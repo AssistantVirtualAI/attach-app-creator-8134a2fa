@@ -790,5 +790,3 @@ All colors MUST be HSL.
 .animate-mascot-mouth { animation: mascot-mouth 280ms ease-in-out infinite; transform-origin: center; }
 
 
-/* Planiprêt shared design tokens & component styles (single source of truth) */
-@import "../shared/planipret-design-tokens/tokens.css";

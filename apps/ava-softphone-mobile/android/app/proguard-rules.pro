@@ -19,3 +19,13 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep Capacitor MainActivity and app-target native classes so they survive R8
+# even if a future release toggles minifyEnabled=true. Google Play rejected a
+# build with: ClassNotFoundException com.lemtel.softphone.MainActivity.
+-keep class com.lemtel.softphone.MainActivity { *; }
+-keep class com.lemtel.softphone.SipForegroundService { *; }
+-keep class com.lemtel.softphone.SipConnectionService { *; }
+-keep class com.lemtel.softphone.CapacitorPjsip { *; }
+-keep class com.getcapacitor.** { *; }
+-keep class * extends com.getcapacitor.Plugin { *; }

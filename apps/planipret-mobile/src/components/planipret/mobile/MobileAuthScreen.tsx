@@ -2,10 +2,36 @@ import { FormEvent, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Globe, Moon, Sun } from "lucide-react";
-import planipretLogo from "@/assets/planipret-logo.png.asset.json";
-import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
+
+/** Inline logo badges — no network dependency, guaranteed to render on iOS WebView. */
+const AvaBadge = ({ size = 56 }: { size?: number }) => (
+  <div
+    aria-label="AVA Statistic"
+    style={{
+      width: size, height: size, borderRadius: 16,
+      background: "linear-gradient(135deg,#7C3AED 0%,#4F46E5 100%)",
+      color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+      fontWeight: 800, fontSize: size * 0.42, letterSpacing: "0.02em",
+      fontFamily: "'Urbanist','Epilogue','Inter',system-ui,sans-serif",
+      boxShadow: "0 6px 18px rgba(124,58,237,0.35)",
+    }}
+  >AVA</div>
+);
+const PlanipretBadge = ({ size = 56 }: { size?: number }) => (
+  <div
+    aria-label="Planiprêt"
+    style={{
+      width: size, height: size, borderRadius: 16,
+      background: "linear-gradient(135deg,#1A4A8A 0%,#0A1425 100%)",
+      color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+      fontWeight: 800, fontSize: size * 0.55,
+      fontFamily: "'Urbanist','Epilogue','Inter',system-ui,sans-serif",
+      boxShadow: "0 6px 18px rgba(26,74,138,0.4)",
+    }}
+  >P</div>
+);
 
 /**
  * Auth screen for /mplanipret — uses the shared mobile design tokens
@@ -69,10 +95,13 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
 
   return (
     <div
-      className="h-full w-full flex flex-col"
+      className="w-full flex flex-col"
       style={{
-        background: "var(--pp-bg-base)",
-        color: "var(--pp-text-primary)",
+        minHeight: "100vh",
+        // @ts-expect-error webkit fallback for iOS
+        ["minHeight" as any]: "-webkit-fill-available",
+        background: "var(--pp-bg-base, #0A1425)",
+        color: "var(--pp-text-primary, #E2E8F0)",
         fontFamily: "'Epilogue','Inter',system-ui,sans-serif",
       }}
     >
@@ -113,19 +142,9 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
       {/* Logos + heading */}
       <div className="flex flex-col items-center mt-8 mb-6 px-6">
         <div className="flex items-center gap-3">
-          <img
-            src={avaLogo.url}
-            alt="AVA Statistic"
-            className="w-14 h-14 rounded-2xl object-cover"
-            style={{ boxShadow: "var(--pp-shadow-md)" }}
-          />
+          <AvaBadge />
           <span className="pp-heading" style={{ fontWeight: 700, fontSize: 20, color: "var(--pp-text-faint)" }}>×</span>
-          <img
-            src={planipretLogo.url}
-            alt="Planiprêt"
-            className="w-14 h-14 rounded-2xl object-cover"
-            style={{ boxShadow: "var(--pp-shadow-md)" }}
-          />
+          <PlanipretBadge />
         </div>
         <h1 className="pp-heading" style={{ fontWeight: 700, fontSize: 22, marginTop: 18 }}>
           {t("auth.welcomeTitle")}

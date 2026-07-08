@@ -1,3 +1,6 @@
+/* Planiprêt shared design tokens & component styles (single source of truth) */
+@import "../shared/planipret-design-tokens/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

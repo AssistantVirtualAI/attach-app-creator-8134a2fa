@@ -237,7 +237,7 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
       {/* Footer */}
       <div className="h-[28px] flex items-center justify-center gap-2 pp-mobile-footer">
         <span className="pp-eyebrow" style={{ fontSize: 9, letterSpacing: "0.14em" }}>{t("footer.poweredBy")}</span>
-        <img src={avaLogo.url} alt="AVA" className="w-3.5 h-3.5 rounded object-cover" />
+        <AvaBadge size={14} />
         <span className="pp-eyebrow" style={{ fontSize: 9, color: "var(--pp-brand-accent)", letterSpacing: "0.12em" }}>AVA</span>
         <span style={{ fontSize: 8.5, color: "var(--pp-text-faint)", letterSpacing: "0.1em" }}>· {t("footer.developedBy")}</span>
       </div>

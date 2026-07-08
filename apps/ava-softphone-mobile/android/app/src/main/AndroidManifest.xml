@@ -47,7 +47,7 @@
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
-            android:name=".MainActivity"
+            android:name="com.lemtel.softphone.MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
@@ -72,12 +72,12 @@
 
         <!-- SERVICE SIP EN FOREGROUND — requis Android 14+ -->
         <service
-            android:name=".SipForegroundService"
+            android:name="com.lemtel.softphone.SipForegroundService"
             android:exported="false"
             android:foregroundServiceType="microphone|phoneCall" />
 
         <service
-            android:name=".SipConnectionService"
+            android:name="com.lemtel.softphone.SipConnectionService"
             android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
             android:exported="true">
             <intent-filter>

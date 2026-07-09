@@ -633,7 +633,7 @@ function genPassword() {
   return Array.from({ length: 14 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
-function UserModal({ mode, user, onClose, onSaved }: { mode: "add" | "edit"; user?: Profile; onClose: () => void; onSaved: (id?: string) => void }) {
+function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" | "edit"; user?: Profile; allNumbers: NsNumber[]; onClose: () => void; onSaved: (id?: string) => void }) {
   const isEdit = mode === "edit";
   const [firstName, setFirstName] = useState(user?.full_name?.split(" ")[0] ?? "");
   const [lastName, setLastName] = useState(user?.full_name?.split(" ").slice(1).join(" ") ?? "");
@@ -646,6 +646,37 @@ function UserModal({ mode, user, onClose, onSaved }: { mode: "add" | "edit"; use
   const [agentId, setAgentId] = useState(user?.elevenlabs_agent_id ?? "");
   const [agentSecOpen, setAgentSecOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Current DIDs assigned to this broker (extension match)
+  const currentNumbers = useMemo(
+    () => allNumbers.filter((n) => n.extension && user?.extension && n.extension === user.extension),
+    [allNumbers, user?.extension],
+  );
+  const availableNumbers = useMemo(
+    () => allNumbers.filter((n) => !n.extension),
+    [allNumbers],
+  );
+  const [phoneNumber, setPhoneNumber] = useState<string>(currentNumbers[0]?.raw ?? "");
+  const originalNumber = currentNumbers[0]?.raw ?? "";
+
+  const applyPhoneNumber = async (ext: string) => {
+    if (phoneNumber === originalNumber) return { ok: true };
+    // Unassign the previous number (if any & changed/cleared)
+    if (originalNumber && originalNumber !== phoneNumber) {
+      await supabase.functions.invoke("pp-admin-phonenumbers", {
+        body: { action: "unassign", payload: { phone_number: originalNumber } },
+      }).catch(() => null);
+    }
+    if (phoneNumber) {
+      const { data, error } = await supabase.functions.invoke("pp-admin-phonenumbers", {
+        body: { action: "assign", payload: { phone_number: phoneNumber, extension: ext } },
+      });
+      if (error || !(data as any)?.success) {
+        return { ok: false, error: (data as any)?.error ?? error?.message ?? "Erreur DID" };
+      }
+    }
+    return { ok: true };
+  };
 
   const submit = async () => {
     if (!firstName || !lastName || !email || !extension || (!isEdit && !password)) {
@@ -660,16 +691,20 @@ function UserModal({ mode, user, onClose, onSaved }: { mode: "add" | "edit"; use
       const { data, error } = await supabase.functions.invoke("pp-admin-user", {
         body: { action: "update", payload: { user_id: user!.user_id, updates: { full_name, extension, mobile_app_enabled: appEnabled, voice_agent_enabled: agentEnabled, elevenlabs_agent_id: agentId || null } } },
       });
+      if (error || !(data as any)?.success) { setBusy(false); toast.error((data as any)?.error ?? "Erreur"); return; }
+      const p = await applyPhoneNumber(extension);
       setBusy(false);
-      if (error || !(data as any)?.success) { toast.error((data as any)?.error ?? "Erreur"); return; }
+      if (!p.ok) { toast.error(`Courtier sauvegardé, DID: ${p.error}`); return; }
       toast.success("Courtier mis à jour");
       onSaved();
     } else {
       const { data, error } = await supabase.functions.invoke("pp-admin-user", {
         body: { action: "create", payload: { email, password, full_name, ns_extension: extension, mobile_app_enabled: appEnabled, voice_agent_enabled: agentEnabled, elevenlabs_agent_id: agentId || null } },
       });
+      if (error || !(data as any)?.success) { setBusy(false); toast.error((data as any)?.error ?? "Erreur de création"); return; }
+      const p = await applyPhoneNumber(extension);
       setBusy(false);
-      if (error || !(data as any)?.success) { toast.error((data as any)?.error ?? "Erreur de création"); return; }
+      if (!p.ok) { toast.error(`Courtier créé, DID: ${p.error}`); onSaved((data as any).user_id); return; }
       toast.success(`Courtier ${full_name} créé ✅`);
       onSaved((data as any).user_id);
     }

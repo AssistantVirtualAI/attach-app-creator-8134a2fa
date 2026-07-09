@@ -250,8 +250,8 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
   // Hard guard: if the native SIP plugin is active, refuse to create a JsSIP UA.
   // Two SIP stacks fighting over the same extension causes 401 loops, mic theft
   // and the "registered → connecting" flip-flop seen on iOS.
-  if (((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true') {
-    throw new JsSIPUnavailableError('JsSIP disabled — native SIP plugin is active');
+  if (__NATIVE_SIP_ACTIVE) {
+    throw new JsSIPUnavailableError('JsSIP disabled — iOS native SIP plugin is active');
   }
   const JsSIP = await waitForJsSIP(timeoutMs, 100, false);
   // SIP/TLS over TCP 5061 — no WebRTC, no mDNS, no TURN.

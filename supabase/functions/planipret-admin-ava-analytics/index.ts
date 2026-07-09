@@ -451,7 +451,7 @@ Deno.serve(async (req) => {
     }
 
     const connectedProfiles = profiles.filter((p) => p.ms365_access_token && p.user_id);
-    const graphProfiles = includeGraph ? connectedProfiles.slice(0, 40) : [];
+    let graphProfiles = includeGraph ? connectedProfiles.slice(0, 40) : [];
     const graphResults: any[] = [];
     const graphErrors: Array<{ broker: string | null; error: string }> = [];
     for (let i = 0; i < graphProfiles.length; i += 5) {
@@ -461,6 +461,24 @@ Deno.serve(async (req) => {
         if (result.status === "fulfilled") graphResults.push(result.value);
         else graphErrors.push({ broker: chunk[idx].ms365_email ?? chunk[idx].email, error: result.reason?.message ?? String(result.reason) });
       });
+    }
+
+    let graphMode: "delegated" | "application" | "none" = graphProfiles.length ? "delegated" : "none";
+    if (includeGraph && graphResults.length === 0) {
+      const appToken = await getAppAccessToken(admin);
+      const appProfiles = profiles.filter((p) => p.user_id && (p.ms365_email || p.email)).slice(0, 40);
+      if (appToken && appProfiles.length) {
+        graphMode = "application";
+        graphProfiles = appProfiles;
+        for (let i = 0; i < appProfiles.length; i += 5) {
+          const chunk = appProfiles.slice(i, i + 5);
+          const settled = await Promise.allSettled(chunk.map((profile) => brokerM365AppStats(appToken, profile, sinceIso, nowIso, futureIso)));
+          settled.forEach((result, idx) => {
+            if (result.status === "fulfilled") graphResults.push(result.value);
+            else graphErrors.push({ broker: chunk[idx].ms365_email ?? chunk[idx].email, error: result.reason?.message ?? String(result.reason) });
+          });
+        }
+      }
     }
 
     const microsoftTotals = { emails_received: 0, emails_sent: 0, emails_unread: 0, meetings: 0, meeting_minutes: 0 };
@@ -522,6 +540,7 @@ Deno.serve(async (req) => {
       microsoft: {
         connected_brokers: connectedProfiles.length,
         scanned_brokers: graphProfiles.length,
+        graph_mode: graphMode,
         truncated: connectedProfiles.length > graphProfiles.length,
         totals: microsoftTotals,
         graph_errors: graphErrors.length,
@@ -569,7 +588,8 @@ Deno.serve(async (req) => {
       microsoft: {
         connected_brokers: connectedProfiles.length,
         scanned_brokers: graphProfiles.length,
-        truncated: connectedProfiles.length > graphProfiles.length,
+        graph_mode: graphMode,
+        truncated: graphMode === "delegated" ? connectedProfiles.length > graphProfiles.length : profiles.length > graphProfiles.length,
         totals: microsoftTotals,
         topSenders: Object.entries(topSenders).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, count]) => ({ name, count })),
         upcomingMeetings: upcomingMeetings.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()).slice(0, 10),

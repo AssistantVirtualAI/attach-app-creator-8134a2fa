@@ -105,110 +105,121 @@ Deno.serve(async (req) => {
   }
 
   if (appToken) {
-    // TEST 2 — organization
+    // Helper: mark 403/InsufficientPrivileges as informational (not a real error)
+    const mkAdminResult = (r: Response, d: any, extra: Record<string, unknown>, required: string, okMsg: string, recNoAccess: string) => {
+      const err = d?.error?.code ?? d?.error?.message ?? "";
+      const forbidden = r.status === 403 || /Insufficient|Authorization_RequestDenied/i.test(String(err));
+      if (r.ok) return { success: true, category: "admin_directory", informational: true, required, ...extra, message: okMsg };
+      if (forbidden) return {
+        success: true, // informational: not a failure
+        category: "admin_directory",
+        informational: true,
+        degraded: "app_permission_missing",
+        required,
+        message: "ℹ️ Diagnostic annuaire non disponible (permission Application non accordée)",
+        recommendation: "Sans impact sur Mail/Calendar/Teams. Ajoutez la permission Application dans Azure uniquement si vous voulez ce diagnostic.",
+      };
+      return { success: false, category: "admin_directory", informational: true, required, message: `⚠️ ${d?.error?.message ?? "erreur"}`, recommendation: recNoAccess };
+    };
+
+    // TEST 2 — organization (informational)
     try {
-      const r = await fetch("https://graph.microsoft.com/v1.0/organization", {
-        headers: { Authorization: `Bearer ${appToken}` },
-      });
+      const r = await fetch("https://graph.microsoft.com/v1.0/organization", { headers: { Authorization: `Bearer ${appToken}` } });
       const d = await r.json();
       const org = d.value?.[0];
-      const msg = d.error?.message ?? "erreur";
-      results.organization = {
-        success: r.ok && !!org,
-        category: "admin_directory",
-        required: "Application permission Organization.Read.All ou rôle Microsoft admin/Global Reader",
-        display_name: org?.displayName,
-        tenant_id: org?.id,
-        country: org?.countryLetterCode,
+      results.organization = mkAdminResult(r, d, {
+        display_name: org?.displayName, tenant_id: org?.id, country: org?.countryLetterCode,
         verified_domains: org?.verifiedDomains?.map((v: any) => v.name),
-        message: r.ok
-          ? `✅ Organisation: ${org?.displayName}`
-          : `⚠️ ${msg}`,
-        recommendation: r.ok ? undefined : "Les fonctions Mail/Calendar/Teams peuvent fonctionner même si ce test directory échoue. Donnez un rôle Microsoft admin/Global Reader ou une permission application pour ce diagnostic.",
-      };
+      }, "Organization.Read.All (Application)", `✅ Organisation: ${org?.displayName}`, "Diagnostic annuaire uniquement.");
     } catch (e) {
-      results.organization = { success: false, error: String(e), message: `❌ ${String(e)}` };
+      results.organization = { success: false, informational: true, category: "admin_directory", error: String(e), message: `❌ ${String(e)}` };
     }
 
-    // TEST 3 — users
+    // TEST 3 — users (informational)
     try {
-      const r = await fetch(
-        "https://graph.microsoft.com/v1.0/users?$top=5&$select=displayName,mail,userPrincipalName",
-        { headers: { Authorization: `Bearer ${appToken}` } },
-      );
+      const r = await fetch("https://graph.microsoft.com/v1.0/users?$top=5&$select=displayName,mail,userPrincipalName", { headers: { Authorization: `Bearer ${appToken}` } });
       const d = await r.json();
-      results.users = {
-        success: r.ok,
-        category: "admin_directory",
-        required: "Application permission User.Read.All ou rôle Microsoft admin/Global Reader",
+      results.users = mkAdminResult(r, d, {
         count: d.value?.length ?? 0,
-        sample: d.value?.map((u: any) => ({
-          name: u.displayName,
-          email: u.mail || u.userPrincipalName,
-        })),
-        message: r.ok
-          ? `✅ ${d.value?.length ?? 0} utilisateurs trouvés`
-          : `⚠️ ${d.error?.message ?? "erreur"}`,
-        recommendation: r.ok ? undefined : "Ce test vérifie l'annuaire Microsoft. Il n'empêche pas la connexion utilisateur OAuth ni Outlook/Calendar/Teams délégués.",
-      };
+        sample: d.value?.map((u: any) => ({ name: u.displayName, email: u.mail || u.userPrincipalName })),
+      }, "User.Read.All (Application)", `✅ ${d.value?.length ?? 0} utilisateurs`, "Diagnostic annuaire uniquement.");
     } catch (e) {
-      results.users = { success: false, error: String(e), message: `❌ ${String(e)}` };
+      results.users = { success: false, informational: true, category: "admin_directory", error: String(e), message: `❌ ${String(e)}` };
     }
 
-    // TEST 4 — app registration + redirect URIs
+    // TEST 4 — app registration (informational)
     try {
-      const r = await fetch(
-        `https://graph.microsoft.com/v1.0/applications?$filter=appId eq '${CLIENT_ID}'&$select=displayName,web,spa,publicClient`,
-        { headers: { Authorization: `Bearer ${appToken}` } },
-      );
+      const r = await fetch(`https://graph.microsoft.com/v1.0/applications?$filter=appId eq '${CLIENT_ID}'&$select=displayName,web,spa,publicClient`, { headers: { Authorization: `Bearer ${appToken}` } });
       const d = await r.json();
       const app = d.value?.[0];
-      results.app_registration = {
-        success: r.ok && !!app,
-        category: "admin_directory",
-        required: "Application.Read.All ou rôle Application Administrator/Global Reader",
+      results.app_registration = mkAdminResult(r, d, {
         app_name: app?.displayName,
         redirect_uris_web: app?.web?.redirectUris ?? [],
         redirect_uris_spa: app?.spa?.redirectUris ?? [],
         redirect_uris_public: app?.publicClient?.redirectUris ?? [],
-        message: app
-          ? `✅ App: ${app.displayName}`
-          : "⚠️ App non trouvée ou permissions insuffisantes",
-        recommendation: app ? undefined : "Ce test lit la configuration Azure App Registration. Si les redirect URIs sont déjà configurées, l'OAuth utilisateur peut fonctionner malgré cette limite.",
-      };
+      }, "Application.Read.All (Application)", app ? `✅ App: ${app.displayName}` : "ℹ️ App non listable", "Diagnostic Azure App Registration uniquement.");
     } catch (e) {
-      results.app_registration = { success: false, error: String(e), message: `❌ ${String(e)}` };
+      results.app_registration = { success: false, informational: true, category: "admin_directory", error: String(e), message: `❌ ${String(e)}` };
     }
 
-    // TEST 5 — service principal / permissions
+    // TEST 5 — service principal (informational)
     try {
-      const r = await fetch(
-        `https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId eq '${CLIENT_ID}'&$select=displayName,appRoles`,
-        { headers: { Authorization: `Bearer ${appToken}` } },
-      );
+      const r = await fetch(`https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId eq '${CLIENT_ID}'&$select=displayName,appRoles`, { headers: { Authorization: `Bearer ${appToken}` } });
       const d = await r.json();
-      results.permissions = {
-        success: r.ok,
-        category: "admin_directory",
-        required: "Application.Read.All ou rôle Application Administrator/Global Reader",
+      results.permissions = mkAdminResult(r, d, {
         service_principal: d.value?.[0]?.displayName,
         app_roles_count: d.value?.[0]?.appRoles?.length ?? 0,
-        message: r.ok
-          ? "✅ Permissions vérifiées"
-          : `❌ ${d.error?.message ?? "erreur"}`,
-      };
+      }, "Application.Read.All (Application)", "✅ Permissions vérifiées", "Diagnostic Azure uniquement.");
     } catch (e) {
-      results.permissions = { success: false, error: String(e), message: `❌ ${String(e)}` };
+      results.permissions = { success: false, informational: true, category: "admin_directory", error: String(e), message: `❌ ${String(e)}` };
     }
   }
 
+  // TEST 6 — Delegated user capability check (real product truth)
+  try {
+    const authHeader = req.headers.get("Authorization") ?? "";
+    if (authHeader.startsWith("Bearer ") && adminUrl && serviceRole) {
+      const { createClient } = await import("npm:@supabase/supabase-js@2");
+      const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+      const admin = createClient(adminUrl, serviceRole);
+      const userClient = createClient(adminUrl, anon, { global: { headers: { Authorization: authHeader } } });
+      const { data: u } = await userClient.auth.getUser();
+      const uid = u?.user?.id;
+      if (uid) {
+        const { data: profile } = await admin.from("planipret_profiles").select("ms365_access_token").eq("user_id", uid).maybeSingle();
+        const tok = profile?.ms365_access_token;
+        if (tok) {
+          const call = async (p: string) => {
+            const r = await fetch(`https://graph.microsoft.com/v1.0${p}`, { headers: { Authorization: `Bearer ${tok}` } });
+            const d = await r.json().catch(() => ({}));
+            return { ok: r.ok, status: r.status, msg: r.ok ? "OK" : (d?.error?.message ?? `HTTP ${r.status}`) };
+          };
+          const [me, mail, cal, chat] = await Promise.all([call("/me?$select=displayName,mail"), call("/me/messages?$top=1&$select=id"), call("/me/events?$top=1&$select=id"), call("/me/chats?$top=1")]);
+          const okAll = me.ok && mail.ok && cal.ok && chat.ok;
+          results.delegated = {
+            success: okAll, informational: false, category: "delegated",
+            checks: { profile: me, mail, calendar: cal, teams: chat },
+            message: okAll ? "✅ Capacités utilisateur (Mail/Calendar/Teams) opérationnelles" : `⚠️ Certaines capacités utilisateur échouent`,
+          };
+        } else {
+          results.delegated = { success: false, informational: false, category: "delegated", message: "ℹ️ Utilisateur non connecté à Microsoft — se connecter via Diagnostics" };
+        }
+      }
+    }
+  } catch (e) {
+    results.delegated = { success: false, category: "delegated", message: `❌ ${String(e)}` };
+  }
+
+  const nonInfo = Object.values(results).filter((r: any) => !r.informational);
   const summary = {
     total_tests: Object.keys(results).length,
     passed: Object.values(results).filter((r: any) => r.success).length,
-    failed: Object.values(results).filter((r: any) => !r.success).length,
-    core_passed: !!results.auth?.success,
-    admin_directory_failed: Object.values(results).filter((r: any) => !r.success && r.category === "admin_directory").length,
-    status: results.auth?.success ? "core_connected" : "not_connected",
+    failed: Object.values(results).filter((r: any) => !r.success && !r.informational).length,
+    core_passed: !!results.auth?.success && (results.delegated ? results.delegated.success !== false : true),
+    admin_directory_failed: 0, // no longer surfaced as failures
+    admin_directory_informational: Object.values(results).filter((r: any) => r.category === "admin_directory").length,
+    delegated_ok: !!results.delegated?.success,
+    status: results.auth?.success ? (results.delegated?.success ? "fully_connected" : "core_connected") : "not_connected",
     tested_at: new Date().toISOString(),
     elapsed_ms: Date.now() - startedAt,
     tenant_id: TENANT_ID,

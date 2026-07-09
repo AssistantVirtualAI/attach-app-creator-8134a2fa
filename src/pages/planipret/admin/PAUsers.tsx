@@ -30,6 +30,15 @@ type Profile = PlanipretBrokerRow & {
   role?: string | null;
 };
 
+export type NsNumber = {
+  raw: string;
+  e164: string;
+  pretty: string;
+  extension: string | null;
+  application: string | null;
+  active: boolean;
+};
+
 
 export default function PAUsers() {
   const navigate = useNavigate();

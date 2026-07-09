@@ -79,7 +79,7 @@ const initials = (n?: string) =>
   (n ?? "A").split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "A";
 
 export default function PlanipretAdminLayout() {
-  const { lang, setLang } = useMplanipretLang();
+  const { lang, setLang, t: tt } = useMplanipretLang();
   const navigate = useNavigate();
   const location = useLocation();
   const [profile, setProfile] = useState<any>(null);
@@ -215,7 +215,6 @@ export default function PlanipretAdminLayout() {
     );
   }
 
-  const { t: tt } = useMplanipretLang();
   const pageKey = PAGE_KEY_BY_PATH[location.pathname];
   const title = pageKey ? tt(`adminPortal.pageTitles.${pageKey}`) : tt("adminPortal.dashboardTitle");
   const dateLabel = new Date().toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });

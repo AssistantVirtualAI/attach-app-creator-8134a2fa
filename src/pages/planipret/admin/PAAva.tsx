@@ -106,6 +106,7 @@ export default function PAAva() {
       setRecentActions([]);
       setMicrosoft(null);
       setInsights([]);
+      setDataHealth(null);
       setLoading(false);
       return;
     }
@@ -121,6 +122,7 @@ export default function PAAva() {
     setRecentActions(payload.recentActions ?? []);
     setMicrosoft(payload.microsoft ?? null);
     setInsights(payload.insights ?? []);
+    setDataHealth(payload.dataHealth ?? null);
     setLoading(false);
   };
 

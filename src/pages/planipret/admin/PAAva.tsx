@@ -128,6 +128,7 @@ export default function PAAva() {
     setMicrosoft(payload.microsoft ?? null);
     setInsights(payload.insights ?? []);
     setDataHealth(payload.dataHealth ?? null);
+    if (payload.dataHealth?.last_analysis_at && !lastSyncAt) setLastSyncAt(payload.dataHealth.last_analysis_at);
     setLoading(false);
   };
 

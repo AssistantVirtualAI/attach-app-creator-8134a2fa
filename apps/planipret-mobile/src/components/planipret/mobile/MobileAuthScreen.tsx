@@ -2,10 +2,15 @@ import { FormEvent, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Globe, Moon, Sun } from "lucide-react";
-import planipretLogo from "@/assets/planipret-logo.png.asset.json";
-import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
+
+const AvaBadge = ({ size = 14 }: { size?: number }) => (
+  <div style={{ background: "#7C3AED", borderRadius: 12, padding: "8px 12px", color: "white", fontWeight: 700, fontSize: size, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>AVA</div>
+);
+const PlanipretBadge = () => (
+  <div style={{ background: "#1A4A8A", borderRadius: 12, padding: "8px 12px", color: "white", fontWeight: 700, fontSize: 14, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>P</div>
+);
 
 /** Auth screen for /mplanipret. Bilingual, App Store / Play Store-ready. */
 export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Promise<void> | void }) {

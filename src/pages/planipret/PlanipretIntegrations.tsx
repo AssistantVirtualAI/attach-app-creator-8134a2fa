@@ -411,7 +411,7 @@ export default function PlanipretIntegrations() {
             })}
           </div>
 
-          <Ms365LiveTestPanel />
+          <Ms365LiveTestPanel onCompleted={() => { refresh(); refreshBackendSecrets(); }} />
         </IntegrationCard>
           );
         })()}

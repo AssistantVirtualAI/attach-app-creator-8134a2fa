@@ -1,10 +1,14 @@
 /**
  * Live Microsoft 365 connection test panel.
  * Invokes the `ms365-connection-test` Edge Function and renders the results.
+ *
+ * Also exposes an "Admin re-test integration" action that re-runs the
+ * backend Microsoft config test (`pp-test-integration`) and refreshes the
+ * saved connection status shown in the parent card immediately.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ChevronDown, ChevronRight, Copy } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, Copy, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 type TestResult = {
@@ -35,13 +39,48 @@ const LABELS: Record<string, string> = {
   config: "Configuration",
 };
 
-export default function Ms365LiveTestPanel() {
+export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [retesting, setRetesting] = useState(false);
   const [data, setData] = useState<Response | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [detection, setDetection] = useState<{
+    tenant_id: string | null;
+    client_id: string | null;
+    has_secret: boolean;
+    loading: boolean;
+  }>({ tenant_id: null, client_id: null, has_secret: false, loading: true });
 
   const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL ?? "";
   const expectedCallback = `${supabaseUrl}/functions/v1/ms365-oauth-callback`;
+
+  async function loadDetection() {
+    setDetection((d) => ({ ...d, loading: true }));
+    const { data: res } = await supabase.functions.invoke("pp-integration-secrets");
+    const ms = ((res as any)?.items ?? []).find((i: any) => i.provider === "microsoft");
+    const pc = ms?.public_config ?? {};
+    const keys: string[] = ms?.has_keys ?? [];
+    setDetection({
+      tenant_id: pc.tenant_id ?? null,
+      client_id: pc.client_id ?? pc.client_secret_id ?? null,
+      has_secret: keys.includes("client_secret") || keys.includes("MICROSOFT_CLIENT_SECRET"),
+      loading: false,
+    });
+  }
+
+  useEffect(() => { loadDetection(); }, []);
+
+  async function persistResult(success: boolean, message: string) {
+    // Re-run backend config test so the parent card's saved status updates.
+    try {
+      await supabase.functions.invoke("pp-test-integration", {
+        body: { integration_key: "ms365" },
+      });
+    } catch {
+      // pp-test-integration already writes on its own; ignore local errors.
+    }
+    onCompleted?.();
+  }
 
   async function runTest() {
     setLoading(true);
@@ -51,11 +90,34 @@ export default function Ms365LiveTestPanel() {
         body: {},
       });
       if (error) throw error;
-      setData(res as Response);
+      const parsed = res as Response;
+      setData(parsed);
+      const ok = parsed.summary.failed === 0;
+      await persistResult(ok, `${parsed.summary.passed}/${parsed.summary.total_tests} tests`);
+      loadDetection();
     } catch (e: any) {
       toast.error("Erreur test MS365: " + (e?.message ?? String(e)));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function adminRetest() {
+    setRetesting(true);
+    try {
+      const { data: res, error } = await supabase.functions.invoke("pp-test-integration", {
+        body: { integration_key: "ms365" },
+      });
+      if (error) throw error;
+      const ok = (res as any)?.success;
+      const msg = (res as any)?.message ?? "—";
+      if (ok) toast.success(`✅ ${msg}`); else toast.error(`❌ ${msg}`);
+      await loadDetection();
+      onCompleted?.();
+    } catch (e: any) {
+      toast.error("Ré-test échoué: " + (e?.message ?? String(e)));
+    } finally {
+      setRetesting(false);
     }
   }
 
@@ -66,6 +128,18 @@ export default function Ms365LiveTestPanel() {
       className="rounded-lg p-3 mt-4"
       style={{ background: "#0A1628", border: "1px solid #0E2A45" }}
     >
+      {/* Detection header — always visible */}
+      <div className="rounded-lg p-3 mb-3" style={{ background: "#0D1F35", border: "1px solid #0E2A45" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#8FA8C0", letterSpacing: "0.08em" }}>
+          🔎 DÉTECTION CONFIGURATION MICROSOFT 365
+        </div>
+        <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-[12px]">
+          <DetectionRow label="Tenant ID" value={detection.tenant_id} loading={detection.loading} mono />
+          <DetectionRow label="Client ID" value={detection.client_id} loading={detection.loading} mono />
+          <DetectionRow label="Client Secret" value={detection.has_secret ? "Enregistré" : null} loading={detection.loading} />
+        </div>
+      </div>
+
       <div className="flex items-center justify-between mb-3">
         <div style={{ fontSize: 12, fontWeight: 700, color: "#E8EDF5" }}>
           🔬 Test en direct
@@ -88,29 +162,51 @@ export default function Ms365LiveTestPanel() {
         )}
       </div>
 
-      <button
-        type="button"
-        onClick={runTest}
-        disabled={loading}
-        className="inline-flex items-center gap-2 disabled:opacity-60"
-        style={{
-          background: "#0078D4",
-          color: "white",
-          borderRadius: 10,
-          padding: "10px 20px",
-          fontWeight: 600,
-          fontSize: 13,
-        }}
-      >
-        {loading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Connexion à Microsoft Azure...
-          </>
-        ) : (
-          <>▶ Tester la connexion Microsoft</>
-        )}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={runTest}
+          disabled={loading}
+          className="inline-flex items-center gap-2 disabled:opacity-60"
+          style={{
+            background: "#0078D4",
+            color: "white",
+            borderRadius: 10,
+            padding: "10px 20px",
+            fontWeight: 600,
+            fontSize: 13,
+          }}
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Connexion à Microsoft Azure...
+            </>
+          ) : (
+            <>▶ Tester la connexion Microsoft</>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={adminRetest}
+          disabled={retesting}
+          className="inline-flex items-center gap-2 disabled:opacity-60"
+          title="Re-run backend Microsoft config test and refresh saved status"
+          style={{
+            background: "#0D1F35",
+            border: "1px solid #2E9BDC",
+            color: "#2E9BDC",
+            borderRadius: 10,
+            padding: "10px 16px",
+            fontWeight: 600,
+            fontSize: 13,
+          }}
+        >
+          {retesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Ré-tester intégration (admin)
+        </button>
+      </div>
 
       {rows.length > 0 && (
         <div className="mt-4 space-y-2">
@@ -165,6 +261,31 @@ export default function Ms365LiveTestPanel() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function DetectionRow({ label, value, loading, mono }: { label: string; value: string | null; loading: boolean; mono?: boolean }) {
+  const ok = !!value;
+  return (
+    <div className="flex items-start gap-2">
+      {loading ? (
+        <Loader2 className="w-3.5 h-3.5 mt-0.5 animate-spin" style={{ color: "#4A7FA5" }} />
+      ) : ok ? (
+        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5" style={{ color: "#00D4AA" }} />
+      ) : (
+        <XCircle className="w-3.5 h-3.5 mt-0.5" style={{ color: "#E84C4C" }} />
+      )}
+      <div className="min-w-0 flex-1">
+        <div style={{ fontSize: 10, color: "#4A7FA5", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+        <div
+          className="truncate"
+          style={{ fontFamily: mono ? "monospace" : "inherit", fontSize: 12, color: ok ? "#E8EDF5" : "#8FA8C0" }}
+          title={value ?? ""}
+        >
+          {loading ? "…" : (value ?? "Non détecté")}
+        </div>
+      </div>
     </div>
   );
 }

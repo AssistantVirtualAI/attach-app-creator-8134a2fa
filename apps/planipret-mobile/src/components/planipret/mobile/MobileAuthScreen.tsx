@@ -62,7 +62,7 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
 
 
   return (
-    <div className="h-full w-full flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
+    <div style={{ background: "#0A1425", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Top control row: lang + theme */}
       <div className="flex items-center justify-end gap-2 px-4"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)" }}>
@@ -85,11 +85,9 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
       {/* Logos */}
       <div className="flex flex-col items-center mt-8 mb-6 px-6">
         <div className="flex items-center gap-3">
-          <img src={avaLogo.url} alt="AVA Statistic" className="w-14 h-14 rounded-2xl object-cover"
-            style={{ boxShadow: "0 4px 18px rgba(155,127,232,0.45)" }} />
+          <AvaBadge />
           <span style={{ fontFamily: "Urbanist,sans-serif", fontWeight: 800, fontSize: 20, color: "var(--pp-text-faint)" }}>×</span>
-          <img src={planipretLogo.url} alt="Planiprêt" className="w-14 h-14 rounded-2xl object-cover"
-            style={{ boxShadow: "0 4px 18px rgba(46,155,220,0.30)" }} />
+          <PlanipretBadge />
         </div>
         <h1 style={{ fontFamily: "Urbanist,sans-serif", fontWeight: 700, fontSize: 22, color: "var(--pp-text-primary)", marginTop: 18, letterSpacing: "-0.01em" }}>
           {t("auth.welcomeTitle")}

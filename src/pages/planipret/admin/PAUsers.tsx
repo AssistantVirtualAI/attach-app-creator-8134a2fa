@@ -139,6 +139,7 @@ export default function PAUsers() {
       .eq("email", "demo@avastatistic.ca");
     setAppReviewExists((reviewCount ?? 0) > 0);
     setLoading(false);
+    loadNumbers();
   };
 
   const syncFromNs = async () => {

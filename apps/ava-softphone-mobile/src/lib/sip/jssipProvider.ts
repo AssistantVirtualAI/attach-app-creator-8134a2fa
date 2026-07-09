@@ -1,13 +1,17 @@
 import * as JsSIPModule from 'jssip';
+import { Capacitor } from '@capacitor/core';
 
-// Module-level barrier: if the native SIP plugin is active, refuse to expose
-// any JsSIP entry point. This guarantees no UA can ever be constructed even
-// if a forgotten code path imports from this file.
+// Module-level barrier: JsSIP is disabled ONLY when the native PJSIP plugin is
+// actually active — i.e. iOS with VITE_NATIVE_SIP=true. On Android the native
+// plugin is a stub, so we must let JsSIP run.
+let __PLATFORM = 'web';
+try { __PLATFORM = Capacitor.getPlatform(); } catch { /* ssr */ }
 const __NATIVE_SIP_ACTIVE =
-  ((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true';
+  ((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true' &&
+  __PLATFORM === 'ios';
 if (__NATIVE_SIP_ACTIVE) {
   // eslint-disable-next-line no-console
-  console.log('[jssipProvider] native SIP active — JsSIP entry points disabled');
+  console.log('[jssipProvider] iOS native SIP active — JsSIP entry points disabled');
 }
 
 declare global {
@@ -246,8 +250,8 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
   // Hard guard: if the native SIP plugin is active, refuse to create a JsSIP UA.
   // Two SIP stacks fighting over the same extension causes 401 loops, mic theft
   // and the "registered → connecting" flip-flop seen on iOS.
-  if (((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true') {
-    throw new JsSIPUnavailableError('JsSIP disabled — native SIP plugin is active');
+  if (__NATIVE_SIP_ACTIVE) {
+    throw new JsSIPUnavailableError('JsSIP disabled — iOS native SIP plugin is active');
   }
   const JsSIP = await waitForJsSIP(timeoutMs, 100, false);
   // SIP/TLS over TCP 5061 — no WebRTC, no mDNS, no TURN.

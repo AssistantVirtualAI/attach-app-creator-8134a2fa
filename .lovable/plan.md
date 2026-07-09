@@ -1,159 +1,83 @@
-## Pourquoi ces erreurs apparaissent
+## Contexte
 
-Les permissions affichées dans Microsoft Entra sont accordées à l’application, mais le token actuellement stocké pour l’utilisateur peut encore être incomplet ou trop ancien. Il faut aussi distinguer :
+### 1. Pourquoi les warnings Microsoft persistent
+Les tests qui affichent « Insufficient privileges » (Organisation, Utilisateurs, Configuration App Azure, Permissions Graph) utilisent tous un **token application (client_credentials, `.default`)** et interrogent des endpoints d'**annuaire Azure AD** :
+- `/organization`, `/users`, `/applications`, `/servicePrincipals`
 
-- **Permissions accordées à l’app Azure** : visibles dans Entra.
-- **Permissions réellement présentes dans le token OAuth de l’utilisateur** : utilisées par l’app mobile/portail.
-- **Privilèges du compte connecté** : certains appels Microsoft Graph comme organisation, utilisateurs, applications Azure peuvent exiger un rôle Microsoft admin/Global Reader/Application Admin en plus des scopes.
-- **Type de permission** : certaines vérifications backend peuvent nécessiter des permissions application/admin, pas seulement delegated.
+Ces endpoints exigent des permissions **Application** (pas Déléguées) — `Organization.Read.All`, `User.Read.All`, `Application.Read.All` — avec **admin consent** dans Azure. Les permissions actuellement approuvées dans votre app Azure sont vraisemblablement de type **Déléguées** (Mail.Send, Calendars.ReadWrite, Chat.Read, etc.), suffisantes pour le vrai produit (login utilisateur + Mail/Calendar/Teams), mais insuffisantes pour ces tests annuaire.
 
-Je ne stockerai pas et ne réutiliserai pas le mot de passe partagé dans le chat. La connexion doit passer par le flux Microsoft OAuth sécurisé.
+**Conclusion :** ces warnings sont un *diagnostic annuaire optionnel*, pas une vraie panne. Ils n'empêchent aucune fonction. Il faut cesser de les présenter comme des erreurs.
 
-## Phase 1 — Audit complet Microsoft 365 existant
+### 2. Page « AVA Statistics » (MStats)
+La page `/mplanipret/stats` existe et affiche déjà les appels/leads, mais ne montre **aucune donnée Microsoft**. Aucun compteur d'emails ni de réunions n'est câblé. Résultat : page à moitié vide pour un utilisateur qui n'a pas encore d'appels.
 
-Objectif : identifier exactement où la connexion casse.
+---
 
-- Vérifier le flux mobile standalone : bouton connexion, URL Microsoft, callback, échange du code, stockage du token.
-- Vérifier le portail admin : statut config tenant/client/secret, test backend, bouton re-test admin.
-- Vérifier les fonctions backend Microsoft : OAuth exchange, config test, webhook mail, Teams, Calendar.
-- Vérifier les tables/colonnes qui stockent l’état de connexion Microsoft.
-- Vérifier si les erreurs viennent de :
-  - token sans scopes récents,
-  - utilisateur non reconnecté après ajout de permissions,
-  - mauvais tenant/client ID,
-  - redirect URI manquant,
-  - rôle Microsoft insuffisant,
-  - backend qui teste des endpoints trop privilégiés.
+## Plan
 
-## Phase 2 — Connexion utilisateur Microsoft complète
+### Phase 1 — Corriger la présentation des tests annuaire (arrêter les faux warnings)
 
-Objectif : que l’utilisateur `mhassoun@planipret.com` soit connecté à Microsoft 365 dans l’app.
+1. Modifier `supabase/functions/ms365-connection-test/index.ts` :
+   - Ajouter un flag `informational: true` sur les 4 sous-tests `admin_directory`.
+   - Sur un 403 « Insufficient privileges », renvoyer `success: true, degraded: "app_permission_missing"` avec un message neutre : « Diagnostic annuaire non disponible (permission Application non accordée) — sans impact sur Mail/Calendar/Teams ».
+   - Ne les compter ni comme `passed` ni comme `failed` dans le `summary`.
 
-- Forcer une reconnexion Microsoft 365 depuis l’app pour obtenir un token neuf avec les scopes actuels.
-- Ajouter une détection claire :
-  - tenant détecté,
-  - client détecté,
-  - secret backend détecté,
-  - compte Microsoft connecté,
-  - scopes accordés,
-  - scopes manquants,
-  - dernier test réussi/échoué.
-- Afficher un message actionnable si Microsoft répond `Insufficient privileges` :
-  - “Reconnecter Microsoft” si token incomplet,
-  - “Rôle Microsoft admin requis” si le compte n’a pas les droits directory/app,
-  - “Permission application requise” si l’endpoint ne peut pas fonctionner en delegated.
-- Stocker l’état de connexion par utilisateur et le statut global admin séparément.
+2. Ajouter un **vrai test délégué** basé sur le token utilisateur connecté :
+   - `/me` (profil), `/me/messages?$top=1`, `/me/events?$top=1`, `/me/chats?$top=1`.
+   - Ce sont les endpoints réellement utilisés par le produit. S'ils passent, la connexion est confirmée OK.
 
-## Phase 3 — Correction des tests backend Microsoft
+3. Mettre à jour `Ms365LiveTestPanel.tsx` + `Ms365Diagnostics.tsx` :
+   - Section « Capacités utilisateur (délégué) » = source de vérité verte/rouge.
+   - Section « Diagnostic annuaire (informatif) » repliée par défaut, badge gris « info », pas d'icône ⚠️ jaune.
+   - Le statut global (`ok/limited/down`) du badge devient dépendant du test délégué, plus des tests annuaire.
 
-Objectif : que le portail admin dise la vérité sans faux négatifs.
+### Phase 2 — Enrichir MStats avec les données Microsoft réelles
 
-- Séparer les tests en catégories :
-  - OAuth/token,
-  - profil utilisateur,
-  - mail,
-  - calendrier,
-  - Teams chats,
-  - Teams channels,
-  - organisation Microsoft,
-  - utilisateurs Microsoft,
-  - application Azure.
-- Pour chaque test, enregistrer : succès, erreur Microsoft exacte, statut HTTP, scopes requis, action recommandée.
-- Ne pas marquer toute l’intégration comme échouée si seulement les tests admin-directory échouent.
-- Ajouter/renforcer le bouton **Admin re-test integration** pour recalculer immédiatement le statut sauvegardé.
+1. Créer `supabase/functions/ms365-stats/index.ts` :
+   - Auth : JWT utilisateur, avec refresh token automatique si expiré (même helper que `ms365-teams-list`).
+   - Query params : `days` (7 / 30 / 90).
+   - Utilise `$search` / `$filter` Graph sur `receivedDateTime` et `sentDateTime` :
+     - `/me/messages?$filter=receivedDateTime ge {ISO}&$select=receivedDateTime,from,isRead&$top=999` (paginé)
+     - `/me/mailFolders/sentitems/messages?$filter=sentDateTime ge {ISO}&$select=sentDateTime&$top=999`
+     - `/me/events?$filter=start/dateTime ge '{ISO}'&$select=subject,start,end,attendees,isOnlineMeeting&$top=500`
+   - Retourne buckets par jour : `{ date, emails_received, emails_sent, emails_unread, meetings, meeting_minutes }`, + totaux, + top expéditeurs.
+   - Cache léger (5 min) via table `planipret_ai_insights` ou simple memoization in-function.
 
-## Phase 4 — Calendrier Microsoft sur la page principale
+2. Créer `supabase/functions/ms365-stats-insights/index.ts` (optionnel — peut être fusionné) :
+   - Prend la sortie de `ms365-stats` et interroge Lovable AI Gateway (`google/gemini-2.5-flash`) pour produire 3–5 insights courts en français : tendance semaine, ratio envoyés/reçus, plages horaires les plus chargées, recommandations.
+   - Stocke le résultat dans `planipret_ai_insights` (déjà existante) pour éviter les appels répétés.
 
-Objectif : afficher le calendrier Microsoft dans l’écran principal Planiprêt.
+3. Modifier `src/pages/planipret/mobile/MStats.tsx` (et miroir mobile) :
+   - Ajouter section « Microsoft 365 » avec :
+     - KPI : `emails_received`, `emails_sent`, `meetings`, `meeting_minutes`.
+     - BarChart empilé « Emails par jour » (reçus vs envoyés).
+     - Liste « Prochaines réunions » (3 items).
+     - Bloc « ✨ Insights AVA » (résultat IA).
+   - Fallback gracieux si non connecté Microsoft → CTA « Connecter Microsoft » vers `/mplanipret/ms365-diagnostics`.
+   - État de chargement + gestion d'erreur (token expiré → auto-retry via edge function).
 
-- Ajouter un module “Calendrier Microsoft” sur la page principale mobile.
-- Lire les événements Microsoft Calendar via backend sécurisé.
-- Afficher : prochains rendez-vous, heure, participant principal, lien Teams si disponible.
-- Ajouter actions rapides :
-  - créer un rendez-vous,
-  - modifier un rendez-vous,
-  - ouvrir Teams meeting,
-  - demander à AVA de préparer un résumé.
-- Prévoir états UI : connecté, non connecté, scopes manquants, chargement, erreur.
+### Phase 3 — Déploiement + parité
 
-## Phase 5 — Brancher AVA Chatbot aux intégrations
+1. Déployer `ms365-connection-test`, `ms365-stats`, `ms365-stats-insights`.
+2. Copier chaque fichier modifié dans `apps/planipret-mobile/src/` pour garder la parité mobile standalone.
+3. Vérifier que `npm run build` du mobile passe.
 
-Objectif : AVA peut agir sur Microsoft 365 et les autres canaux autorisés.
+### Phase 4 — Vérification
 
-Créer un moteur d’actions backend pour AVA avec outils contrôlés :
+1. Rejouer `ms365-connection-test` dans l'aperçu : les 4 blocs annuaire deviennent « Informatif » et le statut global reste vert dès que `auth + /me` passent.
+2. Ouvrir `/mplanipret/stats` : les compteurs Microsoft s'affichent, le graphique se remplit, les insights AVA apparaissent.
+3. Reconnecter Microsoft pour rafraîchir le token si l'appel `/me/messages` renvoie 401 (le helper le fait déjà).
 
-- **Email Outlook**
-  - lire les emails,
-  - résumer les emails,
-  - préparer une réponse,
-  - envoyer une réponse après confirmation utilisateur.
+---
 
-- **Microsoft Calendar**
-  - lire les événements,
-  - ajouter une réunion,
-  - modifier une réunion,
-  - inviter des participants,
-  - créer lien Teams si disponible.
+## Détails techniques
 
-- **Teams**
-  - lire chats/canaux autorisés,
-  - résumer conversations,
-  - préparer réponse,
-  - envoyer réponse après confirmation.
+- **Scopes déjà couverts** par `ms365-oauth-exchange` : `Mail.ReadWrite`, `Calendars.ReadWrite`, `Chat.Read` — suffisants pour toutes les requêtes ci-dessus. Aucun nouveau scope à demander.
+- **Pas de changement Azure requis** de votre côté. Si vous voulez faire disparaître aussi les blocs « Informatif », il faudrait ajouter dans Azure les permissions **Application** `Organization.Read.All`, `User.Read.All`, `Application.Read.All` puis cliquer *Grant admin consent* — mais ce n'est **pas nécessaire** pour Mail/Calendar/Teams/Stats.
+- Les tables `planipret_ai_insights` et `planipret_profiles` (colonnes `ms365_*`) sont déjà en place, aucune migration.
 
-- **Téléphonie/SMS**
-  - appeler un contact via l’intégration téléphonie existante,
-  - envoyer SMS si l’intégration SMS est configurée,
-  - journaliser l’action.
+---
 
-- **Résumé global**
-  - “résume mes emails”,
-  - “résume mes Teams”,
-  - “quels rendez-vous aujourd’hui”,
-  - “prépare mes suivis clients”.
+## Question de cadrage
 
-## Phase 6 — Sécurité, permissions et confirmations
-
-Objectif : donner à AVA beaucoup d’accès sans créer de risque.
-
-- Toutes les actions sensibles passent par backend sécurisé, jamais directement depuis le navigateur.
-- AVA peut lire selon les permissions Microsoft accordées.
-- AVA doit demander confirmation avant :
-  - envoyer un email,
-  - envoyer un message Teams,
-  - envoyer un SMS,
-  - appeler quelqu’un,
-  - créer/modifier un événement calendrier.
-- Journaliser chaque action AVA : utilisateur, action, cible, résultat, heure.
-- Ne jamais exposer tokens Microsoft, secrets Azure, clés API ou mots de passe dans le frontend.
-
-## Phase 7 — Tests end-to-end
-
-Objectif : prouver que tout fonctionne.
-
-Tester séparément :
-
-- Connexion Microsoft mobile standalone.
-- Callback OAuth mobile.
-- Stockage état connecté.
-- Reconnexion après changement de scopes.
-- Portail admin re-test.
-- Lecture email.
-- Résumé email par AVA.
-- Réponse email avec confirmation.
-- Lecture calendrier.
-- Création événement calendrier avec confirmation.
-- Lecture Teams.
-- Réponse Teams avec confirmation.
-- État UI quand permissions manquent.
-
-## Résultat attendu
-
-À la fin :
-
-- L’utilisateur voit clairement s’il est connecté à Microsoft 365.
-- Le portail admin montre le vrai statut tenant/client/auth/scopes.
-- Les erreurs Microsoft affichent une cause claire et une action exacte.
-- Le calendrier Microsoft apparaît sur la page principale.
-- AVA peut lire, résumer et agir sur emails, calendrier, Teams, SMS/appels selon les intégrations configurées.
-- Les actions sensibles sont sécurisées et confirmées avant envoi.
+Voulez-vous que je fusionne `ms365-stats` et `ms365-stats-insights` en une seule fonction (plus simple, un seul appel côté client), ou les garder séparées (plus flexible pour rafraîchir seulement les KPI sans reconsommer du crédit IA) ? Sans réponse, je fusionne en une seule fonction.

@@ -62,10 +62,9 @@ Deno.serve(async (req) => {
       ? { tested_at: cfg.last_tested_at, success: cfg.last_test_success, message: cfg.last_test_result }
       : null;
 
-    // status: ok | limited | down
+    // status: ok when admin config + user token present & not expired
     let status: "ok" | "limited" | "down" = "down";
     if (admin_cfg_ok && user.connected && !user.expired) status = "ok";
-    else if (admin_cfg_ok && (user.connected || last?.success)) status = "limited";
     else if (admin_cfg_ok) status = "limited";
     else status = "down";
 

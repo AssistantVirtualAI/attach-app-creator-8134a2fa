@@ -18,16 +18,25 @@ Tu analyses des transcriptions d'appels téléphoniques (français canadien) ent
 
 Ta mission :
 1. Corriger la transcription (fautes, ponctuation, formatage) SANS changer le sens.
-2. Remplacer les libellés de locuteurs génériques (ex: "Speaker 1", "Speaker 2", "sip:1040", "Agent", "Caller", "Inconnu") par les vrais noms fournis dans le contexte (COURTIER = nom du courtier, CLIENT = nom du client). Utilise le format "Nom Prénom:" au début de chaque tour de parole.
-3. Produire un résumé factuel (2-4 phrases) qui mentionne explicitement le courtier et le client par leur nom.
-4. Évaluer la performance du courtier avec coaching constructif (points forts, améliorations).
-5. Fournir des prochaines actions concrètes ("next_steps") à effectuer par le courtier après cet appel.
-6. Donner un score global sur 100 (rigueur, écoute, closing, conformité).
+2. Remplacer les libellés de locuteurs génériques (Speaker 1, sip:1040, Agent, Caller, Inconnu…) par les vrais noms fournis (COURTIER, CLIENT). Format "Nom Prénom:" au début de chaque tour.
+3. Découper l'appel en segments (un par tour de parole ou groupe de tours cohérent) et pour CHAQUE segment fournir speaker, text, un timestamp relatif "mm:ss" estimé à partir de la durée totale, et un résumé d'une phrase.
+4. Produire un résumé global factuel (2-4 phrases) mentionnant courtier et client par leur nom.
+5. Extraire 2 à 5 thèmes/sujets principaux abordés (mots-clés courts, ex: "Refinancement", "Taux fixe 5 ans", "Pré-approbation").
+6. Extraire les actions concrètes ("action_items") : chaque action a un owner ("courtier"|"client"), une description, et un due (optionnel, ex: "cette semaine").
+7. Évaluer la performance du courtier : forces, améliorations, prochaines étapes.
+8. Donner un score global sur 100 (rigueur, écoute, closing, conformité).
 
 Réponds STRICTEMENT en JSON valide, sans markdown, avec ce schéma:
 {
-  "corrected_transcript": "string (avec vrais noms comme libellés de locuteurs)",
+  "corrected_transcript": "string (locuteurs = vrais noms)",
+  "segments": [
+    { "speaker": "Nom", "timestamp": "mm:ss", "text": "…", "summary": "phrase courte" }
+  ],
   "summary": "string",
+  "topics": ["string", ...],
+  "action_items": [
+    { "owner": "courtier"|"client", "description": "string", "due": "string|null" }
+  ],
   "coaching": {
     "strengths": ["string", ...],
     "improvements": ["string", ...],
@@ -140,9 +149,58 @@ Deno.serve(async (req) => {
     const context = `COURTIER: ${brokerName} (ext ${row.extension ?? "?"})
 CLIENT: ${clientName} (${row.direction === "outbound" ? row.to_number : row.from_number ?? "?"})
 Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
-    const userPrompt = `${context}\n\n--- TRANSCRIPTION BRUTE ---\n${effectiveTranscript}\n--- FIN ---\n\nAnalyse cet appel et renvoie le JSON demandé. IMPORTANT: dans corrected_transcript, remplace TOUS les libellés génériques (Speaker 1, sip:xxxx, Agent, Caller...) par "${brokerName}" et "${clientName}".`;
+    const userPrompt = `${context}\n\n--- TRANSCRIPTION BRUTE ---\n${effectiveTranscript}\n--- FIN ---\n\nAnalyse cet appel et renvoie le JSON demandé. IMPORTANT:\n- dans corrected_transcript, remplace TOUS les libellés génériques (Speaker 1, sip:xxxx, Agent, Caller...) par "${brokerName}" et "${clientName}".\n- Le JSON DOIT contenir TOUTES les clés du schéma: corrected_transcript, segments, summary, topics, action_items, coaching, score.\n- Pour un appel très court ou sans conversation substantielle: topics=[] et action_items=[] mais les clés doivent EXISTER.\n- segments = un objet par tour de parole avec speaker, timestamp (estimé mm:ss à partir de la durée totale ${row.duration_seconds ?? "?"}s), text, summary court.`;
 
     // ── F: appel IA — Claude d'abord (ANTHROPIC_API_KEY), Lovable AI en failover ──
+    // Force le schéma via `tool_use` pour garantir que topics/action_items/segments sont toujours renvoyés.
+    const ANALYSIS_TOOL = {
+      name: "record_call_analysis",
+      description: "Enregistre l'analyse complète de l'appel Planiprêt.",
+      input_schema: {
+        type: "object",
+        properties: {
+          corrected_transcript: { type: "string" },
+          segments: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                speaker: { type: "string" },
+                timestamp: { type: "string", description: "mm:ss estimé" },
+                text: { type: "string" },
+                summary: { type: "string", description: "1 phrase courte" },
+              },
+              required: ["speaker", "text"],
+            },
+          },
+          summary: { type: "string" },
+          topics: { type: "array", items: { type: "string" } },
+          action_items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                owner: { type: "string", enum: ["courtier", "client"] },
+                description: { type: "string" },
+                due: { type: "string", description: "vide si aucun délai" },
+              },
+              required: ["owner", "description"],
+            },
+          },
+          coaching: {
+            type: "object",
+            properties: {
+              strengths: { type: "array", items: { type: "string" } },
+              improvements: { type: "array", items: { type: "string" } },
+              next_steps: { type: "array", items: { type: "string" } },
+            },
+            required: ["strengths", "improvements", "next_steps"],
+          },
+          score: { type: "number", minimum: 0, maximum: 100 },
+        },
+        required: ["corrected_transcript", "segments", "summary", "topics", "action_items", "coaching", "score"],
+      },
+    };
     async function callClaude(): Promise<{ ok: boolean; content?: string; status?: number; error?: string }> {
       if (!ANTHROPIC_API_KEY) return { ok: false, error: "no_anthropic_key" };
       const model = Deno.env.get("PP_COACH_CLAUDE_MODEL") ?? "claude-sonnet-4-5-20250929";
@@ -157,13 +215,21 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
           model,
           max_tokens: 4096,
           system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userPrompt + "\n\nRÉPONDS UNIQUEMENT AVEC UN JSON VALIDE — sans markdown, sans texte hors JSON." }],
+          tools: [ANALYSIS_TOOL],
+          tool_choice: { type: "tool", name: "record_call_analysis" },
+          messages: [{ role: "user", content: userPrompt }],
         }),
       });
-      if (!r.ok) return { ok: false, status: r.status, error: await r.text().catch(() => "") };
-      const j = await r.json();
-      const content = Array.isArray(j?.content) ? j.content.map((b: any) => b?.text ?? "").join("") : "";
-      return { ok: true, content };
+      const rawText = await r.text();
+      if (!r.ok) { console.error("[claude] http", r.status, rawText.slice(0, 500)); return { ok: false, status: r.status, error: rawText }; }
+      let j: any = null;
+      try { j = JSON.parse(rawText); } catch (e) { console.error("[claude] parse fail", (e as Error).message); return { ok: false, error: "parse" }; }
+      console.log("[claude] content types:", Array.isArray(j?.content) ? j.content.map((b: any) => b?.type).join(",") : "none");
+      const toolBlock = Array.isArray(j?.content) ? j.content.find((b: any) => b?.type === "tool_use") : null;
+      if (toolBlock?.input) return { ok: true, content: JSON.stringify(toolBlock.input) };
+      const textContent = Array.isArray(j?.content) ? j.content.map((b: any) => b?.text ?? "").join("") : "";
+      console.log("[claude] no tool_use, text length:", textContent.length);
+      return { ok: true, content: textContent };
     }
 
     async function callLovable(): Promise<{ ok: boolean; content?: string; status?: number; error?: string }> {
@@ -219,6 +285,50 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
     const coaching = parsed.coaching && typeof parsed.coaching === "object" ? parsed.coaching : null;
     const score100 = typeof parsed.score === "number" ? Math.max(0, Math.min(100, Math.round(parsed.score))) : null;
     const score10 = score100 != null ? Math.max(1, Math.min(10, Math.round(score100 / 10))) : null;
+    let topics = Array.isArray(parsed.topics) ? parsed.topics.filter((t: any) => typeof t === "string").slice(0, 8) : null;
+    let actionItems = Array.isArray(parsed.action_items)
+      ? parsed.action_items
+          .filter((a: any) => a && typeof a === "object" && typeof a.description === "string")
+          .map((a: any) => ({
+            owner: ["courtier", "client"].includes(String(a.owner ?? "").toLowerCase()) ? String(a.owner).toLowerCase() : "courtier",
+            description: String(a.description).slice(0, 500),
+            due: a.due ? String(a.due).slice(0, 100) : null,
+          }))
+          .slice(0, 15)
+      : null;
+    let segments = Array.isArray(parsed.segments)
+      ? parsed.segments
+          .filter((s: any) => s && typeof s === "object" && typeof s.text === "string" && s.text.trim())
+          .map((s: any) => ({
+            speaker: String(s.speaker ?? "Speaker").slice(0, 80),
+            timestamp: typeof s.timestamp === "string" ? s.timestamp.slice(0, 12) : null,
+            text: String(s.text).slice(0, 4000),
+            summary: typeof s.summary === "string" ? s.summary.slice(0, 300) : null,
+          }))
+      : null;
+
+    // Fallback: dériver segments à partir de corrected_transcript si Claude ne les fournit pas
+    if ((!segments || !segments.length) && corrected) {
+      const lines = corrected.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+      const totalSec = Number(row.duration_seconds ?? 0);
+      const step = lines.length > 0 ? totalSec / lines.length : 0;
+      segments = lines.map((line: string, i: number) => {
+        const m = line.match(/^([^:]{1,60}):\s*(.+)$/);
+        const speaker = m ? m[1].trim() : "Speaker";
+        const text = m ? m[2].trim() : line;
+        const ts = totalSec ? `${String(Math.floor((i * step) / 60)).padStart(2, "0")}:${String(Math.floor((i * step) % 60)).padStart(2, "0")}` : null;
+        return { speaker, timestamp: ts, text, summary: null };
+      });
+    }
+    // Fallback: dériver action_items à partir de coaching.next_steps
+    if ((!actionItems || !actionItems.length) && Array.isArray(coaching?.next_steps)) {
+      actionItems = coaching.next_steps.slice(0, 10).map((s: string) => ({ owner: "courtier", description: String(s).slice(0, 500), due: null }));
+    }
+    // Fallback: topics vides → au moins un tag générique dérivé
+    if ((!topics || !topics.length) && summary) {
+      const kw = summary.match(/\b(pré-approbation|hypothéc\w+|refinancement|taux fixe|taux variable|renouvellement|assurance|mise de fonds|notaire|revenus|dossier)\b/gi);
+      if (kw) topics = Array.from(new Set(kw.map((k: string) => k.toLowerCase()))).slice(0, 5);
+    }
 
     // ── G: sauvegarder + libérer verrou ───────────────────
     const update: any = {
@@ -234,6 +344,9 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
     if (score10 != null) update.lead_score = score10;
     if (score100 != null) update.coaching_score = score100;
     if (parsed) update.ai_analysis_json = parsed;
+    if (topics && topics.length) update.ai_topics = topics;
+    if (actionItems && actionItems.length) update.ai_action_items = actionItems;
+    if (segments && segments.length) update.transcript_segments = segments;
     if (coaching?.next_steps) update.next_actions = coaching.next_steps;
 
     const { error: upErr } = await admin.from("planipret_phone_calls").update(update).eq("id", call_id);

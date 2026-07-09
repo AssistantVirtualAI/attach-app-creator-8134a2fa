@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
 
     const { data: row } = await admin
       .from("planipret_phone_calls")
-      .select("id, recording_url, transcript, ai_summary")
+      .select("id, recording_url, transcript, ai_summary, transcript_attempts")
       .eq("id", callId)
       .maybeSingle();
     if (!row) return json({ error: "call not found" }, 404);
@@ -55,8 +55,20 @@ Deno.serve(async (req) => {
           });
         } catch (_) { /* best-effort */ }
       }
+      await admin.from("planipret_phone_calls")
+        .update({ transcript_pending: false })
+        .eq("id", callId);
       return json({ ok: true, transcript: row.transcript, cached: true });
     }
+
+    const markPending = async (hint: string) => {
+      await admin.from("planipret_phone_calls").update({
+        transcript_pending: true,
+        transcript_last_attempt_at: new Date().toISOString(),
+        transcript_attempts: (row.transcript_attempts ?? 0) + 1,
+      }).eq("id", callId);
+      return json({ ok: false, pending: true, fallback: true, error: "TRANSCRIPT_PENDING", hint, attempts: (row.transcript_attempts ?? 0) + 1 }, 200);
+    };
 
     // Preferred source: the phone system transcription endpoint. AI is only a fallback
     // and coaching/correction runs after the phone-system transcript is stored.
@@ -75,6 +87,7 @@ Deno.serve(async (req) => {
             transcript_segments: nsTx.segments,
             transcript_language: nsTx.language ?? null,
             transcript_source: "ns-api",
+            transcript_pending: false,
             has_transcript: true,
           })
           .eq("id", callId);
@@ -116,14 +129,14 @@ Deno.serve(async (req) => {
         audioRes = await fetch(recUrl);
       } else {
         const detail = await proxyRes.json().catch(() => ({}));
-        return json({ ok: false, fallback: true, error: "RECORDING_NOT_AVAILABLE", hint: detail?.message ?? resolveJson?.hint ?? "Aucun enregistrement disponible.", resolve_detail: resolveJson, proxy_detail: detail }, 200);
+        return await markPending(detail?.message ?? resolveJson?.hint ?? "Enregistrement pas encore disponible côté système téléphonique.");
       }
     } catch (e) {
-      return json({ ok: false, fallback: true, error: "AUDIO_FETCH_FAILED", hint: (e as Error).message }, 200);
+      return await markPending(`Audio fetch échoué: ${(e as Error).message}`);
     }
-    if (!audioRes || !audioRes.ok) return json({ ok: false, fallback: true, error: `AUDIO_FETCH_${audioRes?.status ?? "NULL"}`, hint: "Impossible de télécharger l'audio." }, 200);
+    if (!audioRes || !audioRes.ok) return await markPending(`Audio HTTP ${audioRes?.status ?? "?"}`);
     const audioBuf = new Uint8Array(await audioRes.arrayBuffer());
-    if (audioBuf.length < 1024) return json({ ok: false, fallback: true, error: "AUDIO_EMPTY", hint: "Fichier audio vide." }, 200);
+    if (audioBuf.length < 1024) return await markPending("Fichier audio vide côté système téléphonique.");
 
     // Call Lovable AI transcription
     const ct = audioRes.headers.get("content-type") ?? "audio/wav";
@@ -139,14 +152,19 @@ Deno.serve(async (req) => {
     });
     if (!sttRes.ok) {
       const t = await sttRes.text().catch(() => "");
-      return json({ ok: false, fallback: true, error: `STT_FAILED_${sttRes.status}`, hint: t.slice(0, 400) || "La transcription IA est temporairement indisponible." }, 200);
+      return await markPending(t.slice(0, 400) || "Transcription IA temporairement indisponible.");
     }
     const sttJson = await sttRes.json().catch(() => ({}));
     const transcript = String(sttJson?.text ?? "").trim();
-    if (!transcript) return json({ ok: false, fallback: true, error: "EMPTY_TRANSCRIPT", hint: "Aucun texte n'a été détecté dans l'audio." }, 200);
+    if (!transcript) return await markPending("Aucun texte détecté dans l'audio.");
 
     await admin.from("planipret_phone_calls")
-      .update({ transcript, recording_url: recUrl ?? row.recording_url })
+      .update({
+        transcript,
+        transcript_source: "whisper-fallback",
+        transcript_pending: false,
+        recording_url: recUrl ?? row.recording_url,
+      })
       .eq("id", callId);
 
     // Chain to Claude-powered coaching (same config as /planipret/admin) so the record is

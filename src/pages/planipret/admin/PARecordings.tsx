@@ -158,6 +158,11 @@ export default function PARecordings() {
         }).eq("id", callId);
         setDetail((cur: any) => cur && cur.id === callId ? { ...cur, transcript: d.transcript, transcript_segments: segments, has_transcript: true } : cur);
         await load(page, pageSize);
+      } else if (d?.pending) {
+        // Transcript pas encore prêt côté téléphone — polling automatique
+        setDetail((cur: any) => cur && cur.id === callId ? { ...cur, transcript_pending: true, transcript_attempts: d.attempts } : cur);
+        setTranscriptionError(null);
+        setTranscriptionUnavailable(false);
       } else {
         setTranscriptionUnavailable(true);
         setTranscriptionDebug(d);
@@ -317,6 +322,21 @@ export default function PARecordings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail?.id]);
 
+  // Polling automatique quand la transcription est en attente côté système téléphonique
+  useEffect(() => {
+    if (!detail?.id) return;
+    const isPending = detail.transcript_pending && !detail.transcript;
+    if (!isPending) return;
+    const attempts = Number(detail.transcript_attempts ?? 0);
+    // Backoff: 15s, 30s, 60s, 120s (max 4 min entre tentatives)
+    const delay = Math.min(15_000 * Math.pow(2, Math.min(attempts, 3)), 240_000);
+    const t = setTimeout(() => {
+      if (transcribing !== detail.id) transcribe(detail.id);
+    }, delay);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.id, detail?.transcript_pending, detail?.transcript_attempts, transcribing]);
+
   // Auto-run Claude coaching once transcript is available and no analysis yet
   useEffect(() => {
     if (!detail?.id) return;
@@ -469,7 +489,7 @@ export default function PARecordings() {
         <table className="w-full text-sm">
           <thead style={{ background: "var(--pp-bg-elevated)" }}>
             <tr style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--pp-text-faint)" }} className="text-left">
-              <th className="p-3">Courtier</th><th>Ext.</th><th>De</th><th>Vers</th><th>Durée</th><th>Date</th><th>Transcription</th><th>IA</th><th></th>
+              <th className="p-3">Courtier</th><th>Ext.</th><th>De</th><th>Vers</th><th>Durée</th><th>Date</th><th>Transcription</th><th>Résumé & thèmes</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -511,11 +531,34 @@ export default function PARecordings() {
                 <td>
                   {c.transcript || (Array.isArray(c.transcript_segments) && c.transcript_segments.length) ? (
                     <span style={{ fontSize: 10, color: "var(--pp-success)" }}>● Disponible</span>
+                  ) : c.transcript_pending ? (
+                    <span style={{ fontSize: 10, color: "#f59e0b" }}>⏳ En attente</span>
                   ) : (
                     <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>—</span>
                   )}
                 </td>
-                <td>{c.ai_summary && <Sparkles className="w-3.5 h-3.5" style={{ color: AGENT }} />}</td>
+                <td style={{ maxWidth: 260 }}>
+                  {c.ai_summary_short || c.ai_summary ? (
+                    <div className="space-y-1">
+                      <div style={{ fontSize: 11, color: "var(--pp-text-secondary)", lineHeight: 1.35 }} className="line-clamp-2">
+                        {c.ai_summary_short ?? c.ai_summary}
+                      </div>
+                      {Array.isArray(c.ai_topics) && c.ai_topics.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {c.ai_topics.slice(0, 3).map((t: string, i: number) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded-full text-[9px]" style={{ background: "rgba(155,127,232,0.14)", color: AGENT, border: `1px solid ${AGENT}55` }}>{t}</span>
+                          ))}
+                          {c.ai_topics.length > 3 && <span style={{ fontSize: 9, color: "var(--pp-text-faint)" }}>+{c.ai_topics.length - 3}</span>}
+                        </div>
+                      )}
+                      {Array.isArray(c.ai_action_items) && c.ai_action_items.length > 0 && (
+                        <div style={{ fontSize: 9, color: ACCENT }}>✓ {c.ai_action_items.length} action{c.ai_action_items.length > 1 ? "s" : ""}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>—</span>
+                  )}
+                </td>
                 <td><Mic className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} /></td>
               </tr>
             ))}
@@ -628,12 +671,35 @@ export default function PARecordings() {
               {hasDetailTranscript && detail.ai_coaching ? (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <p style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Transcription corrigée (IA)</p>
+                    <p style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Transcription corrigée (Claude)</p>
                     <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: "rgba(16,185,129,0.14)", color: "#10b981", border: "1px solid #10b98155", fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>● Terminé</span>
                   </div>
-                  <div className="p-3 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
-                    <div className="whitespace-pre-wrap">{detail.transcript}</div>
-                  </div>
+                  {detailSegments.length > 0 ? (
+                    <div className="space-y-2">
+                      {detailSegments.map((s: any, i: number) => {
+                        const isClient = String(s.speaker ?? "").toLowerCase().includes("client");
+                        const bg = isClient ? "rgba(46,155,220,0.10)" : "rgba(155,127,232,0.10)";
+                        const border = isClient ? "#2E9BDC55" : "#9B7FE855";
+                        const nameColor = isClient ? "#2E9BDC" : "#9B7FE8";
+                        return (
+                          <div key={i} className="p-2.5 rounded-lg" style={{ background: bg, border: `1px solid ${border}`, fontSize: 12 }}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span style={{ fontWeight: 700, color: nameColor, fontSize: 11 }}>{s.speaker ?? "Speaker"}</span>
+                              {s.timestamp && <span style={{ fontSize: 10, color: "var(--pp-text-faint)", fontFamily: "monospace" }}>{s.timestamp}</span>}
+                            </div>
+                            <div style={{ color: "var(--pp-text-primary)" }} className="whitespace-pre-wrap">{s.text}</div>
+                            {s.summary && (
+                              <div style={{ marginTop: 6, fontSize: 10, color: "var(--pp-text-muted)", fontStyle: "italic" }}>↳ {s.summary}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
+                      <div className="whitespace-pre-wrap">{detail.transcript}</div>
+                    </div>
+                  )}
                 </div>
               ) : (hasDetailTranscript && !detail.ai_coaching) || coaching === detail.id ? (
                 (() => {
@@ -671,12 +737,14 @@ export default function PARecordings() {
                     </div>
                   );
                 })()
-              ) : transcribing === detail.id ? (
+              ) : transcribing === detail.id || detail.transcript_pending ? (
                 <div>
                   <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Transcription</p>
                   <div className="flex items-center gap-2 p-3 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
                     <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: "var(--pp-text-muted)", borderTopColor: "transparent" }} />
-                    Chargement de la transcription depuis NS-API…
+                    {detail.transcript_pending
+                      ? `Transcription pas encore prête côté système téléphonique — tentative auto en cours (essai ${detail.transcript_attempts ?? 1})…`
+                      : "Chargement de la transcription depuis NS-API…"}
                   </div>
                 </div>
               ) : transcriptionError ? (
@@ -752,6 +820,36 @@ export default function PARecordings() {
                   <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Résumé IA</p>
                   <div className="p-3 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
                     {detail.ai_summary}
+                  </div>
+                </div>
+              )}
+              {Array.isArray(detail.ai_topics) && detail.ai_topics.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Thèmes abordés</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {detail.ai_topics.map((t: string, i: number) => (
+                      <span key={i} className="px-2 py-1 rounded-full text-[11px]" style={{ background: "rgba(155,127,232,0.14)", color: AGENT, border: `1px solid ${AGENT}55` }}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {Array.isArray(detail.ai_action_items) && detail.ai_action_items.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Actions à faire</p>
+                  <div className="p-3 rounded-lg space-y-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
+                    {detail.ai_action_items.map((a: any, i: number) => {
+                      const isBroker = String(a.owner ?? "").toLowerCase() === "courtier";
+                      const color = isBroker ? ACCENT : AGENT;
+                      return (
+                        <div key={i} className="flex items-start gap-2">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}>{isBroker ? "Courtier" : "Client"}</span>
+                          <div className="flex-1">
+                            <div style={{ color: "var(--pp-text-primary)" }}>{a.description}</div>
+                            {a.due && <div style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>⏱ {a.due}</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

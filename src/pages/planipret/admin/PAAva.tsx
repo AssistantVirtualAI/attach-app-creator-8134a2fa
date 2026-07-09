@@ -282,6 +282,54 @@ export default function PAAva() {
         </div>
       )}
 
+      {/* Analyze progress/report */}
+      {(analyzing || analyzeReport) && (
+        <div className="pp-card" style={{ padding: 14, borderColor: analyzing ? `${ACCENT}55` : (analyzeReport?.mode === "error" ? `${DANGER}55` : `${SUCCESS}55`) }}>
+          <div className="flex items-center gap-2 mb-2">
+            {analyzing ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: ACCENT }} /> : <CheckCircle2 className="w-4 h-4" style={{ color: analyzeReport?.mode === "error" ? DANGER : SUCCESS }} />}
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)" }}>
+              {analyzing ? (t("adminPortal.ava.analyzing")) : (t("adminPortal.ava.analyzeReportTitle"))}
+            </div>
+            {analyzeReport && !analyzing && (
+              <span style={{ fontSize: 10, color: "var(--pp-text-faint)", marginLeft: "auto" }}>
+                {new Date(analyzeReport.at).toLocaleString(lang === "en" ? "en-CA" : "fr-CA")}
+              </span>
+            )}
+          </div>
+          {analyzeReport && (
+            <>
+              <div className="flex flex-wrap gap-3" style={{ fontSize: 11, color: "var(--pp-text-secondary)" }}>
+                <span><strong style={{ color: "var(--pp-text-primary)" }}>{analyzeReport.total_analyses}</strong> {t("adminPortal.ava.kpi.analyses")}</span>
+                <span><strong style={{ color: "var(--pp-text-primary)" }}>{analyzeReport.analyzed_brokers}/{analyzeReport.brokers_scanned}</strong> {t("adminPortal.ava.kpi.activeBrokers")}</span>
+                <span>mode: <strong style={{ color: "var(--pp-text-primary)" }}>{analyzeReport.mode}</strong></span>
+                {analyzeReport.errors.length > 0 && <span style={{ color: DANGER }}>{analyzeReport.errors.length} error(s)</span>}
+              </div>
+              {analyzeReport.per_broker.length > 0 && (
+                <div className="mt-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5 max-h-40 overflow-auto">
+                  {analyzeReport.per_broker.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between px-2 py-1 rounded" style={{ background: "var(--pp-bg-deep)", fontSize: 10 }}>
+                      <span className="truncate" style={{ color: "var(--pp-text-secondary)" }}>{p.broker}</span>
+                      <span className="tabular-nums" style={{ color: p.analyses > 0 ? SUCCESS : "var(--pp-text-faint)", fontWeight: 700 }}>{p.analyses}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {analyzeReport.errors.length > 0 && (
+                <details className="mt-2">
+                  <summary style={{ fontSize: 10, color: DANGER, cursor: "pointer" }}>{analyzeReport.errors.length} error(s)</summary>
+                  <div className="mt-1 space-y-0.5 max-h-32 overflow-auto">
+                    {analyzeReport.errors.map((e, i) => (
+                      <div key={i} style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{e.broker ? `${e.broker} — ` : ""}{e.error}</div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+
       {/* Guided empty state */}
       {showGuidedEmpty && (
         <div className="pp-card text-center" style={{ padding: 28, borderStyle: "dashed" }}>

@@ -34,11 +34,12 @@ type Response = {
 };
 
 const LABELS: Record<string, string> = {
-  auth: "Authentification OAuth2",
-  organization: "Organisation Microsoft",
-  users: "Utilisateurs Microsoft",
-  app_registration: "Configuration App Azure",
-  permissions: "Permissions Graph",
+  auth: "Authentification OAuth2 (app)",
+  delegated: "Capacités utilisateur (Mail/Calendar/Teams)",
+  organization: "Organisation Microsoft (info)",
+  users: "Utilisateurs Microsoft (info)",
+  app_registration: "Configuration App Azure (info)",
+  permissions: "Permissions Graph (info)",
   config: "Configuration",
 };
 
@@ -215,7 +216,8 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
         <div className="mt-4 space-y-2">
           {rows.map(([key, r]) => {
             const open = !!expanded[key];
-            const icon = r.success ? "✅" : r.category === "admin_directory" ? "⚠️" : "❌";
+            const isInfo = (r as any).informational === true;
+            const icon = r.success ? (isInfo ? "ℹ️" : "✅") : isInfo ? "ℹ️" : "❌";
             return (
               <div
                 key={key}

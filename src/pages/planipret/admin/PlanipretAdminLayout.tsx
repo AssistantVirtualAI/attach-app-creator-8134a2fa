@@ -214,9 +214,12 @@ export default function PlanipretAdminLayout() {
     );
   }
 
-  const title = PAGE_TITLES[location.pathname] ?? "Tableau de bord";
+  const { t: tt } = useMplanipretLang();
+  const pageKey = PAGE_KEY_BY_PATH[location.pathname];
+  const title = pageKey ? tt(`adminPortal.pageTitles.${pageKey}`) : tt("adminPortal.dashboardTitle");
   const dateLabel = new Date().toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const sectionLabel = NAV.find((g) => g.items.some((i) => i.to === location.pathname))?.title ?? "Administration";
+  const sectionKey = NAV.find((g) => g.items.some((i) => i.to === location.pathname))?.sectionKey;
+  const sectionLabel = sectionKey ? tt(`adminPortal.sections.${sectionKey}`) : tt("adminPortal.administration");
 
   const renderBadge = (b?: NavBadge) => {
     if (b === "brokers" && brokerCount > 0) {
@@ -259,16 +262,17 @@ export default function PlanipretAdminLayout() {
         style={{ background: "var(--pp-bg-base)" }}>
         <div className="text-center max-w-xs pp-card" style={{ padding: 24 }}>
           <h2 className="pp-heading" style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
-            Dashboard admin
+            {tt("adminPortal.mobileNoticeTitle")}
           </h2>
           <p style={{ fontSize: 13, color: "var(--pp-text-secondary)", marginBottom: 16 }}>
-            Le dashboard admin est optimisé pour desktop. Sur mobile, utilisez l'application courtier.
+            {tt("adminPortal.mobileNoticeBody")}
           </p>
           <button onClick={() => navigate("/mplanipret")} className="pp-btn-primary">
-            Ouvrir l'app mobile
+            {tt("adminPortal.openMobileApp")}
           </button>
         </div>
       </div>
+
 
       {/* Sidebar */}
       <aside className="pp-sidebar hidden md:flex flex-col fixed left-0 top-0 h-screen w-[248px] z-40">
@@ -286,8 +290,8 @@ export default function PlanipretAdminLayout() {
               }}
             />
             <div className="min-w-0">
-              <div className="pp-sidebar-brand" style={{ fontSize: 15 }}>Planiprêt</div>
-              <div className="pp-sidebar-sub" style={{ fontSize: 11 }}>Admin Portal</div>
+              <div className="pp-sidebar-brand" style={{ fontSize: 15 }}>{tt("adminPortal.brand")}</div>
+              <div className="pp-sidebar-sub" style={{ fontSize: 11 }}>{tt("adminPortal.subBrand")}</div>
             </div>
           </div>
         </div>
@@ -295,16 +299,16 @@ export default function PlanipretAdminLayout() {
         {/* Nav groups */}
         <nav className="flex-1 py-2 overflow-y-auto">
           {NAV.map((group) => (
-            <div key={group.title}>
-              <div className="pp-nav-section">{group.title}</div>
-              {group.items.map(({ to, label, Icon, badge }) => (
+            <div key={group.sectionKey}>
+              <div className="pp-nav-section">{tt(`adminPortal.sections.${group.sectionKey}`)}</div>
+              {group.items.map(({ to, key, Icon, badge }) => (
                 <NavLink key={to} to={to} end
                   className={({ isActive }) => `pp-nav-item ${isActive ? "is-active" : ""}`}>
                   {({ isActive }) => (
                     <>
                       <Icon className="w-[17px] h-[17px] flex-shrink-0"
                         style={{ color: isActive ? "var(--pp-brand-accent-2)" : "var(--pp-text-muted)" }} />
-                      <span className="flex-1 truncate">{label}</span>
+                      <span className="flex-1 truncate">{tt(`adminPortal.nav.${key}`)}</span>
                       {renderBadge(badge)}
                     </>
                   )}

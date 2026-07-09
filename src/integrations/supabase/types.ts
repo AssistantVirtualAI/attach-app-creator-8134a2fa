@@ -8829,12 +8829,14 @@ export type Database = {
       }
       planipret_phone_calls: {
         Row: {
+          ai_action_items: Json | null
           ai_analysis_json: Json | null
           ai_client_insights: Json | null
           ai_coaching: Json | null
           ai_key_points: Json | null
           ai_summary: string | null
           ai_summary_short: string | null
+          ai_topics: Json | null
           analysis_in_progress: boolean | null
           analysis_locked_at: string | null
           analysis_locked_by: string | null
@@ -8885,9 +8887,12 @@ export type Database = {
           to_name: string | null
           to_number: string | null
           transcript: string | null
+          transcript_attempts: number
           transcript_confidence: number | null
           transcript_fetched_at: string | null
           transcript_language: string | null
+          transcript_last_attempt_at: string | null
+          transcript_pending: boolean
           transcript_raw: string | null
           transcript_segments: Json | null
           transcript_source: string | null
@@ -8895,12 +8900,14 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          ai_action_items?: Json | null
           ai_analysis_json?: Json | null
           ai_client_insights?: Json | null
           ai_coaching?: Json | null
           ai_key_points?: Json | null
           ai_summary?: string | null
           ai_summary_short?: string | null
+          ai_topics?: Json | null
           analysis_in_progress?: boolean | null
           analysis_locked_at?: string | null
           analysis_locked_by?: string | null
@@ -8951,9 +8958,12 @@ export type Database = {
           to_name?: string | null
           to_number?: string | null
           transcript?: string | null
+          transcript_attempts?: number
           transcript_confidence?: number | null
           transcript_fetched_at?: string | null
           transcript_language?: string | null
+          transcript_last_attempt_at?: string | null
+          transcript_pending?: boolean
           transcript_raw?: string | null
           transcript_segments?: Json | null
           transcript_source?: string | null
@@ -8961,12 +8971,14 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          ai_action_items?: Json | null
           ai_analysis_json?: Json | null
           ai_client_insights?: Json | null
           ai_coaching?: Json | null
           ai_key_points?: Json | null
           ai_summary?: string | null
           ai_summary_short?: string | null
+          ai_topics?: Json | null
           analysis_in_progress?: boolean | null
           analysis_locked_at?: string | null
           analysis_locked_by?: string | null
@@ -9017,9 +9029,12 @@ export type Database = {
           to_name?: string | null
           to_number?: string | null
           transcript?: string | null
+          transcript_attempts?: number
           transcript_confidence?: number | null
           transcript_fetched_at?: string | null
           transcript_language?: string | null
+          transcript_last_attempt_at?: string | null
+          transcript_pending?: boolean
           transcript_raw?: string | null
           transcript_segments?: Json | null
           transcript_source?: string | null

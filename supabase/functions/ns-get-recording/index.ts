@@ -446,26 +446,20 @@ Deno.serve(async (req) => {
     }, 200);
   }
 
-  // Mark the row as unrecorded so the UI stops retrying and shows a clean panel.
-  if (call_db_id) {
-    try {
-      const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-      await admin.from("planipret_phone_calls")
-        .update({ has_recording: false })
-        .eq("id", call_db_id);
-    } catch { /* best-effort */ }
-  }
-
+  // NOTE: do NOT flip has_recording=false here. NetSapiens can respond empty
+  // while the recording is still being finalized, or when the orig/term call-id
+  // we probed doesn't yet match the CDR. Auto-marking permanently hid the
+  // "Load recording" flow for calls that ARE recorded (all lines are auto-recorded).
   return json({
     error: "RECORDING_NOT_FOUND",
     message: cdrMatches.length
-      ? "Cet appel n'a pas d'enregistrement disponible sur NetSapiens (jamais enregistré, expiré ou purgé)."
-      : "Enregistrement non disponible sur NetSapiens.",
+      ? "Aucun enregistrement retourné par NetSapiens pour cet appel (traitement en cours, expiré, ou call-id désynchronisé). Relancez la synchronisation CDR puis réessayez."
+      : "NetSapiens n'a retourné aucun enregistrement pour cet appel. Vérifiez la synchronisation CDR puis réessayez.",
     ns_callid, ns_extension, domain, attempted_ids: ids, cdr_matches: cdrMatches.map((m) => ({ score: m.score, path: m.path })), attempts,
     possible_causes: [
-      "L'appel n'a pas été enregistré (règle d'enregistrement inactive pour cette extension/direction)",
-      "Le fichier a expiré ou été purgé côté NetSapiens",
-      "Le ns_callid stocké ne correspond à aucun enregistrement — vérifier la synchro CDR et les call-id orig/term",
+      "Le fichier est encore en cours de traitement côté NetSapiens (réessayer dans quelques minutes)",
+      "Le ns_callid stocké ne correspond pas à la paire orig/term réelle — resynchroniser le CDR",
+      "Le fichier a expiré ou été purgé côté NetSapiens (rare, uniquement pour d'anciens appels)",
     ],
   }, 200);
 });

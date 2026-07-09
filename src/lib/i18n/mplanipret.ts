@@ -824,6 +824,8 @@ export const MP_DICT = {
           body: "Personne n'a encore connecté Microsoft 365 avec les scopes mis à jour et aucun email n'a été analysé. Reconnectez au moins un courtier, ou lancez une analyse pour peupler ce tableau.",
           openDiagnostic: "Ouvrir le diagnostic Microsoft 365",
         },
+        analyzing: "Analyse des emails en cours…",
+        analyzeReportTitle: "Rapport de la dernière analyse",
       },
     },
   },

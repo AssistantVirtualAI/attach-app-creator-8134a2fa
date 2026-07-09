@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Download, Flame } from "lucide-react";
 import { TEMP_COLORS, TEMP_EMOJI, TEMP_LABEL, type LeadTemp } from "@/components/planipret/leadHelpers";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 type Row = {
   id: string;

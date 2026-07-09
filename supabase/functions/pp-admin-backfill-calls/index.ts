@@ -39,8 +39,7 @@ Deno.serve(async (req) => {
     const CRON_SECRET = Deno.env.get("PP_CRON_TOKEN") ?? Deno.env.get("PP_CRON_SECRET") ?? "";
 
     const auth = req.headers.get("Authorization") ?? "";
-    const cronHeader = req.headers.get("x-pp-cron-secret") ?? req.headers.get("X-Pp-Cron-Secret") ?? "";
-    console.log("[backfill] headers:", { hasAuth: !!auth, cronHeaderLen: cronHeader.length, secretConfigured: !!CRON_SECRET, match: cronHeader === CRON_SECRET });
+    const cronHeader = req.headers.get("x-pp-cron-secret") ?? "";
     const isCron = CRON_SECRET && cronHeader === CRON_SECRET;
     const token = auth.startsWith("Bearer ") ? auth.replace(/^Bearer\s+/i, "") : "";
     const isServiceRole = token && token === SERVICE_ROLE;

@@ -15,6 +15,7 @@ import { safeEdgeFunction } from "@/lib/safeEdgeFunction";
 import MNetworkSection from "@/components/planipret/mobile/MNetworkSection";
 import MCallAudioSettings from "@/components/planipret/mobile/MCallAudioSettings";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 
 const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";

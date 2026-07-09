@@ -1,8 +1,13 @@
-// pp-admin-backfill-calls — Traite en batch tous les appels avec enregistrement
-// qui n'ont pas encore de transcription ou d'analyse Claude.
-// Peut être invoqué:
-//   - par un admin Planipret via le portail (JWT utilisateur)
-//   - par pg_cron / service-role (Bearer = SUPABASE_SERVICE_ROLE_KEY) pour auto-traitement.
+// pp-admin-backfill-calls — Traite en batch tous les appels qui ont probablement
+// un enregistrement (NetSapiens auto-enregistre) mais qui n'ont pas encore
+// de transcription ou d'analyse Claude.
+//
+// - Renvoie 202 immédiatement et draine la file en arrière-plan
+//   (EdgeRuntime.waitUntil) pour ne pas être coupé par le timeout Edge.
+// - Traite jusqu'à `limit` (defaut 250, max 1000) appels par invocation, avec
+//   concurrence limitée pour ne pas surcharger NS/Claude/Lovable AI.
+// - Cron le rappelle toutes les 2 min → la file se draine automatiquement,
+//   les nouveaux appels sont pris en charge sans intervention manuelle.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -57,53 +62,86 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({} as any));
-    const limit = Math.min(Math.max(Number(body.limit) || 25, 1), 100);
-    const concurrency = Math.min(Math.max(Number(body.concurrency) || 3, 1), 5);
+    const limit = Math.min(Math.max(Number(body.limit) || 250, 1), 1000);
+    const concurrency = Math.min(Math.max(Number(body.concurrency) || 4, 1), 8);
     const dryRun = body.dry_run === true;
+    const minDuration = Number.isFinite(Number(body.min_duration)) ? Number(body.min_duration) : 5;
 
-    // Cible: appels avec enregistrement, sans transcript OU sans analyse
+    // Éligibilité large: NetSapiens auto-enregistre tous les appels.
+    // On prend TOUT appel avec un identifiant NS + durée > minDuration qui n'a
+    // pas encore de transcription OU pas encore d'analyse Claude.
+    // (Le pipeline pp-admin-transcribe marque transcript_pending si l'audio
+    // n'est pas encore disponible côté PBX — inutile de re-tenter en boucle
+    // dans la même invocation, on filtre les tentatives récentes < 10 min.)
+    const tenMinAgo = new Date(Date.now() - 10 * 60_000).toISOString();
     const { data: rows, error } = await admin
       .from("planipret_phone_calls")
-      .select("id, has_recording, transcript, analyzed_at, analysis_in_progress, analysis_locked_at")
-      .eq("has_recording", true)
+      .select("id, transcript, analyzed_at, analysis_in_progress, analysis_locked_at, transcript_last_attempt_at, ns_call_id, ns_cdr_id, ns_orig_callid, duration_seconds, has_recording")
+      .or([
+        "has_recording.eq.true",
+        "ns_call_id.not.is.null",
+        "ns_cdr_id.not.is.null",
+        "ns_orig_callid.not.is.null",
+      ].join(","))
+      .gte("duration_seconds", minDuration)
       .or("transcript.is.null,analyzed_at.is.null")
       .order("started_at", { ascending: false })
       .limit(limit);
     if (error) return json({ error: error.message }, 500);
 
-    // Filtrer les verrous actifs (< 2 min)
     const eligible = (rows ?? []).filter((r: any) => {
-      if (!r.analysis_in_progress) return true;
-      const lockedAt = new Date(r.analysis_locked_at || 0).getTime();
-      return Date.now() - lockedAt > 120_000;
+      // Skip locks < 2 min
+      if (r.analysis_in_progress) {
+        const lockedAt = new Date(r.analysis_locked_at || 0).getTime();
+        if (Date.now() - lockedAt < 120_000) return false;
+      }
+      // Skip retry storm: if a transcript attempt failed in the last 10 min,
+      // wait — the audio is probably still not on the PBX yet.
+      if (r.transcript_last_attempt_at && !r.transcript && r.transcript_last_attempt_at > tenMinAgo) return false;
+      return true;
     });
 
     if (dryRun) {
-      return json({ eligible_count: eligible.length, ids: eligible.map((r: any) => r.id) });
+      return json({ eligible_count: eligible.length, ids: eligible.slice(0, 50).map((r: any) => r.id) });
     }
 
-    // Traitement concurrent limité
-    const results: any[] = [];
-    let cursor = 0;
-    const workers = Array.from({ length: concurrency }, async () => {
-      while (cursor < eligible.length) {
-        const idx = cursor++;
-        const row = eligible[idx];
-        const res = await processOne(row.id, downstreamAuth);
-        results.push(res);
-      }
-    });
-    await Promise.all(workers);
+    // Drain the queue in the background so we're not killed by the 150s
+    // edge-function timeout. The client receives 202 immediately.
+    const drain = (async () => {
+      const results: any[] = [];
+      let cursor = 0;
+      const workers = Array.from({ length: concurrency }, async () => {
+        while (cursor < eligible.length) {
+          const idx = cursor++;
+          const row = eligible[idx];
+          const res = await processOne(row.id, downstreamAuth);
+          results.push(res);
+          if (!res.ok) {
+            console.log(`[backfill] ${row.id} FAILED status=${res.status} err=${JSON.stringify(res.detail ?? res.error).slice(0, 200)}`);
+          }
+        }
+      });
+      await Promise.all(workers);
+      const ok = results.filter((r) => r.ok).length;
+      console.log(`[backfill] done: ${ok}/${results.length} succeeded (queue was ${eligible.length})`);
+    })();
 
-    const succeeded = results.filter((r) => r.ok).length;
-    const failed = results.filter((r) => !r.ok);
+    // Keep the worker alive until the drain finishes.
+    // @ts-ignore Edge runtime global
+    if (typeof EdgeRuntime !== "undefined" && (EdgeRuntime as any).waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(drain);
+    } else {
+      // Fallback: fire-and-forget
+      drain.catch((e) => console.error("[backfill] drain error", e));
+    }
+
     return json({
-      total: eligible.length,
-      processed: results.length,
-      succeeded,
-      failed_count: failed.length,
-      failed: failed.slice(0, 10),
-    });
+      queued: eligible.length,
+      concurrency,
+      limit,
+      message: "Processing started in background. Poll planipret_phone_calls for transcript/analyzed_at updates.",
+    }, 202);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }

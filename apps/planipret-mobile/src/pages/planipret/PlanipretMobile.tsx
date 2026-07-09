@@ -32,28 +32,25 @@ import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 
 const ACCENT = "#2E9BDC";
 
+import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
+import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
+
 const AvaBadge = ({ compact = false, circle = false }: { compact?: boolean; circle?: boolean }) => (
   <div
     aria-label="AVA"
     style={{
-      width: circle ? "100%" : undefined,
-      height: circle ? "100%" : undefined,
-      minWidth: compact ? 14 : 34,
-      minHeight: compact ? 14 : 28,
-      background: "#7C3AED",
-      borderRadius: circle ? "50%" : compact ? 4 : 12,
-      padding: circle ? 0 : compact ? "1px 4px" : "8px 12px",
-      color: "white",
-      fontWeight: 800,
-      fontSize: circle ? 15 : compact ? 8 : 14,
+      width: circle ? "100%" : compact ? 16 : 34,
+      height: circle ? "100%" : compact ? 16 : 28,
+      borderRadius: circle ? "50%" : compact ? 4 : 8,
+      overflow: "hidden",
       display: "inline-flex",
       alignItems: "center",
       justifyContent: "center",
-      boxShadow: compact ? undefined : "0 0 12px rgba(124,58,237,0.45)",
-      lineHeight: 1,
+      background: "transparent",
+      boxShadow: compact || circle ? undefined : "0 0 12px rgba(124,58,237,0.35)",
     }}
   >
-    AVA
+    <img src={avaLogoAsset.url} alt="AVA" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
   </div>
 );
 
@@ -63,18 +60,14 @@ const PlanipretBadge = () => (
     style={{
       width: 28,
       height: 28,
-      background: "#1A4A8A",
-      borderRadius: 12,
-      color: "white",
-      fontWeight: 800,
-      fontSize: 14,
+      borderRadius: 8,
+      overflow: "hidden",
       display: "inline-flex",
       alignItems: "center",
       justifyContent: "center",
-      lineHeight: 1,
     }}
   >
-    P
+    <img src={planipretLogoAsset.url} alt="Planiprêt" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
   </div>
 );
 

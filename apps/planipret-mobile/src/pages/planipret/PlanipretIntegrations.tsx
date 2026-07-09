@@ -323,7 +323,6 @@ export default function PlanipretIntegrations() {
           const clientSecretPresent =
             !!rows.ms365?.config_data?.client_secret ||
             (ms?.present ?? []).includes("MICROSOFT_CLIENT_SECRET");
-          const clientIdMissing = !clientIdVal;
           const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL ?? "";
           const edgeCallbackUrl = `${supabaseUrl}/functions/v1/ms365-auth-callback`;
           const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -342,29 +341,13 @@ export default function PlanipretIntegrations() {
           lastTestResult={rows.ms365?.last_test_result}
           lastTestSuccess={rows.ms365?.last_test_success}
           onToggleEnabled={(v) => toggleEnabled("ms365", v)}
-          onSave={() => save("ms365", ["tenant_id", "client_id"])}
+          onSave={() => save("ms365", [])}
           onTest={() => test("ms365")}
-          testDisabled={clientIdMissing}
-          testDisabledReason="Configuration incomplète — Client ID manquant"
         >
-          {clientIdMissing && (
-            <InfoBanner tone="warn">
-              <strong>Configuration incomplète — Client ID manquant.</strong>{" "}
-              Renseignez <code>MICROSOFT_CLIENT_ID</code> dans les secrets backend
-              ou saisissez-le ci-dessous pour activer le test de connexion.
-            </InfoBanner>
-          )}
           <InfoBanner>
-            Créez une App Registration dans Azure AD pour <strong>planipret.ca</strong>.
-            Permissions requises (Application): <code>Mail.ReadWrite</code>, <code>Mail.Send</code>,
-            <code>Calendars.ReadWrite</code>, <code>Chat.ReadWrite</code>, <code>Files.ReadWrite.All</code>, <code>User.Read.All</code>.
-            <div className="mt-2 flex items-center gap-2">
-              <a href="https://portal.azure.com" target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-                style={{ background: "#0D1F35", border: "1px solid #0E2A45", color: "#2E9BDC" }}>
-                Ouvrir Azure Portal →
-              </a>
-            </div>
+            Microsoft 365 utilise la configuration OAuth sécurisée déjà enregistrée côté backend.
+            Les courtiers se connectent avec leur compte Microsoft depuis l'app mobile; aucun Tenant ID,
+            Client ID ou secret n'est demandé dans l'app.
           </InfoBanner>
 
           {/* Read-only Redirect URIs to register in Azure AD */}
@@ -402,31 +385,10 @@ export default function PlanipretIntegrations() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="Tenant ID" required hint="Auto-rempli depuis MICROSOFT_TENANT_ID">
-              <TextInput value={tenantVal}
-                onChange={(e) => setField("ms365", "tenant_id", e.target.value)}
-                placeholder="00000000-0000-0000-0000-000000000000" />
+            <Field label="Statut OAuth" hint="Configuration chargée depuis le backend sécurisé">
+              <TextInput readOnly value={clientIdVal || clientSecretPresent ? "Configuration Microsoft détectée" : "Configuration backend non détectée"} />
             </Field>
-            <Field label="Client ID (Application ID)" required
-              hint={clientIdMissing ? "⚠️ À compléter — MICROSOFT_CLIENT_ID manquant" : "Auto-rempli depuis MICROSOFT_CLIENT_ID (modifiable)"}>
-              <div className="relative">
-                <TextInput value={clientIdVal}
-                  onChange={(e) => setField("ms365", "client_id", e.target.value)}
-                  placeholder="00000000-0000-0000-0000-000000000000" />
-                {clientIdMissing && (
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                    style={{ background: "rgba(245,166,35,0.15)", border: "1px solid #4A3000", color: "#F5A623" }}>
-                    À compléter
-                  </span>
-                )}
-              </div>
-            </Field>
-            <Field label="Client Secret" hint="Auto-détecté depuis MICROSOFT_CLIENT_SECRET · masqué">
-              <SecretInput value={draft.ms365?.client_secret ?? ""}
-                onChange={(v) => setField("ms365", "client_secret", v)}
-                hasSavedValue={clientSecretPresent} />
-            </Field>
-            <Field label="Redirect URI (frontend fallback)" hint="Route interne — non utilisée pour Azure">
+            <Field label="Redirect URI (frontend fallback)" hint="Route interne utilisée par l'app">
               <TextInput readOnly value={`${typeof window !== "undefined" ? window.location.origin : ""}/auth/ms365/callback`} />
             </Field>
           </div>

@@ -226,13 +226,16 @@ function AuthenticatedShell({
   // Permissions are requested natively after login (see requestPermissionsAfterLogin).
 
   // Build SIP config from the same backend credentials used by desktop/portal.
-  // Mobile pins SIP/TLS (port 5061) as the primary transport — no WebRTC required.
+  // iOS: pin SIP/TLS (5061) for the native PJSIP plugin.
+  // Android: use a real wss:// URL because Android falls back to JsSIP (WebRTC).
   const sipPassword = creds.sipPassword;
-  const WORKING_WSS = [
-    'sips://pbxnode.lemtel.tel:5061',
-    'wss://pbxnode.lemtel.tel:7443',
-    'wss://node.lemtelcloud.net:7443',
-  ];
+  const isAndroidPlatform = Capacitor.getPlatform() === 'android';
+  const WSS_TLS = 'sips://pbxnode.lemtel.tel:5061';
+  const WSS_PRIMARY = 'wss://pbxnode.lemtel.tel:7443';
+  const WSS_FALLBACK = 'wss://node.lemtelcloud.net:7443';
+  const WORKING_WSS = isAndroidPlatform
+    ? [WSS_PRIMARY, WSS_FALLBACK]
+    : [WSS_TLS, WSS_PRIMARY, WSS_FALLBACK];
   const sipDomain = creds.sipDomain || 'lemtel.lemtel.tel';
   // credentialsReady: true once we have extension + password, regardless of token freshness
   // The freshCredentialToken check was blocking SIP from ever starting

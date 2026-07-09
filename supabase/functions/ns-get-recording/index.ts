@@ -412,6 +412,12 @@ Deno.serve(async (req) => {
       if (r.ok) {
         const parsed = await r.json().catch(() => null);
         const recording = Array.isArray(parsed) ? parsed[0] : parsed;
+        if (recording && typeof recording === "object") {
+          attempts[attempts.length - 1].fields_found = Object.keys(recording);
+          attempts[attempts.length - 1].sample = Object.fromEntries(
+            Object.entries(recording).filter(([_, v]) => typeof v === "string" && v.length < 400),
+          );
+        }
         if (recording && !recordingMeta) recordingMeta = recording;
         const audioUrl = pickAudioUrl(recording);
         if (audioUrl) {

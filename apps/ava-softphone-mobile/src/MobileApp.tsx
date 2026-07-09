@@ -181,6 +181,8 @@ function AuthenticatedShell({
 
   // permissions handled natively after login
   const [profileOpen, setProfileOpen] = useState(false);
+  useEffect(() => { void navLog('AuthenticatedShell mount', { userId: creds.userId, extension: creds.extension, hasSip: !!creds.sipPassword, tab }); return () => { void navLog('AuthenticatedShell unmount'); }; }, []);
+  useEffect(() => { void navLog('tab change', { tab }); }, [tab]);
   useDeviceNotifications(creds);
   const [freshCredentialToken, setFreshCredentialToken] = useState('');
   const [authExpired, setAuthExpired] = useState(false);

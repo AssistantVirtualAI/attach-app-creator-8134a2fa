@@ -347,31 +347,84 @@ export default function PAAva() {
           </div>
           {analyzeReport && (
             <>
-              <div className="flex flex-wrap gap-3" style={{ fontSize: 11, color: "var(--pp-text-secondary)" }}>
+              <div className="flex flex-wrap items-center gap-3" style={{ fontSize: 11, color: "var(--pp-text-secondary)" }}>
                 <span><strong style={{ color: "var(--pp-text-primary)" }}>{analyzeReport.total_analyses}</strong> {t("adminPortal.ava.kpi.analyses")}</span>
                 <span><strong style={{ color: "var(--pp-text-primary)" }}>{analyzeReport.analyzed_brokers}/{analyzeReport.brokers_scanned}</strong> {t("adminPortal.ava.kpi.activeBrokers")}</span>
                 <span>mode: <strong style={{ color: "var(--pp-text-primary)" }}>{analyzeReport.mode}</strong></span>
                 {analyzeReport.errors.length > 0 && <span style={{ color: DANGER }}>{analyzeReport.errors.length} error(s)</span>}
+                {(analyzeReport.failed_broker_ids?.length ?? 0) > 0 && !analyzing && (
+                  <Button size="sm" variant="outline" className="ml-auto" onClick={() => analyzeAll(analyzeReport.failed_broker_ids)}>
+                    <Loader2 className={`w-3.5 h-3.5 mr-1.5 ${analyzing ? "animate-spin" : "hidden"}`} />
+                    {t("adminPortal.ava.retryFailed")} ({analyzeReport.failed_broker_ids!.length})
+                  </Button>
+                )}
               </div>
+
               {analyzeReport.per_broker.length > 0 && (
-                <div className="mt-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5 max-h-40 overflow-auto">
-                  {analyzeReport.per_broker.map((p, i) => (
-                    <div key={i} className="flex items-center justify-between px-2 py-1 rounded" style={{ background: "var(--pp-bg-deep)", fontSize: 10 }}>
-                      <span className="truncate" style={{ color: "var(--pp-text-secondary)" }}>{p.broker}</span>
-                      <span className="tabular-nums" style={{ color: p.analyses > 0 ? SUCCESS : "var(--pp-text-faint)", fontWeight: 700 }}>{p.analyses}</span>
-                    </div>
-                  ))}
+                <div className="mt-3 overflow-auto" style={{ maxHeight: 260 }}>
+                  <table className="w-full" style={{ fontSize: 11 }}>
+                    <thead style={{ position: "sticky", top: 0, background: "var(--pp-bg-surface)", zIndex: 1 }}>
+                      <tr style={{ color: "var(--pp-text-faint)", textAlign: "left" }}>
+                        <th className="py-1 pr-2">{t("adminPortal.ava.stepColBroker")}</th>
+                        <th className="py-1 pr-2">{t("adminPortal.ava.stepColStep")}</th>
+                        <th className="py-1 pr-2">{t("adminPortal.ava.stepColStatus")}</th>
+                        <th className="py-1 pr-2">{t("adminPortal.ava.stepColDetail")}</th>
+                        <th className="py-1 pr-2 tabular-nums text-right">{t("adminPortal.ava.kpi.analyses")}</th>
+                        <th className="py-1"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analyzeReport.per_broker.map((p, i) => {
+                        const steps = p.steps ?? [];
+                        const rows = steps.length ? steps : [{ step: "no_data", ok: (p.analyses ?? 0) > 0, detail: p.note ?? "" }];
+                        return rows.map((s, si) => (
+                          <tr key={`${i}-${si}`} style={{ borderTop: si === 0 ? "1px solid var(--pp-bg-border-2)" : "none" }}>
+                            <td className="py-1 pr-2 truncate" style={{ maxWidth: 180, color: "var(--pp-text-secondary)" }}>{si === 0 ? (p.broker_name || p.broker) : ""}</td>
+                            <td className="py-1 pr-2" style={{ color: "var(--pp-text-muted)" }}>{s.step}</td>
+                            <td className="py-1 pr-2">
+                              <span style={{ color: s.ok ? SUCCESS : DANGER, fontWeight: 700 }}>
+                                {s.ok ? t("adminPortal.ava.stepOk") : t("adminPortal.ava.stepErr")}
+                              </span>
+                            </td>
+                            <td className="py-1 pr-2 truncate" style={{ maxWidth: 320, color: "var(--pp-text-faint)" }}>{s.detail ?? ""}</td>
+                            <td className="py-1 pr-2 tabular-nums text-right" style={{ color: (p.analyses ?? 0) > 0 ? SUCCESS : "var(--pp-text-faint)", fontWeight: 700 }}>{si === 0 ? p.analyses : ""}</td>
+                            <td className="py-1 text-right">
+                              {si === 0 && ((p.failed ?? 0) > 0 || (p.analyses === 0 && (p.note && p.note !== "empty inbox"))) && p.broker_user_id && !analyzing && (
+                                <button
+                                  onClick={() => analyzeAll([p.broker_user_id!])}
+                                  className="px-2 py-0.5 rounded"
+                                  style={{ fontSize: 10, background: `${ACCENT}1A`, color: ACCENT, border: `1px solid ${ACCENT}33` }}
+                                >
+                                  {t("common.retry") || "Retry"}
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ));
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
+
               {analyzeReport.errors.length > 0 && (
-                <details className="mt-2">
-                  <summary style={{ fontSize: 10, color: DANGER, cursor: "pointer" }}>{analyzeReport.errors.length} error(s)</summary>
-                  <div className="mt-1 space-y-0.5 max-h-32 overflow-auto">
-                    {analyzeReport.errors.map((e, i) => (
-                      <div key={i} style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{e.broker ? `${e.broker} — ` : ""}{e.error}</div>
-                    ))}
-                  </div>
-                </details>
+                <div className="mt-2">
+                  <button
+                    onClick={() => setShowAllErrors((v) => !v)}
+                    style={{ fontSize: 10, color: DANGER, cursor: "pointer", background: "none", border: "none" }}
+                  >
+                    {showAllErrors ? "▼" : "▶"} {analyzeReport.errors.length} error(s) — {t("adminPortal.ava.showAllErrors")}
+                  </button>
+                  {showAllErrors && (
+                    <div className="mt-1 space-y-0.5 max-h-40 overflow-auto">
+                      {analyzeReport.errors.map((e, i) => (
+                        <div key={i} style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>
+                          {e.broker ? `${e.broker} — ` : ""}{e.step ? `[${e.step}] ` : ""}{e.error}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </>
           )}

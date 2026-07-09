@@ -1649,6 +1649,8 @@ export const MP_DICT = {
           body: "Nobody has connected Microsoft 365 with the updated scopes yet and no email has been analyzed. Reconnect at least one broker, or launch an analysis to populate this dashboard.",
           openDiagnostic: "Open Microsoft 365 diagnostic",
         },
+        analyzing: "Analyzing broker emails…",
+        analyzeReportTitle: "Latest analysis report",
       },
     },
   },

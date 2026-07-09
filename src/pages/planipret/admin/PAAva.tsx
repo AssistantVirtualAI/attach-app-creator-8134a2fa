@@ -268,7 +268,7 @@ export default function PAAva() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={analyzeAll} disabled={analyzing} variant="default" size="sm">
+          <Button onClick={() => analyzeAll()} disabled={analyzing} variant="default" size="sm">
             {analyzing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
             {t("adminPortal.ava.analyzeNow")}
           </Button>
@@ -368,7 +368,7 @@ export default function PAAva() {
             {t("adminPortal.ava.empty.body")}
           </p>
           <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
-            <Button onClick={analyzeAll} disabled={analyzing} size="sm">
+            <Button onClick={() => analyzeAll()} disabled={analyzing} size="sm">
               {analyzing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
               {t("adminPortal.ava.analyzeNow")}
             </Button>

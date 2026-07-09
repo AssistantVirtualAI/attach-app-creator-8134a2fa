@@ -585,9 +585,24 @@ export default function PARecordings() {
                     </div>
                   );
                 }
+                if (detail.has_recording === false) {
+                  return (
+                    <div className="p-3 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+                      🔇 Cet appel n'a pas été enregistré côté NetSapiens (jamais capturé, expiré ou purgé).
+                    </div>
+                  );
+                }
                 return (
-                  <div className="p-3 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-danger, #E84C4C)" }}>
-                    {recordingError ?? "Enregistrement introuvable sur NS-API."}
+                  <div className="p-3 rounded-lg text-xs space-y-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+                    <div>{recordingError ?? "Enregistrement introuvable sur NS-API."}</div>
+                    <button
+                      type="button"
+                      onClick={() => resolveRecording(detail, true)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium"
+                      style={{ background: ACCENT, color: "white" }}
+                    >
+                      <RefreshCw className="w-3 h-3" /> Réessayer
+                    </button>
                   </div>
                 );
               })()}

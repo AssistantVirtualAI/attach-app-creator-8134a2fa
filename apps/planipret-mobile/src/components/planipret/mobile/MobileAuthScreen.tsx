@@ -162,8 +162,7 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
       {/* Footer */}
       <div className="h-[28px] flex items-center justify-center gap-2 pp-mobile-footer">
         <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 9, color: "var(--pp-text-muted)", letterSpacing: "0.14em", fontWeight: 600 }}>{t("footer.poweredBy")}</span>
-        <img src={avaLogo.url} alt="AVA" className="w-3.5 h-3.5 rounded object-cover" />
-        <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 9, color: "var(--pp-brand-accent-2)", letterSpacing: "0.10em", fontWeight: 700 }}>AVA</span>
+        <div style={{ background: "#7C3AED", borderRadius: 4, padding: "2px 5px", color: "white", fontWeight: 700, fontSize: 8 }}>AVA</div>
         <span style={{ fontSize: 8.5, color: "var(--pp-text-faint)", letterSpacing: "0.1em" }}>· {t("footer.developedBy")}</span>
       </div>
 

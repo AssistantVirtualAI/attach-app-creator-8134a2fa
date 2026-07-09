@@ -182,7 +182,7 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
               properties: {
                 owner: { type: "string", enum: ["courtier", "client"] },
                 description: { type: "string" },
-                due: { type: ["string", "null"] },
+                due: { type: "string", description: "vide si aucun délai" },
               },
               required: ["owner", "description"],
             },

@@ -422,7 +422,7 @@ export default function PAUsers() {
                   </tr>
                 ))
               ) : paged.length === 0 ? (
-                <tr><td colSpan={10} className="p-8 text-center" style={{ color: "var(--pp-text-faint)" }}>Aucun courtier</td></tr>
+                <tr><td colSpan={11} className="p-8 text-center" style={{ color: "var(--pp-text-faint)" }}>Aucun courtier</td></tr>
               ) : paged.map((u) => (
                 <tr key={u.user_id || u.email || u.extension} className="hover:bg-white/[0.02] transition"
                   style={{

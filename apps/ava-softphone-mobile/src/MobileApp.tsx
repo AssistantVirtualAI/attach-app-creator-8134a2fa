@@ -1,7 +1,7 @@
 import { Component, useEffect, useMemo, useRef, useState, Suspense, lazy, type ReactNode } from 'react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
-import { requestPermissionsAfterLogin } from './lib/requestPermissionsAfterLogin';
+import { requestPermissionsAfterLogin, navLog, setPermissionLogContext } from './lib/requestPermissionsAfterLogin';
 // Re-use battle-tested SIP hook from the desktop app
 import { useSoftphone } from './hooks/useSoftphone';
 import AuthScreen from './screens/AuthScreen';

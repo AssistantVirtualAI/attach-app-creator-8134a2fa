@@ -25,11 +25,15 @@ Deno.serve(async (req) => {
     if (!LOVABLE_API_KEY) return json({ error: "LOVABLE_API_KEY missing" }, 500);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const { data: userData } = await admin.auth.getUser(auth.replace(/^Bearer\s+/i, ""));
-    if (!userData?.user) return json({ error: "Unauthorized" }, 401);
-    const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: userData.user.id });
-    const { data: isMember } = await admin.rpc("is_planipret_member", { _user_id: userData.user.id });
-    if (isAdmin !== true && isMember !== true) return json({ error: "Forbidden" }, 403);
+    const token = auth.replace(/^Bearer\s+/i, "");
+    const isServiceRole = token === SERVICE_ROLE;
+    if (!isServiceRole) {
+      const { data: userData } = await admin.auth.getUser(token);
+      if (!userData?.user) return json({ error: "Unauthorized" }, 401);
+      const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: userData.user.id });
+      const { data: isMember } = await admin.rpc("is_planipret_member", { _user_id: userData.user.id });
+      if (isAdmin !== true && isMember !== true) return json({ error: "Forbidden" }, 403);
+    }
 
     const body = await req.json().catch(() => ({}));
     const callId = body.call_id ?? body.call_row_id ?? body.id;

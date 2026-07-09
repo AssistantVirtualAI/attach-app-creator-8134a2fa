@@ -20,58 +20,58 @@ import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { toast } from "sonner";
 
-type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavItem = { to: string; label: string; Icon: any; badge?: NavBadge };
-type NavGroup = { title: string; items: NavItem[] };
+type NavKey = "overview" | "reports" | "ava" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist";
+type SectionKey = "pilotage" | "brokers" | "communications" | "system";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "mobileDevices" | "sipDiagnostic";
 
-const NAV: NavGroup[] = [
+const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
-    title: "Pilotage",
+    sectionKey: "pilotage",
     items: [
-      { to: "/planipret/admin/overview", label: "Vue d'ensemble", Icon: LayoutDashboard },
-      { to: "/planipret/admin/reports",  label: "Rapports",       Icon: BarChart3 },
-      { to: "/planipret/admin/ava",      label: "AVA Analytics",  Icon: Sparkles },
+      { to: "/planipret/admin/overview", key: "overview", Icon: LayoutDashboard },
+      { to: "/planipret/admin/reports",  key: "reports",  Icon: BarChart3 },
+      { to: "/planipret/admin/ava",      key: "ava",      Icon: Sparkles },
     ],
   },
   {
-    title: "Courtiers",
+    sectionKey: "brokers",
     items: [
-      { to: "/planipret/admin/users", label: "Courtiers", Icon: Users, badge: "brokers" },
+      { to: "/planipret/admin/users", key: "brokers", Icon: Users, badge: "brokers" },
     ],
   },
   {
-    title: "Communications",
+    sectionKey: "communications",
     items: [
-      { to: "/planipret/admin/calls",      label: "Appels",        Icon: Phone,         badge: "missed" },
-      { to: "/planipret/admin/messages",   label: "Messages",      Icon: MessageSquare },
-      { to: "/planipret/admin/recordings", label: "Enregistrements", Icon: Mic },
+      { to: "/planipret/admin/calls",      key: "calls",       Icon: Phone,         badge: "missed" },
+      { to: "/planipret/admin/messages",   key: "messages",    Icon: MessageSquare },
+      { to: "/planipret/admin/recordings", key: "recordings",  Icon: Mic },
     ],
   },
   {
-    title: "Système",
+    sectionKey: "system",
     items: [
-      { to: "/planipret/admin/integrations",    label: "Intégrations", Icon: Plug,        badge: "integrations" },
-      { to: "/planipret/admin/mobile-devices",  label: "Devices mobiles", Icon: Smartphone },
-      { to: "/planipret/admin/sip-diagnostic",  label: "Diagnostic SIP",  Icon: PlugZap },
-      { to: "/planipret/admin/compliance",      label: "Conformité",   Icon: ShieldCheck },
-      { to: "/planipret/admin/audit-checklist", label: "Audit",        Icon: CheckSquare, badge: "audit" },
+      { to: "/planipret/admin/integrations",    key: "integrations",    Icon: Plug,        badge: "integrations" },
+      { to: "/planipret/admin/mobile-devices",  key: "mobileDevices",   Icon: Smartphone },
+      { to: "/planipret/admin/sip-diagnostic",  key: "sipDiagnostic",   Icon: PlugZap },
+      { to: "/planipret/admin/compliance",      key: "compliance",      Icon: ShieldCheck },
+      { to: "/planipret/admin/audit-checklist", key: "auditChecklist",  Icon: CheckSquare, badge: "audit" },
     ],
   },
 ];
 
-const PAGE_TITLES: Record<string, string> = {
-  "/planipret/admin/overview": "Vue d'ensemble",
-  "/planipret/admin/users": "Gestion des courtiers",
-  "/planipret/admin/calls": "Historique des appels",
-  "/planipret/admin/messages": "Messages",
-  "/planipret/admin/recordings": "Enregistrements d'appels",
-  "/planipret/admin/integrations": "Intégrations",
-  "/planipret/admin/reports": "Rapports & Analytics",
-  "/planipret/admin/audit-checklist": "Audit système",
-  "/planipret/admin/compliance": "Conformité PIPEDA · Loi 25",
-  "/planipret/admin/ava": "AVA — Analytics",
-  "/planipret/admin/mobile-devices": "Vérification devices mobiles",
-  "/planipret/admin/sip-diagnostic": "Diagnostic SIP — 113_web",
+const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
+  "/planipret/admin/overview": "overview",
+  "/planipret/admin/users": "users",
+  "/planipret/admin/calls": "calls",
+  "/planipret/admin/messages": "messages",
+  "/planipret/admin/recordings": "recordings",
+  "/planipret/admin/integrations": "integrations",
+  "/planipret/admin/reports": "reports",
+  "/planipret/admin/audit-checklist": "auditChecklist",
+  "/planipret/admin/compliance": "compliance",
+  "/planipret/admin/ava": "ava",
+  "/planipret/admin/mobile-devices": "mobileDevices",
+  "/planipret/admin/sip-diagnostic": "sipDiagnostic",
 };
 
 const initials = (n?: string) =>

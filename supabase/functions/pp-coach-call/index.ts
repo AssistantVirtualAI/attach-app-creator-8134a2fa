@@ -285,8 +285,8 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
     const coaching = parsed.coaching && typeof parsed.coaching === "object" ? parsed.coaching : null;
     const score100 = typeof parsed.score === "number" ? Math.max(0, Math.min(100, Math.round(parsed.score))) : null;
     const score10 = score100 != null ? Math.max(1, Math.min(10, Math.round(score100 / 10))) : null;
-    const topics = Array.isArray(parsed.topics) ? parsed.topics.filter((t: any) => typeof t === "string").slice(0, 8) : null;
-    const actionItems = Array.isArray(parsed.action_items)
+    let topics = Array.isArray(parsed.topics) ? parsed.topics.filter((t: any) => typeof t === "string").slice(0, 8) : null;
+    let actionItems = Array.isArray(parsed.action_items)
       ? parsed.action_items
           .filter((a: any) => a && typeof a === "object" && typeof a.description === "string")
           .map((a: any) => ({
@@ -296,7 +296,7 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
           }))
           .slice(0, 15)
       : null;
-    const segments = Array.isArray(parsed.segments)
+    let segments = Array.isArray(parsed.segments)
       ? parsed.segments
           .filter((s: any) => s && typeof s === "object" && typeof s.text === "string" && s.text.trim())
           .map((s: any) => ({
@@ -306,6 +306,29 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
             summary: typeof s.summary === "string" ? s.summary.slice(0, 300) : null,
           }))
       : null;
+
+    // Fallback: dériver segments à partir de corrected_transcript si Claude ne les fournit pas
+    if ((!segments || !segments.length) && corrected) {
+      const lines = corrected.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+      const totalSec = Number(row.duration_seconds ?? 0);
+      const step = lines.length > 0 ? totalSec / lines.length : 0;
+      segments = lines.map((line: string, i: number) => {
+        const m = line.match(/^([^:]{1,60}):\s*(.+)$/);
+        const speaker = m ? m[1].trim() : "Speaker";
+        const text = m ? m[2].trim() : line;
+        const ts = totalSec ? `${String(Math.floor((i * step) / 60)).padStart(2, "0")}:${String(Math.floor((i * step) % 60)).padStart(2, "0")}` : null;
+        return { speaker, timestamp: ts, text, summary: null };
+      });
+    }
+    // Fallback: dériver action_items à partir de coaching.next_steps
+    if ((!actionItems || !actionItems.length) && Array.isArray(coaching?.next_steps)) {
+      actionItems = coaching.next_steps.slice(0, 10).map((s: string) => ({ owner: "courtier", description: String(s).slice(0, 500), due: null }));
+    }
+    // Fallback: topics vides → au moins un tag générique dérivé
+    if ((!topics || !topics.length) && summary) {
+      const kw = summary.match(/\b(pré-approbation|hypothéc\w+|refinancement|taux fixe|taux variable|renouvellement|assurance|mise de fonds|notaire|revenus|dossier)\b/gi);
+      if (kw) topics = Array.from(new Set(kw.map((k: string) => k.toLowerCase()))).slice(0, 5);
+    }
 
     // ── G: sauvegarder + libérer verrou ───────────────────
     const update: any = {

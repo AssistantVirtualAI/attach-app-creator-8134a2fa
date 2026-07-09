@@ -220,11 +220,15 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
           messages: [{ role: "user", content: userPrompt }],
         }),
       });
-      if (!r.ok) return { ok: false, status: r.status, error: await r.text().catch(() => "") };
-      const j = await r.json();
+      const rawText = await r.text();
+      if (!r.ok) { console.error("[claude] http", r.status, rawText.slice(0, 500)); return { ok: false, status: r.status, error: rawText }; }
+      let j: any = null;
+      try { j = JSON.parse(rawText); } catch (e) { console.error("[claude] parse fail", (e as Error).message); return { ok: false, error: "parse" }; }
+      console.log("[claude] content types:", Array.isArray(j?.content) ? j.content.map((b: any) => b?.type).join(",") : "none");
       const toolBlock = Array.isArray(j?.content) ? j.content.find((b: any) => b?.type === "tool_use") : null;
       if (toolBlock?.input) return { ok: true, content: JSON.stringify(toolBlock.input) };
       const textContent = Array.isArray(j?.content) ? j.content.map((b: any) => b?.text ?? "").join("") : "";
+      console.log("[claude] no tool_use, text length:", textContent.length);
       return { ok: true, content: textContent };
     }
 

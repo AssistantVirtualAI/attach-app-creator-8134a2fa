@@ -1,7 +1,6 @@
 // ava-analyze-all — Admin trigger to run ava-email-analyzer across every
-// broker with a live Microsoft 365 connection. For each broker we list the
-// most recent inbox messages via Graph and invoke ava-email-analyzer with the
-// service header so cached analyses are skipped.
+// broker with a live Microsoft 365 connection. When no delegated token
+// exists we fall back to Azure App Application Permissions.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -17,9 +16,9 @@ async function getMsConfig(admin: any) {
   const { data } = await admin.from("planipret_integration_secrets").select("config").eq("provider", "microsoft").maybeSingle();
   const c = (data?.config ?? {}) as Record<string, string>;
   return {
-    clientId: c.client_id ?? Deno.env.get("MICROSOFT_CLIENT_ID") ?? "",
-    clientSecret: c.client_secret ?? Deno.env.get("MICROSOFT_CLIENT_SECRET") ?? "",
-    tenant: c.tenant_id ?? Deno.env.get("MICROSOFT_TENANT_ID") ?? "common",
+    clientId: c.client_id ?? Deno.env.get("MICROSOFT_CLIENT_ID") ?? Deno.env.get("MS365_CLIENT_ID") ?? "",
+    clientSecret: c.client_secret ?? Deno.env.get("MICROSOFT_CLIENT_SECRET") ?? Deno.env.get("MS365_CLIENT_SECRET") ?? "",
+    tenant: c.tenant_id ?? Deno.env.get("MICROSOFT_TENANT_ID") ?? Deno.env.get("MS365_TENANT_ID") ?? "common",
   };
 }
 
@@ -31,7 +30,7 @@ async function refreshToken(admin: any, profile: any) {
     client_secret: cfg.clientSecret,
     grant_type: "refresh_token",
     refresh_token: profile.ms365_refresh_token,
-    scope: "openid profile email offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All",
+    scope: "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send Calendars.ReadWrite",
   });
   const r = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,
@@ -46,7 +45,24 @@ async function refreshToken(admin: any, profile: any) {
   return d.access_token as string;
 }
 
-async function listInbox(admin: any, profile: any, top: number): Promise<string[]> {
+async function getAppAccessToken(admin: any) {
+  const cfg = await getMsConfig(admin);
+  if (!cfg.clientId || !cfg.clientSecret || !cfg.tenant || cfg.tenant === "common") return null;
+  const body = new URLSearchParams({
+    client_id: cfg.clientId,
+    client_secret: cfg.clientSecret,
+    grant_type: "client_credentials",
+    scope: "https://graph.microsoft.com/.default",
+  });
+  const r = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,
+  });
+  if (!r.ok) return null;
+  const d = await r.json();
+  return d.access_token as string;
+}
+
+async function listInboxDelegated(admin: any, profile: any, top: number): Promise<string[]> {
   let token = profile.ms365_access_token;
   const fetchList = async (tk: string) => fetch(
     `${GRAPH}/me/mailFolders/Inbox/messages?$select=id,receivedDateTime&$orderby=receivedDateTime desc&$top=${top}`,
@@ -59,6 +75,16 @@ async function listInbox(admin: any, profile: any, top: number): Promise<string[
     token = nt;
     r = await fetchList(token);
   }
+  if (!r.ok) return [];
+  const d = await r.json();
+  return (d.value ?? []).map((m: any) => m.id as string).filter(Boolean);
+}
+
+async function listInboxApp(appToken: string, mailbox: string, top: number): Promise<string[]> {
+  const r = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/Inbox/messages?$select=id,receivedDateTime&$orderby=receivedDateTime desc&$top=${top}`,
+    { headers: { Authorization: `Bearer ${appToken}` } },
+  );
   if (!r.ok) return [];
   const d = await r.json();
   return (d.value ?? []).map((m: any) => m.id as string).filter(Boolean);
@@ -78,27 +104,55 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const top = Math.min(Math.max(Number(body.top ?? 20), 1), 50);
+    const maxBrokers = Math.min(Math.max(Number(body.max_brokers ?? 40), 1), 200);
 
-    const { data: brokers } = await admin
+    const { data: delegated } = await admin
       .from("planipret_profiles")
-      .select("id, user_id, ms365_access_token, ms365_refresh_token, ms365_email")
+      .select("id, user_id, ms365_access_token, ms365_refresh_token, ms365_email, email")
       .not("ms365_access_token", "is", null)
-      .not("user_id", "is", null);
+      .not("user_id", "is", null)
+      .limit(maxBrokers);
 
-    if (!brokers?.length) {
-      return json({ ok: true, analyzed_brokers: 0, total_analyses: 0, errors: [], note: "no broker with Microsoft 365 connected" });
+    let brokers = delegated ?? [];
+    let mode: "delegated" | "application" = "delegated";
+    let appToken: string | null = null;
+
+    if (!brokers.length) {
+      appToken = await getAppAccessToken(admin);
+      if (!appToken) {
+        return json({
+          ok: false,
+          error: "Aucun courtier n'a de token Microsoft 365 et l'Application Azure n'est pas configurée (MICROSOFT_TENANT_ID/CLIENT_ID/SECRET).",
+          analyzed_brokers: 0, total_analyses: 0, errors: [], mode: "none",
+        });
+      }
+      mode = "application";
+      const { data: allBrokers } = await admin
+        .from("planipret_profiles")
+        .select("id, user_id, ms365_email, email")
+        .not("user_id", "is", null)
+        .or("ms365_email.not.is.null,email.not.is.null")
+        .limit(maxBrokers);
+      brokers = (allBrokers ?? []).filter((b: any) => b.ms365_email || b.email);
     }
 
     let totalAnalyses = 0;
     let analyzedBrokers = 0;
     const errors: any[] = [];
+    const perBroker: any[] = [];
 
-    // Sequential across brokers, parallel per-message chunks per broker.
     for (const b of brokers) {
       try {
-        const ids = await listInbox(admin, b, top);
-        if (!ids.length) continue;
+        const mailbox = (b as any).ms365_email || (b as any).email;
+        const ids = mode === "application"
+          ? await listInboxApp(appToken!, mailbox, top)
+          : await listInboxDelegated(admin, b, top);
+        if (!ids.length) {
+          perBroker.push({ broker: mailbox, analyses: 0, note: "no inbox message" });
+          continue;
+        }
         analyzedBrokers++;
+        let brokerAnalyses = 0;
         for (let i = 0; i < ids.length; i += 4) {
           const chunk = ids.slice(i, i + 4);
           await Promise.all(chunk.map(async (mid) => {
@@ -109,19 +163,28 @@ Deno.serve(async (req) => {
                 Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
                 "x-ava-service": SUPABASE_SERVICE_ROLE_KEY,
               },
-              body: JSON.stringify({ ms_message_id: mid, broker_user_id: b.user_id }),
+              body: JSON.stringify({ ms_message_id: mid, broker_user_id: (b as any).user_id, graph_mode: mode, mailbox }),
             });
             const jr = await r.json().catch(() => null);
-            if (jr?.success) totalAnalyses++;
-            else if (jr?.error) errors.push({ broker: b.ms365_email, mid, error: jr.error });
+            if (jr?.success) { totalAnalyses++; brokerAnalyses++; }
+            else if (jr?.error) errors.push({ broker: mailbox, mid, error: jr.error });
           }));
         }
+        perBroker.push({ broker: mailbox, analyses: brokerAnalyses });
       } catch (e) {
-        errors.push({ broker: b.ms365_email, error: (e as Error).message });
+        errors.push({ broker: (b as any).ms365_email || (b as any).email, error: (e as Error).message });
       }
     }
 
-    return json({ ok: true, analyzed_brokers: analyzedBrokers, total_analyses: totalAnalyses, brokers: brokers.length, errors });
+    return json({
+      ok: true,
+      mode,
+      analyzed_brokers: analyzedBrokers,
+      total_analyses: totalAnalyses,
+      brokers_scanned: brokers.length,
+      per_broker: perBroker.slice(0, 30),
+      errors: errors.slice(0, 20),
+    });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }

@@ -578,6 +578,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    const lastAnalysisAt = (analyses as any[])
+      .map((a) => a.created_at)
+      .filter(Boolean)
+      .sort()
+      .pop() ?? null;
+
     return json({
       ok: true,
       days,
@@ -599,6 +605,14 @@ Deno.serve(async (req) => {
           .map((r) => ({ broker_user_id: r.broker_user_id, broker_name: r.broker_name, email: r.email, ...r.totals }))
           .sort((a, b) => (b.emails_received + b.meetings) - (a.emails_received + a.meetings)),
         graphErrors,
+      },
+      dataHealth: {
+        brokers_total: brokerProfiles.length,
+        brokers_with_ms365_token: connectedProfiles.length,
+        analyses_last_period: analyses.length,
+        last_analysis_at: lastAnalysisAt,
+        ms_graph_mode: graphMode,
+        scanned_brokers: graphProfiles.length,
       },
       insights,
       source: "service-role-admin-aggregate+graph",

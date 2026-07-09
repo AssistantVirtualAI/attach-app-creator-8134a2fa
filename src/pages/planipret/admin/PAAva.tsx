@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, Sparkles, TrendingUp, ThumbsUp, ThumbsDown, Bot, Mail, Zap, CheckCircle2, XCircle, Inbox, Send, Calendar, AlertCircle, Video, ExternalLink } from "lucide-react";
+import { Loader2, Sparkles, TrendingUp, ThumbsUp, ThumbsDown, Bot, Mail, Zap, CheckCircle2, XCircle, Inbox, Send, Calendar, AlertCircle, Video, ExternalLink, Activity, PlugZap } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend, LineChart, Line,
 } from "recharts";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 const ACCENT = "#2E9BDC";
 const SUCCESS = "#00D4AA";
@@ -74,6 +76,8 @@ function KpiTile({ icon, label, value, color, sub }: { icon: any; label: string;
 }
 
 export default function PAAva() {
+  const { t, lang } = useMplanipretLang();
+  const navigate = useNavigate();
   const [rows, setRows] = useState<Row[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -86,6 +90,7 @@ export default function PAAva() {
   const [recentActions, setRecentActions] = useState<any[]>([]);
   const [microsoft, setMicrosoft] = useState<MicrosoftAnalytics | null>(null);
   const [insights, setInsights] = useState<string[]>([]);
+  const [dataHealth, setDataHealth] = useState<{ brokers_total: number; brokers_with_ms365_token: number; analyses_last_period: number; last_analysis_at: string | null; ms_graph_mode: "delegated" | "application" | "none"; scanned_brokers: number } | null>(null);
 
   const load = async () => {
     setLoading(true);

@@ -1,7 +1,7 @@
 import { Component, useEffect, useMemo, useRef, useState, Suspense, lazy, type ReactNode } from 'react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
-import { requestPermissionsAfterLogin } from './lib/requestPermissionsAfterLogin';
+import { requestPermissionsAfterLogin, navLog, setPermissionLogContext } from './lib/requestPermissionsAfterLogin';
 // Re-use battle-tested SIP hook from the desktop app
 import { useSoftphone } from './hooks/useSoftphone';
 import AuthScreen from './screens/AuthScreen';
@@ -158,8 +158,18 @@ export default function MobileApp() {
   }, []);
 
 
+  useEffect(() => { void navLog('MobileApp render', { loading, booting, hasCreds: !!creds, tab }); }, [loading, booting, creds, tab]);
+
   if (loading || booting) return <SplashAva />;
-  if (!creds) return <MobileI18nProvider><ThemeProvider><AuthScreen onAuthenticated={(c) => { setCreds(c); requestPermissionsAfterLogin(); }} /><PerfOverlay /><IceDiagnosticsOverlay /></ThemeProvider></MobileI18nProvider>;
+  if (!creds) return <MobileI18nProvider><ThemeProvider><AuthScreen onAuthenticated={(c) => {
+    void navLog('AuthScreen.onAuthenticated', { userId: c?.userId, hasExtension: !!c?.extension, hasSipPassword: !!c?.sipPassword, org: c?.organizationId });
+    void setPermissionLogContext({ userId: c?.userId, extension: c?.extension, organizationId: c?.organizationId });
+    setCreds(c);
+    void navLog('setCreds done, calling requestPermissionsAfterLogin');
+    requestPermissionsAfterLogin()
+      .then(() => void navLog('requestPermissionsAfterLogin resolved'))
+      .catch((e) => void navLog('requestPermissionsAfterLogin THREW', { error: String(e) }));
+  }} /><PerfOverlay /><IceDiagnosticsOverlay /></ThemeProvider></MobileI18nProvider>;
 
   return <MobileI18nProvider><ThemeProvider><AuthenticatedShell creds={creds} setCreds={setCreds} tab={tab} setTab={setTab} callsSub={callsSub} callsFilter={callsFilter} onSignOut={clearCreds} preferClickToCall={preferC2C} onTogglePreferC2C={() => {}} /><PerfOverlay /><IceDiagnosticsOverlay /></ThemeProvider></MobileI18nProvider>;
 }
@@ -171,6 +181,8 @@ function AuthenticatedShell({
 
   // permissions handled natively after login
   const [profileOpen, setProfileOpen] = useState(false);
+  useEffect(() => { void navLog('AuthenticatedShell mount', { userId: creds.userId, extension: creds.extension, hasSip: !!creds.sipPassword, tab }); return () => { void navLog('AuthenticatedShell unmount'); }; }, []);
+  useEffect(() => { void navLog('tab change', { tab }); }, [tab]);
   useDeviceNotifications(creds);
   const [freshCredentialToken, setFreshCredentialToken] = useState('');
   const [authExpired, setAuthExpired] = useState(false);

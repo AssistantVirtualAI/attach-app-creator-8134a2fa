@@ -196,24 +196,45 @@ export default function PAAva() {
       }));
   }, [rows, profiles]);
 
+  const healthTone = !dataHealth
+    ? WARNING
+    : dataHealth.brokers_with_ms365_token === 0 && dataHealth.ms_graph_mode !== "application"
+      ? DANGER
+      : dataHealth.analyses_last_period === 0
+        ? WARNING
+        : SUCCESS;
+  const healthStatusLabel = !dataHealth
+    ? t("adminPortal.ava.health.statusEmpty")
+    : dataHealth.brokers_with_ms365_token === 0 && dataHealth.ms_graph_mode !== "application"
+      ? t("adminPortal.ava.health.statusEmpty")
+      : dataHealth.analyses_last_period === 0
+        ? t("adminPortal.ava.health.statusPartial")
+        : t("adminPortal.ava.health.statusOk");
+  const modeLabel = dataHealth?.ms_graph_mode === "application"
+    ? t("adminPortal.ava.health.modeApplication")
+    : dataHealth?.ms_graph_mode === "delegated"
+      ? t("adminPortal.ava.health.modeDelegated")
+      : t("adminPortal.ava.health.modeNone");
+  const showGuidedEmpty = !loading && totals.analyses === 0 && (microsoft?.connected_brokers ?? 0) === 0 && (dataHealth?.ms_graph_mode ?? "none") === "none";
+
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 22, color: "var(--pp-text-primary)" }}>AVA · Analytics 30 jours</h1>
+          <h1 style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 22, color: "var(--pp-text-primary)" }}>{t("adminPortal.ava.title")}</h1>
           <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }} className="mt-0.5">
-            Analyses d'emails, actions, feedback et apprentissage — sync automatique en temps réel.
+            {t("adminPortal.ava.subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={analyzeAll} disabled={analyzing} variant="default" size="sm">
             {analyzing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
-            Analyser les emails maintenant
+            {t("adminPortal.ava.analyzeNow")}
           </Button>
           <Button onClick={retune} disabled={tuning} variant="outline" size="sm">
             {tuning ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
-            Réentraîner AVA
+            {t("adminPortal.ava.retune")}
           </Button>
         </div>
       </div>
@@ -222,28 +243,71 @@ export default function PAAva() {
         <div className="pp-card flex items-start gap-3" style={{ padding: 14, borderColor: `${DANGER}55` }}>
           <AlertCircle className="w-5 h-5 shrink-0" style={{ color: DANGER }} />
           <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)" }}>Analytics non chargés</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)" }}>{t("adminPortal.ava.errorTitle")}</div>
             <div style={{ fontSize: 12, color: "var(--pp-text-secondary)" }}>{apiError}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Data health banner */}
+      {dataHealth && (
+        <div className="pp-card flex items-center gap-3 flex-wrap" style={{ padding: 14, borderColor: `${healthTone}55` }}>
+          <span style={{ width: 10, height: 10, borderRadius: 999, background: healthTone, boxShadow: `0 0 0 4px ${healthTone}22` }} />
+          <Activity className="w-4 h-4 shrink-0" style={{ color: healthTone }} />
+          <div className="flex-1 min-w-0">
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--pp-text-primary)" }}>{t("adminPortal.ava.health.title")} — <span style={{ color: healthTone }}>{healthStatusLabel}</span></div>
+            <div style={{ fontSize: 11, color: "var(--pp-text-secondary)" }}>
+              {t("adminPortal.ava.health.brokersConnected").replace("{connected}", String(dataHealth.brokers_with_ms365_token)).replace("{total}", String(dataHealth.brokers_total))}
+              {" · "}
+              {t("adminPortal.ava.health.analysesCount").replace("{n}", String(dataHealth.analyses_last_period)).replace("{days}", "30")}
+              {" · "}
+              {modeLabel}
+            </div>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => navigate("/planipret/ms365-diagnostics")}>
+            <PlugZap className="w-3.5 h-3.5 mr-1.5" />
+            {t("adminPortal.ava.empty.openDiagnostic")}
+          </Button>
+        </div>
+      )}
+
+      {/* Guided empty state */}
+      {showGuidedEmpty && (
+        <div className="pp-card text-center" style={{ padding: 28, borderStyle: "dashed" }}>
+          <Sparkles className="w-8 h-8 mx-auto mb-3" style={{ color: AGENT }} />
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--pp-text-primary)" }}>{t("adminPortal.ava.empty.title")}</div>
+          <p className="max-w-xl mx-auto" style={{ fontSize: 12, color: "var(--pp-text-secondary)", marginTop: 8 }}>
+            {t("adminPortal.ava.empty.body")}
+          </p>
+          <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+            <Button onClick={analyzeAll} disabled={analyzing} size="sm">
+              {analyzing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
+              {t("adminPortal.ava.analyzeNow")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/planipret/ms365-diagnostics")}>
+              <PlugZap className="w-3.5 h-3.5 mr-1.5" />
+              {t("adminPortal.ava.empty.openDiagnostic")}
+            </Button>
           </div>
         </div>
       )}
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <KpiTile icon={<Mail className="w-4 h-4" />} label="Analyses" value={totals.analyses} color={ACCENT} />
-        <KpiTile icon={<TrendingUp className="w-4 h-4" />} label="Leads détectés" value={totals.leads} color={SUCCESS} />
-        <KpiTile icon={<Zap className="w-4 h-4" />} label="Urgent" value={totals.urgent} color={WARNING} />
-        <KpiTile icon={<CheckCircle2 className="w-4 h-4" />} label="Actions exécutées" value={totals.ok} color={SUCCESS} sub={`${approvalRate}% succès`} />
-        <KpiTile icon={<XCircle className="w-4 h-4" />} label="Erreurs" value={totals.err} color={DANGER} />
-        <KpiTile icon={<Bot className="w-4 h-4" />} label="Courtiers actifs" value={rows.length} color={AGENT} />
-        <KpiTile icon={<ThumbsUp className="w-4 h-4" />} label="Feedback 👍" value={fbStats.up} color={SUCCESS} />
-        <KpiTile icon={<ThumbsDown className="w-4 h-4" />} label="Feedback 👎" value={fbStats.down} color={DANGER} />
-        <KpiTile icon={<Sparkles className="w-4 h-4" />} label="Satisfaction" value={`${satisfaction}%`} color={AGENT} sub={`${fbTotal} avis`} />
-        <KpiTile icon={<Sparkles className="w-4 h-4" />} label="Modifiées" value={totals.modified} color={WARNING} />
-        <KpiTile icon={<Inbox className="w-4 h-4" />} label="Emails reçus M365" value={microsoft?.totals.emails_received ?? 0} color={ACCENT} sub={`${microsoft?.totals.emails_unread ?? 0} non lus`} />
-        <KpiTile icon={<Send className="w-4 h-4" />} label="Emails envoyés M365" value={microsoft?.totals.emails_sent ?? 0} color={SUCCESS} />
-        <KpiTile icon={<Calendar className="w-4 h-4" />} label="Réunions M365" value={microsoft?.totals.meetings ?? 0} color={AGENT} sub={`${Math.round((microsoft?.totals.meeting_minutes ?? 0) / 60)}h total`} />
-        <KpiTile icon={<CheckCircle2 className="w-4 h-4" />} label="Courtiers M365 scannés" value={`${microsoft?.scanned_brokers ?? microsoft?.connected_brokers ?? 0}/${rows.length}`} color={(microsoft?.scanned_brokers ?? microsoft?.connected_brokers ?? 0) ? SUCCESS : WARNING} sub={microsoft?.graph_mode === "application" ? "Azure app" : "Tokens courtier"} />
+        <KpiTile icon={<Mail className="w-4 h-4" />} label={t("adminPortal.ava.kpi.analyses")} value={totals.analyses} color={ACCENT} />
+        <KpiTile icon={<TrendingUp className="w-4 h-4" />} label={t("adminPortal.ava.kpi.leadsDetected")} value={totals.leads} color={SUCCESS} />
+        <KpiTile icon={<Zap className="w-4 h-4" />} label={t("adminPortal.ava.kpi.urgent")} value={totals.urgent} color={WARNING} />
+        <KpiTile icon={<CheckCircle2 className="w-4 h-4" />} label={t("adminPortal.ava.kpi.actionsExecuted")} value={totals.ok} color={SUCCESS} sub={`${approvalRate}% ${t("adminPortal.ava.kpi.successRate")}`} />
+        <KpiTile icon={<XCircle className="w-4 h-4" />} label={t("adminPortal.ava.kpi.errors")} value={totals.err} color={DANGER} />
+        <KpiTile icon={<Bot className="w-4 h-4" />} label={t("adminPortal.ava.kpi.activeBrokers")} value={rows.length} color={AGENT} />
+        <KpiTile icon={<ThumbsUp className="w-4 h-4" />} label={t("adminPortal.ava.kpi.feedbackUp")} value={fbStats.up} color={SUCCESS} />
+        <KpiTile icon={<ThumbsDown className="w-4 h-4" />} label={t("adminPortal.ava.kpi.feedbackDown")} value={fbStats.down} color={DANGER} />
+        <KpiTile icon={<Sparkles className="w-4 h-4" />} label={t("adminPortal.ava.kpi.satisfaction")} value={`${satisfaction}%`} color={AGENT} sub={`${fbTotal} ${t("adminPortal.ava.kpi.reviews")}`} />
+        <KpiTile icon={<Sparkles className="w-4 h-4" />} label={t("adminPortal.ava.kpi.modified")} value={totals.modified} color={WARNING} />
+        <KpiTile icon={<Inbox className="w-4 h-4" />} label={t("adminPortal.ava.kpi.emailsReceivedMs")} value={microsoft?.totals.emails_received ?? 0} color={ACCENT} sub={`${microsoft?.totals.emails_unread ?? 0} ${t("adminPortal.ava.kpi.unread")}`} />
+        <KpiTile icon={<Send className="w-4 h-4" />} label={t("adminPortal.ava.kpi.emailsSentMs")} value={microsoft?.totals.emails_sent ?? 0} color={SUCCESS} />
+        <KpiTile icon={<Calendar className="w-4 h-4" />} label={t("adminPortal.ava.kpi.meetingsMs")} value={microsoft?.totals.meetings ?? 0} color={AGENT} sub={`${Math.round((microsoft?.totals.meeting_minutes ?? 0) / 60)}${t("adminPortal.ava.kpi.hoursTotal")}`} />
+        <KpiTile icon={<CheckCircle2 className="w-4 h-4" />} label={t("adminPortal.ava.kpi.brokersScanned")} value={`${microsoft?.scanned_brokers ?? microsoft?.connected_brokers ?? 0}/${rows.length}`} color={(microsoft?.scanned_brokers ?? microsoft?.connected_brokers ?? 0) ? SUCCESS : WARNING} sub={microsoft?.graph_mode === "application" ? t("adminPortal.ava.kpi.modeApp") : t("adminPortal.ava.kpi.modeToken")} />
       </div>
 
       {/* Microsoft 365 + AVA insights */}

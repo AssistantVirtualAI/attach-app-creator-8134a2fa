@@ -318,6 +318,16 @@ export default function PAUsers() {
               ⚠ NS-API hors ligne
             </span>
           )}
+          {!numbersError && allNumbers.length > 0 && (
+            <span className="px-2 py-1 rounded-full" style={{ fontSize: 11, background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
+              📞 {allNumbers.length} DID · {unassignedNumbers.length} libre{unassignedNumbers.length > 1 ? "s" : ""}
+            </span>
+          )}
+          {numbersError && (
+            <span title={numbersError} className="px-2 py-1 rounded-full" style={{ fontSize: 11, background: `${DANGER}15`, color: DANGER, border: `1px solid ${DANGER}33` }}>
+              ⚠ DID hors ligne
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
 

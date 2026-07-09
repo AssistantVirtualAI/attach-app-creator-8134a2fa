@@ -483,13 +483,51 @@ function GoldGlow() {
 }
 
 function Brand() {
+  const [tapCount, setTapCount] = useState(0);
+  const [debugLogs, setDebugLogs] = useState<string>('');
+
+  const handleLogoTap = async () => {
+    const newCount = tapCount + 1;
+    if (newCount >= 5) {
+      setTapCount(0);
+      try {
+        const { getPermissionLogs } = await import('../lib/requestPermissionsAfterLogin');
+        const logs = await getPermissionLogs();
+        setDebugLogs(logs || 'No logs found');
+      } catch (e) {
+        setDebugLogs('Error loading logs: ' + String(e));
+      }
+    } else {
+      setTapCount(newCount);
+      window.setTimeout(() => setTapCount((c) => (c === newCount ? 0 : c)), 1500);
+    }
+  };
+
+  const clearLogs = async () => {
+    try {
+      const { clearPermissionLogs } = await import('../lib/requestPermissionsAfterLogin');
+      await clearPermissionLogs();
+      setDebugLogs('Cleared.');
+    } catch {}
+  };
+
   return (
     <div style={{ textAlign: 'center', marginBottom: 24 }}>
-      <div style={logoStyle}>
+      <div style={logoStyle} onClick={handleLogoTap}>
         <img src="/ava-logo.png" alt="Lemtel" width={72} height={72} style={{ display: 'block', borderRadius: 16 }} />
       </div>
       <div style={{ marginTop: 14, fontSize: 22, fontWeight: 800, color: C.textIce, letterSpacing: 0.2 }}>Lemtel</div>
       <div style={{ marginTop: 4, fontSize: 11, color: C.textSub, letterSpacing: 1.4, textTransform: 'uppercase', fontWeight: 600 }}>{tx("Téléphonie d'entreprise IA", 'AI business telephony')}</div>
+      {debugLogs ? (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 9999, display: 'flex', flexDirection: 'column', padding: 16 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <button type="button" onClick={() => setDebugLogs('')} style={{ padding: '8px 14px', borderRadius: 8, background: '#FFD700', color: '#0b1530', border: 'none', fontWeight: 700, cursor: 'pointer' }}>Close</button>
+            <button type="button" onClick={clearLogs} style={{ padding: '8px 14px', borderRadius: 8, background: '#EF4444', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}>Clear</button>
+            <div style={{ color: '#FFD700', fontSize: 13, alignSelf: 'center', fontWeight: 700 }}>Permission Logs</div>
+          </div>
+          <pre style={{ flex: 1, overflow: 'auto', background: '#0A1429', color: '#E8EEFB', padding: 12, borderRadius: 8, fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, textAlign: 'left' }}>{debugLogs}</pre>
+        </div>
+      ) : null}
     </div>
   );
 }

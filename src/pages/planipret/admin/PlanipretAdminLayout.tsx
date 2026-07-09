@@ -20,6 +20,7 @@ import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { toast } from "sonner";
 
+type NavBadge = "brokers" | "missed" | "integrations" | "audit";
 type NavKey = "overview" | "reports" | "ava" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
 type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "mobileDevices" | "sipDiagnostic";

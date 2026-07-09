@@ -91,6 +91,7 @@ export default function PAAva() {
   const [microsoft, setMicrosoft] = useState<MicrosoftAnalytics | null>(null);
   const [insights, setInsights] = useState<string[]>([]);
   const [dataHealth, setDataHealth] = useState<{ brokers_total: number; brokers_with_ms365_token: number; analyses_last_period: number; last_analysis_at: string | null; ms_graph_mode: "delegated" | "application" | "none"; scanned_brokers: number } | null>(null);
+  const [analyzeReport, setAnalyzeReport] = useState<{ mode: string; analyzed_brokers: number; total_analyses: number; brokers_scanned: number; per_broker: Array<{broker: string; analyses: number; note?: string}>; errors: Array<{broker?: string; error: string}>; at: string } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -146,16 +147,26 @@ export default function PAAva() {
   };
   const analyzeAll = async () => {
     setAnalyzing(true);
-    const tid = toast.loading("Analyse des emails des courtiers…");
+    const tid = toast.loading(t("adminPortal.ava.analyzing") || "Analyse en cours…");
     try {
       const { data, error } = await supabase.functions.invoke("ava-analyze-all", { body: { top: 20 } });
       if (error) throw error;
       const d = data as any;
       if (!d?.ok) throw new Error(d?.error ?? "Échec");
-      toast.success(`${d.total_analyses} email(s) analysé(s) sur ${d.analyzed_brokers} courtier(s)`, { id: tid });
+      setAnalyzeReport({
+        mode: d.mode,
+        analyzed_brokers: d.analyzed_brokers ?? 0,
+        total_analyses: d.total_analyses ?? 0,
+        brokers_scanned: d.brokers_scanned ?? 0,
+        per_broker: d.per_broker ?? [],
+        errors: d.errors ?? [],
+        at: new Date().toISOString(),
+      });
+      toast.success(`${d.total_analyses} email(s) · ${d.analyzed_brokers}/${d.brokers_scanned} courtier(s) · mode ${d.mode}`, { id: tid });
       await load();
     } catch (e: any) {
       toast.error(`Analyse échouée: ${e.message ?? e}`, { id: tid });
+      setAnalyzeReport({ mode: "error", analyzed_brokers: 0, total_analyses: 0, brokers_scanned: 0, per_broker: [], errors: [{ error: e.message ?? String(e) }], at: new Date().toISOString() });
     } finally {
       setAnalyzing(false);
     }
@@ -270,6 +281,54 @@ export default function PAAva() {
           </Button>
         </div>
       )}
+
+      {/* Analyze progress/report */}
+      {(analyzing || analyzeReport) && (
+        <div className="pp-card" style={{ padding: 14, borderColor: analyzing ? `${ACCENT}55` : (analyzeReport?.mode === "error" ? `${DANGER}55` : `${SUCCESS}55`) }}>
+          <div className="flex items-center gap-2 mb-2">
+            {analyzing ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: ACCENT }} /> : <CheckCircle2 className="w-4 h-4" style={{ color: analyzeReport?.mode === "error" ? DANGER : SUCCESS }} />}
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)" }}>
+              {analyzing ? (t("adminPortal.ava.analyzing")) : (t("adminPortal.ava.analyzeReportTitle"))}
+            </div>
+            {analyzeReport && !analyzing && (
+              <span style={{ fontSize: 10, color: "var(--pp-text-faint)", marginLeft: "auto" }}>
+                {new Date(analyzeReport.at).toLocaleString(lang === "en" ? "en-CA" : "fr-CA")}
+              </span>
+            )}
+          </div>
+          {analyzeReport && (
+            <>
+              <div className="flex flex-wrap gap-3" style={{ fontSize: 11, color: "var(--pp-text-secondary)" }}>
+                <span><strong style={{ color: "var(--pp-text-primary)" }}>{analyzeReport.total_analyses}</strong> {t("adminPortal.ava.kpi.analyses")}</span>
+                <span><strong style={{ color: "var(--pp-text-primary)" }}>{analyzeReport.analyzed_brokers}/{analyzeReport.brokers_scanned}</strong> {t("adminPortal.ava.kpi.activeBrokers")}</span>
+                <span>mode: <strong style={{ color: "var(--pp-text-primary)" }}>{analyzeReport.mode}</strong></span>
+                {analyzeReport.errors.length > 0 && <span style={{ color: DANGER }}>{analyzeReport.errors.length} error(s)</span>}
+              </div>
+              {analyzeReport.per_broker.length > 0 && (
+                <div className="mt-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5 max-h-40 overflow-auto">
+                  {analyzeReport.per_broker.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between px-2 py-1 rounded" style={{ background: "var(--pp-bg-deep)", fontSize: 10 }}>
+                      <span className="truncate" style={{ color: "var(--pp-text-secondary)" }}>{p.broker}</span>
+                      <span className="tabular-nums" style={{ color: p.analyses > 0 ? SUCCESS : "var(--pp-text-faint)", fontWeight: 700 }}>{p.analyses}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {analyzeReport.errors.length > 0 && (
+                <details className="mt-2">
+                  <summary style={{ fontSize: 10, color: DANGER, cursor: "pointer" }}>{analyzeReport.errors.length} error(s)</summary>
+                  <div className="mt-1 space-y-0.5 max-h-32 overflow-auto">
+                    {analyzeReport.errors.map((e, i) => (
+                      <div key={i} style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{e.broker ? `${e.broker} — ` : ""}{e.error}</div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
 
       {/* Guided empty state */}
       {showGuidedEmpty && (

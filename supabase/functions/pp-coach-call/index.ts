@@ -8,6 +8,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
 const json = (p: any, s = 200) =>
   new Response(JSON.stringify(p), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -37,7 +38,7 @@ Réponds STRICTEMENT en JSON valide, sans markdown, avec ce schéma:
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (!LOVABLE_API_KEY) return json({ error: "LOVABLE_API_KEY not configured" }, 500);
+  if (!LOVABLE_API_KEY && !ANTHROPIC_API_KEY) return json({ error: "No AI key configured (ANTHROPIC_API_KEY or LOVABLE_API_KEY)" }, 500);
 
   let body: any = {};
   try { body = await req.json(); } catch { /* empty */ }
@@ -141,41 +142,76 @@ CLIENT: ${clientName} (${row.direction === "outbound" ? row.to_number : row.from
 Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
     const userPrompt = `${context}\n\n--- TRANSCRIPTION BRUTE ---\n${effectiveTranscript}\n--- FIN ---\n\nAnalyse cet appel et renvoie le JSON demandé. IMPORTANT: dans corrected_transcript, remplace TOUS les libellés génériques (Speaker 1, sip:xxxx, Agent, Caller...) par "${brokerName}" et "${clientName}".`;
 
-    // ── F: appel Lovable AI ───────────────────────────────
-    // Model aligned with /planipret/admin coaching config (Claude via Lovable AI Gateway).
-    const AI_MODEL = Deno.env.get("PP_COACH_MODEL") ?? "google/gemini-2.5-pro";
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
-      body: JSON.stringify({
-        model: AI_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt + "\n\nRÉPONDS UNIQUEMENT AVEC UN JSON VALIDE — sans markdown, sans texte hors JSON." },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!aiResp.ok) {
-      const errText = await aiResp.text();
-      await admin.from("planipret_phone_calls").update({
-        analysis_in_progress: false, analysis_locked_at: null, analysis_locked_by: null,
-      }).eq("id", call_id);
-      if (aiResp.status === 429) return json({ error: "AI rate-limited, réessayez plus tard" }, 429);
-      if (aiResp.status === 402) return json({ error: "Crédits IA épuisés" }, 402);
-      return json({ error: "AI gateway failure", details: errText, status: aiResp.status }, 502);
+    // ── F: appel IA — Claude d'abord (ANTHROPIC_API_KEY), Lovable AI en failover ──
+    async function callClaude(): Promise<{ ok: boolean; content?: string; status?: number; error?: string }> {
+      if (!ANTHROPIC_API_KEY) return { ok: false, error: "no_anthropic_key" };
+      const model = Deno.env.get("PP_COACH_CLAUDE_MODEL") ?? "claude-sonnet-4-5-20250929";
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 4096,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userPrompt + "\n\nRÉPONDS UNIQUEMENT AVEC UN JSON VALIDE — sans markdown, sans texte hors JSON." }],
+        }),
+      });
+      if (!r.ok) return { ok: false, status: r.status, error: await r.text().catch(() => "") };
+      const j = await r.json();
+      const content = Array.isArray(j?.content) ? j.content.map((b: any) => b?.text ?? "").join("") : "";
+      return { ok: true, content };
     }
 
-    const aiJson = await aiResp.json();
-    const raw = aiJson?.choices?.[0]?.message?.content ?? "{}";
+    async function callLovable(): Promise<{ ok: boolean; content?: string; status?: number; error?: string }> {
+      if (!LOVABLE_API_KEY) return { ok: false, error: "no_lovable_key" };
+      const AI_MODEL = Deno.env.get("PP_COACH_MODEL") ?? "google/gemini-2.5-pro";
+      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
+        body: JSON.stringify({
+          model: AI_MODEL,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userPrompt + "\n\nRÉPONDS UNIQUEMENT AVEC UN JSON VALIDE — sans markdown, sans texte hors JSON." },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      });
+      if (!r.ok) return { ok: false, status: r.status, error: await r.text().catch(() => "") };
+      const j = await r.json();
+      return { ok: true, content: j?.choices?.[0]?.message?.content ?? "" };
+    }
+
+    let aiResult = await callClaude();
+    let usedProvider: "claude" | "lovable" = "claude";
+    if (!aiResult.ok) {
+      const fallback = await callLovable();
+      if (fallback.ok) { aiResult = fallback; usedProvider = "lovable"; }
+      else {
+        await admin.from("planipret_phone_calls").update({
+          analysis_in_progress: false, analysis_locked_at: null, analysis_locked_by: null,
+        }).eq("id", call_id);
+        const st = fallback.status ?? aiResult.status ?? 502;
+        if (st === 429) return json({ error: "AI rate-limited, réessayez plus tard" }, 429);
+        if (st === 402) return json({ error: "Crédits IA épuisés" }, 402);
+        return json({ error: "AI providers failed", claude: aiResult.error, lovable: fallback.error, status: st }, 502);
+      }
+    }
+
+    const raw = aiResult.content ?? "{}";
     let parsed: any;
-    try { parsed = typeof raw === "string" ? JSON.parse(raw) : raw; }
-    catch {
+    try {
+      const cleaned = String(raw).replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+      parsed = JSON.parse(cleaned);
+    } catch {
       await admin.from("planipret_phone_calls").update({
         analysis_in_progress: false, analysis_locked_at: null, analysis_locked_by: null,
       }).eq("id", call_id);
-      return json({ error: "AI returned invalid JSON", raw }, 502);
+      return json({ error: "AI returned invalid JSON", provider: usedProvider, raw }, 502);
     }
 
     const corrected = typeof parsed.corrected_transcript === "string" ? parsed.corrected_transcript : null;

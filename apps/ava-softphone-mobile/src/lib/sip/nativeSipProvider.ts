@@ -72,8 +72,14 @@ export interface CapacitorSipPlugin {
 export const CapacitorSipNative = registerPlugin<CapacitorSipPlugin>('CapacitorPjsip');
 export const CapacitorPjsip = CapacitorSipNative;
 
-export const NATIVE_SIP_ENABLED =
-  ((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true';
+// Native PJSIP is only wired up on iOS. Android's CapacitorPjsip bridge is a
+// stub that returns ok without doing real SIP, so on Android we fall back to
+// JsSIP (WebRTC) even when VITE_NATIVE_SIP=true.
+import { Capacitor as __Cap } from '@capacitor/core';
+const __NATIVE_FLAG = ((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true';
+let __platform: string = 'web';
+try { __platform = __Cap.getPlatform(); } catch { /* ssr / tests */ }
+export const NATIVE_SIP_ENABLED = __NATIVE_FLAG && __platform === 'ios';
 
 /**
  * Subscribe to a native SIP event. Returns a cleanup function.

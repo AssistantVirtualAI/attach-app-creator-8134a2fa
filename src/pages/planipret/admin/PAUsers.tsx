@@ -741,6 +741,32 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
               <Field label="Extension NS *" hint="Ex: 1234"><input value={extension} onChange={(e) => setExtension(e.target.value)} maxLength={5} className="pp-input" /></Field>
               <Field label="Domaine NS"><input value="planipret.ca" readOnly className="pp-input" style={{ opacity: 0.6 }} /></Field>
             </div>
+            <Field
+              label="Numéro DID assigné"
+              hint={
+                availableNumbers.length === 0 && currentNumbers.length === 0
+                  ? "Aucun numéro libre dans le domaine planipret.ca"
+                  : "Choisir un numéro actif non assigné dans le domaine planipret.ca"
+              }
+            >
+              <select
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="pp-input"
+              >
+                <option value="">— Aucun DID —</option>
+                {currentNumbers.map((n) => (
+                  <option key={`cur-${n.raw}`} value={n.raw}>
+                    {n.pretty} (actuel)
+                  </option>
+                ))}
+                {availableNumbers.map((n) => (
+                  <option key={`free-${n.raw}`} value={n.raw}>
+                    {n.pretty} — libre
+                  </option>
+                ))}
+              </select>
+            </Field>
             {!isEdit ? (
               <Field label="Mot de passe initial *">
                 <div className="flex gap-2">

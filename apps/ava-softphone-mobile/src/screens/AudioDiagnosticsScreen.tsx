@@ -73,24 +73,33 @@ export default function AudioDiagnosticsScreen() {
 
       <section style={{ background: '#0f172a', padding: 12, borderRadius: 12, marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, fontSize: 15 }}>{tx('Test pré-appel', 'Pre-call test')}</h3>
-        <p style={{ color: '#94a3b8', fontSize: 12 }}>
-          {tx('Joue un ton 440 Hz pendant 2 s sur la sortie active et démarre RemoteIO pour mesurer le pic micro.', 'Plays a 440 Hz tone for 2 s on the active output and starts RemoteIO to measure mic peak.')}
-        </p>
-        <button onClick={runToneTest} disabled={tone.running}
-          style={{ padding: '10px 16px', borderRadius: 8, background: '#2563eb', color: '#fff', border: 0 }}>
-          {tone.running ? tx('Test en cours…', 'Running…') : tx('▶ Lancer le test', '▶ Run test')}
-        </button>
-        <div style={{ marginTop: 10 }}>
-          {row(tx('Pic micro', 'Mic peak'), `${(tone.micPeak * 100).toFixed(1)}%`)}
-          {row(tx('Route audio', 'Audio route'), tone.route)}
-        </div>
+        {IS_ANDROID ? (
+          <p style={{ color: '#f59e0b', fontSize: 12 }}>
+            {tx('Test audio non disponible sur Android (JsSIP/WebRTC gère l’audio directement).',
+                'Audio test not available on Android (JsSIP/WebRTC handles audio directly).')}
+          </p>
+        ) : (
+          <>
+            <p style={{ color: '#94a3b8', fontSize: 12 }}>
+              {tx('Joue un ton 440 Hz pendant 2 s sur la sortie active et démarre RemoteIO pour mesurer le pic micro.', 'Plays a 440 Hz tone for 2 s on the active output and starts RemoteIO to measure mic peak.')}
+            </p>
+            <button onClick={runToneTest} disabled={tone.running}
+              style={{ padding: '10px 16px', borderRadius: 8, background: '#2563eb', color: '#fff', border: 0 }}>
+              {tone.running ? tx('Test en cours…', 'Running…') : tx('▶ Lancer le test', '▶ Run test')}
+            </button>
+            <div style={{ marginTop: 10 }}>
+              {row(tx('Pic micro', 'Mic peak'), `${(tone.micPeak * 100).toFixed(1)}%`)}
+              {row(tx('Route audio', 'Audio route'), tone.route)}
+            </div>
+          </>
+        )}
       </section>
 
       <section style={{ background: '#0f172a', padding: 12, borderRadius: 12, marginBottom: 16 }}>
         <h3 style={{ marginTop: 0, fontSize: 15 }}>{tx('Forcer la route', 'Force route')}</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {(['auto','speaker','earpiece','bluetooth'] as const).map(r => (
-            <button key={r} onClick={() => setRouteTo(r)}
+            <button key={r} onClick={() => setRouteTo(r)} disabled={IS_ANDROID && r !== 'speaker' && r !== 'earpiece' && r !== 'bluetooth'}
               style={{ padding: '8px 12px', borderRadius: 8, background: '#1e293b', color: '#e2e8f0', border: '1px solid #334155' }}>
               {r}
             </button>

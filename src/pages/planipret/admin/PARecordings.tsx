@@ -348,18 +348,39 @@ export default function PARecordings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail?.id, detail?.transcript, detail?.transcript_segments]);
 
-  // Auto-fetch audio via ns-get-recording when a recording detail opens (skip voicemails)
+  // Auto-fetch audio via ns-get-recording when a recording detail opens (skip voicemails).
+  // If NS-API returns "recording not ready / callid désynchronisé" on the first try,
+  // we automatically retry a few times with an increasing backoff so the operator
+  // sees a proper loading state instead of a stale error.
   useEffect(() => {
     if (!detail?.id) return;
     const to = String(detail.to_number ?? "").toLowerCase();
     const isVoicemail = to.includes("vmail") || to.includes("voicemail") || to.includes("vm@");
     if (isVoicemail) return;
-    // Always attempt to resolve — all lines are auto-recorded; a stale
-    // has_recording=false must not block the retry flow.
     if (detail.recording_url && String(detail.recording_url).startsWith("blob:")) return;
     if (detail.recording_url && String(detail.recording_url).startsWith("http")) return;
-    if (resolving === detail.id) return;
-    resolveRecording(detail);
+
+    let cancelled = false;
+    let attempt = 0;
+    // Reset the error banner every time a new call is opened so the loader
+    // (resolving === detail.id) can render instead of the stale "not found".
+    setRecordingError(null);
+
+    const kick = async () => {
+      if (cancelled) return;
+      await resolveRecording(detail);
+      if (cancelled) return;
+      // If nothing landed and we still don't have audio, retry with backoff.
+      // NetSapiens finalizes recordings a few seconds after the call ends.
+      const stillMissing = !(detail.recording_url && String(detail.recording_url).startsWith("blob:"));
+      if (stillMissing && attempt < 3) {
+        attempt += 1;
+        const delay = 4000 * attempt; // 4s, 8s, 12s
+        setTimeout(() => { if (!cancelled) kick(); }, delay);
+      }
+    };
+    kick();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail?.id]);
 

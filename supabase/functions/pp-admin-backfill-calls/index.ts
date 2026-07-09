@@ -38,7 +38,12 @@ Deno.serve(async (req) => {
     // Bootstrap: publier PP_CRON_SECRET dans la table pour que pg_cron puisse l'utiliser.
     const CRON_SECRET = Deno.env.get("PP_CRON_SECRET") ?? "";
     if (CRON_SECRET) {
-      admin.from("pp_internal_config").upsert({ key: "cron_secret", value: CRON_SECRET }).then(() => {}, () => {});
+      await admin.from("pp_internal_config").upsert({ key: "cron_secret", value: CRON_SECRET, updated_at: new Date().toISOString() });
+    }
+
+    const url = new URL(req.url);
+    if (url.searchParams.get("bootstrap") === "1") {
+      return json({ ok: true, bootstrapped: !!CRON_SECRET });
     }
 
     const auth = req.headers.get("Authorization") ?? "";

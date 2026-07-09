@@ -265,12 +265,14 @@ async function brokerM365AppStats(accessToken: string, profile: Profile, sinceIs
 
 function fallbackInsights(aggregate: any) {
   const insights: string[] = [];
-  if (aggregate.microsoft.connected_brokers === 0) {
+  if (aggregate.microsoft.scanned_brokers > 0) {
+    insights.push(`${aggregate.microsoft.scanned_brokers} courtier(s) Microsoft scanné(s), ${aggregate.microsoft.totals.emails_received} emails reçus et ${aggregate.microsoft.totals.meetings} réunions sur la période.`);
+  } else if (aggregate.microsoft.connected_brokers === 0) {
     insights.push("Aucun courtier n'a encore de token Microsoft 365 actif: reconnecter Microsoft pour alimenter emails et réunions.");
   } else {
     insights.push(`${aggregate.microsoft.connected_brokers} courtier(s) Microsoft connecté(s), ${aggregate.microsoft.totals.emails_received} emails reçus et ${aggregate.microsoft.totals.meetings} réunions sur la période.`);
   }
-  if (aggregate.ava.analyses === 0 && aggregate.microsoft.connected_brokers > 0) {
+  if (aggregate.ava.analyses === 0 && aggregate.microsoft.scanned_brokers > 0) {
     insights.push("Microsoft est connecté mais AVA n'a pas encore d'analyses: lancer l'analyse des emails maintenant.");
   }
   if (aggregate.ava.errors > 0) insights.push(`${aggregate.ava.errors} action(s) AVA en erreur: vérifier les actions récentes et les autorisations.`);

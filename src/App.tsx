@@ -38,6 +38,7 @@ import MAvaNotifications from "./pages/planipret/mobile/MAvaNotifications";
 import MExtensionSync from "./pages/planipret/mobile/MExtensionSync";
 import PlanipretAudit from "./pages/planipret/PlanipretAudit";
 import Ms365Callback from "./pages/planipret/Ms365Callback";
+import Ms365Diagnostics from "./pages/planipret/Ms365Diagnostics";
 import SoftphoneSetup from "./pages/lemtel/SoftphoneSetup";
 // Lazy-load admin pages (each is its own chunk)
 const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin/PlanipretAdminLayout"));
@@ -425,6 +426,8 @@ const App = () => (
                 <Route path="/auth/ms365/callback" element={<Ms365Callback />} />
                 <Route path="/auth/microsoft/callback" element={<Ms365Callback />} />
                 <Route path="/auth/callback" element={<Ms365Callback />} />
+                <Route path="/mplanipret/ms365-diagnostics" element={<Ms365Diagnostics />} />
+                <Route path="/planipret/ms365-diagnostics" element={<Ms365Diagnostics />} />
                 <Route path="/planipret/audit" element={<AppSeparationGuard app="planipret"><PlanipretAudit /></AppSeparationGuard>} />
                 <Route path="/planipret/store-preflight" element={<AppSeparationGuard app="planipret"><StorePreflightPreview /></AppSeparationGuard>} />
 

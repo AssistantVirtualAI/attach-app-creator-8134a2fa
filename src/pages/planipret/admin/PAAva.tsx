@@ -33,6 +33,7 @@ type Row = {
 type MicrosoftAnalytics = {
   connected_brokers: number;
   scanned_brokers: number;
+  graph_mode?: "delegated" | "application" | "none";
   truncated?: boolean;
   totals: { emails_received: number; emails_sent: number; emails_unread: number; meetings: number; meeting_minutes: number };
   topSenders: Array<{ name: string; count: number }>;
@@ -235,7 +236,7 @@ export default function PAAva() {
         <KpiTile icon={<Inbox className="w-4 h-4" />} label="Emails reçus M365" value={microsoft?.totals.emails_received ?? 0} color={ACCENT} sub={`${microsoft?.totals.emails_unread ?? 0} non lus`} />
         <KpiTile icon={<Send className="w-4 h-4" />} label="Emails envoyés M365" value={microsoft?.totals.emails_sent ?? 0} color={SUCCESS} />
         <KpiTile icon={<Calendar className="w-4 h-4" />} label="Réunions M365" value={microsoft?.totals.meetings ?? 0} color={AGENT} sub={`${Math.round((microsoft?.totals.meeting_minutes ?? 0) / 60)}h total`} />
-        <KpiTile icon={<CheckCircle2 className="w-4 h-4" />} label="Courtiers Microsoft" value={`${microsoft?.connected_brokers ?? 0}/${rows.length}`} color={(microsoft?.connected_brokers ?? 0) ? SUCCESS : WARNING} />
+        <KpiTile icon={<CheckCircle2 className="w-4 h-4" />} label="Courtiers M365 scannés" value={`${microsoft?.scanned_brokers ?? microsoft?.connected_brokers ?? 0}/${rows.length}`} color={(microsoft?.scanned_brokers ?? microsoft?.connected_brokers ?? 0) ? SUCCESS : WARNING} sub={microsoft?.graph_mode === "application" ? "Azure app" : "Tokens courtier"} />
       </div>
 
       {/* Microsoft 365 + AVA insights */}

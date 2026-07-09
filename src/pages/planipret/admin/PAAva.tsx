@@ -191,8 +191,12 @@ export default function PAAva() {
       const { data, error } = await supabase.functions.invoke("ms365-connection-test", { body: {} });
       if (error) throw error;
       const d = data as any;
-      const ok = d?.ok === true || d?.success === true;
-      setTestResult({ ok, message: ok ? (t("adminPortal.ava.testOk") || "OK") : (d?.error ?? t("adminPortal.ava.testFailed")), at: new Date().toISOString() });
+      const status = d?.summary?.status;
+      const ok = d?.ok === true || d?.success === true || status === "core_connected" || status === "fully_connected" || d?.results?.auth?.success === true;
+      const message = ok
+        ? d?.results?.auth?.message ?? d?.summary?.status ?? (t("adminPortal.ava.testOk") || "OK")
+        : d?.error ?? d?.results?.auth?.message ?? t("adminPortal.ava.testFailed");
+      setTestResult({ ok, message, at: new Date().toISOString() });
       ok ? toast.success(t("adminPortal.ava.testOk")) : toast.error(d?.error ?? t("adminPortal.ava.testFailed"));
     } catch (e: any) {
       setTestResult({ ok: false, message: e.message ?? String(e), at: new Date().toISOString() });

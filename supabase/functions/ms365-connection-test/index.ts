@@ -202,7 +202,13 @@ Deno.serve(async (req) => {
             message: okAll ? "✅ Capacités utilisateur (Mail/Calendar/Teams) opérationnelles" : `⚠️ Certaines capacités utilisateur échouent`,
           };
         } else {
-          results.delegated = { success: false, informational: false, category: "delegated", message: "ℹ️ Utilisateur non connecté à Microsoft — se connecter via Diagnostics" };
+          results.delegated = {
+            success: true,
+            informational: true,
+            category: "delegated",
+            degraded: "delegated_not_connected",
+            message: "ℹ️ Aucun token utilisateur — mode application Microsoft actif pour l’admin AVA",
+          };
         }
       }
     }
@@ -211,15 +217,16 @@ Deno.serve(async (req) => {
   }
 
   const nonInfo = Object.values(results).filter((r: any) => !r.informational);
+  const corePassed = !!results.auth?.success;
   const summary = {
     total_tests: Object.keys(results).length,
     passed: Object.values(results).filter((r: any) => r.success).length,
     failed: Object.values(results).filter((r: any) => !r.success && !r.informational).length,
-    core_passed: !!results.auth?.success && (results.delegated ? results.delegated.success !== false : true),
+    core_passed: corePassed,
     admin_directory_failed: 0, // no longer surfaced as failures
     admin_directory_informational: Object.values(results).filter((r: any) => r.category === "admin_directory").length,
-    delegated_ok: !!results.delegated?.success,
-    status: results.auth?.success ? (results.delegated?.success ? "fully_connected" : "core_connected") : "not_connected",
+    delegated_ok: results.delegated?.degraded ? false : !!results.delegated?.success,
+    status: corePassed ? (results.delegated?.success && !results.delegated?.degraded ? "fully_connected" : "core_connected") : "not_connected",
     tested_at: new Date().toISOString(),
     elapsed_ms: Date.now() - startedAt,
     tenant_id: TENANT_ID,

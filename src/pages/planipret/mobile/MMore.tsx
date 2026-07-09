@@ -33,6 +33,22 @@ export default function MMore() {
   const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem("planipret_dark") === "1");
   const [agentOn, setAgentOn] = useState<boolean>(() => localStorage.getItem("planipret_agent_on") !== "0");
   const [monthStats, setMonthStats] = useState<{ calls: number; leads: number; rate: number }>({ calls: 0, leads: 0, rate: 0 });
+  const [ms365Detection, setMs365Detection] = useState<{
+    tenant_id: string | null; client_id: string | null; loading: boolean;
+  }>({ tenant_id: null, client_id: null, loading: true });
+
+  const loadMs365Detection = async () => {
+    setMs365Detection((d) => ({ ...d, loading: true }));
+    const { data } = await supabase.functions.invoke("pp-integration-secrets");
+    const ms = ((data as any)?.items ?? []).find((i: any) => i.provider === "microsoft");
+    const pc = ms?.public_config ?? {};
+    setMs365Detection({
+      tenant_id: pc.tenant_id ?? null,
+      client_id: pc.client_id ?? pc.client_secret_id ?? null,
+      loading: false,
+    });
+  };
+  useEffect(() => { loadMs365Detection(); }, []);
 
   useEffect(() => { if (params.get("ms365") === "ok") toast.success(t("more.msConnected")); }, [params, t]);
 
@@ -235,8 +251,27 @@ export default function MMore() {
 
       <Section title={t("more.sections.integrations")}>
         <Row icon={<Mail className="w-4 h-4" style={{ color: "#3FA3F0" }} />} label="Microsoft 365"
+          sub={
+            ms365Detection.loading
+              ? "Vérification de la configuration…"
+              : ms365Detection.tenant_id || ms365Detection.client_id
+                ? `Tenant ${ms365Detection.tenant_id ? "✓" : "✗"} · Client ${ms365Detection.client_id ? "✓" : "✗"}${ms365Connected ? " · Authentifié" : " · Non authentifié"}`
+                : "Configuration backend introuvable"
+          }
           onClick={ms365Connected ? disconnectMs365 : connectMs365}
           right={<StatusPill ok={ms365Connected} label={ms365Connected ? t("more.connected") : "—"} />} chevron />
+        <div style={{ padding: "0 12px 8px" }}>
+          <div className="rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", padding: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--pp-text-muted)", letterSpacing: "0.06em", marginBottom: 6 }}>
+              🔎 CONFIG DÉTECTÉE
+            </div>
+            <div style={{ fontSize: 11, color: "var(--pp-text-secondary)", fontFamily: "monospace", lineHeight: 1.5 }}>
+              <div>Tenant: {ms365Detection.loading ? "…" : (ms365Detection.tenant_id ?? "—")}</div>
+              <div>Client: {ms365Detection.loading ? "…" : (ms365Detection.client_id ?? "—")}</div>
+              <div>Auth  : {ms365Connected ? "✅ token courtier actif" : "⚠️ compte non lié"}</div>
+            </div>
+          </div>
+        </div>
         {ms365Connected && (
           <div style={{ padding: 8 }}>
             <Ms365ScopesCard profile={profile} onReconnect={connectMs365} />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, Sparkles, TrendingUp, ThumbsUp, ThumbsDown, Bot, Mail, Zap, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, Sparkles, TrendingUp, ThumbsUp, ThumbsDown, Bot, Mail, Zap, CheckCircle2, XCircle, Inbox, Send, Calendar, AlertCircle, Video, ExternalLink } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend, LineChart, Line,
@@ -16,12 +16,29 @@ const AGENT = "#9B7FE8";
 
 type Row = {
   user_id: string;
+  broker_name?: string;
+  broker_email?: string | null;
   analyses_30d: number;
   urgent_30d: number;
   leads_30d: number;
   actions_ok_30d: number;
   actions_err_30d: number;
   actions_modified_30d: number;
+  ms365_connected?: boolean;
+  emails_received?: number;
+  emails_sent?: number;
+  meetings?: number;
+};
+
+type MicrosoftAnalytics = {
+  connected_brokers: number;
+  scanned_brokers: number;
+  truncated?: boolean;
+  totals: { emails_received: number; emails_sent: number; emails_unread: number; meetings: number; meeting_minutes: number };
+  topSenders: Array<{ name: string; count: number }>;
+  upcomingMeetings: Array<{ broker?: string; subject: string; start: string; attendees: number; is_online: boolean; join_url: string | null }>;
+  brokerSummaries: Array<{ broker_user_id: string; broker_name: string; email: string | null; emails_received: number; emails_sent: number; meetings: number }>;
+  graphErrors: Array<{ broker: string | null; error: string }>;
 };
 
 const TooltipDark = ({ active, payload, label }: any) => {
@@ -59,73 +76,45 @@ export default function PAAva() {
   const [rows, setRows] = useState<Row[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [fbStats, setFbStats] = useState({ up: 0, down: 0, modified: 0, skipped: 0 });
   const [tuning, setTuning] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const [dailySeries, setDailySeries] = useState<Array<{ day: string; analyses: number; leads: number; urgent: number }>>([]);
+  const [dailySeries, setDailySeries] = useState<Array<{ day: string; analyses: number; leads: number; urgent: number; ms_emails_received?: number; ms_emails_sent?: number; ms_meetings?: number }>>([]);
   const [toolMix, setToolMix] = useState<Array<{ name: string; value: number; color: string }>>([]);
   const [recentActions, setRecentActions] = useState<any[]>([]);
+  const [microsoft, setMicrosoft] = useState<MicrosoftAnalytics | null>(null);
+  const [insights, setInsights] = useState<string[]>([]);
 
   const load = async () => {
-    const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-    const [statsRes, fbRes, emailAnalyses, actionLog, toolLog] = await Promise.all([
-      supabase.from("planipret_ava_stats").select("*"),
-      supabase.from("planipret_ava_feedback").select("rating").gte("created_at", since),
-      supabase.from("planipret_ava_email_analyses").select("created_at, is_lead, is_urgent").gte("created_at", since),
-      supabase.from("planipret_ava_action_log").select("*").gte("created_at", since).order("created_at", { ascending: false }).limit(10),
-      supabase.from("ai_request_audit_log").select("action").gte("created_at", since).like("action", "elevenlabs_tool:%"),
-    ]);
-    const list = (statsRes.data ?? []) as Row[];
+    setLoading(true);
+    setApiError(null);
+    const { data, error } = await supabase.functions.invoke("planipret-admin-ava-analytics", {
+      body: { days: 30, includeGraph: true, insights: true },
+    });
+    if (error || !(data as any)?.ok) {
+      setApiError(error?.message ?? (data as any)?.error ?? "Analytics indisponible");
+      setRows([]);
+      setDailySeries([]);
+      setToolMix([]);
+      setRecentActions([]);
+      setMicrosoft(null);
+      setInsights([]);
+      setLoading(false);
+      return;
+    }
+    const payload = data as any;
+    const list = (payload.rows ?? []) as Row[];
+    const names: Record<string, string> = {};
+    list.forEach((row) => { names[row.user_id] = row.broker_name || row.user_id.slice(0, 8); });
     setRows(list);
-    const counts = { up: 0, down: 0, modified: 0, skipped: 0 } as any;
-    (fbRes.data ?? []).forEach((r: any) => { counts[r.rating] = (counts[r.rating] ?? 0) + 1; });
-    setFbStats(counts);
-
-    if (list.length) {
-      const { data: p } = await supabase
-        .from("planipret_profiles")
-        .select("user_id, full_name")
-        .in("user_id", list.map((r) => r.user_id));
-      const m: Record<string, string> = {};
-      (p ?? []).forEach((x: any) => { if (x.user_id) m[x.user_id] = x.full_name ?? ""; });
-      setProfiles(m);
-    }
-
-    // Daily analyses series
-    const days: Record<string, { analyses: number; leads: number; urgent: number }> = {};
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(today); d.setDate(d.getDate() - i);
-      days[d.toISOString().slice(0, 10)] = { analyses: 0, leads: 0, urgent: 0 };
-    }
-    (emailAnalyses.data ?? []).forEach((r: any) => {
-      const k = r.created_at?.slice(0, 10);
-      if (k && days[k]) {
-        days[k].analyses++;
-        if (r.is_lead) days[k].leads++;
-        if (r.is_urgent) days[k].urgent++;
-      }
-    });
-    setDailySeries(Object.entries(days).map(([k, v]) => ({
-      day: new Date(k).toLocaleDateString("fr-CA", { day: "2-digit", month: "2-digit" }),
-      ...v,
-    })));
-
-    // Tool call mix
-    const toolMap: Record<string, number> = {};
-    (toolLog.data ?? []).forEach((r: any) => {
-      const tool = String(r.action).replace(/^elevenlabs_tool:/, "");
-      toolMap[tool] = (toolMap[tool] ?? 0) + 1;
-    });
-    const palette = [ACCENT, SUCCESS, AGENT, WARNING, DANGER, "#F5C842", "#4A7FA5"];
-    setToolMix(
-      Object.entries(toolMap)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 7)
-        .map(([name, value], i) => ({ name, value, color: palette[i % palette.length] })),
-    );
-
-    setRecentActions(actionLog.data ?? []);
+    setProfiles(names);
+    setFbStats(payload.feedback ?? { up: 0, down: 0, modified: 0, skipped: 0 });
+    setDailySeries(payload.dailySeries ?? []);
+    setToolMix(payload.toolMix ?? []);
+    setRecentActions(payload.recentActions ?? []);
+    setMicrosoft(payload.microsoft ?? null);
+    setInsights(payload.insights ?? []);
     setLoading(false);
   };
 
@@ -186,14 +175,16 @@ export default function PAAva() {
 
   const brokerLeaderboard = useMemo(() => {
     return [...rows]
-      .sort((a, b) => (b.analyses_30d ?? 0) - (a.analyses_30d ?? 0))
+      .sort((a, b) => ((b.analyses_30d ?? 0) + (b.emails_received ?? 0) + (b.meetings ?? 0)) - ((a.analyses_30d ?? 0) + (a.emails_received ?? 0) + (a.meetings ?? 0)))
       .slice(0, 10)
       .map((r) => ({
-        name: profiles[r.user_id] || r.user_id.slice(0, 8),
+        name: r.broker_name || profiles[r.user_id] || r.user_id.slice(0, 8),
         analyses: r.analyses_30d ?? 0,
         leads: r.leads_30d ?? 0,
         ok: r.actions_ok_30d ?? 0,
         err: r.actions_err_30d ?? 0,
+        emails: r.emails_received ?? 0,
+        meetings: r.meetings ?? 0,
       }));
   }, [rows, profiles]);
 
@@ -219,6 +210,16 @@ export default function PAAva() {
         </div>
       </div>
 
+      {apiError && (
+        <div className="pp-card flex items-start gap-3" style={{ padding: 14, borderColor: `${DANGER}55` }}>
+          <AlertCircle className="w-5 h-5 shrink-0" style={{ color: DANGER }} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)" }}>Analytics non chargés</div>
+            <div style={{ fontSize: 12, color: "var(--pp-text-secondary)" }}>{apiError}</div>
+          </div>
+        </div>
+      )}
+
       {/* KPI grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         <KpiTile icon={<Mail className="w-4 h-4" />} label="Analyses" value={totals.analyses} color={ACCENT} />
@@ -231,7 +232,97 @@ export default function PAAva() {
         <KpiTile icon={<ThumbsDown className="w-4 h-4" />} label="Feedback 👎" value={fbStats.down} color={DANGER} />
         <KpiTile icon={<Sparkles className="w-4 h-4" />} label="Satisfaction" value={`${satisfaction}%`} color={AGENT} sub={`${fbTotal} avis`} />
         <KpiTile icon={<Sparkles className="w-4 h-4" />} label="Modifiées" value={totals.modified} color={WARNING} />
+        <KpiTile icon={<Inbox className="w-4 h-4" />} label="Emails reçus M365" value={microsoft?.totals.emails_received ?? 0} color={ACCENT} sub={`${microsoft?.totals.emails_unread ?? 0} non lus`} />
+        <KpiTile icon={<Send className="w-4 h-4" />} label="Emails envoyés M365" value={microsoft?.totals.emails_sent ?? 0} color={SUCCESS} />
+        <KpiTile icon={<Calendar className="w-4 h-4" />} label="Réunions M365" value={microsoft?.totals.meetings ?? 0} color={AGENT} sub={`${Math.round((microsoft?.totals.meeting_minutes ?? 0) / 60)}h total`} />
+        <KpiTile icon={<CheckCircle2 className="w-4 h-4" />} label="Courtiers Microsoft" value={`${microsoft?.connected_brokers ?? 0}/${rows.length}`} color={(microsoft?.connected_brokers ?? 0) ? SUCCESS : WARNING} />
       </div>
+
+      {/* Microsoft 365 + AVA insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="pp-card lg:col-span-2" style={{ padding: 20 }}>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)" }}>Microsoft 365 · emails et réunions réels</h3>
+            {microsoft?.truncated && <span style={{ fontSize: 10, color: WARNING }}>Top {microsoft.scanned_brokers} courtiers scannés</span>}
+          </div>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={dailySeries}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#4A7FA5" }} />
+              <YAxis tick={{ fontSize: 10, fill: "#4A7FA5" }} />
+              <Tooltip content={<TooltipDark />} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="ms_emails_received" name="Emails reçus" fill={ACCENT} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="ms_emails_sent" name="Emails envoyés" fill={SUCCESS} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="ms_meetings" name="Réunions" fill={AGENT} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="pp-card" style={{ padding: 20 }}>
+          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Insights AVA</h3>
+          {insights.length === 0 ? (
+            <p style={{ fontSize: 12, color: "var(--pp-text-faint)", padding: "50px 0", textAlign: "center" }}>Chargement des insights…</p>
+          ) : (
+            <ul className="space-y-2">
+              {insights.map((item, i) => (
+                <li key={i} className="flex gap-2" style={{ fontSize: 12, color: "var(--pp-text-secondary)" }}>
+                  <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: AGENT }} />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {microsoft && ((microsoft.upcomingMeetings?.length ?? 0) > 0 || (microsoft.topSenders?.length ?? 0) > 0 || (microsoft.graphErrors?.length ?? 0) > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="pp-card lg:col-span-2" style={{ padding: 20 }}>
+            <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Prochaines réunions Teams</h3>
+            {microsoft.upcomingMeetings.length === 0 ? (
+              <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>Aucune réunion à venir trouvée.</p>
+            ) : (
+              <div className="space-y-2">
+                {microsoft.upcomingMeetings.slice(0, 8).map((meeting, i) => (
+                  <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+                    <Calendar className="w-4 h-4 shrink-0" style={{ color: AGENT }} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate" style={{ fontSize: 12, fontWeight: 600, color: "var(--pp-text-primary)" }}>{meeting.subject || "Réunion"}</div>
+                      <div style={{ fontSize: 10, color: "var(--pp-text-muted)" }}>{meeting.broker} · {meeting.start ? new Date(meeting.start).toLocaleString("fr-CA", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""} · {meeting.attendees} participant(s)</div>
+                    </div>
+                    {meeting.is_online && meeting.join_url && (
+                      <a href={meeting.join_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-md" style={{ fontSize: 10, fontWeight: 700, color: AGENT, background: `${AGENT}1A` }}>
+                        <Video className="w-3 h-3" /> Rejoindre <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="pp-card" style={{ padding: 20 }}>
+            <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Top expéditeurs</h3>
+            {microsoft.topSenders.length === 0 ? (
+              <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>Aucun email reçu sur la période.</p>
+            ) : (
+              <div className="space-y-2">
+                {microsoft.topSenders.map((sender) => (
+                  <div key={sender.name} className="flex items-center justify-between gap-2">
+                    <span className="truncate" style={{ fontSize: 11, color: "var(--pp-text-secondary)" }}>{sender.name}</span>
+                    <span className="tabular-nums" style={{ fontSize: 11, fontWeight: 700, color: ACCENT }}>{sender.count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {microsoft.graphErrors.length > 0 && (
+              <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: WARNING, marginBottom: 6 }}>Connexions limitées</div>
+                <div style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{microsoft.graphErrors.length} courtier(s) doivent reconnecter Microsoft.</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -283,6 +374,8 @@ export default function PAAva() {
                 <Tooltip content={<TooltipDark />} cursor={{ fill: "rgba(46,155,220,0.06)" }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="analyses" name="Analyses" fill={ACCENT} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="emails" name="Emails reçus" fill={AGENT} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="meetings" name="Réunions" fill={WARNING} radius={[0, 4, 4, 0]} />
                 <Bar dataKey="ok" name="Actions ✓" fill={SUCCESS} radius={[0, 4, 4, 0]} />
                 <Bar dataKey="err" name="Erreurs" fill={DANGER} radius={[0, 4, 4, 0]} />
               </BarChart>
@@ -325,7 +418,7 @@ export default function PAAva() {
         ) : (
           <div className="space-y-1">
             {recentActions.map((a) => {
-              const ok = a.status === "ok" || a.status === "success" || a.status === "executed";
+              const ok = a.success === true || a.status === "ok" || a.status === "success" || a.status === "executed";
               const color = ok ? SUCCESS : a.status === "error" ? DANGER : WARNING;
               return (
                 <div key={a.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
@@ -333,9 +426,9 @@ export default function PAAva() {
                   <span style={{ fontSize: 12, fontWeight: 500, color: "var(--pp-text-primary)" }} className="truncate flex-1">
                     {a.action_type ?? a.action ?? "action"}
                   </span>
-                  <span style={{ fontSize: 10, color: "var(--pp-text-muted)" }}>{profiles[a.user_id] || a.user_id?.slice(0, 8)}</span>
+                  <span style={{ fontSize: 10, color: "var(--pp-text-muted)" }}>{a.broker_name || profiles[a.broker_user_id] || profiles[a.user_id] || a.broker_user_id?.slice(0, 8) || a.user_id?.slice(0, 8)}</span>
                   <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }} className="tabular-nums">
-                    {a.created_at ? new Date(a.created_at).toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" }) : ""}
+                    {(a.executed_at || a.created_at) ? new Date(a.executed_at || a.created_at).toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" }) : ""}
                   </span>
                 </div>
               );

@@ -91,7 +91,11 @@ export default function PAAva() {
   const [microsoft, setMicrosoft] = useState<MicrosoftAnalytics | null>(null);
   const [insights, setInsights] = useState<string[]>([]);
   const [dataHealth, setDataHealth] = useState<{ brokers_total: number; brokers_with_ms365_token: number; analyses_last_period: number; last_analysis_at: string | null; ms_graph_mode: "delegated" | "application" | "none"; scanned_brokers: number } | null>(null);
-  const [analyzeReport, setAnalyzeReport] = useState<{ mode: string; analyzed_brokers: number; total_analyses: number; brokers_scanned: number; per_broker: Array<{broker: string; analyses: number; note?: string}>; errors: Array<{broker?: string; error: string}>; at: string } | null>(null);
+  const [analyzeReport, setAnalyzeReport] = useState<{ mode: string; analyzed_brokers: number; total_analyses: number; brokers_scanned: number; per_broker: Array<{broker: string; broker_name?: string; broker_user_id?: string; analyses: number; ok?: number; failed?: number; note?: string; steps?: Array<{step: string; ok: boolean; detail?: string}>}>; errors: Array<{broker?: string; broker_user_id?: string; step?: string; mid?: string; error: string}>; failed_broker_ids?: string[]; started_at?: string; finished_at?: string; at: string } | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; at: string } | null>(null);
+  const [showAllErrors, setShowAllErrors] = useState(false);
 
   const load = async () => {
     setLoading(true);

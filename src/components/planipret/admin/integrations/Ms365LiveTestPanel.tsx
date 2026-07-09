@@ -29,6 +29,7 @@ type Response = {
     core_passed?: boolean;
     admin_directory_failed?: number;
     status?: string;
+    delegated_ok?: boolean;
   };
   results: Record<string, TestResult>;
 };
@@ -95,7 +96,7 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
       if (error) throw error;
       const parsed = res as Response;
       setData(parsed);
-      const ok = parsed.summary.core_passed !== false;
+      const ok = parsed.summary.core_passed !== false || parsed.summary.status === "core_connected" || parsed.summary.status === "fully_connected";
       await persistResult(ok, `${parsed.summary.passed}/${parsed.summary.total_tests} tests`);
       loadDetection();
     } catch (e: any) {
@@ -152,12 +153,12 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
             <span
               className="px-2 py-0.5 rounded-full font-semibold"
               style={{
-                background: data.summary.core_passed !== false ? "rgba(46,220,120,0.12)" : "rgba(232,76,76,0.12)",
-                border: `1px solid ${data.summary.core_passed !== false ? "#1a6b3a" : "#5A1010"}`,
-                color: data.summary.core_passed !== false ? "#2EDC78" : "#E84C4C",
+                background: data.summary.core_passed !== false || data.summary.status === "core_connected" || data.summary.status === "fully_connected" ? "rgba(46,220,120,0.12)" : "rgba(232,76,76,0.12)",
+                border: `1px solid ${data.summary.core_passed !== false || data.summary.status === "core_connected" || data.summary.status === "fully_connected" ? "#1a6b3a" : "#5A1010"}`,
+                color: data.summary.core_passed !== false || data.summary.status === "core_connected" || data.summary.status === "fully_connected" ? "#2EDC78" : "#E84C4C",
               }}
             >
-              {data.summary.core_passed !== false ? "✅ Core Microsoft connecté" : "❌ Core Microsoft non connecté"}
+              {data.summary.core_passed !== false || data.summary.status === "core_connected" || data.summary.status === "fully_connected" ? "✅ Core Microsoft connecté" : "❌ Core Microsoft non connecté"}
             </span>
             {!!data.summary.admin_directory_failed && <span>⚠️ {data.summary.admin_directory_failed} diagnostics annuaire limités</span>}
             <span>⏱ {data.summary.elapsed_ms}ms</span>

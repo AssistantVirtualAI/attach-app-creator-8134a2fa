@@ -12,8 +12,29 @@ async function getMsConfig(admin: any) {
   return {
     clientId: c.client_id ?? Deno.env.get("MICROSOFT_CLIENT_ID") ?? "",
     clientSecret: c.client_secret ?? Deno.env.get("MICROSOFT_CLIENT_SECRET") ?? "",
-    tenant: c.tenant_id ?? Deno.env.get("MICROSOFT_TENANT_ID") ?? "common",
+    tenant: c.tenant_id ?? Deno.env.get("MICROSOFT_TENANT_ID") ?? Deno.env.get("MS365_TENANT_ID") ?? "common",
   };
+}
+
+async function getAppAccessToken(admin: any): Promise<string | null> {
+  const cfg = await getMsConfig(admin);
+  if (!cfg.clientId || !cfg.clientSecret || !cfg.tenant || cfg.tenant === "common") return null;
+  const r = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: cfg.clientId,
+      client_secret: cfg.clientSecret,
+      grant_type: "client_credentials",
+      scope: "https://graph.microsoft.com/.default",
+    }),
+  });
+  if (!r.ok) {
+    console.error("[ava-email-analyzer] app token failed", await r.text());
+    return null;
+  }
+  const d = await r.json();
+  return d.access_token as string;
 }
 
 async function refreshToken(admin: any, profile: any) {
@@ -50,6 +71,12 @@ async function graph(admin: any, profile: any, path: string, init: RequestInit =
     if (t) { profile.ms365_access_token = t; return graph(admin, profile, path, init, false); }
   }
   return r;
+}
+
+async function graphApp(appToken: string, mailbox: string, messageId: string): Promise<Response> {
+  return fetch(`${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}?$select=id,subject,from,toRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance,conversationId`, {
+    headers: { Authorization: `Bearer ${appToken}`, "Content-Type": "application/json" },
+  });
 }
 
 function stripHtml(html: string): string {
@@ -177,13 +204,23 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await admin
       .from("planipret_profiles")
-      .select("id, user_id, ms365_access_token, ms365_refresh_token, ava_learned_preferences")
+      .select("id, user_id, email, ms365_email, ms365_access_token, ms365_refresh_token, ava_learned_preferences")
       .eq("user_id", userId)
       .maybeSingle();
-    if (!profile?.ms365_access_token) return j({ success: false, error: "Microsoft 365 non connecté" }, 400);
 
+    if (!profile) return j({ success: false, error: "Courtier introuvable" }, 404);
 
-    const emailResp = await graph(admin, profile, `/me/messages/${encodeURIComponent(ms_message_id)}?$select=id,subject,from,toRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance,conversationId`);
+    let emailResp: Response;
+    if (isService && payload.graph_mode === "application") {
+      const mailbox = payload.mailbox || profile.ms365_email || profile.email;
+      if (!mailbox) return j({ success: false, error: "Mailbox manquante pour le mode application" }, 400);
+      const appToken = await getAppAccessToken(admin);
+      if (!appToken) return j({ success: false, error: "Token application Microsoft indisponible" }, 400);
+      emailResp = await graphApp(appToken, mailbox, ms_message_id);
+    } else {
+      if (!profile.ms365_access_token) return j({ success: false, error: "Microsoft 365 non connecté" }, 400);
+      emailResp = await graph(admin, profile, `/me/messages/${encodeURIComponent(ms_message_id)}?$select=id,subject,from,toRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance,conversationId`);
+    }
     if (!emailResp.ok) {
       const t = await emailResp.text();
       return j({ success: false, error: `Graph ${emailResp.status}: ${t.slice(0, 200)}` }, 500);

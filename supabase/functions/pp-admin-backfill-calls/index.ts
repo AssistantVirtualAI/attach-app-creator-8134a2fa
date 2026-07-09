@@ -33,24 +33,27 @@ async function processOne(callId: string, downstreamAuth: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const auth = req.headers.get("Authorization") ?? "";
-    if (!auth.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
-    const token = auth.replace(/^Bearer\s+/i, "");
-
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const isServiceRole = token === SERVICE_ROLE;
 
-    // Auth: service-role bypass, sinon vérifier admin/membre Planipret
+    // Shared secret for pg_cron invocations
+    const CRON_SECRET = Deno.env.get("PP_CRON_TOKEN") ?? Deno.env.get("PP_CRON_SECRET") ?? "";
+
+    const auth = req.headers.get("Authorization") ?? "";
+    const cronHeader = req.headers.get("x-pp-cron-secret") ?? "";
+    const isCron = CRON_SECRET && cronHeader === CRON_SECRET;
+    const token = auth.startsWith("Bearer ") ? auth.replace(/^Bearer\s+/i, "") : "";
+    const isServiceRole = token && token === SERVICE_ROLE;
+
     let downstreamAuth = auth;
-    if (!isServiceRole) {
+    if (isCron || isServiceRole) {
+      downstreamAuth = `Bearer ${SERVICE_ROLE}`;
+    } else {
+      if (!token) return json({ error: "Unauthorized" }, 401);
       const { data: userData } = await admin.auth.getUser(token);
       if (!userData?.user) return json({ error: "Unauthorized" }, 401);
       const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: userData.user.id });
       const { data: isMember } = await admin.rpc("is_planipret_member", { _user_id: userData.user.id });
       if (isAdmin !== true && isMember !== true) return json({ error: "Forbidden" }, 403);
-    } else {
-      // Cron / internal: on utilise le service role pour appeler pp-admin-transcribe.
-      downstreamAuth = `Bearer ${SERVICE_ROLE}`;
     }
 
     const body = await req.json().catch(() => ({} as any));

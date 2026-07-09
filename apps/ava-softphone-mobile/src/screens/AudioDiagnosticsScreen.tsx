@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { CapacitorSipNative } from '../lib/sip/nativeSipProvider';
 import { useT } from '../lib/i18n';
+
+const IS_ANDROID = Capacitor.getPlatform() === 'android';
 
 type Stats = Awaited<ReturnType<typeof CapacitorSipNative.getRtpStats>>;
 

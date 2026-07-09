@@ -30,6 +30,15 @@ type Profile = PlanipretBrokerRow & {
   role?: string | null;
 };
 
+export type NsNumber = {
+  raw: string;
+  e164: string;
+  pretty: string;
+  extension: string | null;
+  application: string | null;
+  active: boolean;
+};
+
 
 export default function PAUsers() {
   const navigate = useNavigate();
@@ -70,6 +79,40 @@ export default function PAUsers() {
   const [nsError, setNsError] = useState<string | null>(null);
   const [nsDomain, setNsDomain] = useState<string | null>(null);
 
+  // All phone numbers (DIDs) in the NS domain
+  const [allNumbers, setAllNumbers] = useState<NsNumber[]>([]);
+  const [numbersError, setNumbersError] = useState<string | null>(null);
+  const [numbersLoading, setNumbersLoading] = useState(false);
+
+  const numbersByExt = useMemo(() => {
+    const map: Record<string, NsNumber[]> = {};
+    for (const n of allNumbers) {
+      if (!n.extension) continue;
+      (map[n.extension] ??= []).push(n);
+    }
+    return map;
+  }, [allNumbers]);
+
+  const unassignedNumbers = useMemo(
+    () => allNumbers.filter((n) => !n.extension),
+    [allNumbers],
+  );
+
+  const loadNumbers = async () => {
+    setNumbersLoading(true);
+    const { data, error } = await supabase.functions.invoke("pp-admin-phonenumbers", {
+      body: { action: "list" },
+    });
+    setNumbersLoading(false);
+    if (error || !(data as any)?.success) {
+      setNumbersError((data as any)?.error ?? error?.message ?? "Erreur");
+      setAllNumbers([]);
+      return;
+    }
+    setNumbersError(null);
+    setAllNumbers(((data as any).numbers ?? []) as NsNumber[]);
+  };
+
   const load = async () => {
     setLoading(true);
     setNsError(null);
@@ -96,6 +139,7 @@ export default function PAUsers() {
       .eq("email", "demo@avastatistic.ca");
     setAppReviewExists((reviewCount ?? 0) > 0);
     setLoading(false);
+    loadNumbers();
   };
 
   const syncFromNs = async () => {
@@ -274,6 +318,16 @@ export default function PAUsers() {
               ⚠ NS-API hors ligne
             </span>
           )}
+          {!numbersError && allNumbers.length > 0 && (
+            <span className="px-2 py-1 rounded-full" style={{ fontSize: 11, background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
+              📞 {allNumbers.length} DID · {unassignedNumbers.length} libre{unassignedNumbers.length > 1 ? "s" : ""}
+            </span>
+          )}
+          {numbersError && (
+            <span title={numbersError} className="px-2 py-1 rounded-full" style={{ fontSize: 11, background: `${DANGER}15`, color: DANGER, border: `1px solid ${DANGER}33` }}>
+              ⚠ DID hors ligne
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
 
@@ -357,6 +411,7 @@ export default function PAUsers() {
                 <th className="p-3">Nom complet</th>
                 <th className="p-3">Courriel</th>
                 <th className="p-3">Ext.</th>
+                <th className="p-3">Numéros DID</th>
                 <th className="p-3">App</th>
                 <th className="p-3">Agent IA</th>
                 <th className="p-3">DND</th>
@@ -377,7 +432,7 @@ export default function PAUsers() {
                   </tr>
                 ))
               ) : paged.length === 0 ? (
-                <tr><td colSpan={10} className="p-8 text-center" style={{ color: "var(--pp-text-faint)" }}>Aucun courtier</td></tr>
+                <tr><td colSpan={11} className="p-8 text-center" style={{ color: "var(--pp-text-faint)" }}>Aucun courtier</td></tr>
               ) : paged.map((u) => (
                 <tr key={u.user_id || u.email || u.extension} className="hover:bg-white/[0.02] transition"
                   style={{
@@ -395,6 +450,22 @@ export default function PAUsers() {
                   </td>
                   <td className="p-3" style={{ color: "var(--pp-text-secondary)" }}>{u.email}</td>
                   <td className="p-3 tabular-nums" style={{ color: "var(--pp-text-secondary)" }}>{u.extension}</td>
+                  <td className="p-3">
+                    {(() => {
+                      const nums = numbersByExt[u.extension] ?? [];
+                      if (numbersLoading && nums.length === 0) return <span style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>…</span>;
+                      if (nums.length === 0) return <span style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>—</span>;
+                      return (
+                        <div className="flex flex-wrap gap-1">
+                          {nums.map((n) => (
+                            <span key={n.raw} title={n.raw} className="px-1.5 py-0.5 rounded tabular-nums" style={{ fontSize: 11, background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}33` }}>
+                              {n.pretty}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </td>
                   <td className="p-3"><Toggle on={u.mobile_app_enabled} disabled={u.ns_only} loading={savingId === u.user_id} onChange={() => !u.ns_only && toggleField(u, "mobile_app_enabled")} /></td>
                   <td className="p-3"><Toggle on={u.voice_agent_enabled} disabled={u.ns_only} loading={savingId === u.user_id} onChange={() => !u.ns_only && toggleField(u, "voice_agent_enabled")} /></td>
                   <td className="p-3">
@@ -539,8 +610,8 @@ export default function PAUsers() {
       <DebugPanel entries={debug} />
 
 
-      {addOpen && <UserModal mode="add" onClose={() => setAddOpen(false)} onSaved={async (id) => { setAddOpen(false); await load(); if (id) { setHighlightId(id); setTimeout(() => setHighlightId(null), 3000); } }} />}
-      {editUser && <UserModal mode="edit" user={editUser} onClose={() => setEditUser(null)} onSaved={async () => { setEditUser(null); await load(); }} />}
+      {addOpen && <UserModal mode="add" allNumbers={allNumbers} onClose={() => setAddOpen(false)} onSaved={async (id) => { setAddOpen(false); await load(); if (id) { setHighlightId(id); setTimeout(() => setHighlightId(null), 3000); } }} />}
+      {editUser && <UserModal mode="edit" user={editUser} allNumbers={allNumbers} onClose={() => setEditUser(null)} onSaved={async () => { setEditUser(null); await load(); }} />}
       {delUser && <DeleteModal user={delUser} onClose={() => setDelUser(null)} onDeleted={async () => { setDelUser(null); await load(); }} />}
       {addAdminOpen && <AdminModal onClose={() => setAddAdminOpen(false)} onSaved={async () => { setAddAdminOpen(false); await load(); }} />}
     </div>
@@ -562,7 +633,7 @@ function genPassword() {
   return Array.from({ length: 14 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
-function UserModal({ mode, user, onClose, onSaved }: { mode: "add" | "edit"; user?: Profile; onClose: () => void; onSaved: (id?: string) => void }) {
+function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" | "edit"; user?: Profile; allNumbers: NsNumber[]; onClose: () => void; onSaved: (id?: string) => void }) {
   const isEdit = mode === "edit";
   const [firstName, setFirstName] = useState(user?.full_name?.split(" ")[0] ?? "");
   const [lastName, setLastName] = useState(user?.full_name?.split(" ").slice(1).join(" ") ?? "");
@@ -575,6 +646,37 @@ function UserModal({ mode, user, onClose, onSaved }: { mode: "add" | "edit"; use
   const [agentId, setAgentId] = useState(user?.elevenlabs_agent_id ?? "");
   const [agentSecOpen, setAgentSecOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Current DIDs assigned to this broker (extension match)
+  const currentNumbers = useMemo(
+    () => allNumbers.filter((n) => n.extension && user?.extension && n.extension === user.extension),
+    [allNumbers, user?.extension],
+  );
+  const availableNumbers = useMemo(
+    () => allNumbers.filter((n) => !n.extension),
+    [allNumbers],
+  );
+  const [phoneNumber, setPhoneNumber] = useState<string>(currentNumbers[0]?.raw ?? "");
+  const originalNumber = currentNumbers[0]?.raw ?? "";
+
+  const applyPhoneNumber = async (ext: string) => {
+    if (phoneNumber === originalNumber) return { ok: true };
+    // Unassign the previous number (if any & changed/cleared)
+    if (originalNumber && originalNumber !== phoneNumber) {
+      await supabase.functions.invoke("pp-admin-phonenumbers", {
+        body: { action: "unassign", payload: { phone_number: originalNumber } },
+      }).catch(() => null);
+    }
+    if (phoneNumber) {
+      const { data, error } = await supabase.functions.invoke("pp-admin-phonenumbers", {
+        body: { action: "assign", payload: { phone_number: phoneNumber, extension: ext } },
+      });
+      if (error || !(data as any)?.success) {
+        return { ok: false, error: (data as any)?.error ?? error?.message ?? "Erreur DID" };
+      }
+    }
+    return { ok: true };
+  };
 
   const submit = async () => {
     if (!firstName || !lastName || !email || !extension || (!isEdit && !password)) {
@@ -589,16 +691,20 @@ function UserModal({ mode, user, onClose, onSaved }: { mode: "add" | "edit"; use
       const { data, error } = await supabase.functions.invoke("pp-admin-user", {
         body: { action: "update", payload: { user_id: user!.user_id, updates: { full_name, extension, mobile_app_enabled: appEnabled, voice_agent_enabled: agentEnabled, elevenlabs_agent_id: agentId || null } } },
       });
+      if (error || !(data as any)?.success) { setBusy(false); toast.error((data as any)?.error ?? "Erreur"); return; }
+      const p = await applyPhoneNumber(extension);
       setBusy(false);
-      if (error || !(data as any)?.success) { toast.error((data as any)?.error ?? "Erreur"); return; }
+      if (!p.ok) { toast.error(`Courtier sauvegardé, DID: ${p.error}`); return; }
       toast.success("Courtier mis à jour");
       onSaved();
     } else {
       const { data, error } = await supabase.functions.invoke("pp-admin-user", {
         body: { action: "create", payload: { email, password, full_name, ns_extension: extension, mobile_app_enabled: appEnabled, voice_agent_enabled: agentEnabled, elevenlabs_agent_id: agentId || null } },
       });
+      if (error || !(data as any)?.success) { setBusy(false); toast.error((data as any)?.error ?? "Erreur de création"); return; }
+      const p = await applyPhoneNumber(extension);
       setBusy(false);
-      if (error || !(data as any)?.success) { toast.error((data as any)?.error ?? "Erreur de création"); return; }
+      if (!p.ok) { toast.error(`Courtier créé, DID: ${p.error}`); onSaved((data as any).user_id); return; }
       toast.success(`Courtier ${full_name} créé ✅`);
       onSaved((data as any).user_id);
     }
@@ -635,6 +741,32 @@ function UserModal({ mode, user, onClose, onSaved }: { mode: "add" | "edit"; use
               <Field label="Extension NS *" hint="Ex: 1234"><input value={extension} onChange={(e) => setExtension(e.target.value)} maxLength={5} className="pp-input" /></Field>
               <Field label="Domaine NS"><input value="planipret.ca" readOnly className="pp-input" style={{ opacity: 0.6 }} /></Field>
             </div>
+            <Field
+              label="Numéro DID assigné"
+              hint={
+                availableNumbers.length === 0 && currentNumbers.length === 0
+                  ? "Aucun numéro libre dans le domaine planipret.ca"
+                  : "Choisir un numéro actif non assigné dans le domaine planipret.ca"
+              }
+            >
+              <select
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                className="pp-input"
+              >
+                <option value="">— Aucun DID —</option>
+                {currentNumbers.map((n) => (
+                  <option key={`cur-${n.raw}`} value={n.raw}>
+                    {n.pretty} (actuel)
+                  </option>
+                ))}
+                {availableNumbers.map((n) => (
+                  <option key={`free-${n.raw}`} value={n.raw}>
+                    {n.pretty} — libre
+                  </option>
+                ))}
+              </select>
+            </Field>
             {!isEdit ? (
               <Field label="Mot de passe initial *">
                 <div className="flex gap-2">

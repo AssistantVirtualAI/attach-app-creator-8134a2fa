@@ -315,11 +315,6 @@ export default function PlanipretIntegrations() {
             rows.ms365?.config_data?.client_id ??
             backendValues?.client_id ??
             "";
-          const tenantVal =
-            draft.ms365?.tenant_id ??
-            rows.ms365?.config_data?.tenant_id ??
-            backendValues?.tenant_id ??
-            "";
           const clientSecretPresent =
             !!rows.ms365?.config_data?.client_secret ||
             (ms?.present ?? []).includes("MICROSOFT_CLIENT_SECRET");

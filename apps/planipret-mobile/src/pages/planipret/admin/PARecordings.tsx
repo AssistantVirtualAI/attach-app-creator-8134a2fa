@@ -402,6 +402,28 @@ export default function PARecordings() {
         >
           🔬 Diagnostiquer les enregistrements
         </button>
+
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              toast.message("Traitement des enregistrements en cours…");
+              const { data, error } = await supabase.functions.invoke("pp-admin-backfill-calls", { body: { limit: 50, concurrency: 3 } });
+              if (error) throw error;
+              const d = data as any;
+              if (d?.processed === 0) toast.success("Aucun appel en attente de traitement");
+              else toast.success(`${d?.succeeded ?? 0}/${d?.processed ?? 0} appels traités${d?.failed_count ? ` (${d.failed_count} échecs)` : ""}`);
+              setDebug((x) => [{ ts: new Date().toISOString(), label: "Backfill enregistrements", data: d } as any, ...x]);
+              load(page, pageSize);
+            } catch (e: any) {
+              toast.error(`Backfill échoué: ${e?.message ?? e}`);
+            }
+          }}
+          className="px-3 py-2 rounded-lg text-sm text-white"
+          style={{ background: ACCENT }}
+        >
+          ⚡ Traiter tous les enregistrements
+        </button>
       </div>
 
 

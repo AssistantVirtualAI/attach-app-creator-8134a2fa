@@ -48,7 +48,7 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
       provider: "azure",
       options: {
         redirectTo: `${window.location.origin}/mplanipret`,
-        scopes: "email openid profile offline_access User.Read Mail.ReadWrite Calendars.ReadWrite",
+        scopes: "email openid profile offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All",
       },
     });
     setLoading(false);

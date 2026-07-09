@@ -101,7 +101,7 @@ export default function MMore() {
     const clientId = cfg.client_id;
     const tenant = cfg.tenant_id || "common";
     const redirect = `${window.location.origin}/auth/microsoft/callback`;
-    const scope = encodeURIComponent("openid profile email offline_access User.Read Mail.ReadWrite Mail.Send Calendars.ReadWrite Chat.ReadWrite ChannelMessage.Send Team.ReadBasic.All Channel.ReadBasic.All");
+    const scope = encodeURIComponent("openid profile email offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All");
     supabase.auth.getUser().then(({ data: { user } }) => {
       const state = user?.id ?? "";
       window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirect)}&response_mode=query&scope=${scope}&state=${state}`;

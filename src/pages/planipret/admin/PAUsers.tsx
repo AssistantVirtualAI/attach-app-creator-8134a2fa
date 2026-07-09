@@ -401,6 +401,7 @@ export default function PAUsers() {
                 <th className="p-3">Nom complet</th>
                 <th className="p-3">Courriel</th>
                 <th className="p-3">Ext.</th>
+                <th className="p-3">Numéros DID</th>
                 <th className="p-3">App</th>
                 <th className="p-3">Agent IA</th>
                 <th className="p-3">DND</th>

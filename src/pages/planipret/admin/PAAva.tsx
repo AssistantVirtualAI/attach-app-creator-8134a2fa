@@ -149,14 +149,17 @@ export default function PAAva() {
     toast.success(`AVA réentraînée sur ${(data as any).count} courtier(s)`);
     load();
   };
-  const analyzeAll = async () => {
+  const analyzeAll = async (retryBrokerIds?: string[]) => {
     setAnalyzing(true);
     const tid = toast.loading(t("adminPortal.ava.analyzing") || "Analyse en cours…");
     try {
-      const { data, error } = await supabase.functions.invoke("ava-analyze-all", { body: { top: 20 } });
+      const payload: any = { top: 20 };
+      if (retryBrokerIds && retryBrokerIds.length) payload.broker_user_ids = retryBrokerIds;
+      const { data, error } = await supabase.functions.invoke("ava-analyze-all", { body: payload });
       if (error) throw error;
       const d = data as any;
       if (!d?.ok) throw new Error(d?.error ?? "Échec");
+      const finishedAt = d.finished_at ?? new Date().toISOString();
       setAnalyzeReport({
         mode: d.mode,
         analyzed_brokers: d.analyzed_brokers ?? 0,
@@ -164,15 +167,37 @@ export default function PAAva() {
         brokers_scanned: d.brokers_scanned ?? 0,
         per_broker: d.per_broker ?? [],
         errors: d.errors ?? [],
-        at: new Date().toISOString(),
+        failed_broker_ids: d.failed_broker_ids ?? [],
+        started_at: d.started_at,
+        finished_at: finishedAt,
+        at: finishedAt,
       });
+      setLastSyncAt(finishedAt);
       toast.success(`${d.total_analyses} email(s) · ${d.analyzed_brokers}/${d.brokers_scanned} courtier(s) · mode ${d.mode}`, { id: tid });
       await load();
     } catch (e: any) {
       toast.error(`Analyse échouée: ${e.message ?? e}`, { id: tid });
-      setAnalyzeReport({ mode: "error", analyzed_brokers: 0, total_analyses: 0, brokers_scanned: 0, per_broker: [], errors: [{ error: e.message ?? String(e) }], at: new Date().toISOString() });
+      const now = new Date().toISOString();
+      setAnalyzeReport({ mode: "error", analyzed_brokers: 0, total_analyses: 0, brokers_scanned: 0, per_broker: [], errors: [{ error: e.message ?? String(e) }], failed_broker_ids: [], at: now });
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const testM365 = async () => {
+    setTesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ms365-connection-test", { body: {} });
+      if (error) throw error;
+      const d = data as any;
+      const ok = d?.ok === true || d?.success === true;
+      setTestResult({ ok, message: ok ? (t("adminPortal.ava.testOk") || "OK") : (d?.error ?? t("adminPortal.ava.testFailed")), at: new Date().toISOString() });
+      ok ? toast.success(t("adminPortal.ava.testOk")) : toast.error(d?.error ?? t("adminPortal.ava.testFailed"));
+    } catch (e: any) {
+      setTestResult({ ok: false, message: e.message ?? String(e), at: new Date().toISOString() });
+      toast.error(`${t("adminPortal.ava.testFailed")}: ${e.message ?? e}`);
+    } finally {
+      setTesting(false);
     }
   };
 

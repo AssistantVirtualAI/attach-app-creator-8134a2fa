@@ -427,14 +427,18 @@ export default function PARecordings() {
           type="button"
           onClick={async () => {
             try {
-              toast.message("Traitement des enregistrements en cours…");
-              const { data, error } = await supabase.functions.invoke("pp-admin-backfill-calls", { body: { limit: 50, concurrency: 3 } });
+              toast.message("Mise en file de tous les enregistrements…");
+              const { data, error } = await supabase.functions.invoke("pp-admin-backfill-calls", { body: { limit: 1000, concurrency: 5 } });
               if (error) throw error;
               const d = data as any;
-              if (d?.processed === 0) toast.success("Aucun appel en attente de traitement");
-              else toast.success(`${d?.succeeded ?? 0}/${d?.processed ?? 0} appels traités${d?.failed_count ? ` (${d.failed_count} échecs)` : ""}`);
+              const queued = d?.queued ?? 0;
+              if (queued === 0) toast.success("Aucun appel en attente de traitement");
+              else toast.success(`${queued} appels en cours de traitement en arrière-plan. La liste se met à jour au fur et à mesure.`);
               setDebug((x) => [{ ts: new Date().toISOString(), label: "Backfill enregistrements", data: d } as any, ...x]);
-              load(page, pageSize);
+              // Refresh a few times to surface progress
+              setTimeout(() => load(page, pageSize), 5_000);
+              setTimeout(() => load(page, pageSize), 20_000);
+              setTimeout(() => load(page, pageSize), 60_000);
             } catch (e: any) {
               toast.error(`Backfill échoué: ${e?.message ?? e}`);
             }

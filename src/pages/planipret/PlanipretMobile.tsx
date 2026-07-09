@@ -4,9 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Home, Phone, MessageSquare, Users, Phone as PhoneIcon, X, Delete, Plus, Lock, PhoneOff, Settings as SettingsIcon, Search as SearchIcon, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
-import planipretLogo from "@/assets/planipret-logo.png.asset.json";
-import avaWordmark from "@/assets/ava-wordmark.svg";
-import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import { usePullToRefresh, PullIndicator } from "@/hooks/usePullToRefresh";
 import { useRealtimeManager } from "@/hooks/useRealtimeManager";
 import InboundCallOverlay, { type InboundCall } from "@/components/InboundCallOverlay";
@@ -34,6 +31,52 @@ import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 
 
 const ACCENT = "#2E9BDC";
+
+const AvaBadge = ({ compact = false, circle = false }: { compact?: boolean; circle?: boolean }) => (
+  <div
+    aria-label="AVA"
+    style={{
+      width: circle ? "100%" : undefined,
+      height: circle ? "100%" : undefined,
+      minWidth: compact ? 14 : 34,
+      minHeight: compact ? 14 : 28,
+      background: "#7C3AED",
+      borderRadius: circle ? "50%" : compact ? 4 : 12,
+      padding: circle ? 0 : compact ? "1px 4px" : "8px 12px",
+      color: "white",
+      fontWeight: 800,
+      fontSize: circle ? 15 : compact ? 8 : 14,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: compact ? undefined : "0 0 12px rgba(124,58,237,0.45)",
+      lineHeight: 1,
+    }}
+  >
+    AVA
+  </div>
+);
+
+const PlanipretBadge = () => (
+  <div
+    aria-label="Planiprêt"
+    style={{
+      width: 28,
+      height: 28,
+      background: "#1A4A8A",
+      borderRadius: 12,
+      color: "white",
+      fontWeight: 800,
+      fontSize: 14,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      lineHeight: 1,
+    }}
+  >
+    P
+  </div>
+);
 
 export type PlanipretMobileContext = { profile: any; reloadProfile: () => Promise<void>; openDialer: (number?: string) => void; openAva: () => void; registerRefresh: (fn: (() => Promise<void> | void) | null) => void; softphone: ReturnType<typeof useMplanipretSoftphone> };
 
@@ -534,11 +577,11 @@ export default function PlanipretMobile() {
     void hasSeenPrimer().then((seen) => { if (!seen) setShowPrimer(true); });
   }, [profile?.user_id, profile?.ns_extension, profile?.extension]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#F7F9FC", color: "#5A6B85", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1425", color: "#2E9BDC", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;
 
   if (accessError === "unauthenticated") {
     return (
-      <Frame>
+      <Frame forceDark>
         <MobileAuthScreen onLoggedIn={loadProfile} />
       </Frame>
     );
@@ -603,8 +646,7 @@ export default function PlanipretMobile() {
 
           {/* AVA icon — left */}
           <div className="flex items-center gap-1.5">
-            <img src={avaLogo.url} alt="AVA" className="w-7 h-7 rounded-lg object-cover"
-              style={{ boxShadow: "0 0 12px rgba(155,127,232,0.45)" }} />
+            <AvaBadge />
             <span className="flex items-center gap-1.5">
               <span className="pp-live-dot" />
               <span style={{ fontSize: 9, color: "var(--pp-success)", fontWeight: 700, letterSpacing: "0.05em" }}>REST</span>
@@ -629,7 +671,7 @@ export default function PlanipretMobile() {
 
           {/* Planiprêt centered logo */}
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
-            <img src={planipretLogo.url} alt="Planiprêt" className="w-7 h-7 rounded-lg object-cover" />
+            <PlanipretBadge />
             <span style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 14, color: "var(--pp-text-primary)", letterSpacing: "-0.01em" }}>Planiprêt</span>
           </div>
 
@@ -665,8 +707,7 @@ export default function PlanipretMobile() {
             width: 62, height: 62, bottom: 74, padding: 3,
           }}
           aria-label={profile?.voice_agent_enabled ? t("dialer.talkToAva") : t("dialer.chatWithAva")}>
-          <img src={avaLogo.url} alt="AVA" className="w-full h-full rounded-full object-cover"
-            style={{ background: "#060D1A" }} />
+          <AvaBadge circle />
         </button>
 
         {/* Right FAB — Keypad (bleu) ou raccrocher (rouge) si appel actif */}
@@ -725,7 +766,7 @@ export default function PlanipretMobile() {
         {/* Powered by AVA footer */}
         <div className="absolute bottom-0 inset-x-0 h-[24px] flex items-center justify-center gap-2 z-10 pp-mobile-footer">
           <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 9, color: "var(--pp-text-muted)", letterSpacing: "0.14em", fontWeight: 600 }}>{t("footer.poweredBy")}</span>
-          <img src={avaLogo.url} alt="AVA" className="w-3.5 h-3.5 rounded object-cover" />
+          <AvaBadge compact />
           <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 9, color: "var(--pp-brand-accent-2)", letterSpacing: "0.10em", fontWeight: 700 }}>AVA</span>
           <span style={{ fontSize: 8.5, color: "var(--pp-text-faint)", letterSpacing: "0.1em" }}>· {t("footer.developedBy")}</span>
         </div>
@@ -745,19 +786,20 @@ export default function PlanipretMobile() {
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ children, forceDark = false }: { children: React.ReactNode; forceDark?: boolean }) {
   const { theme } = useMplanipretTheme();
+  const frameTheme = forceDark ? "dark" : theme;
   return (
     <div className="planipret-scope planipret-mobile-scope planipret-mobile-frame-bg min-h-screen w-full flex items-center justify-center md:p-6"
-      data-pp-theme={theme}
-      style={{ background: theme === "dark"
+      data-pp-theme={frameTheme}
+      style={{ background: frameTheme === "dark"
         ? "linear-gradient(160deg, #060D1A 0%, #0A1425 100%)"
         : "linear-gradient(160deg, #EEF2F8 0%, #DCE3EC 100%)" }}>
       <div id="pp-mobile-frame" className="planipret-mobile-phone overflow-hidden w-full md:w-[390px] md:h-[844px] h-screen md:rounded-[44px] relative"
         style={{
           background: "var(--pp-bg-base)",
           border: "1px solid var(--pp-bg-border-2)",
-          boxShadow: theme === "dark"
+          boxShadow: frameTheme === "dark"
             ? "0 0 0 6px #08111F, 0 40px 120px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04)"
             : "0 0 0 6px #FFFFFF, 0 40px 120px rgba(15,27,61,0.18), inset 0 1px 0 rgba(255,255,255,0.6)",
         }}>

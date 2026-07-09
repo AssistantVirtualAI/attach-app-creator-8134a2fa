@@ -1,83 +1,85 @@
-## Contexte
 
-### 1. Pourquoi les warnings Microsoft persistent
-Les tests qui affichent « Insufficient privileges » (Organisation, Utilisateurs, Configuration App Azure, Permissions Graph) utilisent tous un **token application (client_credentials, `.default`)** et interrogent des endpoints d'**annuaire Azure AD** :
-- `/organization`, `/users`, `/applications`, `/servicePrincipals`
+## Constat après vérification
 
-Ces endpoints exigent des permissions **Application** (pas Déléguées) — `Organization.Read.All`, `User.Read.All`, `Application.Read.All` — avec **admin consent** dans Azure. Les permissions actuellement approuvées dans votre app Azure sont vraisemblablement de type **Déléguées** (Mail.Send, Calendars.ReadWrite, Chat.Read, etc.), suffisantes pour le vrai produit (login utilisateur + Mail/Calendar/Teams), mais insuffisantes pour ces tests annuaire.
+**1. AVA Analytics est vide parce que la base est vide, pas parce que la page est cassée.**
 
-**Conclusion :** ces warnings sont un *diagnostic annuaire optionnel*, pas une vraie panne. Ils n'empêchent aucune fonction. Il faut cesser de les présenter comme des erreurs.
+Vérification directe côté backend :
+- `planipret_ava_email_analyses` : **0 lignes** (aucun email n'a jamais été analysé par AVA)
+- `planipret_profiles` : **352 courtiers**, dont **0 avec un token Microsoft actif** (`ms365_access_token IS NULL` partout)
+- La fonction `planipret-admin-ava-analytics` répond correctement (logs propres, pas d'erreur), mais elle n'a littéralement rien à agréger.
 
-### 2. Page « AVA Statistics » (MStats)
-La page `/mplanipret/stats` existe et affiche déjà les appels/leads, mais ne montre **aucune donnée Microsoft**. Aucun compteur d'emails ni de réunions n'est câblé. Résultat : page à moitié vide pour un utilisateur qui n'a pas encore d'appels.
+Donc les KPI à 0, le graphique plat et « Aucune réunion à venir » sont le comportement correct — pas un bug d'affichage. Tant qu'aucun courtier n'a reconnecté Microsoft 365 après la mise à jour des scopes, et tant que « Analyser les emails maintenant » n'a pas été lancé au moins une fois, la page restera vide.
 
----
+**2. Le switch FR ↔ EN ne traduit pas tout parce que la plupart des pages du portail admin sont écrites en français en dur.**
+
+Sur 16 pages `src/pages/planipret/admin/*.tsx`, seulement 3 utilisent `useMplanipretLang` (`PAOverview`, `PAReports`, `PlanipretAdminLayout`). Tous les autres (`PAAva`, `PACalls`, `PALeads`, `PAMessages`, `PAUsers`, `PARecordings`, `PAVoicemails`, `PATemplates`, `PACompliance`, `PAAuditLog`, `PAAuditChecklist`, `PADebug`, `PASipDiagnostic`, `PAMobileDevices`) contiennent des libellés FR en dur (titres, boutons, tooltips, états vides…). Le sélecteur de langue fonctionne correctement — il n'y a simplement rien à basculer sur ces écrans.
 
 ## Plan
 
-### Phase 1 — Corriger la présentation des tests annuaire (arrêter les faux warnings)
+### A. Rendre AVA Analytics « non-vide » et actionnable
 
-1. Modifier `supabase/functions/ms365-connection-test/index.ts` :
-   - Ajouter un flag `informational: true` sur les 4 sous-tests `admin_directory`.
-   - Sur un 403 « Insufficient privileges », renvoyer `success: true, degraded: "app_permission_missing"` avec un message neutre : « Diagnostic annuaire non disponible (permission Application non accordée) — sans impact sur Mail/Calendar/Teams ».
-   - Ne les compter ni comme `passed` ni comme `failed` dans le `summary`.
+Objectif : quand il n'y a pas encore de données, la page doit expliquer pourquoi et guider l'admin — sans mentir avec des chiffres factices.
 
-2. Ajouter un **vrai test délégué** basé sur le token utilisateur connecté :
-   - `/me` (profil), `/me/messages?$top=1`, `/me/events?$top=1`, `/me/chats?$top=1`.
-   - Ce sont les endpoints réellement utilisés par le produit. S'ils passent, la connexion est confirmée OK.
+1. Dans `src/pages/planipret/admin/PAAva.tsx` (+ miroir `apps/planipret-mobile/…`), ajouter un **bandeau d'état des sources de données** en haut de page qui affiche, en direct :
+   - Nombre de courtiers avec token Microsoft actif / total (ex. « 0 / 352 courtiers connectés à Microsoft 365 »).
+   - Nombre d'analyses AVA sur la période (ex. « 0 email analysé sur 30 jours »).
+   - Une puce colorée : vert si tout coule, orange si Microsoft connecté mais 0 analyse, rouge si aucun courtier connecté.
+2. Quand `totals.analyses === 0 && microsoft.connected_brokers === 0`, remplacer la grille KPI par un **empty-state pédagogique** avec deux actions :
+   - « Ouvrir le diagnostic Microsoft 365 » → route existante `/planipret/ms365-diagnostics`.
+   - « Analyser les emails maintenant » (bouton déjà présent, remonté en évidence).
+   Les graphiques restent affichés en dessous mais grisés avec la mention « en attente de données ».
+3. Étendre la fonction `planipret-admin-ava-analytics` pour renvoyer un bloc `dataHealth` :
+   ```
+   dataHealth: {
+     brokers_total, brokers_with_ms365_token,
+     analyses_last_30d, last_analysis_at,
+     ms_graph_mode: "delegated" | "application" | "none"
+   }
+   ```
+   Le front l'utilise pour peindre le bandeau et l'empty-state ci-dessus.
+4. Ajouter dans la fonction un fallback : si `brokers_with_ms365_token === 0` mais que le mode `application` est disponible (Azure app permissions), tenter automatiquement un scan léger sur les 5 premiers courtiers pour peupler la page — déjà partiellement fait, mais actuellement il faut appeler `getAppAccessToken` seulement en fallback ; on force ce chemin dès qu'aucun token délégué n'existe.
 
-3. Mettre à jour `Ms365LiveTestPanel.tsx` + `Ms365Diagnostics.tsx` :
-   - Section « Capacités utilisateur (délégué) » = source de vérité verte/rouge.
-   - Section « Diagnostic annuaire (informatif) » repliée par défaut, badge gris « info », pas d'icône ⚠️ jaune.
-   - Le statut global (`ok/limited/down`) du badge devient dépendant du test délégué, plus des tests annuaire.
+### B. Traduire le portail admin Planiprêt (FR ↔ EN)
 
-### Phase 2 — Enrichir MStats avec les données Microsoft réelles
+Objectif : le switch FR/EN change réellement l'UI sur toutes les pages admin.
 
-1. Créer `supabase/functions/ms365-stats/index.ts` :
-   - Auth : JWT utilisateur, avec refresh token automatique si expiré (même helper que `ms365-teams-list`).
-   - Query params : `days` (7 / 30 / 90).
-   - Utilise `$search` / `$filter` Graph sur `receivedDateTime` et `sentDateTime` :
-     - `/me/messages?$filter=receivedDateTime ge {ISO}&$select=receivedDateTime,from,isRead&$top=999` (paginé)
-     - `/me/mailFolders/sentitems/messages?$filter=sentDateTime ge {ISO}&$select=sentDateTime&$top=999`
-     - `/me/events?$filter=start/dateTime ge '{ISO}'&$select=subject,start,end,attendees,isOnlineMeeting&$top=500`
-   - Retourne buckets par jour : `{ date, emails_received, emails_sent, emails_unread, meetings, meeting_minutes }`, + totaux, + top expéditeurs.
-   - Cache léger (5 min) via table `planipret_ai_insights` ou simple memoization in-function.
+1. Ajouter une section `adminPortal` dans le dictionnaire partagé `src/lib/i18n/mplanipret.ts` (source de vérité utilisée par `useMplanipretLang`) avec les clés nécessaires pour chaque page admin listée ci-dessous. Structure :
+   ```
+   adminPortal: {
+     ava: { title, subtitle, analyzeNow, retune, kpi: {...}, sections: {...}, empty: {...} },
+     calls: { … },
+     leads: { … },
+     messages: { … },
+     users: { … },
+     recordings: { … },
+     voicemails: { … },
+     templates: { … },
+     compliance: { … },
+     auditLog: { … },
+     auditChecklist: { … },
+     debug: { … },
+     sipDiagnostic: { … },
+     mobileDevices: { … },
+     common: { loading, error, refresh, exportCsv, empty, retry }
+   }
+   ```
+   Chaque clé est renseignée en `fr` **et** en `en`. Aucune valeur en dur ne subsiste dans les composants.
+2. Refactorer chacune des 13 pages admin listées ci-dessus pour :
+   - Importer `useMplanipretLang` et appeler `const { t } = useMplanipretLang();`.
+   - Remplacer les chaînes FR en dur par `t("adminPortal.<page>.<clé>")`.
+   - Formater les dates via `toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", …)` au lieu de forcer `fr-CA`.
+3. Répliquer strictement les mêmes changements dans `apps/planipret-mobile/src/pages/planipret/admin/` pour garder la parité mobile standalone (contrainte `mplanipret-isolation-locked`).
+4. Ajouter un test de parité FR/EN dans `src/lib/i18n/__tests__/mplanipret-parity.test.ts` (déjà présent) pour vérifier que chaque clé `adminPortal.*` existe dans les deux langues.
 
-2. Créer `supabase/functions/ms365-stats-insights/index.ts` (optionnel — peut être fusionné) :
-   - Prend la sortie de `ms365-stats` et interroge Lovable AI Gateway (`google/gemini-2.5-flash`) pour produire 3–5 insights courts en français : tendance semaine, ratio envoyés/reçus, plages horaires les plus chargées, recommandations.
-   - Stocke le résultat dans `planipret_ai_insights` (déjà existante) pour éviter les appels répétés.
+### C. Vérification
 
-3. Modifier `src/pages/planipret/mobile/MStats.tsx` (et miroir mobile) :
-   - Ajouter section « Microsoft 365 » avec :
-     - KPI : `emails_received`, `emails_sent`, `meetings`, `meeting_minutes`.
-     - BarChart empilé « Emails par jour » (reçus vs envoyés).
-     - Liste « Prochaines réunions » (3 items).
-     - Bloc « ✨ Insights AVA » (résultat IA).
-   - Fallback gracieux si non connecté Microsoft → CTA « Connecter Microsoft » vers `/mplanipret/ms365-diagnostics`.
-   - État de chargement + gestion d'erreur (token expiré → auto-retry via edge function).
+- `npm run build` (racine + `apps/planipret-mobile`) pour valider TypeScript.
+- Test manuel : ouvrir `/planipret/admin/ava` → vérifier bandeau + empty-state ; cliquer FR/EN → vérifier que titres, boutons et libellés changent sur toutes les pages admin.
+- Test unitaire de parité i18n exécuté via `bunx vitest run src/lib/i18n/__tests__/mplanipret-parity.test.ts`.
 
-### Phase 3 — Déploiement + parité
+## Détails techniques (référence)
 
-1. Déployer `ms365-connection-test`, `ms365-stats`, `ms365-stats-insights`.
-2. Copier chaque fichier modifié dans `apps/planipret-mobile/src/` pour garder la parité mobile standalone.
-3. Vérifier que `npm run build` du mobile passe.
-
-### Phase 4 — Vérification
-
-1. Rejouer `ms365-connection-test` dans l'aperçu : les 4 blocs annuaire deviennent « Informatif » et le statut global reste vert dès que `auth + /me` passent.
-2. Ouvrir `/mplanipret/stats` : les compteurs Microsoft s'affichent, le graphique se remplit, les insights AVA apparaissent.
-3. Reconnecter Microsoft pour rafraîchir le token si l'appel `/me/messages` renvoie 401 (le helper le fait déjà).
-
----
-
-## Détails techniques
-
-- **Scopes déjà couverts** par `ms365-oauth-exchange` : `Mail.ReadWrite`, `Calendars.ReadWrite`, `Chat.Read` — suffisants pour toutes les requêtes ci-dessus. Aucun nouveau scope à demander.
-- **Pas de changement Azure requis** de votre côté. Si vous voulez faire disparaître aussi les blocs « Informatif », il faudrait ajouter dans Azure les permissions **Application** `Organization.Read.All`, `User.Read.All`, `Application.Read.All` puis cliquer *Grant admin consent* — mais ce n'est **pas nécessaire** pour Mail/Calendar/Teams/Stats.
-- Les tables `planipret_ai_insights` et `planipret_profiles` (colonnes `ms365_*`) sont déjà en place, aucune migration.
-
----
-
-## Question de cadrage
-
-Voulez-vous que je fusionne `ms365-stats` et `ms365-stats-insights` en une seule fonction (plus simple, un seul appel côté client), ou les garder séparées (plus flexible pour rafraîchir seulement les KPI sans reconsommer du crédit IA) ? Sans réponse, je fusionne en une seule fonction.
+- Aucune modification de schéma DB ni de RLS n'est requise.
+- Aucune modification Azure requise ; la partie « scan applicatif » utilise déjà `MICROSOFT_CLIENT_ID/SECRET/TENANT` côté secrets.
+- La contrainte `mplanipret-isolation-locked` impose la synchro `src/` ↔ `apps/planipret-mobile/src/` pour tous les composants touchés.
+- Aucun changement au sélecteur de langue lui-même (`PlanipretLangSwitch`, `useMplanipretLang`) : ils fonctionnent, seul le contenu manque.

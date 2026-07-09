@@ -403,23 +403,25 @@ Deno.serve(async (req) => {
     try {
       const r = await fetch(target, { headers });
       const ct = r.headers.get("Content-Type") ?? "";
-      attempts.push({ url: p, status: r.status, ct, lookup_id: lookupId });
+      const attempt: any = { url: p, status: r.status, ct, lookup_id: lookupId };
+      attempts.push(attempt);
 
       if (r.ok && (ct.startsWith("audio") || ct.includes("octet-stream"))) {
         if (!r.body) continue;
         return audioResponse(r, recordingMeta, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p });
       }
       if (r.ok) {
-        const parsed = await r.json().catch(() => null);
+        const rawText = await r.text();
+        attempt.body_preview = rawText.slice(0, 500);
+        let parsed: any = null;
+        try { parsed = rawText ? JSON.parse(rawText) : null; } catch { parsed = null; }
         const recording = Array.isArray(parsed) ? parsed[0] : parsed;
         if (recording && typeof recording === "object") {
-          attempts[attempts.length - 1].fields_found = Object.keys(recording);
-          attempts[attempts.length - 1].sample = Object.fromEntries(
-            Object.entries(recording).filter(([_, v]) => typeof v === "string" && v.length < 400),
-          );
+          attempt.fields_found = Object.keys(recording);
         }
         if (recording && !recordingMeta) recordingMeta = recording;
         const audioUrl = pickAudioUrl(recording);
+        attempt.audio_url_extracted = audioUrl;
         if (audioUrl) {
           const streamed = await streamFromUrl(audioUrl, recording, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, attempts);
           if (streamed) return streamed;

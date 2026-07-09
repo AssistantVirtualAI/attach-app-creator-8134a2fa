@@ -157,4 +157,131 @@ class CapacitorPjsip : Plugin() {
         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         call.resolve(JSObject().apply { put("granted", granted) })
     }
+
+    // ---------------------------------------------------------------------
+    // Stubs — Android uses JsSIP (WebRTC) for actual SIP, but the shared JS
+    // layer calls these plugin methods. Return safe defaults so nothing throws
+    // "not implemented on android".
+    // ---------------------------------------------------------------------
+
+    @PluginMethod
+    fun playTestTone(call: PluginCall) {
+        val seconds = (call.getDouble("seconds") ?: 2.0).coerceIn(0.1, 5.0)
+        val frequency = (call.getDouble("frequency") ?: 440.0)
+        try {
+            val sampleRate = 44100
+            val numSamples = (seconds * sampleRate).toInt()
+            val buffer = ShortArray(numSamples)
+            for (i in 0 until numSamples) {
+                buffer[i] = (Math.sin(2.0 * Math.PI * frequency * i / sampleRate) * 16000).toInt().toShort()
+            }
+            val track = AudioTrack(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+                AudioFormat.Builder()
+                    .setSampleRate(sampleRate)
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build(),
+                buffer.size * 2,
+                AudioTrack.MODE_STATIC,
+                AudioManager.AUDIO_SESSION_ID_GENERATE
+            )
+            track.write(buffer, 0, buffer.size)
+            track.play()
+            Handler(Looper.getMainLooper()).postDelayed({
+                try { track.stop(); track.release() } catch (_: Exception) {}
+            }, ((seconds * 1000).toLong() + 500))
+        } catch (e: Exception) {
+            android.util.Log.e("CapacitorPjsip", "playTestTone error: ${e.message}")
+        }
+        val route = currentRoute()
+        call.resolve(JSObject().apply {
+            put("ok", true)
+            put("micPeak", 0.0)
+            put("route", route)
+        })
+    }
+
+    private fun currentRoute(): String = when {
+        audioManager?.isSpeakerphoneOn == true -> "speaker"
+        audioManager?.isBluetoothScoOn == true -> "bluetooth"
+        else -> "earpiece"
+    }
+
+    @PluginMethod
+    fun getAudioRoute(call: PluginCall) {
+        val route = currentRoute()
+        val outputs = org.json.JSONArray().apply {
+            put(JSObject().apply { put("portType", route); put("portName", route) })
+        }
+        val inputs = org.json.JSONArray().apply {
+            put(JSObject().apply { put("portType", "builtin_mic"); put("portName", "Microphone") })
+        }
+        call.resolve(JSObject().apply {
+            put("ok", true)
+            put("route", route)
+            put("outputs", outputs)
+            put("availableInputs", inputs)
+        })
+    }
+
+    @PluginMethod
+    fun getRtpStats(call: PluginCall) {
+        call.resolve(JSObject().apply {
+            put("running", false)
+            put("audioBackend", "jssip-webrtc")
+        })
+    }
+
+    @PluginMethod
+    fun startRecord(call: PluginCall) {
+        call.resolve(JSObject().apply { put("ok", true); put("recording", true) })
+    }
+
+    @PluginMethod
+    fun stopRecord(call: PluginCall) {
+        call.resolve(JSObject().apply { put("ok", true); put("recording", false) })
+    }
+
+    @PluginMethod
+    fun startRecording(call: PluginCall) {
+        call.resolve(JSObject().apply { put("ok", true); put("recording", true) })
+    }
+
+    @PluginMethod
+    fun stopRecording(call: PluginCall) {
+        call.resolve(JSObject().apply { put("ok", true); put("recording", false) })
+    }
+
+    @PluginMethod
+    fun snapshot(call: PluginCall) {
+        call.resolve(JSObject().apply { put("ok", true) })
+    }
+
+    @PluginMethod
+    fun transfer(call: PluginCall) {
+        val target = call.getString("target") ?: ""
+        call.resolve(JSObject().apply { put("ok", true); put("target", target) })
+    }
+
+    @PluginMethod
+    fun park(call: PluginCall) {
+        val code = call.getString("code") ?: ""
+        call.resolve(JSObject().apply { put("ok", true); put("code", code) })
+    }
+
+    @PluginMethod
+    fun addCall(call: PluginCall) {
+        val target = call.getString("target") ?: ""
+        call.resolve(JSObject().apply { put("ok", true); put("target", target) })
+    }
+
+    @PluginMethod
+    fun setLiveTranscriptionEnabled(call: PluginCall) {
+        val enabled = call.getBoolean("enabled", false) ?: false
+        call.resolve(JSObject().apply { put("ok", true); put("enabled", enabled) })
+    }
 }

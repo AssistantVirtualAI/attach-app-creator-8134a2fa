@@ -334,7 +334,7 @@ export default function PARecordings() {
     const to = String(detail.to_number ?? "").toLowerCase();
     const isVoicemail = to.includes("vmail") || to.includes("voicemail") || to.includes("vm@");
     if (isVoicemail) return;
-    if (detail.has_recording === false && !detail.ns_callid && !detail.ns_orig_callid) return;
+    if (detail.has_recording === false) return;
     if (detail.recording_url && String(detail.recording_url).startsWith("blob:")) return;
     if (detail.recording_url && String(detail.recording_url).startsWith("http")) return;
     if (resolving === detail.id) return;

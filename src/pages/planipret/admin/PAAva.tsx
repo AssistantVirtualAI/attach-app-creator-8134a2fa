@@ -267,7 +267,14 @@ export default function PAAva() {
             {t("adminPortal.ava.subtitle")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>
+            {t("adminPortal.ava.lastSync")}: {lastSyncAt ? new Date(lastSyncAt).toLocaleString(lang === "en" ? "en-CA" : "fr-CA") : t("adminPortal.ava.neverSynced")}
+          </span>
+          <Button onClick={testM365} disabled={testing} variant="outline" size="sm">
+            {testing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <PlugZap className="w-3.5 h-3.5 mr-1.5" />}
+            {testing ? t("adminPortal.ava.testingConnection") : t("adminPortal.ava.testConnection")}
+          </Button>
           <Button onClick={() => analyzeAll()} disabled={analyzing} variant="default" size="sm">
             {analyzing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1.5" />}
             {t("adminPortal.ava.analyzeNow")}
@@ -278,6 +285,19 @@ export default function PAAva() {
           </Button>
         </div>
       </div>
+
+      {testResult && (
+        <div className="pp-card flex items-start gap-3" style={{ padding: 12, borderColor: `${testResult.ok ? SUCCESS : DANGER}55` }}>
+          {testResult.ok ? <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: SUCCESS }} /> : <XCircle className="w-4 h-4 shrink-0" style={{ color: DANGER }} />}
+          <div className="flex-1 min-w-0">
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--pp-text-primary)" }}>
+              {testResult.ok ? t("adminPortal.ava.testOk") : t("adminPortal.ava.testFailed")}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--pp-text-secondary)" }}>{testResult.message}</div>
+          </div>
+          <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{new Date(testResult.at).toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA")}</span>
+        </div>
+      )}
 
       {apiError && (
         <div className="pp-card flex items-start gap-3" style={{ padding: 14, borderColor: `${DANGER}55` }}>

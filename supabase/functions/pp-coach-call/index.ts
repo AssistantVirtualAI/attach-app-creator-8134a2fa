@@ -152,6 +152,55 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
     const userPrompt = `${context}\n\n--- TRANSCRIPTION BRUTE ---\n${effectiveTranscript}\n--- FIN ---\n\nAnalyse cet appel et renvoie le JSON demandé. IMPORTANT:\n- dans corrected_transcript, remplace TOUS les libellés génériques (Speaker 1, sip:xxxx, Agent, Caller...) par "${brokerName}" et "${clientName}".\n- Le JSON DOIT contenir TOUTES les clés du schéma: corrected_transcript, segments, summary, topics, action_items, coaching, score.\n- Pour un appel très court ou sans conversation substantielle: topics=[] et action_items=[] mais les clés doivent EXISTER.\n- segments = un objet par tour de parole avec speaker, timestamp (estimé mm:ss à partir de la durée totale ${row.duration_seconds ?? "?"}s), text, summary court.`;
 
     // ── F: appel IA — Claude d'abord (ANTHROPIC_API_KEY), Lovable AI en failover ──
+    // Force le schéma via `tool_use` pour garantir que topics/action_items/segments sont toujours renvoyés.
+    const ANALYSIS_TOOL = {
+      name: "record_call_analysis",
+      description: "Enregistre l'analyse complète de l'appel Planiprêt.",
+      input_schema: {
+        type: "object",
+        properties: {
+          corrected_transcript: { type: "string" },
+          segments: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                speaker: { type: "string" },
+                timestamp: { type: "string", description: "mm:ss estimé" },
+                text: { type: "string" },
+                summary: { type: "string", description: "1 phrase courte" },
+              },
+              required: ["speaker", "text"],
+            },
+          },
+          summary: { type: "string" },
+          topics: { type: "array", items: { type: "string" } },
+          action_items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                owner: { type: "string", enum: ["courtier", "client"] },
+                description: { type: "string" },
+                due: { type: ["string", "null"] },
+              },
+              required: ["owner", "description"],
+            },
+          },
+          coaching: {
+            type: "object",
+            properties: {
+              strengths: { type: "array", items: { type: "string" } },
+              improvements: { type: "array", items: { type: "string" } },
+              next_steps: { type: "array", items: { type: "string" } },
+            },
+            required: ["strengths", "improvements", "next_steps"],
+          },
+          score: { type: "number", minimum: 0, maximum: 100 },
+        },
+        required: ["corrected_transcript", "segments", "summary", "topics", "action_items", "coaching", "score"],
+      },
+    };
     async function callClaude(): Promise<{ ok: boolean; content?: string; status?: number; error?: string }> {
       if (!ANTHROPIC_API_KEY) return { ok: false, error: "no_anthropic_key" };
       const model = Deno.env.get("PP_COACH_CLAUDE_MODEL") ?? "claude-sonnet-4-5-20250929";
@@ -166,13 +215,17 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
           model,
           max_tokens: 4096,
           system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userPrompt + "\n\nRÉPONDS UNIQUEMENT AVEC UN JSON VALIDE — sans markdown, sans texte hors JSON." }],
+          tools: [ANALYSIS_TOOL],
+          tool_choice: { type: "tool", name: "record_call_analysis" },
+          messages: [{ role: "user", content: userPrompt }],
         }),
       });
       if (!r.ok) return { ok: false, status: r.status, error: await r.text().catch(() => "") };
       const j = await r.json();
-      const content = Array.isArray(j?.content) ? j.content.map((b: any) => b?.text ?? "").join("") : "";
-      return { ok: true, content };
+      const toolBlock = Array.isArray(j?.content) ? j.content.find((b: any) => b?.type === "tool_use") : null;
+      if (toolBlock?.input) return { ok: true, content: JSON.stringify(toolBlock.input) };
+      const textContent = Array.isArray(j?.content) ? j.content.map((b: any) => b?.text ?? "").join("") : "";
+      return { ok: true, content: textContent };
     }
 
     async function callLovable(): Promise<{ ok: boolean; content?: string; status?: number; error?: string }> {

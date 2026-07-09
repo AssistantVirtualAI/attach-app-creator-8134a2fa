@@ -251,6 +251,14 @@ export default function MMore() {
       </Section>
 
       <Section title={t("more.sections.integrations")}>
+        <div className="px-3 pb-2 flex items-center justify-between">
+          <Ms365StatusBadge />
+          <button
+            onClick={() => navigate("/mplanipret/ms365-diagnostics")}
+            className="text-[11px] font-semibold"
+            style={{ color: "#2E9BDC" }}
+          >Diagnostics →</button>
+        </div>
         <Row icon={<Mail className="w-4 h-4" style={{ color: "#3FA3F0" }} />} label="Microsoft 365"
           sub={
             ms365Detection.loading

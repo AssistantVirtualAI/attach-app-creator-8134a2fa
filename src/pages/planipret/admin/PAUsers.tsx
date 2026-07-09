@@ -440,6 +440,22 @@ export default function PAUsers() {
                   </td>
                   <td className="p-3" style={{ color: "var(--pp-text-secondary)" }}>{u.email}</td>
                   <td className="p-3 tabular-nums" style={{ color: "var(--pp-text-secondary)" }}>{u.extension}</td>
+                  <td className="p-3">
+                    {(() => {
+                      const nums = numbersByExt[u.extension] ?? [];
+                      if (numbersLoading && nums.length === 0) return <span style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>…</span>;
+                      if (nums.length === 0) return <span style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>—</span>;
+                      return (
+                        <div className="flex flex-wrap gap-1">
+                          {nums.map((n) => (
+                            <span key={n.raw} title={n.raw} className="px-1.5 py-0.5 rounded tabular-nums" style={{ fontSize: 11, background: `${ACCENT}15`, color: ACCENT, border: `1px solid ${ACCENT}33` }}>
+                              {n.pretty}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </td>
                   <td className="p-3"><Toggle on={u.mobile_app_enabled} disabled={u.ns_only} loading={savingId === u.user_id} onChange={() => !u.ns_only && toggleField(u, "mobile_app_enabled")} /></td>
                   <td className="p-3"><Toggle on={u.voice_agent_enabled} disabled={u.ns_only} loading={savingId === u.user_id} onChange={() => !u.ns_only && toggleField(u, "voice_agent_enabled")} /></td>
                   <td className="p-3">

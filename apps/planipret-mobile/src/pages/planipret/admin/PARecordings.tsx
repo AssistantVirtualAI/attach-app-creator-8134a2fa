@@ -334,7 +334,8 @@ export default function PARecordings() {
     const to = String(detail.to_number ?? "").toLowerCase();
     const isVoicemail = to.includes("vmail") || to.includes("voicemail") || to.includes("vm@");
     if (isVoicemail) return;
-    if (detail.has_recording === false) return;
+    // Always attempt to resolve — all lines are auto-recorded; a stale
+    // has_recording=false must not block the retry flow.
     if (detail.recording_url && String(detail.recording_url).startsWith("blob:")) return;
     if (detail.recording_url && String(detail.recording_url).startsWith("http")) return;
     if (resolving === detail.id) return;
@@ -585,13 +586,8 @@ export default function PARecordings() {
                     </div>
                   );
                 }
-                if (detail.has_recording === false) {
-                  return (
-                    <div className="p-3 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
-                      🔇 Cet appel n'a pas été enregistré côté NetSapiens (jamais capturé, expiré ou purgé).
-                    </div>
-                  );
-                }
+                // Fallback state (no audio yet, no error yet): still loading or awaiting first resolve
+
                 return (
                   <div className="p-3 rounded-lg text-xs space-y-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
                     <div>{recordingError ?? "Enregistrement introuvable sur NS-API."}</div>

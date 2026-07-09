@@ -5,10 +5,13 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Send, Plus, Menu, Loader2, Sparkles, Mic, Square, Volume2, VolumeX } from "lucide-react";
+import { Send, Plus, Menu, Loader2, Sparkles, Mic, Square, Volume2, VolumeX, CheckCircle2 } from "lucide-react";
 
-type Msg = { id: string; role: "user" | "assistant"; message: string; created_at: string };
+type AvaSuggestion = { id: string; label: string; kind: string; payload?: Record<string, any> };
+type Msg = { id: string; role: "user" | "assistant"; message: string; created_at: string; suggestions?: AvaSuggestion[] };
 type Session = { id: string; title: string; last_message_at: string };
+
+const MUTATING_ACTIONS = new Set(["send_email", "create_calendar_event", "send_teams_message", "reply_teams_message"]);
 
 export default function MAvaChat() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -21,6 +24,7 @@ export default function MAvaChat() {
   const [transcribing, setTranscribing] = useState(false);
   const [speakReplies, setSpeakReplies] = useState<boolean>(() => localStorage.getItem("ava_tts_on") === "1");
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [runningSuggestion, setRunningSuggestion] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -80,11 +84,31 @@ export default function MAvaChat() {
       }
       const replyText = String(d.reply ?? "…");
       const replyId = `a-${Date.now()}`;
-      setMessages((m) => [...m, { id: replyId, role: "assistant", message: replyText, created_at: new Date().toISOString() }]);
+      setMessages((m) => [...m, { id: replyId, role: "assistant", message: replyText, suggestions: Array.isArray(d.suggestions) ? d.suggestions : [], created_at: new Date().toISOString() }]);
       if (speakReplies) speak(replyId, replyText);
     } catch (e: any) {
       toast.error(e?.message ?? "Erreur AVA");
     } finally { setBusy(false); }
+  };
+
+  const runSuggestion = async (suggestion: AvaSuggestion) => {
+    const action = String(suggestion.payload?.action ?? "");
+    const needsConfirm = suggestion.kind === "call" || suggestion.kind === "sms" || MUTATING_ACTIONS.has(action);
+    if (needsConfirm && !confirm(`Confirmer: ${suggestion.label}`)) return;
+    setRunningSuggestion(suggestion.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
+        body: { mode: "chat", confirm_action: suggestion, approved: true, session_id: sessionId },
+      });
+      if (error) throw error;
+      const replyText = String((data as any)?.reply ?? "Action terminée.");
+      setMessages((m) => [...m, { id: `act-${Date.now()}`, role: "assistant", message: replyText, created_at: new Date().toISOString() }]);
+      toast.success("Action AVA traitée");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Action AVA impossible");
+    } finally {
+      setRunningSuggestion(null);
+    }
   };
 
   const speak = async (id: string, text: string) => {
@@ -206,6 +230,22 @@ export default function MAvaChat() {
                   >
                     {speakingId === m.id ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
                   </button>
+                )}
+                {m.role === "assistant" && m.suggestions && m.suggestions.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {m.suggestions.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => runSuggestion(s)}
+                        disabled={!!runningSuggestion}
+                        className="text-left text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 disabled:opacity-50"
+                        style={{ background: "rgba(46,155,220,0.10)", border: "1px solid rgba(46,155,220,0.24)", color: "var(--pp-brand-accent)" }}
+                      >
+                        {runningSuggestion === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>

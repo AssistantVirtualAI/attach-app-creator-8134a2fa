@@ -14,9 +14,23 @@ Deno.serve(async (req) => {
   }
 
   const startedAt = Date.now();
-  const TENANT_ID = Deno.env.get("MICROSOFT_TENANT_ID") ?? "";
-  const CLIENT_ID = Deno.env.get("MICROSOFT_CLIENT_ID") ?? "";
-  const CLIENT_SECRET = Deno.env.get("MICROSOFT_CLIENT_SECRET") ?? "";
+  const adminUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  let saved: Record<string, string> = {};
+  if (adminUrl && serviceRole) {
+    try {
+      const { createClient } = await import("npm:@supabase/supabase-js@2");
+      const admin = createClient(adminUrl, serviceRole);
+      const [{ data: secret }, { data: cfg }] = await Promise.all([
+        admin.from("planipret_integration_secrets").select("config").in("provider", ["microsoft", "ms365"]).limit(1).maybeSingle(),
+        admin.from("planipret_integration_config").select("config_data").eq("integration_key", "ms365").maybeSingle(),
+      ]);
+      saved = { ...((cfg?.config_data ?? {}) as Record<string, string>), ...((secret?.config ?? {}) as Record<string, string>) };
+    } catch (e) { console.error("ms365 config read failed", e); }
+  }
+  const TENANT_ID = saved.tenant_id ?? Deno.env.get("MICROSOFT_TENANT_ID") ?? "";
+  const CLIENT_ID = saved.client_id ?? saved.client_secret_id ?? Deno.env.get("MICROSOFT_CLIENT_ID") ?? "";
+  const CLIENT_SECRET = saved.client_secret ?? Deno.env.get("MICROSOFT_CLIENT_SECRET") ?? "";
 
   const results: Record<string, any> = {};
 
@@ -98,15 +112,19 @@ Deno.serve(async (req) => {
       });
       const d = await r.json();
       const org = d.value?.[0];
+      const msg = d.error?.message ?? "erreur";
       results.organization = {
         success: r.ok && !!org,
+        category: "admin_directory",
+        required: "Application permission Organization.Read.All ou rôle Microsoft admin/Global Reader",
         display_name: org?.displayName,
         tenant_id: org?.id,
         country: org?.countryLetterCode,
         verified_domains: org?.verifiedDomains?.map((v: any) => v.name),
         message: r.ok
           ? `✅ Organisation: ${org?.displayName}`
-          : `❌ ${d.error?.message ?? "erreur"}`,
+          : `⚠️ ${msg}`,
+        recommendation: r.ok ? undefined : "Les fonctions Mail/Calendar/Teams peuvent fonctionner même si ce test directory échoue. Donnez un rôle Microsoft admin/Global Reader ou une permission application pour ce diagnostic.",
       };
     } catch (e) {
       results.organization = { success: false, error: String(e), message: `❌ ${String(e)}` };
@@ -121,6 +139,8 @@ Deno.serve(async (req) => {
       const d = await r.json();
       results.users = {
         success: r.ok,
+        category: "admin_directory",
+        required: "Application permission User.Read.All ou rôle Microsoft admin/Global Reader",
         count: d.value?.length ?? 0,
         sample: d.value?.map((u: any) => ({
           name: u.displayName,
@@ -128,7 +148,8 @@ Deno.serve(async (req) => {
         })),
         message: r.ok
           ? `✅ ${d.value?.length ?? 0} utilisateurs trouvés`
-          : `❌ ${d.error?.message ?? "erreur"}`,
+          : `⚠️ ${d.error?.message ?? "erreur"}`,
+        recommendation: r.ok ? undefined : "Ce test vérifie l'annuaire Microsoft. Il n'empêche pas la connexion utilisateur OAuth ni Outlook/Calendar/Teams délégués.",
       };
     } catch (e) {
       results.users = { success: false, error: String(e), message: `❌ ${String(e)}` };
@@ -144,6 +165,8 @@ Deno.serve(async (req) => {
       const app = d.value?.[0];
       results.app_registration = {
         success: r.ok && !!app,
+        category: "admin_directory",
+        required: "Application.Read.All ou rôle Application Administrator/Global Reader",
         app_name: app?.displayName,
         redirect_uris_web: app?.web?.redirectUris ?? [],
         redirect_uris_spa: app?.spa?.redirectUris ?? [],
@@ -151,6 +174,7 @@ Deno.serve(async (req) => {
         message: app
           ? `✅ App: ${app.displayName}`
           : "⚠️ App non trouvée ou permissions insuffisantes",
+        recommendation: app ? undefined : "Ce test lit la configuration Azure App Registration. Si les redirect URIs sont déjà configurées, l'OAuth utilisateur peut fonctionner malgré cette limite.",
       };
     } catch (e) {
       results.app_registration = { success: false, error: String(e), message: `❌ ${String(e)}` };
@@ -165,6 +189,8 @@ Deno.serve(async (req) => {
       const d = await r.json();
       results.permissions = {
         success: r.ok,
+        category: "admin_directory",
+        required: "Application.Read.All ou rôle Application Administrator/Global Reader",
         service_principal: d.value?.[0]?.displayName,
         app_roles_count: d.value?.[0]?.appRoles?.length ?? 0,
         message: r.ok
@@ -180,6 +206,9 @@ Deno.serve(async (req) => {
     total_tests: Object.keys(results).length,
     passed: Object.values(results).filter((r: any) => r.success).length,
     failed: Object.values(results).filter((r: any) => !r.success).length,
+    core_passed: !!results.auth?.success,
+    admin_directory_failed: Object.values(results).filter((r: any) => !r.success && r.category === "admin_directory").length,
+    status: results.auth?.success ? "core_connected" : "not_connected",
     tested_at: new Date().toISOString(),
     elapsed_ms: Date.now() - startedAt,
     tenant_id: TENANT_ID,

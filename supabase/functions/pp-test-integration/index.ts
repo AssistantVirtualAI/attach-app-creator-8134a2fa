@@ -144,7 +144,18 @@ async function testMs365(cfg: Record<string, string>): Promise<TestResult> {
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) return { success: false, message: `Azure AD: ${j?.error_description ?? r.status}` };
-  return { success: true, message: `Azure AD OK · token type ${j?.token_type ?? "Bearer"}` };
+  const org = await fetch("https://graph.microsoft.com/v1.0/organization?$select=id,displayName", {
+    headers: { Authorization: `Bearer ${j.access_token}` },
+  });
+  if (!org.ok) {
+    const body = await org.json().catch(() => ({}));
+    return {
+      success: true,
+      message: `Microsoft OAuth OK · tests annuaire limités: ${body?.error?.message ?? org.status}`,
+      details: { token_type: j?.token_type ?? "Bearer", directory_status: org.status, recommendation: "Reconnecter l'utilisateur pour Mail/Calendar/Teams; rôle Microsoft admin requis seulement pour les diagnostics annuaire." },
+    };
+  }
+  return { success: true, message: `Microsoft OAuth OK · token type ${j?.token_type ?? "Bearer"}` };
 }
 
 async function testMaestro(cfg: Record<string, string>): Promise<TestResult> {

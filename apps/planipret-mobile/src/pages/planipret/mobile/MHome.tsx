@@ -7,7 +7,7 @@ import {
   Phone, PhoneMissed, MessageSquare, Voicemail,
   ArrowDownLeft, ArrowUpRight, X, Calendar, Headphones, Bot,
   BellOff, Flame, Sparkles, ChevronRight, Mail, Users as UsersIcon,
-  CheckSquare, RefreshCw, AlertCircle,
+  CheckSquare, RefreshCw, AlertCircle, Video, ExternalLink,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { toast } from "sonner";
@@ -50,6 +50,9 @@ export default function MHome() {
   const [hotLeads, setHotLeads] = useState<any[]>([]);
   const [dueReminders, setDueReminders] = useState<any[]>([]);
   const [meetings, setMeetings] = useState<any[]>([]);
+  const [msMeetings, setMsMeetings] = useState<any[]>([]);
+  const [msCalendarLoading, setMsCalendarLoading] = useState(false);
+  const [msCalendarError, setMsCalendarError] = useState<string | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [brief, setBrief] = useState<any | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
@@ -107,12 +110,30 @@ export default function MHome() {
         .eq("user_id", profile.user_id).eq("status", "pending"),
     ]);
 
+    let microsoftEvents: any[] = [];
+    setMsCalendarError(null);
+    if (profile?.ms365_access_token) {
+      setMsCalendarLoading(true);
+      const { data: msData, error: msError } = await supabase.functions.invoke("ms365-actions", {
+        body: { action: "list_calendar_events", payload: { start: nowIso, end: weekEnd.toISOString(), top: 5 } },
+      });
+      setMsCalendarLoading(false);
+      if (msError || (msData as any)?.success === false) {
+        setMsCalendarError((msData as any)?.error ?? msError?.message ?? "Calendrier Microsoft indisponible");
+      } else {
+        microsoftEvents = (msData as any)?.events ?? [];
+      }
+    } else {
+      setMsMeetings([]);
+    }
+    setMsMeetings(microsoftEvents);
+
     setStats({
       calls: callsRes.count ?? 0,
       missed: missedRes.count ?? 0,
       sms: smsRes.count ?? 0,
       voicemails: vmRes.count ?? 0,
-      meetings: (meetingsRes.data ?? []).length,
+      meetings: (meetingsRes.data ?? []).length + microsoftEvents.length,
       hotLeads: hotCountRes.count ?? 0,
       tasks: tasksCountRes.count ?? 0,
       outbound: outboundRes.count ?? 0,
@@ -388,15 +409,39 @@ export default function MHome() {
 
       {/* ===== MEETINGS ===== */}
       <section className="pp-card p-4">
-        <SectionHead icon={<Calendar className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />} title={t("home.upcomingMeetings")} count={meetings.length} />
-        {statsLoading ? (
+        <SectionHead icon={<Calendar className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />} title={t("home.upcomingMeetings")} count={meetings.length + msMeetings.length} />
+        {statsLoading || msCalendarLoading ? (
           <div className="space-y-2"><Shimmer className="h-10" /><Shimmer className="h-10" /></div>
-        ) : meetings.length === 0 ? (
+        ) : meetings.length === 0 && msMeetings.length === 0 ? (
           <p className="text-xs text-center py-3" style={{ color: "var(--pp-text-muted)" }}>
-            {t("home.noMeetings")}
+            {profile?.ms365_access_token ? "Aucun rendez-vous local ou Microsoft à venir" : t("home.noMeetings")}
           </p>
         ) : (
           <ul className="space-y-2">
+            {msMeetings.map((m) => {
+              const start = m.start?.dateTime ? new Date(m.start.dateTime) : null;
+              const join = m.onlineMeeting?.joinUrl ?? m.webLink;
+              return (
+                <li key={`ms-${m.id}`} className="flex items-center gap-3 py-2">
+                  <div className="px-2.5 py-1.5 rounded-lg text-xs font-bold tabular-nums"
+                    style={{ background: "rgba(46,155,220,0.10)", color: "var(--pp-brand-accent)", border: "1px solid rgba(46,155,220,0.25)", fontFamily: "Urbanist,sans-serif" }}>
+                    {start ? start.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { day: "2-digit", month: "short" }) : "—"}
+                    {" "}{start ? start.toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : ""}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate font-medium flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
+                      <Video className="w-3 h-3" style={{ color: "var(--pp-brand-accent)" }} /> {m.subject ?? "Microsoft 365"}
+                    </p>
+                    <p className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }}>Microsoft Calendar</p>
+                  </div>
+                  {join && (
+                    <button onClick={() => window.open(join, "_blank", "noopener,noreferrer")} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ color: "var(--pp-brand-accent)", background: "rgba(46,155,220,0.10)" }}>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </li>
+              );
+            })}
             {meetings.map((m) => {
               const meetingDate = m.start_time ? new Date(m.start_time) : null;
               return (
@@ -417,6 +462,9 @@ export default function MHome() {
               );
             })}
           </ul>
+        )}
+        {msCalendarError && (
+          <p className="text-[11px] mt-2" style={{ color: "var(--pp-danger)" }}>{msCalendarError}</p>
         )}
       </section>
 

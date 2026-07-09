@@ -19,7 +19,7 @@ async function refreshToken(refresh_token: string) {
     client_secret: clientSecret,
     grant_type: "refresh_token",
     refresh_token,
-    scope: "openid offline_access Mail.ReadWrite Calendars.ReadWrite User.Read",
+    scope: "openid profile email offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All",
   });
   const r = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,
@@ -52,6 +52,7 @@ Deno.serve(async (req) => {
           await admin.from("planipret_profiles").update({
             ms365_access_token: tok.access_token,
             ms365_refresh_token: tok.refresh_token,
+            ms365_scopes: "openid profile email offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All",
             ms365_token_expiry: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
           }).eq("id", r.id);
           ok++;
@@ -77,6 +78,7 @@ Deno.serve(async (req) => {
     await admin.from("planipret_profiles").update({
       ms365_access_token: tok.access_token,
       ms365_refresh_token: tok.refresh_token,
+      ms365_scopes: "openid profile email offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All",
       ms365_token_expiry: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
     }).eq("user_id", userId);
     return j({ success: true, expires_in: tok.expires_in });

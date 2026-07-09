@@ -31,7 +31,7 @@ async function refreshToken(admin: any, profile: any) {
     client_secret: cfg.clientSecret,
     grant_type: "refresh_token",
     refresh_token: profile.ms365_refresh_token,
-    scope: "openid offline_access Mail.ReadWrite Calendars.ReadWrite User.Read",
+    scope: "openid profile email offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All",
   });
   const r = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,

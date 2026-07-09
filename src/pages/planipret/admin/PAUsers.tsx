@@ -70,6 +70,40 @@ export default function PAUsers() {
   const [nsError, setNsError] = useState<string | null>(null);
   const [nsDomain, setNsDomain] = useState<string | null>(null);
 
+  // All phone numbers (DIDs) in the NS domain
+  const [allNumbers, setAllNumbers] = useState<NsNumber[]>([]);
+  const [numbersError, setNumbersError] = useState<string | null>(null);
+  const [numbersLoading, setNumbersLoading] = useState(false);
+
+  const numbersByExt = useMemo(() => {
+    const map: Record<string, NsNumber[]> = {};
+    for (const n of allNumbers) {
+      if (!n.extension) continue;
+      (map[n.extension] ??= []).push(n);
+    }
+    return map;
+  }, [allNumbers]);
+
+  const unassignedNumbers = useMemo(
+    () => allNumbers.filter((n) => !n.extension),
+    [allNumbers],
+  );
+
+  const loadNumbers = async () => {
+    setNumbersLoading(true);
+    const { data, error } = await supabase.functions.invoke("pp-admin-phonenumbers", {
+      body: { action: "list" },
+    });
+    setNumbersLoading(false);
+    if (error || !(data as any)?.success) {
+      setNumbersError((data as any)?.error ?? error?.message ?? "Erreur");
+      setAllNumbers([]);
+      return;
+    }
+    setNumbersError(null);
+    setAllNumbers(((data as any).numbers ?? []) as NsNumber[]);
+  };
+
   const load = async () => {
     setLoading(true);
     setNsError(null);

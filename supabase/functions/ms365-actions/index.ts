@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
+const MS_SCOPE = "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send Calendars.ReadWrite Chat.ReadWrite ChannelMessage.Send Team.ReadBasic.All Channel.ReadBasic.All";
 
 async function getMsConfig(admin: any) {
   const [{ data: secret }, { data: cfg }] = await Promise.all([
@@ -25,7 +26,7 @@ async function refreshToken(admin: any, profile: any) {
     client_secret: cfg.clientSecret,
     grant_type: "refresh_token",
     refresh_token: profile.ms365_refresh_token,
-    scope: "openid offline_access Mail.ReadWrite Calendars.ReadWrite User.Read",
+    scope: MS_SCOPE,
   });
   const r = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,
@@ -35,6 +36,8 @@ async function refreshToken(admin: any, profile: any) {
   await admin.from("planipret_profiles").update({
     ms365_access_token: d.access_token,
     ms365_refresh_token: d.refresh_token ?? profile.ms365_refresh_token,
+    ms365_scopes: d.scope ?? profile.ms365_scopes ?? MS_SCOPE,
+    ms365_token_expiry: new Date(Date.now() + Number(d.expires_in ?? 3600) * 1000).toISOString(),
   }).eq("id", profile.id);
   return d.access_token as string;
 }
@@ -62,7 +65,7 @@ Deno.serve(async (req) => {
     const userId = claims?.claims?.sub;
     if (!userId) return new Response(JSON.stringify({ success: false, error: "Unauthorized", code: 401 }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const { data: profile } = await admin.from("planipret_profiles").select("id, user_id, full_name, ms365_access_token, ms365_refresh_token").eq("user_id", userId).maybeSingle();
+    const { data: profile } = await admin.from("planipret_profiles").select("id, user_id, full_name, ms365_access_token, ms365_refresh_token, ms365_scopes, ms365_token_expiry, ms365_email").eq("user_id", userId).maybeSingle();
     if (!profile?.ms365_access_token) {
       return new Response(JSON.stringify({ success: false, error: "Microsoft 365 non connecté pour ce courtier" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -71,12 +74,21 @@ Deno.serve(async (req) => {
     const j = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     switch (action) {
+      case "connection_status": {
+        return j({
+          success: true,
+          connected: !!profile?.ms365_access_token,
+          email: profile?.ms365_email ?? null,
+          scopes: profile?.ms365_scopes ?? null,
+          expires_at: profile?.ms365_token_expiry ?? null,
+        });
+      }
       case "read_emails": {
         const top = Math.min(Number(payload.top ?? 25), 50);
         const filter = payload.folder === "unread" ? "&$filter=isRead%20eq%20false" : "";
         const r = await graph(admin, profile, `/me/messages?$top=${top}&$orderby=receivedDateTime%20desc&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,hasAttachments,importance${filter}`);
         const d = await r.json();
-        return j({ success: r.ok, emails: d.value ?? [], error: d?.error?.message, code: r.status }, 200);
+        return j({ success: r.ok, emails: d.value ?? [], error: d?.error?.message, details: d?.error, code: r.status }, 200);
       }
       case "read_email_detail": {
         const id = String(payload.message_id ?? "");
@@ -86,20 +98,41 @@ Deno.serve(async (req) => {
         return j({ success: r.ok, email: d }, r.ok ? 200 : 500);
       }
       case "send_email": {
-        const r = await graph(admin, profile, `/me/sendMail`, { method: "POST", body: JSON.stringify({ message: { subject: payload.subject, body: { contentType: "HTML", content: payload.body }, toRecipients: (payload.to ?? []).map((e: string) => ({ emailAddress: { address: e } })) } }) });
-        return j({ success: r.ok }, r.ok ? 200 : 500);
+        const to = Array.isArray(payload.to) ? payload.to : [payload.to].filter(Boolean);
+        if (!to.length || !payload.subject || !payload.body) return j({ success: false, error: "to, subject, body requis" }, 400);
+        const r = await graph(admin, profile, `/me/sendMail`, { method: "POST", body: JSON.stringify({ message: { subject: payload.subject, body: { contentType: "HTML", content: String(payload.body).replace(/\n/g, "<br/>" ) }, toRecipients: to.map((e: string) => ({ emailAddress: { address: e } })) }, saveToSentItems: true }) });
+        const txt = await r.text().catch(() => "");
+        return j({ success: r.ok, error: r.ok ? null : txt, code: r.status }, r.ok ? 200 : 500);
       }
       case "create_calendar_event": {
-        const r = await graph(admin, profile, `/me/events`, { method: "POST", body: JSON.stringify({ subject: payload.subject, start: payload.start, end: payload.end, body: { contentType: "HTML", content: payload.body ?? "" }, attendees: (payload.attendees ?? []).map((e: string) => ({ emailAddress: { address: e }, type: "required" })) }) });
+        if (!payload.subject || !payload.start || !payload.end) return j({ success: false, error: "subject, start, end requis" }, 400);
+        const r = await graph(admin, profile, `/me/events`, { method: "POST", body: JSON.stringify({ subject: payload.subject, start: payload.start, end: payload.end, body: { contentType: "HTML", content: payload.body ?? "" }, attendees: (payload.attendees ?? []).map((e: string) => ({ emailAddress: { address: e }, type: "required" })), isOnlineMeeting: payload.isOnlineMeeting ?? true, onlineMeetingProvider: payload.onlineMeetingProvider ?? "teamsForBusiness" }) });
         const d = await r.json();
-        return j({ success: r.ok, event_id: d.id }, r.ok ? 200 : 500);
+        return j({ success: r.ok, event_id: d.id, event: d, error: d?.error?.message, code: r.status }, r.ok ? 200 : 500);
       }
       case "list_calendar_events": {
         const start = payload.start ?? new Date().toISOString();
         const end = payload.end ?? new Date(Date.now() + 7 * 86400000).toISOString();
-        const r = await graph(admin, profile, `/me/calendarView?startDateTime=${start}&endDateTime=${end}`);
+        const r = await graph(admin, profile, `/me/calendarView?startDateTime=${encodeURIComponent(start)}&endDateTime=${encodeURIComponent(end)}&$orderby=start/dateTime&$top=${Math.min(Number(payload.top ?? 20), 50)}&$select=id,subject,bodyPreview,start,end,location,attendees,organizer,onlineMeeting,webLink,isOnlineMeeting`);
         const d = await r.json();
-        return j({ success: r.ok, events: d.value ?? [] }, r.ok ? 200 : 500);
+        return j({ success: r.ok, events: d.value ?? [], error: d?.error?.message, details: d?.error, code: r.status }, r.ok ? 200 : 500);
+      }
+      case "reply_teams_message":
+      case "send_teams_message": {
+        const chatId = payload.chat_id;
+        const teamId = payload.team_id;
+        const channelId = payload.channel_id;
+        const content = payload.content ?? payload.message;
+        if (!content) return j({ success: false, error: "content requis" }, 400);
+        const scope = chatId
+          ? `/chats/${encodeURIComponent(chatId)}/messages`
+          : (teamId && channelId)
+            ? `/teams/${encodeURIComponent(teamId)}/channels/${encodeURIComponent(channelId)}/messages`
+            : null;
+        if (!scope) return j({ success: false, error: "chat_id ou team_id+channel_id requis" }, 400);
+        const r = await graph(admin, profile, scope, { method: "POST", body: JSON.stringify({ body: { contentType: payload.contentType ?? "text", content } }) });
+        const d = await r.json().catch(() => ({}));
+        return j({ success: r.ok, message_id: d.id, error: d?.error?.message, details: d?.error, code: r.status }, r.ok ? 200 : 500);
       }
       case "daily_briefing": {
         const emailsR = await graph(admin, profile, `/me/messages?$top=5&$filter=isRead%20eq%20false&$select=subject,from,bodyPreview`);

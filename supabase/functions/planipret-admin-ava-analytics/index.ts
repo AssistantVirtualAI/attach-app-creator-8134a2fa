@@ -106,6 +106,39 @@ async function pageAll(admin: any, profile: Profile, path: string, max = 800): P
   return rows.slice(0, max);
 }
 
+async function getAppAccessToken(admin: any) {
+  const cfg = await getMsConfig(admin);
+  if (!cfg.clientId || !cfg.clientSecret || !cfg.tenant || cfg.tenant === "common") return null;
+  const body = new URLSearchParams({
+    client_id: cfg.clientId,
+    client_secret: cfg.clientSecret,
+    grant_type: "client_credentials",
+    scope: "https://graph.microsoft.com/.default",
+  });
+  const res = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.access_token as string;
+}
+
+async function pageAllApp(accessToken: string, userAddress: string, path: string, max = 800): Promise<any[]> {
+  const rows: any[] = [];
+  let next: string | null = `/users/${encodeURIComponent(userAddress)}${path}`;
+  while (next && rows.length < max) {
+    const res = await fetch(`${GRAPH}${next}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error?.message ?? `Graph ${res.status}`);
+    rows.push(...(data.value ?? []));
+    const nextLink = data["@odata.nextLink"] as string | undefined;
+    next = nextLink ? nextLink.replace(GRAPH, "") : null;
+  }
+  return rows.slice(0, max);
+}
+
 async function brokerM365Stats(admin: any, profile: Profile, sinceIso: string, nowIso: string, futureIso: string) {
   const [received, sent, events, upcoming] = await Promise.all([
     pageAll(admin, profile, `/me/messages?$filter=receivedDateTime ge ${sinceIso}&$select=receivedDateTime,from,isRead,subject&$top=100`, 1000),
@@ -158,6 +191,68 @@ async function brokerM365Stats(admin: any, profile: Profile, sinceIso: string, n
     topSenders: Object.entries(senders).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count })),
     upcomingMeetings: upcoming.map((event: any) => ({
       broker: profile.full_name || profile.ms365_email || profile.email,
+      subject: event.subject,
+      start: event.start?.dateTime,
+      end: event.end?.dateTime,
+      attendees: (event.attendees ?? []).length,
+      is_online: !!event.isOnlineMeeting,
+      join_url: event.onlineMeeting?.joinUrl ?? null,
+    })),
+  };
+}
+
+async function brokerM365AppStats(accessToken: string, profile: Profile, sinceIso: string, nowIso: string, futureIso: string) {
+  const userAddress = profile.ms365_email || profile.email;
+  if (!userAddress) throw new Error("Aucune adresse Microsoft pour ce courtier");
+  const [received, sent, events, upcoming] = await Promise.all([
+    pageAllApp(accessToken, userAddress, `/messages?$filter=receivedDateTime ge ${sinceIso}&$select=receivedDateTime,from,isRead,subject&$top=100`, 1000),
+    pageAllApp(accessToken, userAddress, `/mailFolders/sentitems/messages?$filter=sentDateTime ge ${sinceIso}&$select=sentDateTime,toRecipients&$top=100`, 1000),
+    pageAllApp(accessToken, userAddress, `/events?$filter=start/dateTime ge '${sinceIso}' and start/dateTime le '${nowIso}'&$select=subject,start,end,attendees,isOnlineMeeting&$top=100`, 400),
+    pageAllApp(accessToken, userAddress, `/events?$filter=start/dateTime ge '${nowIso}' and start/dateTime le '${futureIso}'&$select=subject,start,end,attendees,isOnlineMeeting,onlineMeeting&$orderby=start/dateTime&$top=5`, 10),
+  ]);
+
+  const daily: Record<string, { emails_received: number; emails_sent: number; emails_unread: number; meetings: number; meeting_minutes: number }> = {};
+  const senders: Record<string, number> = {};
+  for (const message of received) {
+    const key = ymd(message.receivedDateTime);
+    daily[key] ??= { emails_received: 0, emails_sent: 0, emails_unread: 0, meetings: 0, meeting_minutes: 0 };
+    daily[key].emails_received++;
+    if (message.isRead === false) daily[key].emails_unread++;
+    const from = message.from?.emailAddress?.name || message.from?.emailAddress?.address;
+    if (from) senders[from] = (senders[from] ?? 0) + 1;
+  }
+  for (const message of sent) {
+    const key = ymd(message.sentDateTime);
+    daily[key] ??= { emails_received: 0, emails_sent: 0, emails_unread: 0, meetings: 0, meeting_minutes: 0 };
+    daily[key].emails_sent++;
+  }
+  for (const event of events) {
+    const key = ymd(event.start?.dateTime ?? "");
+    daily[key] ??= { emails_received: 0, emails_sent: 0, emails_unread: 0, meetings: 0, meeting_minutes: 0 };
+    daily[key].meetings++;
+    const start = new Date(event.start?.dateTime ?? 0).getTime();
+    const end = new Date(event.end?.dateTime ?? 0).getTime();
+    daily[key].meeting_minutes += Math.max(0, Math.round((end - start) / 60000));
+  }
+  const totals = Object.values(daily).reduce(
+    (acc, day) => ({
+      emails_received: acc.emails_received + day.emails_received,
+      emails_sent: acc.emails_sent + day.emails_sent,
+      emails_unread: acc.emails_unread + day.emails_unread,
+      meetings: acc.meetings + day.meetings,
+      meeting_minutes: acc.meeting_minutes + day.meeting_minutes,
+    }),
+    { emails_received: 0, emails_sent: 0, emails_unread: 0, meetings: 0, meeting_minutes: 0 },
+  );
+  return {
+    broker_user_id: profile.user_id,
+    broker_name: profile.full_name || profile.ms365_display_name || userAddress,
+    email: userAddress,
+    daily,
+    totals,
+    topSenders: Object.entries(senders).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count })),
+    upcomingMeetings: upcoming.map((event: any) => ({
+      broker: profile.full_name || userAddress,
       subject: event.subject,
       start: event.start?.dateTime,
       end: event.end?.dateTime,

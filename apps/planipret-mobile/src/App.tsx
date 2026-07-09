@@ -26,6 +26,7 @@ const MStats = lazy(() => import('@/pages/planipret/mobile/MStats'));
 const MAvaChat = lazy(() => import('@/pages/planipret/mobile/MAvaChat'));
 const MAvaNotifications = lazy(() => import('@/pages/planipret/mobile/MAvaNotifications'));
 const MExtensionSync = lazy(() => import('@/pages/planipret/mobile/MExtensionSync'));
+const Ms365Callback = lazy(() => import('@/pages/planipret/Ms365Callback'));
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,8 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<Navigate to="/mplanipret" replace />} />
                   <Route path="/login" element={<Navigate to="/mplanipret" replace />} />
+                  <Route path="/auth/ms365/callback" element={<Ms365Callback />} />
+                  <Route path="/auth/microsoft/callback" element={<Ms365Callback />} />
                   <Route
                     path="/mplanipret"
                     element={<MplanipretGuard><PlanipretMobile /></MplanipretGuard>}

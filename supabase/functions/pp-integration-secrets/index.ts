@@ -10,6 +10,53 @@ function mask(v: unknown): string {
   return v.slice(0, 2) + "•".repeat(Math.max(4, v.length - 6)) + v.slice(-4);
 }
 
+function normalizeProvider(provider: string): string {
+  return provider === "ms365" ? "microsoft" : provider;
+}
+
+function compactPublicConfig(config: Record<string, any>, provider: string) {
+  const publicConfig: Record<string, any> = {};
+  if (provider === "microsoft") {
+    publicConfig.tenant_id = config?.tenant_id ?? null;
+    publicConfig.client_id = config?.client_id ?? config?.client_secret_id ?? null;
+    publicConfig.redirect_uri = config?.redirect_uri ?? null;
+  } else if (provider === "nsapi") {
+    publicConfig.base_url = config?.base_url ?? null;
+    publicConfig.domain = config?.domain ?? config?.default_domain ?? null;
+  } else {
+    for (const [key, value] of Object.entries(config ?? {})) {
+      if (!/secret|token|key|password/i.test(key)) publicConfig[key] = value;
+    }
+  }
+  return publicConfig;
+}
+
+function mergeItem(
+  map: Map<string, any>,
+  providerRaw: string,
+  config: Record<string, any>,
+  updatedAt: string | null,
+) {
+  const provider = normalizeProvider(providerRaw);
+  const existing = map.get(provider) ?? {
+    provider,
+    updated_at: updatedAt,
+    public_config: {},
+    config_masked: {},
+    has_keys: [],
+  };
+
+  const publicConfig = compactPublicConfig(config, provider);
+  existing.public_config = { ...existing.public_config, ...publicConfig };
+  existing.config_masked = {
+    ...existing.config_masked,
+    ...Object.fromEntries(Object.entries(config ?? {}).map(([k, v]) => [k, mask(v)])),
+  };
+  existing.has_keys = Array.from(new Set([...(existing.has_keys ?? []), ...Object.keys(config ?? {})]));
+  existing.updated_at = existing.updated_at ?? updatedAt;
+  map.set(provider, existing);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -61,37 +108,22 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    // Mask all values before returning to the browser.
-    const secretRows = (data ?? []).map((row: any) => ({
-      provider: row.provider,
-      updated_at: row.updated_at,
-      public_config: {
-        tenant_id: row.config?.tenant_id ?? null,
-        client_id: row.config?.client_id ?? row.config?.client_secret_id ?? null,
-        redirect_uri: row.config?.redirect_uri ?? null,
-      },
-      config_masked: Object.fromEntries(
-        Object.entries(row.config ?? {}).map(([k, v]) => [k, mask(v)])
-      ),
-      has_keys: Object.keys(row.config ?? {}),
-    }));
-    const configRows = (cfgRows ?? []).map((row: any) => ({
-      provider: row.integration_key === "ms365" ? "microsoft" : "nsapi",
-      updated_at: row.updated_at,
-      public_config: {
-        tenant_id: row.config_data?.tenant_id ?? null,
-        client_id: row.config_data?.client_id ?? null,
-        redirect_uri: row.config_data?.redirect_uri ?? null,
-        base_url: row.config_data?.base_url ?? null,
-        domain: row.config_data?.domain ?? row.config_data?.default_domain ?? null,
-      },
-      config_masked: Object.fromEntries(
-        Object.entries(row.config_data ?? {}).map(([k, v]) => [k, mask(v)])
-      ),
-      has_keys: Object.keys(row.config_data ?? {}),
-    }));
-    const masked = [...configRows, ...secretRows];
-    return new Response(JSON.stringify({ items: masked }), {
+    // Merge config + secure secret rows so callers never pick an incomplete
+    // duplicate Microsoft row and fall back to asking brokers for tenant/client IDs.
+    const merged = new Map<string, any>();
+    for (const row of cfgRows ?? []) {
+      mergeItem(
+        merged,
+        row.integration_key === "ms365" ? "microsoft" : "nsapi",
+        row.config_data ?? {},
+        row.updated_at ?? null,
+      );
+    }
+    for (const row of data ?? []) {
+      mergeItem(merged, row.provider, row.config ?? {}, row.updated_at ?? null);
+    }
+
+    return new Response(JSON.stringify({ items: Array.from(merged.values()) }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

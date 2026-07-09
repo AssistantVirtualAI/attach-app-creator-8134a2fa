@@ -41,7 +41,16 @@ Deno.serve(async (req) => {
       .select("config_data")
       .eq("integration_key", integration_key)
       .maybeSingle();
-    const cfg = (row?.config_data ?? {}) as Record<string, string>;
+    let cfg = (row?.config_data ?? {}) as Record<string, string>;
+    if (integration_key === "ms365") {
+      const { data: secretRow } = await admin
+        .from("planipret_integration_secrets")
+        .select("config")
+        .in("provider", ["microsoft", "ms365"])
+        .limit(1)
+        .maybeSingle();
+      cfg = { ...cfg, ...((secretRow?.config ?? {}) as Record<string, string>) };
+    }
 
     let result: TestResult;
     try {

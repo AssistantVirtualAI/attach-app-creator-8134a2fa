@@ -144,23 +144,24 @@ export default function PARecordings() {
     setTranscriptionUnavailable(false);
     setTranscriptionDebug(null);
     try {
-      const { data, error } = await supabase.functions.invoke("ns-get-transcription", { body: { call_db_id: callId } });
+      // Full pipeline: NS transcript → Whisper (STT) fallback → Claude coaching chain.
+      const { data, error } = await supabase.functions.invoke("pp-admin-transcribe", { body: { call_id: callId } });
       if (error) throw error;
       const d = data as any;
-      if (d?.success && Array.isArray(d.segments) && d.segments.length) {
-        const text = d.segments.map((s: any) => `${s.speaker}: ${s.text}`).join("\n");
+      if (d?.ok && d?.transcript) {
+        const segments = Array.isArray(d.segments) ? d.segments : null;
         await supabase.from("planipret_phone_calls").update({
-          transcript: text,
-          transcript_segments: d.segments,
-          transcript_source: "ns-api",
+          transcript: d.transcript,
+          transcript_segments: segments,
+          transcript_source: d.source ?? "ai",
           has_transcript: true,
         }).eq("id", callId);
-        setDetail((cur: any) => cur && cur.id === callId ? { ...cur, transcript: text, transcript_segments: d.segments, has_transcript: true } : cur);
+        setDetail((cur: any) => cur && cur.id === callId ? { ...cur, transcript: d.transcript, transcript_segments: segments, has_transcript: true } : cur);
         await load(page, pageSize);
       } else {
-        // Transcript unavailable — capture full debug payload for the diagnostic panel
         setTranscriptionUnavailable(true);
         setTranscriptionDebug(d);
+        if (d?.hint) setTranscriptionError(d.hint);
       }
     } catch (e: any) {
       setTranscriptionError(e?.message ?? String(e));
@@ -333,7 +334,7 @@ export default function PARecordings() {
     const to = String(detail.to_number ?? "").toLowerCase();
     const isVoicemail = to.includes("vmail") || to.includes("voicemail") || to.includes("vm@");
     if (isVoicemail) return;
-    if (detail.has_recording === false && !detail.ns_callid && !detail.ns_orig_callid) return;
+    if (detail.has_recording === false) return;
     if (detail.recording_url && String(detail.recording_url).startsWith("blob:")) return;
     if (detail.recording_url && String(detail.recording_url).startsWith("http")) return;
     if (resolving === detail.id) return;
@@ -584,9 +585,24 @@ export default function PARecordings() {
                     </div>
                   );
                 }
+                if (detail.has_recording === false) {
+                  return (
+                    <div className="p-3 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+                      🔇 Cet appel n'a pas été enregistré côté NetSapiens (jamais capturé, expiré ou purgé).
+                    </div>
+                  );
+                }
                 return (
-                  <div className="p-3 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-danger, #E84C4C)" }}>
-                    {recordingError ?? "Enregistrement introuvable sur NS-API."}
+                  <div className="p-3 rounded-lg text-xs space-y-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+                    <div>{recordingError ?? "Enregistrement introuvable sur NS-API."}</div>
+                    <button
+                      type="button"
+                      onClick={() => resolveRecording(detail, true)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium"
+                      style={{ background: ACCENT, color: "white" }}
+                    >
+                      <RefreshCw className="w-3 h-3" /> Réessayer
+                    </button>
                   </div>
                 );
               })()}

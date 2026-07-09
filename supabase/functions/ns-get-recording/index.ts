@@ -403,17 +403,25 @@ Deno.serve(async (req) => {
     try {
       const r = await fetch(target, { headers });
       const ct = r.headers.get("Content-Type") ?? "";
-      attempts.push({ url: p, status: r.status, ct, lookup_id: lookupId });
+      const attempt: any = { url: p, status: r.status, ct, lookup_id: lookupId };
+      attempts.push(attempt);
 
       if (r.ok && (ct.startsWith("audio") || ct.includes("octet-stream"))) {
         if (!r.body) continue;
         return audioResponse(r, recordingMeta, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p });
       }
       if (r.ok) {
-        const parsed = await r.json().catch(() => null);
+        const rawText = await r.text();
+        attempt.body_preview = rawText.slice(0, 500);
+        let parsed: any = null;
+        try { parsed = rawText ? JSON.parse(rawText) : null; } catch { parsed = null; }
         const recording = Array.isArray(parsed) ? parsed[0] : parsed;
+        if (recording && typeof recording === "object") {
+          attempt.fields_found = Object.keys(recording);
+        }
         if (recording && !recordingMeta) recordingMeta = recording;
         const audioUrl = pickAudioUrl(recording);
+        attempt.audio_url_extracted = audioUrl;
         if (audioUrl) {
           const streamed = await streamFromUrl(audioUrl, recording, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, attempts);
           if (streamed) return streamed;
@@ -438,10 +446,20 @@ Deno.serve(async (req) => {
     }, 200);
   }
 
+  // Mark the row as unrecorded so the UI stops retrying and shows a clean panel.
+  if (call_db_id) {
+    try {
+      const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+      await admin.from("planipret_phone_calls")
+        .update({ has_recording: false })
+        .eq("id", call_db_id);
+    } catch { /* best-effort */ }
+  }
+
   return json({
     error: "RECORDING_NOT_FOUND",
     message: cdrMatches.length
-      ? "Aucun fichier audio n'a été retourné par NS-API pour les identifiants d'appel trouvés."
+      ? "Cet appel n'a pas d'enregistrement disponible sur NetSapiens (jamais enregistré, expiré ou purgé)."
       : "Enregistrement non disponible sur NetSapiens.",
     ns_callid, ns_extension, domain, attempted_ids: ids, cdr_matches: cdrMatches.map((m) => ({ score: m.score, path: m.path })), attempts,
     possible_causes: [

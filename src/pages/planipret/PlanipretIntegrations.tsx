@@ -68,8 +68,24 @@ export default function PlanipretIntegrations() {
   }
 
   async function refreshBackendSecrets() {
-    const { data, error } = await supabase.functions.invoke("pp-backend-secrets-status", { body: {} });
-    if (!error && (data as any)?.secrets) setBackendSecrets((data as any).secrets);
+    const [{ data, error }, { data: saved }] = await Promise.all([
+      supabase.functions.invoke("pp-backend-secrets-status", { body: {} }),
+      supabase.functions.invoke("pp-integration-secrets"),
+    ]);
+    if (!error && (data as any)?.secrets) {
+      const next = { ...(data as any).secrets };
+      const microsoft = ((saved as any)?.items ?? []).find((i: any) => i.provider === "microsoft");
+      if (microsoft?.public_config) {
+        const existing = next.ms365 ?? { configured: false, present: [], missing: [] };
+        next.ms365 = {
+          ...existing,
+          configured: true,
+          present: Array.from(new Set([...(existing.present ?? []), ...(microsoft.has_keys ?? [])])),
+          values: { ...(existing.values ?? {}), ...microsoft.public_config },
+        };
+      }
+      setBackendSecrets(next);
+    }
   }
 
   useEffect(() => {
@@ -107,7 +123,8 @@ export default function PlanipretIntegrations() {
   }
 
   async function save(key: string, requiredFields: string[]) {
-    const cfg = { ...(rows[key]?.config_data ?? {}), ...(draft[key] ?? {}) };
+    const backendValues = (backendSecrets[key] as any)?.values as Record<string, string> | undefined;
+    const cfg = { ...(backendValues ?? {}), ...(rows[key]?.config_data ?? {}), ...(draft[key] ?? {}) };
     for (const f of requiredFields) {
       if (!cfg[f]) { toast.error(`Champ requis: ${f}`); return; }
     }

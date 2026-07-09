@@ -26,6 +26,9 @@ type Response = {
     elapsed_ms: number;
     tenant_id?: string | null;
     client_id?: string | null;
+    core_passed?: boolean;
+    admin_directory_failed?: number;
+    status?: string;
   };
   results: Record<string, TestResult>;
 };
@@ -51,8 +54,7 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
     loading: boolean;
   }>({ tenant_id: null, client_id: null, has_secret: false, loading: true });
 
-  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL ?? "";
-  const expectedCallback = `${supabaseUrl}/functions/v1/ms365-oauth-callback`;
+  const expectedCallback = typeof window !== "undefined" ? `${window.location.origin}/auth/microsoft/callback` : "";
 
   async function loadDetection() {
     setDetection((d) => ({ ...d, loading: true }));
@@ -92,7 +94,7 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
       if (error) throw error;
       const parsed = res as Response;
       setData(parsed);
-      const ok = parsed.summary.failed === 0;
+      const ok = parsed.summary.core_passed !== false;
       await persistResult(ok, `${parsed.summary.passed}/${parsed.summary.total_tests} tests`);
       loadDetection();
     } catch (e: any) {
@@ -149,13 +151,14 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
             <span
               className="px-2 py-0.5 rounded-full font-semibold"
               style={{
-                background: data.summary.failed === 0 ? "rgba(46,220,120,0.12)" : "rgba(232,76,76,0.12)",
-                border: `1px solid ${data.summary.failed === 0 ? "#1a6b3a" : "#5A1010"}`,
-                color: data.summary.failed === 0 ? "#2EDC78" : "#E84C4C",
+                background: data.summary.core_passed !== false ? "rgba(46,220,120,0.12)" : "rgba(232,76,76,0.12)",
+                border: `1px solid ${data.summary.core_passed !== false ? "#1a6b3a" : "#5A1010"}`,
+                color: data.summary.core_passed !== false ? "#2EDC78" : "#E84C4C",
               }}
             >
-              ✅ {data.summary.passed}/{data.summary.total_tests} tests réussis
+              {data.summary.core_passed !== false ? "✅ Core Microsoft connecté" : "❌ Core Microsoft non connecté"}
             </span>
+            {!!data.summary.admin_directory_failed && <span>⚠️ {data.summary.admin_directory_failed} diagnostics annuaire limités</span>}
             <span>⏱ {data.summary.elapsed_ms}ms</span>
             <span>Testé le: {new Date(data.summary.tested_at).toLocaleString("fr-CA")}</span>
           </div>
@@ -212,7 +215,7 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
         <div className="mt-4 space-y-2">
           {rows.map(([key, r]) => {
             const open = !!expanded[key];
-            const icon = r.success ? "✅" : "❌";
+            const icon = r.success ? "✅" : r.category === "admin_directory" ? "⚠️" : "❌";
             return (
               <div
                 key={key}
@@ -251,7 +254,12 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
                     >
                       {JSON.stringify(r, null, 2)}
                     </pre>
-                    {key === "app_registration" && r.success && expectedCallback && (
+                    {r.recommendation && (
+                      <div className="mt-2 p-2 rounded text-[11px]" style={{ background: "rgba(245,166,35,0.08)", border: "1px solid #4A3000", color: "#F5A623" }}>
+                        {r.recommendation}
+                      </div>
+                    )}
+                    {key === "app_registration" && expectedCallback && (
                       <RedirectCheck result={r} expected={expectedCallback} />
                     )}
                   </div>

@@ -588,3 +588,189 @@ function Kpi({ icon, value, label, accent, pulse, onClick }: {
     </button>
   );
 }
+
+function MsCalendarSection({ profile, events, loading, error, lang }: {
+  profile: any; events: any[]; loading: boolean; error: string | null; lang: string;
+}) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const [cursor, setCursor] = useState(() => { const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; });
+  const [selected, setSelected] = useState<Date>(today);
+
+  const locale = lang === "en" ? "en-CA" : "fr-CA";
+
+  const eventsByDay = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    for (const e of events) {
+      const dt = e.start?.dateTime ? new Date(e.start.dateTime) : null;
+      if (!dt) continue;
+      const key = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
+      (map[key] ||= []).push(e);
+    }
+    for (const k of Object.keys(map)) {
+      map[k].sort((a,b) => +new Date(a.start.dateTime) - +new Date(b.start.dateTime));
+    }
+    return map;
+  }, [events]);
+
+  const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const selectedEvents = eventsByDay[dayKey(selected)] ?? [];
+
+  // Build 6-week grid starting from Sunday
+  const gridStart = new Date(cursor);
+  gridStart.setDate(1 - cursor.getDay());
+  const days: Date[] = Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(gridStart); d.setDate(gridStart.getDate() + i); return d;
+  });
+
+  const weekdays = lang === "en"
+    ? ["S","M","T","W","T","F","S"]
+    : ["D","L","M","M","J","V","S"];
+
+  const monthLabel = cursor.toLocaleDateString(locale, { month: "long", year: "numeric" });
+
+  return (
+    <section className="pp-card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold flex items-center gap-1.5 pp-heading">
+          <Calendar className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />
+          Calendrier Microsoft
+        </h2>
+        <span className="pp-eyebrow">{events.length}</span>
+      </div>
+
+      {!profile?.ms365_access_token ? (
+        <p className="text-xs text-center py-4" style={{ color: "var(--pp-text-muted)" }}>
+          Connectez Microsoft 365 dans « Plus » pour afficher votre calendrier ici.
+        </p>
+      ) : (
+        <>
+          {/* Month header */}
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => { const d=new Date(cursor); d.setMonth(d.getMonth()-1); setCursor(d); }}
+              className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-95"
+              style={{ background: "rgba(46,155,220,0.10)", color: "var(--pp-brand-accent)" }}>
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <p className="text-sm font-semibold capitalize" style={{ color: "var(--pp-text-primary)", fontFamily: "Urbanist,sans-serif" }}>
+              {monthLabel}
+            </p>
+            <button onClick={() => { const d=new Date(cursor); d.setMonth(d.getMonth()+1); setCursor(d); }}
+              className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-95"
+              style={{ background: "rgba(46,155,220,0.10)", color: "var(--pp-brand-accent)" }}>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Weekday headers */}
+          <div className="grid grid-cols-7 gap-1 mb-1">
+            {weekdays.map((w, i) => (
+              <div key={i} className="text-center text-[10px] font-semibold uppercase tracking-wider"
+                style={{ color: "var(--pp-text-muted)", fontFamily: "Urbanist,sans-serif" }}>
+                {w}
+              </div>
+            ))}
+          </div>
+
+          {/* Day grid */}
+          <div className="grid grid-cols-7 gap-1">
+            {days.map((d, i) => {
+              const inMonth = d.getMonth() === cursor.getMonth();
+              const isToday = d.getTime() === today.getTime();
+              const isSelected = d.getTime() === selected.getTime();
+              const dayEvents = eventsByDay[dayKey(d)] ?? [];
+              const hasEvents = dayEvents.length > 0;
+              return (
+                <button key={i} onClick={() => setSelected(new Date(d))}
+                  className="aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5 active:scale-95 relative"
+                  style={{
+                    background: isSelected
+                      ? "var(--pp-brand-accent)"
+                      : isToday ? "rgba(46,155,220,0.10)" : "transparent",
+                    color: isSelected
+                      ? "#fff"
+                      : inMonth ? "var(--pp-text-primary)" : "var(--pp-text-muted)",
+                    opacity: inMonth ? 1 : 0.35,
+                    border: isToday && !isSelected ? "1px solid rgba(46,155,220,0.35)" : "none",
+                  }}>
+                  <span className="text-[12px] font-semibold tabular-nums leading-none">{d.getDate()}</span>
+                  {hasEvents && (
+                    <span className="flex gap-0.5">
+                      {dayEvents.slice(0,3).map((_,j) => (
+                        <span key={j} className="w-1 h-1 rounded-full"
+                          style={{ background: isSelected ? "#fff" : "var(--pp-brand-accent)" }} />
+                      ))}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selected day agenda */}
+          <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
+            <p className="text-[11px] font-semibold uppercase tracking-wider mb-2"
+              style={{ color: "var(--pp-text-muted)", fontFamily: "Urbanist,sans-serif" }}>
+              {selected.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
+            </p>
+
+            {loading ? (
+              <div className="space-y-2"><Shimmer className="h-12" /><Shimmer className="h-12" /></div>
+            ) : selectedEvents.length === 0 ? (
+              <p className="text-xs text-center py-3" style={{ color: "var(--pp-text-muted)" }}>
+                Aucun rendez-vous ce jour-là.
+              </p>
+            ) : (
+              <ul className="space-y-1.5">
+                {selectedEvents.map((m) => {
+                  const start = m.start?.dateTime ? new Date(m.start.dateTime) : null;
+                  const end = m.end?.dateTime ? new Date(m.end.dateTime) : null;
+                  const join = m.onlineMeeting?.joinUrl ?? m.webLink;
+                  const isTeams = !!m.onlineMeeting?.joinUrl;
+                  return (
+                    <li key={m.id} className="flex items-center gap-3 py-2 px-2 rounded-lg"
+                      style={{ background: "rgba(46,155,220,0.06)", border: "1px solid rgba(46,155,220,0.15)" }}>
+                      <div className="w-14 flex-shrink-0 text-center px-1.5 py-1 rounded-md"
+                        style={{ background: "rgba(46,155,220,0.12)", color: "var(--pp-brand-accent)", fontFamily: "Urbanist,sans-serif" }}>
+                        <div className="text-[11px] font-bold tabular-nums leading-none">
+                          {start ? start.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) : "—"}
+                        </div>
+                        {end && (
+                          <div className="text-[9px] mt-0.5 opacity-70 tabular-nums leading-none">
+                            {end.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm truncate font-medium flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
+                          {isTeams && <Video className="w-3 h-3 flex-shrink-0" style={{ color: "var(--pp-brand-accent)" }} />}
+                          {m.subject ?? "Sans titre"}
+                        </p>
+                        {(m.location?.displayName || m.bodyPreview) && (
+                          <p className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }}>
+                            {m.location?.displayName || m.bodyPreview}
+                          </p>
+                        )}
+                      </div>
+                      {join && (
+                        <button onClick={() => window.open(join, "_blank", "noopener,noreferrer")}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ color: "var(--pp-brand-accent)", background: "rgba(46,155,220,0.10)" }}>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
+
+      {error && (
+        <p className="text-[11px] mt-2" style={{ color: "var(--pp-danger)" }}>{error}</p>
+      )}
+    </section>
+  );
+}
+

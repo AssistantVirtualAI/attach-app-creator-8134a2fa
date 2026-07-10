@@ -51,14 +51,30 @@ function pretty(num: string): string {
 }
 
 function extractDest(pn: any): { extension: string | null; type: string | null } {
-  // NetSapiens phone number destination fields vary between versions.
-  const destUser = pn?.["to-user"] ?? pn?.["dest-user"] ?? pn?.dest ?? pn?.destination ?? null;
-  const app = pn?.["dest-application"] ?? pn?.application ?? pn?.["destination-application"] ?? null;
+  // NetSapiens phone-number destination fields vary a LOT between versions.
+  // Accept every known variant + parse sip:ext@domain strings.
+  const app =
+    pn?.["dest-application"] ?? pn?.application ?? pn?.["destination-application"] ??
+    pn?.["dest_type"] ?? pn?.["destination-type"] ?? pn?.dest_app ?? null;
+
+  const candidates: any[] = [
+    pn?.["to-user"], pn?.["to_user"], pn?.["dest-user"], pn?.["dest_user"],
+    pn?.dest, pn?.destination, pn?.["destination-user"], pn?.["destination_user"],
+    pn?.["destination-user-name"], pn?.["destination_user_name"],
+    pn?.["to-connection"], pn?.["forward-all-destination"], pn?.["dest-extension"],
+    pn?.user, pn?.subscriber, pn?.extension, pn?.ext,
+  ];
+
   let ext: string | null = null;
-  if (destUser && typeof destUser === "string") {
-    // strip "@domain" if present
-    ext = destUser.split("@")[0] || null;
-    if (ext && !/^\d+$/.test(ext)) ext = null;
+  for (const raw of candidates) {
+    if (raw == null || raw === "") continue;
+    let s = String(raw).trim();
+    // Handle "sip:100@domain" / "100@domain" / bare "100"
+    s = s.replace(/^sip:/i, "").split("@")[0].trim();
+    if (!s) continue;
+    // Accept 3-6 digit extensions (standard NS) or short alphanumerics.
+    if (/^\d{2,7}$/.test(s)) { ext = s; break; }
+    if (/^[a-z0-9._-]{2,20}$/i.test(s) && !ext) ext = s;
   }
   return { extension: ext, type: app ? String(app) : null };
 }

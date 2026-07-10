@@ -1,52 +1,70 @@
-## Objectif
+## Problème
 
-Rendre les deux toggles admin réellement fonctionnels côté courtier :
+Sur l'app mobile Planipret, la page **Enregistrements** :
+- Fait juste l'upload audio, sans vraiment enchaîner transcript + IA de façon fiable.
+- Associe parfois la transcription et l'analyse IA au **mauvais appel** (mismatch avec l'audio joué).
+- N'utilise pas la même logique éprouvée que `/planipret/admin/recordings` (PARecordings).
 
-1. **Application mobile** : décocher = blocage immédiat de l'accès à l'app mobile ; cocher = accès restauré.
-2. **Agent vocal IA** : cocher = le bouton central AVA lance l'**agent vocal WebRTC** ; décocher = le bouton central lance le **chatbot texte**.
+### Cause racine
 
-## Constats
+Dans `src/components/planipret/mobile/recordings/RecordingsList.tsx` :
 
-- Le gate mobile existe déjà (`PlanipretMobile.tsx` ligne 593 : `profile.mobile_app_enabled === false → écran verrouillé`). Deux failles :
-  - `mobile_app_enabled` peut être `null` par défaut pour les anciens comptes → le `=== false` strict laisse passer.
-  - Après un toggle admin, le profil courtier reste en cache tant que l'utilisateur ne recharge pas. Il faut un rafraîchissement temps réel (Supabase Realtime sur `planipret_profiles`) pour couper l'accès sans attendre un reload.
-- Le bouton central AVA ouvre **toujours** `AvaChatSheet`, quel que soit `voice_agent_enabled`. Seule la couleur du FAB change. `AvaVoiceAgent` est importé mais jamais rendu depuis le FAB. Il faut brancher la logique conditionnelle.
-- Côté admin (`PAUsers.tsx` `toggleField`) le PATCH via `pp-admin-user` fonctionne, mais l'UI ne surface pas l'erreur si `data.error` est non-string, et il n'y a pas de vérification que la valeur persistée en DB correspond bien au toggle affiché.
+1. Le helper `callDbId(c)` retourne `proxy_call_db_id ?? c.id`. Il est utilisé **à la fois** pour :
+   - la résolution audio (correct — le proxy pointe vers la ligne qui a le fichier)
+   - **et** pour `pp-admin-transcribe` / `pp-coach-call` (**incorrect** — la transcription et l'IA doivent être écrites sur la ligne affichée `c.id`, pas sur le proxy). Résultat : le transcript arrive sur un autre `id`, et la carte affiche celui d'un appel voisin.
 
-## Changements
+2. La boucle `for (const call of queue)` traite les calls en série mais **ne se termine jamais proprement** en cas d'erreur intermédiaire, et ne re-tente pas de la même façon que le portail admin (backoff `transcript_pending`, retry `TRANSCRIPT_MISSING`, realtime UPDATE).
 
-### 1. Gate mobile robuste + réactif (`src/pages/planipret/PlanipretMobile.tsx`)
+3. Aucune souscription realtime `postgres_changes` sur `planipret_phone_calls` pour rafraîchir la carte quand `pp-admin-transcribe` ou `pp-coach-call` écrit dans la DB (le portail admin le fait via `pa-call-${callId}`).
 
-- Remplacer le check `profile.mobile_app_enabled === false` par `profile.mobile_app_enabled !== true` pour bloquer aussi les profils avec valeur `null`.
-- Ajouter un abonnement Supabase Realtime sur `planipret_profiles` filtré par `user_id = current user`. À chaque `UPDATE`, rappeler `loadProfile()` pour que la révocation ou l'activation par l'admin prenne effet en < 2 s sans reload.
-- Si `mobile_app_enabled` bascule à `false` pendant que l'utilisateur est dans l'app, l'écran verrouillé prend le relais automatiquement (déjà géré une fois `profile` mis à jour).
+4. Aucune garde "voicemail" (les `vmail@` sont bruités et échouent — l'admin les filtre).
 
-### 2. Bouton central AVA branché sur `voice_agent_enabled` (`src/pages/planipret/PlanipretMobile.tsx`)
+## Correctif
 
-- Ajouter un state `avaMode: "chat" | "voice"` initialisé par `profile.voice_agent_enabled`.
-- `openAva()` détermine dynamiquement le mode d'ouverture :
-  - `voice_agent_enabled === true` → monter `<AvaVoiceAgent userId=... onClose=... />`.
-  - sinon → monter `<AvaChatSheet userId=... onClose=... />`.
-- Un seul overlay actif à la fois ; la fermeture (`onClose`) remet `avaOpen=false`.
-- Le style/animation du FAB reste synchronisé (déjà en place).
+Refactorer uniquement `src/components/planipret/mobile/recordings/RecordingsList.tsx` pour reproduire fidèlement le pipeline du portail admin, en conservant l'UI mobile existante (cartes, pills, PipelineProgress, autoloader silencieux).
 
-### 3. Migration DB : défaut explicite pour `mobile_app_enabled`
+### 1. Séparer les identifiants
 
-- `ALTER TABLE planipret_profiles ALTER COLUMN mobile_app_enabled SET DEFAULT false;`
-- Backfill : `UPDATE planipret_profiles SET mobile_app_enabled = false WHERE mobile_app_enabled IS NULL;`
-- Même chose pour `voice_agent_enabled` (`DEFAULT false`, backfill des `NULL`).
-- Ainsi tout nouveau courtier est bloqué tant que l'admin ne coche pas explicitement.
+- `audioLookupId(c)` = `proxy_call_db_id ?? c.id` (pour `ns-get-recording` uniquement).
+- `pipelineId(c)` = **toujours `c.id`** pour `pp-admin-transcribe` et `pp-coach-call`, de façon à ce que la ligne mise à jour en DB soit exactement celle de la carte.
 
-### 4. Toggle admin — feedback + persistance vérifiée (`src/pages/planipret/admin/PAUsers.tsx`)
+### 2. Reprendre la séquence exacte du portail admin par appel
 
-- Dans `toggleField`, après l'appel edge `pp-admin-user action=update`, relire la ligne (`select mobile_app_enabled, voice_agent_enabled`) et resynchroniser `rows` avec la valeur réelle en DB (évite un état optimiste divergent en cas d'échec silencieux).
-- Améliorer les messages : `toast.error` prend maintenant `data.error ?? error?.message ?? "Erreur"`.
-- Rien à changer dans l'edge function `pp-admin-user` (déjà en place, écrit correctement les deux colonnes).
+Pour chaque `call` de la file (top 15 avec audio résolvable, hors voicemails) :
 
-## Validation (build mode)
+1. **Audio** — `ns-get-recording` avec `call_db_id = audioLookupId`. Si `pending/processing`, backoff comme admin (15s → 30s → 60s → 120s, max 4 min), max ~4 tentatives, puis `error` silencieux.
+2. **Transcript** — `pp-admin-transcribe` avec `call_id = pipelineId`. Gérer les 3 issues comme admin :
+   - `ok + transcript` → merge dans l'état + `onUpdated`.
+   - `pending` → replanifier avec backoff (15s·2^n).
+   - autre → marquer `error` sans toast.
+3. **IA / Coaching** — `pp-coach-call` avec `call_id = pipelineId` et `transcript` local (fallback si DB pas encore synchro, comme admin). Gérer `TRANSCRIPT_MISSING` → retry 3 s. Skip si `ai_coaching` déjà présent (cache).
 
-1. Se connecter comme admin sur `/planipret/admin/users`, décocher **Mobile app** pour un courtier → vérifier via Playwright que l'app mobile de ce courtier affiche `access.notActivated` dans les 2 secondes.
-2. Recocher → l'écran de blocage disparaît sans reload manuel.
-3. Cocher **Agent vocal IA** → sur l'app mobile du courtier, taper sur le bouton central AVA → l'overlay `AvaVoiceAgent` (WebRTC) s'ouvre au lieu du chat texte.
-4. Décocher → même bouton ouvre à nouveau `AvaChatSheet`.
-5. Console : plus de 400 « user\_id requis » puisqu'on garde les guards ajoutés au tour précédent.
+Chaque étape est indépendante : si transcript échoue, on n'appelle pas l'IA ; si audio échoue, on tente quand même transcript/IA (utile pour les vieux appels sans MP3).
+
+### 3. Realtime par carte visible
+
+Souscrire un canal `postgres_changes UPDATE` sur `planipret_phone_calls filter id=eq.${call.id}` pour chaque carte ouverte (comme `pa-call-${callId}` dans admin), afin que les colonnes `transcript`, `ai_summary`, `ai_coaching`, `lead_score`, `lead_temperature` mettent à jour la carte instantanément quand une écriture arrive de n'importe quelle source.
+
+### 4. Filtre voicemail
+
+Exclure de la file d'auto-pipeline les appels dont `to_number` matche `vmail|voicemail|vm@` (aligné avec `PARecordings`).
+
+### 5. Cache & garde-fous
+
+- `autoPipelineDoneRef` conservé, mais réinitialisé quand un appel repasse en erreur pour permettre un retry manuel via le bouton "retry audio" déjà présent.
+- Toujours écrire via `onUpdated` avec `{ ...call, ... }` en gardant le même `id`, pour ne jamais déplacer les données vers une autre carte.
+
+## Détails techniques
+
+- Fichier modifié : `src/components/planipret/mobile/recordings/RecordingsList.tsx` (uniquement — pas de changement DB, pas de nouvelle edge function, pas de changement admin).
+- Aucune modification du parent `MRecordings` / `MHome`.
+- Aucune modification de `pp-admin-transcribe`, `pp-coach-call`, `ns-get-recording` (déjà corrects côté admin).
+- La barre déjà retirée reste retirée ; l'autoloader silencieux (sans toast) est conservé.
+- L'UI (cartes, pills, `PipelineProgress`, `AudioStatusBadge`) n'est pas touchée visuellement.
+
+## Vérification
+
+Après implémentation, ouvrir `/planipret/mobile/recordings`, laisser tourner 30 s, puis vérifier via Playwright + `supabase--read_query` que pour 3 cartes :
+- `transcript` correspond bien au bon `id` (jointure `planipret_phone_calls` sur `id`, comparaison à la carte affichée),
+- `ai_summary` et `lead_score` sont cohérents avec ce transcript,
+- Aucun appel voicemail n'apparaît en boucle d'échec dans la console.

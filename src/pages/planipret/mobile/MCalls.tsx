@@ -509,9 +509,8 @@ export default function MCalls() {
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
-        {tab === "active" ? (
-          <ActiveCallsTab userId={userId} openDialer={openDialer} />
-        ) : tab === "recordings" ? (
+        {tab === "recordings" ? (
+
           <>
             <div className="px-4 pt-2 flex items-center justify-end">
               <button

@@ -166,8 +166,9 @@ export default function MCalls() {
   const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();
   const [params, setParams] = useSearchParams();
   const initialTab = (params.get("tab") as any) || "recents";
-  const [tab, setTab] = useState<"recents" | "active" | "missed" | "recordings" | "voicemails">(
-    ["recents", "active", "missed", "recordings", "voicemails"].includes(initialTab) ? initialTab : "recents"
+  const [tab, setTab] = useState<"recents" | "missed" | "recordings" | "voicemails">(
+    ["recents", "missed", "recordings", "voicemails"].includes(initialTab) ? initialTab : "recents"
+
   );
   const [calls, setCalls] = useState<Call[]>([]);
   const [recordings, setRecordings] = useState<Call[]>([]);

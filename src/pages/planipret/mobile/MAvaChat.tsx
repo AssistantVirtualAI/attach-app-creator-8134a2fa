@@ -343,6 +343,7 @@ export default function MAvaChat() {
           size="icon"
           variant={recording ? "destructive" : "outline"}
           title={recording ? "Arrêter" : "Dicter"}
+          aria-label={recording ? "Arrêter la dictée" : "Dicter à AVA"}
         >
           {transcribing ? <Loader2 className="w-4 h-4 animate-spin" /> : recording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
         </Button>
@@ -357,7 +358,7 @@ export default function MAvaChat() {
           className="flex-1 min-h-[44px] max-h-28 resize-none rounded-2xl px-3.5 py-3 text-[14px] outline-none disabled:opacity-60"
           style={{ color: "var(--pp-text-primary)", caretColor: "var(--pp-brand-accent)", background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}
         />
-        <Button onClick={send} disabled={busy || !input.trim()} size="icon">
+        <Button onClick={send} disabled={busy || !input.trim()} size="icon" aria-label="Envoyer à AVA">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </Button>
       </div>

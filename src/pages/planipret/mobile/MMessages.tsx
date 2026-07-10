@@ -51,7 +51,7 @@ const fmtTime = (iso: string, lang: "fr" | "en" = "fr", t?: (key: string) => str
 
 export default function MMessages() {
   const { t } = useMplanipretLang();
-  const { profile, openDialer, openAva, registerRefresh } = useOutletContext<PlanipretMobileContext>();
+  const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();
   const [sub, setSub] = useState<SubTab>("sms");
 
   return (

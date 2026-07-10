@@ -65,9 +65,9 @@ Deno.serve(async (req) => {
 
     if (!res.ok) {
       if (call.recording_url) {
-        return json({ url: call.recording_url, expires_at: null, source: "ns" });
+        return json({ url: call.recording_url, recording_url: call.recording_url, expires_at: null, source: "ns" });
       }
-      return json({ error: "recording_unavailable", status: res.status }, 404);
+      return json({ available: false, reason: "maestro_status_" + res.status, url: null, recording_url: null });
     }
 
     const data = res.data ?? {};

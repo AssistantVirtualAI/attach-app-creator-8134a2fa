@@ -450,101 +450,15 @@ export default function MHome() {
         )}
       </section>
 
-      {/* ===== MICROSOFT CALENDAR (14 days) ===== */}
-      <section className="pp-card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold flex items-center gap-1.5 pp-heading">
-            <Calendar className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />
-            {t("home.upcomingMeetings")}
-          </h2>
-          <span className="pp-eyebrow">{msMeetings.length}</span>
-        </div>
+      {/* ===== MICROSOFT CALENDAR (month grid + agenda) ===== */}
+      <MsCalendarSection
+        profile={profile}
+        events={msMeetings}
+        loading={msCalendarLoading}
+        error={msCalendarError}
+        lang={lang}
+      />
 
-        {!profile?.ms365_access_token ? (
-          <p className="text-xs text-center py-4" style={{ color: "var(--pp-text-muted)" }}>
-            Connectez Microsoft 365 dans « Plus » pour afficher votre calendrier ici.
-          </p>
-        ) : msCalendarLoading ? (
-          <div className="space-y-2">
-            <Shimmer className="h-14" /><Shimmer className="h-14" /><Shimmer className="h-14" />
-          </div>
-        ) : msMeetings.length === 0 ? (
-          <p className="text-xs text-center py-4" style={{ color: "var(--pp-text-muted)" }}>
-            Aucun rendez-vous à venir dans les 14 prochains jours.
-          </p>
-        ) : (
-          <ul className="space-y-3">
-            {(() => {
-              const groups: Record<string, any[]> = {};
-              for (const m of msMeetings) {
-                const d = m.start?.dateTime ? new Date(m.start.dateTime) : null;
-                const key = d ? d.toISOString().slice(0, 10) : "—";
-                (groups[key] ||= []).push(m);
-              }
-              const keys = Object.keys(groups).sort();
-              return keys.map((k) => {
-                const d = k === "—" ? null : new Date(k + "T00:00:00");
-                const label = d
-                  ? d.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long" })
-                  : "—";
-                return (
-                  <div key={k}>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider mb-1.5"
-                       style={{ color: "var(--pp-text-muted)", fontFamily: "Urbanist,sans-serif" }}>
-                      {label}
-                    </p>
-                    <ul className="space-y-1.5">
-                      {groups[k].map((m) => {
-                        const start = m.start?.dateTime ? new Date(m.start.dateTime) : null;
-                        const end = m.end?.dateTime ? new Date(m.end.dateTime) : null;
-                        const join = m.onlineMeeting?.joinUrl ?? m.webLink;
-                        const isTeams = !!m.onlineMeeting?.joinUrl;
-                        return (
-                          <li key={`ms-${m.id}`} className="flex items-center gap-3 py-2 px-2 rounded-lg"
-                              style={{ background: "rgba(46,155,220,0.06)", border: "1px solid rgba(46,155,220,0.15)" }}>
-                            <div className="w-14 flex-shrink-0 text-center px-1.5 py-1 rounded-md"
-                                 style={{ background: "rgba(46,155,220,0.12)", color: "var(--pp-brand-accent)", fontFamily: "Urbanist,sans-serif" }}>
-                              <div className="text-[11px] font-bold tabular-nums leading-none">
-                                {start ? start.toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : "—"}
-                              </div>
-                              {end && (
-                                <div className="text-[9px] mt-0.5 opacity-70 tabular-nums leading-none">
-                                  {end.toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" })}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm truncate font-medium flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
-                                {isTeams && <Video className="w-3 h-3 flex-shrink-0" style={{ color: "var(--pp-brand-accent)" }} />}
-                                {m.subject ?? "Sans titre"}
-                              </p>
-                              {(m.location?.displayName || m.bodyPreview) && (
-                                <p className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }}>
-                                  {m.location?.displayName || m.bodyPreview}
-                                </p>
-                              )}
-                            </div>
-                            {join && (
-                              <button onClick={() => window.open(join, "_blank", "noopener,noreferrer")}
-                                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                                      style={{ color: "var(--pp-brand-accent)", background: "rgba(46,155,220,0.10)" }}>
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                );
-              });
-            })()}
-          </ul>
-        )}
-        {msCalendarError && (
-          <p className="text-[11px] mt-2" style={{ color: "var(--pp-danger)" }}>{msCalendarError}</p>
-        )}
-      </section>
 
 
       {/* ===== TASKS / REMINDERS ===== */}

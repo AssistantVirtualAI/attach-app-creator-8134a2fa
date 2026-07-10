@@ -190,6 +190,22 @@ export default function MAvaChat() {
 
   const currentTitle = useMemo(() => sessions.find((s) => s.id === sessionId)?.title ?? "AVA", [sessions, sessionId]);
 
+  if (mode === "voice" && voiceAgentAllowed && userId) {
+    return (
+      <div className="relative min-h-full">
+        <AvaVoiceAgent userId={userId} onClose={() => switchMode("chat")} />
+        <button
+          onClick={() => setVoiceSettingsOpen(true)}
+          className="absolute top-4 right-16 z-[70] w-9 h-9 rounded-full bg-white/5 text-white/80 flex items-center justify-center"
+          title="Voix"
+        ><Radio className="w-4 h-4" /></button>
+        {voiceSettingsOpen && (
+          <VoiceSettingsSheet userId={userId} onClose={() => setVoiceSettingsOpen(false)} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-full">
       <div className="sticky top-0 z-10 flex items-center gap-2 p-3 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.55)", borderBottom: "1px solid var(--pp-bg-border)" }}>
@@ -215,11 +231,28 @@ export default function MAvaChat() {
         </Sheet>
         <Sparkles className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} />
         <div className="font-medium truncate flex-1" style={{ color: "var(--pp-text-primary)" }}>{currentTitle}</div>
+        {voiceAgentAllowed && (
+          <div className="flex rounded-full overflow-hidden" style={{ border: "1px solid var(--pp-bg-border-2)" }}>
+            <button
+              onClick={() => switchMode("chat")}
+              className="px-2 py-1 text-xs flex items-center gap-1"
+              style={{ background: mode === "chat" ? "var(--pp-brand-accent)" : "transparent", color: mode === "chat" ? "#03131A" : "var(--pp-text-secondary)" }}
+              title="Mode Chat"
+            ><MessageSquare className="w-3 h-3" /> Chat</button>
+            <button
+              onClick={() => switchMode("voice")}
+              className="px-2 py-1 text-xs flex items-center gap-1"
+              style={{ background: mode === "voice" ? "var(--pp-brand-accent)" : "transparent", color: mode === "voice" ? "#03131A" : "var(--pp-text-secondary)" }}
+              title="Mode Vocal"
+            ><Radio className="w-3 h-3" /> Vocal</button>
+          </div>
+        )}
         <Button size="icon" variant="ghost" onClick={toggleTts} title={speakReplies ? "Voix activée" : "Voix désactivée"}>
           {speakReplies ? <Volume2 className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} /> : <VolumeX className="w-5 h-5" />}
         </Button>
         <Button size="icon" variant="ghost" onClick={startNew}><Plus className="w-5 h-5" /></Button>
       </div>
+
 
       <div className="flex-1">
         <div ref={scrollRef} className="p-4 space-y-4 pb-6">

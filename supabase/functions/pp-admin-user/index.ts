@@ -393,6 +393,22 @@ Deno.serve(async (req) => {
       const { error } = await admin.from("planipret_profiles").update(allowed).eq("user_id", user_id);
       if (error) return jsonResponse({ success: false, error: error.message }, 200);
 
+      // Auto-provision ElevenLabs agent when Agent IA is turned on and none exists yet.
+      let provisionedAgentId: string | null = null;
+      let provisionError: string | null = null;
+      if (allowed.voice_agent_enabled === true && !allowed.elevenlabs_agent_id) {
+        const { data: existing } = await admin
+          .from("planipret_profiles")
+          .select("elevenlabs_agent_id")
+          .eq("user_id", user_id)
+          .maybeSingle();
+        if (!existing?.elevenlabs_agent_id) {
+          const res = await provisionBrokerAgent(admin, user_id);
+          provisionedAgentId = res.agent_id;
+          provisionError = res.error ?? null;
+        }
+      }
+
       // Propagate name / extension changes to NS and verify the user exists there.
       if (current) {
         const domain = current.ns_domain || NS_DEFAULT_DOMAIN;

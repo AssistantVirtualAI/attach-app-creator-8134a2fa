@@ -383,6 +383,42 @@ function RecordingCard({
   const [open, setOpen] = useState<"rec" | "txt" | "ai" | "crm" | null>(null);
   const temp = tempIcon(call.lead_temperature);
 
+  // Realtime: reflect any DB write (pp-admin-transcribe, pp-coach-call, etc.)
+  // sur la MÊME ligne que la carte, comme le portail admin (`pa-call-${id}`).
+  useEffect(() => {
+    const ch = supabase
+      .channel(`pp-mobile-call-${call.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "planipret_phone_calls", filter: `id=eq.${call.id}` },
+        (payload: any) => {
+          const n = payload?.new;
+          if (!n) return;
+          onUpdated({
+            ...call,
+            transcript: n.transcript ?? call.transcript,
+            transcript_segments: n.transcript_segments ?? call.transcript_segments,
+            transcript_language: n.transcript_language ?? call.transcript_language,
+            ai_summary: n.ai_summary ?? call.ai_summary,
+            ai_coaching: n.ai_coaching ?? call.ai_coaching,
+            ai_key_points: n.ai_key_points ?? call.ai_key_points,
+            ai_client_insights: n.ai_client_insights ?? call.ai_client_insights,
+            ai_tasks: n.ai_tasks ?? call.ai_tasks,
+            lead_score: n.lead_score ?? call.lead_score,
+            coaching_score: n.coaching_score ?? call.coaching_score,
+            lead_temperature: n.lead_temperature ?? call.lead_temperature,
+            maestro_synced: n.maestro_synced ?? call.maestro_synced,
+            maestro_client_id: n.maestro_client_id ?? call.maestro_client_id,
+          });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [call.id]);
+
+
+
 
   return (
     <li

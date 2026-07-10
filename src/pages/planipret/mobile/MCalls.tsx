@@ -529,7 +529,7 @@ export default function MCalls() {
             />
           </>
         ) : tab === "voicemails" ? (
-          <VoicemailsTab userId={userId} openDialer={openDialer} registerRefresh={registerRefresh} />
+          <VoicemailsTab userId={userId} openDialer={openDialer} registerRefresh={registerRefresh} profile={profile} reloadProfile={async () => { /* noop */ }} />
         ) : (
           <>
             {/* Pull-to-refresh proxy */}

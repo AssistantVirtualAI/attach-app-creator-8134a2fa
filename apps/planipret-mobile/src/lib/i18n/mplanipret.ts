@@ -345,6 +345,9 @@ export const MP_DICT = {
       created: "Contact créé",
       createFailed: "Échec de la création",
       loadFailed: "Échec chargement contacts",
+      extension: "Ext.",
+      presence: { available: "Disponible", busy: "Occupé", away: "Absent", offline: "Non disponible", unknown: "Non disponible" },
+      directorySection: "Répertoire interne",
     },
     more: {
       edit: "Modifier",

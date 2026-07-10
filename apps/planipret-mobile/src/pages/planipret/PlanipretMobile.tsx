@@ -317,11 +317,15 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                 <div className="flex-1 overflow-y-auto mt-3 -mx-2 px-2 pb-4">
                   {loadingContacts && contacts.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{t("dialer.searching")}</div>
-                  ) : !normalized ? (
-                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{t("dialer.typeToSearch")}</div>
                   ) : filtered.length === 0 ? (
-                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{t("dialer.noResults")}</div>
+                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{normalized ? t("dialer.noResults") : t("contacts.noDirectory")}</div>
                   ) : (
+                    <>
+                      {!normalized && (
+                        <div className="px-1 pb-2 text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--pp-text-muted)" }}>
+                          {t("contacts.directorySection") || t("contacts.directory")}
+                        </div>
+                      )}
                     <ul className="flex flex-col gap-1.5">
                       {filtered.map((c, i) => {
                         const dest = contactPrimaryPhone(c);

@@ -708,23 +708,6 @@ export default function PlanipretMobile() {
           <OnboardingTutorial profile={profile} onDone={loadProfile} />
         )}
 
-        {/* Center FAB — AVA (voice if enabled, chat otherwise) */}
-        <button onClick={openAva}
-          className="absolute left-1/2 -translate-x-1/2 z-20 rounded-full flex items-center justify-center active:scale-95 transition overflow-hidden"
-          style={{
-            background: profile?.voice_agent_enabled
-              ? "linear-gradient(135deg, #2D1A5A, #9B7FE8, #E84CC9)"
-              : "linear-gradient(135deg, #1E3A8A, #6366F1, #9B7FE8)",
-            boxShadow: profile?.voice_agent_enabled
-              ? "0 6px 28px rgba(232,76,201,0.55), 0 0 0 2px rgba(155,127,232,0.25)"
-              : "0 6px 24px rgba(99,102,241,0.5), 0 0 0 2px rgba(99,102,241,0.2)",
-            animation: profile?.voice_agent_enabled ? "pp-glow-purple 2s ease-in-out infinite" : undefined,
-            width: 62, height: 62, bottom: 74, padding: 3,
-          }}
-          aria-label={profile?.voice_agent_enabled ? t("dialer.talkToAva") : t("dialer.chatWithAva")}>
-          <AvaBadge circle />
-        </button>
-
         {/* Right FAB — Keypad (bleu) ou raccrocher (rouge) si appel actif */}
         <button onClick={activeCallId ? hangupActive : () => setDialerOpen(true)}
           className="absolute z-20 rounded-full flex items-center justify-center text-white active:scale-95 transition"

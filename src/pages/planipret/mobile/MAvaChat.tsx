@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { Send, Plus, Menu, Loader2, Sparkles, Mic, Square, Volume2, VolumeX, CheckCircle2 } from "lucide-react";
@@ -179,8 +179,8 @@ export default function MAvaChat() {
   const currentTitle = useMemo(() => sessions.find((s) => s.id === sessionId)?.title ?? "AVA", [sessions, sessionId]);
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-8rem)]">
-      <div className="flex items-center gap-2 p-3 border-b">
+    <div className="flex flex-col min-h-full">
+      <div className="sticky top-0 z-10 flex items-center gap-2 p-3 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.55)", borderBottom: "1px solid var(--pp-bg-border)" }}>
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon"><Menu className="w-5 h-5" /></Button>
@@ -201,16 +201,16 @@ export default function MAvaChat() {
             </div>
           </SheetContent>
         </Sheet>
-        <Sparkles className="w-5 h-5 text-primary" />
-        <div className="font-medium truncate flex-1">{currentTitle}</div>
+        <Sparkles className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} />
+        <div className="font-medium truncate flex-1" style={{ color: "var(--pp-text-primary)" }}>{currentTitle}</div>
         <Button size="icon" variant="ghost" onClick={toggleTts} title={speakReplies ? "Voix activée" : "Voix désactivée"}>
-          {speakReplies ? <Volume2 className="w-5 h-5 text-primary" /> : <VolumeX className="w-5 h-5" />}
+          {speakReplies ? <Volume2 className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} /> : <VolumeX className="w-5 h-5" />}
         </Button>
         <Button size="icon" variant="ghost" onClick={startNew}><Plus className="w-5 h-5" /></Button>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div ref={scrollRef} className="p-4 space-y-4">
+      <div className="flex-1">
+        <div ref={scrollRef} className="p-4 space-y-4 pb-6">
           {messages.length === 0 && (
             <div className="text-center text-sm py-10" style={{ color: "var(--pp-text-muted)" }}>
               Pose ta question à AVA. Elle a accès à tes leads, appels et courriels.
@@ -275,9 +275,9 @@ export default function MAvaChat() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
-      <div className="p-3 border-t flex gap-2" style={{ borderColor: "var(--pp-bg-border)" }}>
+      <div className="sticky bottom-0 z-10 p-3 flex gap-2 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.65)", borderTop: "1px solid var(--pp-bg-border)" }}>
         <Button
           onClick={recording ? stopRec : startRec}
           disabled={busy || transcribing || !userId}
@@ -293,6 +293,7 @@ export default function MAvaChat() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           disabled={busy || !userId || recording}
+          className="flex-1"
           style={{ color: "var(--pp-text-primary)", background: "var(--pp-bg-surface)", borderColor: "var(--pp-bg-border-2)" }}
         />
         <Button onClick={send} disabled={busy || !input.trim()} size="icon">

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import IdentityCard from "@/components/planipret/mobile/IdentityCard";
 import { useOutletContext, useNavigate } from "react-router-dom";
 
 import { supabase } from "@/integrations/supabase/client";

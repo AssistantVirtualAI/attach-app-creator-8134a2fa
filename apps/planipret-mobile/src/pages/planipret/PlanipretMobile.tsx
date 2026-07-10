@@ -332,13 +332,22 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                         const label = contactDisplayName(c);
                         return (
                           <li key={(c.id ?? "") + i} className="flex items-center gap-3 p-2.5 rounded-xl" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
-                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold" style={{ background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)", color: "white" }}>
-                              {label.slice(0, 1).toUpperCase()}
+                            <div className="relative w-9 h-9">
+                              <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold" style={{ background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)", color: "white" }}>
+                                {label.slice(0, 1).toUpperCase()}
+                              </div>
+                              {c.source === "directory" && (() => {
+                                const p = String((c as any).presence ?? "").toLowerCase();
+                                const color = ["available","online","active","ready","registered"].includes(p) ? "#22c55e"
+                                  : ["busy","dnd","oncall","on-call","in-call"].includes(p) ? "#ef4444"
+                                  : ["away","idle"].includes(p) ? "#f59e0b" : "#64748b";
+                                return <span style={{ position: "absolute", right: -1, bottom: -1, width: 11, height: 11, borderRadius: "50%", background: color, border: "2px solid var(--pp-bg-surface)" }} />;
+                              })()}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium truncate" style={{ color: "var(--pp-text-primary)" }}>{label}</div>
                               <div className="text-xs truncate" style={{ color: "var(--pp-text-muted)" }}>
-                                {c.extension ? `#${c.extension}` : dest || c.email || ""}
+                                {c.extension ? `${t("contacts.extension") || "Ext."} ${c.extension}` : dest || c.email || ""}
                                 {c.source === "directory" && ` · ${t("dialer.internal")}`}
                               </div>
                             </div>

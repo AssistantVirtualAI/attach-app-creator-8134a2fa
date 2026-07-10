@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Mic, Play, Pause, Phone, Save, Forward, Trash2, FileText, X, Voicemail as VmIcon, Inbox, Bookmark, Sparkles } from "lucide-react";
+import { Mic, Play, Pause, Phone, Save, Forward, Trash2, FileText, X, Voicemail as VmIcon, Inbox, Bookmark, Sparkles, Loader2, AudioWaveform } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";

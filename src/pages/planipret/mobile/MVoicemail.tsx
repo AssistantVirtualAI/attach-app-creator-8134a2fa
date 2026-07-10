@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Mic, Play, Pause, Phone, Save, Forward, Trash2, FileText, X, Voicemail as VmIcon, Inbox, Bookmark, Sparkles } from "lucide-react";
+import { Mic, Play, Pause, Phone, Save, Forward, Trash2, FileText, X, Voicemail as VmIcon, Inbox, Bookmark, Sparkles, Loader2, AudioWaveform } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
@@ -251,11 +251,30 @@ export default function MVoicemail() {
           {tab === "greeting" ? (
             <GreetingStudio profile={profile} onProfileChange={reloadProfile} />
           ) : loading ? (
-            <div className="space-y-2.5">
+            <div className="space-y-2.5" aria-busy="true" aria-live="polite">
+              <div className="flex items-center gap-2 px-1 pb-1">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: PRIMARY }} />
+                <span className="text-[11px] font-medium" style={{ color: "var(--pp-text-secondary)" }}>
+                  {t("voicemail.loading") || "Chargement des messages…"}
+                </span>
+              </div>
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl h-[72px] animate-pulse border border-slate-100" />
+                <div
+                  key={i}
+                  className="bg-white rounded-2xl px-3.5 py-3 flex items-center gap-3 border border-slate-100 shadow-sm overflow-hidden relative"
+                  style={{ animation: `pp-vm-pulse 1.4s ease-in-out ${i * 0.08}s infinite` }}
+                >
+                  <div className="w-11 h-11 rounded-2xl bg-slate-200/70" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 rounded-full bg-slate-200/70" style={{ width: `${55 + (i % 3) * 12}%` }} />
+                    <div className="h-2.5 rounded-full bg-slate-200/60 w-1/3" />
+                  </div>
+                  <div className="w-9 h-9 rounded-full bg-slate-200/70" />
+                </div>
               ))}
+              <style>{`@keyframes pp-vm-pulse{0%,100%{opacity:1}50%{opacity:.55}}`}</style>
             </div>
+          
           ) : filtered.length === 0 ? (
             <div className="bg-white rounded-3xl p-10 text-center shadow-sm border border-slate-100 mt-4">
               <div
@@ -397,16 +416,28 @@ function AudioPlayer({ vm }: { vm: VM }) {
   const [progress, setProgress] = useState(0);
   const [dur, setDur] = useState(vm.duration_seconds ?? 0);
   const [speed, setSpeed] = useState(1);
+  const [buffering, setBuffering] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const loadingAudio = !src;
+
+  const fetchAudio = async () => {
+    setLoadError(false);
+    const id = vm.ns_vm_id ?? vm.id;
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "audio", vm_id: id } });
+      if (error) throw error;
+      const url = (data as any)?.url ?? (data as any)?.audio_url;
+      if (url) setSrc(url); else setLoadError(true);
+    } catch {
+      setLoadError(true);
+    }
+  };
 
   useEffect(() => {
-    (async () => {
-      if (src) return;
-      const id = vm.ns_vm_id ?? vm.id;
-      const { data } = await supabase.functions.invoke("pp-ns-voicemail", { body: { action: "audio", vm_id: id } });
-      const url = (data as any)?.url ?? (data as any)?.audio_url;
-      if (url) setSrc(url);
-    })();
+    if (src) return;
+    fetchAudio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vm.id]);
 
   const toggle = () => {
@@ -421,8 +452,11 @@ function AudioPlayer({ vm }: { vm: VM }) {
   };
 
   const fmtT = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-
   const pct = dur > 0 ? Math.min(100, (progress / dur) * 100) : 0;
+
+  // Deterministic pseudo-waveform bars (32 bars, seeded by vm.id length)
+  const seed = (vm.id?.length ?? 8) + 3;
+  const bars = Array.from({ length: 32 }, (_, i) => 30 + Math.abs(Math.sin(i * 0.7 + seed)) * 70);
 
   return (
     <div
@@ -432,15 +466,72 @@ function AudioPlayer({ vm }: { vm: VM }) {
         borderColor: "var(--pp-bg-border)",
       }}
     >
-      {src ? <audio ref={audioRef} src={src} onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDur(e.currentTarget.duration)} onEnded={() => setPlaying(false)} hidden /> : null}
+      {src ? (
+        <audio
+          ref={audioRef}
+          src={src}
+          onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
+          onLoadedMetadata={(e) => setDur(e.currentTarget.duration)}
+          onWaiting={() => setBuffering(true)}
+          onPlaying={() => { setBuffering(false); setPlaying(true); }}
+          onPause={() => setPlaying(false)}
+          onEnded={() => { setPlaying(false); setProgress(0); }}
+          onError={() => setLoadError(true)}
+          hidden
+        />
+      ) : null}
+
+      {/* Waveform / skeleton */}
+      <div className="flex items-end justify-between h-10 gap-[2px] mb-2">
+        {loadingAudio
+          ? Array.from({ length: 32 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex-1 rounded-sm bg-slate-200/70"
+                style={{
+                  height: `${25 + Math.abs(Math.sin(i * 0.9)) * 60}%`,
+                  animation: `pp-vm-wave 1.2s ease-in-out ${i * 0.03}s infinite`,
+                }}
+              />
+            ))
+          : bars.map((h, i) => {
+              const filled = (i / bars.length) * 100 < pct;
+              return (
+                <div
+                  key={i}
+                  className="flex-1 rounded-sm transition-colors"
+                  style={{
+                    height: `${h}%`,
+                    background: filled ? `linear-gradient(180deg, ${ACCENT}, ${PRIMARY})` : "rgba(148,163,184,0.35)",
+                    opacity: filled ? 1 : 0.7,
+                  }}
+                />
+              );
+            })}
+        <style>{`@keyframes pp-vm-wave{0%,100%{opacity:.4}50%{opacity:.9}}`}</style>
+      </div>
+
       <div className="flex items-center gap-3">
         <button
           onClick={toggle}
           disabled={!src}
-          className="w-11 h-11 rounded-full flex items-center justify-center text-white shadow-md disabled:opacity-40 flex-shrink-0 active:scale-95 transition-transform"
+          aria-label={playing ? "Pause" : "Play"}
+          className="w-11 h-11 rounded-full flex items-center justify-center text-white shadow-md disabled:opacity-40 flex-shrink-0 active:scale-95 transition-transform relative"
           style={{ background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})` }}
         >
-          {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+          {loadingAudio || buffering ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : playing ? (
+            <Pause className="w-5 h-5" />
+          ) : (
+            <Play className="w-5 h-5 ml-0.5" />
+          )}
+          {playing && !buffering && (
+            <span
+              className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white"
+              style={{ background: "#22C55E", animation: "pp-vm-pulse 1.2s ease-in-out infinite" }}
+            />
+          )}
         </button>
         <div className="flex-1 min-w-0">
           <div className="relative h-1.5 rounded-full bg-slate-200/70 overflow-hidden">
@@ -454,27 +545,50 @@ function AudioPlayer({ vm }: { vm: VM }) {
               max={dur || 0}
               step={0.1}
               value={progress}
+              disabled={!src}
               onChange={(e) => { const v = +e.target.value; setProgress(v); if (audioRef.current) audioRef.current.currentTime = v; }}
-              className="absolute inset-0 w-full opacity-0 cursor-pointer"
+              className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+              aria-label="Position lecture"
             />
           </div>
           <div className="flex items-center justify-between mt-1.5">
-            <span className="text-[10px] text-slate-500 tabular-nums font-medium">{fmtT(progress)}</span>
+            <span className="text-[10px] tabular-nums font-medium flex items-center gap-1" style={{ color: playing ? PRIMARY : "var(--pp-text-secondary)" }}>
+              {playing && <AudioWaveform className="w-2.5 h-2.5" />}
+              {fmtT(progress)}
+            </span>
             <span className="text-[10px] text-slate-400 tabular-nums">-{fmtT(Math.max(0, (dur || 0) - progress))}</span>
           </div>
         </div>
         <button
           onClick={cycleSpeed}
-          className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold tabular-nums border transition-colors flex-shrink-0"
+          disabled={!src}
+          className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold tabular-nums border transition-colors flex-shrink-0 disabled:opacity-40"
           style={{ background: "#fff", color: PRIMARY, borderColor: `${PRIMARY}30` }}
         >
           {speed}×
         </button>
       </div>
-      {!src && (
-        <div className="flex items-center gap-2 mt-2">
-          <div className="w-3 h-3 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
-          <p className="text-[10.5px] text-slate-500">{t("voicemail.audioLoading")}</p>
+
+      {loadingAudio && !loadError && (
+        <div className="flex items-center gap-2 mt-2.5 px-1">
+          <Loader2 className="w-3 h-3 animate-spin" style={{ color: PRIMARY }} />
+          <p className="text-[10.5px] font-medium" style={{ color: "var(--pp-text-secondary)" }}>
+            {t("voicemail.audioLoading") || "Chargement de l'audio…"}
+          </p>
+        </div>
+      )}
+      {loadError && (
+        <div className="flex items-center justify-between gap-2 mt-2.5 px-1">
+          <p className="text-[10.5px] font-medium" style={{ color: "#DC2626" }}>
+            {t("voicemail.audioFailed") || "Audio indisponible"}
+          </p>
+          <button
+            onClick={fetchAudio}
+            className="text-[10.5px] font-semibold px-2 py-1 rounded-md"
+            style={{ background: "#fff", color: PRIMARY, border: `1px solid ${PRIMARY}30` }}
+          >
+            {t("common.retry") || "Réessayer"}
+          </button>
         </div>
       )}
     </div>

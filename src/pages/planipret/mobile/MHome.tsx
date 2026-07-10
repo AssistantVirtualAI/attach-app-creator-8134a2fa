@@ -19,6 +19,7 @@ import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 type Period = "day" | "week" | "month" | "shift";
+const DEFAULT_PERIOD: Period = "month";
 
 function periodRange(period: Period) {
   const now = new Date();
@@ -64,9 +65,12 @@ export default function MHome() {
   const navigate = useNavigate();
 
   const [period, setPeriod] = useState<Period>(() => {
-    try { return (localStorage.getItem("pp.mobile.period") as Period) || "day"; } catch { return "day"; }
+    try {
+      const saved = localStorage.getItem("pp.mobile.period.v2") as Period | null;
+      return saved && ["day", "week", "month", "shift"].includes(saved) ? saved : DEFAULT_PERIOD;
+    } catch { return DEFAULT_PERIOD; }
   });
-  useEffect(() => { try { localStorage.setItem("pp.mobile.period", period); } catch {} }, [period]);
+  useEffect(() => { try { localStorage.setItem("pp.mobile.period.v2", period); } catch {} }, [period]);
 
   const [stats, setStats] = useState({ calls: 0, missed: 0, sms: 0, voicemails: 0, meetings: 0, hotLeads: 0, tasks: 0, outbound: 0 });
   const [recent, setRecent] = useState<any[]>([]);
@@ -113,8 +117,13 @@ export default function MHome() {
       return filter ? query.or(filter) : query;
     };
 
-    const settle = <T,>(p: PromiseLike<T>, fallback: T): Promise<T> =>
-      Promise.resolve(p).then((v) => v as T).catch(() => fallback);
+    const settle = <T,>(p: PromiseLike<T>, fallback: T, ms = 4500): Promise<T> =>
+      new Promise((resolve) => {
+        const timer = window.setTimeout(() => resolve(fallback), ms);
+        Promise.resolve(p)
+          .then((v) => { window.clearTimeout(timer); resolve(v as T); })
+          .catch(() => { window.clearTimeout(timer); resolve(fallback); });
+      });
 
     const [nsCallsLive, nsSmsLive, nsVmLive, callsRes, missedRes, smsRes, vmRes, recentRes, hotRes, remRes, outboundRes, meetingsRes, hotCountRes, tasksCountRes] = await Promise.all([
       settle(supabase.functions.invoke("pp-ns-cdr", { body: { action: "list", limit: 100, offset: 0 } }), { data: null, error: null } as any),

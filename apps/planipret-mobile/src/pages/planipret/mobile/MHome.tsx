@@ -19,6 +19,7 @@ import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 type Period = "day" | "week" | "month" | "shift";
+const DEFAULT_PERIOD: Period = "month";
 
 function periodRange(period: Period) {
   const now = new Date();
@@ -34,6 +35,29 @@ function Shimmer({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded ${className}`} style={{ background: "#E2E8F0" }} />;
 }
 
+const pickHome = (raw: any, keys: string[]) => {
+  for (const k of keys) {
+    const v = raw?.[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+  }
+  return null;
+};
+
+const nsCallTime = (c: any) => String(pickHome(c, ["started_at", "start_time", "created_at", "timestamp", "time", "call-start-datetime", "call-start-time"]) ?? new Date().toISOString());
+const nsCallDirection = (c: any) => {
+  const raw = String(pickHome(c, ["direction", "call_direction", "call-direction", "type", "call-type"]) ?? "").toLowerCase();
+  const status = String(pickHome(c, ["status", "disposition", "result"]) ?? "").toLowerCase();
+  const unanswered = c?.answered === false || ["missed", "no-answer", "unanswered", "busy"].includes(status);
+  if (raw.includes("out") || raw === "placed") return "outbound";
+  return unanswered ? "missed" : "inbound";
+};
+const nsSmsUnread = (thread: any) => {
+  const n = pickHome(thread, ["unread", "unread_count"]);
+  if (typeof n === "number") return n;
+  const status = String(pickHome(thread, ["messagesession-last-status", "status"]) ?? "").toLowerCase();
+  return status && status !== "read" ? 1 : 0;
+};
+
 export default function MHome() {
   const { t, lang } = useMplanipretLang();
   const { profile, registerRefresh, openDialer, openAva, reloadProfile } =
@@ -41,9 +65,12 @@ export default function MHome() {
   const navigate = useNavigate();
 
   const [period, setPeriod] = useState<Period>(() => {
-    try { return (localStorage.getItem("pp.mobile.period") as Period) || "day"; } catch { return "day"; }
+    try {
+      const saved = localStorage.getItem("pp.mobile.period.v2") as Period | null;
+      return saved && ["day", "week", "month", "shift"].includes(saved) ? saved : DEFAULT_PERIOD;
+    } catch { return DEFAULT_PERIOD; }
   });
-  useEffect(() => { try { localStorage.setItem("pp.mobile.period", period); } catch {} }, [period]);
+  useEffect(() => { try { localStorage.setItem("pp.mobile.period.v2", period); } catch {} }, [period]);
 
   const [stats, setStats] = useState({ calls: 0, missed: 0, sms: 0, voicemails: 0, meetings: 0, hotLeads: 0, tasks: 0, outbound: 0 });
   const [recent, setRecent] = useState<any[]>([]);
@@ -75,53 +102,103 @@ export default function MHome() {
   const loadStats = async () => {
     if (!profile) return;
     setStatsLoading(true);
+    try {
     const { sinceIso, untilIso } = periodRange(period);
     const nowIso = new Date().toISOString();
     const weekEnd = new Date(); weekEnd.setDate(weekEnd.getDate() + 7);
+    const profileExtension = profile?.ns_extension ?? profile?.extension;
+    const scope = (includeExtension = false) => [
+      profile?.id ? `user_id.eq.${profile.id}` : null,
+      profile?.user_id ? `user_id.eq.${profile.user_id}` : null,
+      includeExtension && profileExtension ? `extension.eq.${profileExtension}` : null,
+    ].filter(Boolean).join(",");
+    const applyScope = (query: any, includeExtension = false) => {
+      const filter = scope(includeExtension);
+      return filter ? query.or(filter) : query;
+    };
 
-    const [callsRes, missedRes, smsRes, vmRes, recentRes, hotRes, remRes, outboundRes, meetingsRes, hotCountRes, tasksCountRes] = await Promise.all([
-      supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true })
-        .eq("user_id", profile.user_id).gte("started_at", sinceIso).lte("started_at", untilIso),
-      supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true })
-        .eq("user_id", profile.user_id).eq("direction", "missed").gte("started_at", sinceIso).lte("started_at", untilIso),
-      supabase.from("planipret_phone_messages").select("id", { count: "exact", head: true })
-        .eq("user_id", profile.user_id).is("read_at", null).eq("direction", "inbound"),
-      supabase.from("planipret_voicemails").select("id", { count: "exact", head: true })
-        .eq("user_id", profile.user_id).eq("is_read", false).eq("folder", "inbox"),
-      supabase.from("planipret_phone_calls")
+    const settle = <T,>(p: PromiseLike<T>, fallback: T, ms = 4500): Promise<T> =>
+      new Promise((resolve) => {
+        const timer = window.setTimeout(() => resolve(fallback), ms);
+        Promise.resolve(p)
+          .then((v) => { window.clearTimeout(timer); resolve(v as T); })
+          .catch(() => { window.clearTimeout(timer); resolve(fallback); });
+      });
+
+    const [nsCallsLive, nsSmsLive, nsVmLive, callsRes, missedRes, smsRes, vmRes, recentRes, hotRes, remRes, outboundRes, meetingsRes, hotCountRes, tasksCountRes] = await Promise.all([
+      settle(supabase.functions.invoke("pp-ns-cdr", { body: { action: "list", limit: 100, offset: 0 } }), { data: null, error: null } as any),
+      settle(supabase.functions.invoke("pp-ns-sms", { body: { action: "threads" } }), { data: null, error: null } as any),
+      settle(supabase.functions.invoke("pp-ns-voicemail", { body: { action: "list", folder: "inbox" } }), { data: null, error: null } as any),
+      settle(applyScope(supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true }), true)
+        .gte("started_at", sinceIso).lte("started_at", untilIso), { count: 0, data: null } as any),
+      settle(applyScope(supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true }), true)
+        .eq("status", "missed").gte("started_at", sinceIso).lte("started_at", untilIso), { count: 0, data: null } as any),
+      settle(applyScope(supabase.from("planipret_phone_messages").select("id", { count: "exact", head: true }))
+        .is("read_at", null).eq("direction", "inbound"), { count: 0, data: null } as any),
+      settle(applyScope(supabase.from("planipret_voicemails").select("id", { count: "exact", head: true }))
+        .eq("is_read", false).eq("folder", "inbox"), { count: 0, data: null } as any),
+      settle(applyScope(supabase.from("planipret_phone_calls")
         .select("id, direction, from_number, from_name, to_number, to_name, started_at, lead_score, lead_temperature, ai_summary")
-        .eq("user_id", profile.user_id).order("started_at", { ascending: false }).limit(5),
-      supabase.from("planipret_phone_calls")
+        .order("started_at", { ascending: false }).limit(5), true), { data: [] } as any),
+      settle(applyScope(supabase.from("planipret_phone_calls")
         .select("id, from_number, from_name, to_number, to_name, lead_score, lead_temperature, started_at, direction")
-        .eq("user_id", profile.user_id).gte("started_at", sinceIso).gte("lead_score", 7)
-        .order("lead_score", { ascending: false }).limit(5),
-      supabase.from("planipret_reminders").select("*")
-        .eq("user_id", profile.user_id).eq("status", "pending").lte("scheduled_at", nowIso)
-        .order("scheduled_at", { ascending: true }).limit(10),
-      supabase.from("planipret_phone_messages").select("id", { count: "exact", head: true })
-        .eq("user_id", profile.user_id).eq("direction", "outbound").gte("created_at", sinceIso),
-      supabase.from("appointments")
+        .gte("started_at", sinceIso).gte("lead_score", 7)
+        .order("lead_score", { ascending: false }).limit(5), true), { data: [] } as any),
+      settle(applyScope(supabase.from("planipret_reminders").select("*"))
+        .eq("status", "pending").lte("scheduled_at", nowIso)
+        .order("scheduled_at", { ascending: true }).limit(10), { data: [] } as any),
+      settle(applyScope(supabase.from("planipret_phone_messages").select("id", { count: "exact", head: true }))
+        .eq("direction", "outbound").gte("created_at", sinceIso), { count: 0, data: null } as any),
+      settle(supabase.from("appointments")
         .select("id, title, start_time, attendee_name, location_type, meeting_url")
         .eq("host_user_id", profile.user_id).gte("start_time", new Date().toISOString()).lte("start_time", weekEnd.toISOString())
-        .order("start_time", { ascending: true }).limit(5),
-      supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true })
-        .eq("user_id", profile.user_id).gte("lead_score", 7).gte("started_at", sinceIso).lte("started_at", untilIso),
-      supabase.from("planipret_reminders").select("id", { count: "exact", head: true })
-        .eq("user_id", profile.user_id).eq("status", "pending"),
+        .order("start_time", { ascending: true }).limit(5), { data: [] } as any),
+      settle(applyScope(supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true }), true)
+        .gte("lead_score", 7).gte("started_at", sinceIso).lte("started_at", untilIso), { count: 0, data: null } as any),
+      settle(applyScope(supabase.from("planipret_reminders").select("id", { count: "exact", head: true }))
+        .eq("status", "pending"), { count: 0, data: null } as any),
     ]);
+
+    const liveCalls = Array.isArray((nsCallsLive.data as any)?.items) ? (nsCallsLive.data as any).items : [];
+    const liveCallsInPeriod = liveCalls.filter((c: any) => {
+      const ts = +new Date(nsCallTime(c));
+      return Number.isFinite(ts) && ts >= +new Date(sinceIso) && ts <= +new Date(untilIso);
+    });
+    const liveRecent = liveCalls.slice(0, 5).map((c: any, i: number) => {
+      const direction = nsCallDirection(c);
+      return {
+        id: String(pickHome(c, ["id", "cdr-id", "call-parent-cdr-id", "call_id", "call-id"]) ?? `ns-${i}`),
+        direction,
+        status: direction === "missed" ? "missed" : String(pickHome(c, ["status", "disposition"]) ?? ""),
+        from_number: pickHome(c, ["from_number", "from", "caller_id_number", "caller-id-number", "orig_from_user", "ani"]),
+        from_name: pickHome(c, ["from_name", "caller_id_name", "caller-id-name", "orig_from_name"]),
+        to_number: pickHome(c, ["to_number", "to", "destination", "dialed_number", "dnis"]),
+        to_name: pickHome(c, ["to_name", "callee_name", "destination_name"]),
+        started_at: nsCallTime(c),
+        ai_summary: null,
+      };
+    });
+    const liveSmsThreads = Array.isArray((nsSmsLive.data as any)?.threads) ? (nsSmsLive.data as any).threads : [];
+    const liveVmItems = Array.isArray((nsVmLive.data as any)?.items) ? (nsVmLive.data as any).items : [];
+    const liveVmUnread = liveVmItems.filter((v: any) => !(v.is_read ?? v.read ?? false)).length;
 
     let microsoftEvents: any[] = [];
     setMsCalendarError(null);
     if (profile?.ms365_access_token) {
       setMsCalendarLoading(true);
+      try {
       const { data: msData, error: msError } = await supabase.functions.invoke("ms365-actions", {
         body: { action: "list_calendar_events", payload: { start: nowIso, end: weekEnd.toISOString(), top: 5 } },
       });
-      setMsCalendarLoading(false);
       if (msError || (msData as any)?.success === false) {
         setMsCalendarError((msData as any)?.error ?? msError?.message ?? "Calendrier Microsoft indisponible");
       } else {
         microsoftEvents = (msData as any)?.events ?? [];
+      }
+      } catch (e: any) {
+        setMsCalendarError(e?.message ?? "Calendrier Microsoft indisponible");
+      } finally {
+        setMsCalendarLoading(false);
       }
     } else {
       setMsMeetings([]);
@@ -129,20 +206,24 @@ export default function MHome() {
     setMsMeetings(microsoftEvents);
 
     setStats({
-      calls: callsRes.count ?? 0,
-      missed: missedRes.count ?? 0,
-      sms: smsRes.count ?? 0,
-      voicemails: vmRes.count ?? 0,
+      calls: liveCallsInPeriod.length || callsRes.count || 0,
+      missed: liveCallsInPeriod.length ? liveCallsInPeriod.filter((c: any) => nsCallDirection(c) === "missed").length : (missedRes.count ?? 0),
+      sms: liveSmsThreads.length ? liveSmsThreads.reduce((sum: number, th: any) => sum + nsSmsUnread(th), 0) : (smsRes.count ?? 0),
+      voicemails: liveVmItems.length ? liveVmUnread : (vmRes.count ?? 0),
       meetings: (meetingsRes.data ?? []).length + microsoftEvents.length,
       hotLeads: hotCountRes.count ?? 0,
       tasks: tasksCountRes.count ?? 0,
       outbound: outboundRes.count ?? 0,
     });
-    setRecent(recentRes.data ?? []);
+    setRecent(liveRecent.length ? liveRecent : (recentRes.data ?? []));
     setHotLeads(hotRes.data ?? []);
     setDueReminders(remRes.data ?? []);
     setMeetings(meetingsRes.data ?? []);
+    } catch (e) {
+      console.error("[MHome] loadStats failed", e);
+    } finally {
     setStatsLoading(false);
+    }
   };
 
   const loadBrief = async (force = false) => {

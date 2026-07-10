@@ -275,9 +275,9 @@ export default function MAvaChat() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
-      <div className="p-3 border-t flex gap-2" style={{ borderColor: "var(--pp-bg-border)" }}>
+      <div className="sticky bottom-0 z-10 p-3 flex gap-2 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.65)", borderTop: "1px solid var(--pp-bg-border)" }}>
         <Button
           onClick={recording ? stopRec : startRec}
           disabled={busy || transcribing || !userId}
@@ -293,6 +293,7 @@ export default function MAvaChat() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           disabled={busy || !userId || recording}
+          className="flex-1"
           style={{ color: "var(--pp-text-primary)", background: "var(--pp-bg-surface)", borderColor: "var(--pp-bg-border-2)" }}
         />
         <Button onClick={send} disabled={busy || !input.trim()} size="icon">

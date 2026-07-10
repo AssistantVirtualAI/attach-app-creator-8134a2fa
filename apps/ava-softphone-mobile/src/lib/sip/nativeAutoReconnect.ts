@@ -51,7 +51,14 @@ export async function attachNativeAutoReconnect(reconnect: () => void): Promise<
         typeChanged,
       });
       lastType = nextType;
-      if (s.connected) scheduleReconnect(3000, 'networkStatusChange');
+      // Respect the user's "auto Wi-Fi / LTE handover" preference.
+      let handoverEnabled = true;
+      try {
+        const v = localStorage.getItem('ava.autoHandover');
+        handoverEnabled = v === null ? true : (v === 'on' || v === '1' || v === 'true');
+      } catch {}
+      if (!handoverEnabled) return;
+      if (s.connected) scheduleReconnect(typeChanged ? 1200 : 3000, 'networkStatusChange');
     });
     cleanups.push(() => { sub.remove().catch(() => {}); });
   } catch {}

@@ -547,26 +547,27 @@ export function useSoftphoneJsSip(
     };
   }, [config?.extension, config?.wssUrl, config?.domain, config?.password, opts.jsSipTimeoutMs, reconnectTick, log, setSipError, setSipStatus]);
 
-  // HD audio capture constraints — noise cancellation, echo cancellation,
-  // auto gain, mono 16 kHz. Combined with Opus FEC/DTX in the SDP, this
-  // delivers usable voice even on weak cellular links.
-  const HD_AUDIO_CONSTRAINTS: MediaStreamConstraints = {
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      channelCount: 1,
-      sampleRate: 16000,
-      sampleSize: 16,
-      // Chromium-specific hints, ignored elsewhere.
-      googEchoCancellation: true,
-      googNoiseSuppression: true,
-      googAutoGainControl: true,
-      googHighpassFilter: true,
-      googTypingNoiseDetection: true,
-    } as any,
-    video: false,
-  };
+  // HD audio capture constraints — driven by the user's Settings preferences
+  // (noise cancellation on/off + mode). Built lazily on each call so toggling
+  // in Settings takes effect on the next getUserMedia().
+  const HD_AUDIO_CONSTRAINTS: MediaStreamConstraints = (() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { getAudioConstraints } = require('../lib/audioPrefs');
+      return getAudioConstraints();
+    } catch {
+      return {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 16000,
+        } as any,
+        video: false,
+      };
+    }
+  })();
 
   /** Parse SDP audio m-line + rtpmap lines into an ordered codec list. */
   const extractAudioCodecs = (sdp: string): string[] => {

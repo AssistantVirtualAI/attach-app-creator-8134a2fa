@@ -9,6 +9,9 @@ import { getAnnounceConsent, setAnnounceConsent } from '../lib/recordingConsent'
 import { useTheme } from '../lib/ThemeContext';
 import { useT } from '../lib/i18n';
 import type { Tab } from '../components/BottomTabs';
+import { setRoute as setAudioRoute, type AudioRoute } from '../lib/sip/audioOutput';
+import { audioPrefs, type NCMode } from '../lib/audioPrefs';
+import { showMobileToast as toast } from '../lib/mobileToast';
 
 const PORTAL_URL = 'https://avastatistic.ca';
 
@@ -26,9 +29,22 @@ export default function SettingsScreen({
   const [announceRec, setAnnounceRec] = useState<boolean>(() => getAnnounceConsent());
   const [claudeFallback, setClaudeFallback] = useState<boolean>(() => localStorage.getItem('ava.claudeFallback') !== 'off');
   const [lastTranscriber, setLastTranscriber] = useState<string>(() => localStorage.getItem('ava.lastTranscriber') || '—');
-  
+
   const [ringtone, setRingtone] = useState<string>(() => localStorage.getItem('ava.ringtone') || 'AVA Default');
-  const [audioOut, setAudioOut] = useState<string>(() => localStorage.getItem('ava.audioOut') || 'System default');
+  const [audioOut, setAudioOut] = useState<AudioRoute | 'default'>(() => (localStorage.getItem('ava.audioOut') as AudioRoute) || 'default');
+
+  // Audio quality / network prefs
+  const [ncEnabled, setNcEnabled] = useState<boolean>(() => audioPrefs.ncEnabled());
+  const [ncMode, setNcMode] = useState<NCMode>(() => audioPrefs.ncMode());
+  const [autoHandover, setAutoHandover] = useState<boolean>(() => audioPrefs.autoHandover());
+  const [preferWifi, setPreferWifi] = useState<boolean>(() => audioPrefs.preferWifi());
+  const [bgCalls, setBgCalls] = useState<boolean>(() => audioPrefs.backgroundCalls());
+  const [netType, setNetType] = useState<string>('unknown');
+  const [netConnected, setNetConnected] = useState<boolean>(true);
+
+  // In-app sheets (Capacitor WebView-safe replacements for prompt/confirm)
+  const [sheet, setSheet] = useState<null | 'ringtone' | 'audioOut' | 'fwd' | 'clearCache'>(null);
+  const [fwdInput, setFwdInput] = useState<string>('');
 
   useEffect(() => {
     mobileApi.me().then((next) => {
@@ -39,34 +55,75 @@ export default function SettingsScreen({
   }, []);
   useEffect(() => { checkAllPermissions().then(setPerms); }, []);
 
-  const toggleDnd = async () => { const next = !dnd; setDnd(next); try { await mobileApi.setDnd(next); } catch {} };
-  const toggleFwd = async () => {
-    const cur = forwarding;
-    const next = cur ? null : prompt(lang === 'fr' ? 'Numéro de transfert (E.164):' : 'Forwarding number (E.164):', '+1');
-    if (next === undefined) return;
-    setForwarding(next || null);
-    try { await mobileApi.setForwarding(next || null); } catch {}
+  // Live network status
+  useEffect(() => {
+    let sub: any = null; let mounted = true;
+    (async () => {
+      try {
+        const { Network } = await import('@capacitor/network');
+        const cur = await Network.getStatus();
+        if (!mounted) return;
+        setNetType(cur.connectionType || 'unknown');
+        setNetConnected(!!cur.connected);
+        sub = await Network.addListener('networkStatusChange', (s) => {
+          setNetType(s.connectionType || 'unknown');
+          setNetConnected(!!s.connected);
+        });
+      } catch {}
+    })();
+    return () => { mounted = false; sub?.remove?.().catch?.(() => {}); };
+  }, []);
+
+  const toggleDnd = async () => { const next = !dnd; setDnd(next); try { await mobileApi.setDnd(next); toast(next ? (lang==='fr'?'Ne pas déranger activé':'Do not disturb on') : (lang==='fr'?'Ne pas déranger désactivé':'Do not disturb off'), 'success'); } catch {} };
+  const openFwdSheet = () => {
+    if (forwarding) {
+      setForwarding(null);
+      mobileApi.setForwarding(null).catch(() => {});
+      toast(lang==='fr'?'Transfert désactivé':'Forwarding disabled', 'success');
+      return;
+    }
+    setFwdInput('+1');
+    setSheet('fwd');
+  };
+  const commitFwd = async () => {
+    const v = fwdInput.trim();
+    if (!v) { setSheet(null); return; }
+    setForwarding(v); setSheet(null);
+    try { await mobileApi.setForwarding(v); toast(lang==='fr'?'Transfert activé':'Forwarding enabled', 'success'); } catch {}
   };
   const toggleHaptics = () => { const next = !haptics; setHaptics(next); localStorage.setItem('ava.haptics', next ? 'on' : 'off'); };
   const toggleAutoAnswer = () => { const next = !autoAnswer; setAutoAnswer(next); localStorage.setItem('ava.autoAnswer', next ? 'on' : 'off'); };
-  
-  const pickRingtone = () => {
-    const opts = ['AVA Default', 'Classic', 'Pulse', 'Marimba', 'Silent'];
-    const choice = prompt((lang === 'fr' ? 'Sonnerie' : 'Ringtone') + ` (${opts.join(', ')}):`, ringtone);
-    if (choice && opts.includes(choice)) { setRingtone(choice); localStorage.setItem('ava.ringtone', choice); }
+
+  const pickRingtoneChoice = (choice: string) => {
+    setRingtone(choice);
+    localStorage.setItem('ava.ringtone', choice);
+    setSheet(null);
+    toast(lang==='fr'?'Sonnerie enregistrée':'Ringtone saved', 'success');
   };
-  const pickAudioOut = () => {
-    const opts = ['System default', 'Speaker', 'Earpiece', 'Bluetooth'];
-    const choice = prompt((lang === 'fr' ? 'Sortie audio' : 'Audio output') + ` (${opts.join(', ')}):`, audioOut);
-    if (choice && opts.includes(choice)) { setAudioOut(choice); localStorage.setItem('ava.audioOut', choice); }
+  const pickAudioOutChoice = async (choice: AudioRoute | 'default') => {
+    setAudioOut(choice);
+    localStorage.setItem('ava.audioOut', choice);
+    setSheet(null);
+    if (choice !== 'default') {
+      try { await setAudioRoute(choice); } catch {}
+    }
+    toast(lang==='fr'?'Sortie audio mise à jour':'Audio output updated', 'success');
   };
-  const clearCache = () => {
-    if (!confirm(lang === 'fr' ? 'Vider le cache de l\'application ?' : 'Clear app cache?')) return;
+  const doClearCache = () => {
     Object.keys(localStorage)
       .filter((k) => k.startsWith('ava.aisummary.') || k.startsWith('ava.cache.'))
       .forEach((k) => localStorage.removeItem(k));
-    alert(lang === 'fr' ? 'Cache vidé.' : 'Cache cleared.');
+    setSheet(null);
+    toast(lang === 'fr' ? 'Cache vidé' : 'Cache cleared', 'success');
   };
+  const openPortal = (path = '') => window.open(`${PORTAL_URL}${path}`, '_blank', 'noopener');
+
+  const toggleNc = () => { const n = !ncEnabled; setNcEnabled(n); audioPrefs.setNcEnabled(n); };
+  const changeNcMode = (m: NCMode) => { setNcMode(m); audioPrefs.setNcMode(m); };
+  const toggleAutoHandover = () => { const n = !autoHandover; setAutoHandover(n); audioPrefs.setAutoHandover(n); };
+  const togglePreferWifi = () => { const n = !preferWifi; setPreferWifi(n); audioPrefs.setPreferWifi(n); };
+  const toggleBgCalls = () => { const n = !bgCalls; setBgCalls(n); audioPrefs.setBackgroundCalls(n); };
+
   const openPortal = (path = '') => window.open(`${PORTAL_URL}${path}`, '_blank', 'noopener');
 
   const s = sp?.snap?.status;
@@ -128,13 +185,76 @@ export default function SettingsScreen({
           right={<Switch on={preferClickToCall} />}
           onPress={togglePreferC2C}
         />
-        <SettingsRow label={t('settings.callForwarding')} icon="↪" onPress={toggleFwd} value={forwarding || t('common.off')} right={<Switch on={!!forwarding} />} />
+        <SettingsRow label={t('settings.callForwarding')} icon="↪" onPress={openFwdSheet} value={forwarding || t('common.off')} right={<Switch on={!!forwarding} />} />
         <SettingsRow label={t('settings.voicemailGreeting')} icon="🎙" value={t('settings.defaultGreeting')} onPress={() => onNavigate?.('voicemail' as Tab)} />
         <SettingsRow label={t('settings.autoAnswer')} icon="⚡" right={<Switch on={autoAnswer} />} onPress={toggleAutoAnswer} />
-        <SettingsRow label={t('settings.ringtone')} icon="🎵" value={ringtone} onPress={pickRingtone} />
-        <SettingsRow label={t('settings.audioOutput')} icon="🔊" value={audioOut} onPress={pickAudioOut} />
+        <SettingsRow label={t('settings.ringtone')} icon="🎵" value={ringtone} onPress={() => setSheet('ringtone')} />
+        <SettingsRow label={t('settings.audioOutput')} icon="🔊" value={audioOutLabel(audioOut, lang)} onPress={() => setSheet('audioOut')} />
         <SettingsRow label={t('settings.haptics')} icon="📳" right={<Switch on={haptics} />} onPress={toggleHaptics} />
       </Card>
+
+      {/* Audio quality — noise cancellation */}
+      <SectionTitle eyebrow="AUDIO" title={t('settings.audioQuality')} />
+      <Card padded={false}>
+        <SettingsRow
+          label={t('settings.noiseCancel')} icon="🎧"
+          value={ncEnabled ? t('common.on') : t('common.off')}
+          right={<Switch on={ncEnabled} />}
+          onPress={toggleNc}
+        />
+        {ncEnabled && (
+          <div style={{ padding: '10px 14px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            {(['standard','office','phone'] as NCMode[]).map((m) => {
+              const active = ncMode === m;
+              const label = m === 'standard' ? t('settings.ncStandard') : m === 'office' ? t('settings.ncOffice') : t('settings.ncPhone');
+              const desc  = m === 'standard' ? t('settings.ncStandardDesc') : m === 'office' ? t('settings.ncOfficeDesc') : t('settings.ncPhoneDesc');
+              return (
+                <button key={m} onClick={() => changeNcMode(m)} style={{
+                  padding: '10px 8px', borderRadius: 12, textAlign: 'left', cursor: 'pointer',
+                  background: active ? 'rgba(46,155,220,0.18)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${active ? colors.avaCyan : colors.border}`,
+                  color: colors.textIce,
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>{label}</div>
+                  <div style={{ fontSize: 10, opacity: 0.7, marginTop: 3, lineHeight: 1.3 }}>{desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Network — auto Wi-Fi / LTE handover */}
+      <SectionTitle eyebrow="NET" title={t('settings.network')} />
+      <Card padded={false}>
+        <SettingsRow
+          label={t('settings.autoHandover')} icon="🔀"
+          value={autoHandover ? t('settings.autoHandoverSub') : t('common.off')}
+          right={<Switch on={autoHandover} />}
+          onPress={toggleAutoHandover}
+        />
+        <SettingsRow
+          label={t('settings.preferWifi')} icon="📶"
+          right={<Switch on={preferWifi} />}
+          onPress={togglePreferWifi}
+        />
+        <SettingsRow
+          label={t('settings.backgroundCalls')} icon="🌙"
+          right={<Switch on={bgCalls} />}
+          onPress={toggleBgCalls}
+        />
+        <SettingsRow
+          label={t('settings.currentNetwork')} icon={netConnected ? '🟢' : '🔴'}
+          value={
+            !netConnected ? t('settings.netOffline') :
+            netType === 'wifi' ? t('settings.netWifi') :
+            netType === 'cellular' ? t('settings.netCellular') :
+            netType
+          }
+        />
+      </Card>
+
+
 
       {/* Account */}
       <SectionTitle eyebrow={t('settings.account')} title={t('settings.extDevices')} />
@@ -206,7 +326,7 @@ export default function SettingsScreen({
           value={announceRec ? (lang === 'fr' ? 'Activé (recommandé)' : 'On (recommended)') : (lang === 'fr' ? 'Désactivé' : 'Off')}
           onPress={() => { const next = !announceRec; setAnnounceRec(next); setAnnounceConsent(next); }}
         />
-        <SettingsRow label={t('settings.clearCache')} icon="🧹" onPress={clearCache} />
+        <SettingsRow label={t('settings.clearCache')} icon="🧹" onPress={() => setSheet('clearCache')} />
         <SettingsRow label={t('settings.deleteAccount')} icon="⚠" onPress={() => openPortal('/account/delete')} />
       </Card>
 
@@ -256,9 +376,111 @@ export default function SettingsScreen({
         AVA Softphone · Powered by AVA AI
       </div>
       <div style={{ height: 80 }} />
+
+      {/* Bottom sheets — WebView-safe replacements for prompt/confirm */}
+      {sheet === 'ringtone' && (
+        <Sheet title={lang==='fr'?'Sonnerie':'Ringtone'} onClose={() => setSheet(null)}>
+          {['AVA Default','Classic','Pulse','Marimba','Silent'].map((r) => (
+            <SheetItem key={r} active={ringtone===r} onPress={() => pickRingtoneChoice(r)} label={r} />
+          ))}
+        </Sheet>
+      )}
+      {sheet === 'audioOut' && (
+        <Sheet title={lang==='fr'?'Sortie audio':'Audio output'} onClose={() => setSheet(null)}>
+          {([
+            ['default', lang==='fr'?'Par défaut système':'System default'],
+            ['earpiece', lang==='fr'?'Écouteur':'Earpiece'],
+            ['speaker', lang==='fr'?'Haut-parleur':'Speaker'],
+            ['bluetooth', 'Bluetooth'],
+          ] as [AudioRoute|'default', string][]).map(([k,l]) => (
+            <SheetItem key={k} active={audioOut===k} onPress={() => pickAudioOutChoice(k)} label={l} />
+          ))}
+        </Sheet>
+      )}
+      {sheet === 'fwd' && (
+        <Sheet title={lang==='fr'?'Numéro de transfert':'Forwarding number'} onClose={() => setSheet(null)}>
+          <input
+            type="tel" autoFocus value={fwdInput}
+            onChange={(e) => setFwdInput(e.target.value)}
+            placeholder="+15145550123"
+            style={{
+              width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 10,
+              background: 'rgba(255,255,255,0.06)', border: `1px solid ${colors.border}`,
+              color: colors.textIce, fontSize: 16, marginBottom: 12,
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setSheet(null)} style={sheetBtnStyle(false)}>{t('common.cancel')}</button>
+            <button onClick={commitFwd} style={sheetBtnStyle(true)}>{t('common.save')}</button>
+          </div>
+        </Sheet>
+      )}
+      {sheet === 'clearCache' && (
+        <Sheet title={lang==='fr'?"Vider le cache ?":'Clear app cache?'} onClose={() => setSheet(null)}>
+          <p style={{ fontSize: 13, color: colors.mutedSilver, margin: '0 0 14px' }}>
+            {lang==='fr'?"Les résumés IA et caches locaux seront supprimés.":'AI summaries and local caches will be removed.'}
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setSheet(null)} style={sheetBtnStyle(false)}>{t('common.cancel')}</button>
+            <button onClick={doClearCache} style={sheetBtnStyle(true)}>{t('common.clear')}</button>
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }
+
+function audioOutLabel(v: AudioRoute | 'default', lang: 'en'|'fr') {
+  if (v === 'speaker') return lang==='fr'?'Haut-parleur':'Speaker';
+  if (v === 'earpiece') return lang==='fr'?'Écouteur':'Earpiece';
+  if (v === 'bluetooth') return 'Bluetooth';
+  return lang==='fr'?'Par défaut':'System default';
+}
+
+function sheetBtnStyle(primary: boolean): React.CSSProperties {
+  return {
+    flex: 1, height: 44, borderRadius: 10, cursor: 'pointer',
+    background: primary ? gradients.call : 'rgba(255,255,255,0.06)',
+    color: primary ? '#fff' : colors.textIce,
+    border: `1px solid ${primary ? colors.signalGold : colors.border}`,
+    fontWeight: 700, fontSize: 14,
+  };
+}
+
+function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999,
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: '100%', maxWidth: 480, background: colors.graphite,
+        borderTopLeftRadius: 20, borderTopRightRadius: 20,
+        padding: '16px 16px 28px', borderTop: `1px solid ${colors.border}`,
+      }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: colors.border, margin: '0 auto 14px' }} />
+        <div style={{ fontSize: 15, fontWeight: 800, color: colors.textIce, marginBottom: 10 }}>{title}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SheetItem({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <button onClick={onPress} style={{
+      width: '100%', textAlign: 'left', padding: '14px 12px', borderRadius: 10,
+      background: active ? 'rgba(46,155,220,0.18)' : 'transparent',
+      border: `1px solid ${active ? colors.avaCyan : 'transparent'}`,
+      color: colors.textIce, fontSize: 14, marginBottom: 6, cursor: 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    }}>
+      <span>{label}</span>
+      {active && <span style={{ color: colors.avaCyan }}>✓</span>}
+    </button>
+  );
+}
+
 
 function Switch({ on }: { on: boolean }) {
   return (

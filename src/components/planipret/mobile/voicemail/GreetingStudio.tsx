@@ -36,12 +36,12 @@ const TEMPLATES: { key: string; label: string; lang: "fr" | "en"; body: (n: stri
 ];
 
 const TOKENS = {
-  bg: "#060D1A",
-  card: "#0A1628",
-  border: "#0E2A45",
-  borderActive: "#2E9BDC",
-  text: "#E8EDF5",
-  muted: "#4A7FA5",
+  bg: "var(--pp-bg-base)",
+  card: "var(--pp-bg-elevated)",
+  border: "var(--pp-bg-border-2)",
+  borderActive: "var(--pp-brand-accent)",
+  text: "var(--pp-text-primary)",
+  muted: "var(--pp-text-muted)",
 };
 
 export default function GreetingStudio({ profile, onProfileChange }: { profile: Profile; onProfileChange?: () => void }) {

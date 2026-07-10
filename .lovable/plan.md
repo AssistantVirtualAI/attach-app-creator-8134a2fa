@@ -1,80 +1,111 @@
-# Fix Lemtel mobile Settings — full interactivity + noise cancellation + auto network switching
 
-Scope is limited to `apps/ava-softphone-mobile/` (Lemtel mobile app). No other apps or backends are touched.
+# Plan — Sync appels brokers + build iPhone Planiprêt
 
-## Problem
-On the Settings screen:
-- Several rows do nothing or open browser `prompt()`/`confirm()` dialogs, which don't work in the Capacitor WebView on iOS/Android → they look broken and can't change anything.
-- Ringtone, audio output, forwarding, cache-clear are behind these broken prompts.
-- Toggles fire but don't show an "on" active state everywhere.
-- No control over noise cancellation.
-- No user control over Wi-Fi ↔ LTE handover (there is auto-reconnect code but no UI, no signal-based switching, no way to disable it).
+## Partie 1 — Synchronisation centralisée transcription + analyse IA
 
-## What will change
+### Objectif
+Chaque appel (broker mobile ou admin) est **transcrit + analysé une seule fois** côté serveur, puis diffusé en temps réel à tous les clients (mobile broker + portail admin). Zéro double consommation de tokens Claude / STT.
 
-### 1. Replace all browser prompts with native-friendly bottom sheets
-File: `src/screens/SettingsScreen.tsx`
-- New reusable `<PickerSheet>` and `<InputSheet>` components (small, in-file).
-- Replace `prompt()`/`confirm()` for: **ringtone**, **audio output**, **forwarding number**, **clear cache**, **about**.
-- Every row becomes tappable with a visible right-side chevron/switch and current value.
+### Verrou anti-double-traitement
+Utiliser les colonnes déjà présentes sur `planipret_phone_calls` :
+- `analysis_in_progress` (bool), `analysis_locked_at`, `analysis_locked_by`
+- `analyzed_at`, `transcript`, `raw_transcript`, `ai_summary`, `ai_coaching`, `ai_analysis_json`
 
-### 2. Wire settings to the real subsystems (currently unwired)
-- **Ringtone** → save to `ava.ringtone`, and call the existing `ringPreferences` API used by `incomingRingtone.ts` so it actually plays on next incoming call.
-- **Audio output** → call `audioOutput.setRoute('speaker'|'earpiece'|'bluetooth')` from `src/lib/sip/audioOutput.ts` (already implemented, just not called here).
-- **Haptics**, **Auto-answer**, **Announce recording**, **Claude fallback** → already persist; add correct `Switch on={value}` binding and toast confirmation.
-- **Notifications** row → open native app settings (already correct) + show current permission chip.
+Règle : toute demande d'analyse passe par `pp-coach-call` qui exécute une **CAS lock** SQL :
+```
+UPDATE planipret_phone_calls
+SET analysis_in_progress = true,
+    analysis_locked_at = now(),
+    analysis_locked_by = <caller>
+WHERE id = :id
+  AND analyzed_at IS NULL
+  AND (analysis_in_progress = false OR analysis_locked_at < now() - interval '5 min')
+RETURNING id;
+```
+Si aucune ligne retournée → un autre process s'en occupe → renvoyer `{ locked: true }` sans appeler Claude/STT.
 
-### 3. New "Audio Quality" section — noise cancellation
-New file: `src/lib/audioPrefs.ts`
-- Keys: `ava.nc_enabled` (default `on`), `ava.nc_mode` (`standard | office | phone`).
-- Export `getAudioConstraints()` returning `MediaStreamConstraints` (mirrors the pattern already used in `src/lib/planipret/audio/audioConstraints.ts` but scoped to Lemtel mobile).
+### Auto-traitement côté admin (source unique)
+Nouveau trigger + edge function :
+1. Trigger DB `AFTER INSERT OR UPDATE OF recording_url ON planipret_phone_calls` → appelle (via `pg_net`) l'edge function `pp-auto-process-call` avec `call_id`.
+2. `pp-auto-process-call` (nouvelle) :
+   - pose le lock (voir ci-dessus)
+   - si pas de `raw_transcript` → appelle `pp-ns-recordings` / STT et stocke dans `raw_transcript` + `transcript`
+   - appelle Claude via logique de `pp-coach-call` pour produire `ai_summary`, `ai_coaching`, `ai_analysis_json`, `coaching_score`, `lead_score`
+   - `analyzed_at = now()`, `analysis_in_progress = false`
+   - broadcast `analysis_complete` sur channel `call-analysis` (déjà consommé par `useCallAnalysis`)
+3. Le bouton "Analyser" admin et l'appel mobile deviennent des **no-op si `analyzed_at` déjà présent** — ils se contentent de recharger la ligne.
 
-File: `src/hooks/useSoftphone.ts`
-- Replace the hard-coded `HD_AUDIO_CONSTRAINTS` with `getAudioConstraints()` so the toggle/mode actually change what's captured on the next call.
-- When NC is off → `echoCancellation/noiseSuppression/autoGainControl` set to `false`.
-- Modes: `standard` = 16 kHz + NS on, `office` = 16 kHz + extra Chromium hints (typing/highpass), `phone` = 8 kHz for weak cellular.
+### Diffusion aux brokers (chacun ses appels)
+- Le broker mobile utilise déjà `useCallAnalysis` avec `postgres_changes` sur `planipret_phone_calls filter id=eq.<id>`. On garde ça — RLS `planipret_phone_calls` scope déjà par `broker_id`/`organization_id`, donc chaque broker ne voit que ses propres appels.
+- Vérifier / ajouter la policy REALTIME (`supabase_realtime` publication) pour `planipret_phone_calls` si absente.
+- Sur la liste (`MCalls.tsx` / `RecordingsList.tsx`) : ajouter subscription realtime sur `broker_id=eq.<uid>` pour rafraîchir badges "transcrit / analysé" en direct.
 
-UI in Settings (new section):
-- Toggle **Noise cancellation** (default on).
-- 3-button segmented mode selector (Standard / Bureau / Téléphone) — hidden when NC is off.
+### UI
+- `PARecordings.tsx` (admin) : afficher **toujours** `raw_transcript` (déjà fait tour précédent) + badge "Analysé automatiquement le …".
+- `MCalls.tsx` (mobile) : afficher `raw_transcript` + `ai_summary` en lecture seule (pas de bouton "Analyser" côté broker — juste "Voir analyse").
+- Toast "Analyse en cours…" quand `analysis_in_progress = true`.
 
-### 4. New "Réseau" section — auto Wi-Fi/LTE handover
-Uses existing `@capacitor/network` (already installed, used by `nativeAutoReconnect.ts`).
+### Backfill
+Edge function `pp-admin-backfill-calls` (existe) : ajouter un mode qui itère les appels `analyzed_at IS NULL AND recording_url IS NOT NULL` et enfile `pp-auto-process-call` (batché, 5/min).
 
-New keys in `audioPrefs.ts`:
-- `ava.autoHandover` (default `on`) — controls automatic re-registration on network change.
-- `ava.preferWifi` (default `on`) — when both are up, prefer Wi-Fi.
-- `ava.backgroundCalls` (default `on`).
+---
 
-File: `src/lib/sip/nativeAutoReconnect.ts`
-- Gate the debounced `scheduleReconnect(..., 'networkStatusChange')` on `ava.autoHandover`.
-- On `networkStatusChange`, if new type differs from previous (Wi-Fi ↔ cellular) → trigger reconnect (this is the "auto-detect best signal" behaviour on mobile; iOS doesn't let apps pick the radio, so we react to every handover which effectively re-registers on whichever link currently has connectivity).
-- Log previous vs next type to the SIP log so diagnostics show the switch.
+## Partie 2 — App iPhone `apps/planipret-mobile` alignée + push GitHub
 
-UI in Settings (new section):
-- Toggle **Basculement automatique Wi-Fi / LTE**.
-- Toggle **Préférer Wi-Fi quand disponible**.
-- Toggle **Appels en arrière-plan**.
-- Live status row: current network (Wi-Fi / Cellular / Offline) + connection quality dot, refreshed via `Network.addListener('networkStatusChange')`.
+### Constat
+Le code utilisé pour l'app native vit dans `apps/planipret-mobile/src/pages/planipret/mobile/**`. La logique canonique vit dans `src/pages/planipret/mobile/**` (portail admin). Un script `apps/planipret-mobile/scripts/audit-native.mjs` vérifie la parité fichier-par-fichier.
 
-### 5. i18n
-File: `src/lib/i18n.tsx`
-- Add keys (fr + en) for: `settings.audioQuality`, `settings.noiseCancel`, `settings.ncStandard/Office/Phone`, `settings.network`, `settings.autoHandover`, `settings.preferWifi`, `settings.backgroundCalls`, `settings.currentNetwork`.
-
-## Out of scope
-- No changes to the Planipret mobile app (isolation-locked memory).
-- No changes to desktop, web portal, edge functions, or DB.
-- No native plugin changes — everything ships in the JS bundle and takes effect on the next `npx cap sync` the user does anyway.
-
-## Files touched
-```text
-apps/ava-softphone-mobile/src/screens/SettingsScreen.tsx   (rewrite interactions, add 2 sections)
-apps/ava-softphone-mobile/src/lib/audioPrefs.ts            (new)
-apps/ava-softphone-mobile/src/hooks/useSoftphone.ts        (use getAudioConstraints)
-apps/ava-softphone-mobile/src/lib/sip/nativeAutoReconnect.ts (respect autoHandover pref, log switch)
-apps/ava-softphone-mobile/src/lib/i18n.tsx                 (new keys)
+Fichiers actuellement présents (identiques attendus) :
+```
+MAvaChat, MAvaNotifications, MCalls, MContacts, MExtensionSync,
+MHome, MMessages, MMore, MPipeline, MSearch, MStats, MVoicemail
 ```
 
-## Verification
-- `tsgo` clean.
-- Manually: open `/` in mobile preview → Settings → every row now opens a sheet or toggles visibly; NC + Network sections render; toggling NC mode is persisted across reload.
+### Étapes
+1. **Re-synchroniser la parité** : copier depuis `src/pages/planipret/mobile/**`, `src/components/planipret/mobile/**`, `src/hooks/*` (liste dans `audit-native.mjs`) vers `apps/planipret-mobile/**` et pour toutes les modifs de Partie 1 (ex. `MCalls.tsx`, `useCallAnalysis.ts`).
+2. **Faire tourner l'audit** : `cd apps/planipret-mobile && npm run audit:native` — doit passer avant tout build. Corriger les mismatches détectés.
+3. **Vérifier `capacitor.config.ts`** : `appId: com.planipret.mobile`, `webDir: dist`, pas de `server.url` de dev pour build TestFlight.
+4. **Build web + sync** :
+   ```
+   cd apps/planipret-mobile
+   npm install
+   npm run build
+   npx cap sync ios
+   ```
+5. **Xcode readiness** : vérifier `ios/App/App/Info.plist` (permissions micro, réseau, background audio/VoIP), `Podfile.lock` à jour (`pod install`).
+6. **Push GitHub** : l'utilisateur fait le push via le bouton GitHub Lovable (Git est géré par la plateforme — je ne peux pas faire `git push`). Une fois poussé, sur son Mac :
+   ```
+   git pull
+   cd apps/planipret-mobile
+   npm install && npm run build
+   npx cap sync ios
+   cd ios/App && pod install
+   npx cap open ios
+   ```
+   Puis dans Xcode : signer avec son Team, choisir son iPhone, Run.
+
+### Points de vigilance TestFlight
+- Bundle ID `com.planipret.mobile` doit exister dans Apple Developer (App ID + capabilities Push / VoIP / Background Modes).
+- Certificats APNs Planiprêt (secrets `PLANIPRET_APNS_*`) — déjà documentés dans `docs/native-setup.md`.
+- Pas d'URL `server.url` dev active dans `capacitor.config.ts` au moment de l'archive.
+
+---
+
+## Détails techniques (résumé)
+
+| Zone | Fichier | Action |
+|---|---|---|
+| DB | migration | Trigger `AFTER INSERT/UPDATE recording_url` → pg_net → `pp-auto-process-call` |
+| Edge | `supabase/functions/pp-auto-process-call/index.ts` | Nouvelle — lock atomique + STT + Claude + broadcast |
+| Edge | `pp-coach-call/index.ts` | Refactor pour partager la logique de lock (idempotent) |
+| Edge | `pp-admin-backfill-calls` | Mode `mode=auto_process` qui enfile les appels non traités |
+| UI admin | `src/pages/planipret/admin/PARecordings.tsx` | Retirer bouton "Analyser" manuel superflu, garder "Ré-analyser (force)" pour super_admin |
+| UI mobile | `src/pages/planipret/mobile/MCalls.tsx` + copie `apps/planipret-mobile/…/MCalls.tsx` | Lecture seule transcript + analyse, realtime |
+| Hook | `src/hooks/useCallAnalysis.ts` + copie mobile | `analyze()` devient no-op si `analyzed_at`, gère état `queued` |
+| Realtime | Supabase | S'assurer que `planipret_phone_calls` est dans la publication realtime |
+| Native | `apps/planipret-mobile/*` | Parité + `audit:native` + `cap sync ios` |
+
+## Livrables
+1. Traitement unique server-side + diffusion realtime (mobile + admin).
+2. Portail admin = seule source d'analyse ; brokers voient leurs propres transcripts/analyses en push.
+3. `apps/planipret-mobile` prêt à builder sur iPhone via Xcode après `git pull`.

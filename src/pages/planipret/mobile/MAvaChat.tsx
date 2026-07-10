@@ -267,7 +267,7 @@ export default function MAvaChat() {
 
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div ref={scrollRef} className="h-full overflow-y-auto p-4 space-y-4 pb-6">
+        <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-4 pb-6 space-y-4 max-w-3xl w-full mx-auto">
           {messages.length === 0 && (
             <div className="text-center text-sm py-10" style={{ color: "var(--pp-text-muted)" }}>
               Pose ta question à AVA. Elle a accès à tes leads, appels et courriels.
@@ -336,7 +336,8 @@ export default function MAvaChat() {
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 p-3 flex items-end gap-2 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.82)", borderTop: "1px solid var(--pp-bg-border)" }}>
+      <div className="sticky bottom-0 z-10 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.82)", borderTop: "1px solid var(--pp-bg-border)" }}>
+       <div className="p-3 flex items-end gap-2 max-w-3xl w-full mx-auto">
         <Button
           onClick={recording ? stopRec : startRec}
           disabled={busy || transcribing || !userId}
@@ -361,6 +362,7 @@ export default function MAvaChat() {
         <Button onClick={send} disabled={busy || !input.trim()} size="icon" aria-label="Envoyer à AVA">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </Button>
+      </div>
       </div>
     </div>
   );

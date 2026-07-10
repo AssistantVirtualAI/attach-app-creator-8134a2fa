@@ -761,10 +761,10 @@ export default function PlanipretMobile() {
 
 
         {/* Powered by AVA footer */}
-        <div className="absolute bottom-0 inset-x-0 h-[24px] flex items-center justify-center gap-2 z-10 pp-mobile-footer">
+        <div className="absolute bottom-0 inset-x-0 h-[34px] flex items-center justify-center gap-2 z-10 pp-mobile-footer">
           <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 9, color: "var(--pp-text-muted)", letterSpacing: "0.14em", fontWeight: 600 }}>{t("footer.poweredBy")}</span>
-          <AvaBadge compact />
-          <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 9, color: "var(--pp-brand-accent-2)", letterSpacing: "0.10em", fontWeight: 700 }}>AVA</span>
+          <div style={{ width: 26, height: 26, background: "#7C3AED", borderRadius: 8, color: "white", fontWeight: 900, fontSize: 12, display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 10px rgba(124,58,237,0.5)", lineHeight: 1 }}>AVA</div>
+          <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 13, color: "var(--pp-brand-accent-2)", letterSpacing: "0.14em", fontWeight: 800 }}>AVA</span>
           <span style={{ fontSize: 8.5, color: "var(--pp-text-faint)", letterSpacing: "0.1em" }}>· {t("footer.developedBy")}</span>
         </div>
 

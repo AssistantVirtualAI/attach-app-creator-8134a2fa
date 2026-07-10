@@ -361,13 +361,8 @@ export default function PAUsers() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
   const toggleField = async (u: Profile, field: "mobile_app_enabled" | "voice_agent_enabled") => {
-    setSavingId(u.user_id);
     const next = !u[field];
-    if (!u.ns_only && !u.user_id) {
-      setSavingId(null);
-      toast.error("Ce courtier n'a pas encore de compte Planiprêt — activez-le via « Provisionner ».");
-      return;
-    }
+    setSavingId(u.user_id ?? `ext:${u.extension ?? u.ns_extension ?? ""}`);
 
     // ns_only broker → no Planiprêt profile yet. Provision one on the fly so
     // the toggle actually takes effect.
@@ -393,6 +388,11 @@ export default function PAUsers() {
       return;
     }
 
+    if (!u.user_id) {
+      setSavingId(null);
+      toast.error("Ce courtier n'a pas encore de compte Planiprêt — activez-le via « Provisionner ».");
+      return;
+    }
     setRows((p) => p.map((r) => r.user_id === u.user_id ? { ...r, [field]: next } : r));
     const { data, error } = await supabase.functions.invoke("pp-admin-user", {
       body: { action: "update", payload: { user_id: u.user_id, updates: { [field]: next } } },
@@ -653,8 +653,8 @@ export default function PAUsers() {
                       );
                     })()}
                   </td>
-                  <td className="p-3"><Toggle on={u.mobile_app_enabled} loading={savingId === u.user_id} onChange={() => toggleField(u, "mobile_app_enabled")} /></td>
-                  <td className="p-3"><Toggle on={u.voice_agent_enabled} loading={savingId === u.user_id} onChange={() => toggleField(u, "voice_agent_enabled")} /></td>
+                  <td className="p-3"><Toggle on={!!u.mobile_app_enabled} loading={!!(u.user_id && savingId === u.user_id)} onChange={() => toggleField(u, "mobile_app_enabled")} /></td>
+                  <td className="p-3"><Toggle on={!!u.voice_agent_enabled} loading={!!(u.user_id && savingId === u.user_id)} onChange={() => toggleField(u, "voice_agent_enabled")} /></td>
                   <td className="p-3">
                     {u.dnd_enabled ? (
                       <button

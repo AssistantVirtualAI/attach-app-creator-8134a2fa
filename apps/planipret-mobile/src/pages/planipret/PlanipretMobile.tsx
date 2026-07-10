@@ -193,6 +193,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
   }, [open, mode, contacts.length, loadingContacts]);
 
   const normalized = query.trim().toLowerCase();
+  const directoryOnly = contacts.filter((c) => c.source === "directory");
   const filtered = normalized
     ? contacts.filter((c) => {
         const hay = [
@@ -207,7 +208,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
         ].filter(Boolean).join(" ").toLowerCase();
         return hay.includes(normalized);
       }).slice(0, 30)
-    : [];
+    : directoryOnly.slice(0, 50);
 
   return (
     <AnimatePresence>

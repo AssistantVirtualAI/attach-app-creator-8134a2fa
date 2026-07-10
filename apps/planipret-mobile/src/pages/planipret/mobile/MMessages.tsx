@@ -164,14 +164,23 @@ const threadPeer = (t: any) => {
 };
 const threadTime = (t: any) =>
   t.last_message_at ?? t.updated_at ?? t.timestamp ?? t["messagesession-last-datetime"] ?? t["messagesession-start-datetime"] ?? new Date().toISOString();
-const msgId = (m: NsMessage, i: number) => m.id ?? m.message_id ?? `${m.timestamp ?? m.created_at ?? i}-${i}`;
-const msgBody = (m: NsMessage) => m.body ?? m.message ?? m.text ?? "";
-const msgTime = (m: NsMessage) => m.timestamp ?? m.created_at ?? m.sent_at ?? new Date().toISOString();
-const msgIsOut = (m: NsMessage, myExt: string) => {
+const msgId = (m: any, i: number) => m.id ?? m.message_id ?? m["message-id"] ?? `${m.timestamp ?? m.created_at ?? i}-${i}`;
+const msgBody = (m: any) => m.body ?? m.message ?? m.text ?? m["message-text"] ?? "";
+const msgTime = (m: any) => {
+  const raw = m.timestamp ?? m.created_at ?? m.sent_at ?? m["message-datetime"];
+  if (!raw) return new Date().toISOString();
+  // NS-API returns "YYYY-MM-DD HH:MM:SS" (UTC) — normalize to ISO
+  if (typeof raw === "string" && !raw.includes("T")) return raw.replace(" ", "T") + "Z";
+  return raw;
+};
+const msgIsOut = (m: any, myExt: string) => {
   const dir = (m.direction ?? "").toLowerCase();
-  if (dir === "outbound" || dir === "out" || dir === "sent") return true;
-  if (dir === "inbound" || dir === "in" || dir === "received") return false;
-  return (m.from ?? m.source ?? "") === myExt;
+  // NS-API: "orig" = originating (outbound from user), "term" = terminating (inbound to user)
+  if (dir === "outbound" || dir === "out" || dir === "sent" || dir === "orig") return true;
+  if (dir === "inbound" || dir === "in" || dir === "received" || dir === "term") return false;
+  const from = m.from ?? m.source ?? m["from-user-id"] ?? m["from-number"] ?? "";
+  const fromStr = String(from);
+  return fromStr === myExt || fromStr.startsWith(`${myExt}@`);
 };
 
 function SmsList({ profile, openDialer, registerRefresh }: any) {

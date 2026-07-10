@@ -108,7 +108,7 @@ export default function MMessages() {
         {sub === "sms" && <SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} />}
         {sub === "team" && <TeamChat profile={profile} />}
         {sub === "teams365" && <Teams365Panel profile={profile} />}
-        {sub === "roster" && <TeamRoster profile={profile} openDialer={openDialer} onSwitchTab={setSub} />}
+        
         {sub === "ava" && <AvaChat profile={profile} openAva={openAva} openDialer={openDialer} />}
         {sub === "emails" && <EmailsList profile={profile} openAva={openAva} />}
       </div>

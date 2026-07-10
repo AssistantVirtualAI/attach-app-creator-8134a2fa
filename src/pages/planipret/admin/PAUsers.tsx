@@ -388,6 +388,11 @@ export default function PAUsers() {
       return;
     }
 
+    if (!u.user_id) {
+      setSavingId(null);
+      toast.error("Ce courtier n'a pas encore de compte Planiprêt — activez-le via « Provisionner ».");
+      return;
+    }
     setRows((p) => p.map((r) => r.user_id === u.user_id ? { ...r, [field]: next } : r));
     const { data, error } = await supabase.functions.invoke("pp-admin-user", {
       body: { action: "update", payload: { user_id: u.user_id, updates: { [field]: next } } },

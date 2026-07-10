@@ -366,8 +366,8 @@ export default function MVoicemail() {
               })}
             </div>
           )}
-        </div>
       </div>
+
 
       {forwardFor && (
         <ForwardModal vm={forwardFor} onClose={() => setForwardFor(null)} />

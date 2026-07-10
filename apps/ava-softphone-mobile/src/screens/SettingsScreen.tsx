@@ -376,9 +376,111 @@ export default function SettingsScreen({
         AVA Softphone · Powered by AVA AI
       </div>
       <div style={{ height: 80 }} />
+
+      {/* Bottom sheets — WebView-safe replacements for prompt/confirm */}
+      {sheet === 'ringtone' && (
+        <Sheet title={lang==='fr'?'Sonnerie':'Ringtone'} onClose={() => setSheet(null)}>
+          {['AVA Default','Classic','Pulse','Marimba','Silent'].map((r) => (
+            <SheetItem key={r} active={ringtone===r} onPress={() => pickRingtoneChoice(r)} label={r} />
+          ))}
+        </Sheet>
+      )}
+      {sheet === 'audioOut' && (
+        <Sheet title={lang==='fr'?'Sortie audio':'Audio output'} onClose={() => setSheet(null)}>
+          {([
+            ['default', lang==='fr'?'Par défaut système':'System default'],
+            ['earpiece', lang==='fr'?'Écouteur':'Earpiece'],
+            ['speaker', lang==='fr'?'Haut-parleur':'Speaker'],
+            ['bluetooth', 'Bluetooth'],
+          ] as [AudioRoute|'default', string][]).map(([k,l]) => (
+            <SheetItem key={k} active={audioOut===k} onPress={() => pickAudioOutChoice(k)} label={l} />
+          ))}
+        </Sheet>
+      )}
+      {sheet === 'fwd' && (
+        <Sheet title={lang==='fr'?'Numéro de transfert':'Forwarding number'} onClose={() => setSheet(null)}>
+          <input
+            type="tel" autoFocus value={fwdInput}
+            onChange={(e) => setFwdInput(e.target.value)}
+            placeholder="+15145550123"
+            style={{
+              width: '100%', boxSizing: 'border-box', padding: '12px 14px', borderRadius: 10,
+              background: 'rgba(255,255,255,0.06)', border: `1px solid ${colors.border}`,
+              color: colors.textIce, fontSize: 16, marginBottom: 12,
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setSheet(null)} style={sheetBtnStyle(false)}>{t('common.cancel')}</button>
+            <button onClick={commitFwd} style={sheetBtnStyle(true)}>{t('common.save')}</button>
+          </div>
+        </Sheet>
+      )}
+      {sheet === 'clearCache' && (
+        <Sheet title={lang==='fr'?"Vider le cache ?":'Clear app cache?'} onClose={() => setSheet(null)}>
+          <p style={{ fontSize: 13, color: colors.mutedSilver, margin: '0 0 14px' }}>
+            {lang==='fr'?"Les résumés IA et caches locaux seront supprimés.":'AI summaries and local caches will be removed.'}
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setSheet(null)} style={sheetBtnStyle(false)}>{t('common.cancel')}</button>
+            <button onClick={doClearCache} style={sheetBtnStyle(true)}>{t('common.clear')}</button>
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }
+
+function audioOutLabel(v: AudioRoute | 'default', lang: 'en'|'fr') {
+  if (v === 'speaker') return lang==='fr'?'Haut-parleur':'Speaker';
+  if (v === 'earpiece') return lang==='fr'?'Écouteur':'Earpiece';
+  if (v === 'bluetooth') return 'Bluetooth';
+  return lang==='fr'?'Par défaut':'System default';
+}
+
+function sheetBtnStyle(primary: boolean): React.CSSProperties {
+  return {
+    flex: 1, height: 44, borderRadius: 10, cursor: 'pointer',
+    background: primary ? gradients.call : 'rgba(255,255,255,0.06)',
+    color: primary ? '#fff' : colors.textIce,
+    border: `1px solid ${primary ? colors.signalGold : colors.border}`,
+    fontWeight: 700, fontSize: 14,
+  };
+}
+
+function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999,
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: '100%', maxWidth: 480, background: colors.graphite,
+        borderTopLeftRadius: 20, borderTopRightRadius: 20,
+        padding: '16px 16px 28px', borderTop: `1px solid ${colors.border}`,
+      }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: colors.border, margin: '0 auto 14px' }} />
+        <div style={{ fontSize: 15, fontWeight: 800, color: colors.textIce, marginBottom: 10 }}>{title}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SheetItem({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <button onClick={onPress} style={{
+      width: '100%', textAlign: 'left', padding: '14px 12px', borderRadius: 10,
+      background: active ? 'rgba(46,155,220,0.18)' : 'transparent',
+      border: `1px solid ${active ? colors.avaCyan : 'transparent'}`,
+      color: colors.textIce, fontSize: 14, marginBottom: 6, cursor: 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    }}>
+      <span>{label}</span>
+      {active && <span style={{ color: colors.avaCyan }}>✓</span>}
+    </button>
+  );
+}
+
 
 function Switch({ on }: { on: boolean }) {
   return (

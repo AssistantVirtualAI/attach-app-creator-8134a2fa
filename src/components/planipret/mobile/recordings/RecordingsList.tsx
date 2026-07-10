@@ -100,36 +100,23 @@ async function fetchNsTranscript(call: RecordingCall) {
   return { text, segments: d.segments, language: d.language ?? null };
 }
 
-// Fetch the audio blob via the backend proxy. Retries with backoff when the
-// recording is not yet available on the PBX ("not ready" / 404 / 425).
-async function fetchAudioBlob(call: RecordingCall, opts: { retries?: number; signal?: AbortSignal } = {}): Promise<string> {
+// Fetch a directly-playable signed URL for the recording. Triggers server-side
+// caching to our own storage bucket on first hit; subsequent hits return
+// instantly from the cache. Retries with backoff while NS is still finalizing.
+async function fetchAudioUrl(call: RecordingCall, opts: { retries?: number; signal?: AbortSignal } = {}): Promise<string> {
   const retries = opts.retries ?? 3;
-  const projectId = (import.meta as any).env?.VITE_SUPABASE_PROJECT_ID;
-  const anonKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ?? (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-  if (!projectId) throw new Error("Backend URL indisponible");
-  const { data: { session } } = await supabase.auth.getSession();
   let lastErr: any = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
     if (opts.signal?.aborted) throw new Error("aborted");
     try {
-      const resp = await fetch(`https://${projectId}.supabase.co/functions/v1/ns-get-recording`, {
-        method: "POST",
-        signal: opts.signal,
-        headers: {
-          "Content-Type": "application/json",
-          apikey: anonKey ?? "",
-          Authorization: `Bearer ${session?.access_token ?? anonKey ?? ""}`,
-        },
-        body: JSON.stringify(recordingLookupBody(call)),
+      const { data, error } = await supabase.functions.invoke("ns-get-recording", {
+        body: { ...recordingLookupBody(call), prefer_url: true },
       });
-      const ct = resp.headers.get("Content-Type") ?? "";
-      if (resp.ok && ct.includes("audio")) {
-        const blob = await resp.blob();
-        return URL.createObjectURL(blob);
-      }
-      const j = await resp.json().catch(() => ({}));
-      const msg: string = j?.message ?? j?.error ?? `HTTP ${resp.status}`;
-      const retriable = resp.status === 404 || resp.status === 425 || resp.status === 503 || /not ready|processing|pending|indisponible/i.test(msg);
+      if (error) throw error;
+      const d = (data as any) ?? {};
+      if (d?.success && d?.url) return d.url as string;
+      const msg: string = d?.message ?? d?.error ?? "Enregistrement indisponible";
+      const retriable = /not ready|processing|pending|NOT_FOUND|NO_FILE|FINALIZ/i.test(msg);
       lastErr = new Error(msg);
       if (!retriable || attempt === retries) throw lastErr;
     } catch (e: any) {

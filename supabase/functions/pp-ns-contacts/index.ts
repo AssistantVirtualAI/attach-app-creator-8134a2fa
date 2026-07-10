@@ -55,13 +55,21 @@ Deno.serve(async (req) => {
       if (!res.ok) return jsonResponse({ error: "NS-API directory fetch failed", status: res.status, body: await res.text() }, 502);
       const raw = await res.json();
       const users = Array.isArray(raw) ? raw : (raw?.users ?? raw?.data ?? []);
-      const directory = users.map((u: any) => ({
-        extension: u.user ?? u.extension ?? u.uid,
-        name: u.name ?? u.display_name ?? u.full_name ?? u.user,
-        email: u.email ?? null,
-        department: u.department ?? null,
-        presence: u.presence ?? u.status ?? "unknown",
-      }));
+      const directory = users.map((u: any) => {
+        const first = u.first_name ?? u.firstname ?? u["first-name"] ?? "";
+        const last = u.last_name ?? u.lastname ?? u["last-name"] ?? "";
+        const composed = `${first} ${last}`.trim();
+        const name = u.name ?? u.display_name ?? u.full_name ?? (composed || u.user);
+        return {
+          extension: u.user ?? u.extension ?? u.uid,
+          name,
+          first_name: first || undefined,
+          last_name: last || undefined,
+          email: u.email ?? null,
+          department: u.department ?? null,
+          presence: u.presence ?? u.status ?? "unknown",
+        };
+      });
       return jsonResponse({ ok: true, count: directory.length, directory });
     }
 

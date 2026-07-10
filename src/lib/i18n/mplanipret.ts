@@ -1630,7 +1630,7 @@ export const MP_DICT = {
         recordings: "Recordings",
         integrations: "Integrations",
         mobileDevices: "Mobile devices",
-        sipDiagnostic: "SIP diagnostic",
+        sipDiagnostic: "Diagnostic portal",
         compliance: "Compliance",
         auditChecklist: "Audit",
       },

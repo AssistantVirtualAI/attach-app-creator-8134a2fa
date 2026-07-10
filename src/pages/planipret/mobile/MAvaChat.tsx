@@ -50,10 +50,10 @@ export default function MAvaChat() {
     (async () => {
       const { data } = await supabase
         .from("planipret_ava_conversations")
-        .select("id,role,message,created_at")
+        .select("id,role,message,created_at,tool_calls")
         .eq("session_id", sessionId)
         .order("created_at", { ascending: true });
-      setMessages((data ?? []) as Msg[]);
+      setMessages(((data ?? []) as any[]).map((r) => ({ ...r, suggestions: Array.isArray(r.tool_calls) ? r.tool_calls : [] })) as Msg[]);
     })();
   }, [sessionId]);
 

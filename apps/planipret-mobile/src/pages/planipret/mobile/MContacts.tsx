@@ -36,6 +36,15 @@ function normalizeContact(c: any) {
   };
 }
 
+function presenceMeta(raw: string | undefined | null, t: (k: string) => string): { color: string; label: string } {
+  const v = String(raw ?? "").toLowerCase();
+  if (["available", "online", "active", "ready", "registered"].includes(v)) return { color: "#22c55e", label: t("contacts.presence.available") || "Available" };
+  if (["busy", "dnd", "do-not-disturb", "oncall", "on-call", "in-call"].includes(v)) return { color: "#ef4444", label: t("contacts.presence.busy") || "Busy" };
+  if (["away", "idle"].includes(v)) return { color: "#f59e0b", label: t("contacts.presence.away") || "Away" };
+  if (["offline", "unavailable"].includes(v)) return { color: "#64748b", label: t("contacts.presence.offline") || "Unavailable" };
+  return { color: "#64748b", label: t("contacts.presence.unknown") || "Unavailable" };
+}
+
 export default function MContacts() {
   const { t } = useMplanipretLang();
   const { openDialer } = useOutletContext<PlanipretMobileContext>();

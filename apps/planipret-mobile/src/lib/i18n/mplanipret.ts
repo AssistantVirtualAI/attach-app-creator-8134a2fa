@@ -101,7 +101,7 @@ export const MP_DICT = {
       theme: "Thème",
       profile: "Profil",
     },
-    tabs: { home: "Accueil", calls: "Appels", messages: "Messages", contacts: "Contacts" },
+    tabs: { home: "Accueil", calls: "Appels", messages: "Messages", contacts: "Contacts", ava: "AVA" },
     footer: { poweredBy: "PROPULSÉ PAR", developedBy: "DÉVELOPPÉ PAR AVA" },
     extSync: {
       extLabel: "Extension",
@@ -271,7 +271,7 @@ export const MP_DICT = {
     },
     messages: {
       title: "Messages",
-      tabs: { sms: "SMS", team: "Équipe", roster: "Annuaire", ava: "AVA", emails: "Emails" },
+      tabs: { sms: "SMS", team: "Équipe", roster: "Annuaire", emails: "Emails" },
       newMessage: "Nouveau message",
       phoneNumber: "Numéro de téléphone",
       noMessages: "Aucun message",
@@ -1021,7 +1021,7 @@ export const MP_DICT = {
       theme: "Theme",
       profile: "Profile",
     },
-    tabs: { home: "Home", calls: "Calls", messages: "Messages", contacts: "Contacts" },
+    tabs: { home: "Home", calls: "Calls", messages: "Messages", contacts: "Contacts", ava: "AVA" },
     footer: { poweredBy: "POWERED BY", developedBy: "DEVELOPED BY AVA" },
     extSync: {
       extLabel: "Extension",
@@ -1191,7 +1191,7 @@ export const MP_DICT = {
     },
     messages: {
       title: "Messages",
-      tabs: { sms: "SMS", team: "Team", roster: "Directory", ava: "AVA", emails: "Emails" },
+      tabs: { sms: "SMS", team: "Team", roster: "Directory", emails: "Emails" },
       newMessage: "New message",
       phoneNumber: "Phone number",
       noMessages: "No messages",

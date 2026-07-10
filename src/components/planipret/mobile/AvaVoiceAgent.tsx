@@ -525,3 +525,18 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
     </div>
   );
 }
+
+function VoiceOrb({ state, analyser }: { state: AgentState; analyser: AnalyserNode | null }) {
+  const level = useAnalyserLevel(analyser, state === "listening");
+  const orbState: "idle" | "connecting" | "listening" | "speaking" | "processing" | "error" =
+    state === "tool_running" ? "processing" : state;
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <AvaOrb state={orbState} level={level} size={260} />
+      <div className="text-[15px] font-semibold tracking-wide" style={{ color: "#E8EDF5", fontFamily: "Urbanist,sans-serif" }}>
+        {state === "speaking" ? "AVA parle…" : state === "listening" ? "Je vous écoute…" : state === "processing" ? "Réflexion…" : state === "tool_running" ? "Exécution…" : state === "connecting" ? "Connexion…" : state === "error" ? "Erreur" : "Prête"}
+      </div>
+    </div>
+  );
+}
+

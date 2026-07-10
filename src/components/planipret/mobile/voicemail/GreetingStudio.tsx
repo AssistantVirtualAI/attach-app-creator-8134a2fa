@@ -61,6 +61,8 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
   const [improving, setImproving] = useState(false);
   const [settings, setSettings] = useState({ stability: 0.6, similarity_boost: 0.8, style: 0.3 });
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [genderFilter, setGenderFilter] = useState<"all" | "F" | "M">("all");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | "professional" | "natural" | "custom">("professional");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const fullName = profile.full_name ?? t("greeting.defaultBroker");

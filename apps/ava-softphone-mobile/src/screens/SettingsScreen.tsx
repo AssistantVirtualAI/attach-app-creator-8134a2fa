@@ -185,11 +185,11 @@ export default function SettingsScreen({
           right={<Switch on={preferClickToCall} />}
           onPress={togglePreferC2C}
         />
-        <SettingsRow label={t('settings.callForwarding')} icon="↪" onPress={toggleFwd} value={forwarding || t('common.off')} right={<Switch on={!!forwarding} />} />
+        <SettingsRow label={t('settings.callForwarding')} icon="↪" onPress={openFwdSheet} value={forwarding || t('common.off')} right={<Switch on={!!forwarding} />} />
         <SettingsRow label={t('settings.voicemailGreeting')} icon="🎙" value={t('settings.defaultGreeting')} onPress={() => onNavigate?.('voicemail' as Tab)} />
         <SettingsRow label={t('settings.autoAnswer')} icon="⚡" right={<Switch on={autoAnswer} />} onPress={toggleAutoAnswer} />
-        <SettingsRow label={t('settings.ringtone')} icon="🎵" value={ringtone} onPress={pickRingtone} />
-        <SettingsRow label={t('settings.audioOutput')} icon="🔊" value={audioOut} onPress={pickAudioOut} />
+        <SettingsRow label={t('settings.ringtone')} icon="🎵" value={ringtone} onPress={() => setSheet('ringtone')} />
+        <SettingsRow label={t('settings.audioOutput')} icon="🔊" value={audioOutLabel(audioOut, lang)} onPress={() => setSheet('audioOut')} />
         <SettingsRow label={t('settings.haptics')} icon="📳" right={<Switch on={haptics} />} onPress={toggleHaptics} />
       </Card>
 
@@ -263,7 +263,7 @@ export default function SettingsScreen({
           value={announceRec ? (lang === 'fr' ? 'Activé (recommandé)' : 'On (recommended)') : (lang === 'fr' ? 'Désactivé' : 'Off')}
           onPress={() => { const next = !announceRec; setAnnounceRec(next); setAnnounceConsent(next); }}
         />
-        <SettingsRow label={t('settings.clearCache')} icon="🧹" onPress={clearCache} />
+        <SettingsRow label={t('settings.clearCache')} icon="🧹" onPress={() => setSheet('clearCache')} />
         <SettingsRow label={t('settings.deleteAccount')} icon="⚠" onPress={() => openPortal('/account/delete')} />
       </Card>
 

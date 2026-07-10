@@ -70,37 +70,90 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!profile?.ms365_access_token) return j({ connected: false, chats: [], teams: [], error: "ms365_not_connected" });
 
-    // Chats récents
-    const chatsRes = await graph(admin, profile, "/me/chats?$top=25&$expand=members&$orderby=lastMessagePreview/createdDateTime desc");
-    const chatsBody = await chatsRes.json();
-    if (!chatsRes.ok) return j({ error: "graph_chats", detail: chatsBody }, chatsRes.status);
+    const diagnostics: any = {};
 
-    const chats = (chatsBody.value ?? []).map((c: any) => ({
-      id: c.id,
-      topic: c.topic ?? ((c.members ?? []).filter((m: any) => m.userId).map((m: any) => m.displayName).join(", ") || "Chat"),
-      chatType: c.chatType,
-      lastUpdated: c.lastUpdatedDateTime,
-      preview: c.lastMessagePreview?.body?.content ?? null,
-      previewFrom: c.lastMessagePreview?.from?.user?.displayName ?? null,
-    }));
+    // Chats récents — tolerate errors
+    let chats: any[] = [];
+    try {
+      const chatsRes = await graph(admin, profile, "/me/chats?$top=25&$expand=members&$orderby=lastMessagePreview/createdDateTime desc");
+      const chatsBody = await chatsRes.json().catch(() => ({}));
+      if (!chatsRes.ok) {
+        diagnostics.chats_error = chatsBody?.error?.message ?? `HTTP ${chatsRes.status}`;
+      } else {
+        chats = (chatsBody.value ?? []).map((c: any) => ({
+          id: c.id,
+          topic: c.topic ?? ((c.members ?? []).filter((m: any) => m.userId).map((m: any) => m.displayName).join(", ") || "Chat"),
+          chatType: c.chatType,
+          lastUpdated: c.lastUpdatedDateTime,
+          members: (c.members ?? []).map((m: any) => ({ id: m.userId, name: m.displayName, email: m.email })),
+          preview: c.lastMessagePreview?.body?.content ?? null,
+          previewFrom: c.lastMessagePreview?.from?.user?.displayName ?? null,
+        }));
+      }
+    } catch (e: any) { diagnostics.chats_error = e?.message; }
 
     // Teams + channels
-    const teamsRes = await graph(admin, profile, "/me/joinedTeams?$select=id,displayName");
-    const teamsBody = await teamsRes.json();
     const teams: any[] = [];
-    if (teamsRes.ok) {
-      for (const t of (teamsBody.value ?? []).slice(0, 10)) {
-        const chRes = await graph(admin, profile, `/teams/${t.id}/channels?$select=id,displayName`);
-        const chBody = await chRes.json().catch(() => ({}));
-        teams.push({
-          id: t.id,
-          displayName: t.displayName,
-          channels: (chBody.value ?? []).map((c: any) => ({ id: c.id, displayName: c.displayName })),
-        });
+    try {
+      const teamsRes = await graph(admin, profile, "/me/joinedTeams?$select=id,displayName,description");
+      const teamsBody = await teamsRes.json().catch(() => ({}));
+      if (!teamsRes.ok) {
+        diagnostics.teams_error = teamsBody?.error?.message ?? `HTTP ${teamsRes.status}`;
+      } else {
+        for (const t of (teamsBody.value ?? []).slice(0, 15)) {
+          const chRes = await graph(admin, profile, `/teams/${t.id}/channels?$select=id,displayName`);
+          const chBody = await chRes.json().catch(() => ({}));
+          teams.push({
+            id: t.id,
+            displayName: t.displayName,
+            description: t.description ?? null,
+            channels: (chBody.value ?? []).map((c: any) => ({ id: c.id, displayName: c.displayName })),
+          });
+        }
       }
-    }
+    } catch (e: any) { diagnostics.teams_error = e?.message; }
 
-    return j({ connected: true, chats, teams });
+    // Tenant users (people to chat with directly) + presence
+    const people: any[] = [];
+    try {
+      const uRes = await graph(admin, profile, "/users?$top=100&$select=id,displayName,mail,userPrincipalName,jobTitle");
+      const uBody = await uRes.json().catch(() => ({}));
+      if (!uRes.ok) {
+        diagnostics.people_error = uBody?.error?.message ?? `HTTP ${uRes.status}`;
+      } else {
+        const list = (uBody.value ?? []).filter((u: any) => u.id).map((u: any) => ({
+          id: u.id,
+          name: u.displayName,
+          email: u.mail ?? u.userPrincipalName,
+          title: u.jobTitle ?? null,
+          presence: null as null | { availability: string; activity: string },
+        }));
+
+        const chunk = <T,>(arr: T[], n: number) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
+        for (const grp of chunk(list, 20)) {
+          try {
+            const pr = await graph(admin, profile, "/communications/getPresencesByUserId", {
+              method: "POST",
+              body: JSON.stringify({ ids: grp.map((p) => p.id) }),
+            });
+            const pb = await pr.json().catch(() => ({}));
+            if (pr.ok) {
+              const byId: Record<string, any> = {};
+              for (const p of (pb.value ?? [])) byId[p.id] = p;
+              for (const p of grp) {
+                const pr2 = byId[p.id];
+                if (pr2) p.presence = { availability: pr2.availability, activity: pr2.activity };
+              }
+            } else if (!diagnostics.presence_error) {
+              diagnostics.presence_error = pb?.error?.message ?? `HTTP ${pr.status}`;
+            }
+          } catch (e: any) { if (!diagnostics.presence_error) diagnostics.presence_error = e?.message; }
+        }
+        people.push(...list);
+      }
+    } catch (e: any) { diagnostics.people_error = e?.message; }
+
+    return j({ connected: true, chats, teams, people, diagnostics });
   } catch (e: any) {
     console.error("[ms365-teams-list]", e);
     return j({ error: e?.message ?? "server_error" }, 500);

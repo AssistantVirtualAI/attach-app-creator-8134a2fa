@@ -75,8 +75,9 @@ Deno.serve(async (req) => {
     }
 
     const { data: rows } = await sb.from("pbx_sms_threads")
-      .select("id, contact_name, contact_phone, unread_count, last_message_at, pbx_sms_messages(body, sent_at)")
+      .select("id, contact_name, contact_phone, unread_count, last_message_at, assigned_user_id, pbx_sms_messages(body, sent_at)")
       .eq("organization_id", orgId)
+      .or(`assigned_user_id.eq.${u.user.id},assigned_user_id.is.null`)
       .order("last_message_at", { ascending: false }).limit(80);
     return json((rows || []).map((t: any) => {
       const msgs = t.pbx_sms_messages || [];

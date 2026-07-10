@@ -268,7 +268,7 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
             const id = threadId(th);
             const peer = threadPeer(th);
             const unread = th.unread ?? th.unread_count ?? 0;
-            const preview = (th as any).last_message ?? (th as any).preview ?? (th as any).last_message_text ?? (th as any).body ?? (th as any).message ?? (th as any).snippet ?? "";
+            const preview = (th as any).last_message ?? (th as any).preview ?? (th as any)["messagesession-last-message"] ?? (th as any).last_message_text ?? (th as any).body ?? (th as any).message ?? (th as any).snippet ?? "";
             return (
               <ThreadRow
                 key={`${id || "noid"}-${peer || "nopeer"}-${index}`}

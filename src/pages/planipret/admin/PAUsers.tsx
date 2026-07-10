@@ -363,6 +363,31 @@ export default function PAUsers() {
   const toggleField = async (u: Profile, field: "mobile_app_enabled" | "voice_agent_enabled") => {
     setSavingId(u.user_id);
     const next = !u[field];
+
+    // ns_only broker → no Planiprêt profile yet. Provision one on the fly so
+    // the toggle actually takes effect.
+    if (u.ns_only) {
+      const { data, error } = await supabase.functions.invoke("pp-admin-user", {
+        body: {
+          action: "provision_from_ns",
+          payload: {
+            email: u.email,
+            full_name: u.full_name,
+            extension: u.extension ?? u.ns_extension,
+            updates: { [field]: next },
+          },
+        },
+      });
+      setSavingId(null);
+      if (error || !(data as any)?.success) {
+        toast.error((data as any)?.error ?? error?.message ?? "Erreur de provisionnement");
+        return;
+      }
+      toast.success("Compte Planiprêt créé et activé");
+      await load();
+      return;
+    }
+
     setRows((p) => p.map((r) => r.user_id === u.user_id ? { ...r, [field]: next } : r));
     const { data, error } = await supabase.functions.invoke("pp-admin-user", {
       body: { action: "update", payload: { user_id: u.user_id, updates: { [field]: next } } },

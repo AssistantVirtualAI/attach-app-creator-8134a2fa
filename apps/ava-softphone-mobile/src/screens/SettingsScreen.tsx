@@ -193,6 +193,69 @@ export default function SettingsScreen({
         <SettingsRow label={t('settings.haptics')} icon="📳" right={<Switch on={haptics} />} onPress={toggleHaptics} />
       </Card>
 
+      {/* Audio quality — noise cancellation */}
+      <SectionTitle eyebrow="AUDIO" title={t('settings.audioQuality')} />
+      <Card padded={false}>
+        <SettingsRow
+          label={t('settings.noiseCancel')} icon="🎧"
+          value={ncEnabled ? t('common.on') : t('common.off')}
+          right={<Switch on={ncEnabled} />}
+          onPress={toggleNc}
+        />
+        {ncEnabled && (
+          <div style={{ padding: '10px 14px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            {(['standard','office','phone'] as NCMode[]).map((m) => {
+              const active = ncMode === m;
+              const label = m === 'standard' ? t('settings.ncStandard') : m === 'office' ? t('settings.ncOffice') : t('settings.ncPhone');
+              const desc  = m === 'standard' ? t('settings.ncStandardDesc') : m === 'office' ? t('settings.ncOfficeDesc') : t('settings.ncPhoneDesc');
+              return (
+                <button key={m} onClick={() => changeNcMode(m)} style={{
+                  padding: '10px 8px', borderRadius: 12, textAlign: 'left', cursor: 'pointer',
+                  background: active ? 'rgba(46,155,220,0.18)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${active ? colors.avaCyan : colors.border}`,
+                  color: colors.textIce,
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>{label}</div>
+                  <div style={{ fontSize: 10, opacity: 0.7, marginTop: 3, lineHeight: 1.3 }}>{desc}</div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Network — auto Wi-Fi / LTE handover */}
+      <SectionTitle eyebrow="NET" title={t('settings.network')} />
+      <Card padded={false}>
+        <SettingsRow
+          label={t('settings.autoHandover')} icon="🔀"
+          value={autoHandover ? t('settings.autoHandoverSub') : t('common.off')}
+          right={<Switch on={autoHandover} />}
+          onPress={toggleAutoHandover}
+        />
+        <SettingsRow
+          label={t('settings.preferWifi')} icon="📶"
+          right={<Switch on={preferWifi} />}
+          onPress={togglePreferWifi}
+        />
+        <SettingsRow
+          label={t('settings.backgroundCalls')} icon="🌙"
+          right={<Switch on={bgCalls} />}
+          onPress={toggleBgCalls}
+        />
+        <SettingsRow
+          label={t('settings.currentNetwork')} icon={netConnected ? '🟢' : '🔴'}
+          value={
+            !netConnected ? t('settings.netOffline') :
+            netType === 'wifi' ? t('settings.netWifi') :
+            netType === 'cellular' ? t('settings.netCellular') :
+            netType
+          }
+        />
+      </Card>
+
+
+
       {/* Account */}
       <SectionTitle eyebrow={t('settings.account')} title={t('settings.extDevices')} />
       <Card padded={false}>

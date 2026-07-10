@@ -638,7 +638,7 @@ export default function PlanipretMobile() {
       </Frame>
     );
   }
-  const isAvaRoute = location.pathname === "/mplanipret/ava";
+  const location = useLocation();
 
   return (
     <Frame>

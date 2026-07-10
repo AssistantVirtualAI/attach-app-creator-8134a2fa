@@ -128,11 +128,11 @@ export default function MHome() {
         .is("read_at", null).eq("direction", "inbound"), { count: 0, data: null } as any),
       settle(applyScope(supabase.from("planipret_voicemails").select("id", { count: "exact", head: true }))
         .eq("is_read", false).eq("folder", "inbox"), { count: 0, data: null } as any),
-      settle(applyScope(supabase.from("planipret_phone_calls"), true)
-        .select("id, direction, from_number, from_name, to_number, to_name, started_at, lead_score, lead_temperature, ai_summary")
+      settle(applyScope(supabase.from("planipret_phone_calls")
+        .select("id, direction, from_number, from_name, to_number, to_name, started_at, lead_score, lead_temperature, ai_summary"), true)
         .order("started_at", { ascending: false }).limit(5), { data: [] } as any),
-      settle(applyScope(supabase.from("planipret_phone_calls"), true)
-        .select("id, from_number, from_name, to_number, to_name, lead_score, lead_temperature, started_at, direction")
+      settle(applyScope(supabase.from("planipret_phone_calls")
+        .select("id, from_number, from_name, to_number, to_name, lead_score, lead_temperature, started_at, direction"), true)
         .gte("started_at", sinceIso).gte("lead_score", 7)
         .order("lead_score", { ascending: false }).limit(5), { data: [] } as any),
       settle(applyScope(supabase.from("planipret_reminders").select("*"))

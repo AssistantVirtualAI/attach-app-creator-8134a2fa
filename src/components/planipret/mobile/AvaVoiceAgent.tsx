@@ -7,6 +7,7 @@ import { Conversation } from "@elevenlabs/client";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { X, Mic, Send, Settings, AlertTriangle, Sparkles, PhoneOutgoing, MessageSquare, Search, Calendar, Mail, Bot, Map } from "lucide-react";
+import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 
 type AgentState = "idle" | "connecting" | "listening" | "speaking" | "processing" | "tool_running" | "error";
 type AutonomyMode = "confirm" | "semi_auto" | "full_auto";
@@ -373,8 +374,8 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 pt-4">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(135deg,#2D1A5A,#9B7FE8)" }}>
-            <Bot className="w-4 h-4 text-white" />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+            <img src={avaLogo.url} alt="AVA" className="w-full h-full object-contain" />
           </div>
           <span className="text-[14px] font-bold text-white">AVA</span>
         </div>
@@ -399,7 +400,7 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
       )}
 
       {/* Center visualization */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
+      <div className="flex-1 min-h-0 flex flex-col items-center px-4 pt-8 pb-3">
         {micError ? (
           <div className="bg-white rounded-2xl p-5 text-center max-w-xs">
             <AlertTriangle className="w-8 h-8 mx-auto text-amber-500 mb-2" />
@@ -407,7 +408,7 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
             <p className="text-xs text-slate-600 mt-1">Autorisez le microphone dans les paramètres du navigateur.</p>
           </div>
         ) : (
-          <div className="relative" style={{ width: 180, height: 180 }}>
+          <div className="relative shrink-0" style={{ width: 168, height: 168 }}>
             {state === "listening" && (
               <>
                 <div className="absolute inset-0 rounded-full animate-pulse" style={{ background: "rgba(46,155,220,0.1)" }} />
@@ -456,10 +457,19 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
         )}
 
         {/* Live transcript */}
-        <div ref={scrollRef} className="w-full max-h-[200px] overflow-y-auto mt-6 space-y-1.5 px-2">
+        <div
+          ref={scrollRef}
+          className="mt-5 w-full flex-1 min-h-[160px] overflow-y-auto rounded-2xl p-3 space-y-2"
+          style={{ background: "rgba(10,22,40,0.72)", border: "1px solid var(--pp-bg-border-2)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)" }}
+        >
+          {transcript.length === 0 && (
+            <div className="h-full min-h-[132px] flex items-center justify-center text-center text-[12px] leading-relaxed px-6" style={{ color: "var(--pp-text-muted)" }}>
+              La conversation texte avec AVA apparaîtra ici.
+            </div>
+          )}
           {transcript.slice(-12).map((t) => {
             if (t.role === "tool") return (
-              <div key={t.id} className="text-center text-[11px] px-3 py-1.5 rounded-lg mx-auto inline-block"
+              <div key={t.id} className="text-center text-[11px] px-3 py-1.5 rounded-lg mx-auto w-fit"
                 style={{ background: "rgba(0,212,170,0.08)", border: "1px solid rgba(0,212,170,0.2)", color: "#00D4AA" }}>
                 ⚡ {t.text}
               </div>
@@ -469,10 +479,10 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
             );
             return (
               <div key={t.id} className={t.role === "user" ? "flex justify-end" : "flex justify-start"}>
-                <div className="max-w-[80%] px-3 py-2 text-[13px]"
+                <div className="max-w-[86%] px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap break-words shadow-sm"
                   style={t.role === "user"
-                    ? { background: "rgba(46,155,220,0.15)", borderRadius: "12px 12px 2px 12px", color: "#E8EDF5" }
-                    : { background: "rgba(155,127,232,0.15)", borderRadius: "12px 12px 12px 2px", color: "#E8EDF5" }}>
+                    ? { background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-success))", borderRadius: "14px 14px 4px 14px", color: "var(--pp-bg-deep)", fontWeight: 650 }
+                    : { background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", borderRadius: "14px 14px 14px 4px", color: "var(--pp-text-primary)" }}>
                   {t.text}
                 </div>
               </div>

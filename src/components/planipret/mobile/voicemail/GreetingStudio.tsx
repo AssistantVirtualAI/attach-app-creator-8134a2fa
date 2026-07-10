@@ -147,7 +147,7 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
   };
 
   return (
-    <div className="space-y-4 pb-8" style={{ background: TOKENS.bg }}>
+    <div className="space-y-4 pb-8">
       {/* Header */}
       <div>
         <h2 className="text-[18px] font-bold" style={{ color: TOKENS.text }}>{t("greeting.title")}</h2>
@@ -155,7 +155,7 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
       </div>
 
       {/* Current greeting card */}
-      <div className="rounded-2xl p-4" style={{ background: TOKENS.card, border: `1px solid ${TOKENS.border}` }}>
+      <div className="pp-card p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[11px] uppercase tracking-wider" style={{ color: TOKENS.muted }}>{t("greeting.current")}</span>
           <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"

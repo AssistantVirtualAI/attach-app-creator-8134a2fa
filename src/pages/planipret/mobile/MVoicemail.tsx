@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Mic, Play, Pause, Phone, Save, Forward, Trash2, FileText, X, Voicemail as VmIcon, Inbox, Bookmark, Sparkles, Loader2, AudioWaveform } from "lucide-react";
+import { Mic, Play, Pause, Phone, Save, Forward, Trash2, FileText, X, Voicemail as VmIcon, Inbox, Bookmark, Sparkles, Loader2, AudioWaveform, PlugZap, CheckCircle2 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
@@ -230,7 +230,24 @@ export default function MVoicemail() {
 
       <div>
         {tab === "greeting" ? (
-          <div className="pp-card p-4">
+          <div className="space-y-3">
+            <div className="pp-card p-4 overflow-hidden relative">
+              <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: "linear-gradient(90deg, transparent, var(--pp-brand-accent), var(--pp-agent), transparent)" }} />
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0" style={{ background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.28)", color: "var(--pp-brand-accent)" }}>
+                  <PlugZap className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[15px] font-bold" style={{ color: "var(--pp-text-primary)" }}>ElevenLabs</h2>
+                    <span className="pp-pill pp-pill-success"><CheckCircle2 className="w-3 h-3" /> Connecté</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed mt-1" style={{ color: "var(--pp-text-secondary)" }}>
+                    Voix IA, aperçu audio et activation NetSapiens synchronisés au profil du courtier.
+                  </p>
+                </div>
+              </div>
+            </div>
             <GreetingStudio profile={profile} onProfileChange={reloadProfile} />
           </div>
         ) : loading ? (

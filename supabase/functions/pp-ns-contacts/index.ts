@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
         const first = u.first_name ?? u.firstname ?? u["first-name"] ?? "";
         const last = u.last_name ?? u.lastname ?? u["last-name"] ?? "";
         const composed = `${first} ${last}`.trim();
-        const name = u.name ?? u.display_name ?? u.full_name ?? composed || u.user;
+        const name = u.name ?? u.display_name ?? u.full_name ?? (composed || u.user);
         return {
           extension: u.user ?? u.extension ?? u.uid,
           name,

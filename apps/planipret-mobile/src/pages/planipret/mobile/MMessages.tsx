@@ -15,7 +15,7 @@ import { callAva, type AvaSuggestion } from "@/services/avaProactive";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 
-type SubTab = "sms" | "team" | "teams365" | "ava" | "emails" | "roster";
+type SubTab = "sms" | "team" | "teams365" | "emails" | "roster";
 
 
 type Msg = {
@@ -69,8 +69,6 @@ export default function MMessages() {
             { k: "sms" as SubTab, label: t("messages.tabs.sms"), Icon: MessageSquare },
             { k: "team" as SubTab, label: t("messages.tabs.team"), Icon: UsersRound },
             { k: "teams365" as SubTab, label: "Teams", Icon: Users },
-            
-            { k: "ava" as SubTab, label: t("messages.tabs.ava"), Icon: Bot },
             { k: "emails" as SubTab, label: t("messages.tabs.emails"), Icon: Mail },
           ].map((item) => {
             const active = sub === item.k;
@@ -105,9 +103,7 @@ export default function MMessages() {
         {sub === "sms" && <SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} />}
         {sub === "team" && <TeamChat profile={profile} />}
         {sub === "teams365" && <Teams365Panel profile={profile} />}
-        
-        {sub === "ava" && <AvaChat profile={profile} openAva={openAva} openDialer={openDialer} />}
-        {sub === "emails" && <EmailsList profile={profile} openAva={openAva} />}
+        {sub === "emails" && <EmailsList profile={profile} />}
       </div>
     </div>
   );

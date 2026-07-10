@@ -269,9 +269,25 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
         if (cancelled) { try { await conv.endSession(); } catch (_) { /* */ } return; }
         convRef.current = conv;
 
+        // Phase 9 — push live broker context so AVA knows what's pending.
+        try {
+          const [missedRes, vmRes, todayCallsRes] = await Promise.all([
+            supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true })
+              .eq("user_id", userId).eq("status", "missed")
+              .gte("started_at", new Date(Date.now() - 24 * 3600e3).toISOString()),
+            supabase.from("planipret_voicemails").select("id", { count: "exact", head: true })
+              .eq("user_id", userId).eq("is_read", false),
+            supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true })
+              .eq("user_id", userId)
+              .gte("started_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+          ]);
+          const ctx = `Contexte courant du courtier: ${missedRes.count ?? 0} appel(s) manqué(s) dans les dernières 24h, ${vmRes.count ?? 0} message(s) vocal(aux) non lu(s), ${todayCallsRes.count ?? 0} appel(s) aujourd'hui.`;
+          conv.sendContextualUpdate?.(ctx);
+        } catch (ctxErr) { console.warn("contextual_update failed", ctxErr); }
+
         // Bump session counter
         supabase.from("planipret_profiles").update({
-          ava_sessions_count: 1, // RLS-safe via increment trigger or fallback
+          ava_sessions_count: 1,
           ava_last_session_at: new Date().toISOString(),
         }).eq("user_id", userId).then(() => null);
       } catch (e) {

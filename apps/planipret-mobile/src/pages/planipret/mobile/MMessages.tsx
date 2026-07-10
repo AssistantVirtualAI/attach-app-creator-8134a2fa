@@ -4,21 +4,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Plus, X, ArrowLeft, Phone, Send, Paperclip, MessageSquare, Zap,
-  Users, Bot, Mail, Sparkles, Loader2, RefreshCw, Mic, Reply, History, Circle, CheckCircle2, AlertTriangle, RotateCw,
+  Users, Mail, Sparkles, Loader2, RefreshCw, Reply, Circle, CheckCircle2, AlertTriangle, RotateCw,
   UsersRound, Contact,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import SmsTemplatesSheet from "@/components/planipret/SmsTemplatesSheet";
 import AvaSummarizeSheet from "@/components/planipret/ava/AvaSummarizeSheet";
 import AvaProposedActionsCard from "@/components/planipret/mobile/AvaProposedActionsCard";
-import AvaHistorySheet from "@/components/planipret/ava/AvaHistorySheet";
-import CoachOverlay from "@/components/planipret/ava/CoachOverlay";
 import { callAva, type AvaSuggestion } from "@/services/avaProactive";
-import { useAvaDraft } from "@/hooks/useAvaDraft";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 
-type SubTab = "sms" | "team" | "teams365" | "ava" | "emails" | "roster";
+type SubTab = "sms" | "team" | "teams365" | "emails" | "roster";
 
 
 type Msg = {
@@ -54,7 +51,7 @@ const fmtTime = (iso: string, lang: "fr" | "en" = "fr", t?: (key: string) => str
 
 export default function MMessages() {
   const { t } = useMplanipretLang();
-  const { profile, openDialer, openAva, registerRefresh } = useOutletContext<PlanipretMobileContext>();
+  const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();
   const [sub, setSub] = useState<SubTab>("sms");
 
   return (
@@ -72,8 +69,6 @@ export default function MMessages() {
             { k: "sms" as SubTab, label: t("messages.tabs.sms"), Icon: MessageSquare },
             { k: "team" as SubTab, label: t("messages.tabs.team"), Icon: UsersRound },
             { k: "teams365" as SubTab, label: "Teams", Icon: Users },
-            
-            { k: "ava" as SubTab, label: t("messages.tabs.ava"), Icon: Bot },
             { k: "emails" as SubTab, label: t("messages.tabs.emails"), Icon: Mail },
           ].map((item) => {
             const active = sub === item.k;
@@ -108,9 +103,7 @@ export default function MMessages() {
         {sub === "sms" && <SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} />}
         {sub === "team" && <TeamChat profile={profile} />}
         {sub === "teams365" && <Teams365Panel profile={profile} />}
-        
-        {sub === "ava" && <AvaChat profile={profile} openAva={openAva} openDialer={openDialer} />}
-        {sub === "emails" && <EmailsList profile={profile} openAva={openAva} />}
+        {sub === "emails" && <EmailsList profile={profile} />}
       </div>
     </div>
   );
@@ -676,235 +669,9 @@ function TeamChat({ profile }: { profile: any }) {
 }
 
 // ============================================================
-// AVA CHAT TAB
-// ============================================================
-type AvaMsg = {
-  id: string;
-  user_id: string;
-  role: "user" | "assistant";
-  message: string;
-  created_at: string;
-};
-
-function AvaChat({ profile, openAva, openDialer }: { profile: any; openAva: () => void; openDialer: (n?: string) => void }) {
-  const { t, lang } = useMplanipretLang();
-  const [msgs, setMsgs] = useState<AvaMsg[]>([]);
-  const [text, setText] = useAvaDraft(profile?.user_id, "ava-chat");
-  const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [coach, setCoach] = useState<{ open: boolean; suggestions: AvaSuggestion[]; title?: string }>({ open: false, suggestions: [] });
-  const bottomRef = useRef<HTMLDivElement>(null);
-  // setText is the debounced draft updater
-  const inputRef = useRef<(v: string) => void>(setText);
-  inputRef.current = setText;
-
-  const load = async () => {
-    if (!profile?.user_id) return;
-    setLoading(true);
-    const { data } = await supabase
-      .from("planipret_ava_conversations")
-      .select("*")
-      .eq("user_id", profile.user_id)
-      .order("created_at", { ascending: true })
-      .limit(100);
-    setMsgs((data ?? []) as AvaMsg[]);
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [profile?.user_id]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs.length]);
-
-  const send = async () => {
-    const body = text.trim();
-    if (!body || !profile?.user_id) return;
-    setSending(true);
-    const userMsg = { user_id: profile.user_id, role: "user" as const, message: body };
-    const { data: ins } = await supabase.from("planipret_ava_conversations").insert(userMsg).select().single();
-    if (ins) setMsgs((p) => [...p, ins as AvaMsg]);
-    setText("");
-
-    const r = await callAva({
-      mode: "chat",
-      message: body,
-      history: msgs.slice(-10).map((m) => ({ role: m.role, content: m.message })),
-    });
-
-    const { data: ins2 } = await supabase.from("planipret_ava_conversations")
-      .insert({ user_id: profile.user_id, role: "assistant", message: r.reply }).select().single();
-    if (ins2) setMsgs((p) => [...p, ins2 as AvaMsg]);
-
-    if (r.openVoice) openAva();
-    if (r.openCoach || r.suggestions.length) {
-      setCoach({ open: true, suggestions: r.suggestions, title: "Coach AVA" });
-    }
-    setSending(false);
-  };
-
-  const clear = async () => {
-    if (!profile?.user_id) return;
-    await supabase.from("planipret_ava_conversations").delete().eq("user_id", profile.user_id);
-    setMsgs([]);
-  };
-
-  return (
-    <div className="absolute inset-x-0 top-[120px] bottom-0 flex flex-col">
-      <div
-        className="px-4 py-2 flex items-center justify-between"
-        style={{ borderBottom: "1px solid var(--pp-bg-border)" }}
-      >
-        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider" style={{ color: "var(--pp-agent)" }}>
-          <Sparkles className="w-3 h-3" /> {t("messages.avaAssistant")}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setHistoryOpen(true)}
-            className="text-[11px] flex items-center gap-1"
-            style={{ color: "var(--pp-text-muted)" }}
-            title={t("messages.avaHistory")}
-          >
-            <History className="w-3.5 h-3.5" /> {t("messages.avaHistory")}
-          </button>
-          {msgs.length > 0 && (
-            <button onClick={clear} className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
-              {t("messages.clear")}
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
-        {loading ? (
-          <div className="text-center py-8" style={{ color: "var(--pp-text-muted)" }}>
-            <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-          </div>
-        ) : msgs.length === 0 ? (
-          <div className="text-center py-10 px-6">
-            <div
-              className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-3"
-              style={{
-                background: "linear-gradient(135deg, var(--pp-agent), #6C3CE1)",
-                boxShadow: "0 8px 24px rgba(155,127,232,0.4)",
-              }}
-            >
-              <Bot className="w-7 h-7 text-white" />
-            </div>
-            <p className="font-semibold" style={{ color: "var(--pp-text-primary)" }}>{t("messages.avaHello")}</p>
-            <p className="text-xs mt-1" style={{ color: "var(--pp-text-muted)" }}>
-              {t("messages.avaHelp")}
-            </p>
-            <div className="flex flex-wrap justify-center gap-1.5 mt-4">
-              {[
-                "📊 Brief du jour",
-                "🔥 Mes hot leads",
-                "📅 Mes RDV",
-                "💡 Conseils du jour",
-              ].map((chip) => (
-                <button
-                  key={chip}
-                  onClick={() => setText(chip.replace(/^\S+\s/, ""))}
-                  className="text-[11px] px-3 py-1.5 rounded-full"
-                  style={{
-                    background: "rgba(155,127,232,0.10)",
-                    border: "1px solid rgba(155,127,232,0.30)",
-                    color: "var(--pp-agent)",
-                  }}
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          msgs.map((m) => {
-            const mine = m.role === "user";
-            return (
-              <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                <div className="max-w-[80%] flex items-end gap-2">
-                  {!mine && (
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-                      style={{ background: "linear-gradient(135deg, var(--pp-agent), #6C3CE1)" }}
-                    >
-                      <Bot className="w-3 h-3 text-white" />
-                    </div>
-                  )}
-                  <div>
-                    <div
-                      className={mine ? "pp-bubble-out" : ""}
-                      style={
-                        mine
-                          ? { padding: "8px 12px", fontSize: 14 }
-                          : {
-                              padding: "8px 12px",
-                              fontSize: 14,
-                              background: "rgba(155,127,232,0.10)",
-                              border: "1px solid rgba(155,127,232,0.25)",
-                              color: "var(--pp-text-primary)",
-                              borderRadius: "16px 16px 16px 4px",
-                            }
-                      }
-                    >
-                      <p className="whitespace-pre-wrap break-words">{m.message}</p>
-                    </div>
-                    <p className={`text-[10px] mt-1 ${mine ? "text-right" : "text-left"}`} style={{ color: "var(--pp-text-faint)" }}>
-                      {fmtTime(m.created_at, lang, t)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-        {sending && (
-          <div className="flex justify-start">
-            <div
-              className="px-3 py-2 rounded-2xl text-sm flex items-center gap-2"
-              style={{
-                background: "rgba(155,127,232,0.10)",
-                border: "1px solid rgba(155,127,232,0.25)",
-                color: "var(--pp-agent)",
-              }}
-            >
-              <Loader2 className="w-3 h-3 animate-spin" /> {t("messages.avaThinking")}
-            </div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
-      <Composer
-        text={text} setText={setText} onSend={send} sending={sending}
-        placeholder={t("messages.avaPlaceholder")} accent="agent"
-        leftAction={
-          profile?.voice_agent_enabled ? (
-            <button
-              onClick={openAva}
-              className="p-2 rounded-full"
-              style={{ color: "var(--pp-agent)" }}
-              title={t("messages.voiceMode")}
-            >
-              <Mic className="w-5 h-5" />
-            </button>
-          ) : null
-        }
-      />
-
-      <AvaHistorySheet open={historyOpen} userId={profile?.user_id} onClose={() => setHistoryOpen(false)} />
-      <CoachOverlay
-        open={coach.open}
-        title={coach.title}
-        suggestions={coach.suggestions}
-        ctx={{ openDialer, openAva, userId: profile?.user_id, profileId: profile?.id }}
-        onClose={() => setCoach({ open: false, suggestions: [] })}
-      />
-    </div>
-  );
-}
-
-
-// ============================================================
 // EMAILS TAB (M365)
 // ============================================================
-function EmailsList({ profile, openAva: _openAva }: { profile: any; openAva: () => void }) {
+function EmailsList({ profile }: { profile: any }) {
   const { t, lang } = useMplanipretLang();
   const [emails, setEmails] = useState<any[] | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "no_m365" | "error">("loading");

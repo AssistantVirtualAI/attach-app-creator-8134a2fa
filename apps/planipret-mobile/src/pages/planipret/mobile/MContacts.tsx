@@ -1,13 +1,37 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useOutletContext } from "react-router-dom";
-import { Search, Phone, MessageSquare, Mail, Users, UserCog, BookUser, X, Calendar, ListChecks, Loader2, ExternalLink, Sparkles, Plus } from "lucide-react";
+import { Search, Phone, MessageSquare, Mail, Users, UserCog, BookUser, X, Calendar, ListChecks, Loader2, ExternalLink, Sparkles, Plus, Star } from "lucide-react";
 import AvaSummarizeSheet from "@/components/planipret/ava/AvaSummarizeSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
-type Tab = "personal" | "shared" | "directory";
+type Tab = "personal" | "favorites" | "directory";
+
+// ---- Favorites (local, per-device) ----
+const FAV_KEY = "planipret.contacts.favorites.v1";
+type FavEntry = {
+  key: string;                 // unique id (source:id/ext/phone)
+  source: "personal" | "shared" | "directory" | "maestro";
+  name: string;
+  phone?: string;
+  extension?: string;
+  email?: string;
+  company?: string;
+  department?: string;
+};
+function loadFavs(): FavEntry[] {
+  try { return JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); } catch { return []; }
+}
+function saveFavs(list: FavEntry[]) {
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(list)); } catch {}
+  try { window.dispatchEvent(new Event("planipret:favorites-changed")); } catch {}
+}
+function favKeyFor(source: FavEntry["source"], c: any): string {
+  const id = c.id ?? c.contact_id ?? c.extension ?? c.phone ?? c.email ?? "";
+  return `${source}:${id}`;
+}
 
 function Avatar({ name }: { name: string }) {
   const initials = name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase() || "?";

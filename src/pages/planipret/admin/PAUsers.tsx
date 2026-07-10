@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Search, Plus, Edit3, Trash2, ExternalLink, X, AlertTriangle, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp, MoreHorizontal, KeyRound, Copy, Smartphone, Bot, Phone, Sparkles } from "lucide-react";
+import { Search, Plus, Edit3, Trash2, ExternalLink, X, AlertTriangle, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp, MoreHorizontal, KeyRound, Copy, Smartphone, Bot, Phone, Sparkles, Upload } from "lucide-react";
 import Pagination from "@/components/planipret/admin/Pagination";
 import DebugPanel, { type DebugEntry } from "@/components/planipret/admin/DebugPanel";
 import { TableErrorState, TableEmptyState } from "@/components/planipret/admin/TableStates";
@@ -30,6 +30,12 @@ type Profile = PlanipretBrokerRow & {
   role?: string | null;
 };
 
+type DidAssignmentImport = {
+  phone_number: string;
+  extension: string;
+  callerid_name?: string | null;
+};
+
 export type NsNumber = {
   raw: string;
   e164: string;
@@ -37,6 +43,111 @@ export type NsNumber = {
   extension: string | null;
   application: string | null;
   active: boolean;
+};
+
+const normalizeDigits = (value: unknown) => String(value ?? "").replace(/\D/g, "");
+
+const normalizeExt = (value: unknown) => String(value ?? "")
+  .trim()
+  .replace(/^sip:/i, "")
+  .split("@")[0]
+  .replace(/[^a-z0-9._-]/gi, "")
+  .trim();
+
+const isPhoneLike = (value: unknown) => {
+  const d = normalizeDigits(value);
+  return d.length === 10 || (d.length === 11 && d.startsWith("1"));
+};
+
+const parseDelimitedLine = (line: string, delimiter: string) => {
+  const out: string[] = [];
+  let cur = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (quoted && line[i + 1] === '"') { cur += '"'; i += 1; }
+      else quoted = !quoted;
+    } else if (ch === delimiter && !quoted) {
+      out.push(cur.trim()); cur = "";
+    } else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+};
+
+const pickByHeader = (row: Record<string, string>, groups: string[]) => {
+  const entries = Object.entries(row);
+  for (const key of groups) {
+    const hit = entries.find(([h]) => h.includes(key));
+    if (hit?.[1]) return hit[1];
+  }
+  return "";
+};
+
+const rowsToAssignments = (records: Record<string, string>[]) => records
+  .map((row) => {
+    const phone = pickByHeader(row, ["phone", "téléphone", "telephone", "numero", "numéro", "did", "dnis", "phonenumber"]);
+    const extension = pickByHeader(row, ["extension", "ext", "to-user", "dest-user", "destination-user", "destination"]);
+    const callerid = pickByHeader(row, ["callerid", "caller id", "name", "nom", "description"]);
+    if (!isPhoneLike(phone) || !normalizeExt(extension)) return null;
+    return { phone_number: phone, extension: normalizeExt(extension), callerid_name: callerid || null };
+  })
+  .filter(Boolean) as DidAssignmentImport[];
+
+const parseAssignmentsFile = (text: string): DidAssignmentImport[] => {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    const arr = Array.isArray(parsed) ? parsed : (parsed.assignments ?? parsed.numbers ?? parsed.data ?? []);
+    if (Array.isArray(arr)) return rowsToAssignments(arr.map((item: any) => Object.fromEntries(
+      Object.entries(item ?? {}).map(([k, v]) => [String(k).toLowerCase(), String(v ?? "")]),
+    )));
+  } catch { /* not JSON */ }
+
+  if (/<table|<tr|<html/i.test(trimmed)) {
+    const doc = new DOMParser().parseFromString(trimmed, "text/html");
+    const records: Record<string, string>[] = [];
+    doc.querySelectorAll("table").forEach((table) => {
+      const trs = Array.from(table.querySelectorAll("tr"));
+      const header = Array.from(trs[0]?.querySelectorAll("th,td") ?? []).map((c) => c.textContent?.trim().toLowerCase() ?? "");
+      trs.slice(1).forEach((tr) => {
+        const cells = Array.from(tr.querySelectorAll("td,th")).map((c) => c.textContent?.trim() ?? "");
+        if (cells.length < 2) return;
+        const row: Record<string, string> = {};
+        cells.forEach((v, i) => { row[header[i] || `col${i}`] = v; });
+        records.push(row);
+      });
+    });
+    const fromTables = rowsToAssignments(records);
+    if (fromTables.length > 0) return fromTables;
+  }
+
+  const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const delimiter = ["\t", ";", ",", "|"]
+    .sort((a, b) => (lines[0].split(b).length - lines[0].split(a).length))[0];
+  const headers = parseDelimitedLine(lines[0], delimiter).map((h) => h.toLowerCase());
+  const hasHeader = headers.some((h) => /phone|téléphone|telephone|numero|numéro|did|dnis|extension|ext/.test(h));
+  if (hasHeader) {
+    const records = lines.slice(1).map((line) => {
+      const cells = parseDelimitedLine(line, delimiter);
+      const row: Record<string, string> = {};
+      cells.forEach((v, i) => { row[headers[i] || `col${i}`] = v; });
+      return row;
+    });
+    const fromCsv = rowsToAssignments(records);
+    if (fromCsv.length > 0) return fromCsv;
+  }
+
+  return lines.map((line) => {
+    const phone = line.match(/(?:\+?1[\s().-]*)?[2-9]\d{2}[\s().-]*\d{3}[\s.-]*\d{4}/)?.[0] ?? "";
+    const withoutPhone = line.replace(phone, " ");
+    const ext = withoutPhone.match(/(?:ext\.?|extension|poste|user)?\s*[:#-]?\s*([1-9]\d{2,5})\b/i)?.[1] ?? "";
+    if (!isPhoneLike(phone) || !ext) return null;
+    return { phone_number: phone, extension: ext, callerid_name: withoutPhone.replace(/\s+/g, " ").trim() || null };
+  }).filter(Boolean) as DidAssignmentImport[];
 };
 
 
@@ -83,6 +194,9 @@ export default function PAUsers() {
   const [allNumbers, setAllNumbers] = useState<NsNumber[]>([]);
   const [numbersError, setNumbersError] = useState<string | null>(null);
   const [numbersLoading, setNumbersLoading] = useState(false);
+  const [importingAssignments, setImportingAssignments] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const didInitialLoad = useRef(false);
 
   const numbersByExt = useMemo(() => {
     const map: Record<string, NsNumber[]> = {};
@@ -97,6 +211,8 @@ export default function PAUsers() {
     () => allNumbers.filter((n) => !n.extension),
     [allNumbers],
   );
+
+  const assignedNumbersCount = allNumbers.filter((n) => !!n.extension).length;
 
   const loadNumbers = async () => {
     setNumbersLoading(true);
@@ -142,6 +258,29 @@ export default function PAUsers() {
     loadNumbers();
   };
 
+  const importAssignmentsFile = async (file: File) => {
+    setImportingAssignments(true);
+    try {
+      const assignments = parseAssignmentsFile(await file.text());
+      if (assignments.length === 0) {
+        toast.error("Aucun assignment DID valide trouvé dans ce fichier");
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke("pp-admin-phonenumbers", {
+        body: { action: "sync_assignments", payload: { assignments, replace: true } },
+      });
+      if (error || !(data as any)?.success) {
+        toast.error((data as any)?.error ?? error?.message ?? "Erreur d'import DID");
+        return;
+      }
+      toast.success(`${(data as any).imported ?? assignments.length} assignments DID synchronisés`);
+      await loadNumbers();
+    } finally {
+      setImportingAssignments(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const syncFromNs = async () => {
     setSyncing(true);
     const { data, error } = await supabase.functions.invoke("ns-sync-user", { body: { action: "sync_from_ns" } });
@@ -178,11 +317,9 @@ export default function PAUsers() {
   };
 
   useEffect(() => {
+    if (didInitialLoad.current) return;
+    didInitialLoad.current = true;
     load();
-    const ch = supabase.channel("admin-users")
-      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_profiles" }, () => load())
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
   }, []);
 
   const normalizeSearch = (value: unknown) => String(value ?? "")
@@ -283,9 +420,6 @@ export default function PAUsers() {
   const adminCount = rows.length;
   return (
     <div className="space-y-4">
-      <div className="rounded-lg px-3 py-2 text-[11px]" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
-        🔒 Les comptes <code>@lemtel.com</code> sont automatiquement exclus de Planiprêt (réservés à Lemtel).
-      </div>
       {!loading && adminCount <= 1 && (
         <div className="rounded-xl p-4 flex items-start gap-3" style={{ background: `${ACCENT}10`, border: `1px solid ${ACCENT}33` }}>
           <div style={{ color: ACCENT, fontSize: 20, lineHeight: 1 }}>ℹ️</div>
@@ -320,7 +454,7 @@ export default function PAUsers() {
           )}
           {!numbersError && allNumbers.length > 0 && (
             <span className="px-2 py-1 rounded-full" style={{ fontSize: 11, background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
-              📞 {allNumbers.length} DID · {unassignedNumbers.length} libre{unassignedNumbers.length > 1 ? "s" : ""}
+              📞 {allNumbers.length} DID · {assignedNumbersCount} assigné{assignedNumbersCount > 1 ? "s" : ""} · {unassignedNumbers.length} libre{unassignedNumbers.length > 1 ? "s" : ""}
             </span>
           )}
           {numbersError && (
@@ -340,6 +474,19 @@ export default function PAUsers() {
           </div>
           <button onClick={syncFromNs} disabled={syncing} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)", opacity: syncing ? 0.6 : 1 }}>
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} /> {syncing ? "Sync..." : "Sync NS-API"}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.tsv,.txt,.json,.html,.htm,text/csv,text/tab-separated-values,application/json,text/html"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void importAssignmentsFile(file);
+            }}
+          />
+          <button onClick={() => fileInputRef.current?.click()} disabled={importingAssignments} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)", opacity: importingAssignments ? 0.6 : 1 }}>
+            <Upload className={`w-4 h-4 ${importingAssignments ? "animate-pulse" : ""}`} /> {importingAssignments ? "Import..." : "Importer DID"}
           </button>
           <button onClick={() => setAddAdminOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: `1px solid ${ACCENT}55`, color: ACCENT }}>
             <Plus className="w-4 h-4" /> Ajouter un admin

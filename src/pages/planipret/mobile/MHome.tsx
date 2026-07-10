@@ -278,31 +278,20 @@ export default function MHome() {
       <ExtensionSyncBanner profile={profile} reloadProfile={reloadProfile} />
 
       {/* ===== HEADER ===== */}
-      <header className="flex items-start justify-between">
-        <div className="min-w-0">
-          <p className="pp-eyebrow">{dateLabel}</p>
-          <h1 className="text-[26px] leading-tight font-bold mt-0.5">
-            {t("home.hello")}, <span style={{ color: "var(--pp-brand-accent)" }}>{firstName}</span>
-          </h1>
-        </div>
-        <button
-          onClick={() => {
-            if (phoneOnline) toast.success("Appels REST prêts — votre téléphone mobile sonnera quand vous appellerez.");
-            else toast.error("Aucune extension NetSapiens liée. Contacte un admin pour la synchroniser.");
-          }}
-          className="pp-pill"
-          style={{
-            background: phoneOnline ? "rgba(13,122,95,0.10)" : "rgba(178,58,72,0.10)",
-            color: phoneOnline ? "var(--pp-success)" : "var(--pp-danger)",
-            border: `1px solid ${phoneOnline ? "rgba(13,122,95,0.30)" : "rgba(178,58,72,0.30)"}`,
-          }}
-        >
-          <span style={{ width: 6, height: 6, borderRadius: 999, background: "currentColor", boxShadow: "0 0 6px currentColor" }} />
-          {phoneOnline ? "Appels REST" : "Non lié"}
-        </button>
+      <header className="min-w-0">
+        <p className="pp-eyebrow">{dateLabel}</p>
+        <h1 className="text-[26px] leading-tight font-bold mt-0.5">
+          {t("home.hello")}, <span style={{ color: "var(--pp-brand-accent)" }}>{firstName}</span>
+        </h1>
+        {(profile?.ns_extension || profile?.extension) && (
+          <p className="text-[12px] mt-1" style={{ color: "var(--pp-text-muted)" }}>
+            {t("extSync.extLabel")} {profile?.ns_extension || profile?.extension}
+          </p>
+        )}
       </header>
 
-      <IdentityCard profile={profile} onLinked={reloadProfile} />
+
+
 
 
 

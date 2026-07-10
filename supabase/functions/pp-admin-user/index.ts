@@ -233,6 +233,82 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Provision a Planiprêt profile stub for an ns_only broker so admin
+    // toggles (mobile_app_enabled / voice_agent_enabled) become editable.
+    // Creates the auth user with a random password + sends a reset email.
+    if (action === "provision_from_ns") {
+      const { email, full_name, extension, updates } = payload ?? {};
+      if (!email || !extension) {
+        return jsonResponse({ success: false, error: "email et extension requis" }, 400);
+      }
+      if (/@lemtel\.com$/i.test(String(email).trim())) {
+        return jsonResponse({ success: false, error: "Emails @lemtel.com non supportés" }, 422);
+      }
+
+      // If a profile already exists (by email or extension), reuse it.
+      const { data: byEmail } = await admin.from("planipret_profiles")
+        .select("id, user_id").eq("email", email).maybeSingle();
+      const { data: byExt } = byEmail ? { data: null } : await admin.from("planipret_profiles")
+        .select("id, user_id").eq("extension", extension).maybeSingle();
+      let userId = byEmail?.user_id ?? byExt?.user_id ?? null;
+      let profileId = byEmail?.id ?? byExt?.id ?? null;
+
+      if (!userId) {
+        // Try to reuse an existing auth user with the same email.
+        const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+        const existingAuth = list?.users?.find((u: any) => String(u.email ?? "").toLowerCase() === String(email).toLowerCase());
+        if (existingAuth) {
+          userId = existingAuth.id;
+        } else {
+          const { data: created, error: cErr } = await admin.auth.admin.createUser({
+            email, password: randomPassword(22), email_confirm: true,
+          });
+          if (cErr || !created?.user) {
+            return jsonResponse({ success: false, error: cErr?.message ?? "Échec création auth" }, 200);
+          }
+          userId = created.user.id;
+          admin.auth.resetPasswordForEmail(email).catch(() => null);
+        }
+      }
+
+      const patch: any = {
+        user_id: userId,
+        organization_id: profile.organization_id,
+        email,
+        full_name: full_name || extension,
+        extension,
+        ns_extension: extension,
+        ns_domain: NS_DEFAULT_DOMAIN,
+        ns_linked: true,
+        role: "broker",
+        mobile_app_enabled: updates?.mobile_app_enabled ?? false,
+        voice_agent_enabled: updates?.voice_agent_enabled ?? false,
+      };
+
+      if (profileId) {
+        await admin.from("planipret_profiles").update(patch).eq("id", profileId);
+      } else {
+        const { data: ins, error: pErr } = await admin.from("planipret_profiles")
+          .insert(patch).select("id").maybeSingle();
+        if (pErr) return jsonResponse({ success: false, error: pErr.message }, 200);
+        profileId = ins?.id ?? null;
+      }
+
+      await admin.from("user_roles").upsert({
+        user_id: userId,
+        organization_id: profile.organization_id,
+        role: "planipret_broker",
+      }, { onConflict: "user_id,organization_id" });
+
+      await logAudit(admin, req, {
+        admin_id: profile.id, action: "USER_PROVISION_FROM_NS",
+        resource_type: "user", resource_id: userId,
+        metadata: { email, extension, updates },
+      });
+
+      return jsonResponse({ success: true, user_id: userId, profile_id: profileId });
+    }
+
     if (action === "update") {
       const { user_id, updates } = payload ?? {};
       if (!user_id) return jsonResponse({ success: false, error: "user_id requis" }, 400);

@@ -177,7 +177,7 @@ export default function RecordingsList({
         if (!audioBlobCacheRef.current.has(call.id) && !alreadyBlob) {
           setStatus(call.id, "uploading");
           try {
-            const url = await fetchAudioBlob(call, { retries: 3, signal: controller.signal });
+            const url = await fetchAudioUrl(call, { retries: 3, signal: controller.signal });
             if (cancelled) { URL.revokeObjectURL(url); break; }
             audioBlobCacheRef.current.set(call.id, url);
             setStatus(call.id, "uploaded");
@@ -297,7 +297,7 @@ export default function RecordingsList({
   const retryAudio = async (call: RecordingCall) => {
     setStatus(call.id, "uploading");
     try {
-      const url = await fetchAudioBlob(call, { retries: 3 });
+      const url = await fetchAudioUrl(call, { retries: 3 });
       const prev = audioBlobCacheRef.current.get(call.id);
       if (prev) { try { URL.revokeObjectURL(prev); } catch {} }
       audioBlobCacheRef.current.set(call.id, url);
@@ -527,7 +527,7 @@ function RecordingSection({ call, onUpdated }: { call: RecordingCall; onUpdated:
   const fetchRec = async (opts: { play?: boolean } = {}) => {
     setLoading(true);
     try {
-      const url = await fetchAudioBlob(call, { retries: 3 });
+      const url = await fetchAudioUrl(call, { retries: 3 });
       if (localObjectUrlRef.current?.startsWith("blob:")) URL.revokeObjectURL(localObjectUrlRef.current);
       localObjectUrlRef.current = url;
       playAfterLoadRef.current = !!opts.play;

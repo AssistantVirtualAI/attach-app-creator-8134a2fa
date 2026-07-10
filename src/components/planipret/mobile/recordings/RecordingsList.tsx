@@ -75,7 +75,15 @@ const otherLabel = (c: RecordingCall) => {
 const hasResolvableAudio = (c: RecordingCall) => !!(
   c.recording_url || c.has_recording || c.stream_via_proxy || c.proxy_call_db_id || c.proxy_ns_callid || c.ns_callid || c.ns_orig_callid || c.ns_term_callid || c.ns_call_id
 );
+// Audio lookup peut suivre le proxy (autre ligne DB qui détient le fichier NS).
 const callDbId = (c: RecordingCall) => c.proxy_call_db_id ?? c.id;
+// Pipeline (transcript + IA) DOIT écrire sur la ligne exacte de la carte,
+// sinon transcript/analyse atterrissent sur un appel voisin.
+const pipelineId = (c: RecordingCall) => c.id;
+const isVoicemailCall = (c: RecordingCall) => {
+  const to = String(c.to_number ?? "").toLowerCase();
+  return to.includes("vmail") || to.includes("voicemail") || to.includes("vm@");
+};
 const recordingLookupBody = (c: RecordingCall) => ({
   call_db_id: callDbId(c),
   ns_callid: c.proxy_ns_callid ?? c.ns_callid ?? c.ns_orig_callid ?? c.ns_term_callid ?? c.ns_call_id,
@@ -165,15 +173,70 @@ export default function RecordingsList({
     if (!withRec.length) return;
     const controller = new AbortController();
     let cancelled = false;
-    const queue = withRec.slice(0, 15).filter((c) => hasResolvableAudio(c));
+    const queue = withRec.slice(0, 15).filter((c) => hasResolvableAudio(c) && !isVoicemailCall(c));
+
+    // Backoff planifié pour transcript pending (aligné sur PARecordings admin).
+    const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+
+    const runTranscriptWithRetries = async (start: RecordingCall): Promise<RecordingCall> => {
+      let working = start;
+      let attempts = 0;
+      while (!cancelled && !working.transcript && attempts < 5) {
+        const { data, error } = await supabase.functions.invoke("pp-admin-transcribe", {
+          body: { call_id: pipelineId(working) },
+        });
+        if (error) throw error;
+        const tx = (data as any) ?? {};
+        if (tx?.ok && tx?.transcript) {
+          working = {
+            ...working,
+            transcript: tx.transcript,
+            transcript_segments: Array.isArray(tx.segments) ? tx.segments : working.transcript_segments,
+            transcript_language: tx.language ?? working.transcript_language,
+          };
+          if (!cancelled) onUpdated(working);
+          return working;
+        }
+        if (tx?.pending) {
+          const delay = Math.min(15_000 * Math.pow(2, Math.min(attempts, 3)), 240_000);
+          attempts++;
+          await sleep(delay);
+          continue;
+        }
+        // Erreur non-récupérable : sort silencieusement.
+        return working;
+      }
+      return working;
+    };
+
+    const runCoachingWithRetries = async (start: RecordingCall): Promise<void> => {
+      let attempts = 0;
+      while (!cancelled && attempts < 4) {
+        const localTranscript = start.transcript
+          || (Array.isArray(start.transcript_segments) ? start.transcript_segments.map((s: any) => s?.text).filter(Boolean).join("\n") : "");
+        const { data, error } = await supabase.functions.invoke("pp-coach-call", {
+          body: { call_id: pipelineId(start), transcript: localTranscript },
+        });
+        if (error) throw error;
+        const d = (data as any) ?? {};
+        if (d?.error === "TRANSCRIPT_MISSING") {
+          attempts++;
+          await sleep(3000);
+          continue;
+        }
+        if (d?.success || d?.summary || d?.coaching) {
+          if (!cancelled) onUpdated(applyCoachPayload(start, d));
+        }
+        return;
+      }
+    };
 
     (async () => {
       for (const call of queue) {
         if (cancelled) break;
         const who = otherLabel(call);
 
-        // Auto-cache audio server-side and keep the signed URL ready for instant playback.
-        // Runs silently — no toast — since the user asked for automatic sync.
+        // 1) Audio : cache signé côté serveur, silencieux.
         const alreadyBlob = !!call.recording_url && /^blob:/i.test(String(call.recording_url));
         if (!audioBlobCacheRef.current.has(call.id) && !alreadyBlob) {
           setStatus(call.id, "uploading");
@@ -193,49 +256,25 @@ export default function RecordingsList({
           setStatus(call.id, "uploaded");
         }
 
-        // Transcript + coaching pipeline — silent background processing.
+        // 2) Transcript + 3) IA — pipeline complet, indépendant de l'audio.
         if (!autoPipelineDoneRef.current.has(call.id) && (!call.transcript || !call.ai_summary)) {
           autoPipelineDoneRef.current.add(call.id);
           try {
             let working = call;
             if (!working.transcript) {
-              try {
-                const { data, error } = await supabase.functions.invoke("pp-admin-transcribe", { body: { call_id: callDbId(working) } });
-                if (error) throw error;
-                const tx = (data as any) ?? {};
-                if (tx.transcript) {
-                  working = {
-                    ...working,
-                    transcript: tx.transcript,
-                    transcript_segments: tx.segments ?? working.transcript_segments,
-                    transcript_language: tx.language ?? working.transcript_language,
-                  };
-                  if (!cancelled) onUpdated(working);
-                }
-              } catch (e: any) {
-                console.warn("[RecordingsList] transcription failed", who, e?.message);
-                throw e;
-              }
+              working = await runTranscriptWithRetries(working);
             }
             if (!cancelled && working.transcript && !working.ai_summary) {
-              try {
-                const { data, error } = await supabase.functions.invoke("pp-coach-call", {
-                  body: { call_id: callDbId(working), transcript: working.transcript },
-                });
-                if (error) throw error;
-                if (!cancelled) onUpdated(applyCoachPayload(working, data));
-              } catch (e: any) {
-                console.warn("[RecordingsList] coaching failed", who, e?.message);
-                throw e;
-              }
+              await runCoachingWithRetries(working);
             }
-          } catch (e) {
-            console.warn("[RecordingsList] background pipeline failed", e);
+          } catch (e: any) {
+            // Autorise un futur retry si erreur transitoire.
+            autoPipelineDoneRef.current.delete(call.id);
+            console.warn("[RecordingsList] background pipeline failed", who, e?.message);
           }
         }
 
-
-        await new Promise((resolve) => window.setTimeout(resolve, 400));
+        await sleep(400);
       }
 
     })();
@@ -343,6 +382,42 @@ function RecordingCard({
 }) {
   const [open, setOpen] = useState<"rec" | "txt" | "ai" | "crm" | null>(null);
   const temp = tempIcon(call.lead_temperature);
+
+  // Realtime: reflect any DB write (pp-admin-transcribe, pp-coach-call, etc.)
+  // sur la MÊME ligne que la carte, comme le portail admin (`pa-call-${id}`).
+  useEffect(() => {
+    const ch = supabase
+      .channel(`pp-mobile-call-${call.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "planipret_phone_calls", filter: `id=eq.${call.id}` },
+        (payload: any) => {
+          const n = payload?.new;
+          if (!n) return;
+          onUpdated({
+            ...call,
+            transcript: n.transcript ?? call.transcript,
+            transcript_segments: n.transcript_segments ?? call.transcript_segments,
+            transcript_language: n.transcript_language ?? call.transcript_language,
+            ai_summary: n.ai_summary ?? call.ai_summary,
+            ai_coaching: n.ai_coaching ?? call.ai_coaching,
+            ai_key_points: n.ai_key_points ?? call.ai_key_points,
+            ai_client_insights: n.ai_client_insights ?? call.ai_client_insights,
+            ai_tasks: n.ai_tasks ?? call.ai_tasks,
+            lead_score: n.lead_score ?? call.lead_score,
+            coaching_score: n.coaching_score ?? call.coaching_score,
+            lead_temperature: n.lead_temperature ?? call.lead_temperature,
+            maestro_synced: n.maestro_synced ?? call.maestro_synced,
+            maestro_client_id: n.maestro_client_id ?? call.maestro_client_id,
+          });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [call.id]);
+
+
 
 
   return (
@@ -676,7 +751,7 @@ function TranscriptSection({ call, onUpdated }: { call: RecordingCall; onUpdated
         languageNext = nsTranscript.language;
       } else {
         const { data, error } = await supabase.functions.invoke("pp-admin-transcribe", {
-          body: { call_id: callDbId(call) },
+          body: { call_id: pipelineId(call) },
         });
         if (error) throw error;
         const next = (data as any) ?? {};
@@ -689,7 +764,7 @@ function TranscriptSection({ call, onUpdated }: { call: RecordingCall; onUpdated
       onUpdated(updated);
       if (text) {
         const { data: coached } = await supabase.functions.invoke("pp-coach-call", {
-          body: { call_id: callDbId(call), transcript: text },
+          body: { call_id: pipelineId(call), transcript: text },
         });
         onUpdated(applyCoachPayload(updated, coached));
       }
@@ -788,7 +863,7 @@ function AISection({ call, onUpdated }: { call: RecordingCall; onUpdated: (c: Re
           baseCall = { ...call, transcript: nsTranscript.text, transcript_segments: nsTranscript.segments, transcript_language: nsTranscript.language };
           onUpdated(baseCall);
         } else {
-          const { data: tx, error: txErr } = await supabase.functions.invoke("pp-admin-transcribe", { body: { call_id: callDbId(call) } });
+          const { data: tx, error: txErr } = await supabase.functions.invoke("pp-admin-transcribe", { body: { call_id: pipelineId(call) } });
           if (txErr) throw txErr;
           const t = (tx as any)?.transcript;
           if (t) {
@@ -800,7 +875,7 @@ function AISection({ call, onUpdated }: { call: RecordingCall; onUpdated: (c: Re
       }
       if (!transcriptForAi) throw new Error("Transcription indisponible côté système téléphonique");
       const { data, error } = await supabase.functions.invoke("pp-coach-call", {
-        body: { call_id: callDbId(call), transcript: transcriptForAi },
+        body: { call_id: pipelineId(call), transcript: transcriptForAi },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any)?.message ?? (data as any)?.error);

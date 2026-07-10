@@ -469,11 +469,11 @@ export default function MCalls() {
         >
           {[
             { k: "recents", label: t("calls.tabs.recents") },
-            { k: "active", label: t("calls.tabs.active") },
             { k: "missed", label: t("calls.tabs.missed") },
             { k: "recordings", label: t("calls.tabs.recordings") },
             { k: "voicemails", label: t("calls.tabs.voicemails") },
           ].map((tabDef) => {
+
             const active = tab === (tabDef.k as any);
             const isMissedTab = tabDef.k === "missed";
             return (

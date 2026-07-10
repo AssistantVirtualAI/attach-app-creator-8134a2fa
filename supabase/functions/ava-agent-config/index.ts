@@ -94,19 +94,16 @@ Deno.serve(async (req) => {
 
   const { data: full } = await admin
     .from("planipret_profiles")
-    .select("id, full_name, extension, ns_domain, ms365_access_token, maestro_broker_id, maestro_connected, voice_agent_enabled, ava_autonomy_mode, ava_preferred_lang, elevenlabs_agent_id")
+    .select("id, full_name, extension, ns_domain, ms365_access_token, maestro_broker_id, maestro_connected, voice_agent_enabled, ava_autonomy_mode, ava_preferred_lang, elevenlabs_agent_id, ava_voice_id, ava_voice_stability, ava_voice_similarity, ava_voice_style")
     .eq("id", profile.id)
     .maybeSingle();
 
-  const p = full ?? profile;
-  // GATING: réservé aux courtiers activés depuis l'admin (toggle "Agent IA").
+  const p: any = full ?? profile;
   if (p.voice_agent_enabled === false) {
     return jsonResponse({ success: false, error: "ava_not_enabled_for_user" }, 403);
   }
 
   const agentId = p.elevenlabs_agent_id || DEFAULT_AGENT_ID;
-  // Graceful setup_required when ELEVENLABS_DEFAULT_AGENT_ID is missing AND broker
-  // has no per-user agent_id configured. Frontend shows an inline setup banner.
   if (!agentId) {
     return jsonResponse({
       success: false,
@@ -118,7 +115,7 @@ Deno.serve(async (req) => {
   }
 
   const firstName = (p.full_name ?? "courtier").split(" ")[0];
-  const voiceId = Deno.env.get("ELEVENLABS_AVA_VOICE_ID") || DEFAULT_VOICE_ID;
+  const voiceId = p.ava_voice_id || Deno.env.get("ELEVENLABS_AVA_VOICE_ID") || DEFAULT_VOICE_ID;
 
   return jsonResponse({
     success: true,
@@ -127,6 +124,11 @@ Deno.serve(async (req) => {
     system_prompt: buildPrompt(p),
     first_message: `Bonjour ${firstName} ! Je suis AVA, ton assistante IA. Comment puis-je t'aider aujourd'hui ?`,
     voice_id: voiceId,
+    voice_settings: {
+      stability: Number(p.ava_voice_stability ?? 0.6),
+      similarity_boost: Number(p.ava_voice_similarity ?? 0.8),
+      style: Number(p.ava_voice_style ?? 0.3),
+    },
     language: p.ava_preferred_lang ?? "fr",
     autonomy_mode: p.ava_autonomy_mode ?? "confirm",
     tools: TOOL_NAMES,

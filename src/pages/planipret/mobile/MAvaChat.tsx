@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Send, Plus, Menu, Loader2, Sparkles, Mic, Square, Volume2, VolumeX, CheckCircle2 } from "lucide-react";
+import { Send, Plus, Menu, Loader2, Sparkles, Mic, Square, Volume2, VolumeX, CheckCircle2, MessageSquare, Radio } from "lucide-react";
+import AvaVoiceAgent from "@/components/planipret/mobile/AvaVoiceAgent";
 
 type AvaSuggestion = { id: string; label: string; kind: string; payload?: Record<string, any> };
 type Msg = { id: string; role: "user" | "assistant"; message: string; created_at: string; suggestions?: AvaSuggestion[] };

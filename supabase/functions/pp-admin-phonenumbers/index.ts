@@ -1,6 +1,6 @@
 // Manage NetSapiens DIDs (phone numbers) for the Planiprêt domain.
 // Actions: list, assign, unassign
-import { corsHeaders, jsonResponse, requirePlanipretAdmin } from "../_shared/ns-broker.ts";
+import { corsHeaders, jsonResponse, requirePlanipretAdmin, supaAdmin } from "../_shared/ns-broker.ts";
 
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
 const NS_API_BASE_URL = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";

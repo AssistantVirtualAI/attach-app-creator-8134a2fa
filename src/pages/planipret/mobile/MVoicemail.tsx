@@ -422,18 +422,61 @@ function AudioPlayer({ vm }: { vm: VM }) {
 
   const fmtT = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
+  const pct = dur > 0 ? Math.min(100, (progress / dur) * 100) : 0;
+
   return (
-    <div className="bg-slate-50 rounded-lg p-3 mt-3">
+    <div
+      className="rounded-2xl p-3 mt-3 border"
+      style={{
+        background: `linear-gradient(135deg, ${PRIMARY}08, ${ACCENT}08)`,
+        borderColor: "var(--pp-bg-border)",
+      }}
+    >
       {src ? <audio ref={audioRef} src={src} onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)} onLoadedMetadata={(e) => setDur(e.currentTarget.duration)} onEnded={() => setPlaying(false)} hidden /> : null}
-      <div className="flex items-center gap-2">
-        <button onClick={toggle} disabled={!src} className="w-9 h-9 rounded-full flex items-center justify-center text-white disabled:opacity-40" style={{ background: PRIMARY }}>
-          {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={toggle}
+          disabled={!src}
+          className="w-11 h-11 rounded-full flex items-center justify-center text-white shadow-md disabled:opacity-40 flex-shrink-0 active:scale-95 transition-transform"
+          style={{ background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})` }}
+        >
+          {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
         </button>
-        <input type="range" min={0} max={dur || 0} step={0.1} value={progress} onChange={(e) => { const v = +e.target.value; setProgress(v); if (audioRef.current) audioRef.current.currentTime = v; }} className="flex-1" />
-        <span className="text-[10px] text-slate-500 tabular-nums">{fmtT(progress)} / {fmtT(dur || 0)}</span>
-        <button onClick={cycleSpeed} className="px-2 py-1 rounded bg-white text-[10px] font-semibold text-slate-700">{speed}x</button>
+        <div className="flex-1 min-w-0">
+          <div className="relative h-1.5 rounded-full bg-slate-200/70 overflow-hidden">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full transition-[width]"
+              style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${PRIMARY}, ${ACCENT})` }}
+            />
+            <input
+              type="range"
+              min={0}
+              max={dur || 0}
+              step={0.1}
+              value={progress}
+              onChange={(e) => { const v = +e.target.value; setProgress(v); if (audioRef.current) audioRef.current.currentTime = v; }}
+              className="absolute inset-0 w-full opacity-0 cursor-pointer"
+            />
+          </div>
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="text-[10px] text-slate-500 tabular-nums font-medium">{fmtT(progress)}</span>
+            <span className="text-[10px] text-slate-400 tabular-nums">-{fmtT(Math.max(0, (dur || 0) - progress))}</span>
+          </div>
+        </div>
+        <button
+          onClick={cycleSpeed}
+          className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold tabular-nums border transition-colors flex-shrink-0"
+          style={{ background: "#fff", color: PRIMARY, borderColor: `${PRIMARY}30` }}
+        >
+          {speed}×
+        </button>
       </div>
-      {!src && <p className="text-[10px] text-slate-400 mt-1">{t("voicemail.audioLoading")}</p>}
+      {!src && (
+        <div className="flex items-center gap-2 mt-2">
+          <div className="w-3 h-3 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+          <p className="text-[10.5px] text-slate-500">{t("voicemail.audioLoading")}</p>
+        </div>
+      )}
     </div>
   );
 }

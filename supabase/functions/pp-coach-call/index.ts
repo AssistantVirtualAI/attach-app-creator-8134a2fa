@@ -53,6 +53,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* empty */ }
   const call_id = body.call_id;
   const force = body.force === true;
+  const reprocess = body.reprocess === true;
   const bodyTranscript = typeof body.transcript === "string" ? body.transcript : null;
   if (!call_id) return json({ error: "call_id required" }, 400);
 
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
   if (error || !row) return json({ error: "call not found", details: error?.message }, 404);
 
   // ── A: cache déjà analysé ────────────────────────────────
-  if (row.analyzed_at && !force) {
+  if (row.analyzed_at && !reprocess) {
     return json({
       success: true, cached: true, call_id,
       summary: row.ai_summary, coaching: row.ai_coaching,
@@ -75,7 +76,7 @@ Deno.serve(async (req) => {
   }
 
   // ── B: vérifier verrou existant ─────────────────────────
-  if (row.analysis_in_progress && !force) {
+  if (row.analysis_in_progress && !reprocess) {
     const lockedAt = new Date(row.analysis_locked_at || 0).getTime();
     if (Date.now() - lockedAt < 120_000) {
       return json({
@@ -107,7 +108,7 @@ Deno.serve(async (req) => {
     // ── D: transcript ─────────────────────────────────────
     const effectiveTranscript = (row.transcript && row.transcript.trim().length >= 20)
       ? row.transcript
-      : (bodyTranscript && bodyTranscript.trim().length >= 20 ? bodyTranscript : null);
+      : (bodyTranscript && bodyTranscript.trim().length >= 20 && (force || reprocess) ? bodyTranscript : null);
 
     if (!effectiveTranscript) {
       // Release lock

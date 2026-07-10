@@ -16,6 +16,13 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const json = (payload: any, status = 200) =>
   new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+const unavailable = (reason: string, payload: Record<string, unknown> = {}) => json({
+  success: false,
+  available: false,
+  reason,
+  ...payload,
+}, 200);
+
 function pickAudioUrl(j: any): string | null {
   if (!j) return null;
   const first = Array.isArray(j) ? j[0] : j;
@@ -358,7 +365,7 @@ async function audioResponse(
     const path = await persistRecording(opts.callDbId, body, contentType);
     if (path) {
       const url = await signCachedUrl(path);
-      if (url) return json({ success: true, url, cached: true, path, content_type: contentType, bytes: body.byteLength });
+      if (url) return json({ success: true, available: true, reason: "cached", url, recording_url: url, cached: true, path, content_type: contentType, bytes: body.byteLength });
     }
   } else if (opts.callDbId) {
     try { (globalThis as any).EdgeRuntime?.waitUntil?.(persistRecording(opts.callDbId, body, contentType)); }
@@ -401,7 +408,7 @@ async function streamFromUrl(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   let cfg;
-  try { cfg = await getNsRuntimeConfig(); } catch (e) { return json({ error: (e as Error).message }, 500); }
+  try { cfg = await getNsRuntimeConfig(); } catch (e) { return unavailable("ns_not_configured", { error: (e as Error).message, message: (e as Error).message }); }
 
   let body: any = {};
   try { body = await req.json(); } catch { /* GET/empty */ }
@@ -431,7 +438,7 @@ Deno.serve(async (req) => {
     if (row?.recording_storage_path) {
       const signed = await signCachedUrl(row.recording_storage_path);
       if (signed) {
-        if (preferUrl) return json({ success: true, url: signed, cached: true, path: row.recording_storage_path });
+        if (preferUrl) return json({ success: true, available: true, reason: "cached", url: signed, recording_url: signed, cached: true, path: row.recording_storage_path });
         const s = await fetch(signed);
         if (s.ok) {
           const bytes = new Uint8Array(await s.arrayBuffer());
@@ -467,11 +474,11 @@ Deno.serve(async (req) => {
   for (const m of cdrMatches) addIds(ids, m.cdr);
 
   if (!ids.length) {
-    return json({
+    return unavailable("missing_callid", {
       error: "MISSING_CALLID",
       message: "Identifiant NS-API introuvable pour cet appel. Relancez la synchronisation CDR.",
       call_db_id, ns_callid, ns_extension, attempts,
-    }, 200);
+    });
   }
 
   const headers = { Authorization: `Bearer ${cfg.apiKey}`, Accept: "audio/*, application/json" };
@@ -525,7 +532,7 @@ Deno.serve(async (req) => {
   }
 
   if (recordingMeta) {
-    return json({
+    return unavailable("no_file_access_url", {
       error: "NO_FILE_ACCESS_URL",
       message: "L'enregistrement existe mais l'URL d'accès n'est pas disponible (traitement en cours ou fichier vide).",
       ns_callid, ns_extension, domain,
@@ -535,14 +542,14 @@ Deno.serve(async (req) => {
       duration_sec: recordingMeta["file-duration-seconds"] ?? null,
       recording_meta: recordingMeta,
       attempts,
-    }, 200);
+    });
   }
 
   // NOTE: do NOT flip has_recording=false here. NetSapiens can respond empty
   // while the recording is still being finalized, or when the orig/term call-id
   // we probed doesn't yet match the CDR. Auto-marking permanently hid the
   // "Load recording" flow for calls that ARE recorded (all lines are auto-recorded).
-  return json({
+  return unavailable("recording_not_found", {
     error: "RECORDING_NOT_FOUND",
     message: cdrMatches.length
       ? "Aucun enregistrement retourné par NetSapiens pour cet appel (traitement en cours, expiré, ou call-id désynchronisé). Relancez la synchronisation CDR puis réessayez."
@@ -553,5 +560,5 @@ Deno.serve(async (req) => {
       "Le ns_callid stocké ne correspond pas à la paire orig/term réelle — resynchroniser le CDR",
       "Le fichier a expiré ou été purgé côté NetSapiens (rare, uniquement pour d'anciens appels)",
     ],
-  }, 200);
+  });
 });

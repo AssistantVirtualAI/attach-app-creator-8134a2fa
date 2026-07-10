@@ -5,9 +5,8 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const NS_API_KEY = Deno.env.get("NS_API_KEY");
-const NS_API_BASE_URL = (Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2").replace(/\/$/, "");
-const NS_DOMAIN = Deno.env.get("NS_DEFAULT_DOMAIN") ?? Deno.env.get("NS_API_DOMAIN") ?? "planipret.ca";
+const FALLBACK_NS_API_BASE_URL = (Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2").replace(/\/$/, "");
+const FALLBACK_NS_DOMAIN = Deno.env.get("NS_DEFAULT_DOMAIN") ?? Deno.env.get("NS_API_DOMAIN") ?? "planipret.ca";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -68,9 +67,31 @@ function asArray(data: any): any[] {
   return [data];
 }
 
-async function nsJson(path: string) {
-  const r = await fetch(`${NS_API_BASE_URL}${path}`, {
-    headers: { Authorization: `Bearer ${NS_API_KEY}`, Accept: "application/json" },
+async function getNsRuntimeConfig() {
+  let configData: Record<string, string> = {};
+  let secretData: Record<string, string> = {};
+  try {
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const [{ data: cfg }, { data: secrets }] = await Promise.all([
+      admin.from("planipret_integration_config").select("config_data").eq("integration_key", "ns_api").maybeSingle(),
+      admin.from("planipret_integration_secrets").select("provider, config").in("provider", ["nsapi", "ns_api"]).limit(2),
+    ]);
+    configData = (cfg?.config_data ?? {}) as Record<string, string>;
+    secretData = (((secrets ?? [])[0] as any)?.config ?? {}) as Record<string, string>;
+  } catch { /* env fallback */ }
+  const baseUrl = (configData.base_url ?? secretData.base_url ?? FALLBACK_NS_API_BASE_URL).replace(/\/$/, "").replace(/\/ns-api(\/v2)?$/, "") + "/ns-api/v2";
+  const apiKey = configData.api_key ?? secretData.api_key ?? Deno.env.get("NS_API_KEY") ?? "";
+  if (!apiKey) throw new Error("NS_API_KEY not configured");
+  return {
+    baseUrl,
+    apiKey,
+    domain: configData.domain ?? configData.default_domain ?? secretData.domain ?? secretData.default_domain ?? FALLBACK_NS_DOMAIN,
+  };
+}
+
+async function nsJson(path: string, cfg: { baseUrl: string; apiKey: string }) {
+  const r = await fetch(`${cfg.baseUrl}${path}`, {
+    headers: { Authorization: `Bearer ${cfg.apiKey}`, Accept: "application/json" },
   });
   const rawText = await r.text();
   let data: any = null;
@@ -116,7 +137,8 @@ function parseTranscript(raw: any): Array<{ speaker: string; text: string }> {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (!NS_API_KEY) return json({ error: "NS_API_KEY not configured" }, 500);
+  let cfg;
+  try { cfg = await getNsRuntimeConfig(); } catch (e) { return json({ success: false, available: false, reason: "ns_not_configured", error: (e as Error).message }, 200); }
 
   let body: any = {};
   try { body = await req.json(); } catch { /* empty */ }
@@ -125,15 +147,17 @@ Deno.serve(async (req) => {
   let ns_callid: string | null = body.ns_callid ?? url.searchParams.get("ns_callid") ?? url.searchParams.get("call_id");
   let ns_extension: string | null = body.ns_extension ?? url.searchParams.get("ns_extension");
   let row: any = null;
+  let domain = String(body.domain ?? url.searchParams.get("domain") ?? cfg.domain);
 
-  if ((!ns_callid || !ns_extension) && call_db_id) {
+  if (call_db_id) {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const { data } = await admin
       .from("planipret_phone_calls")
-      .select("id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, extension, metadata, started_at, duration_seconds, from_number, to_number")
+        .select("id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, started_at, duration_seconds, from_number, to_number")
       .eq("id", call_db_id)
       .maybeSingle();
     row = data;
+    domain = row?.ns_domain || row?.metadata?.domain || domain;
     ns_callid = ns_callid || row?.ns_callid || row?.ns_orig_callid || row?.ns_term_callid || row?.metadata?.["call-parent-cdr-id"] || null;
     ns_extension = ns_extension || row?.extension || null;
   }
@@ -142,11 +166,13 @@ Deno.serve(async (req) => {
   let transcript: any = null;
   const ids: string[] = [];
   pushId(ids, ns_callid);
+  pushId(ids, body.ns_orig_callid ?? url.searchParams.get("ns_orig_callid"));
+  pushId(ids, body.ns_term_callid ?? url.searchParams.get("ns_term_callid"));
   addIds(ids, row?.metadata, row);
 
   const cdrs: any[] = [];
   if (row?.started_at) {
-    const D = encodeURIComponent(NS_DOMAIN);
+    const D = encodeURIComponent(domain);
     const start = new Date(new Date(row.started_at).getTime() - 180_000).toISOString();
     const end = new Date(new Date(row.started_at).getTime() + (Number(row.duration_seconds ?? 0) + 180) * 1000).toISOString();
     const qs = `datetime-start=${encodeURIComponent(start)}&datetime-end=${encodeURIComponent(end)}&limit=200`;
@@ -154,7 +180,7 @@ Deno.serve(async (req) => {
     if (row.extension) paths.push(`/domains/${D}/users/${encodeURIComponent(row.extension)}/cdrs?${qs}`);
     for (const p of paths) {
       try {
-        const r = await nsJson(p);
+          const r = await nsJson(p, cfg);
         attempts.push({ url: p, status: r.status, kind: "cdr_lookup", body_preview: String(r.rawText).slice(0, 160) });
         if (!r.ok) continue;
         const rows = asArray(r.data).map((cdr) => {
@@ -189,14 +215,14 @@ Deno.serve(async (req) => {
     }
   }
 
-  const D = encodeURIComponent(NS_DOMAIN);
+  const D = encodeURIComponent(domain);
 
   // Direct CDR-by-callid fetch (in case datetime lookup missed the right CDR)
   if (ns_callid) {
     const base = String(ns_callid).split("@")[0];
     for (const cid of Array.from(new Set([ns_callid, base]))) {
       try {
-        const r = await nsJson(`/domains/${D}/cdrs/${encodeURIComponent(cid)}`);
+        const r = await nsJson(`/domains/${D}/cdrs/${encodeURIComponent(cid)}`, cfg);
         attempts.push({ url: `/domains/${D}/cdrs/${cid}`, status: r.status, kind: "cdr_by_callid", fields_found: r.ok && r.data && typeof r.data === "object" ? Object.keys(Array.isArray(r.data) ? r.data[0] ?? {} : r.data) : [] });
         if (r.ok) {
           const items = asArray(r.data);
@@ -225,7 +251,7 @@ Deno.serve(async (req) => {
         const path = normalizeNsPath(s);
         if (!path) continue;
         try {
-          const r = await nsJson(path);
+          const r = await nsJson(path, cfg);
           attempts.push({ url: path, status: r.status, kind: `prefilled:${f}`, body_preview: String(r.rawText).slice(0, 300) });
           if (r.ok) {
             const items = Array.isArray(r.data) ? r.data : [r.data];
@@ -287,7 +313,7 @@ Deno.serve(async (req) => {
 
   for (const q of transcript ? [] : Array.from(new Set(queries))) {
     try {
-      const r = await nsJson(q);
+      const r = await nsJson(q, cfg);
       const data = r.data;
       const items = Array.isArray(data) ? data : (data && typeof data === "object" ? [data] : []);
       const fields_found = items[0] && typeof items[0] === "object" ? Object.keys(items[0]) : [];
@@ -314,9 +340,11 @@ Deno.serve(async (req) => {
   if (!transcript) {
     return json({
       success: false,
+      available: false,
+      reason: "transcript_not_available",
       error: "TRANSCRIPT_NOT_AVAILABLE",
       message: "Transcription non disponible pour cet appel.",
-      ns_callid, ns_extension, attempts,
+      ns_callid, ns_extension, domain, attempts,
       action_required: "Demandez à Clinton d'activer PORTAL_VOICE_TRANSCRIPTION_SENTIMENT = yes sur planipret.ca",
     }, 200);
   }
@@ -334,5 +362,5 @@ Deno.serve(async (req) => {
       }).eq("id", call_db_id);
     } catch { /* best-effort cache */ }
   }
-  return json({ success: true, ns_callid, segments, raw: transcript });
+  return json({ success: true, available: true, reason: "fresh", ns_callid, domain, segments, raw: transcript });
 });

@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
           await fetch(`${SUPABASE_URL}/functions/v1/pp-coach-call`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: auth },
-            body: JSON.stringify({ call_id: callId, transcript: row.transcript, force: true }),
+            body: JSON.stringify({ call_id: callId, transcript: row.transcript }),
           });
         } catch (_) { /* best-effort */ }
       }
@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
           await fetch(`${SUPABASE_URL}/functions/v1/pp-coach-call`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: auth },
-            body: JSON.stringify({ call_id: callId, transcript, force: true }),
+            body: JSON.stringify({ call_id: callId, transcript }),
           });
         } catch (_) { /* best-effort */ }
         return json({ ok: true, transcript, segments: nsTx.segments, source: "ns-api" });
@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
       await fetch(`${SUPABASE_URL}/functions/v1/pp-coach-call`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: auth },
-        body: JSON.stringify({ call_id: callId, transcript, force: true }),
+        body: JSON.stringify({ call_id: callId, transcript }),
       });
     } catch (_) { /* best-effort */ }
 

@@ -727,12 +727,11 @@ export default function PlanipretMobile() {
         </button>
 
 
-        {/* Tab bar (5 tabs + center FAB placeholder = 5 grid columns) */}
+        {/* Tab bar (5 tabs) */}
         <nav className="absolute bottom-[22px] inset-x-0 grid grid-cols-5 z-10 pp-mobile-tabbar"
           style={{ height: 70 }}>
 
           {TABS.map((tabItem) => {
-            if (tabItem.to === "_fab") return <div key="fab-slot" />;
             const badge = tabItem.to.endsWith("/messages") ? unreadMsg : 0;
             return (
               <NavLink key={tabItem.to} to={tabItem.to}

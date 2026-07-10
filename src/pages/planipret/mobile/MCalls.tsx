@@ -301,7 +301,7 @@ export default function MCalls() {
       const { data: local } = await localQuery;
       setRecordings((local ?? []).filter((r: any) => r.has_recording || r.recording_url || r.ns_callid || r.ns_orig_callid || r.ns_term_callid || r.ns_call_id).map((r: any) => ({
         ...r,
-        stream_via_proxy: true,
+        stream_via_proxy: false,
         proxy_call_db_id: r.id,
         proxy_ns_callid: r.ns_callid ?? r.ns_orig_callid ?? r.ns_term_callid ?? r.ns_call_id ?? null,
         has_recording: !!(r.has_recording || r.recording_url || r.ns_callid || r.ns_orig_callid || r.ns_term_callid || r.ns_call_id),

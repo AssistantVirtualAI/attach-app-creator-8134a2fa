@@ -165,7 +165,7 @@ export default function RecordingsList({
     if (!withRec.length) return;
     const controller = new AbortController();
     let cancelled = false;
-    const queue = withRec.slice(0, 5).filter((c) => hasResolvableAudio(c));
+    const queue = withRec.slice(0, 15).filter((c) => hasResolvableAudio(c));
 
     (async () => {
       for (const call of queue) {
@@ -178,8 +178,8 @@ export default function RecordingsList({
         if (!audioBlobCacheRef.current.has(call.id) && !alreadyBlob) {
           setStatus(call.id, "uploading");
           try {
-            const url = await fetchAudioUrl(call, { retries: 3, signal: controller.signal });
-            if (cancelled) { URL.revokeObjectURL(url); break; }
+            const url = await fetchAudioUrl(call, { signal: controller.signal });
+            if (cancelled) break;
             audioBlobCacheRef.current.set(call.id, url);
             setStatus(call.id, "uploaded");
             onUpdated({ ...call, recording_url: url, has_recording: true, stream_via_proxy: false });
@@ -246,7 +246,7 @@ export default function RecordingsList({
   // Cleanup blob URLs on unmount
   useEffect(() => () => {
     for (const url of audioBlobCacheRef.current.values()) {
-      try { URL.revokeObjectURL(url); } catch {}
+      if (url.startsWith("blob:")) try { URL.revokeObjectURL(url); } catch {}
     }
     audioBlobCacheRef.current.clear();
   }, []);
@@ -311,7 +311,7 @@ export default function RecordingsList({
   };
 
   const top = withRec.slice(0, 5);
-  const audioReady = top.filter((c) => audioStatus[c.id] === "uploaded" || /^blob:/i.test(String(c.recording_url ?? ""))).length;
+  const audioReady = top.filter((c) => audioStatus[c.id] === "uploaded" || /^https?:|^blob:|^data:/i.test(String(c.recording_url ?? ""))).length;
   const txReady = top.filter((c) => !!c.transcript).length;
   const aiReady = top.filter((c) => !!c.ai_summary).length;
   const pct = top.length ? Math.round(((audioReady + txReady + aiReady) / (top.length * 3)) * 100) : 100;

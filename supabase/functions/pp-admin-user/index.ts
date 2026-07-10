@@ -3,6 +3,68 @@ import { authBroker, corsHeaders, jsonResponse, logAudit, supaAdmin } from "../_
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
 const NS_API_BASE_URL = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";
 const NS_DEFAULT_DOMAIN = Deno.env.get("NS_DEFAULT_DOMAIN") ?? "planipret.ca";
+const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
+
+/** Auto-provision a per-broker ElevenLabs conversational agent. Best-effort. */
+async function provisionBrokerAgent(
+  admin: ReturnType<typeof supaAdmin>,
+  brokerUserId: string,
+): Promise<{ agent_id: string | null; error?: string }> {
+  if (!ELEVENLABS_API_KEY) return { agent_id: null, error: "no_elevenlabs_key" };
+  try {
+    const { data: prof } = await admin
+      .from("planipret_profiles")
+      .select("id, full_name, extension, email, ava_voice_id, elevenlabs_agent_id")
+      .eq("user_id", brokerUserId)
+      .maybeSingle();
+    if (!prof) return { agent_id: null, error: "no_profile" };
+    if (prof.elevenlabs_agent_id) return { agent_id: prof.elevenlabs_agent_id };
+
+    const firstName = String(prof.full_name || prof.extension || "courtier").split(/\s+/)[0];
+    const body = {
+      name: `AVA — ${prof.full_name || prof.extension}`,
+      conversation_config: {
+        agent: {
+          prompt: {
+            prompt: `Tu es AVA, l'assistante vocale IA personnelle de ${prof.full_name || prof.extension} (extension ${prof.extension}), courtier hypothécaire Planiprêt. Tu parles en français canadien, chaleureuse et efficace. Tu peux consulter ses appels, messages vocaux, SMS, emails Microsoft 365, contacts et deals Maestro, et déclencher des actions via les outils disponibles.`,
+            llm: "gemini-2.0-flash-001",
+            temperature: 0.7,
+            max_tokens: 500,
+          },
+          first_message: `Bonjour ${firstName}, je suis AVA. Comment puis-je t'aider?`,
+          language: "fr",
+        },
+        tts: {
+          model_id: "eleven_turbo_v2_5",
+          voice_id: prof.ava_voice_id || "EXAVITQu4vr4xnSDxMaL",
+          agent_output_audio_format: "pcm_16000",
+          optimize_streaming_latency: 4,
+          stability: 0.5, similarity_boost: 0.75, style: 0.4, use_speaker_boost: true,
+        },
+        conversation: {
+          max_duration_seconds: 1800,
+          client_events: ["audio", "interruption", "user_transcript", "agent_response", "agent_response_correction"],
+        },
+      },
+      platform_settings: { widget: { is_disabled: true }, overrides: { conversation_config_override: { agent: { prompt: { prompt: true }, first_message: true, language: true }, tts: { voice_id: true } } } },
+    };
+    const r = await fetch("https://api.elevenlabs.io/v1/convai/agents/create", {
+      method: "POST",
+      headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) return { agent_id: null, error: (data as any)?.detail?.message || `HTTP ${r.status}` };
+    const agentId = (data as any)?.agent_id ?? null;
+    if (agentId) {
+      await admin.from("planipret_profiles").update({ elevenlabs_agent_id: agentId }).eq("user_id", brokerUserId);
+    }
+    return { agent_id: agentId };
+  } catch (e: any) {
+    return { agent_id: null, error: e?.message ?? "provision_failed" };
+  }
+}
+
 
 /** Direct NS-API call using service bearer key (admin ops). */
 async function nsFetch(path: string, init: RequestInit = {}) {

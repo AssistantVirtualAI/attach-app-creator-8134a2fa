@@ -169,22 +169,70 @@ Deno.serve(async (req) => {
       `Téléphonie/SMS: ${profile?.extension ? `extension ${profile.extension}` : "non liée"}`,
     ];
 
-    if (profile?.ms365_access_token && userMessage) {
+    if (userMessage && profile?.id) {
       const dataBlocks: string[] = [];
-      if (wantsEmailSummary(userMessage)) {
-        const emails = await invokeFunction("ms365-actions", authHeader, { action: "read_emails", payload: { top: 12, folder: /non lus?|unread/i.test(userMessage) ? "unread" : "inbox" } });
-        dataBlocks.push(`Courriels Microsoft: ${JSON.stringify(emails.data).slice(0, 5000)}`);
+
+      if (profile?.ms365_access_token) {
+        if (wantsEmailSummary(userMessage)) {
+          const emails = await invokeFunction("ms365-actions", authHeader, { action: "read_emails", payload: { top: 12, folder: /non lus?|unread/i.test(userMessage) ? "unread" : "inbox" } });
+          dataBlocks.push(`Courriels Microsoft: ${JSON.stringify(emails.data).slice(0, 4000)}`);
+        }
+        if (wantsCalendar(userMessage)) {
+          const start = new Date(); start.setHours(0, 0, 0, 0);
+          const end = /semaine|week/i.test(userMessage) ? new Date(Date.now() + 7 * 86400000) : new Date(Date.now() + 2 * 86400000);
+          const cal = await invokeFunction("ms365-actions", authHeader, { action: "list_calendar_events", payload: { start: start.toISOString(), end: end.toISOString(), top: 20 } });
+          dataBlocks.push(`Calendrier Microsoft: ${JSON.stringify(cal.data).slice(0, 4000)}`);
+        }
       }
-      if (wantsCalendar(userMessage)) {
-        const start = new Date(); start.setHours(0, 0, 0, 0);
-        const end = /semaine|week/i.test(userMessage) ? new Date(Date.now() + 7 * 86400000) : new Date(Date.now() + 2 * 86400000);
-        const cal = await invokeFunction("ms365-actions", authHeader, { action: "list_calendar_events", payload: { start: start.toISOString(), end: end.toISOString(), top: 20 } });
-        dataBlocks.push(`Calendrier Microsoft: ${JSON.stringify(cal.data).slice(0, 5000)}`);
+
+      if (wantsCalls(userMessage)) {
+        const sinceDays = /semaine|week/i.test(userMessage) ? 7 : /mois|month/i.test(userMessage) ? 30 : 2;
+        const since = new Date(Date.now() - sinceDays * 86400000).toISOString();
+        const { data: calls } = await admin.from("planipret_phone_calls")
+          .select("id, direction, status, from_number, from_name, to_number, to_name, started_at, duration_seconds, lead_score, lead_temperature, ai_summary")
+          .or(`user_id.eq.${profile.id},user_id.eq.${u.user.id}`)
+          .gte("started_at", since).order("started_at", { ascending: false }).limit(20);
+        dataBlocks.push(`Appels récents (${sinceDays}j): ${JSON.stringify(calls ?? []).slice(0, 4000)}`);
       }
+
+      if (wantsSms(userMessage)) {
+        const { data: sms } = await admin.from("planipret_phone_messages")
+          .select("id, direction, from_number, to_number, body, created_at, read_at")
+          .eq("user_id", u.user.id).order("created_at", { ascending: false }).limit(15);
+        dataBlocks.push(`SMS récents: ${JSON.stringify(sms ?? []).slice(0, 3000)}`);
+      }
+
+      if (wantsVoicemail(userMessage)) {
+        const { data: vm } = await admin.from("planipret_voicemails")
+          .select("id, from_number, from_name, duration_seconds, transcript, is_read, created_at")
+          .or(`user_id.eq.${profile.id},user_id.eq.${u.user.id}`)
+          .order("created_at", { ascending: false }).limit(10);
+        dataBlocks.push(`Messagerie vocale: ${JSON.stringify(vm ?? []).slice(0, 3000)}`);
+      }
+
+      if (wantsLeads(userMessage)) {
+        const since = new Date(Date.now() - 14 * 86400000).toISOString();
+        const { data: hot } = await admin.from("planipret_phone_calls")
+          .select("id, from_number, from_name, to_number, to_name, lead_score, lead_temperature, started_at, ai_summary")
+          .or(`user_id.eq.${profile.id},user_id.eq.${u.user.id}`)
+          .gte("started_at", since).gte("lead_score", 6)
+          .order("lead_score", { ascending: false }).limit(10);
+        dataBlocks.push(`Leads chauds (14j): ${JSON.stringify(hot ?? []).slice(0, 3000)}`);
+      }
+
+      if (wantsReminders(userMessage)) {
+        const { data: rem } = await admin.from("planipret_reminders")
+          .select("id, contact_name, contact_number, note, scheduled_at, status")
+          .or(`user_id.eq.${profile.id},user_id.eq.${u.user.id}`)
+          .eq("status", "pending").order("scheduled_at", { ascending: true }).limit(15);
+        dataBlocks.push(`Rappels/tâches en attente: ${JSON.stringify(rem ?? []).slice(0, 3000)}`);
+      }
+
       if (dataBlocks.length) appContext += `\n${dataBlocks.join("\n")}`;
     }
 
     if (mode === "recommend" && profile?.id) {
+
       const startDay = new Date(); startDay.setHours(0, 0, 0, 0);
       const [{ data: hot }, { data: missed }, { count: smsUnread }] = await Promise.all([
         admin.from("planipret_phone_calls").select("id, caller_number, started_at, lead_score")

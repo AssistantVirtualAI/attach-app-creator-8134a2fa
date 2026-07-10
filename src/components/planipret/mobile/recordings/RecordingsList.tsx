@@ -751,7 +751,7 @@ function TranscriptSection({ call, onUpdated }: { call: RecordingCall; onUpdated
         languageNext = nsTranscript.language;
       } else {
         const { data, error } = await supabase.functions.invoke("pp-admin-transcribe", {
-          body: { call_id: callDbId(call) },
+          body: { call_id: pipelineId(call) },
         });
         if (error) throw error;
         const next = (data as any) ?? {};
@@ -764,7 +764,7 @@ function TranscriptSection({ call, onUpdated }: { call: RecordingCall; onUpdated
       onUpdated(updated);
       if (text) {
         const { data: coached } = await supabase.functions.invoke("pp-coach-call", {
-          body: { call_id: callDbId(call), transcript: text },
+          body: { call_id: pipelineId(call), transcript: text },
         });
         onUpdated(applyCoachPayload(updated, coached));
       }
@@ -863,7 +863,7 @@ function AISection({ call, onUpdated }: { call: RecordingCall; onUpdated: (c: Re
           baseCall = { ...call, transcript: nsTranscript.text, transcript_segments: nsTranscript.segments, transcript_language: nsTranscript.language };
           onUpdated(baseCall);
         } else {
-          const { data: tx, error: txErr } = await supabase.functions.invoke("pp-admin-transcribe", { body: { call_id: callDbId(call) } });
+          const { data: tx, error: txErr } = await supabase.functions.invoke("pp-admin-transcribe", { body: { call_id: pipelineId(call) } });
           if (txErr) throw txErr;
           const t = (tx as any)?.transcript;
           if (t) {
@@ -875,7 +875,7 @@ function AISection({ call, onUpdated }: { call: RecordingCall; onUpdated: (c: Re
       }
       if (!transcriptForAi) throw new Error("Transcription indisponible côté système téléphonique");
       const { data, error } = await supabase.functions.invoke("pp-coach-call", {
-        body: { call_id: callDbId(call), transcript: transcriptForAi },
+        body: { call_id: pipelineId(call), transcript: transcriptForAi },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any)?.message ?? (data as any)?.error);

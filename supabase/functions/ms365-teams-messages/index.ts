@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     if (!userId) return j({ error: "Unauthorized" }, 401);
 
     const body = await req.json().catch(() => ({}));
-    const { action, chat_id, team_id, channel_id, content, contentType = "text", top = 30 } = body ?? {};
+    const { action, chat_id, team_id, channel_id, content, contentType = "text", top = 30, user_ids, topic } = body ?? {};
     if (!action) return j({ error: "action_required" }, 400);
 
     const { data: profile } = await admin
@@ -74,6 +74,30 @@ Deno.serve(async (req) => {
       .eq("user_id", userId)
       .maybeSingle();
     if (!profile?.ms365_access_token) return j({ connected: false, messages: [], error: "ms365_not_connected" });
+
+    // Create or reuse a chat (1:1 or group)
+    if (action === "create_chat") {
+      if (!Array.isArray(user_ids) || user_ids.length === 0) return j({ error: "user_ids_required" }, 400);
+      const meRes = await graph(admin, profile, "/me?$select=id");
+      const meBody = await meRes.json();
+      if (!meRes.ok) return j({ error: "graph_me", detail: meBody }, meRes.status);
+      const meId = meBody.id as string;
+      const allIds = Array.from(new Set([meId, ...user_ids]));
+      const isGroup = allIds.length > 2;
+      const payload: any = {
+        chatType: isGroup ? "group" : "oneOnOne",
+        members: allIds.map((id: string) => ({
+          "@odata.type": "#microsoft.graph.aadUserConversationMember",
+          roles: ["owner"],
+          "user@odata.bind": `https://graph.microsoft.com/v1.0/users('${id}')`,
+        })),
+      };
+      if (isGroup && topic) payload.topic = topic;
+      const cr = await graph(admin, profile, "/chats", { method: "POST", body: JSON.stringify(payload) });
+      const cb = await cr.json();
+      if (!cr.ok) return j({ error: "graph_create_chat", detail: cb }, cr.status);
+      return j({ ok: true, chat_id: cb.id, chatType: cb.chatType, topic: cb.topic ?? null });
+    }
 
     const scope = chat_id
       ? `/chats/${chat_id}/messages`

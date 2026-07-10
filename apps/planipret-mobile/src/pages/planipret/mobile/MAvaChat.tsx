@@ -210,7 +210,7 @@ export default function MAvaChat() {
       </div>
 
       <ScrollArea className="flex-1">
-        <div ref={scrollRef} className="p-4 space-y-3">
+        <div ref={scrollRef} className="p-4 space-y-3 max-w-3xl w-full mx-auto">
           {messages.length === 0 && (
             <div className="text-center text-muted-foreground text-sm py-10">
               Pose ta question à AVA. Elle a accès à tes leads, appels et courriels.

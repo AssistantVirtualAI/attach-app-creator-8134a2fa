@@ -193,6 +193,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
   }, [open, mode, contacts.length, loadingContacts]);
 
   const normalized = query.trim().toLowerCase();
+  const directoryOnly = contacts.filter((c) => c.source === "directory");
   const filtered = normalized
     ? contacts.filter((c) => {
         const hay = [
@@ -207,7 +208,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
         ].filter(Boolean).join(" ").toLowerCase();
         return hay.includes(normalized);
       }).slice(0, 30)
-    : [];
+    : directoryOnly.slice(0, 50);
 
   return (
     <AnimatePresence>
@@ -316,24 +317,37 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                 <div className="flex-1 overflow-y-auto mt-3 -mx-2 px-2 pb-4">
                   {loadingContacts && contacts.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{t("dialer.searching")}</div>
-                  ) : !normalized ? (
-                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{t("dialer.typeToSearch")}</div>
                   ) : filtered.length === 0 ? (
-                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{t("dialer.noResults")}</div>
+                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{normalized ? t("dialer.noResults") : t("contacts.noDirectory")}</div>
                   ) : (
+                    <>
+                      {!normalized && (
+                        <div className="px-1 pb-2 text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--pp-text-muted)" }}>
+                          {t("contacts.directorySection") || t("contacts.directory")}
+                        </div>
+                      )}
                     <ul className="flex flex-col gap-1.5">
                       {filtered.map((c, i) => {
                         const dest = contactPrimaryPhone(c);
                         const label = contactDisplayName(c);
                         return (
                           <li key={(c.id ?? "") + i} className="flex items-center gap-3 p-2.5 rounded-xl" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
-                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold" style={{ background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)", color: "white" }}>
-                              {label.slice(0, 1).toUpperCase()}
+                            <div className="relative w-9 h-9">
+                              <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold" style={{ background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)", color: "white" }}>
+                                {label.slice(0, 1).toUpperCase()}
+                              </div>
+                              {c.source === "directory" && (() => {
+                                const p = String((c as any).presence ?? "").toLowerCase();
+                                const color = ["available","online","active","ready","registered"].includes(p) ? "#22c55e"
+                                  : ["busy","dnd","oncall","on-call","in-call"].includes(p) ? "#ef4444"
+                                  : ["away","idle"].includes(p) ? "#f59e0b" : "#64748b";
+                                return <span style={{ position: "absolute", right: -1, bottom: -1, width: 11, height: 11, borderRadius: "50%", background: color, border: "2px solid var(--pp-bg-surface)" }} />;
+                              })()}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium truncate" style={{ color: "var(--pp-text-primary)" }}>{label}</div>
                               <div className="text-xs truncate" style={{ color: "var(--pp-text-muted)" }}>
-                                {c.extension ? `#${c.extension}` : dest || c.email || ""}
+                                {c.extension ? `${t("contacts.extension") || "Ext."} ${c.extension}` : dest || c.email || ""}
                                 {c.source === "directory" && ` · ${t("dialer.internal")}`}
                               </div>
                             </div>
@@ -359,6 +373,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                         );
                       })}
                     </ul>
+                    </>
                   )}
                 </div>
               </div>

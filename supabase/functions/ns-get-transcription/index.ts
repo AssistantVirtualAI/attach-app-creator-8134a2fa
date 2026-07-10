@@ -340,6 +340,8 @@ Deno.serve(async (req) => {
   if (!transcript) {
     return json({
       success: false,
+      available: false,
+      reason: "transcript_not_available",
       error: "TRANSCRIPT_NOT_AVAILABLE",
       message: "Transcription non disponible pour cet appel.",
       ns_callid, ns_extension, domain, attempts,
@@ -360,5 +362,5 @@ Deno.serve(async (req) => {
       }).eq("id", call_db_id);
     } catch { /* best-effort cache */ }
   }
-  return json({ success: true, ns_callid, segments, raw: transcript });
+  return json({ success: true, available: true, reason: "fresh", ns_callid, domain, segments, raw: transcript });
 });

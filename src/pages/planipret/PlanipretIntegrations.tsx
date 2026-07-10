@@ -189,10 +189,16 @@ export default function PlanipretIntegrations() {
             avec l'application mobile pour les 350 courtiers.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <HealthPill color="#00D4AA" bg="#0D3D2A" border="#1A5A3F" label={`${health.connected} connectées`} />
           <HealthPill color="#F5A623" bg="#2A1A00" border="#4A3000" label={`${health.pending} en attente`} />
           <HealthPill color="#E84C4C" bg="#3D1010" border="#5A1A1A" label={`${health.errors} erreurs`} />
+          <button
+            onClick={() => autosync(true)}
+            className="text-xs px-3 py-1.5 rounded-full font-medium transition hover:opacity-80"
+            style={{ background: "#003D7A", color: "#B8DCFC", border: "1px solid #1A5A9A" }}
+            title="Re-détecte toutes les intégrations depuis les secrets et lance un ping live"
+          >⟳ Auto-sync + tests</button>
         </div>
       </div>
 

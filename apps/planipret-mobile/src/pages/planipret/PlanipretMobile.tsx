@@ -779,21 +779,21 @@ export default function PlanipretMobile() {
         </nav>
 
 
-        {/* Powered by AVA footer — logo mis en évidence */}
-        <div className="absolute bottom-0 inset-x-0 h-[52px] flex flex-col items-center justify-center z-10 pp-mobile-footer" style={{ gap: 2 }}>
-          <div className="flex items-center gap-2.5">
-            <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 9, color: "var(--pp-text-muted)", letterSpacing: "0.16em", fontWeight: 600 }}>{t("footer.poweredBy")}</span>
-            <div className="relative flex items-center justify-center" style={{ width: 40, height: 40 }}>
-              <div className="absolute inset-0 rounded-full" style={{ background: "radial-gradient(circle, rgba(124,58,237,0.55) 0%, rgba(46,155,220,0.25) 50%, transparent 75%)", filter: "blur(8px)", animation: "ava-footer-pulse 3s ease-in-out infinite" }} />
-              <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ background: "conic-gradient(from 0deg, #7C3AED, #2E9BDC, #00D4AA, #7C3AED)", padding: 2, animation: "ava-footer-spin 6s linear infinite" }}>
-                <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: "var(--pp-bg-surface, #0A1628)", color: "#fff", fontWeight: 900, fontSize: 12, fontFamily: "Urbanist,sans-serif", letterSpacing: "0.02em" }}>AVA</div>
+        {/* Powered by AVA footer — discret */}
+        <div className="absolute bottom-0 inset-x-0 h-[40px] flex flex-col items-center justify-center z-10 pp-mobile-footer" style={{ gap: 1 }}>
+          <div className="flex items-center gap-2">
+            <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 7, color: "var(--pp-text-muted)", letterSpacing: "0.14em", fontWeight: 600 }}>{t("footer.poweredBy")}</span>
+            <div className="relative flex items-center justify-center" style={{ width: 24, height: 24 }}>
+              <div className="absolute inset-0 rounded-full" style={{ background: "radial-gradient(circle, rgba(124,58,237,0.45) 0%, rgba(46,155,220,0.18) 50%, transparent 75%)", filter: "blur(5px)", animation: "ava-footer-pulse 3s ease-in-out infinite" }} />
+              <div className="absolute inset-0 rounded-full flex items-center justify-center overflow-hidden" style={{ background: "conic-gradient(from 0deg, #7C3AED, #2E9BDC, #00D4AA, #7C3AED)", padding: 1.5, animation: "ava-footer-spin 6s linear infinite" }}>
+                <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: "var(--pp-bg-surface, #0A1628)", color: "#fff", fontWeight: 800, fontSize: 8, fontFamily: "Urbanist,sans-serif", letterSpacing: "0.02em" }}>AVA</div>
               </div>
             </div>
-            <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 20, letterSpacing: "0.08em", fontWeight: 900, background: "linear-gradient(90deg,#7C3AED,#2E9BDC)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>AVA</span>
+            <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 12, letterSpacing: "0.06em", fontWeight: 800, background: "linear-gradient(90deg,#7C3AED,#2E9BDC)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>AVA</span>
           </div>
-          <span style={{ fontSize: 8, color: "var(--pp-text-faint)", letterSpacing: "0.1em" }}>· {t("footer.developedBy")}</span>
+          <span style={{ fontSize: 6, color: "var(--pp-text-faint)", letterSpacing: "0.08em" }}>· {t("footer.developedBy")}</span>
           <style>{`
-            @keyframes ava-footer-pulse { 0%,100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }
+            @keyframes ava-footer-pulse { 0%,100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 0.9; transform: scale(1.08); } }
             @keyframes ava-footer-spin { to { transform: rotate(360deg); } }
           `}</style>
         </div>

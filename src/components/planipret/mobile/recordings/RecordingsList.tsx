@@ -75,7 +75,15 @@ const otherLabel = (c: RecordingCall) => {
 const hasResolvableAudio = (c: RecordingCall) => !!(
   c.recording_url || c.has_recording || c.stream_via_proxy || c.proxy_call_db_id || c.proxy_ns_callid || c.ns_callid || c.ns_orig_callid || c.ns_term_callid || c.ns_call_id
 );
+// Audio lookup peut suivre le proxy (autre ligne DB qui détient le fichier NS).
 const callDbId = (c: RecordingCall) => c.proxy_call_db_id ?? c.id;
+// Pipeline (transcript + IA) DOIT écrire sur la ligne exacte de la carte,
+// sinon transcript/analyse atterrissent sur un appel voisin.
+const pipelineId = (c: RecordingCall) => c.id;
+const isVoicemailCall = (c: RecordingCall) => {
+  const to = String(c.to_number ?? "").toLowerCase();
+  return to.includes("vmail") || to.includes("voicemail") || to.includes("vm@");
+};
 const recordingLookupBody = (c: RecordingCall) => ({
   call_db_id: callDbId(c),
   ns_callid: c.proxy_ns_callid ?? c.ns_callid ?? c.ns_orig_callid ?? c.ns_term_callid ?? c.ns_call_id,

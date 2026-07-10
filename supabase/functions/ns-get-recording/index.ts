@@ -500,7 +500,7 @@ Deno.serve(async (req) => {
 
       if (r.ok && (ct.startsWith("audio") || ct.includes("octet-stream"))) {
         if (!r.body) continue;
-        return audioResponse(r, recordingMeta, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p });
+        return audioResponse(r, recordingMeta, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, { callDbId: call_db_id, preferUrl });
       }
       if (r.ok) {
         const rawText = await r.text();
@@ -515,7 +515,7 @@ Deno.serve(async (req) => {
         const audioUrl = pickAudioUrl(recording);
         attempt.audio_url_extracted = audioUrl;
         if (audioUrl) {
-          const streamed = await streamFromUrl(audioUrl, recording, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, attempts);
+          const streamed = await streamFromUrl(audioUrl, recording, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, attempts, { callDbId: call_db_id, preferUrl });
           if (streamed) return streamed;
         }
       }

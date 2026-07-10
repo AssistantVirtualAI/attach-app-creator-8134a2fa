@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Phone, PhoneMissed, MessageSquare, Voicemail,
   ArrowDownLeft, ArrowUpRight, X, Calendar, Headphones, Bot,
-  BellOff, Flame, Sparkles, ChevronRight, Mail, Users as UsersIcon,
+  BellOff, Flame, Sparkles, ChevronRight, ChevronLeft, Mail, Users as UsersIcon,
   CheckSquare, RefreshCw, AlertCircle, Video, ExternalLink,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";

@@ -72,7 +72,7 @@ export default function MMessages() {
             { k: "sms" as SubTab, label: t("messages.tabs.sms"), Icon: MessageSquare },
             { k: "team" as SubTab, label: t("messages.tabs.team"), Icon: UsersRound },
             { k: "teams365" as SubTab, label: "Teams", Icon: Users },
-            { k: "roster" as SubTab, label: t("messages.tabs.roster"), Icon: Contact },
+            
             { k: "ava" as SubTab, label: t("messages.tabs.ava"), Icon: Bot },
             { k: "emails" as SubTab, label: t("messages.tabs.emails"), Icon: Mail },
           ].map((item) => {

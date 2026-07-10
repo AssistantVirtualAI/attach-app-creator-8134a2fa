@@ -267,7 +267,7 @@ export default function MAvaChat() {
 
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div ref={scrollRef} className="h-full overflow-y-auto p-4 space-y-4 pb-6">
+        <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-4 pb-6 space-y-4 max-w-3xl w-full mx-auto">
           {messages.length === 0 && (
             <div className="text-center text-sm py-10" style={{ color: "var(--pp-text-muted)" }}>
               Pose ta question à AVA. Elle a accès à tes leads, appels et courriels.

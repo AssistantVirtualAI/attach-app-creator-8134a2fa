@@ -523,14 +523,16 @@ function RecordingSection({ call, onUpdated }: { call: RecordingCall; onUpdated:
   const [dur, setDur] = useState(0);
   const [localUrl, setLocalUrl] = useState<string | null>(null);
   const localObjectUrlRef = useRef<string | null>(null);
+  const audioErrorRetryRef = useRef(false);
   const playableUrl = localUrl ?? (!!call.recording_url && (/^(blob:|data:)/i.test(String(call.recording_url)) || call.stream_via_proxy === false) ? call.recording_url : null);
 
   const fetchRec = async (opts: { play?: boolean } = {}) => {
     setLoading(true);
     try {
-      const url = await fetchAudioUrl(call, { retries: 3 });
+      const url = await fetchAudioUrl(call);
       if (localObjectUrlRef.current?.startsWith("blob:")) URL.revokeObjectURL(localObjectUrlRef.current);
       localObjectUrlRef.current = url;
+      audioErrorRetryRef.current = false;
       playAfterLoadRef.current = !!opts.play;
       setLocalUrl(url);
       onUpdated({ ...call, recording_url: url, has_recording: true, stream_via_proxy: false });
@@ -602,7 +604,15 @@ function RecordingSection({ call, onUpdated }: { call: RecordingCall; onUpdated:
             ref={audioRef}
             src={playableUrl}
             preload="metadata"
-            onError={() => { setPlaying(false); toast.error("Audio non disponible"); }}
+            onError={() => {
+              setPlaying(false);
+              if (!audioErrorRetryRef.current) {
+                audioErrorRetryRef.current = true;
+                void fetchRec({ play: true });
+              } else {
+                toast.error("Audio non disponible");
+              }
+            }}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
             onTimeUpdate={(e) => setCur((e.target as HTMLAudioElement).currentTime)}

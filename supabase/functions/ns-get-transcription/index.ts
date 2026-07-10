@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
   let row: any = null;
   let domain = String(body.domain ?? url.searchParams.get("domain") ?? cfg.domain);
 
-  if ((!ns_callid || !ns_extension) && call_db_id) {
+  if (call_db_id) {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const { data } = await admin
       .from("planipret_phone_calls")
@@ -166,6 +166,8 @@ Deno.serve(async (req) => {
   let transcript: any = null;
   const ids: string[] = [];
   pushId(ids, ns_callid);
+  pushId(ids, body.ns_orig_callid ?? url.searchParams.get("ns_orig_callid"));
+  pushId(ids, body.ns_term_callid ?? url.searchParams.get("ns_term_callid"));
   addIds(ids, row?.metadata, row);
 
   const cdrs: any[] = [];

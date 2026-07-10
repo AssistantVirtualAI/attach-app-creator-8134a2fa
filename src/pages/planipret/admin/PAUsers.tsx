@@ -653,8 +653,8 @@ export default function PAUsers() {
                       );
                     })()}
                   </td>
-                  <td className="p-3"><Toggle on={u.mobile_app_enabled} loading={savingId === u.user_id} onChange={() => toggleField(u, "mobile_app_enabled")} /></td>
-                  <td className="p-3"><Toggle on={u.voice_agent_enabled} loading={savingId === u.user_id} onChange={() => toggleField(u, "voice_agent_enabled")} /></td>
+                  <td className="p-3"><Toggle on={!!u.mobile_app_enabled} loading={!!(u.user_id && savingId === u.user_id)} onChange={() => toggleField(u, "mobile_app_enabled")} /></td>
+                  <td className="p-3"><Toggle on={!!u.voice_agent_enabled} loading={!!(u.user_id && savingId === u.user_id)} onChange={() => toggleField(u, "voice_agent_enabled")} /></td>
                   <td className="p-3">
                     {u.dnd_enabled ? (
                       <button

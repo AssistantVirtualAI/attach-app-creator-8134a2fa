@@ -178,7 +178,10 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
               firstMessage: c.first_message,
               language: c.language ?? "fr",
             },
-            tts: { voiceId: c.voice_id },
+            tts: {
+              voiceId: c.voice_id,
+              ...(c.voice_settings ? { stability: c.voice_settings.stability, similarityBoost: c.voice_settings.similarity_boost, style: c.voice_settings.style } : {}),
+            },
           } as any,
           clientTools,
           onConnect: () => setState("listening"),

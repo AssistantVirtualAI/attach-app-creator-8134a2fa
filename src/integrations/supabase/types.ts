@@ -9266,11 +9266,17 @@ export type Database = {
         Row: {
           auth_method: string | null
           ava_autonomy_mode: string
+          ava_chat_mode: string
           ava_last_session_at: string | null
           ava_learned_preferences: string | null
           ava_learned_updated_at: string | null
           ava_preferred_lang: string
           ava_sessions_count: number
+          ava_voice_id: string | null
+          ava_voice_similarity: number | null
+          ava_voice_speed: number | null
+          ava_voice_stability: number | null
+          ava_voice_style: number | null
           avatar_url: string | null
           created_at: string
           dnd_auto_schedule: boolean
@@ -9355,11 +9361,17 @@ export type Database = {
         Insert: {
           auth_method?: string | null
           ava_autonomy_mode?: string
+          ava_chat_mode?: string
           ava_last_session_at?: string | null
           ava_learned_preferences?: string | null
           ava_learned_updated_at?: string | null
           ava_preferred_lang?: string
           ava_sessions_count?: number
+          ava_voice_id?: string | null
+          ava_voice_similarity?: number | null
+          ava_voice_speed?: number | null
+          ava_voice_stability?: number | null
+          ava_voice_style?: number | null
           avatar_url?: string | null
           created_at?: string
           dnd_auto_schedule?: boolean
@@ -9444,11 +9456,17 @@ export type Database = {
         Update: {
           auth_method?: string | null
           ava_autonomy_mode?: string
+          ava_chat_mode?: string
           ava_last_session_at?: string | null
           ava_learned_preferences?: string | null
           ava_learned_updated_at?: string | null
           ava_preferred_lang?: string
           ava_sessions_count?: number
+          ava_voice_id?: string | null
+          ava_voice_similarity?: number | null
+          ava_voice_speed?: number | null
+          ava_voice_stability?: number | null
+          ava_voice_style?: number | null
           avatar_url?: string | null
           created_at?: string
           dnd_auto_schedule?: boolean

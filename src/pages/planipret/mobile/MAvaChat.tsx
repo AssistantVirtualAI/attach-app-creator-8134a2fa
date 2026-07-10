@@ -5,7 +5,9 @@ import { Input } from "@/components/ui/input";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Send, Plus, Menu, Loader2, Sparkles, Mic, Square, Volume2, VolumeX, CheckCircle2 } from "lucide-react";
+import { Send, Plus, Menu, Loader2, Sparkles, Mic, Square, Volume2, VolumeX, CheckCircle2, MessageSquare, Radio } from "lucide-react";
+import AvaVoiceAgent from "@/components/planipret/mobile/AvaVoiceAgent";
+import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
 
 type AvaSuggestion = { id: string; label: string; kind: string; payload?: Record<string, any> };
 type Msg = { id: string; role: "user" | "assistant"; message: string; created_at: string; suggestions?: AvaSuggestion[] };
@@ -15,6 +17,9 @@ const MUTATING_ACTIONS = new Set(["send_email", "create_calendar_event", "send_t
 
 export default function MAvaChat() {
   const [userId, setUserId] = useState<string | null>(null);
+  const [voiceAgentAllowed, setVoiceAgentAllowed] = useState(false);
+  const [mode, setMode] = useState<"chat" | "voice">(() => (localStorage.getItem("ava_mode") as any) || "chat");
+  const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -30,11 +35,19 @@ export default function MAvaChat() {
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  const switchMode = (m: "chat" | "voice") => { setMode(m); localStorage.setItem("ava_mode", m); };
+
   useEffect(() => {
     (async () => {
       const { data } = await supabase.auth.getUser();
       if (!data.user) return;
       setUserId(data.user.id);
+      const { data: prof } = await supabase
+        .from("planipret_profiles")
+        .select("voice_agent_enabled")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+      setVoiceAgentAllowed(!!(prof as any)?.voice_agent_enabled);
       const { data: s } = await supabase
         .from("planipret_ava_chat_sessions")
         .select("id,title,last_message_at")
@@ -178,6 +191,22 @@ export default function MAvaChat() {
 
   const currentTitle = useMemo(() => sessions.find((s) => s.id === sessionId)?.title ?? "AVA", [sessions, sessionId]);
 
+  if (mode === "voice" && voiceAgentAllowed && userId) {
+    return (
+      <div className="relative min-h-full">
+        <AvaVoiceAgent userId={userId} onClose={() => switchMode("chat")} />
+        <button
+          onClick={() => setVoiceSettingsOpen(true)}
+          className="absolute top-4 right-16 z-[70] w-9 h-9 rounded-full bg-white/5 text-white/80 flex items-center justify-center"
+          title="Voix"
+        ><Radio className="w-4 h-4" /></button>
+        {voiceSettingsOpen && (
+          <VoiceSettingsSheet userId={userId} onClose={() => setVoiceSettingsOpen(false)} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-full">
       <div className="sticky top-0 z-10 flex items-center gap-2 p-3 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.55)", borderBottom: "1px solid var(--pp-bg-border)" }}>
@@ -203,11 +232,28 @@ export default function MAvaChat() {
         </Sheet>
         <Sparkles className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} />
         <div className="font-medium truncate flex-1" style={{ color: "var(--pp-text-primary)" }}>{currentTitle}</div>
+        {voiceAgentAllowed && (
+          <div className="flex rounded-full overflow-hidden" style={{ border: "1px solid var(--pp-bg-border-2)" }}>
+            <button
+              onClick={() => switchMode("chat")}
+              className="px-2 py-1 text-xs flex items-center gap-1"
+              style={{ background: mode === "chat" ? "var(--pp-brand-accent)" : "transparent", color: mode === "chat" ? "#03131A" : "var(--pp-text-secondary)" }}
+              title="Mode Chat"
+            ><MessageSquare className="w-3 h-3" /> Chat</button>
+            <button
+              onClick={() => switchMode("voice")}
+              className="px-2 py-1 text-xs flex items-center gap-1"
+              style={{ background: mode === "voice" ? "var(--pp-brand-accent)" : "transparent", color: mode === "voice" ? "#03131A" : "var(--pp-text-secondary)" }}
+              title="Mode Vocal"
+            ><Radio className="w-3 h-3" /> Vocal</button>
+          </div>
+        )}
         <Button size="icon" variant="ghost" onClick={toggleTts} title={speakReplies ? "Voix activée" : "Voix désactivée"}>
           {speakReplies ? <Volume2 className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} /> : <VolumeX className="w-5 h-5" />}
         </Button>
         <Button size="icon" variant="ghost" onClick={startNew}><Plus className="w-5 h-5" /></Button>
       </div>
+
 
       <div className="flex-1">
         <div ref={scrollRef} className="p-4 space-y-4 pb-6">

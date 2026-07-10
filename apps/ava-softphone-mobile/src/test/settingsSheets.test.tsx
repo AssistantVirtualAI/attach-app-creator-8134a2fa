@@ -48,7 +48,7 @@ vi.mock('@capacitor/network', () => ({
 
 import SettingsScreen from '../screens/SettingsScreen';
 import { ThemeProvider } from '../lib/ThemeContext';
-import { LangProvider } from '../lib/i18n';
+import { MobileI18nProvider as LangProvider } from '../lib/i18n';
 
 const creds: any = { extension: '300', displayName: 'Test', email: 't@x.com', sipDomain: 'lemtel.tel', role: 'agent' };
 const sp: any = { snap: { status: 'registered' }, sipConfig: { wssUrl: 'wss://x' }, sipLog: [], reconnect: vi.fn(), clearSipState: vi.fn() };

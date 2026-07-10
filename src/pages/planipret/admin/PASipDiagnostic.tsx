@@ -128,9 +128,9 @@ export default function PASipDiagnostic() {
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--pp-text-primary)" }}>Diagnostic SIP — 113_web (WSS)</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--pp-text-primary)" }}>Portail diagnostic</h2>
           <p className="mt-1" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
-            Teste l'enregistrement SIP.js sur le device web via wss://core1.cluster1.ucstack.io:9002.
+            Teste l'enregistrement SIP.js sur le device web via wss://core1.cluster1.ucstack.io:9002, et diagnostique les enregistrements NS-API.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -149,8 +149,28 @@ export default function PASipDiagnostic() {
             style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
             Arrêter
           </button>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                toast.message("Diagnostic enregistrements en cours (~30s)…");
+                const { data, error } = await supabase.functions.invoke("ns-debug-real-cdr", { body: {} });
+                if (error) throw error;
+                console.log("[NS RECORDING DIAG]", data);
+                const successes = (data as any)?.successes ?? [];
+                if (successes.length) toast.success(`✅ ${successes.length} endpoint(s) audio trouvé(s) — voir console`);
+                else toast.error("Aucun endpoint audio n'a répondu 200 — voir console");
+              } catch (e: any) {
+                toast.error(`Diagnostic échoué: ${e?.message ?? e}`);
+              }
+            }}
+            className="rounded-lg px-3 py-2 text-sm font-medium"
+            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+            🔬 Diagnostiquer enregistrements
+          </button>
         </div>
       </div>
+
 
       {/* Status card */}
       <div className="pp-card p-4">

@@ -2,6 +2,7 @@
 // Replaces the legacy VoiceAgent.tsx with rich state visualization, live
 // transcript, tool execution notifications and confirmation modal.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Conversation } from "@elevenlabs/client";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";

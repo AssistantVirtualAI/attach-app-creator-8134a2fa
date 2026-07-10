@@ -45,12 +45,33 @@ async function invokeFunction(name: string, authHeader: string, body: Record<str
 }
 
 function wantsEmailSummary(text: string) {
-  return /courriels?|emails?|inbox|bo[îi]te|mail/i.test(text) && /r[ée]sum|summar|non lus?|unread|lis|read/i.test(text);
+  return /courriels?|emails?|inbox|bo[îi]te|mail/i.test(text);
 }
 
 function wantsCalendar(text: string) {
-  return /calendrier|calendar|rendez[- ]?vous|meeting|rencontre/i.test(text) && /aujourd|semaine|prochain|liste|horaire|agenda|today|week|upcoming/i.test(text);
+  return /calendrier|calendar|rendez[- ]?vous|meeting|rencontre|agenda|horaire|today|week|upcoming|semaine|prochain|aujourd/i.test(text);
 }
+
+function wantsCalls(text: string) {
+  return /appels?|calls?|t[ée]l[ée]phon|manqu[eé]s?|missed|derniers? appels?/i.test(text);
+}
+
+function wantsSms(text: string) {
+  return /\bsms\b|texto|message texte|messages? non lus?/i.test(text);
+}
+
+function wantsVoicemail(text: string) {
+  return /messagerie|voicemail|vm\b|bo[îi]te vocale/i.test(text);
+}
+
+function wantsLeads(text: string) {
+  return /leads?|prospects?|clients? potentiels?|hot leads?|pipeline|dossiers?/i.test(text);
+}
+
+function wantsReminders(text: string) {
+  return /rappels?|reminders?|t[âa]ches?|tasks?|todo|à faire/i.test(text);
+}
+
 
 async function logAvaAction(admin: ReturnType<typeof createClient>, profile: any, userId: string, actionType: string, params: Record<string, unknown>, success: boolean, result: unknown, error?: string | null) {
   try {

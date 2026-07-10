@@ -223,12 +223,33 @@ export default defineConfig(({ mode }) => {
         entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "react-router-dom"],
-          "vendor-supabase": ["@supabase/supabase-js"],
-          "vendor-tanstack": ["@tanstack/react-query"],
-          "vendor-ui": ["lucide-react", "date-fns"],
-          "vendor-charts": ["recharts"],
+        manualChunks: (id) => {
+          // External vendors
+          if (id.includes("node_modules")) {
+            if (id.includes("react-router-dom") || id.includes("react-dom") || id.includes("/react/")) return "vendor-react";
+            if (id.includes("@supabase")) return "vendor-supabase";
+            if (id.includes("@tanstack")) return "vendor-tanstack";
+            if (id.includes("lucide-react") || id.includes("date-fns")) return "vendor-ui";
+            if (id.includes("recharts")) return "vendor-charts";
+            if (id.includes("zod") || id.includes("@hookform")) return "vendor-forms";
+            if (id.includes("framer-motion")) return "vendor-motion";
+            return "vendor-common";
+          }
+
+          // Application code split by domain to keep the entry chunk small
+          if (id.includes("/src/pages/planipret/")) return "app-planipret";
+          if (id.includes("/src/pages/telephony/")) return "app-telephony";
+          if (id.includes("/src/pages/lemtel/")) return "app-lemtel";
+          if (id.includes("/src/pages/admin/")) return "app-admin";
+          if (id.includes("/src/pages/console/")) return "app-console";
+          if (id.includes("/src/pages/callcenter/")) return "app-callcenter";
+          if (id.includes("/src/pages/")) return "app-pages";
+          if (id.includes("/src/components/")) return "app-components";
+          if (id.includes("/src/hooks/")) return "app-hooks";
+          if (id.includes("/src/context/")) return "app-context";
+          if (id.includes("/src/lib/")) return "app-lib";
+
+          return null;
         },
       },
     },

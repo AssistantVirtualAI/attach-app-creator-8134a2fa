@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Send, Plus, Menu, Loader2, Sparkles, Mic, Square, Volume2, VolumeX, CheckCircle2, MessageSquare, Radio } from "lucide-react";
+import { Send, Plus, Menu, Loader2, Mic, Square, Volume2, VolumeX, CheckCircle2, MessageSquare, Radio } from "lucide-react";
 import AvaVoiceAgent from "@/components/planipret/mobile/AvaVoiceAgent";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
+import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 
 type AvaSuggestion = { id: string; label: string; kind: string; payload?: Record<string, any> };
 type Msg = { id: string; role: "user" | "assistant"; message: string; created_at: string; suggestions?: AvaSuggestion[] };
@@ -31,6 +31,8 @@ export default function MAvaChat() {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [runningSuggestion, setRunningSuggestion] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const suppressSessionLoadRef = useRef<string | null>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -60,6 +62,10 @@ export default function MAvaChat() {
 
   useEffect(() => {
     if (!sessionId) { setMessages([]); return; }
+    if (suppressSessionLoadRef.current === sessionId) {
+      suppressSessionLoadRef.current = null;
+      return;
+    }
     (async () => {
       const { data } = await supabase
         .from("planipret_ava_conversations")
@@ -73,6 +79,10 @@ export default function MAvaChat() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
+
+  useEffect(() => {
+    if (!recording) inputRef.current?.focus();
+  }, [busy, recording, sessionId]);
 
   const startNew = () => { setSessionId(null); setMessages([]); };
 
@@ -91,6 +101,7 @@ export default function MAvaChat() {
       const d = data as any;
       const newSid = d.session_id ?? sessionId;
       if (newSid && newSid !== sessionId) {
+        suppressSessionLoadRef.current = newSid;
         setSessionId(newSid);
         const { data: srow } = await supabase.from("planipret_ava_chat_sessions").select("id,title,last_message_at").eq("id", newSid).maybeSingle();
         if (srow) setSessions((s) => [srow as Session, ...s.filter((x) => x.id !== newSid)]);
@@ -255,8 +266,8 @@ export default function MAvaChat() {
       </div>
 
 
-      <div className="flex-1">
-        <div ref={scrollRef} className="p-4 space-y-4 pb-6">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div ref={scrollRef} className="h-full overflow-y-auto p-4 space-y-4 pb-6">
           {messages.length === 0 && (
             <div className="text-center text-sm py-10" style={{ color: "var(--pp-text-muted)" }}>
               Pose ta question à AVA. Elle a accès à tes leads, appels et courriels.
@@ -268,19 +279,21 @@ export default function MAvaChat() {
               <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 {m.role === "assistant" ? (
                   <div className="max-w-[92%] space-y-2">
-                    <div className="flex items-start gap-2">
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.35)" }}>
-                        <Sparkles className="w-3.5 h-3.5" style={{ color: "var(--pp-brand-accent)" }} />
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 overflow-hidden" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+                        <img src={avaLogo.url} alt="AVA" className="w-full h-full object-contain" />
                       </div>
-                      <div className="text-[14px] leading-relaxed whitespace-pre-wrap break-words flex-1" style={{ color: "var(--pp-text-primary)" }}>
-                        {cleaned}
+                      <div className="flex-1 min-w-0 rounded-2xl rounded-tl-md px-3.5 py-3" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", boxShadow: "0 8px 24px rgba(0,0,0,0.18)" }}>
+                        <div className="text-[14px] leading-relaxed whitespace-pre-wrap break-words" style={{ color: "var(--pp-text-primary)" }}>
+                          {cleaned}
+                        </div>
                         <button
                           onClick={() => (speakingId === m.id ? (audioRef.current?.pause(), setSpeakingId(null)) : speak(m.id, cleaned))}
-                          className="ml-2 inline-flex items-center align-middle opacity-60 hover:opacity-100"
+                          className="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold opacity-75 hover:opacity-100"
                           style={{ color: "var(--pp-text-muted)" }}
                           title="Écouter"
                         >
-                          {speakingId === m.id ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                          {speakingId === m.id ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />} Écouter
                         </button>
                       </div>
                     </div>
@@ -303,8 +316,8 @@ export default function MAvaChat() {
                   </div>
                 ) : (
                   <div
-                    className="max-w-[85%] rounded-2xl px-4 py-2.5 text-[14px] whitespace-pre-wrap break-words shadow-sm"
-                    style={{ background: "var(--pp-brand-accent)", color: "#03131A", fontWeight: 500 }}
+                    className="max-w-[85%] rounded-2xl rounded-tr-md px-4 py-2.5 text-[14px] whitespace-pre-wrap break-words shadow-sm"
+                    style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-success))", color: "var(--pp-bg-deep)", fontWeight: 650 }}
                   >
                     {m.message}
                   </div>
@@ -314,8 +327,8 @@ export default function MAvaChat() {
           })}
           {busy && (
             <div className="flex justify-start items-center gap-2 text-sm" style={{ color: "var(--pp-text-muted)" }}>
-              <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(34,211,238,0.15)" }}>
-                <Sparkles className="w-3.5 h-3.5" style={{ color: "var(--pp-brand-accent)" }} />
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+                <img src={avaLogo.url} alt="AVA" className="w-full h-full object-contain" />
               </div>
               <Loader2 className="w-3 h-3 animate-spin" /> AVA réfléchit…
             </div>
@@ -323,7 +336,7 @@ export default function MAvaChat() {
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 p-3 flex gap-2 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.65)", borderTop: "1px solid var(--pp-bg-border)" }}>
+      <div className="sticky bottom-0 z-10 p-3 flex items-end gap-2 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.82)", borderTop: "1px solid var(--pp-bg-border)" }}>
         <Button
           onClick={recording ? stopRec : startRec}
           disabled={busy || transcribing || !userId}
@@ -333,14 +346,16 @@ export default function MAvaChat() {
         >
           {transcribing ? <Loader2 className="w-4 h-4 animate-spin" /> : recording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
         </Button>
-        <Input
+        <textarea
+          ref={inputRef}
           placeholder={recording ? "Enregistrement…" : "Message à AVA…"}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           disabled={busy || !userId || recording}
-          className="flex-1"
-          style={{ color: "var(--pp-text-primary)", background: "var(--pp-bg-surface)", borderColor: "var(--pp-bg-border-2)" }}
+          rows={1}
+          className="flex-1 min-h-[44px] max-h-28 resize-none rounded-2xl px-3.5 py-3 text-[14px] outline-none disabled:opacity-60"
+          style={{ color: "var(--pp-text-primary)", caretColor: "var(--pp-brand-accent)", background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}
         />
         <Button onClick={send} disabled={busy || !input.trim()} size="icon">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

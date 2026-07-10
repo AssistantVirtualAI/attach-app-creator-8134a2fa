@@ -753,7 +753,7 @@ export const MP_DICT = {
         compliance: "Conformité PIPEDA · Loi 25",
         ava: "AVA — Analytics",
         mobileDevices: "Vérification devices mobiles",
-        sipDiagnostic: "Diagnostic SIP — 113_web",
+        sipDiagnostic: "Portail diagnostic",
       },
       ava: {
         title: "AVA · Analytics 30 jours",

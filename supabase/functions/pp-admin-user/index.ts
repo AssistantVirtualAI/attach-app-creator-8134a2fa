@@ -448,7 +448,7 @@ Deno.serve(async (req) => {
         admin_id: profile.id, action: "USER_UPDATE",
         resource_type: "user", resource_id: user_id, metadata: allowed,
       });
-      return jsonResponse({ success: true });
+      return jsonResponse({ success: true, elevenlabs_agent_id: provisionedAgentId, elevenlabs_error: provisionError });
     }
 
     if (action === "delete") {

@@ -27,6 +27,7 @@ const MAvaChat = lazy(() => import('@/pages/planipret/mobile/MAvaChat'));
 const MAvaNotifications = lazy(() => import('@/pages/planipret/mobile/MAvaNotifications'));
 const MExtensionSync = lazy(() => import('@/pages/planipret/mobile/MExtensionSync'));
 const Ms365Callback = lazy(() => import('@/pages/planipret/Ms365Callback'));
+const MMs365Diagnostics = lazy(() => import('@/pages/planipret/mobile/MMs365Diagnostics'));
 
 const queryClient = new QueryClient();
 
@@ -73,6 +74,7 @@ export default function App() {
                     <Route path="ava" element={<MAvaChat />} />
                     <Route path="notifications" element={<MAvaNotifications />} />
                     <Route path="extension-sync" element={<MExtensionSync />} />
+                    <Route path="ms365-diagnostics" element={<MMs365Diagnostics />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/mplanipret" replace />} />
                 </Routes>

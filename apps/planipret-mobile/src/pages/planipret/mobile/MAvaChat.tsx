@@ -260,7 +260,8 @@ export default function MAvaChat() {
         </div>
       </ScrollArea>
 
-      <div className="p-3 border-t flex gap-2">
+      <div className="border-t">
+        <div className="p-3 flex gap-2 max-w-3xl w-full mx-auto">
         <Button
           onClick={recording ? stopRec : startRec}
           disabled={busy || transcribing || !userId}
@@ -280,6 +281,7 @@ export default function MAvaChat() {
         <Button onClick={send} disabled={busy || !input.trim()} size="icon">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </Button>
+        </div>
       </div>
     </div>
   );

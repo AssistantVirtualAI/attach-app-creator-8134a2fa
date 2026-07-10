@@ -197,6 +197,49 @@ function recordingHeaders(upstream: Response, meta: any, extra: Record<string, s
   return h;
 }
 
+// Persist recording bytes to the "call-recordings" bucket and remember the
+// path on the phone_calls row so subsequent playbacks are instant.
+async function persistRecording(callDbId: string | null, bytes: Uint8Array, contentType: string) {
+  if (!callDbId || !bytes?.byteLength) return null;
+  try {
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const { data: row } = await admin
+      .from("planipret_phone_calls")
+      .select("user_id, recording_storage_path")
+      .eq("id", callDbId)
+      .maybeSingle();
+    if (row?.recording_storage_path) return row.recording_storage_path;
+    const userId = row?.user_id ?? "unknown";
+    const ext = contentType.includes("mpeg") || contentType.includes("mp3") ? "mp3" : contentType.includes("wav") ? "wav" : "audio";
+    const path = `${userId}/${callDbId}.${ext}`;
+    const up = await admin.storage.from("call-recordings").upload(path, bytes, {
+      contentType: contentType.startsWith("audio/") ? contentType : "audio/mpeg",
+      upsert: true,
+    });
+    if (up.error) return null;
+    await admin
+      .from("planipret_phone_calls")
+      .update({
+        recording_storage_path: path,
+        recording_cached_at: new Date().toISOString(),
+        recording_bytes: bytes.byteLength,
+        has_recording: true,
+      })
+      .eq("id", callDbId);
+    return path;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function signCachedUrl(path: string) {
+  try {
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const { data } = await admin.storage.from("call-recordings").createSignedUrl(path, 3600);
+    return data?.signedUrl ?? null;
+  } catch { return null; }
+}
+
 function readWavChunks(bytes: Uint8Array) {
   if (bytes.length < 44 || String.fromCharCode(...bytes.slice(0, 4)) !== "RIFF" || String.fromCharCode(...bytes.slice(8, 12)) !== "WAVE") return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

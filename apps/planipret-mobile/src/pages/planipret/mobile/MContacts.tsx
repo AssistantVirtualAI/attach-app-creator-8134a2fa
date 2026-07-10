@@ -184,8 +184,11 @@ export default function MContacts() {
           {list.map((c: any) => {
             const isDir = tab === "directory";
             const name = isDir ? (c.name || c.extension) : (`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || c.phone || c.email);
-            const sub = isDir ? `Ext. ${c.extension}${c.department ? " • " + c.department : ""}` : (c.phone || c.email || c.company);
+            const sub = isDir
+              ? `${t("contacts.extension") || "Ext."} ${c.extension}${c.department ? " • " + c.department : ""}`
+              : (c.phone || c.email || c.company);
             const phone = isDir ? c.extension : c.phone;
+            const pres = isDir ? presenceMeta(c.presence, t) : null;
             return (
               <div
                 key={c.id ?? c.extension}
@@ -193,12 +196,29 @@ export default function MContacts() {
                 className="pp-card flex items-center gap-3 cursor-pointer"
                 style={{ padding: 12 }}
               >
-                <Avatar name={name || "?"} />
+                <div className="relative">
+                  <Avatar name={name || "?"} />
+                  {pres && (
+                    <span
+                      aria-label={pres.label}
+                      style={{
+                        position: "absolute", right: -1, bottom: -1,
+                        width: 12, height: 12, borderRadius: "50%",
+                        background: pres.color, border: "2px solid var(--pp-bg-base)",
+                      }}
+                    />
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div style={{ fontFamily: "Inter,sans-serif", fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)" }}
                     className="truncate">{name || t("contacts.noName")}</div>
                   <div style={{ fontFamily: "DM Sans,sans-serif", fontSize: 11, color: "var(--pp-text-muted)" }}
                     className="truncate">{sub}</div>
+                  {pres && (
+                    <div style={{ fontFamily: "DM Sans,sans-serif", fontSize: 10, color: pres.color, marginTop: 2, fontWeight: 600 }}>
+                      • {pres.label}
+                    </div>
+                  )}
                 </div>
                 <button onClick={(e) => { e.stopPropagation(); phone && openDialer(phone); }}
                   className="flex items-center justify-center active:scale-95 transition"

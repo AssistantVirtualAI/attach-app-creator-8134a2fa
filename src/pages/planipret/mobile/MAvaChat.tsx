@@ -340,12 +340,13 @@ export default function MAvaChat() {
                   </div>
                 ) : (
                   <div
-                    className="max-w-[85%] rounded-2xl rounded-tr-md px-4 py-2.5 text-[14px] whitespace-pre-wrap break-words shadow-sm"
-                    style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-success))", color: "var(--pp-bg-deep)", fontWeight: 650 }}
+                    className="max-w-[85%] rounded-2xl px-4 py-2.5 text-[14px] whitespace-pre-wrap break-words"
+                    style={{ background: "linear-gradient(135deg, #2E9BDC 0%, #7C3AED 100%)", color: "#ffffff", fontWeight: 500, borderRadius: "20px 20px 6px 20px", boxShadow: "0 8px 24px rgba(124,58,237,0.28)" }}
                   >
                     {m.message}
                   </div>
                 )}
+
               </div>
             );
           })}

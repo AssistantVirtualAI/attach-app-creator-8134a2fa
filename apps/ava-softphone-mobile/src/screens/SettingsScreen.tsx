@@ -29,9 +29,22 @@ export default function SettingsScreen({
   const [announceRec, setAnnounceRec] = useState<boolean>(() => getAnnounceConsent());
   const [claudeFallback, setClaudeFallback] = useState<boolean>(() => localStorage.getItem('ava.claudeFallback') !== 'off');
   const [lastTranscriber, setLastTranscriber] = useState<string>(() => localStorage.getItem('ava.lastTranscriber') || '—');
-  
+
   const [ringtone, setRingtone] = useState<string>(() => localStorage.getItem('ava.ringtone') || 'AVA Default');
-  const [audioOut, setAudioOut] = useState<string>(() => localStorage.getItem('ava.audioOut') || 'System default');
+  const [audioOut, setAudioOut] = useState<AudioRoute | 'default'>(() => (localStorage.getItem('ava.audioOut') as AudioRoute) || 'default');
+
+  // Audio quality / network prefs
+  const [ncEnabled, setNcEnabled] = useState<boolean>(() => audioPrefs.ncEnabled());
+  const [ncMode, setNcMode] = useState<NCMode>(() => audioPrefs.ncMode());
+  const [autoHandover, setAutoHandover] = useState<boolean>(() => audioPrefs.autoHandover());
+  const [preferWifi, setPreferWifi] = useState<boolean>(() => audioPrefs.preferWifi());
+  const [bgCalls, setBgCalls] = useState<boolean>(() => audioPrefs.backgroundCalls());
+  const [netType, setNetType] = useState<string>('unknown');
+  const [netConnected, setNetConnected] = useState<boolean>(true);
+
+  // In-app sheets (Capacitor WebView-safe replacements for prompt/confirm)
+  const [sheet, setSheet] = useState<null | 'ringtone' | 'audioOut' | 'fwd' | 'clearCache'>(null);
+  const [fwdInput, setFwdInput] = useState<string>('');
 
   useEffect(() => {
     mobileApi.me().then((next) => {
@@ -42,34 +55,75 @@ export default function SettingsScreen({
   }, []);
   useEffect(() => { checkAllPermissions().then(setPerms); }, []);
 
-  const toggleDnd = async () => { const next = !dnd; setDnd(next); try { await mobileApi.setDnd(next); } catch {} };
-  const toggleFwd = async () => {
-    const cur = forwarding;
-    const next = cur ? null : prompt(lang === 'fr' ? 'Numéro de transfert (E.164):' : 'Forwarding number (E.164):', '+1');
-    if (next === undefined) return;
-    setForwarding(next || null);
-    try { await mobileApi.setForwarding(next || null); } catch {}
+  // Live network status
+  useEffect(() => {
+    let sub: any = null; let mounted = true;
+    (async () => {
+      try {
+        const { Network } = await import('@capacitor/network');
+        const cur = await Network.getStatus();
+        if (!mounted) return;
+        setNetType(cur.connectionType || 'unknown');
+        setNetConnected(!!cur.connected);
+        sub = await Network.addListener('networkStatusChange', (s) => {
+          setNetType(s.connectionType || 'unknown');
+          setNetConnected(!!s.connected);
+        });
+      } catch {}
+    })();
+    return () => { mounted = false; sub?.remove?.().catch?.(() => {}); };
+  }, []);
+
+  const toggleDnd = async () => { const next = !dnd; setDnd(next); try { await mobileApi.setDnd(next); toast(next ? (lang==='fr'?'Ne pas déranger activé':'Do not disturb on') : (lang==='fr'?'Ne pas déranger désactivé':'Do not disturb off'), 'success'); } catch {} };
+  const openFwdSheet = () => {
+    if (forwarding) {
+      setForwarding(null);
+      mobileApi.setForwarding(null).catch(() => {});
+      toast(lang==='fr'?'Transfert désactivé':'Forwarding disabled', 'success');
+      return;
+    }
+    setFwdInput('+1');
+    setSheet('fwd');
+  };
+  const commitFwd = async () => {
+    const v = fwdInput.trim();
+    if (!v) { setSheet(null); return; }
+    setForwarding(v); setSheet(null);
+    try { await mobileApi.setForwarding(v); toast(lang==='fr'?'Transfert activé':'Forwarding enabled', 'success'); } catch {}
   };
   const toggleHaptics = () => { const next = !haptics; setHaptics(next); localStorage.setItem('ava.haptics', next ? 'on' : 'off'); };
   const toggleAutoAnswer = () => { const next = !autoAnswer; setAutoAnswer(next); localStorage.setItem('ava.autoAnswer', next ? 'on' : 'off'); };
-  
-  const pickRingtone = () => {
-    const opts = ['AVA Default', 'Classic', 'Pulse', 'Marimba', 'Silent'];
-    const choice = prompt((lang === 'fr' ? 'Sonnerie' : 'Ringtone') + ` (${opts.join(', ')}):`, ringtone);
-    if (choice && opts.includes(choice)) { setRingtone(choice); localStorage.setItem('ava.ringtone', choice); }
+
+  const pickRingtoneChoice = (choice: string) => {
+    setRingtone(choice);
+    localStorage.setItem('ava.ringtone', choice);
+    setSheet(null);
+    toast(lang==='fr'?'Sonnerie enregistrée':'Ringtone saved', 'success');
   };
-  const pickAudioOut = () => {
-    const opts = ['System default', 'Speaker', 'Earpiece', 'Bluetooth'];
-    const choice = prompt((lang === 'fr' ? 'Sortie audio' : 'Audio output') + ` (${opts.join(', ')}):`, audioOut);
-    if (choice && opts.includes(choice)) { setAudioOut(choice); localStorage.setItem('ava.audioOut', choice); }
+  const pickAudioOutChoice = async (choice: AudioRoute | 'default') => {
+    setAudioOut(choice);
+    localStorage.setItem('ava.audioOut', choice);
+    setSheet(null);
+    if (choice !== 'default') {
+      try { await setAudioRoute(choice); } catch {}
+    }
+    toast(lang==='fr'?'Sortie audio mise à jour':'Audio output updated', 'success');
   };
-  const clearCache = () => {
-    if (!confirm(lang === 'fr' ? 'Vider le cache de l\'application ?' : 'Clear app cache?')) return;
+  const doClearCache = () => {
     Object.keys(localStorage)
       .filter((k) => k.startsWith('ava.aisummary.') || k.startsWith('ava.cache.'))
       .forEach((k) => localStorage.removeItem(k));
-    alert(lang === 'fr' ? 'Cache vidé.' : 'Cache cleared.');
+    setSheet(null);
+    toast(lang === 'fr' ? 'Cache vidé' : 'Cache cleared', 'success');
   };
+  const openPortal = (path = '') => window.open(`${PORTAL_URL}${path}`, '_blank', 'noopener');
+
+  const toggleNc = () => { const n = !ncEnabled; setNcEnabled(n); audioPrefs.setNcEnabled(n); };
+  const changeNcMode = (m: NCMode) => { setNcMode(m); audioPrefs.setNcMode(m); };
+  const toggleAutoHandover = () => { const n = !autoHandover; setAutoHandover(n); audioPrefs.setAutoHandover(n); };
+  const togglePreferWifi = () => { const n = !preferWifi; setPreferWifi(n); audioPrefs.setPreferWifi(n); };
+  const toggleBgCalls = () => { const n = !bgCalls; setBgCalls(n); audioPrefs.setBackgroundCalls(n); };
+
   const openPortal = (path = '') => window.open(`${PORTAL_URL}${path}`, '_blank', 'noopener');
 
   const s = sp?.snap?.status;

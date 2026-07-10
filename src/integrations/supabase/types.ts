@@ -13626,6 +13626,7 @@ export type Database = {
       }
       pin_chat_message: { Args: { _message_id: string }; Returns: undefined }
       planipret_ava_org_id: { Args: never; Returns: string }
+      planipret_broker_ids: { Args: { _uid: string }; Returns: string[] }
       pp_audit_realtime_check: { Args: never; Returns: Json }
       pp_claim_call: {
         Args: { _answered_by: string; _call_id: string }

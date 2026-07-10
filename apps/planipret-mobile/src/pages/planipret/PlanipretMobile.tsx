@@ -760,13 +760,25 @@ export default function PlanipretMobile() {
         </nav>
 
 
-        {/* Powered by AVA footer */}
-        <div className="absolute bottom-0 inset-x-0 h-[34px] flex items-center justify-center gap-2 z-10 pp-mobile-footer">
-          <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 9, color: "var(--pp-text-muted)", letterSpacing: "0.14em", fontWeight: 600 }}>{t("footer.poweredBy")}</span>
-          <div style={{ width: 26, height: 26, background: "#7C3AED", borderRadius: 8, color: "white", fontWeight: 900, fontSize: 12, display: "inline-flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 10px rgba(124,58,237,0.5)", lineHeight: 1 }}>AVA</div>
-          <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 13, color: "var(--pp-brand-accent-2)", letterSpacing: "0.14em", fontWeight: 800 }}>AVA</span>
-          <span style={{ fontSize: 8.5, color: "var(--pp-text-faint)", letterSpacing: "0.1em" }}>· {t("footer.developedBy")}</span>
+        {/* Powered by AVA footer — logo mis en évidence */}
+        <div className="absolute bottom-0 inset-x-0 h-[52px] flex flex-col items-center justify-center z-10 pp-mobile-footer" style={{ gap: 2 }}>
+          <div className="flex items-center gap-2.5">
+            <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 9, color: "var(--pp-text-muted)", letterSpacing: "0.16em", fontWeight: 600 }}>{t("footer.poweredBy")}</span>
+            <div className="relative flex items-center justify-center" style={{ width: 40, height: 40 }}>
+              <div className="absolute inset-0 rounded-full" style={{ background: "radial-gradient(circle, rgba(124,58,237,0.55) 0%, rgba(46,155,220,0.25) 50%, transparent 75%)", filter: "blur(8px)", animation: "ava-footer-pulse 3s ease-in-out infinite" }} />
+              <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ background: "conic-gradient(from 0deg, #7C3AED, #2E9BDC, #00D4AA, #7C3AED)", padding: 2, animation: "ava-footer-spin 6s linear infinite" }}>
+                <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: "var(--pp-bg-surface, #0A1628)", color: "#fff", fontWeight: 900, fontSize: 12, fontFamily: "Urbanist,sans-serif", letterSpacing: "0.02em" }}>AVA</div>
+              </div>
+            </div>
+            <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 20, letterSpacing: "0.08em", fontWeight: 900, background: "linear-gradient(90deg,#7C3AED,#2E9BDC)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>AVA</span>
+          </div>
+          <span style={{ fontSize: 8, color: "var(--pp-text-faint)", letterSpacing: "0.1em" }}>· {t("footer.developedBy")}</span>
+          <style>{`
+            @keyframes ava-footer-pulse { 0%,100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }
+            @keyframes ava-footer-spin { to { transform: rotate(360deg); } }
+          `}</style>
         </div>
+
 
 
         <Dialer open={dialerOpen} onClose={() => setDialerOpen(false)} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); navigate(`/mplanipret/messages${n ? `?to=${encodeURIComponent(n)}` : ""}`); }} softphone={softphone} />

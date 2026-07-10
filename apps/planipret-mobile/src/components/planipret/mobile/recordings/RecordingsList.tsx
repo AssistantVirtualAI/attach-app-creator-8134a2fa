@@ -330,34 +330,9 @@ export default function RecordingsList({
     }
   };
 
-  const top = withRec.slice(0, 5);
-  const audioReady = top.filter((c) => audioStatus[c.id] === "uploaded" || /^blob:/i.test(String(c.recording_url ?? ""))).length;
-  const txReady = top.filter((c) => !!c.transcript).length;
-  const aiReady = top.filter((c) => !!c.ai_summary).length;
-  const pct = top.length ? Math.round(((audioReady + txReady + aiReady) / (top.length * 3)) * 100) : 100;
-  const showProgress = top.length > 0 && pct < 100;
-
   return (
     <>
-      {showProgress && (
-        <div className="px-3 pt-3">
-          <div className="rounded-xl p-2.5" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
-            <div className="flex items-center justify-between text-[11px] mb-1.5" style={{ color: "var(--pp-text-secondary)" }}>
-              <span className="font-semibold">Traitement des {top.length} derniers appels</span>
-              <span style={{ color: "var(--pp-text-muted)" }}>{pct}%</span>
-            </div>
-            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--pp-bg-border-2)" }}>
-              <div className="h-full transition-all"
-                   style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }} />
-            </div>
-            <div className="flex items-center justify-between mt-1.5 text-[10px]" style={{ color: "var(--pp-text-muted)" }}>
-              <span>Audio {audioReady}/{top.length}</span>
-              <span>Transcript {txReady}/{top.length}</span>
-              <span>IA {aiReady}/{top.length}</span>
-            </div>
-          </div>
-        </div>
-      )}
+
       <ul className="px-3 pt-3 pb-4 space-y-2">
 
       {withRec.map((c) => (

@@ -55,24 +55,47 @@ export default function SettingsScreen({
   }, []);
   useEffect(() => { checkAllPermissions().then(setPerms); }, []);
 
-  // Live network status
+  // Live network status — Capacitor listener on native, navigator fallback on web
   useEffect(() => {
     let sub: any = null; let mounted = true;
+    const apply = (connected: boolean, type: string) => {
+      if (!mounted) return;
+      setNetConnected(connected);
+      setNetType(type || 'unknown');
+      console.info('[Settings] network', { connected, type });
+    };
+    const readNav = () => {
+      const conn: any = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+      const t = conn?.type || (conn?.effectiveType ? 'cellular' : (navigator.onLine ? 'wifi' : 'none'));
+      apply(!!navigator.onLine, t);
+    };
     (async () => {
       try {
         const { Network } = await import('@capacitor/network');
         const cur = await Network.getStatus();
-        if (!mounted) return;
-        setNetType(cur.connectionType || 'unknown');
-        setNetConnected(!!cur.connected);
+        apply(!!cur.connected, cur.connectionType || 'unknown');
         sub = await Network.addListener('networkStatusChange', (s) => {
-          setNetType(s.connectionType || 'unknown');
-          setNetConnected(!!s.connected);
+          apply(!!s.connected, s.connectionType || 'unknown');
         });
-      } catch {}
+      } catch {
+        readNav();
+      }
     })();
-    return () => { mounted = false; sub?.remove?.().catch?.(() => {}); };
+    const onOnline = () => readNav();
+    const onOffline = () => apply(false, 'none');
+    const conn: any = (navigator as any).connection;
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    conn?.addEventListener?.('change', readNav);
+    return () => {
+      mounted = false;
+      sub?.remove?.().catch?.(() => {});
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      conn?.removeEventListener?.('change', readNav);
+    };
   }, []);
+
 
   const toggleDnd = async () => { const next = !dnd; setDnd(next); try { await mobileApi.setDnd(next); toast(next ? (lang==='fr'?'Ne pas déranger activé':'Do not disturb on') : (lang==='fr'?'Ne pas déranger désactivé':'Do not disturb off'), 'success'); } catch {} };
   const openFwdSheet = () => {

@@ -8468,6 +8468,39 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_did_assignments: {
+        Row: {
+          callerid_name: string | null
+          created_at: string
+          domain: string
+          extension: string
+          phone_number_digits: string
+          phone_number_e164: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          callerid_name?: string | null
+          created_at?: string
+          domain?: string
+          extension: string
+          phone_number_digits: string
+          phone_number_e164: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          callerid_name?: string | null
+          created_at?: string
+          domain?: string
+          extension?: string
+          phone_number_digits?: string
+          phone_number_e164?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       planipret_edge_function_runs: {
         Row: {
           created_at: string

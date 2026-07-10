@@ -1,6 +1,6 @@
 // Manage NetSapiens DIDs (phone numbers) for the Planiprêt domain.
 // Actions: list, assign, unassign
-import { corsHeaders, jsonResponse, requirePlanipretAdmin } from "../_shared/ns-broker.ts";
+import { corsHeaders, jsonResponse, requirePlanipretAdmin, supaAdmin } from "../_shared/ns-broker.ts";
 
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
 const NS_API_BASE_URL = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";
@@ -124,6 +124,37 @@ Deno.serve(async (req) => {
       }
       const raw = Array.isArray(r.data) ? r.data : (r.data?.data ?? r.data?.items ?? []);
       const numbers = (raw ?? []).map(normalizeNumber).filter((n: any) => n.raw);
+
+      // Overlay local assignments (source of truth = planipret_did_assignments imported from NS export)
+      // NS-API v2 sometimes returns the destination as an empty string when the DID is bound to
+      // a user through a "to-user" application. We merge our local map so the admin UI can show
+      // the extension owner and hide already-assigned numbers from the "libre" dropdown.
+      try {
+        const db = supaAdmin();
+        const { data: assigns } = await db
+          .from("planipret_did_assignments")
+          .select("phone_number_e164,phone_number_digits,extension,callerid_name")
+          .eq("domain", domain);
+        const byE164 = new Map<string, any>();
+        const byDigits = new Map<string, any>();
+        for (const a of (assigns ?? []) as any[]) {
+          if (a.phone_number_e164) byE164.set(String(a.phone_number_e164), a);
+          if (a.phone_number_digits) byDigits.set(String(a.phone_number_digits), a);
+        }
+        for (const n of numbers) {
+          if (n.extension) continue; // NS already provided a binding — trust it
+          const digits = String(n.raw ?? "").replace(/\D/g, "");
+          const hit = byE164.get(n.e164) ?? byDigits.get(digits);
+          if (hit) {
+            n.extension = String(hit.extension);
+            n.application = n.application ?? "to-user";
+            (n as any).source = "local_assignment";
+          }
+        }
+      } catch (e) {
+        console.warn("[pp-admin-phonenumbers] local overlay failed:", e);
+      }
+
       return jsonResponse({ success: true, domain, count: numbers.length, numbers });
     }
 
@@ -147,6 +178,21 @@ Deno.serve(async (req) => {
         `/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`,
         `/domains/${encodeURIComponent(domain)}/phone-numbers/${encodeURIComponent(pn)}`,
       ], { method: "PUT", body: JSON.stringify(assignBody) });
+
+      // Always persist our local overlay so the admin UI reflects the change even if NS
+      // read-back is stale or the API version does not echo the destination field.
+      try {
+        const e164 = pn.length === 10 ? `+1${pn}` : `+${pn}`;
+        await supaAdmin().from("planipret_did_assignments").upsert({
+          phone_number_e164: e164,
+          phone_number_digits: pn,
+          extension: ext,
+          domain,
+          source: "admin_ui",
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "phone_number_e164" });
+      } catch (e) { console.warn("assign upsert failed:", e); }
+
       if (!r.ok) {
         return jsonResponse({ success: false, error: `NS assign failed (${r.status})`, detail: r.data }, 200);
       }
@@ -168,6 +214,14 @@ Deno.serve(async (req) => {
         `/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`,
         `/domains/${encodeURIComponent(domain)}/phone-numbers/${encodeURIComponent(pn)}`,
       ], { method: "PUT", body: JSON.stringify(clearBody) });
+
+      try {
+        const e164 = pn.length === 10 ? `+1${pn}` : `+${pn}`;
+        await supaAdmin().from("planipret_did_assignments")
+          .delete()
+          .or(`phone_number_e164.eq.${e164},phone_number_digits.eq.${pn}`);
+      } catch (e) { console.warn("unassign cleanup failed:", e); }
+
       if (!r.ok) return jsonResponse({ success: false, error: `NS unassign failed (${r.status})`, detail: r.data }, 200);
       return jsonResponse({ success: true, phone_number: pn });
     }

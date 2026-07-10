@@ -124,7 +124,7 @@ export default function SettingsScreen({
   const togglePreferWifi = () => { const n = !preferWifi; setPreferWifi(n); audioPrefs.setPreferWifi(n); };
   const toggleBgCalls = () => { const n = !bgCalls; setBgCalls(n); audioPrefs.setBackgroundCalls(n); };
 
-  const openPortal = (path = '') => window.open(`${PORTAL_URL}${path}`, '_blank', 'noopener');
+
 
   const s = sp?.snap?.status;
   const sipState: 'registered' | 'connecting' | 'retrying' | 'offline' =

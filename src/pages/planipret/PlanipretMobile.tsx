@@ -557,6 +557,23 @@ export default function PlanipretMobile() {
     void hasSeenPrimer().then((seen) => { if (!seen) setShowPrimer(true); });
   }, [profile?.user_id, profile?.ns_extension, profile?.extension]);
 
+  // Realtime: react instantly when an admin toggles mobile_app_enabled /
+  // voice_agent_enabled or updates any other profile field.
+  useEffect(() => {
+    if (!profile?.user_id) return;
+    const ch = supabase
+      .channel(`mplanipret-profile-${profile.user_id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "planipret_profiles", filter: `user_id=eq.${profile.user_id}` },
+        () => { void loadProfile(); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.user_id]);
+
+
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1425", color: "#2E9BDC", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;
 
   if (accessError === "unauthenticated") {
@@ -590,7 +607,7 @@ export default function PlanipretMobile() {
     );
   }
 
-  if (profile && profile.mobile_app_enabled === false) {
+  if (profile && profile.mobile_app_enabled !== true) {
     return (
       <Frame>
         <div className="h-full flex items-center justify-center p-6" style={{ background: "var(--pp-bg-base)" }}>
@@ -754,7 +771,9 @@ export default function PlanipretMobile() {
         <PpActiveCallScreen softphone={softphone} />
         <InboundCallOverlay call={inbound} onClose={() => setInbound(null)} />
         {avaOpen && profile?.user_id && (
-          <AvaChatSheet userId={profile.user_id} onClose={() => setAvaOpen(false)} />
+          profile.voice_agent_enabled
+            ? <AvaVoiceAgent userId={profile.user_id} onClose={() => setAvaOpen(false)} />
+            : <AvaChatSheet userId={profile.user_id} onClose={() => setAvaOpen(false)} />
         )}
 
         <OfflineBanner />

@@ -400,8 +400,17 @@ export default function PAUsers() {
     setSavingId(null);
     if (error || !(data as any)?.success) {
       setRows((p) => p.map((r) => r.user_id === u.user_id ? { ...r, [field]: !next } : r));
-      toast.error("Erreur de mise à jour");
+      toast.error((data as any)?.error ?? error?.message ?? "Erreur de mise à jour");
       return;
+    }
+    // Resync from DB so the UI reflects the persisted value (defensive).
+    const { data: fresh } = await supabase
+      .from("planipret_profiles")
+      .select("mobile_app_enabled, voice_agent_enabled")
+      .eq("user_id", u.user_id)
+      .maybeSingle();
+    if (fresh) {
+      setRows((p) => p.map((r) => r.user_id === u.user_id ? { ...r, mobile_app_enabled: !!fresh.mobile_app_enabled, voice_agent_enabled: !!fresh.voice_agent_enabled } : r));
     }
     // Propagate to NS-API (recording config depends on voice_agent_enabled)
     if (field === "voice_agent_enabled") {
@@ -409,7 +418,7 @@ export default function PAUsers() {
         body: { action: "sync_one", broker_id: u.user_id },
       }).catch(() => null);
     }
-    toast.success("Mis à jour");
+    toast.success(next ? (field === "mobile_app_enabled" ? "Accès mobile activé" : "Agent vocal IA activé") : (field === "mobile_app_enabled" ? "Accès mobile désactivé" : "Agent vocal IA désactivé"));
   };
 
   const bulkToggle = async (field: "mobile_app_enabled" | "voice_agent_enabled", value: boolean) => {

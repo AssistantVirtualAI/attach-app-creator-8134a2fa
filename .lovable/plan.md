@@ -1,70 +1,65 @@
-## Problème
+## Objectif
 
-Sur l'app mobile Planipret, la page **Enregistrements** :
-- Fait juste l'upload audio, sans vraiment enchaîner transcript + IA de façon fiable.
-- Associe parfois la transcription et l'analyse IA au **mauvais appel** (mismatch avec l'audio joué).
-- N'utilise pas la même logique éprouvée que `/planipret/admin/recordings` (PARecordings).
+Refonte visuelle de la page AVA (chat) pour l'aligner sur le reste de l'app mobile Planiprêt, mettre en évidence le logo AVA dans le footer, et transformer le mode vocal en une orbe "AVA parle" style ChatGPT.
 
-### Cause racine
+## 1. Footer (PlanipretMobile.tsx) — logo AVA en évidence
 
-Dans `src/components/planipret/mobile/recordings/RecordingsList.tsx` :
+Fichiers : `src/pages/planipret/PlanipretMobile.tsx` + `apps/planipret-mobile/src/pages/planipret/PlanipretMobile.tsx`
 
-1. Le helper `callDbId(c)` retourne `proxy_call_db_id ?? c.id`. Il est utilisé **à la fois** pour :
-   - la résolution audio (correct — le proxy pointe vers la ligne qui a le fichier)
-   - **et** pour `pp-admin-transcribe` / `pp-coach-call` (**incorrect** — la transcription et l'IA doivent être écrites sur la ligne affichée `c.id`, pas sur le proxy). Résultat : le transcript arrive sur un autre `id`, et la carte affiche celui d'un appel voisin.
+- Hauteur footer 34px → 48px.
+- Logo AVA au **centre** : disque 40×40 avec halo violet pulsé (var(--pp-agent)), léger anneau conique animé, drop-shadow marquée.
+- Wordmark "AVA" plus grand (18px, poids 900) accolé au logo, en gradient (agent → brand-accent).
+- Micro-textes "Powered by" et "Developed by Planiprêt Solutions" en 8px, opacité réduite, disposés en dessous sur une deuxième ligne pour ne pas voler la vedette au logo.
 
-2. La boucle `for (const call of queue)` traite les calls en série mais **ne se termine jamais proprement** en cas d'erreur intermédiaire, et ne re-tente pas de la même façon que le portail admin (backoff `transcript_pending`, retry `TRANSCRIPT_MISSING`, realtime UPDATE).
+## 2. Chat AVA — refonte visuelle synchronisée avec les autres pages
 
-3. Aucune souscription realtime `postgres_changes` sur `planipret_phone_calls` pour rafraîchir la carte quand `pp-admin-transcribe` ou `pp-coach-call` écrit dans la DB (le portail admin le fait via `pa-call-${callId}`).
+Fichiers : `src/pages/planipret/mobile/MAvaChat.tsx` + apps/mobile jumeau.
 
-4. Aucune garde "voicemail" (les `vmail@` sont bruités et échouent — l'admin les filtre).
+- **Header** : passer du bandeau sombre custom au style "card-header" utilisé sur MHome/MPipeline (fond `--pp-bg-surface`, border-bottom `--pp-bg-border`, radius top). Titre en Urbanist, sous-titre "Assistant Planiprêt" en petit texte muted.
+- **Switch Chat / Vocal** : remplacer les deux boutons plats par un segmented control arrondi, pill glossy, avec indicateur animé (translate). Icônes Mic/MessageSquare, actifs en gradient brand→agent.
+- **Bulles** :
+  - Assistant : fond `--pp-bg-elevated`, border subtile, radius 20/20/20/6, ombre douce, avatar AVA 32px avec halo agent.
+  - Utilisateur : gradient `brand-accent → agent` (harmonisé avec le reste de l'app plutôt que brand→success), texte `#fff`, radius 20/20/6/20.
+  - Suggestions : chips en verre (`backdrop-blur`, border agent 30%, hover translate).
+- **Composer** : conteneur pill flottant (max-w-3xl, shadow-lg, border agent/20, backdrop-blur), boutons Mic et Send en cercles gradient, animation d'onde pendant l'enregistrement.
+- **Empty state** : ajouter l'orbe AVA (petite version) + 3 suggestions cliquables ("Résumé de la journée", "Prochains rendez-vous", "Rappeler un client").
 
-## Correctif
+## 3. Mode vocal — orbe AVA style ChatGPT
 
-Refactorer uniquement `src/components/planipret/mobile/recordings/RecordingsList.tsx` pour reproduire fidèlement le pipeline du portail admin, en conservant l'UI mobile existante (cartes, pills, PipelineProgress, autoloader silencieux).
+Fichier : `src/components/planipret/mobile/AvaVoiceAgent.tsx` (+ jumeau).
 
-### 1. Séparer les identifiants
+Créer un nouveau composant `AvaOrb.tsx` (`src/components/planipret/mobile/`) :
 
-- `audioLookupId(c)` = `proxy_call_db_id ?? c.id` (pour `ns-get-recording` uniquement).
-- `pipelineId(c)` = **toujours `c.id`** pour `pp-admin-transcribe` et `pp-coach-call`, de façon à ce que la ligne mise à jour en DB soit exactement celle de la carte.
+- Cercle central 260px, gradient conique animé (violet agent → cyan brand-accent → success).
+- 3 anneaux SVG flous en rotation lente contrarotative.
+- Réactivité audio :
+  - **Idle** : respiration lente (scale 1 ↔ 1.04, 4s).
+  - **Listening** : l'orbe pulse selon `micLevels` (déjà calculés via analyser) — scale et intensité de halo proportionnels au niveau moyen.
+  - **Speaking** : ondes concentriques émises (3 anneaux `animate-ping` décalés), teinte plus chaude (brand-accent dominant).
+  - **Processing / tool_running** : rotation accélérée + shimmer.
+- Implémenté en pur CSS + `<canvas>` optionnel pour le voice-blob (fallback : `radial-gradient` + `@keyframes`).
 
-### 2. Reprendre la séquence exacte du portail admin par appel
+Intégration dans AvaVoiceAgent :
 
-Pour chaque `call` de la file (top 15 avec audio résolvable, hors voicemails) :
+- Remplace le visuel actuel (grande carte + barres micro) par l'orbe centrée verticalement.
+- Sous l'orbe : label d'état (`STATE_LABEL[state]`) en typo Urbanist 18px.
+- Transcript déplacé en bas, semi-transparent, max 3 lignes visibles avec fade.
+- Bouton "Retour au chat" en haut à gauche, cohérent avec le style pill du chat.
 
-1. **Audio** — `ns-get-recording` avec `call_db_id = audioLookupId`. Si `pending/processing`, backoff comme admin (15s → 30s → 60s → 120s, max 4 min), max ~4 tentatives, puis `error` silencieux.
-2. **Transcript** — `pp-admin-transcribe` avec `call_id = pipelineId`. Gérer les 3 issues comme admin :
-   - `ok + transcript` → merge dans l'état + `onUpdated`.
-   - `pending` → replanifier avec backoff (15s·2^n).
-   - autre → marquer `error` sans toast.
-3. **IA / Coaching** — `pp-coach-call` avec `call_id = pipelineId` et `transcript` local (fallback si DB pas encore synchro, comme admin). Gérer `TRANSCRIPT_MISSING` → retry 3 s. Skip si `ai_coaching` déjà présent (cache).
+## 4. Détails techniques
 
-Chaque étape est indépendante : si transcript échoue, on n'appelle pas l'IA ; si audio échoue, on tente quand même transcript/IA (utile pour les vieux appels sans MP3).
+- Aucun changement de logique (sessions, invocations edge, ElevenLabs) — uniquement UI.
+- Tokens : utiliser exclusivement `--pp-*` déjà définis dans `design-tokens`.
+- Nouveaux keyframes ajoutés localement via `<style>` inline dans `AvaOrb` pour rester scopés.
+- Miroir strict entre `src/` et `apps/planipret-mobile/src/` (règle mplanipret-isolation).
+- Build + typecheck après modification.
 
-### 3. Realtime par carte visible
+## Fichiers touchés
 
-Souscrire un canal `postgres_changes UPDATE` sur `planipret_phone_calls filter id=eq.${call.id}` pour chaque carte ouverte (comme `pa-call-${callId}` dans admin), afin que les colonnes `transcript`, `ai_summary`, `ai_coaching`, `lead_score`, `lead_temperature` mettent à jour la carte instantanément quand une écriture arrive de n'importe quelle source.
-
-### 4. Filtre voicemail
-
-Exclure de la file d'auto-pipeline les appels dont `to_number` matche `vmail|voicemail|vm@` (aligné avec `PARecordings`).
-
-### 5. Cache & garde-fous
-
-- `autoPipelineDoneRef` conservé, mais réinitialisé quand un appel repasse en erreur pour permettre un retry manuel via le bouton "retry audio" déjà présent.
-- Toujours écrire via `onUpdated` avec `{ ...call, ... }` en gardant le même `id`, pour ne jamais déplacer les données vers une autre carte.
-
-## Détails techniques
-
-- Fichier modifié : `src/components/planipret/mobile/recordings/RecordingsList.tsx` (uniquement — pas de changement DB, pas de nouvelle edge function, pas de changement admin).
-- Aucune modification du parent `MRecordings` / `MHome`.
-- Aucune modification de `pp-admin-transcribe`, `pp-coach-call`, `ns-get-recording` (déjà corrects côté admin).
-- La barre déjà retirée reste retirée ; l'autoloader silencieux (sans toast) est conservé.
-- L'UI (cartes, pills, `PipelineProgress`, `AudioStatusBadge`) n'est pas touchée visuellement.
-
-## Vérification
-
-Après implémentation, ouvrir `/planipret/mobile/recordings`, laisser tourner 30 s, puis vérifier via Playwright + `supabase--read_query` que pour 3 cartes :
-- `transcript` correspond bien au bon `id` (jointure `planipret_phone_calls` sur `id`, comparaison à la carte affichée),
-- `ai_summary` et `lead_score` sont cohérents avec ce transcript,
-- Aucun appel voicemail n'apparaît en boucle d'échec dans la console.
+- `src/pages/planipret/PlanipretMobile.tsx`
+- `apps/planipret-mobile/src/pages/planipret/PlanipretMobile.tsx`
+- `src/pages/planipret/mobile/MAvaChat.tsx`
+- `apps/planipret-mobile/src/pages/planipret/mobile/MAvaChat.tsx`
+- `src/components/planipret/mobile/AvaVoiceAgent.tsx`
+- `apps/planipret-mobile/src/components/planipret/mobile/AvaVoiceAgent.tsx`
+- **nouveau** `src/components/planipret/mobile/AvaOrb.tsx` (+ jumeau)

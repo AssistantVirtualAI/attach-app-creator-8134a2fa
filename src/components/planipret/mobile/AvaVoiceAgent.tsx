@@ -169,9 +169,18 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
           return;
         }
 
+        // Mint a scoped WebRTC token server-side so the API key stays private.
+        const { data: tok, error: tokErr } = await supabase.functions.invoke("pp-ava-webrtc-token", { body: {} });
+        if (tokErr || !(tok as any)?.token) {
+          toast.error((tok as any)?.error ?? "Token vocal indisponible");
+          setState("error");
+          return;
+        }
+
         const conv = await Conversation.startSession({
-          agentId: c.agent_id,
+          conversationToken: (tok as any).token,
           connectionType: "webrtc",
+
           overrides: {
             agent: {
               prompt: { prompt: c.system_prompt },

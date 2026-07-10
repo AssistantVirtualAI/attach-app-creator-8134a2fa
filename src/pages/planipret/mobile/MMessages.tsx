@@ -298,8 +298,9 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
           {threads.map((th, index) => {
             const id = threadId(th);
             const peer = threadPeer(th);
-            const unread = th.unread ?? th.unread_count ?? 0;
-            const preview = th.last_message ?? th.preview ?? "";
+            const unread = threadUnread(th);
+            const preview = threadPreview(th);
+
             return (
               <ThreadRow
                 key={`${id || "noid"}-${peer || "nopeer"}-${index}`}

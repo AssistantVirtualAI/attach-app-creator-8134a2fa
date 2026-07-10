@@ -1098,7 +1098,7 @@ function CallDetailSheet({
         if ((freshCall.transcript || segs) && !hasInsight) {
           setAiLoading(true);
           await supabase.functions.invoke("pp-coach-call", {
-            body: { call_id: call.id, transcript: freshCall.transcript ?? null, force: true },
+            body: { call_id: call.id, transcript: freshCall.transcript ?? null },
           });
           setAiLoading(false);
           const { data: ins } = await supabase.from("planipret_ai_insights").select("*").eq("call_id", call.id).maybeSingle();
@@ -1137,10 +1137,11 @@ function CallDetailSheet({
 
   const fetchRecording = async () => {
     setRecLoading(true);
-    const { data, error } = await supabase.functions.invoke("pp-ns-recordings", { body: { action: "get", call_id: call.ns_call_id ?? call.id } });
+    const { data, error } = await supabase.functions.invoke("ns-get-recording", { body: { call_db_id: call.id, ns_callid: call.ns_callid ?? call.ns_call_id, prefer_url: true } });
     setRecLoading(false);
-    if (error || !(data as any)?.recording_url) { toast.error(t("calls.recordingUnavailable")); return; }
-    await supabase.from("planipret_phone_calls").update({ recording_url: (data as any).recording_url }).eq("id", call.id);
+    const recUrl = (data as any)?.recording_url ?? (data as any)?.url;
+    if (error || !(data as any)?.available || !recUrl) { toast.error((data as any)?.message ?? t("calls.recordingUnavailable")); return; }
+    await supabase.from("planipret_phone_calls").update({ recording_url: recUrl, has_recording: true }).eq("id", call.id);
     await refreshCall();
     toast.success(t("calls.recordingFetched"));
   };
@@ -1182,7 +1183,7 @@ function CallDetailSheet({
       await refreshCall();
       if (transcript && !call.ai_summary) {
         setAiLoading(true);
-        await supabase.functions.invoke("pp-coach-call", { body: { call_id: call.id, transcript, force: true } });
+        await supabase.functions.invoke("pp-coach-call", { body: { call_id: call.id, transcript } });
         setAiLoading(false);
         await refreshCall();
       }
@@ -1213,7 +1214,7 @@ function CallDetailSheet({
     if (!call.transcript && !segments) return;
     setAiLoading(true);
     const { data, error } = await supabase.functions.invoke("pp-coach-call", {
-      body: { call_id: call.id, transcript: call.transcript ?? null, force: true },
+      body: { call_id: call.id, transcript: call.transcript ?? null },
     });
     setAiLoading(false);
     if (error) { toast.error(error.message ?? t("common.failed")); return; }

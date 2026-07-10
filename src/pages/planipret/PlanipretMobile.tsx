@@ -756,10 +756,9 @@ export default function PlanipretMobile() {
         <PpActiveCallScreen softphone={softphone} />
         <InboundCallOverlay call={inbound} onClose={() => setInbound(null)} />
         {avaOpen && profile?.user_id && (
-          profile.voice_agent_enabled
-            ? <AvaVoiceAgent userId={profile.user_id} onClose={() => setAvaOpen(false)} />
-            : <AvaChatSheet userId={profile.user_id} onClose={() => setAvaOpen(false)} />
+          <AvaChatSheet userId={profile.user_id} onClose={() => setAvaOpen(false)} />
         )}
+
         <OfflineBanner />
       </div>
     </Frame>

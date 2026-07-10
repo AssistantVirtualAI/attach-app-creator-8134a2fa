@@ -166,8 +166,9 @@ export default function MCalls() {
   const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();
   const [params, setParams] = useSearchParams();
   const initialTab = (params.get("tab") as any) || "recents";
-  const [tab, setTab] = useState<"recents" | "active" | "missed" | "recordings" | "voicemails">(
-    ["recents", "active", "missed", "recordings", "voicemails"].includes(initialTab) ? initialTab : "recents"
+  const [tab, setTab] = useState<"recents" | "missed" | "recordings" | "voicemails">(
+    ["recents", "missed", "recordings", "voicemails"].includes(initialTab) ? initialTab : "recents"
+
   );
   const [calls, setCalls] = useState<Call[]>([]);
   const [recordings, setRecordings] = useState<Call[]>([]);
@@ -468,11 +469,11 @@ export default function MCalls() {
         >
           {[
             { k: "recents", label: t("calls.tabs.recents") },
-            { k: "active", label: t("calls.tabs.active") },
             { k: "missed", label: t("calls.tabs.missed") },
             { k: "recordings", label: t("calls.tabs.recordings") },
             { k: "voicemails", label: t("calls.tabs.voicemails") },
           ].map((tabDef) => {
+
             const active = tab === (tabDef.k as any);
             const isMissedTab = tabDef.k === "missed";
             return (
@@ -508,9 +509,8 @@ export default function MCalls() {
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
-        {tab === "active" ? (
-          <ActiveCallsTab userId={userId} openDialer={openDialer} />
-        ) : tab === "recordings" ? (
+        {tab === "recordings" ? (
+
           <>
             <div className="px-4 pt-2 flex items-center justify-end">
               <button

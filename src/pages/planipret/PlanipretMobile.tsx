@@ -32,51 +32,31 @@ import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 
 const ACCENT = "#2E9BDC";
 
+import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
+import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
+
 const AvaBadge = ({ compact = false, circle = false }: { compact?: boolean; circle?: boolean }) => (
-  <div
-    aria-label="AVA"
+  <img
+    src={avaLogoAsset.url}
+    alt="AVA"
     style={{
-      width: circle ? "100%" : undefined,
-      height: circle ? "100%" : undefined,
-      minWidth: compact ? 14 : 34,
-      minHeight: compact ? 14 : 28,
-      background: "#7C3AED",
-      borderRadius: circle ? "50%" : compact ? 4 : 12,
-      padding: circle ? 0 : compact ? "1px 4px" : "8px 12px",
-      color: "white",
-      fontWeight: 800,
-      fontSize: circle ? 15 : compact ? 8 : 14,
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      boxShadow: compact ? undefined : "0 0 12px rgba(124,58,237,0.45)",
-      lineHeight: 1,
+      width: circle ? "100%" : compact ? 18 : 32,
+      height: circle ? "100%" : compact ? 18 : 32,
+      borderRadius: circle ? "50%" : 8,
+      objectFit: "contain",
+      display: "inline-block",
     }}
-  >
-    AVA
-  </div>
+  />
 );
 
 const PlanipretBadge = () => (
-  <div
-    aria-label="Planiprêt"
-    style={{
-      width: 28,
-      height: 28,
-      background: "#1A4A8A",
-      borderRadius: 12,
-      color: "white",
-      fontWeight: 800,
-      fontSize: 14,
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      lineHeight: 1,
-    }}
-  >
-    P
-  </div>
+  <img
+    src={planipretLogoAsset.url}
+    alt="Planiprêt"
+    style={{ width: 28, height: 28, borderRadius: 8, objectFit: "contain", display: "inline-block" }}
+  />
 );
+
 
 export type PlanipretMobileContext = { profile: any; reloadProfile: () => Promise<void>; openDialer: (number?: string) => void; openAva: () => void; registerRefresh: (fn: (() => Promise<void> | void) | null) => void; softphone: ReturnType<typeof useMplanipretSoftphone> };
 
@@ -644,14 +624,12 @@ export default function PlanipretMobile() {
           style={{ marginTop: "calc(env(safe-area-inset-top, 0px) + 56px)", paddingTop: 18, paddingBottom: 12 }}
         >
 
-          {/* AVA icon — left */}
+          {/* Live status pill — left */}
           <div className="flex items-center gap-1.5">
-            <AvaBadge />
-            <span className="flex items-center gap-1.5">
-              <span className="pp-live-dot" />
-              <span style={{ fontSize: 9, color: "var(--pp-success)", fontWeight: 700, letterSpacing: "0.05em" }}>REST</span>
-            </span>
+            <span className="pp-live-dot" />
+            <span style={{ fontSize: 9, color: "var(--pp-success)", fontWeight: 700, letterSpacing: "0.05em" }}>REST</span>
           </div>
+
 
           {/* Settings button — between AVA (left) and Planiprêt (center) */}
           <button
@@ -776,10 +754,9 @@ export default function PlanipretMobile() {
         <PpActiveCallScreen softphone={softphone} />
         <InboundCallOverlay call={inbound} onClose={() => setInbound(null)} />
         {avaOpen && profile?.user_id && (
-          profile.voice_agent_enabled
-            ? <AvaVoiceAgent userId={profile.user_id} onClose={() => setAvaOpen(false)} />
-            : <AvaChatSheet userId={profile.user_id} onClose={() => setAvaOpen(false)} />
+          <AvaChatSheet userId={profile.user_id} onClose={() => setAvaOpen(false)} />
         )}
+
         <OfflineBanner />
       </div>
     </Frame>

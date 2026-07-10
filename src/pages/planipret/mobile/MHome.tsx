@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import IdentityCard from "@/components/planipret/mobile/IdentityCard";
 import { useOutletContext, useNavigate } from "react-router-dom";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -187,8 +186,9 @@ export default function MHome() {
     if (profile?.ms365_access_token) {
       setMsCalendarLoading(true);
       try {
+        const calEnd = new Date(); calEnd.setDate(calEnd.getDate() + 14);
         const { data: msData, error: msError } = await supabase.functions.invoke("ms365-actions", {
-          body: { action: "list_calendar_events", payload: { start: nowIso, end: weekEnd.toISOString(), top: 5 } },
+          body: { action: "list_calendar_events", payload: { start: nowIso, end: calEnd.toISOString(), top: 25 } },
         });
         if (msError || (msData as any)?.success === false) {
           setMsCalendarError((msData as any)?.error ?? msError?.message ?? "Calendrier Microsoft indisponible");
@@ -278,31 +278,20 @@ export default function MHome() {
       <ExtensionSyncBanner profile={profile} reloadProfile={reloadProfile} />
 
       {/* ===== HEADER ===== */}
-      <header className="flex items-start justify-between">
-        <div className="min-w-0">
-          <p className="pp-eyebrow">{dateLabel}</p>
-          <h1 className="text-[26px] leading-tight font-bold mt-0.5">
-            {t("home.hello")}, <span style={{ color: "var(--pp-brand-accent)" }}>{firstName}</span>
-          </h1>
-        </div>
-        <button
-          onClick={() => {
-            if (phoneOnline) toast.success("Appels REST prêts — votre téléphone mobile sonnera quand vous appellerez.");
-            else toast.error("Aucune extension NetSapiens liée. Contacte un admin pour la synchroniser.");
-          }}
-          className="pp-pill"
-          style={{
-            background: phoneOnline ? "rgba(13,122,95,0.10)" : "rgba(178,58,72,0.10)",
-            color: phoneOnline ? "var(--pp-success)" : "var(--pp-danger)",
-            border: `1px solid ${phoneOnline ? "rgba(13,122,95,0.30)" : "rgba(178,58,72,0.30)"}`,
-          }}
-        >
-          <span style={{ width: 6, height: 6, borderRadius: 999, background: "currentColor", boxShadow: "0 0 6px currentColor" }} />
-          {phoneOnline ? "Appels REST" : "Non lié"}
-        </button>
+      <header className="min-w-0">
+        <p className="pp-eyebrow">{dateLabel}</p>
+        <h1 className="text-[26px] leading-tight font-bold mt-0.5">
+          {t("home.hello")}, <span style={{ color: "var(--pp-brand-accent)" }}>{firstName}</span>
+        </h1>
+        {(profile?.ns_extension || profile?.extension) && (
+          <p className="text-[12px] mt-1" style={{ color: "var(--pp-text-muted)" }}>
+            {t("extSync.extLabel")} {profile?.ns_extension || profile?.extension}
+          </p>
+        )}
       </header>
 
-      <IdentityCard profile={profile} onLinked={reloadProfile} />
+
+
 
 
 
@@ -460,95 +449,102 @@ export default function MHome() {
         )}
       </section>
 
-      {/* ===== HOT LEADS ===== */}
-      {hotLeads.length > 0 && (
-        <section className="pp-card p-4">
-          <SectionHead icon={<Flame className="w-4 h-4" style={{ color: "#C9582A" }} />} title={t("home.hotLeads")} count={hotLeads.length} />
-          <ul className="space-y-1.5">
-            {hotLeads.map((l) => {
-              const name = l.from_name || l.from_number || l.to_name || l.to_number;
-              const phone = l.from_number || l.to_number;
-              return (
-                <li key={l.id} className="flex items-center gap-3 py-2 px-2 rounded-lg"
-                  style={{ background: "rgba(201,88,42,0.05)" }}>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: "var(--pp-text-primary)" }}>{name ?? "—"}</p>
-                    <p className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
-                      {TEMP_EMOJI.hot} {t("home.score")} {l.lead_score}/10
-                    </p>
-                  </div>
-                  <button onClick={() => openDialer(phone ?? undefined)}
-                    className="text-[11px] font-semibold px-3 py-1.5 rounded-lg text-white"
-                    style={{ background: "#C9582A", fontFamily: "Urbanist,sans-serif" }}>
-                    {t("common.callBack")}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
-
-      {/* ===== MEETINGS ===== */}
+      {/* ===== MICROSOFT CALENDAR (14 days) ===== */}
       <section className="pp-card p-4">
-        <SectionHead icon={<Calendar className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />} title={t("home.upcomingMeetings")} count={meetings.length + msMeetings.length} />
-        {statsLoading || msCalendarLoading ? (
-          <div className="space-y-2"><Shimmer className="h-10" /><Shimmer className="h-10" /></div>
-        ) : meetings.length === 0 && msMeetings.length === 0 ? (
-          <p className="text-xs text-center py-3" style={{ color: "var(--pp-text-muted)" }}>
-            {profile?.ms365_access_token ? "Aucun rendez-vous local ou Microsoft à venir" : t("home.noMeetings")}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold flex items-center gap-1.5 pp-heading">
+            <Calendar className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />
+            {t("home.upcomingMeetings")}
+          </h2>
+          <span className="pp-eyebrow">{msMeetings.length}</span>
+        </div>
+
+        {!profile?.ms365_access_token ? (
+          <p className="text-xs text-center py-4" style={{ color: "var(--pp-text-muted)" }}>
+            Connectez Microsoft 365 dans « Plus » pour afficher votre calendrier ici.
+          </p>
+        ) : msCalendarLoading ? (
+          <div className="space-y-2">
+            <Shimmer className="h-14" /><Shimmer className="h-14" /><Shimmer className="h-14" />
+          </div>
+        ) : msMeetings.length === 0 ? (
+          <p className="text-xs text-center py-4" style={{ color: "var(--pp-text-muted)" }}>
+            Aucun rendez-vous à venir dans les 14 prochains jours.
           </p>
         ) : (
-          <ul className="space-y-2">
-            {msMeetings.map((m) => {
-              const start = m.start?.dateTime ? new Date(m.start.dateTime) : null;
-              const join = m.onlineMeeting?.joinUrl ?? m.webLink;
-              return (
-                <li key={`ms-${m.id}`} className="flex items-center gap-3 py-2">
-                  <div className="px-2.5 py-1.5 rounded-lg text-xs font-bold tabular-nums"
-                    style={{ background: "rgba(46,155,220,0.10)", color: "var(--pp-brand-accent)", border: "1px solid rgba(46,155,220,0.25)", fontFamily: "Urbanist,sans-serif" }}>
-                    {start ? start.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { day: "2-digit", month: "short" }) : "—"}
-                    {" "}{start ? start.toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : ""}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate font-medium flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
-                      <Video className="w-3 h-3" style={{ color: "var(--pp-brand-accent)" }} /> {m.subject ?? "Microsoft 365"}
+          <ul className="space-y-3">
+            {(() => {
+              const groups: Record<string, any[]> = {};
+              for (const m of msMeetings) {
+                const d = m.start?.dateTime ? new Date(m.start.dateTime) : null;
+                const key = d ? d.toISOString().slice(0, 10) : "—";
+                (groups[key] ||= []).push(m);
+              }
+              const keys = Object.keys(groups).sort();
+              return keys.map((k) => {
+                const d = k === "—" ? null : new Date(k + "T00:00:00");
+                const label = d
+                  ? d.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long" })
+                  : "—";
+                return (
+                  <div key={k}>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider mb-1.5"
+                       style={{ color: "var(--pp-text-muted)", fontFamily: "Urbanist,sans-serif" }}>
+                      {label}
                     </p>
-                    <p className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }}>Microsoft Calendar</p>
+                    <ul className="space-y-1.5">
+                      {groups[k].map((m) => {
+                        const start = m.start?.dateTime ? new Date(m.start.dateTime) : null;
+                        const end = m.end?.dateTime ? new Date(m.end.dateTime) : null;
+                        const join = m.onlineMeeting?.joinUrl ?? m.webLink;
+                        const isTeams = !!m.onlineMeeting?.joinUrl;
+                        return (
+                          <li key={`ms-${m.id}`} className="flex items-center gap-3 py-2 px-2 rounded-lg"
+                              style={{ background: "rgba(46,155,220,0.06)", border: "1px solid rgba(46,155,220,0.15)" }}>
+                            <div className="w-14 flex-shrink-0 text-center px-1.5 py-1 rounded-md"
+                                 style={{ background: "rgba(46,155,220,0.12)", color: "var(--pp-brand-accent)", fontFamily: "Urbanist,sans-serif" }}>
+                              <div className="text-[11px] font-bold tabular-nums leading-none">
+                                {start ? start.toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                              </div>
+                              {end && (
+                                <div className="text-[9px] mt-0.5 opacity-70 tabular-nums leading-none">
+                                  {end.toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" })}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm truncate font-medium flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
+                                {isTeams && <Video className="w-3 h-3 flex-shrink-0" style={{ color: "var(--pp-brand-accent)" }} />}
+                                {m.subject ?? "Sans titre"}
+                              </p>
+                              {(m.location?.displayName || m.bodyPreview) && (
+                                <p className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }}>
+                                  {m.location?.displayName || m.bodyPreview}
+                                </p>
+                              )}
+                            </div>
+                            {join && (
+                              <button onClick={() => window.open(join, "_blank", "noopener,noreferrer")}
+                                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                      style={{ color: "var(--pp-brand-accent)", background: "rgba(46,155,220,0.10)" }}>
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </div>
-                  {join && (
-                    <button onClick={() => window.open(join, "_blank", "noopener,noreferrer")} className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ color: "var(--pp-brand-accent)", background: "rgba(46,155,220,0.10)" }}>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-            {meetings.map((m) => {
-              const meetingDate = m.start_time ? new Date(m.start_time) : null;
-              return (
-                <li key={m.id} className="flex items-center gap-3 py-2">
-                  <div className="px-2.5 py-1.5 rounded-lg text-xs font-bold tabular-nums"
-                    style={{ background: "rgba(59,111,160,0.10)", color: "var(--pp-brand-accent-2)", border: "1px solid rgba(59,111,160,0.25)", fontFamily: "Urbanist,sans-serif" }}>
-                    {meetingDate ? meetingDate.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { day: "2-digit", month: "short" }) : "—"}
-                    {" "}
-                    {meetingDate ? meetingDate.toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : ""}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate font-medium" style={{ color: "var(--pp-text-primary)" }}>{m.title ?? t("home.untitled")}</p>
-                    {m.attendee_name && (
-                      <p className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }}>{m.attendee_name}</p>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
+                );
+              });
+            })()}
           </ul>
         )}
         {msCalendarError && (
           <p className="text-[11px] mt-2" style={{ color: "var(--pp-danger)" }}>{msCalendarError}</p>
         )}
       </section>
+
 
       {/* ===== TASKS / REMINDERS ===== */}
       {dueReminders.length > 0 && (

@@ -1,5 +1,5 @@
 // Manage NetSapiens DIDs (phone numbers) for the Planiprêt domain.
-// Actions: list, assign, unassign
+// Actions: list, assign, unassign, sync_assignments
 import { corsHeaders, jsonResponse, requirePlanipretAdmin, supaAdmin } from "../_shared/ns-broker.ts";
 
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
@@ -55,12 +55,17 @@ function extractDest(pn: any): { extension: string | null; type: string | null }
   // Accept every known variant + parse sip:ext@domain strings.
   const app =
     pn?.["dest-application"] ?? pn?.application ?? pn?.["destination-application"] ??
-    pn?.["dest_type"] ?? pn?.["destination-type"] ?? pn?.dest_app ?? null;
+    pn?.["dest_type"] ?? pn?.["destination-type"] ?? pn?.dest_app ??
+    pn?.["dial-rule-application"] ?? pn?.["dial_rule_application"] ?? null;
 
   const candidates: any[] = [
     pn?.["to-user"], pn?.["to_user"], pn?.["dest-user"], pn?.["dest_user"],
     pn?.dest, pn?.destination, pn?.["destination-user"], pn?.["destination_user"],
     pn?.["destination-user-name"], pn?.["destination_user_name"],
+    pn?.["dial-rule-translation-destination-user"], pn?.["dial_rule_translation_destination_user"],
+    pn?.["dial-rule-translation-destination"], pn?.["dial_rule_translation_destination"],
+    pn?.["dial-rule-translation-destination-host"], pn?.["dial_rule_translation_destination_host"],
+    pn?.["translation-destination-user"], pn?.["translation_destination_user"],
     pn?.["to-connection"], pn?.["forward-all-destination"], pn?.["dest-extension"],
     pn?.user, pn?.subscriber, pn?.extension, pn?.ext,
   ];
@@ -93,8 +98,37 @@ function normalizeNumber(pn: any): {
   );
   const e164 = normalizeE164(raw);
   const dest = extractDest(pn);
-  const active = (pn?.["enable"] ?? pn?.enabled ?? pn?.status ?? "yes") !== "no";
+  const active = (pn?.["enable"] ?? pn?.enabled ?? pn?.["enabled"] ?? pn?.status ?? "yes") !== "no";
   return { raw, e164, pretty: pretty(e164 || raw), extension: dest.extension, application: dest.type, active, ns: pn };
+}
+
+function normalizeAssignment(input: any, domain: string) {
+  const rawPhone = input?.phone_number ?? input?.phoneNumber ?? input?.phone_number_e164 ??
+    input?.phone_number_digits ?? input?.phonenumber ?? input?.["phone-number"] ??
+    input?.number ?? input?.did ?? input?.dnis ?? input?.raw;
+  const digits = String(rawPhone ?? "").replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  const phoneDigits = digits.length === 10 ? `1${digits}` : digits;
+  const e164 = `+${phoneDigits}`;
+
+  const rawExt = input?.extension ?? input?.ext ?? input?.user ?? input?.["to-user"] ??
+    input?.["dest-user"] ?? input?.destination ?? input?.dest ??
+    input?.["destination-user"] ?? input?.["dial-rule-translation-destination-user"];
+  let ext = String(rawExt ?? "").trim().replace(/^sip:/i, "").split("@")[0].trim();
+  ext = ext.replace(/[^a-z0-9._-]/gi, "");
+  if (!/^[a-z0-9._-]{2,20}$/i.test(ext)) return null;
+
+  const callerid = input?.callerid_name ?? input?.callerIdName ?? input?.name ??
+    input?.description ?? input?.["dial-rule-description"] ?? null;
+  return {
+    phone_number_e164: e164,
+    phone_number_digits: phoneDigits,
+    extension: ext,
+    callerid_name: callerid ? String(callerid).slice(0, 200) : null,
+    domain,
+    source: "file_sync",
+    updated_at: new Date().toISOString(),
+  };
 }
 
 Deno.serve(async (req) => {
@@ -197,6 +231,46 @@ Deno.serve(async (req) => {
         return jsonResponse({ success: false, error: `NS assign failed (${r.status})`, detail: r.data }, 200);
       }
       return jsonResponse({ success: true, phone_number: pn, extension: ext });
+    }
+
+    if (action === "sync_assignments") {
+      const assignments = Array.isArray(payload?.assignments) ? payload.assignments : [];
+      const rows = assignments
+        .map((a: any) => normalizeAssignment(a, domain))
+        .filter(Boolean) as any[];
+      const deduped = Array.from(new Map(rows.map((r) => [r.phone_number_e164, r])).values());
+      if (deduped.length === 0) {
+        return jsonResponse({ success: false, error: "Aucun assignment DID valide trouvé dans le fichier" }, 400);
+      }
+
+      const db = supaAdmin();
+      const { error: upsertError } = await db
+        .from("planipret_did_assignments")
+        .upsert(deduped, { onConflict: "phone_number_e164" });
+      if (upsertError) return jsonResponse({ success: false, error: upsertError.message }, 200);
+
+      let removed = 0;
+      if (payload?.replace === true && deduped.length >= 10) {
+        const keep = deduped.map((r) => r.phone_number_e164);
+        const { data: existing } = await db
+          .from("planipret_did_assignments")
+          .select("phone_number_e164")
+          .eq("domain", domain);
+        const stale = (existing ?? [])
+          .map((r: any) => String(r.phone_number_e164))
+          .filter((n) => !keep.includes(n));
+        if (stale.length > 0) {
+          const { error: delError } = await db
+            .from("planipret_did_assignments")
+            .delete()
+            .eq("domain", domain)
+            .in("phone_number_e164", stale);
+          if (delError) return jsonResponse({ success: false, error: delError.message }, 200);
+          removed = stale.length;
+        }
+      }
+
+      return jsonResponse({ success: true, domain, imported: deduped.length, removed });
     }
 
     if (action === "unassign") {

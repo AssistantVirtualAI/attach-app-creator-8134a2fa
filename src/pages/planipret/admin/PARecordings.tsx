@@ -401,53 +401,6 @@ export default function PARecordings() {
           type="button"
           onClick={async () => {
             try {
-              const { data: recentCall } = await supabase
-                .from("planipret_phone_calls")
-                .select("*")
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-              const { data: rawCdr, error } = await supabase.functions.invoke("ns-debug-cdr", { body: {} });
-              const payload = { db_row_fields: recentCall ? Object.keys(recentCall) : [], db_row: recentCall, ns_debug: rawCdr, invoke_error: error?.message };
-              console.log("[CDR DEBUG]", payload);
-              setDebug((d) => [{ ts: new Date().toISOString(), label: "CDR fields debug", data: payload } as any, ...d]);
-              toast.success("Debug CDR — voir DebugPanel + console");
-            } catch (e: any) {
-              toast.error(`Debug échoué: ${e?.message ?? e}`);
-            }
-          }}
-          className="px-3 py-2 rounded-lg text-sm border"
-          style={{ borderColor: "var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
-        >
-          🔍 Debug CDR Fields
-        </button>
-
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              toast.message("Diagnostic en cours (peut prendre ~30s)…");
-              const { data, error } = await supabase.functions.invoke("ns-debug-real-cdr", { body: {} });
-              if (error) throw error;
-              console.log("[NS RECORDING DIAG]", data);
-              setDebug((d) => [{ ts: new Date().toISOString(), label: "Diagnostic enregistrements NS-API", data } as any, ...d]);
-              const successes = (data as any)?.successes ?? [];
-              if (successes.length) toast.success(`✅ ${successes.length} endpoint(s) audio trouvé(s) — voir DebugPanel`);
-              else toast.error("Aucun endpoint audio n'a répondu 200 — voir DebugPanel");
-            } catch (e: any) {
-              toast.error(`Diagnostic échoué: ${e?.message ?? e}`);
-            }
-          }}
-          className="px-3 py-2 rounded-lg text-sm border"
-          style={{ borderColor: "var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
-        >
-          🔬 Diagnostiquer les enregistrements
-        </button>
-
-        <button
-          type="button"
-          onClick={async () => {
-            try {
               toast.message("Mise en file de tous les enregistrements…");
               const { data, error } = await supabase.functions.invoke("pp-admin-backfill-calls", { body: { limit: 1000, concurrency: 5 } });
               if (error) throw error;
@@ -456,7 +409,6 @@ export default function PARecordings() {
               if (queued === 0) toast.success("Aucun appel en attente de traitement");
               else toast.success(`${queued} appels en cours de traitement en arrière-plan. La liste se met à jour au fur et à mesure.`);
               setDebug((x) => [{ ts: new Date().toISOString(), label: "Backfill enregistrements", data: d } as any, ...x]);
-              // Refresh a few times to surface progress
               setTimeout(() => load(page, pageSize), 5_000);
               setTimeout(() => load(page, pageSize), 20_000);
               setTimeout(() => load(page, pageSize), 60_000);
@@ -470,6 +422,7 @@ export default function PARecordings() {
           ⚡ Traiter tous les enregistrements
         </button>
       </div>
+
 
 
 

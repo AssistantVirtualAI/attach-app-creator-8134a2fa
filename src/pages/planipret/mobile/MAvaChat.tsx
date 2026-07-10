@@ -277,10 +277,25 @@ export default function MAvaChat() {
       <div className="flex-1 min-h-0 overflow-hidden">
         <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-4 pb-6 space-y-4 max-w-3xl w-full mx-auto">
           {messages.length === 0 && (
-            <div className="text-center text-sm py-10" style={{ color: "var(--pp-text-muted)" }}>
-              Pose ta question à AVA. Elle a accès à tes leads, appels et courriels.
+            <div className="flex flex-col items-center justify-center py-14 gap-4 text-center">
+              <AvaOrb state="idle" size={140} />
+              <div className="space-y-1">
+                <div className="text-[16px] font-semibold" style={{ color: "var(--pp-text-primary)", fontFamily: "Urbanist,sans-serif" }}>Bonjour, je suis AVA</div>
+                <div className="text-[12px] max-w-xs" style={{ color: "var(--pp-text-muted)" }}>J'ai accès à tes leads, appels, courriels et calendrier Microsoft.</div>
+              </div>
+              <div className="flex flex-wrap justify-center gap-1.5 max-w-md">
+                {["Résumé de ma journée", "Prochains rendez-vous", "Leads chauds à rappeler"].map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => { setInput(q); setTimeout(() => send(), 50); }}
+                    className="text-[11px] px-3 py-1.5 rounded-full transition hover:-translate-y-0.5"
+                    style={{ background: "color-mix(in srgb, var(--pp-agent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--pp-agent) 30%, transparent)", color: "var(--pp-agent)", backdropFilter: "blur(8px)" }}
+                  >{q}</button>
+                ))}
+              </div>
             </div>
           )}
+
           {messages.map((m) => {
             const cleaned = m.role === "assistant" ? cleanReply(m.message) : m.message;
             return (

@@ -48,6 +48,7 @@ const CONFIRM_REQUIRED = new Set([
 ]);
 
 export default function AvaVoiceAgent({ onClose, userId }: Props) {
+  const navigate = useNavigate();
   const [state, setState] = useState<AgentState>("idle");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [toolNotif, setToolNotif] = useState<string | null>(null);

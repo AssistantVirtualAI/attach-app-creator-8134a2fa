@@ -16,6 +16,9 @@ const MUTATING_ACTIONS = new Set(["send_email", "create_calendar_event", "send_t
 
 export default function MAvaChat() {
   const [userId, setUserId] = useState<string | null>(null);
+  const [voiceAgentAllowed, setVoiceAgentAllowed] = useState(false);
+  const [mode, setMode] = useState<"chat" | "voice">(() => (localStorage.getItem("ava_mode") as any) || "chat");
+  const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -30,6 +33,8 @@ export default function MAvaChat() {
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const switchMode = (m: "chat" | "voice") => { setMode(m); localStorage.setItem("ava_mode", m); };
 
   useEffect(() => {
     (async () => {

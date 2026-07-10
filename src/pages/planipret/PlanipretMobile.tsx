@@ -607,7 +607,7 @@ export default function PlanipretMobile() {
     );
   }
 
-  if (profile && profile.mobile_app_enabled === false) {
+  if (profile && profile.mobile_app_enabled !== true) {
     return (
       <Frame>
         <div className="h-full flex items-center justify-center p-6" style={{ background: "var(--pp-bg-base)" }}>

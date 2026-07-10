@@ -83,8 +83,8 @@ export type PlanipretMobileContext = { profile: any; reloadProfile: () => Promis
 const TABS = [
   { to: "/mplanipret/home", labelKey: "tabs.home", Icon: Home },
   { to: "/mplanipret/calls", labelKey: "tabs.calls", Icon: Phone },
-  { to: "/mplanipret/messages", labelKey: "tabs.messages", Icon: MessageSquare },
   { to: "/mplanipret/ava", labelKey: "tabs.ava", Icon: Bot },
+  { to: "/mplanipret/messages", labelKey: "tabs.messages", Icon: MessageSquare },
   { to: "/mplanipret/contacts", labelKey: "tabs.contacts", Icon: Users },
 ];
 
@@ -733,17 +733,36 @@ export default function PlanipretMobile() {
 
           {TABS.map((tabItem) => {
             const badge = tabItem.to.endsWith("/messages") ? unreadMsg : 0;
+            const isAva = tabItem.to.endsWith("/ava");
             return (
               <NavLink key={tabItem.to} to={tabItem.to}
-                className="relative flex flex-col items-center justify-center gap-1 text-[9px] font-semibold pt-1.5"
+                className={`relative flex flex-col items-center justify-center gap-1 text-[9px] font-semibold pt-1.5 ${isAva ? "ava-tab-center" : ""}`}
                 style={({ isActive }) => ({ color: isActive ? "var(--pp-brand-accent)" : "var(--pp-text-faint)" })}>
                 {({ isActive }) => (
                   <>
-                    {isActive && (
+                    {isActive && !isAva && (
                       <span className="absolute top-1 w-1 h-1 rounded-full" style={{ background: "var(--pp-brand-accent)" }} />
                     )}
-                    <div className="relative">
-                      <tabItem.Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.4 : 1.8} />
+                    <div
+                      className="relative flex items-center justify-center transition-all duration-200"
+                      style={isAva ? {
+                        width: isActive ? 50 : 46,
+                        height: isActive ? 50 : 46,
+                        borderRadius: "50%",
+                        background: isActive
+                          ? "linear-gradient(135deg, #7C3AED, #2E9BDC)"
+                          : "var(--pp-bg-elevated)",
+                        border: isActive ? "2px solid rgba(255,255,255,0.15)" : "1px solid var(--pp-bg-border-2)",
+                        boxShadow: isActive
+                          ? "0 6px 20px rgba(124,58,237,0.5)"
+                          : "0 2px 8px rgba(0,0,0,0.12)",
+                        marginTop: -10,
+                      } : {}}>
+                      <tabItem.Icon
+                        className={isAva ? "w-[26px] h-[26px]" : "w-[22px] h-[22px]"}
+                        strokeWidth={isActive ? 2.4 : 1.8}
+                        style={{ color: isAva ? (isActive ? "#fff" : "var(--pp-brand-accent)") : undefined }}
+                      />
                       {badge > 0 && (
                         <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
                           style={{ background: "var(--pp-danger)" }}>
@@ -751,7 +770,7 @@ export default function PlanipretMobile() {
                         </span>
                       )}
                     </div>
-                    <span style={{ letterSpacing: "0.02em" }}>{"labelKey" in tabItem ? t(tabItem.labelKey) : ""}</span>
+                    {!isAva && <span style={{ letterSpacing: "0.02em" }}>{"labelKey" in tabItem ? t(tabItem.labelKey) : ""}</span>}
                   </>
                 )}
               </NavLink>
@@ -760,21 +779,21 @@ export default function PlanipretMobile() {
         </nav>
 
 
-        {/* Powered by AVA footer — logo mis en évidence */}
-        <div className="absolute bottom-0 inset-x-0 h-[52px] flex flex-col items-center justify-center z-10 pp-mobile-footer" style={{ gap: 2 }}>
-          <div className="flex items-center gap-2.5">
-            <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 9, color: "var(--pp-text-muted)", letterSpacing: "0.16em", fontWeight: 600 }}>{t("footer.poweredBy")}</span>
-            <div className="relative flex items-center justify-center" style={{ width: 40, height: 40 }}>
-              <div className="absolute inset-0 rounded-full" style={{ background: "radial-gradient(circle, rgba(124,58,237,0.55) 0%, rgba(46,155,220,0.25) 50%, transparent 75%)", filter: "blur(8px)", animation: "ava-footer-pulse 3s ease-in-out infinite" }} />
-              <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ background: "conic-gradient(from 0deg, #7C3AED, #2E9BDC, #00D4AA, #7C3AED)", padding: 2, animation: "ava-footer-spin 6s linear infinite" }}>
-                <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: "var(--pp-bg-surface, #0A1628)", color: "#fff", fontWeight: 900, fontSize: 12, fontFamily: "Urbanist,sans-serif", letterSpacing: "0.02em" }}>AVA</div>
+        {/* Powered by AVA footer — discret */}
+        <div className="absolute bottom-0 inset-x-0 h-[40px] flex flex-col items-center justify-center z-10 pp-mobile-footer" style={{ gap: 1 }}>
+          <div className="flex items-center gap-2">
+            <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 7, color: "var(--pp-text-muted)", letterSpacing: "0.14em", fontWeight: 600 }}>{t("footer.poweredBy")}</span>
+            <div className="relative flex items-center justify-center" style={{ width: 24, height: 24 }}>
+              <div className="absolute inset-0 rounded-full" style={{ background: "radial-gradient(circle, rgba(124,58,237,0.45) 0%, rgba(46,155,220,0.18) 50%, transparent 75%)", filter: "blur(5px)", animation: "ava-footer-pulse 3s ease-in-out infinite" }} />
+              <div className="absolute inset-0 rounded-full flex items-center justify-center overflow-hidden" style={{ background: "conic-gradient(from 0deg, #7C3AED, #2E9BDC, #00D4AA, #7C3AED)", padding: 1.5, animation: "ava-footer-spin 6s linear infinite" }}>
+                <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: "var(--pp-bg-surface, #0A1628)", color: "#fff", fontWeight: 800, fontSize: 8, fontFamily: "Urbanist,sans-serif", letterSpacing: "0.02em" }}>AVA</div>
               </div>
             </div>
-            <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 20, letterSpacing: "0.08em", fontWeight: 900, background: "linear-gradient(90deg,#7C3AED,#2E9BDC)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>AVA</span>
+            <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 12, letterSpacing: "0.06em", fontWeight: 800, background: "linear-gradient(90deg,#7C3AED,#2E9BDC)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>AVA</span>
           </div>
-          <span style={{ fontSize: 8, color: "var(--pp-text-faint)", letterSpacing: "0.1em" }}>· {t("footer.developedBy")}</span>
+          <span style={{ fontSize: 6, color: "var(--pp-text-faint)", letterSpacing: "0.08em" }}>· {t("footer.developedBy")}</span>
           <style>{`
-            @keyframes ava-footer-pulse { 0%,100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }
+            @keyframes ava-footer-pulse { 0%,100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 0.9; transform: scale(1.08); } }
             @keyframes ava-footer-spin { to { transform: rotate(360deg); } }
           `}</style>
         </div>

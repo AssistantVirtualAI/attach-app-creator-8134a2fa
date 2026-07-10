@@ -342,13 +342,28 @@ export default function MCalls() {
     void loadRecordings(true);
   }, [userId, loadRecordings]);
 
-  // While the Recordings tab is open, refresh silently in the background.
+  // While the Recordings tab is open, refresh in the background with adaptive
+  // backoff: poll fast (5s → 10s → 20s → 40s, cap 60s) as long as some items
+  // are still missing audio or transcript, then relax to 60s once everything
+  // is settled.
   useEffect(() => {
     if (tab !== "recordings" || !userId) return;
-    void loadRecordings(true);
-    const timer = window.setInterval(() => { void loadRecordings(true); }, 30_000);
-    return () => window.clearInterval(timer);
-  }, [tab, userId, loadRecordings]);
+    let cancelled = false;
+    let timer: number | null = null;
+    let delay = 5_000;
+    const tick = async () => {
+      await loadRecordings(true);
+      if (cancelled) return;
+      const pending = recordings.some((r: any) =>
+        !r.recording_url || !r.has_recording || (!r.transcript && !r.ai_summary)
+      );
+      delay = pending ? Math.min(delay * 2, 60_000) : 60_000;
+      timer = window.setTimeout(tick, delay);
+    };
+    timer = window.setTimeout(tick, delay);
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
+  }, [tab, userId, loadRecordings, recordings]);
+
 
   // Reset pagination when tab or search changes
   useEffect(() => { setVisibleCount(25); }, [tab, search]);

@@ -1236,18 +1236,43 @@ function ActionPill({ Icon, label, onClick, disabled }: { Icon: any; label: stri
 // ============================================================================
 // TEAMS 365 PANEL — Microsoft Teams chats + channels via MS Graph
 // ============================================================================
+type Teams365SubTab = "active" | "new" | "teams";
+
+const TEAMS_READS_KEY = "planipret.teams365.lastReads.v1";
+function loadTeamsReads(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(TEAMS_READS_KEY) || "{}") || {}; } catch { return {}; }
+}
+function saveTeamsReads(map: Record<string, string>) {
+  try { localStorage.setItem(TEAMS_READS_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+}
+function markChatRead(chatId: string) {
+  const map = loadTeamsReads();
+  map[chatId] = new Date().toISOString();
+  saveTeamsReads(map);
+}
+function isChatUnread(chat: any, reads: Record<string, string>): boolean {
+  if (!chat?.lastUpdated) return false;
+  const last = reads[chat.id];
+  if (!last) return true;
+  return new Date(chat.lastUpdated).getTime() > new Date(last).getTime();
+}
+
 function Teams365Panel({ profile }: { profile: any }) {
+  const [innerTab, setInnerTab] = useState<Teams365SubTab>("active");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [diag, setDiag] = useState<any>({});
   const [chats, setChats] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [people, setPeople] = useState<any[]>([]);
+  const [reads, setReads] = useState<Record<string, string>>(() => loadTeamsReads());
   const [search, setSearch] = useState("");
+  const [chatSearch, setChatSearch] = useState("");
   const [groupMode, setGroupMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [groupTopic, setGroupTopic] = useState("");
   const [creating, setCreating] = useState(false);
+  const prevUnreadIds = useRef<Set<string>>(new Set());
   const [active, setActive] = useState<
     | { kind: "chat"; id: string; title: string }
     | { kind: "channel"; teamId: string; channelId: string; title: string }
@@ -1265,15 +1290,31 @@ function Teams365Panel({ profile }: { profile: any }) {
     if (error && !payload.chats) { setErr(error.message || "Erreur"); return; }
     if (payload.connected === false || payload.error === "ms365_not_connected") { setErr("ms365_not_connected"); return; }
     if (payload.error) { setErr(payload.error); return; }
-    setChats(payload.chats || []);
+    const nextChats = payload.chats || [];
+    // Notify on new unread chats appearing since last load
+    const currentReads = loadTeamsReads();
+    const nowUnread = new Set<string>(nextChats.filter((c: any) => isChatUnread(c, currentReads)).map((c: any) => c.id));
+    const newly: any[] = [];
+    for (const c of nextChats) {
+      if (nowUnread.has(c.id) && !prevUnreadIds.current.has(c.id)) newly.push(c);
+    }
+    if (prevUnreadIds.current.size > 0 && newly.length > 0) {
+      const first = newly[0];
+      toast.message(`Nouveau message · ${first.topic}`, {
+        description: first.previewFrom ? `${first.previewFrom}: ${(first.preview || "").replace(/<[^>]*>/g, "").slice(0, 80)}` : undefined,
+      });
+    }
+    prevUnreadIds.current = nowUnread;
+    setChats(nextChats);
     setTeams(payload.teams || []);
     setPeople(payload.people || []);
     setDiag(payload.diagnostics || {});
+    setReads(currentReads);
   };
   useEffect(() => {
     load(); /* eslint-disable-next-line */
     if (!connected) return;
-    const id = window.setInterval(() => { load(); }, 60_000);
+    const id = window.setInterval(() => { load(); }, 30_000);
     return () => window.clearInterval(id);
   }, [connected]);
 
@@ -1285,9 +1326,14 @@ function Teams365Panel({ profile }: { profile: any }) {
     setCreating(false);
     const p: any = data ?? {};
     if (error || p?.error) { toast.error(p?.error || error?.message || "Impossible de créer le chat"); return; }
-    setActive({ kind: "chat", id: p.chat_id, title });
+    openThread({ kind: "chat", id: p.chat_id, title });
     setGroupMode(false); setSelectedIds(new Set()); setGroupTopic("");
     load();
+  };
+
+  const openThread = (t: NonNullable<typeof active>) => {
+    if (t.kind === "chat") { markChatRead(t.id); setReads(loadTeamsReads()); }
+    setActive(t);
   };
 
   const presenceColor = (a?: string) =>
@@ -1296,29 +1342,34 @@ function Teams365Panel({ profile }: { profile: any }) {
     a === "Away" || a === "BeRightBack" ? "#f59e0b" :
     "#6b7280";
 
-  if (active) return <TeamsThreadView target={active} onClose={() => setActive(null)} />;
+  if (active) return <TeamsThreadView target={active} onClose={() => { setActive(null); load(); }} />;
 
   const filteredPeople = people.filter((p) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (p.name || "").toLowerCase().includes(q) || (p.email || "").toLowerCase().includes(q);
   });
+  const filteredChats = chats.filter((c) => {
+    const q = chatSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (c.topic || "").toLowerCase().includes(q);
+  });
+  const unreadCount = chats.filter((c) => isChatUnread(c, reads)).length;
+
+  const tabs: { k: Teams365SubTab; label: string; badge?: number }[] = [
+    { k: "active", label: "Discussions actives", badge: unreadCount },
+    { k: "new", label: "Nouveau", badge: 0 },
+    { k: "teams", label: "Équipes", badge: 0 },
+  ];
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-3 space-y-4">
+    <div className="h-full overflow-y-auto px-4 py-3 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>Microsoft Teams</h2>
-        <div className="flex gap-2">
-          <button onClick={load} className="text-xs px-2 py-1 rounded-full flex items-center gap-1"
-            style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
-            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Recharger
-          </button>
-          <button onClick={() => { setGroupMode((v) => !v); setSelectedIds(new Set()); }}
-            className="text-xs px-2 py-1 rounded-full flex items-center gap-1 text-white"
-            style={{ background: groupMode ? "var(--pp-danger)" : "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
-            {groupMode ? <><X className="w-3 h-3" /> Annuler</> : <><Plus className="w-3 h-3" /> Groupe</>}
-          </button>
-        </div>
+        <button onClick={load} className="text-xs px-2 py-1 rounded-full flex items-center gap-1"
+          style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
+          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Recharger
+        </button>
       </div>
 
       {err === "ms365_not_connected" && (
@@ -1326,7 +1377,7 @@ function Teams365Panel({ profile }: { profile: any }) {
           <Users className="w-10 h-10 mx-auto mb-3" style={{ color: "var(--pp-brand-accent)" }} />
           <p className="font-semibold" style={{ color: "var(--pp-text-primary)" }}>Microsoft 365 non connecté</p>
           <p className="text-xs mt-1 mb-3" style={{ color: "var(--pp-text-muted)" }}>
-            Connectez votre compte Microsoft pour voir vos chats Teams, canaux et coéquipiers.
+            Connectez votre compte Microsoft pour voir vos discussions Teams et coéquipiers.
           </p>
           <a href="/mplanipret/more" className="inline-block text-xs px-4 py-2 rounded-full text-white font-semibold"
             style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
@@ -1340,139 +1391,189 @@ function Teams365Panel({ profile }: { profile: any }) {
 
       {!err && (
         <>
-          {/* Group chat composer */}
-          {groupMode && (
-            <div className="rounded-lg p-3 space-y-2" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-brand-accent)" }}>
-              <div className="text-xs font-semibold" style={{ color: "var(--pp-text-primary)" }}>
-                Nouveau chat de groupe · {selectedIds.size} sélectionné(s)
-              </div>
-              <input value={groupTopic} onChange={(e) => setGroupTopic(e.target.value)}
-                placeholder="Nom du groupe (optionnel si 1:1)"
+          {/* Inner tabs */}
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar" style={{ scrollbarWidth: "none" }}>
+            {tabs.map((t) => {
+              const isActive = innerTab === t.k;
+              return (
+                <button key={t.k} onClick={() => setInnerTab(t.k)}
+                  className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-full flex items-center gap-1.5"
+                  style={isActive
+                    ? { background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))", color: "white" }
+                    : { background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
+                  {t.label}
+                  {!!t.badge && (
+                    <span className="min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
+                      style={{ background: isActive ? "rgba(255,255,255,0.25)" : "#ef4444", color: "white" }}>
+                      {t.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active discussions tab */}
+          {innerTab === "active" && (
+            <div className="space-y-2">
+              <input value={chatSearch} onChange={(e) => setChatSearch(e.target.value)} placeholder="Rechercher une discussion…"
                 className="w-full text-xs px-3 py-2 rounded-lg outline-none"
                 style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }} />
-              <button
-                disabled={selectedIds.size === 0 || creating}
-                onClick={() => {
-                  const ids = Array.from(selectedIds);
-                  const title = groupTopic || people.filter((p) => selectedIds.has(p.id)).map((p) => p.name).join(", ");
-                  startChatWith(ids, title, ids.length > 1 ? (groupTopic || undefined) : undefined);
-                }}
-                className="w-full text-xs py-2 rounded-lg text-white font-semibold disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
-                {creating ? "Création…" : "Créer le chat"}
-              </button>
+              {loading && !chats.length ? (
+                <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Chargement…</div>
+              ) : filteredChats.length === 0 ? (
+                <div className="rounded-xl p-6 text-center" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
+                  <MessageSquare className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--pp-text-muted)" }} />
+                  <p className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucune discussion active. Ouvrez l'onglet « Nouveau » pour démarrer.</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {filteredChats.map((c) => {
+                    const unread = isChatUnread(c, reads);
+                    return (
+                      <button key={c.id} onClick={() => openThread({ kind: "chat", id: c.id, title: c.topic })}
+                        className="w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3"
+                        style={{ background: "var(--pp-bg-elevated)", border: `1px solid ${unread ? "var(--pp-brand-accent)" : "var(--pp-bg-border)"}` }}>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
+                          style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
+                          {initials(c.topic || "?")}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm truncate" style={{ color: "var(--pp-text-primary)", fontWeight: unread ? 700 : 500 }}>{c.topic}</div>
+                            {c.lastUpdated && (
+                              <div className="text-[10px] shrink-0" style={{ color: "var(--pp-text-muted)" }}>{fmtTime(c.lastUpdated)}</div>
+                            )}
+                          </div>
+                          {c.preview && (
+                            <div className="text-[11px] truncate" style={{ color: unread ? "var(--pp-text-primary)" : "var(--pp-text-muted)" }}>
+                              {c.previewFrom ? `${c.previewFrom}: ` : ""}{String(c.preview).replace(/<[^>]*>/g, "").slice(0, 100)}
+                            </div>
+                          )}
+                        </div>
+                        {unread && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "#ef4444" }} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
-          {/* People / tenant */}
-          <div>
-            <div className="text-[10px] uppercase tracking-wider mb-2 flex items-center justify-between" style={{ color: "var(--pp-text-muted)" }}>
-              <span>Coéquipiers Microsoft ({people.length})</span>
-              {diag.people_error && <span style={{ color: "#dc2626" }}>Err: {String(diag.people_error).slice(0, 40)}</span>}
-            </div>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un coéquipier…"
-              className="w-full text-xs px-3 py-2 rounded-lg outline-none mb-2"
-              style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }} />
-            {loading && !people.length ? (
-              <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Chargement…</div>
-            ) : filteredPeople.length === 0 ? (
-              <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucun coéquipier trouvé.</div>
-            ) : (
-              <div className="space-y-1">
-                {filteredPeople.map((p) => {
-                  const selected = selectedIds.has(p.id);
-                  return (
-                    <button key={p.id}
-                      onClick={() => {
-                        if (groupMode) {
-                          setSelectedIds((prev) => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; });
-                        } else {
-                          startChatWith([p.id], p.name);
-                        }
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2"
-                      style={{ background: selected ? "rgba(46,155,220,0.12)" : "var(--pp-bg-elevated)", border: `1px solid ${selected ? "var(--pp-brand-accent)" : "var(--pp-bg-border)"}` }}>
-                      <div className="relative">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-                          style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
-                          {initials(p.name || p.email || "?")}
-                        </div>
-                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
-                          style={{ background: presenceColor(p.presence?.availability), borderColor: "var(--pp-bg-elevated)" }} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate" style={{ color: "var(--pp-text-primary)" }}>{p.name}</div>
-                        <div className="text-[10px] truncate" style={{ color: "var(--pp-text-muted)" }}>
-                          {p.presence?.availability || "—"} {p.title ? `· ${p.title}` : ""}
-                        </div>
-                      </div>
-                      {groupMode ? (
-                        <div className="w-4 h-4 rounded border flex items-center justify-center"
-                          style={{ borderColor: "var(--pp-brand-accent)", background: selected ? "var(--pp-brand-accent)" : "transparent" }}>
-                          {selected && <CheckCircle2 className="w-3 h-3 text-white" />}
-                        </div>
-                      ) : (
-                        <MessageSquare className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} />
-                      )}
-                    </button>
-                  );
-                })}
+          {/* New chat tab */}
+          {innerTab === "new" && (
+            <div className="space-y-2">
+              <div className="flex justify-end">
+                <button onClick={() => { setGroupMode((v) => !v); setSelectedIds(new Set()); }}
+                  className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1 text-white"
+                  style={{ background: groupMode ? "var(--pp-danger)" : "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
+                  {groupMode ? <><X className="w-3 h-3" /> Annuler groupe</> : <><Plus className="w-3 h-3" /> Chat de groupe</>}
+                </button>
               </div>
-            )}
-          </div>
-
-          {/* Recent chats */}
-          <div>
-            <div className="text-[10px] uppercase tracking-wider mb-2 flex items-center justify-between" style={{ color: "var(--pp-text-muted)" }}>
-              <span>Chats récents</span>
-              {diag.chats_error && <span style={{ color: "#dc2626" }}>Err: {String(diag.chats_error).slice(0, 40)}</span>}
-            </div>
-            {chats.length === 0 ? (
-              <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucun chat récent.</div>
-            ) : (
-              <div className="space-y-1">
-                {chats.map((c) => (
-                  <button key={c.id} onClick={() => setActive({ kind: "chat", id: c.id, title: c.topic })}
-                    className="w-full text-left px-3 py-2 rounded-lg flex flex-col"
-                    style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
-                    <div className="text-sm font-medium truncate" style={{ color: "var(--pp-text-primary)" }}>{c.topic}</div>
-                    {c.preview && (
-                      <div className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }} dangerouslySetInnerHTML={{ __html: c.preview }} />
-                    )}
+              {groupMode && (
+                <div className="rounded-lg p-3 space-y-2" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-brand-accent)" }}>
+                  <div className="text-xs font-semibold" style={{ color: "var(--pp-text-primary)" }}>
+                    Nouveau chat de groupe · {selectedIds.size} sélectionné(s)
+                  </div>
+                  <input value={groupTopic} onChange={(e) => setGroupTopic(e.target.value)}
+                    placeholder="Nom du groupe (optionnel si 1:1)"
+                    className="w-full text-xs px-3 py-2 rounded-lg outline-none"
+                    style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }} />
+                  <button
+                    disabled={selectedIds.size === 0 || creating}
+                    onClick={() => {
+                      const ids = Array.from(selectedIds);
+                      const title = groupTopic || people.filter((p) => selectedIds.has(p.id)).map((p) => p.name).join(", ");
+                      startChatWith(ids, title, ids.length > 1 ? (groupTopic || undefined) : undefined);
+                    }}
+                    className="w-full text-xs py-2 rounded-lg text-white font-semibold disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
+                    {creating ? "Création…" : "Créer le chat"}
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un coéquipier…"
+                className="w-full text-xs px-3 py-2 rounded-lg outline-none"
+                style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }} />
+              {loading && !people.length ? (
+                <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Chargement…</div>
+              ) : filteredPeople.length === 0 ? (
+                <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucun coéquipier trouvé.</div>
+              ) : (
+                <div className="space-y-1">
+                  {filteredPeople.map((p) => {
+                    const selected = selectedIds.has(p.id);
+                    return (
+                      <button key={p.id}
+                        onClick={() => {
+                          if (groupMode) {
+                            setSelectedIds((prev) => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; });
+                          } else {
+                            startChatWith([p.id], p.name);
+                          }
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2"
+                        style={{ background: selected ? "rgba(46,155,220,0.12)" : "var(--pp-bg-elevated)", border: `1px solid ${selected ? "var(--pp-brand-accent)" : "var(--pp-bg-border)"}` }}>
+                        <div className="relative">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                            style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
+                            {initials(p.name || p.email || "?")}
+                          </div>
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
+                            style={{ background: presenceColor(p.presence?.availability), borderColor: "var(--pp-bg-elevated)" }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate" style={{ color: "var(--pp-text-primary)" }}>{p.name}</div>
+                          <div className="text-[10px] truncate" style={{ color: "var(--pp-text-muted)" }}>
+                            {p.presence?.availability || "—"} {p.title ? `· ${p.title}` : ""}
+                          </div>
+                        </div>
+                        {groupMode ? (
+                          <div className="w-4 h-4 rounded border flex items-center justify-center"
+                            style={{ borderColor: "var(--pp-brand-accent)", background: selected ? "var(--pp-brand-accent)" : "transparent" }}>
+                            {selected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                          </div>
+                        ) : (
+                          <MessageSquare className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Teams & channels */}
-          <div>
-            <div className="text-[10px] uppercase tracking-wider mb-2 flex items-center justify-between" style={{ color: "var(--pp-text-muted)" }}>
-              <span>Équipes & canaux ({teams.length})</span>
-              {diag.teams_error && <span style={{ color: "#dc2626" }}>Err: {String(diag.teams_error).slice(0, 40)}</span>}
-            </div>
-            {teams.length === 0 ? (
-              <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucune équipe.</div>
-            ) : (
-              <div className="space-y-2">
-                {teams.map((tm) => (
-                  <div key={tm.id} className="rounded-lg p-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
-                    <div className="text-xs font-semibold mb-1" style={{ color: "var(--pp-text-primary)" }}>{tm.displayName}</div>
-                    <div className="flex flex-wrap gap-1">
-                      {tm.channels.map((ch: any) => (
-                        <button key={ch.id}
-                          onClick={() => setActive({ kind: "channel", teamId: tm.id, channelId: ch.id, title: `${tm.displayName} · ${ch.displayName}` })}
-                          className="text-[11px] px-2 py-1 rounded-full"
-                          style={{ background: "var(--pp-bg-deep)", color: "var(--pp-text-primary)" }}>
-                          #{ch.displayName}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+          {innerTab === "teams" && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wider mb-2 flex items-center justify-between" style={{ color: "var(--pp-text-muted)" }}>
+                <span>Équipes & canaux ({teams.length})</span>
+                {diag.teams_error && <span style={{ color: "#dc2626" }}>Err: {String(diag.teams_error).slice(0, 40)}</span>}
               </div>
-            )}
-          </div>
+              {teams.length === 0 ? (
+                <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucune équipe.</div>
+              ) : (
+                <div className="space-y-2">
+                  {teams.map((tm) => (
+                    <div key={tm.id} className="rounded-lg p-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
+                      <div className="text-xs font-semibold mb-1" style={{ color: "var(--pp-text-primary)" }}>{tm.displayName}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {tm.channels.map((ch: any) => (
+                          <button key={ch.id}
+                            onClick={() => openThread({ kind: "channel", teamId: tm.id, channelId: ch.id, title: `${tm.displayName} · ${ch.displayName}` })}
+                            className="text-[11px] px-2 py-1 rounded-full"
+                            style={{ background: "var(--pp-bg-deep)", color: "var(--pp-text-primary)" }}>
+                            #{ch.displayName}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -1484,10 +1585,15 @@ function TeamsThreadView({ target, onClose }: {
   onClose: () => void;
 }) {
   const [messages, setMessages] = useState<any[]>([]);
+  const [meId, setMeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [pendingAtts, setPendingAtts] = useState<any[]>([]);
   const [sendStatus, setSendStatus] = useState<null | { kind: "ok" | "err"; message: string; lastText?: string }>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   const invokeBody = target.kind === "chat"
     ? { chat_id: target.id }
@@ -1496,7 +1602,7 @@ function TeamsThreadView({ target, onClose }: {
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase.functions.invoke("ms365-teams-messages", {
-      body: { action: "list", ...invokeBody, top: 40 },
+      body: { action: "list", ...invokeBody, top: 50 },
     });
     setLoading(false);
     let payload: any = data ?? {};
@@ -1512,15 +1618,46 @@ function TeamsThreadView({ target, onClose }: {
       return;
     }
     if (error) { toast.error(error.message || "Erreur"); return; }
+    setMeId(payload.me_id ?? null);
     setMessages(((payload.messages) || []).slice().reverse());
+    setTimeout(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, 50);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    load();
+    if (target.kind === "chat") markChatRead(target.id);
+    const id = window.setInterval(() => load(), 15_000);
+    return () => window.clearInterval(id);
+    /* eslint-disable-next-line */
+  }, []);
 
-  const doSend = async (content: string) => {
+  const onPickFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        if (file.size > 15 * 1024 * 1024) { toast.error(`${file.name}: trop volumineux (max 15 Mo)`); continue; }
+        const buf = await file.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let binary = ""; for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const b64 = btoa(binary);
+        const { data, error } = await supabase.functions.invoke("ms365-teams-messages", {
+          body: { action: "upload_attachment", filename: file.name, mimeType: file.type, contentBase64: b64 },
+        });
+        const payload: any = data ?? {};
+        if (error || payload?.error) { toast.error(`${file.name}: ${payload?.error || error?.message || "échec"}`); continue; }
+        if (payload.attachment) setPendingAtts((prev) => [...prev, payload.attachment]);
+      }
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const doSend = async (content: string, atts: any[]) => {
     setSending(true);
     setSendStatus(null);
     const { data, error } = await supabase.functions.invoke("ms365-teams-messages", {
-      body: { action: "send", ...invokeBody, content, contentType: "text" },
+      body: { action: "send", ...invokeBody, content, contentType: "text", attachments: atts },
     });
     setSending(false);
     let payload: any = data ?? {};
@@ -1536,38 +1673,77 @@ function TeamsThreadView({ target, onClose }: {
     }
     setSendStatus({ kind: "ok", message: "Message envoyé" });
     setText("");
+    setPendingAtts([]);
     load();
-    setTimeout(() => setSendStatus((s) => (s?.kind === "ok" ? null : s)), 2500);
+    setTimeout(() => setSendStatus((s) => (s?.kind === "ok" ? null : s)), 2000);
   };
 
   const send = () => {
-    if (!text.trim() || sending) return;
-    doSend(text.trim());
+    if ((!text.trim() && pendingAtts.length === 0) || sending) return;
+    doSend(text.trim(), pendingAtts);
   };
 
   const retry = () => {
     if (!sendStatus?.lastText || sending) return;
-    doSend(sendStatus.lastText);
+    doSend(sendStatus.lastText, []);
   };
+
+  const removePending = (id: string) => setPendingAtts((prev) => prev.filter((a) => a.id !== id));
 
   return (
     <div className="h-full flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
-      <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
+      <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-deep)" }}>
         <button onClick={onClose} className="p-1"><ArrowLeft className="w-4 h-4" style={{ color: "var(--pp-text-primary)" }} /></button>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+          style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
+          {initials(target.title || "?")}
+        </div>
         <div className="flex-1 text-sm font-semibold truncate" style={{ color: "var(--pp-text-primary)" }}>{target.title}</div>
         <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
           {target.kind === "chat" ? "Chat" : "Canal"}
         </span>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-        {loading ? <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Chargement…</div> :
-          messages.length === 0 ? <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucun message.</div> :
-          messages.map((m) => (
-            <div key={m.id} className="rounded-lg px-3 py-2" style={{ background: "var(--pp-bg-elevated)" }}>
-              <div className="text-[10px] mb-0.5" style={{ color: "var(--pp-text-muted)" }}>{m.from} · {fmtTime(m.createdAt)}</div>
-              <div className="text-sm" style={{ color: "var(--pp-text-primary)" }} dangerouslySetInnerHTML={{ __html: m.content }} />
-            </div>
-          ))
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+        {loading && messages.length === 0 ? <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Chargement…</div> :
+          messages.length === 0 ? <div className="text-xs text-center py-8" style={{ color: "var(--pp-text-muted)" }}>Aucun message. Envoyez le premier !</div> :
+          messages.map((m) => {
+            const own = !!m.isMe || (meId && m.fromId === meId);
+            return (
+              <div key={m.id} className={`flex items-end gap-2 ${own ? "flex-row-reverse" : ""}`}>
+                {!own && (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold shrink-0"
+                    style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
+                    {initials(m.from || "?")}
+                  </div>
+                )}
+                <div className={`max-w-[78%] rounded-2xl px-3 py-2 ${own ? "rounded-br-sm" : "rounded-bl-sm"}`}
+                  style={{
+                    background: own ? "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" : "var(--pp-bg-elevated)",
+                    color: own ? "white" : "var(--pp-text-primary)",
+                  }}>
+                  {!own && (
+                    <div className="text-[10px] mb-0.5 font-semibold" style={{ color: "var(--pp-brand-accent)" }}>{m.from}</div>
+                  )}
+                  {m.content && (
+                    <div className="text-sm break-words" dangerouslySetInnerHTML={{ __html: m.content }} />
+                  )}
+                  {(m.attachments || []).length > 0 && (
+                    <div className="mt-1.5 space-y-1">
+                      {m.attachments.map((a: any) => (
+                        <a key={a.id} href={a.contentUrl} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-lg"
+                          style={{ background: own ? "rgba(255,255,255,0.2)" : "var(--pp-bg-deep)", color: own ? "white" : "var(--pp-text-primary)" }}>
+                          <Paperclip className="w-3 h-3" />
+                          <span className="truncate">{a.name || "Fichier"}</span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-[9px] mt-1 opacity-70">{fmtTime(m.createdAt)}</div>
+                </div>
+              </div>
+            );
+          })
         }
       </div>
       {sendStatus && (
@@ -1586,7 +1762,24 @@ function TeamsThreadView({ target, onClose }: {
           )}
         </div>
       )}
+      {pendingAtts.length > 0 && (
+        <div className="px-3 py-2 flex flex-wrap gap-1.5" style={{ borderTop: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-deep)" }}>
+          {pendingAtts.map((a) => (
+            <span key={a.id} className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full"
+              style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)" }}>
+              <Paperclip className="w-3 h-3" />
+              <span className="max-w-[140px] truncate">{a.name}</span>
+              <button onClick={() => removePending(a.id)}><X className="w-3 h-3" /></button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="px-3 py-2 flex items-center gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-deep)" }}>
+        <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => onPickFiles(e.target.files)} />
+        <button onClick={() => fileRef.current?.click()} disabled={uploading} className="p-2 rounded-full"
+          style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)", opacity: uploading ? 0.5 : 1 }}>
+          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+        </button>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -1597,9 +1790,9 @@ function TeamsThreadView({ target, onClose }: {
         />
         <button
           onClick={send}
-          disabled={sending || !text.trim()}
+          disabled={sending || (!text.trim() && pendingAtts.length === 0)}
           className="p-2 rounded-full"
-          style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))", color: "white", opacity: sending || !text.trim() ? 0.5 : 1 }}
+          style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))", color: "white", opacity: sending || (!text.trim() && pendingAtts.length === 0) ? 0.5 : 1 }}
         >
           {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </button>
@@ -1607,3 +1800,4 @@ function TeamsThreadView({ target, onClose }: {
     </div>
   );
 }
+

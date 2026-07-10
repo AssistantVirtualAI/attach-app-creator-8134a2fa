@@ -186,8 +186,9 @@ export default function MHome() {
     if (profile?.ms365_access_token) {
       setMsCalendarLoading(true);
       try {
+        const calEnd = new Date(); calEnd.setDate(calEnd.getDate() + 14);
         const { data: msData, error: msError } = await supabase.functions.invoke("ms365-actions", {
-          body: { action: "list_calendar_events", payload: { start: nowIso, end: weekEnd.toISOString(), top: 5 } },
+          body: { action: "list_calendar_events", payload: { start: nowIso, end: calEnd.toISOString(), top: 25 } },
         });
         if (msError || (msData as any)?.success === false) {
           setMsCalendarError((msData as any)?.error ?? msError?.message ?? "Calendrier Microsoft indisponible");

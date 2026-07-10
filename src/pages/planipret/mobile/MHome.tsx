@@ -83,7 +83,7 @@ export default function MHome() {
       supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true })
         .eq("user_id", profile.user_id).gte("started_at", sinceIso).lte("started_at", untilIso),
       supabase.from("planipret_phone_calls").select("id", { count: "exact", head: true })
-        .eq("user_id", profile.user_id).eq("direction", "missed").gte("started_at", sinceIso).lte("started_at", untilIso),
+        .eq("user_id", profile.user_id).eq("status", "missed").gte("started_at", sinceIso).lte("started_at", untilIso),
       supabase.from("planipret_phone_messages").select("id", { count: "exact", head: true })
         .eq("user_id", profile.user_id).is("read_at", null).eq("direction", "inbound"),
       supabase.from("planipret_voicemails").select("id", { count: "exact", head: true })

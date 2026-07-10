@@ -120,7 +120,6 @@ export default function MMessages() {
 // SMS TAB — branché sur Edge Function pp-ns-sms (NS-API v2)
 // ============================================================
 type NsThread = {
-  // legacy / normalized fields
   id?: string;
   messagesession_id?: string;
   session_id?: string;
@@ -134,8 +133,6 @@ type NsThread = {
   last_message_at?: string;
   updated_at?: string;
   timestamp?: string;
-  // NS raw payload uses hyphenated keys — accessed via bracket notation
-  [key: string]: any;
 };
 
 type NsMessage = {
@@ -153,51 +150,14 @@ type NsMessage = {
   created_at?: string;
   sent_at?: string;
   read_at?: string | null;
-  [key: string]: any;
 };
 
-const pick = (t: any, ...keys: string[]) => {
-  for (const k of keys) {
-    const v = t?.[k];
-    if (v !== undefined && v !== null && v !== "") return v;
-  }
-  return undefined;
-};
-
-const threadId = (t: NsThread) =>
-  String(pick(t, "id", "messagesession-id", "messagesession_id", "session_id", "destination", "messagesession-remote") ?? "");
-
-const threadPeer = (t: NsThread) => {
-  const raw = pick(t, "destination", "remote_party", "contact", "messagesession-remote");
-  if (raw === undefined || raw === null || raw === "") return threadId(t);
-  const s = String(raw).trim();
-  // NS sends numeric E164 like 15149522685 → normalize to +15149522685
-  if (/^\d{10,15}$/.test(s)) return `+${s}`;
-  return s;
-};
-
-const threadTime = (t: NsThread) =>
-  String(pick(t, "last_message_at", "messagesession-last-datetime", "updated_at", "timestamp") ?? new Date().toISOString());
-
-const threadPreview = (t: NsThread) =>
-  String(pick(t, "preview", "last_message", "messagesession-last-message") ?? "");
-
-const threadUnread = (t: NsThread) => {
-  const n = pick(t, "unread", "unread_count");
-  if (typeof n === "number") return n;
-  // NS: status "read" = 0 unread; otherwise if last sender != me, count as 1
-  const status = String(pick(t, "messagesession-last-status") ?? "").toLowerCase();
-  if (status === "read") return 0;
-  const sender = String(pick(t, "messagesession-last-sender") ?? "");
-  const me = String(pick(t, "user") ?? "");
-  if (sender && me && !sender.startsWith(me + "@") && !sender.startsWith(me)) return 1;
-  return 0;
-};
-
+const threadId = (t: NsThread) => t.id ?? t.messagesession_id ?? t.session_id ?? t.destination ?? "";
+const threadPeer = (t: NsThread) => t.destination ?? t.remote_party ?? t.contact ?? threadId(t);
+const threadTime = (t: NsThread) => t.last_message_at ?? t.updated_at ?? t.timestamp ?? new Date().toISOString();
 const msgId = (m: NsMessage, i: number) => m.id ?? m.message_id ?? `${m.timestamp ?? m.created_at ?? i}-${i}`;
-const msgBody = (m: NsMessage) => m.body ?? m.message ?? m.text ?? (m as any)["message-text"] ?? "";
-const msgTime = (m: NsMessage) => m.timestamp ?? m.created_at ?? m.sent_at ?? (m as any)["message-datetime"] ?? new Date().toISOString();
-
+const msgBody = (m: NsMessage) => m.body ?? m.message ?? m.text ?? "";
+const msgTime = (m: NsMessage) => m.timestamp ?? m.created_at ?? m.sent_at ?? new Date().toISOString();
 const msgIsOut = (m: NsMessage, myExt: string) => {
   const dir = (m.direction ?? "").toLowerCase();
   if (dir === "outbound" || dir === "out" || dir === "sent") return true;
@@ -298,9 +258,8 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
           {threads.map((th, index) => {
             const id = threadId(th);
             const peer = threadPeer(th);
-            const unread = threadUnread(th);
-            const preview = threadPreview(th);
-
+            const unread = th.unread ?? th.unread_count ?? 0;
+            const preview = th.last_message ?? th.preview ?? "";
             return (
               <ThreadRow
                 key={`${id || "noid"}-${peer || "nopeer"}-${index}`}
@@ -1495,8 +1454,15 @@ function ActionPill({ Icon, label, onClick, disabled }: { Icon: any; label: stri
 function Teams365Panel({ profile }: { profile: any }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [diag, setDiag] = useState<any>({});
   const [chats, setChats] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
+  const [people, setPeople] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
+  const [groupMode, setGroupMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [groupTopic, setGroupTopic] = useState("");
+  const [creating, setCreating] = useState(false);
   const [active, setActive] = useState<
     | { kind: "chat"; id: string; title: string }
     | { kind: "channel"; teamId: string; channelId: string; title: string }
@@ -1507,25 +1473,17 @@ function Teams365Panel({ profile }: { profile: any }) {
 
   const load = async () => {
     if (!connected) { setLoading(false); setErr("ms365_not_connected"); return; }
-    setLoading(true);
-    setErr(null);
+    setLoading(true); setErr(null);
     const { data, error } = await supabase.functions.invoke("ms365-teams-list", { body: {} });
     setLoading(false);
     const payload = (data as any) ?? {};
-    if (error && !payload.chats) {
-      setErr(error.message || "Erreur");
-      return;
-    }
-    if (payload.connected === false || payload.error === "ms365_not_connected") {
-      setErr("ms365_not_connected");
-      return;
-    }
-    if (payload.error) {
-      setErr(payload.error);
-      return;
-    }
+    if (error && !payload.chats) { setErr(error.message || "Erreur"); return; }
+    if (payload.connected === false || payload.error === "ms365_not_connected") { setErr("ms365_not_connected"); return; }
+    if (payload.error) { setErr(payload.error); return; }
     setChats(payload.chats || []);
     setTeams(payload.teams || []);
+    setPeople(payload.people || []);
+    setDiag(payload.diagnostics || {});
   };
   useEffect(() => {
     load(); /* eslint-disable-next-line */
@@ -1534,16 +1492,48 @@ function Teams365Panel({ profile }: { profile: any }) {
     return () => window.clearInterval(id);
   }, [connected]);
 
+  const startChatWith = async (userIds: string[], title: string, topicText?: string) => {
+    setCreating(true);
+    const { data, error } = await supabase.functions.invoke("ms365-teams-messages", {
+      body: { action: "create_chat", user_ids: userIds, ...(topicText ? { topic: topicText } : {}) },
+    });
+    setCreating(false);
+    const p: any = data ?? {};
+    if (error || p?.error) { toast.error(p?.error || error?.message || "Impossible de créer le chat"); return; }
+    setActive({ kind: "chat", id: p.chat_id, title });
+    setGroupMode(false); setSelectedIds(new Set()); setGroupTopic("");
+    load();
+  };
+
+  const presenceColor = (a?: string) =>
+    a === "Available" ? "#22c55e" :
+    a === "Busy" || a === "DoNotDisturb" ? "#ef4444" :
+    a === "Away" || a === "BeRightBack" ? "#f59e0b" :
+    "#6b7280";
+
   if (active) return <TeamsThreadView target={active} onClose={() => setActive(null)} />;
+
+  const filteredPeople = people.filter((p) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (p.name || "").toLowerCase().includes(q) || (p.email || "").toLowerCase().includes(q);
+  });
 
   return (
     <div className="h-full overflow-y-auto px-4 py-3 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>Microsoft Teams</h2>
-        <button onClick={load} className="text-xs px-2 py-1 rounded-full flex items-center gap-1"
-          style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
-          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Recharger
-        </button>
+        <div className="flex gap-2">
+          <button onClick={load} className="text-xs px-2 py-1 rounded-full flex items-center gap-1"
+            style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
+            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Recharger
+          </button>
+          <button onClick={() => { setGroupMode((v) => !v); setSelectedIds(new Set()); }}
+            className="text-xs px-2 py-1 rounded-full flex items-center gap-1 text-white"
+            style={{ background: groupMode ? "var(--pp-danger)" : "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
+            {groupMode ? <><X className="w-3 h-3" /> Annuler</> : <><Plus className="w-3 h-3" /> Groupe</>}
+          </button>
+        </div>
       </div>
 
       {err === "ms365_not_connected" && (
@@ -1553,11 +1543,8 @@ function Teams365Panel({ profile }: { profile: any }) {
           <p className="text-xs mt-1 mb-3" style={{ color: "var(--pp-text-muted)" }}>
             Connectez votre compte Microsoft pour voir vos chats Teams, canaux et coéquipiers.
           </p>
-          <a
-            href="/mplanipret/more"
-            className="inline-block text-xs px-4 py-2 rounded-full text-white font-semibold"
-            style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}
-          >
+          <a href="/mplanipret/more" className="inline-block text-xs px-4 py-2 rounded-full text-white font-semibold"
+            style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
             Connecter Microsoft 365
           </a>
         </div>
@@ -1568,21 +1555,101 @@ function Teams365Panel({ profile }: { profile: any }) {
 
       {!err && (
         <>
+          {/* Group chat composer */}
+          {groupMode && (
+            <div className="rounded-lg p-3 space-y-2" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-brand-accent)" }}>
+              <div className="text-xs font-semibold" style={{ color: "var(--pp-text-primary)" }}>
+                Nouveau chat de groupe · {selectedIds.size} sélectionné(s)
+              </div>
+              <input value={groupTopic} onChange={(e) => setGroupTopic(e.target.value)}
+                placeholder="Nom du groupe (optionnel si 1:1)"
+                className="w-full text-xs px-3 py-2 rounded-lg outline-none"
+                style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }} />
+              <button
+                disabled={selectedIds.size === 0 || creating}
+                onClick={() => {
+                  const ids = Array.from(selectedIds);
+                  const title = groupTopic || people.filter((p) => selectedIds.has(p.id)).map((p) => p.name).join(", ");
+                  startChatWith(ids, title, ids.length > 1 ? (groupTopic || undefined) : undefined);
+                }}
+                className="w-full text-xs py-2 rounded-lg text-white font-semibold disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
+                {creating ? "Création…" : "Créer le chat"}
+              </button>
+            </div>
+          )}
+
+          {/* People / tenant */}
           <div>
-            <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: "var(--pp-text-muted)" }}>Chats récents</div>
-            {loading && !chats.length ? (
+            <div className="text-[10px] uppercase tracking-wider mb-2 flex items-center justify-between" style={{ color: "var(--pp-text-muted)" }}>
+              <span>Coéquipiers Microsoft ({people.length})</span>
+              {diag.people_error && <span style={{ color: "#dc2626" }}>Err: {String(diag.people_error).slice(0, 40)}</span>}
+            </div>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un coéquipier…"
+              className="w-full text-xs px-3 py-2 rounded-lg outline-none mb-2"
+              style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }} />
+            {loading && !people.length ? (
               <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Chargement…</div>
-            ) : chats.length === 0 ? (
+            ) : filteredPeople.length === 0 ? (
+              <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucun coéquipier trouvé.</div>
+            ) : (
+              <div className="space-y-1">
+                {filteredPeople.map((p) => {
+                  const selected = selectedIds.has(p.id);
+                  return (
+                    <button key={p.id}
+                      onClick={() => {
+                        if (groupMode) {
+                          setSelectedIds((prev) => { const n = new Set(prev); n.has(p.id) ? n.delete(p.id) : n.add(p.id); return n; });
+                        } else {
+                          startChatWith([p.id], p.name);
+                        }
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg flex items-center gap-2"
+                      style={{ background: selected ? "rgba(46,155,220,0.12)" : "var(--pp-bg-elevated)", border: `1px solid ${selected ? "var(--pp-brand-accent)" : "var(--pp-bg-border)"}` }}>
+                      <div className="relative">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                          style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
+                          {initials(p.name || p.email || "?")}
+                        </div>
+                        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
+                          style={{ background: presenceColor(p.presence?.availability), borderColor: "var(--pp-bg-elevated)" }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate" style={{ color: "var(--pp-text-primary)" }}>{p.name}</div>
+                        <div className="text-[10px] truncate" style={{ color: "var(--pp-text-muted)" }}>
+                          {p.presence?.availability || "—"} {p.title ? `· ${p.title}` : ""}
+                        </div>
+                      </div>
+                      {groupMode ? (
+                        <div className="w-4 h-4 rounded border flex items-center justify-center"
+                          style={{ borderColor: "var(--pp-brand-accent)", background: selected ? "var(--pp-brand-accent)" : "transparent" }}>
+                          {selected && <CheckCircle2 className="w-3 h-3 text-white" />}
+                        </div>
+                      ) : (
+                        <MessageSquare className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Recent chats */}
+          <div>
+            <div className="text-[10px] uppercase tracking-wider mb-2 flex items-center justify-between" style={{ color: "var(--pp-text-muted)" }}>
+              <span>Chats récents</span>
+              {diag.chats_error && <span style={{ color: "#dc2626" }}>Err: {String(diag.chats_error).slice(0, 40)}</span>}
+            </div>
+            {chats.length === 0 ? (
               <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucun chat récent.</div>
             ) : (
               <div className="space-y-1">
                 {chats.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => setActive({ kind: "chat", id: c.id, title: c.topic })}
+                  <button key={c.id} onClick={() => setActive({ kind: "chat", id: c.id, title: c.topic })}
                     className="w-full text-left px-3 py-2 rounded-lg flex flex-col"
-                    style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}
-                  >
+                    style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
                     <div className="text-sm font-medium truncate" style={{ color: "var(--pp-text-primary)" }}>{c.topic}</div>
                     {c.preview && (
                       <div className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }} dangerouslySetInnerHTML={{ __html: c.preview }} />
@@ -1593,21 +1660,25 @@ function Teams365Panel({ profile }: { profile: any }) {
             )}
           </div>
 
-          {teams.length > 0 && (
-            <div>
-              <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: "var(--pp-text-muted)" }}>Équipes & canaux</div>
+          {/* Teams & channels */}
+          <div>
+            <div className="text-[10px] uppercase tracking-wider mb-2 flex items-center justify-between" style={{ color: "var(--pp-text-muted)" }}>
+              <span>Équipes & canaux ({teams.length})</span>
+              {diag.teams_error && <span style={{ color: "#dc2626" }}>Err: {String(diag.teams_error).slice(0, 40)}</span>}
+            </div>
+            {teams.length === 0 ? (
+              <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucune équipe.</div>
+            ) : (
               <div className="space-y-2">
                 {teams.map((tm) => (
                   <div key={tm.id} className="rounded-lg p-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
                     <div className="text-xs font-semibold mb-1" style={{ color: "var(--pp-text-primary)" }}>{tm.displayName}</div>
                     <div className="flex flex-wrap gap-1">
                       {tm.channels.map((ch: any) => (
-                        <button
-                          key={ch.id}
+                        <button key={ch.id}
                           onClick={() => setActive({ kind: "channel", teamId: tm.id, channelId: ch.id, title: `${tm.displayName} · ${ch.displayName}` })}
                           className="text-[11px] px-2 py-1 rounded-full"
-                          style={{ background: "var(--pp-bg-deep)", color: "var(--pp-text-primary)" }}
-                        >
+                          style={{ background: "var(--pp-bg-deep)", color: "var(--pp-text-primary)" }}>
                           #{ch.displayName}
                         </button>
                       ))}
@@ -1615,8 +1686,8 @@ function Teams365Panel({ profile }: { profile: any }) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </div>

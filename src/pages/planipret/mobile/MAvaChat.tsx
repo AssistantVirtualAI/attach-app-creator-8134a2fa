@@ -41,6 +41,12 @@ export default function MAvaChat() {
       const { data } = await supabase.auth.getUser();
       if (!data.user) return;
       setUserId(data.user.id);
+      const { data: prof } = await supabase
+        .from("planipret_profiles")
+        .select("voice_agent_enabled")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+      setVoiceAgentAllowed(!!(prof as any)?.voice_agent_enabled);
       const { data: s } = await supabase
         .from("planipret_ava_chat_sessions")
         .select("id,title,last_message_at")

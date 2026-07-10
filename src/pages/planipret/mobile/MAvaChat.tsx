@@ -219,11 +219,11 @@ export default function MAvaChat() {
   }
 
   return (
-    <div className="flex flex-col min-h-full">
-      <div className="sticky top-0 z-10 flex items-center gap-2 p-3 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.55)", borderBottom: "1px solid var(--pp-bg-border)" }}>
+    <div className="flex flex-col min-h-full" style={{ background: "var(--pp-bg-base)" }}>
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2.5 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 78%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>
         <Sheet>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon"><Menu className="w-5 h-5" /></Button>
+            <Button variant="ghost" size="icon" className="rounded-full"><Menu className="w-5 h-5" /></Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-80">
             <SheetHeader><SheetTitle>Conversations AVA</SheetTitle></SheetHeader>
@@ -241,29 +241,37 @@ export default function MAvaChat() {
             </div>
           </SheetContent>
         </Sheet>
-        <Sparkles className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} />
-        <div className="font-medium truncate flex-1" style={{ color: "var(--pp-text-primary)" }}>{currentTitle}</div>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="relative w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "conic-gradient(from 0deg, #7C3AED, #2E9BDC, #00D4AA, #7C3AED)", padding: 2 }}>
+            <div className="w-full h-full rounded-full flex items-center justify-center overflow-hidden" style={{ background: "var(--pp-bg-surface)" }}>
+              <img src={avaLogo.url} alt="AVA" className="w-full h-full object-contain p-0.5" />
+            </div>
+          </div>
+          <div className="flex flex-col min-w-0">
+            <div className="font-semibold truncate leading-tight" style={{ color: "var(--pp-text-primary)", fontFamily: "Urbanist,sans-serif" }}>{currentTitle}</div>
+            <div className="text-[10px] leading-tight" style={{ color: "var(--pp-text-muted)", letterSpacing: "0.08em" }}>Assistant Planiprêt</div>
+          </div>
+        </div>
         {voiceAgentAllowed && (
-          <div className="flex rounded-full overflow-hidden" style={{ border: "1px solid var(--pp-bg-border-2)" }}>
-            <button
-              onClick={() => switchMode("chat")}
-              className="px-2 py-1 text-xs flex items-center gap-1"
-              style={{ background: mode === "chat" ? "var(--pp-brand-accent)" : "transparent", color: mode === "chat" ? "#03131A" : "var(--pp-text-secondary)" }}
-              title="Mode Chat"
-            ><MessageSquare className="w-3 h-3" /> Chat</button>
-            <button
-              onClick={() => switchMode("voice")}
-              className="px-2 py-1 text-xs flex items-center gap-1"
-              style={{ background: mode === "voice" ? "var(--pp-brand-accent)" : "transparent", color: mode === "voice" ? "#03131A" : "var(--pp-text-secondary)" }}
-              title="Mode Vocal"
-            ><Radio className="w-3 h-3" /> Vocal</button>
+          <div className="relative flex rounded-full p-0.5" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+            <div
+              className="absolute top-0.5 bottom-0.5 rounded-full transition-all duration-300 ease-out"
+              style={{ width: "calc(50% - 2px)", left: mode === "chat" ? 2 : "calc(50%)", background: "linear-gradient(135deg,#2E9BDC,#7C3AED)", boxShadow: "0 4px 12px rgba(124,58,237,0.35)" }}
+            />
+            <button onClick={() => switchMode("chat")} className="relative z-10 px-3 py-1 text-[11px] flex items-center gap-1 rounded-full transition-colors" style={{ color: mode === "chat" ? "#fff" : "var(--pp-text-secondary)", fontWeight: 600 }}>
+              <MessageSquare className="w-3 h-3" /> Chat
+            </button>
+            <button onClick={() => switchMode("voice")} className="relative z-10 px-3 py-1 text-[11px] flex items-center gap-1 rounded-full transition-colors" style={{ color: mode === "voice" ? "#fff" : "var(--pp-text-secondary)", fontWeight: 600 }}>
+              <Radio className="w-3 h-3" /> Vocal
+            </button>
           </div>
         )}
-        <Button size="icon" variant="ghost" onClick={toggleTts} title={speakReplies ? "Voix activée" : "Voix désactivée"}>
+        <Button size="icon" variant="ghost" className="rounded-full" onClick={toggleTts} title={speakReplies ? "Voix activée" : "Voix désactivée"}>
           {speakReplies ? <Volume2 className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} /> : <VolumeX className="w-5 h-5" />}
         </Button>
-        <Button size="icon" variant="ghost" onClick={startNew}><Plus className="w-5 h-5" /></Button>
+        <Button size="icon" variant="ghost" className="rounded-full" onClick={startNew}><Plus className="w-5 h-5" /></Button>
       </div>
+
 
 
       <div className="flex-1 min-h-0 overflow-hidden">

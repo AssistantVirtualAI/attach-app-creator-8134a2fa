@@ -251,11 +251,30 @@ export default function MVoicemail() {
           {tab === "greeting" ? (
             <GreetingStudio profile={profile} onProfileChange={reloadProfile} />
           ) : loading ? (
-            <div className="space-y-2.5">
+            <div className="space-y-2.5" aria-busy="true" aria-live="polite">
+              <div className="flex items-center gap-2 px-1 pb-1">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: PRIMARY }} />
+                <span className="text-[11px] font-medium" style={{ color: "var(--pp-text-secondary)" }}>
+                  {t("voicemail.loading") || "Chargement des messages…"}
+                </span>
+              </div>
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl h-[72px] animate-pulse border border-slate-100" />
+                <div
+                  key={i}
+                  className="bg-white rounded-2xl px-3.5 py-3 flex items-center gap-3 border border-slate-100 shadow-sm overflow-hidden relative"
+                  style={{ animation: `pp-vm-pulse 1.4s ease-in-out ${i * 0.08}s infinite` }}
+                >
+                  <div className="w-11 h-11 rounded-2xl bg-slate-200/70" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 rounded-full bg-slate-200/70" style={{ width: `${55 + (i % 3) * 12}%` }} />
+                    <div className="h-2.5 rounded-full bg-slate-200/60 w-1/3" />
+                  </div>
+                  <div className="w-9 h-9 rounded-full bg-slate-200/70" />
+                </div>
               ))}
+              <style>{`@keyframes pp-vm-pulse{0%,100%{opacity:1}50%{opacity:.55}}`}</style>
             </div>
+          
           ) : filtered.length === 0 ? (
             <div className="bg-white rounded-3xl p-10 text-center shadow-sm border border-slate-100 mt-4">
               <div

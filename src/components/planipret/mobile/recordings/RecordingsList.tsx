@@ -300,7 +300,7 @@ export default function RecordingsList({
     try {
       const url = await fetchAudioUrl(call, { retries: 3 });
       const prev = audioBlobCacheRef.current.get(call.id);
-      if (prev) { try { URL.revokeObjectURL(prev); } catch {} }
+      if (prev?.startsWith("blob:")) { try { URL.revokeObjectURL(prev); } catch {} }
       audioBlobCacheRef.current.set(call.id, url);
       setStatus(call.id, "uploaded");
       onUpdated({ ...call, recording_url: url, has_recording: true, stream_via_proxy: false });

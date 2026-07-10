@@ -1842,8 +1842,10 @@ function fmtVmDur(s: number | null) {
 }
 
 function VoicemailsTab({
-  userId, openDialer, registerRefresh,
-}: { userId?: string; openDialer: (n: string) => void; registerRefresh: (fn: (() => void) | null) => void }) {
+  userId, openDialer, registerRefresh, profile, reloadProfile,
+}: { userId?: string; openDialer: (n: string) => void; registerRefresh: (fn: (() => void) | null) => void; profile?: any; reloadProfile?: () => Promise<void> | void }) {
+  const [studioOpen, setStudioOpen] = useState(false);
+
   const [items, setItems] = useState<VM[]>([]);
   const [loading, setLoading] = useState(true);
   const [folder, setFolder] = useState<"inbox" | "saved">("inbox");

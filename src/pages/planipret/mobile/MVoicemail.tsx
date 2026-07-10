@@ -175,78 +175,197 @@ export default function MVoicemail() {
   };
 
 
-  return (
-    <div className="p-4">
-      <header className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-bold" style={{ color: "var(--pp-text-primary)" }}>{t("voicemail.title")}</h1>
-          {unreadInbox > 0 && <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center">{unreadInbox}</span>}
-        </div>
-      </header>
+  const savedCount = items.filter((v) => v.folder === "saved").length;
+  const inboxCount = items.filter((v) => v.folder === "inbox").length;
 
-      <div className="flex gap-2 mb-3">
-        {(["greeting", "inbox", "saved"] as const).map((k) => (
-          <button key={k} onClick={() => setTab(k)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${tab === k ? "text-white shadow-sm" : "bg-white text-slate-600"}`}
-            style={tab === k ? { background: PRIMARY } : undefined}>
-            {t(`voicemail.tabs.${k}`)}
-          </button>
-        ))}
+  const tabMeta: Record<"greeting" | "inbox" | "saved", { icon: React.ReactNode; badge?: number }> = {
+    greeting: { icon: <Sparkles className="w-3.5 h-3.5" /> },
+    inbox: { icon: <Inbox className="w-3.5 h-3.5" />, badge: inboxCount },
+    saved: { icon: <Bookmark className="w-3.5 h-3.5" />, badge: savedCount },
+  };
+
+  return (
+    <div className="pb-6">
+      {/* Hero header */}
+      <div
+        className="relative overflow-hidden px-4 pt-5 pb-6"
+        style={{
+          background: `linear-gradient(135deg, ${PRIMARY} 0%, ${ACCENT} 100%)`,
+        }}
+      >
+        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full opacity-20 blur-2xl" style={{ background: "#fff" }} />
+        <div className="absolute -bottom-20 -left-10 w-56 h-56 rounded-full opacity-10 blur-3xl" style={{ background: "#fff" }} />
+        <div className="relative flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/25">
+            <VmIcon className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-white text-lg font-bold leading-tight tracking-tight">{t("voicemail.title")}</h1>
+            <p className="text-white/70 text-[11px] mt-0.5">
+              {unreadInbox > 0
+                ? `${unreadInbox} ${t("voicemail.newFrom") || "nouveaux messages"}`
+                : t("voicemail.emptyInbox") || "Boîte à jour"}
+            </p>
+          </div>
+          {unreadInbox > 0 && (
+            <div className="min-w-[26px] h-[26px] px-2 rounded-full bg-white text-[11px] font-bold flex items-center justify-center shadow-sm" style={{ color: PRIMARY }}>
+              {unreadInbox}
+            </div>
+          )}
+        </div>
       </div>
 
-      {tab === "greeting" ? (
-        <GreetingStudio profile={profile} onProfileChange={reloadProfile} />
-      ) : loading ? (
-        <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="bg-white rounded-2xl h-16 animate-pulse" />)}</div>
-      ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-2xl p-8 text-center shadow-sm mt-8 text-slate-500 text-sm">
-          {tab === "inbox" ? t("voicemail.emptyInbox") : t("voicemail.emptySaved")}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((vm) => (
-            <div key={vm.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              <button onClick={() => { setExpanded(expanded === vm.id ? null : vm.id); markRead(vm); }}
-                className="w-full px-3 py-3 flex items-center gap-3 active:bg-slate-50 text-left">
-                <div className="relative flex-shrink-0">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: `${PRIMARY}15`, color: PRIMARY }}>
-                    <Mic className="w-5 h-5" />
-                  </div>
-                  {!vm.is_read && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm truncate ${vm.is_read ? "" : "font-semibold"}`} style={{ color: "var(--pp-text-primary)" }}>{vm.from_name || vm.from_number || t("common.unknown")}</p>
-                  <p className="text-[11px] text-slate-500">{fmtDate(vm.received_at ?? vm.created_at, lang, t)} · {fmtDur(vm.duration_seconds, lang)}</p>
-                </div>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white" style={{ background: PRIMARY }}>
-                  {expanded === vm.id ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
-                </div>
+      <div className="px-4 -mt-4">
+        {/* Segmented tabs */}
+        <div className="bg-white rounded-2xl p-1 flex gap-1 shadow-md border border-slate-100">
+          {(["greeting", "inbox", "saved"] as const).map((k) => {
+            const active = tab === k;
+            const meta = tabMeta[k];
+            return (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                className="flex-1 py-2 rounded-xl text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5"
+                style={
+                  active
+                    ? { background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`, color: "#fff", boxShadow: `0 4px 12px -4px ${PRIMARY}` }
+                    : { color: "var(--pp-text-secondary)" }
+                }
+              >
+                {meta.icon}
+                <span>{t(`voicemail.tabs.${k}`)}</span>
+                {!!meta.badge && meta.badge > 0 && (
+                  <span
+                    className="ml-0.5 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
+                    style={active ? { background: "rgba(255,255,255,0.25)", color: "#fff" } : { background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)" }}
+                  >
+                    {meta.badge}
+                  </span>
+                )}
               </button>
+            );
+          })}
+        </div>
 
-              {expanded === vm.id && (
-                <div className="px-3 pb-3 border-t border-slate-100 animate-fade-in">
-                  <AudioPlayer vm={vm} />
-                  <div className="mt-3">
-                    {vm.transcript ? (
-                      <div className="bg-slate-50 rounded-lg p-2 text-xs text-slate-700 whitespace-pre-wrap">{vm.transcript}</div>
-                    ) : (
-                      <button onClick={() => fetchTranscript(vm)} className="w-full py-2 rounded-lg bg-slate-100 text-xs font-medium text-slate-700 flex items-center justify-center gap-1.5">
-                        <FileText className="w-3.5 h-3.5" /> {t("voicemail.getTranscript")}
-                      </button>
+        <div className="mt-4">
+          {tab === "greeting" ? (
+            <GreetingStudio profile={profile} onProfileChange={reloadProfile} />
+          ) : loading ? (
+            <div className="space-y-2.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="bg-white rounded-2xl h-[72px] animate-pulse border border-slate-100" />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="bg-white rounded-3xl p-10 text-center shadow-sm border border-slate-100 mt-4">
+              <div
+                className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-3"
+                style={{ background: `linear-gradient(135deg, ${PRIMARY}15, ${ACCENT}15)`, color: PRIMARY }}
+              >
+                {tab === "inbox" ? <Inbox className="w-7 h-7" /> : <Bookmark className="w-7 h-7" />}
+              </div>
+              <p className="font-semibold text-sm" style={{ color: "var(--pp-text-primary)" }}>
+                {tab === "inbox" ? t("voicemail.emptyInbox") : t("voicemail.emptySaved")}
+              </p>
+              <p className="text-[11px] mt-1 text-slate-500">
+                {tab === "inbox" ? "Les nouveaux messages apparaîtront ici" : "Sauvegardez vos messages importants"}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {filtered.map((vm) => {
+                const isOpen = expanded === vm.id;
+                return (
+                  <div
+                    key={vm.id}
+                    className={`bg-white rounded-2xl overflow-hidden border transition-all ${
+                      isOpen ? "shadow-lg border-transparent ring-1" : "shadow-sm border-slate-100"
+                    }`}
+                    style={isOpen ? ({ ["--tw-ring-color" as any]: `${PRIMARY}30` } as any) : undefined}
+                  >
+                    <button
+                      onClick={() => { setExpanded(isOpen ? null : vm.id); markRead(vm); }}
+                      className="w-full px-3.5 py-3 flex items-center gap-3 active:bg-slate-50 text-left"
+                    >
+                      <div className="relative flex-shrink-0">
+                        <div
+                          className="w-11 h-11 rounded-2xl flex items-center justify-center"
+                          style={{
+                            background: vm.is_read
+                              ? "var(--pp-bg-elevated)"
+                              : `linear-gradient(135deg, ${PRIMARY}20, ${ACCENT}20)`,
+                            color: PRIMARY,
+                          }}
+                        >
+                          <Mic className="w-5 h-5" />
+                        </div>
+                        {!vm.is_read && (
+                          <span
+                            className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white"
+                            style={{ background: ACCENT }}
+                          />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={`text-[13px] truncate ${vm.is_read ? "font-medium" : "font-semibold"}`}
+                          style={{ color: "var(--pp-text-primary)" }}
+                        >
+                          {vm.from_name || vm.from_number || t("common.unknown")}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10.5px] text-slate-500">{fmtDate(vm.received_at ?? vm.created_at, lang, t)}</span>
+                          <span className="w-1 h-1 rounded-full bg-slate-300" />
+                          <span className="text-[10.5px] text-slate-500 tabular-nums">{fmtDur(vm.duration_seconds, lang)}</span>
+                        </div>
+                      </div>
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-white shadow-sm transition-transform"
+                        style={{
+                          background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`,
+                          transform: isOpen ? "scale(1.05)" : "scale(1)",
+                        }}
+                      >
+                        {isOpen ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="px-3.5 pb-3.5 border-t border-slate-100 animate-fade-in">
+                        <AudioPlayer vm={vm} />
+                        <div className="mt-3">
+                          {vm.transcript ? (
+                            <div className="rounded-xl p-3 text-[12px] leading-relaxed whitespace-pre-wrap border" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", borderColor: "var(--pp-bg-border)" }}>
+                              <div className="flex items-center gap-1.5 mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: PRIMARY }}>
+                                <FileText className="w-3 h-3" /> Transcription
+                              </div>
+                              {vm.transcript}
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => fetchTranscript(vm)}
+                              className="w-full py-2.5 rounded-xl text-[12px] font-semibold flex items-center justify-center gap-1.5 border transition-colors"
+                              style={{ background: "var(--pp-bg-elevated)", color: PRIMARY, borderColor: "var(--pp-bg-border)" }}
+                            >
+                              <FileText className="w-3.5 h-3.5" /> {t("voicemail.getTranscript")}
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-4 gap-1.5 mt-3">
+                          <ActionBtn icon={<Phone className="w-4 h-4" />} label={t("common.callBack")} onClick={() => openDialer(vm.from_number ?? "")} />
+                          {tab === "inbox" && <ActionBtn icon={<Save className="w-4 h-4" />} label={t("voicemail.saveShort")} onClick={() => saveVm(vm)} />}
+                          <ActionBtn icon={<Forward className="w-4 h-4" />} label={t("voicemail.forward")} onClick={() => setForwardFor(vm)} />
+                          <ActionBtn icon={<Trash2 className="w-4 h-4" />} label={t("voicemail.deleteShort")} onClick={() => removeVm(vm)} danger />
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-4 gap-1.5 mt-3">
-                    <ActionBtn icon={<Phone className="w-4 h-4" />} label={t("common.callBack")} onClick={() => openDialer(vm.from_number ?? "")} />
-                    {tab === "inbox" && <ActionBtn icon={<Save className="w-4 h-4" />} label={t("voicemail.saveShort")} onClick={() => saveVm(vm)} />}
-                    <ActionBtn icon={<Forward className="w-4 h-4" />} label={t("voicemail.forward")} onClick={() => setForwardFor(vm)} />
-                    <ActionBtn icon={<Trash2 className="w-4 h-4" />} label={t("voicemail.deleteShort")} onClick={() => removeVm(vm)} danger />
-                  </div>
-                </div>
-              )}
+                );
+              })}
             </div>
-          ))}
+          )}
         </div>
-      )}
+      </div>
 
       {forwardFor && (
         <ForwardModal vm={forwardFor} onClose={() => setForwardFor(null)} />
@@ -257,7 +376,15 @@ export default function MVoicemail() {
 
 function ActionBtn({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
   return (
-    <button onClick={onClick} className={`py-2 rounded-lg text-[11px] font-medium flex flex-col items-center gap-1 ${danger ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-700"}`}>
+    <button
+      onClick={onClick}
+      className="py-2.5 rounded-xl text-[10.5px] font-semibold flex flex-col items-center gap-1 border transition-all active:scale-95"
+      style={
+        danger
+          ? { background: "#FEF2F2", color: "#DC2626", borderColor: "#FEE2E2" }
+          : { background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", borderColor: "var(--pp-bg-border)" }
+      }
+    >
       {icon}<span>{label}</span>
     </button>
   );

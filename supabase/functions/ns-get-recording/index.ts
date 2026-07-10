@@ -412,12 +412,13 @@ Deno.serve(async (req) => {
   let row: any = null;
   let domain = String(body.domain ?? url.searchParams.get("domain") ?? cfg.domain);
   const attempts: any[] = [];
+  const preferUrl = body?.prefer_url === true || url.searchParams.get("prefer_url") === "1";
 
-  if ((!ns_callid || !ns_extension) && call_db_id) {
+  if ((!ns_callid || !ns_extension || preferUrl) && call_db_id) {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const { data } = await admin
       .from("planipret_phone_calls")
-      .select("id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, recording_url, started_at, duration_seconds, from_number, to_number")
+      .select("id, user_id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, recording_url, recording_storage_path, started_at, duration_seconds, from_number, to_number")
       .eq("id", call_db_id)
       .maybeSingle();
     row = data;
@@ -425,9 +426,32 @@ Deno.serve(async (req) => {
     ns_callid = ns_callid || row?.ns_callid || row?.ns_orig_callid || row?.ns_term_callid
       || row?.metadata?.["call-orig-call-id"] || row?.metadata?.["call-term-call-id"] || row?.metadata?.["call-parent-cdr-id"] || null;
     ns_extension = ns_extension || row?.extension || row?.metadata?.["call-orig-user"]?.toString() || null;
+
+    // Fastest path: recording is already cached in our own storage.
+    if (row?.recording_storage_path) {
+      const signed = await signCachedUrl(row.recording_storage_path);
+      if (signed) {
+        if (preferUrl) return json({ success: true, url: signed, cached: true, path: row.recording_storage_path });
+        const s = await fetch(signed);
+        if (s.ok) {
+          const bytes = new Uint8Array(await s.arrayBuffer());
+          return new Response(bytes, {
+            status: 200,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": s.headers.get("Content-Type") ?? "audio/mpeg",
+              "Content-Length": String(bytes.byteLength),
+              "Cache-Control": "private, max-age=3600",
+              "X-NS-Source": "storage-cache",
+            },
+          });
+        }
+      }
+    }
+
     // If DB already has a fully-resolved http recording_url, short-circuit.
     if (row?.recording_url && String(row.recording_url).startsWith("http")) {
-      const direct = await streamFromUrl(row.recording_url, row.metadata?.ns_recording ?? null, { "X-NS-Source": "cached" }, attempts);
+      const direct = await streamFromUrl(row.recording_url, row.metadata?.ns_recording ?? null, { "X-NS-Source": "cached" }, attempts, { callDbId: call_db_id, preferUrl });
       if (direct) return direct;
     }
   }

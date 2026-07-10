@@ -185,79 +185,62 @@ export default function MVoicemail() {
   };
 
   return (
-    <div className="pb-6">
-      {/* Hero header */}
-      <div
-        className="relative overflow-hidden px-4 pt-5 pb-6"
-        style={{
-          background: `linear-gradient(135deg, ${PRIMARY} 0%, ${ACCENT} 100%)`,
-        }}
-      >
-        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full opacity-20 blur-2xl" style={{ background: "#fff" }} />
-        <div className="absolute -bottom-20 -left-10 w-56 h-56 rounded-full opacity-10 blur-3xl" style={{ background: "#fff" }} />
-        <div className="relative flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/25">
-            <VmIcon className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-white text-lg font-bold leading-tight tracking-tight">{t("voicemail.title")}</h1>
-            <p className="text-white/70 text-[11px] mt-0.5">
-              {unreadInbox > 0
-                ? `${unreadInbox} ${t("voicemail.newFrom") || "nouveaux messages"}`
-                : t("voicemail.emptyInbox") || "Boîte à jour"}
-            </p>
-          </div>
-          {unreadInbox > 0 && (
-            <div className="min-w-[26px] h-[26px] px-2 rounded-full bg-white text-[11px] font-bold flex items-center justify-center shadow-sm" style={{ color: PRIMARY }}>
-              {unreadInbox}
-            </div>
-          )}
+    <div className="p-4 space-y-4 pb-6">
+      {/* Header — cohérent avec les autres pages */}
+      <header className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.30)", color: "var(--pp-brand-accent)" }}>
+          <VmIcon className="w-5 h-5" />
         </div>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[18px] font-bold leading-tight" style={{ color: "var(--pp-text-primary)" }}>{t("voicemail.title")}</h1>
+          <p className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
+            {unreadInbox > 0
+              ? `${unreadInbox} ${t("voicemail.newFrom") || "nouveaux messages"}`
+              : t("voicemail.emptyInbox") || "Boîte à jour"}
+          </p>
+        </div>
+        {unreadInbox > 0 && (
+          <span className="pp-pill pp-pill-accent">{unreadInbox}</span>
+        )}
+      </header>
+
+      {/* Segmented tabs */}
+      <div className="pp-segmented w-full flex">
+        {(["greeting", "inbox", "saved"] as const).map((k) => {
+          const active = tab === k;
+          const meta = tabMeta[k];
+          return (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              className={`flex-1 flex items-center justify-center gap-1.5 ${active ? "is-active" : ""}`}
+            >
+              {meta.icon}
+              <span>{t(`voicemail.tabs.${k}`)}</span>
+              {!!meta.badge && meta.badge > 0 && (
+                <span className="ml-0.5 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
+                  style={active ? { background: "rgba(34,211,238,0.25)", color: "var(--pp-brand-accent)" } : { background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)" }}>
+                  {meta.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="px-4 -mt-4">
-        {/* Segmented tabs */}
-        <div className="bg-white rounded-2xl p-1 flex gap-1 shadow-md border border-slate-100">
-          {(["greeting", "inbox", "saved"] as const).map((k) => {
-            const active = tab === k;
-            const meta = tabMeta[k];
-            return (
-              <button
-                key={k}
-                onClick={() => setTab(k)}
-                className="flex-1 py-2 rounded-xl text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5"
-                style={
-                  active
-                    ? { background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})`, color: "#fff", boxShadow: `0 4px 12px -4px ${PRIMARY}` }
-                    : { color: "var(--pp-text-secondary)" }
-                }
-              >
-                {meta.icon}
-                <span>{t(`voicemail.tabs.${k}`)}</span>
-                {!!meta.badge && meta.badge > 0 && (
-                  <span
-                    className="ml-0.5 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center"
-                    style={active ? { background: "rgba(255,255,255,0.25)", color: "#fff" } : { background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)" }}
-                  >
-                    {meta.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="mt-4">
-          {tab === "greeting" ? (
+      <div>
+        {tab === "greeting" ? (
+          <div className="pp-card p-4">
             <GreetingStudio profile={profile} onProfileChange={reloadProfile} />
-          ) : loading ? (
-            <div className="space-y-2.5" aria-busy="true" aria-live="polite">
-              <div className="flex items-center gap-2 px-1 pb-1">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: PRIMARY }} />
-                <span className="text-[11px] font-medium" style={{ color: "var(--pp-text-secondary)" }}>
-                  {t("voicemail.loading") || "Chargement des messages…"}
-                </span>
-              </div>
+          </div>
+        ) : loading ? (
+          <div className="space-y-2.5" aria-busy="true" aria-live="polite">
+            <div className="flex items-center gap-2 px-1 pb-1">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: PRIMARY }} />
+              <span className="text-[11px] font-medium" style={{ color: "var(--pp-text-secondary)" }}>
+                {t("voicemail.loading") || "Chargement des messages…"}
+              </span>
+            </div>
               {Array.from({ length: 5 }).map((_, i) => (
                 <div
                   key={i}

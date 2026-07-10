@@ -101,17 +101,63 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
     return d;
   }, [sessionId]);
 
+  // Client-only tools execute in the browser (no server round-trip).
+  const CLIENT_ONLY: Record<string, (p: any) => any> = useMemo(() => ({
+    navigate_to: ({ path }: { path?: string }) => {
+      if (!path) return { success: false, error: "no_path" };
+      const p = path.startsWith("/") ? path : `/mplanipret/${path.replace(/^\/+/, "")}`;
+      appendTranscript({ role: "nav", text: `🗺️ ${p}` });
+      navigate(p);
+      return { success: true, path: p };
+    },
+    show_toast: ({ message, level }: { message?: string; level?: "info" | "success" | "error" }) => {
+      const m = String(message ?? "");
+      if (level === "success") toast.success(m);
+      else if (level === "error") toast.error(m);
+      else toast(m);
+      return { success: true };
+    },
+    open_dialer: ({ number }: { number?: string }) => {
+      if (!number) return { success: false, error: "no_number" };
+      navigate(`/mplanipret/calls?dial=${encodeURIComponent(number)}`);
+      return { success: true };
+    },
+    open_sms_composer: ({ number, body }: { number?: string; body?: string }) => {
+      const q = new URLSearchParams();
+      if (number) q.set("to", number);
+      if (body) q.set("body", body);
+      navigate(`/mplanipret/messages?${q.toString()}`);
+      return { success: true };
+    },
+    show_client_in_app: ({ client_id }: { client_id?: string }) => {
+      if (!client_id) return { success: false, error: "no_client_id" };
+      navigate(`/mplanipret/contacts?id=${encodeURIComponent(client_id)}`);
+      return { success: true };
+    },
+    open_call_detail: ({ call_id }: { call_id?: string }) => {
+      if (!call_id) return { success: false, error: "no_call_id" };
+      navigate(`/mplanipret/calls?id=${encodeURIComponent(call_id)}`);
+      return { success: true };
+    },
+    close_ava: () => { onClose(); return { success: true }; },
+  }), [navigate, onClose]);
+
   const handleTool = useCallback(async (toolName: string, params: any) => {
-    // Confirmation gate
+    // Route client-only tools locally (no confirm gate, no server call).
+    if (CLIENT_ONLY[toolName]) {
+      showToolNotif(TOOL_LABELS[toolName] ?? toolName);
+      return CLIENT_ONLY[toolName](params ?? {});
+    }
+    // Confirmation gate for mutating server tools.
     if (autonomy === "confirm" && CONFIRM_REQUIRED.has(toolName)) {
       return new Promise((resolve, reject) => {
         setPending({ tool: toolName, params, resolve, reject });
       }).then((r: any) => r ?? { success: false, error: "user_cancelled" });
     }
     return callServerTool(toolName, params);
-  }, [autonomy, callServerTool]);
+  }, [autonomy, callServerTool, CLIENT_ONLY]);
 
-  // Build clientTools map dynamically (all tools delegate to server)
+  // Build clientTools map dynamically (server + client-side tools)
   const clientTools = useMemo(() => {
     const TOOL_NAMES = [
       "make_call", "get_active_calls", "hangup_call", "get_call_history",
@@ -123,11 +169,12 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
       "get_upcoming_appointments", "update_client", "create_client",
       "read_emails", "send_email", "get_calendar_today", "get_calendar_week",
       "navigate_to", "show_client_in_app", "open_call_detail",
+      "show_toast", "open_dialer", "open_sms_composer", "close_ava",
       "get_daily_briefing", "get_my_stats",
       "explain_feature", "get_integration_status",
     ];
     const map: Record<string, (p: any) => Promise<any>> = {};
-    for (const t of TOOL_NAMES) map[t] = (p: any) => handleTool(t, p);
+    for (const t of TOOL_NAMES) map[t] = (p: any) => Promise.resolve(handleTool(t, p));
     return map;
   }, [handleTool]);
 

@@ -56,24 +56,11 @@ Deno.serve(async (req) => {
     if (!sp) return json({ error: "NO_SOFTPHONE_ACCOUNT" }, 404);
     if (!sp.extension) return json({ error: "NO_EXTENSION_ASSIGNED" }, 403);
 
-    const [{ data: roleRow }, { data: orgMember }, { data: superAdmin }, { data: lemtelAdmin }] = await Promise.all([
-      admin.from("user_roles").select("role").eq("user_id", u.user.id).eq("organization_id", sp.organization_id).maybeSingle(),
-      admin.from("org_members").select("role, can_manage_extensions, can_listen_calls").eq("user_id", u.user.id).eq("org_id", sp.organization_id).maybeSingle(),
-      (async () => { try { return await admin.rpc("is_super_admin", { _user_id: u.user.id }).maybeSingle(); } catch { return { data: false } as any; } })(),
-      (async () => { try { return await admin.rpc("is_lemtel_admin", { _user_id: u.user.id }).maybeSingle(); } catch { return { data: false } as any; } })(),
-    ]);
-    const orgMemberRole = (orgMember as any)?.role || "";
-    const appRole = (roleRow as any)?.role || "agent";
-    const isDomainAdmin = !!superAdmin || !!lemtelAdmin
-      || ["master_admin", "ava_admin", "reseller_admin", "customer_admin"].includes(orgMemberRole)
-      || ["super_admin", "admin", "org_admin", "manager"].includes(appRole)
-      || !!(orgMember as any)?.can_manage_extensions
-      || !!(orgMember as any)?.can_listen_calls;
-
     const url = new URL(req.url);
     const id = url.searchParams.get("id");
-    const extParam = url.searchParams.get("extension");
 
+    // Mobile app is ALWAYS scoped to the current broker's extension — no
+    // admin bypass here, so brokers never see other brokers' calls.
     const ext = sp.extension;
     const extFilter = `extension.eq.${ext},caller_number.eq.${ext},source_number.eq.${ext},destination_number.eq.${ext},destination.eq.${ext}`;
 

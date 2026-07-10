@@ -4,17 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Plus, X, ArrowLeft, Phone, Send, Paperclip, MessageSquare, Zap,
-  Users, Bot, Mail, Sparkles, Loader2, RefreshCw, Mic, Reply, History, Circle, CheckCircle2, AlertTriangle, RotateCw,
+  Users, Mail, Sparkles, Loader2, RefreshCw, Reply, Circle, CheckCircle2, AlertTriangle, RotateCw,
   UsersRound, Contact,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import SmsTemplatesSheet from "@/components/planipret/SmsTemplatesSheet";
 import AvaSummarizeSheet from "@/components/planipret/ava/AvaSummarizeSheet";
 import AvaProposedActionsCard from "@/components/planipret/mobile/AvaProposedActionsCard";
-import AvaHistorySheet from "@/components/planipret/ava/AvaHistorySheet";
-import CoachOverlay from "@/components/planipret/ava/CoachOverlay";
 import { callAva, type AvaSuggestion } from "@/services/avaProactive";
-import { useAvaDraft } from "@/hooks/useAvaDraft";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 

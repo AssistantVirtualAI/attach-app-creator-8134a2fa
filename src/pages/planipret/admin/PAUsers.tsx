@@ -412,13 +412,19 @@ export default function PAUsers() {
     if (fresh) {
       setRows((p) => p.map((r) => r.user_id === u.user_id ? { ...r, mobile_app_enabled: !!fresh.mobile_app_enabled, voice_agent_enabled: !!fresh.voice_agent_enabled } : r));
     }
-    // Propagate to NS-API (recording config depends on voice_agent_enabled)
-    if (field === "voice_agent_enabled") {
-      supabase.functions.invoke("ns-sync-user", {
-        body: { action: "sync_one", broker_id: u.user_id },
+    // Propagate to phone system: any toggle change re-provisions the NS user
+    // (recording config + mobile access are derived from these flags).
+    supabase.functions.invoke("ns-sync-user", {
+      body: { action: "sync_one", broker_id: u.user_id },
+    }).catch(() => null);
+    // When the mobile app is activated, also enqueue softphone/app provisioning
+    // so the broker gets an app account in the phone system automatically.
+    if (field === "mobile_app_enabled" && next) {
+      supabase.functions.invoke("provision-app-user", {
+        body: { user_id: u.user_id },
       }).catch(() => null);
     }
-    toast.success(next ? (field === "mobile_app_enabled" ? "Accès mobile activé" : "Agent vocal IA activé") : (field === "mobile_app_enabled" ? "Accès mobile désactivé" : "Agent vocal IA désactivé"));
+    toast.success(next ? (field === "mobile_app_enabled" ? "Accès mobile activé — provisionnement en cours" : "Agent vocal IA activé") : (field === "mobile_app_enabled" ? "Accès mobile désactivé" : "Agent vocal IA désactivé"));
   };
 
   const bulkToggle = async (field: "mobile_app_enabled" | "voice_agent_enabled", value: boolean) => {

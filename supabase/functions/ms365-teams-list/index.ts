@@ -114,43 +114,67 @@ Deno.serve(async (req) => {
     } catch (e: any) { diagnostics.teams_error = e?.message; }
 
     // Tenant users (people to chat with directly) + presence
+    // Paginate through ALL tenant users and keep only enabled accounts with at least one Microsoft license.
     const people: any[] = [];
     try {
-      const uRes = await graph(admin, profile, "/users?$top=100&$select=id,displayName,mail,userPrincipalName,jobTitle");
-      const uBody = await uRes.json().catch(() => ({}));
-      if (!uRes.ok) {
-        diagnostics.people_error = uBody?.error?.message ?? `HTTP ${uRes.status}`;
-      } else {
-        const list = (uBody.value ?? []).filter((u: any) => u.id).map((u: any) => ({
+      const collected: any[] = [];
+      let nextPath: string | null =
+        "/users?$top=999&$select=id,displayName,mail,userPrincipalName,jobTitle,accountEnabled,assignedLicenses,userType";
+      let pages = 0;
+      while (nextPath && pages < 15) {
+        const uRes = await graph(admin, profile, nextPath);
+        const uBody = await uRes.json().catch(() => ({}));
+        if (!uRes.ok) {
+          diagnostics.people_error = uBody?.error?.message ?? `HTTP ${uRes.status}`;
+          break;
+        }
+        for (const u of (uBody.value ?? [])) collected.push(u);
+        const next = uBody["@odata.nextLink"] as string | undefined;
+        nextPath = next ? next.replace(GRAPH, "") : null;
+        pages++;
+      }
+      diagnostics.people_fetched = collected.length;
+
+      const licensed = collected.filter((u: any) => {
+        if (!u.id) return false;
+        if (u.accountEnabled === false) return false;
+        const lic = Array.isArray(u.assignedLicenses) ? u.assignedLicenses.length : 0;
+        return lic > 0;
+      });
+      diagnostics.people_licensed = licensed.length;
+
+      const list = licensed
+        .map((u: any) => ({
           id: u.id,
           name: u.displayName,
           email: u.mail ?? u.userPrincipalName,
           title: u.jobTitle ?? null,
+          userType: u.userType ?? null,
           presence: null as null | { availability: string; activity: string },
-        }));
+        }))
+        .sort((a: any, b: any) => (a.name ?? "").localeCompare(b.name ?? "", "fr", { sensitivity: "base" }));
 
-        const chunk = <T,>(arr: T[], n: number) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
-        for (const grp of chunk(list, 20)) {
-          try {
-            const pr = await graph(admin, profile, "/communications/getPresencesByUserId", {
-              method: "POST",
-              body: JSON.stringify({ ids: grp.map((p) => p.id) }),
-            });
-            const pb = await pr.json().catch(() => ({}));
-            if (pr.ok) {
-              const byId: Record<string, any> = {};
-              for (const p of (pb.value ?? [])) byId[p.id] = p;
-              for (const p of grp) {
-                const pr2 = byId[p.id];
-                if (pr2) p.presence = { availability: pr2.availability, activity: pr2.activity };
-              }
-            } else if (!diagnostics.presence_error) {
-              diagnostics.presence_error = pb?.error?.message ?? `HTTP ${pr.status}`;
+      const chunk = <T,>(arr: T[], n: number) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
+      for (const grp of chunk(list, 20)) {
+        try {
+          const pr = await graph(admin, profile, "/communications/getPresencesByUserId", {
+            method: "POST",
+            body: JSON.stringify({ ids: grp.map((p) => p.id) }),
+          });
+          const pb = await pr.json().catch(() => ({}));
+          if (pr.ok) {
+            const byId: Record<string, any> = {};
+            for (const p of (pb.value ?? [])) byId[p.id] = p;
+            for (const p of grp) {
+              const pr2 = byId[p.id];
+              if (pr2) p.presence = { availability: pr2.availability, activity: pr2.activity };
             }
-          } catch (e: any) { if (!diagnostics.presence_error) diagnostics.presence_error = e?.message; }
-        }
-        people.push(...list);
+          } else if (!diagnostics.presence_error) {
+            diagnostics.presence_error = pb?.error?.message ?? `HTTP ${pr.status}`;
+          }
+        } catch (e: any) { if (!diagnostics.presence_error) diagnostics.presence_error = e?.message; }
       }
+      people.push(...list);
     } catch (e: any) { diagnostics.people_error = e?.message; }
 
     return j({ connected: true, chats, teams, people, diagnostics });

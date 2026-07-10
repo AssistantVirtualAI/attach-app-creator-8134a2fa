@@ -72,7 +72,7 @@ export default function MMessages() {
             { k: "sms" as SubTab, label: t("messages.tabs.sms"), Icon: MessageSquare },
             { k: "team" as SubTab, label: t("messages.tabs.team"), Icon: UsersRound },
             { k: "teams365" as SubTab, label: "Teams", Icon: Users },
-            { k: "roster" as SubTab, label: t("messages.tabs.roster"), Icon: Contact },
+            
             { k: "ava" as SubTab, label: t("messages.tabs.ava"), Icon: Bot },
             { k: "emails" as SubTab, label: t("messages.tabs.emails"), Icon: Mail },
           ].map((item) => {
@@ -108,7 +108,7 @@ export default function MMessages() {
         {sub === "sms" && <SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} />}
         {sub === "team" && <TeamChat profile={profile} />}
         {sub === "teams365" && <Teams365Panel profile={profile} />}
-        {sub === "roster" && <TeamRoster profile={profile} openDialer={openDialer} onSwitchTab={setSub} />}
+        
         {sub === "ava" && <AvaChat profile={profile} openAva={openAva} openDialer={openDialer} />}
         {sub === "emails" && <EmailsList profile={profile} openAva={openAva} />}
       </div>
@@ -152,17 +152,35 @@ type NsMessage = {
   read_at?: string | null;
 };
 
-const threadId = (t: NsThread) => t.id ?? t.messagesession_id ?? t.session_id ?? t.destination ?? "";
-const threadPeer = (t: NsThread) => t.destination ?? t.remote_party ?? t.contact ?? threadId(t);
-const threadTime = (t: NsThread) => t.last_message_at ?? t.updated_at ?? t.timestamp ?? new Date().toISOString();
-const msgId = (m: NsMessage, i: number) => m.id ?? m.message_id ?? `${m.timestamp ?? m.created_at ?? i}-${i}`;
-const msgBody = (m: NsMessage) => m.body ?? m.message ?? m.text ?? "";
-const msgTime = (m: NsMessage) => m.timestamp ?? m.created_at ?? m.sent_at ?? new Date().toISOString();
-const msgIsOut = (m: NsMessage, myExt: string) => {
+const threadId = (t: any) =>
+  t.id ?? t.messagesession_id ?? t["messagesession-id"] ?? t.session_id ?? t.destination ?? t.phonenumber ?? t.remote_party ?? "";
+const threadPeer = (t: any) => {
+  const raw = t.destination ?? t.remote_party ?? t.contact ?? t.phonenumber ?? t.phone_number ?? t.caller_id ?? t.from ?? t.to ?? t.participant ??
+    t["messagesession-remote"] ?? t["messagesession-remote-party"] ??
+    (Array.isArray(t.participants) && t.participants[0]?.destination) ??
+    (Array.isArray(t.session_participants) && t.session_participants[0]?.destination) ??
+    "";
+  return raw ? String(raw) : "";
+};
+const threadTime = (t: any) =>
+  t.last_message_at ?? t.updated_at ?? t.timestamp ?? t["messagesession-last-datetime"] ?? t["messagesession-start-datetime"] ?? new Date().toISOString();
+const msgId = (m: any, i: number) => m.id ?? m.message_id ?? m["message-id"] ?? `${m.timestamp ?? m.created_at ?? i}-${i}`;
+const msgBody = (m: any) => m.body ?? m.message ?? m.text ?? m["message-text"] ?? "";
+const msgTime = (m: any) => {
+  const raw = m.timestamp ?? m.created_at ?? m.sent_at ?? m["message-datetime"];
+  if (!raw) return new Date().toISOString();
+  // NS-API returns "YYYY-MM-DD HH:MM:SS" (UTC) — normalize to ISO
+  if (typeof raw === "string" && !raw.includes("T")) return raw.replace(" ", "T") + "Z";
+  return raw;
+};
+const msgIsOut = (m: any, myExt: string) => {
   const dir = (m.direction ?? "").toLowerCase();
-  if (dir === "outbound" || dir === "out" || dir === "sent") return true;
-  if (dir === "inbound" || dir === "in" || dir === "received") return false;
-  return (m.from ?? m.source ?? "") === myExt;
+  // NS-API: "orig" = originating (outbound from user), "term" = terminating (inbound to user)
+  if (dir === "outbound" || dir === "out" || dir === "sent" || dir === "orig") return true;
+  if (dir === "inbound" || dir === "in" || dir === "received" || dir === "term") return false;
+  const from = m.from ?? m.source ?? m["from-user-id"] ?? m["from-number"] ?? "";
+  const fromStr = String(from);
+  return fromStr === myExt || fromStr.startsWith(`${myExt}@`);
 };
 
 function SmsList({ profile, openDialer, registerRefresh }: any) {
@@ -259,7 +277,7 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
             const id = threadId(th);
             const peer = threadPeer(th);
             const unread = th.unread ?? th.unread_count ?? 0;
-            const preview = th.last_message ?? th.preview ?? "";
+            const preview = (th as any).last_message ?? (th as any).preview ?? (th as any)["messagesession-last-message"] ?? (th as any).last_message_text ?? (th as any).body ?? (th as any).message ?? (th as any).snippet ?? "";
             return (
               <ThreadRow
                 key={`${id || "noid"}-${peer || "nopeer"}-${index}`}

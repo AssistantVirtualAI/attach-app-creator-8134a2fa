@@ -285,7 +285,7 @@ export default function PARecordings() {
       }
       if (d?.success) {
         toast.success(`Coaching généré (score ${d.score ?? "—"}/100)`);
-        setDetail((c: any) => c && c.id === callId ? { ...c, ai_summary: d.summary, ai_coaching: d.coaching, transcript: d.corrected_transcript ?? c.transcript, lead_score: d.score } : c);
+        setDetail((c: any) => c && c.id === callId ? { ...c, ai_summary: d.summary, ai_coaching: d.coaching, raw_transcript: c.raw_transcript ?? c.transcript, transcript: d.corrected_transcript ?? c.transcript, lead_score: d.score } : c);
         setCoachStatus((s) => ({ ...s, [callId]: "done" }));
       }
     } catch (e: any) {

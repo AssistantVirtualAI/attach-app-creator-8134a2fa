@@ -240,6 +240,17 @@ export default function SettingsScreen({
 
       {/* Network — auto Wi-Fi / LTE handover */}
       <SectionTitle eyebrow="NET" title={t('settings.network')} />
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '0 0 8px' }}>
+        <Chip tone={netConnected ? (netType === 'wifi' ? 'cyan' : 'gold') : 'red' as any}>
+          {!netConnected ? (lang==='fr'?'Hors ligne':'Offline') : netType === 'wifi' ? 'Wi-Fi' : netType === 'cellular' ? 'LTE / Cellular' : netType.toUpperCase()}
+        </Chip>
+        <Chip tone={autoHandover ? 'cyan' : 'gold' as any}>
+          {autoHandover ? (lang==='fr'?'Basculement auto ON':'Auto handover ON') : (lang==='fr'?'Basculement auto OFF':'Auto handover OFF')}
+        </Chip>
+        <Chip tone={preferWifi ? 'cyan' : 'gold' as any}>
+          {preferWifi ? (lang==='fr'?'Préf. Wi-Fi':'Prefer Wi-Fi') : (lang==='fr'?'Préf. LTE':'Prefer LTE')}
+        </Chip>
+      </div>
       <Card padded={false}>
         <SettingsRow
           label={t('settings.autoHandover')} icon="🔀"

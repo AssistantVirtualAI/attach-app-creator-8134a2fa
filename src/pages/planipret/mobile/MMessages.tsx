@@ -120,6 +120,7 @@ export default function MMessages() {
 // SMS TAB — branché sur Edge Function pp-ns-sms (NS-API v2)
 // ============================================================
 type NsThread = {
+  // legacy / normalized fields
   id?: string;
   messagesession_id?: string;
   session_id?: string;
@@ -133,6 +134,8 @@ type NsThread = {
   last_message_at?: string;
   updated_at?: string;
   timestamp?: string;
+  // NS raw payload uses hyphenated keys — accessed via bracket notation
+  [key: string]: any;
 };
 
 type NsMessage = {
@@ -150,14 +153,51 @@ type NsMessage = {
   created_at?: string;
   sent_at?: string;
   read_at?: string | null;
+  [key: string]: any;
 };
 
-const threadId = (t: NsThread) => t.id ?? t.messagesession_id ?? t.session_id ?? t.destination ?? "";
-const threadPeer = (t: NsThread) => t.destination ?? t.remote_party ?? t.contact ?? threadId(t);
-const threadTime = (t: NsThread) => t.last_message_at ?? t.updated_at ?? t.timestamp ?? new Date().toISOString();
+const pick = (t: any, ...keys: string[]) => {
+  for (const k of keys) {
+    const v = t?.[k];
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return undefined;
+};
+
+const threadId = (t: NsThread) =>
+  String(pick(t, "id", "messagesession-id", "messagesession_id", "session_id", "destination", "messagesession-remote") ?? "");
+
+const threadPeer = (t: NsThread) => {
+  const raw = pick(t, "destination", "remote_party", "contact", "messagesession-remote");
+  if (raw === undefined || raw === null || raw === "") return threadId(t);
+  const s = String(raw).trim();
+  // NS sends numeric E164 like 15149522685 → normalize to +15149522685
+  if (/^\d{10,15}$/.test(s)) return `+${s}`;
+  return s;
+};
+
+const threadTime = (t: NsThread) =>
+  String(pick(t, "last_message_at", "messagesession-last-datetime", "updated_at", "timestamp") ?? new Date().toISOString());
+
+const threadPreview = (t: NsThread) =>
+  String(pick(t, "preview", "last_message", "messagesession-last-message") ?? "");
+
+const threadUnread = (t: NsThread) => {
+  const n = pick(t, "unread", "unread_count");
+  if (typeof n === "number") return n;
+  // NS: status "read" = 0 unread; otherwise if last sender != me, count as 1
+  const status = String(pick(t, "messagesession-last-status") ?? "").toLowerCase();
+  if (status === "read") return 0;
+  const sender = String(pick(t, "messagesession-last-sender") ?? "");
+  const me = String(pick(t, "user") ?? "");
+  if (sender && me && !sender.startsWith(me + "@") && !sender.startsWith(me)) return 1;
+  return 0;
+};
+
 const msgId = (m: NsMessage, i: number) => m.id ?? m.message_id ?? `${m.timestamp ?? m.created_at ?? i}-${i}`;
-const msgBody = (m: NsMessage) => m.body ?? m.message ?? m.text ?? "";
-const msgTime = (m: NsMessage) => m.timestamp ?? m.created_at ?? m.sent_at ?? new Date().toISOString();
+const msgBody = (m: NsMessage) => m.body ?? m.message ?? m.text ?? (m as any)["message-text"] ?? "";
+const msgTime = (m: NsMessage) => m.timestamp ?? m.created_at ?? m.sent_at ?? (m as any)["message-datetime"] ?? new Date().toISOString();
+
 const msgIsOut = (m: NsMessage, myExt: string) => {
   const dir = (m.direction ?? "").toLowerCase();
   if (dir === "outbound" || dir === "out" || dir === "sent") return true;

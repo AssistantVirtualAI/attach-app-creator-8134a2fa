@@ -364,6 +364,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                         );
                       })}
                     </ul>
+                    </>
                   )}
                 </div>
               </div>

@@ -336,7 +336,8 @@ export default function MAvaChat() {
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 p-3 flex items-end gap-2 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.82)", borderTop: "1px solid var(--pp-bg-border)" }}>
+      <div className="sticky bottom-0 z-10 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.82)", borderTop: "1px solid var(--pp-bg-border)" }}>
+       <div className="p-3 flex items-end gap-2 max-w-3xl w-full mx-auto">
         <Button
           onClick={recording ? stopRec : startRec}
           disabled={busy || transcribing || !userId}

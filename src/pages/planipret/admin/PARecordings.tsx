@@ -646,11 +646,13 @@ export default function PARecordings() {
                 );
               })()}
 
-              {hasDetailTranscript && detail.ai_coaching ? (
+              {hasDetailTranscript ? (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <p style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Transcription corrigée (Claude)</p>
-                    <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: "rgba(16,185,129,0.14)", color: "#10b981", border: "1px solid #10b98155", fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>● Terminé</span>
+                    <p style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Transcription de l'appel</p>
+                    {detail.ai_coaching && (
+                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: "rgba(16,185,129,0.14)", color: "#10b981", border: "1px solid #10b98155", fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>● Analysé</span>
+                    )}
                   </div>
                   {detailSegments.length > 0 ? (
                     <div className="space-y-2">
@@ -675,11 +677,20 @@ export default function PARecordings() {
                     </div>
                   ) : (
                     <div className="p-3 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
-                      <div className="whitespace-pre-wrap">{detail.transcript}</div>
+                      <div className="whitespace-pre-wrap">{detail.raw_transcript || detail.transcript}</div>
                     </div>
+                  )}
+                  {detail.ai_coaching && detail.transcript && detail.raw_transcript && detail.transcript !== detail.raw_transcript && (
+                    <details className="mt-2">
+                      <summary style={{ fontSize: 11, color: "var(--pp-text-muted)", cursor: "pointer", padding: "6px 0" }}>Version corrigée par Claude</summary>
+                      <div className="p-3 rounded-lg mt-1" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
+                        <div className="whitespace-pre-wrap">{detail.transcript}</div>
+                      </div>
+                    </details>
                   )}
                 </div>
               ) : (hasDetailTranscript && !detail.ai_coaching) || coaching === detail.id ? (
+
                 (() => {
                   const st = coachStatus[detail.id] ?? "queued";
                   const label = st === "queued" ? "En attente" : st === "running" ? "En cours" : st === "error" ? "Erreur" : "Terminé";

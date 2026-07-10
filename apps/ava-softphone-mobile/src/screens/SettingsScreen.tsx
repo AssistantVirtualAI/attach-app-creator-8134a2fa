@@ -9,6 +9,9 @@ import { getAnnounceConsent, setAnnounceConsent } from '../lib/recordingConsent'
 import { useTheme } from '../lib/ThemeContext';
 import { useT } from '../lib/i18n';
 import type { Tab } from '../components/BottomTabs';
+import { setRoute as setAudioRoute, type AudioRoute } from '../lib/sip/audioOutput';
+import { audioPrefs, type NCMode } from '../lib/audioPrefs';
+import { toast } from '../lib/mobileToast';
 
 const PORTAL_URL = 'https://avastatistic.ca';
 

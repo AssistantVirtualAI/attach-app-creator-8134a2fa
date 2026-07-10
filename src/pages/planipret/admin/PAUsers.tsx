@@ -361,13 +361,8 @@ export default function PAUsers() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
   const toggleField = async (u: Profile, field: "mobile_app_enabled" | "voice_agent_enabled") => {
-    setSavingId(u.user_id);
     const next = !u[field];
-    if (!u.ns_only && !u.user_id) {
-      setSavingId(null);
-      toast.error("Ce courtier n'a pas encore de compte Planiprêt — activez-le via « Provisionner ».");
-      return;
-    }
+    setSavingId(u.user_id ?? `ext:${u.extension ?? u.ns_extension ?? ""}`);
 
     // ns_only broker → no Planiprêt profile yet. Provision one on the fly so
     // the toggle actually takes effect.

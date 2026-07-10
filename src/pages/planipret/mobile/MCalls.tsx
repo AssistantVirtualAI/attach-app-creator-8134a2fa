@@ -1923,6 +1923,37 @@ function VoicemailsTab({
 
   return (
     <div className="px-3 pt-3 pb-4">
+      {/* ElevenLabs Greeting Studio — text → voice → push to voicemail box */}
+      {profile && (
+        <div className="mb-3 rounded-2xl overflow-hidden"
+          style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
+          <button
+            onClick={() => setStudioOpen((v) => !v)}
+            className="w-full flex items-center gap-3 px-4 py-3 active:opacity-80"
+          >
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white"
+              style={{ background: "linear-gradient(135deg, #2D1A5A, #9B7FE8, #E84CC9)" }}>
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="flex-1 text-left">
+              <div className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>
+                Personnaliser ma boîte vocale
+              </div>
+              <div className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
+                Écrivez, choisissez une voix ElevenLabs, écoutez et publiez.
+              </div>
+            </div>
+            <div style={{ color: "var(--pp-text-muted)", fontSize: 18 }}>{studioOpen ? "−" : "+"}</div>
+          </button>
+          {studioOpen && (
+            <div style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+              <GreetingStudio profile={profile} onProfileChange={reloadProfile as any} />
+            </div>
+          )}
+        </div>
+      )}
+
+
       {/* Folder switch */}
       <div className="flex gap-1 mb-3 p-1 rounded-full"
         style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>

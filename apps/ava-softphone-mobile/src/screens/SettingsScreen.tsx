@@ -91,13 +91,24 @@ export default function SettingsScreen({
     setForwarding(v); setSheet(null);
     try { await mobileApi.setForwarding(v); toast(lang==='fr'?'Transfert activé':'Forwarding enabled', 'success'); } catch {}
   };
-  const toggleHaptics = () => { const next = !haptics; setHaptics(next); localStorage.setItem('ava.haptics', next ? 'on' : 'off'); };
-  const toggleAutoAnswer = () => { const next = !autoAnswer; setAutoAnswer(next); localStorage.setItem('ava.autoAnswer', next ? 'on' : 'off'); };
+  const applyPref = (key: string, next: boolean, apply: (v: boolean) => void, labelFr: string, labelEn: string) => {
+    try {
+      apply(next);
+      console.info('[Settings] pref changed', { key, next });
+      toast(`${lang==='fr'?labelFr:labelEn} — ${next ? (lang==='fr'?'activé':'on') : (lang==='fr'?'désactivé':'off')}`, 'success');
+    } catch (e) {
+      console.error('[Settings] pref failed', { key, next, error: e });
+      toast(lang==='fr'?'Échec de la sauvegarde':'Failed to save', 'error');
+    }
+  };
+  const toggleHaptics = () => { const n = !haptics; setHaptics(n); applyPref('haptics', n, (v)=>localStorage.setItem('ava.haptics', v?'on':'off'), 'Vibrations', 'Haptics'); };
+  const toggleAutoAnswer = () => { const n = !autoAnswer; setAutoAnswer(n); applyPref('autoAnswer', n, (v)=>localStorage.setItem('ava.autoAnswer', v?'on':'off'), 'Réponse auto', 'Auto answer'); };
 
   const pickRingtoneChoice = (choice: string) => {
     setRingtone(choice);
     localStorage.setItem('ava.ringtone', choice);
     setSheet(null);
+    console.info('[Settings] ringtone', choice);
     toast(lang==='fr'?'Sonnerie enregistrée':'Ringtone saved', 'success');
   };
   const pickAudioOutChoice = async (choice: AudioRoute | 'default') => {
@@ -105,7 +116,8 @@ export default function SettingsScreen({
     localStorage.setItem('ava.audioOut', choice);
     setSheet(null);
     if (choice !== 'default') {
-      try { await setAudioRoute(choice); } catch {}
+      try { await setAudioRoute(choice); console.info('[Settings] audio route set', choice); }
+      catch (e) { console.error('[Settings] setRoute failed', e); toast(lang==='fr'?'Échec sortie audio':'Audio route failed', 'error'); return; }
     }
     toast(lang==='fr'?'Sortie audio mise à jour':'Audio output updated', 'success');
   };
@@ -114,15 +126,17 @@ export default function SettingsScreen({
       .filter((k) => k.startsWith('ava.aisummary.') || k.startsWith('ava.cache.'))
       .forEach((k) => localStorage.removeItem(k));
     setSheet(null);
+    console.info('[Settings] cache cleared');
     toast(lang === 'fr' ? 'Cache vidé' : 'Cache cleared', 'success');
   };
   const openPortal = (path = '') => window.open(`${PORTAL_URL}${path}`, '_blank', 'noopener');
 
-  const toggleNc = () => { const n = !ncEnabled; setNcEnabled(n); audioPrefs.setNcEnabled(n); };
-  const changeNcMode = (m: NCMode) => { setNcMode(m); audioPrefs.setNcMode(m); };
-  const toggleAutoHandover = () => { const n = !autoHandover; setAutoHandover(n); audioPrefs.setAutoHandover(n); };
-  const togglePreferWifi = () => { const n = !preferWifi; setPreferWifi(n); audioPrefs.setPreferWifi(n); };
-  const toggleBgCalls = () => { const n = !bgCalls; setBgCalls(n); audioPrefs.setBackgroundCalls(n); };
+  const toggleNc = () => { const n = !ncEnabled; setNcEnabled(n); applyPref('nc', n, audioPrefs.setNcEnabled, 'Réduction de bruit', 'Noise cancellation'); };
+  const changeNcMode = (m: NCMode) => { setNcMode(m); audioPrefs.setNcMode(m); console.info('[Settings] nc mode', m); toast(lang==='fr'?`Mode ${m}`:`Mode ${m}`, 'success'); };
+  const toggleAutoHandover = () => { const n = !autoHandover; setAutoHandover(n); applyPref('autoHandover', n, audioPrefs.setAutoHandover, 'Basculement auto Wi-Fi/LTE', 'Auto Wi-Fi/LTE handover'); };
+  const togglePreferWifi = () => { const n = !preferWifi; setPreferWifi(n); applyPref('preferWifi', n, audioPrefs.setPreferWifi, 'Préférer le Wi-Fi', 'Prefer Wi-Fi'); };
+  const toggleBgCalls = () => { const n = !bgCalls; setBgCalls(n); applyPref('bgCalls', n, audioPrefs.setBackgroundCalls, 'Appels en arrière-plan', 'Background calls'); };
+
 
 
 
@@ -226,6 +240,17 @@ export default function SettingsScreen({
 
       {/* Network — auto Wi-Fi / LTE handover */}
       <SectionTitle eyebrow="NET" title={t('settings.network')} />
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '0 0 8px' }}>
+        <Chip tone={netConnected ? (netType === 'wifi' ? 'cyan' : 'gold') : 'red' as any}>
+          {!netConnected ? (lang==='fr'?'Hors ligne':'Offline') : netType === 'wifi' ? 'Wi-Fi' : netType === 'cellular' ? 'LTE / Cellular' : netType.toUpperCase()}
+        </Chip>
+        <Chip tone={autoHandover ? 'cyan' : 'gold' as any}>
+          {autoHandover ? (lang==='fr'?'Basculement auto ON':'Auto handover ON') : (lang==='fr'?'Basculement auto OFF':'Auto handover OFF')}
+        </Chip>
+        <Chip tone={preferWifi ? 'cyan' : 'gold' as any}>
+          {preferWifi ? (lang==='fr'?'Préf. Wi-Fi':'Prefer Wi-Fi') : (lang==='fr'?'Préf. LTE':'Prefer LTE')}
+        </Chip>
+      </div>
       <Card padded={false}>
         <SettingsRow
           label={t('settings.autoHandover')} icon="🔀"

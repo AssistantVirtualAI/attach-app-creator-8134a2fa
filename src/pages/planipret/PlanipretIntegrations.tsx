@@ -88,9 +88,20 @@ export default function PlanipretIntegrations() {
     }
   }
 
+  async function autosync(runTests = false) {
+    const { data, error } = await supabase.functions.invoke("pp-integration-autosync", { body: { run_tests: runTests } });
+    if (error) { toast.error("Auto-sync: " + error.message); return; }
+    const configured = ((data as any)?.detected ?? []).filter((d: any) => d.is_configured).length;
+    toast.success(`Auto-sync · ${configured} intégration(s) configurée(s)${runTests ? " · testées" : ""}`);
+    refresh();
+  }
+
   useEffect(() => {
     refresh();
     refreshBackendSecrets();
+    // Auto-sync on mount so is_configured reflects env secrets even if no admin
+    // ever pressed Save (e.g. NS_API_KEY set at project setup).
+    supabase.functions.invoke("pp-integration-autosync", { body: {} }).then(() => refresh()).catch(() => {});
     const channel = supabase
       .channel("pp-integration-config")
       .on("postgres_changes",

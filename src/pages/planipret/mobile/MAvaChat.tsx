@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { toast } from "sonner";
 import { Send, Plus, Menu, Loader2, Sparkles, Mic, Square, Volume2, VolumeX, CheckCircle2, MessageSquare, Radio } from "lucide-react";
 import AvaVoiceAgent from "@/components/planipret/mobile/AvaVoiceAgent";
+import AvaOrb from "@/components/planipret/mobile/AvaOrb";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 
@@ -219,11 +220,11 @@ export default function MAvaChat() {
   }
 
   return (
-    <div className="flex flex-col min-h-full">
-      <div className="sticky top-0 z-10 flex items-center gap-2 p-3 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.55)", borderBottom: "1px solid var(--pp-bg-border)" }}>
+    <div className="flex flex-col min-h-full" style={{ background: "var(--pp-bg-base)" }}>
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2.5 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 78%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>
         <Sheet>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon"><Menu className="w-5 h-5" /></Button>
+            <Button variant="ghost" size="icon" className="rounded-full"><Menu className="w-5 h-5" /></Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-80">
             <SheetHeader><SheetTitle>Conversations AVA</SheetTitle></SheetHeader>
@@ -241,38 +242,61 @@ export default function MAvaChat() {
             </div>
           </SheetContent>
         </Sheet>
-        <Sparkles className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} />
-        <div className="font-medium truncate flex-1" style={{ color: "var(--pp-text-primary)" }}>{currentTitle}</div>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="relative w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: "conic-gradient(from 0deg, #7C3AED, #2E9BDC, #00D4AA, #7C3AED)", padding: 2 }}>
+            <div className="w-full h-full rounded-full flex items-center justify-center overflow-hidden" style={{ background: "var(--pp-bg-surface)" }}>
+              <img src={avaLogo.url} alt="AVA" className="w-full h-full object-contain p-0.5" />
+            </div>
+          </div>
+          <div className="flex flex-col min-w-0">
+            <div className="font-semibold truncate leading-tight" style={{ color: "var(--pp-text-primary)", fontFamily: "Urbanist,sans-serif" }}>{currentTitle}</div>
+            <div className="text-[10px] leading-tight" style={{ color: "var(--pp-text-muted)", letterSpacing: "0.08em" }}>Assistant Planiprêt</div>
+          </div>
+        </div>
         {voiceAgentAllowed && (
-          <div className="flex rounded-full overflow-hidden" style={{ border: "1px solid var(--pp-bg-border-2)" }}>
-            <button
-              onClick={() => switchMode("chat")}
-              className="px-2 py-1 text-xs flex items-center gap-1"
-              style={{ background: mode === "chat" ? "var(--pp-brand-accent)" : "transparent", color: mode === "chat" ? "#03131A" : "var(--pp-text-secondary)" }}
-              title="Mode Chat"
-            ><MessageSquare className="w-3 h-3" /> Chat</button>
-            <button
-              onClick={() => switchMode("voice")}
-              className="px-2 py-1 text-xs flex items-center gap-1"
-              style={{ background: mode === "voice" ? "var(--pp-brand-accent)" : "transparent", color: mode === "voice" ? "#03131A" : "var(--pp-text-secondary)" }}
-              title="Mode Vocal"
-            ><Radio className="w-3 h-3" /> Vocal</button>
+          <div className="relative flex rounded-full p-0.5" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+            <div
+              className="absolute top-0.5 bottom-0.5 rounded-full transition-all duration-300 ease-out"
+              style={{ width: "calc(50% - 2px)", left: mode === "chat" ? 2 : "calc(50%)", background: "linear-gradient(135deg,#2E9BDC,#7C3AED)", boxShadow: "0 4px 12px rgba(124,58,237,0.35)" }}
+            />
+            <button onClick={() => switchMode("chat")} className="relative z-10 px-3 py-1 text-[11px] flex items-center gap-1 rounded-full transition-colors" style={{ color: mode === "chat" ? "#fff" : "var(--pp-text-secondary)", fontWeight: 600 }}>
+              <MessageSquare className="w-3 h-3" /> Chat
+            </button>
+            <button onClick={() => switchMode("voice")} className="relative z-10 px-3 py-1 text-[11px] flex items-center gap-1 rounded-full transition-colors" style={{ color: mode === "voice" ? "#fff" : "var(--pp-text-secondary)", fontWeight: 600 }}>
+              <Radio className="w-3 h-3" /> Vocal
+            </button>
           </div>
         )}
-        <Button size="icon" variant="ghost" onClick={toggleTts} title={speakReplies ? "Voix activée" : "Voix désactivée"}>
+        <Button size="icon" variant="ghost" className="rounded-full" onClick={toggleTts} title={speakReplies ? "Voix activée" : "Voix désactivée"}>
           {speakReplies ? <Volume2 className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} /> : <VolumeX className="w-5 h-5" />}
         </Button>
-        <Button size="icon" variant="ghost" onClick={startNew}><Plus className="w-5 h-5" /></Button>
+        <Button size="icon" variant="ghost" className="rounded-full" onClick={startNew}><Plus className="w-5 h-5" /></Button>
       </div>
+
 
 
       <div className="flex-1 min-h-0 overflow-hidden">
         <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-4 pb-6 space-y-4 max-w-3xl w-full mx-auto">
           {messages.length === 0 && (
-            <div className="text-center text-sm py-10" style={{ color: "var(--pp-text-muted)" }}>
-              Pose ta question à AVA. Elle a accès à tes leads, appels et courriels.
+            <div className="flex flex-col items-center justify-center py-14 gap-4 text-center">
+              <AvaOrb state="idle" size={140} />
+              <div className="space-y-1">
+                <div className="text-[16px] font-semibold" style={{ color: "var(--pp-text-primary)", fontFamily: "Urbanist,sans-serif" }}>Bonjour, je suis AVA</div>
+                <div className="text-[12px] max-w-xs" style={{ color: "var(--pp-text-muted)" }}>J'ai accès à tes leads, appels, courriels et calendrier Microsoft.</div>
+              </div>
+              <div className="flex flex-wrap justify-center gap-1.5 max-w-md">
+                {["Résumé de ma journée", "Prochains rendez-vous", "Leads chauds à rappeler"].map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => { setInput(q); setTimeout(() => send(), 50); }}
+                    className="text-[11px] px-3 py-1.5 rounded-full transition hover:-translate-y-0.5"
+                    style={{ background: "color-mix(in srgb, var(--pp-agent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--pp-agent) 30%, transparent)", color: "var(--pp-agent)", backdropFilter: "blur(8px)" }}
+                  >{q}</button>
+                ))}
+              </div>
             </div>
           )}
+
           {messages.map((m) => {
             const cleaned = m.role === "assistant" ? cleanReply(m.message) : m.message;
             return (
@@ -316,12 +340,13 @@ export default function MAvaChat() {
                   </div>
                 ) : (
                   <div
-                    className="max-w-[85%] rounded-2xl rounded-tr-md px-4 py-2.5 text-[14px] whitespace-pre-wrap break-words shadow-sm"
-                    style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-success))", color: "var(--pp-bg-deep)", fontWeight: 650 }}
+                    className="max-w-[85%] rounded-2xl px-4 py-2.5 text-[14px] whitespace-pre-wrap break-words"
+                    style={{ background: "linear-gradient(135deg, #2E9BDC 0%, #7C3AED 100%)", color: "#ffffff", fontWeight: 500, borderRadius: "20px 20px 6px 20px", boxShadow: "0 8px 24px rgba(124,58,237,0.28)" }}
                   >
                     {m.message}
                   </div>
                 )}
+
               </div>
             );
           })}
@@ -336,18 +361,18 @@ export default function MAvaChat() {
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.82)", borderTop: "1px solid var(--pp-bg-border)" }}>
-       <div className="p-3 flex items-end gap-2 max-w-3xl w-full mx-auto">
-        <Button
+      <div className="sticky bottom-0 z-10 backdrop-blur-xl px-3 pb-3 pt-2" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 70%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
+       <div className="flex items-end gap-2 max-w-3xl w-full mx-auto rounded-full pl-2 pr-1.5 py-1.5" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", boxShadow: "0 10px 30px -10px rgba(124,58,237,0.25)" }}>
+        <button
           onClick={recording ? stopRec : startRec}
           disabled={busy || transcribing || !userId}
-          size="icon"
-          variant={recording ? "destructive" : "outline"}
+          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 disabled:opacity-50 transition-transform active:scale-95"
+          style={{ background: recording ? "linear-gradient(135deg,#E84C4C,#F5A623)" : "color-mix(in srgb, var(--pp-agent) 12%, transparent)", color: recording ? "#fff" : "var(--pp-agent)" }}
           title={recording ? "Arrêter" : "Dicter"}
           aria-label={recording ? "Arrêter la dictée" : "Dicter à AVA"}
         >
           {transcribing ? <Loader2 className="w-4 h-4 animate-spin" /> : recording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-        </Button>
+        </button>
         <textarea
           ref={inputRef}
           placeholder={recording ? "Enregistrement…" : "Message à AVA…"}
@@ -356,14 +381,21 @@ export default function MAvaChat() {
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           disabled={busy || !userId || recording}
           rows={1}
-          className="flex-1 min-h-[44px] max-h-28 resize-none rounded-2xl px-3.5 py-3 text-[14px] outline-none disabled:opacity-60"
-          style={{ color: "var(--pp-text-primary)", caretColor: "var(--pp-brand-accent)", background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}
+          className="flex-1 min-h-[36px] max-h-28 resize-none bg-transparent px-2 py-2 text-[14px] outline-none disabled:opacity-60 placeholder:opacity-60"
+          style={{ color: "var(--pp-text-primary)", caretColor: "var(--pp-agent)" }}
         />
-        <Button onClick={send} disabled={busy || !input.trim()} size="icon" aria-label="Envoyer à AVA">
+        <button
+          onClick={send}
+          disabled={busy || !input.trim()}
+          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white disabled:opacity-40 transition-transform active:scale-95"
+          style={{ background: "linear-gradient(135deg,#2E9BDC,#7C3AED)", boxShadow: "0 6px 18px rgba(124,58,237,0.45)" }}
+          aria-label="Envoyer à AVA"
+        >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-        </Button>
+        </button>
       </div>
       </div>
+
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { X, Mic, Send, Settings, AlertTriangle, Sparkles, PhoneOutgoing, MessageSquare, Search, Calendar, Mail, Bot, Map } from "lucide-react";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
+import AvaOrb, { useAnalyserLevel } from "@/components/planipret/mobile/AvaOrb";
 
 type AgentState = "idle" | "connecting" | "listening" | "speaking" | "processing" | "tool_running" | "error";
 type AutonomyMode = "confirm" | "semi_auto" | "full_auto";
@@ -399,8 +400,8 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
         </div>
       )}
 
-      {/* Center visualization */}
-      <div className="flex-1 min-h-0 flex flex-col items-center px-4 pt-8 pb-3">
+      {/* Center visualization — AVA orb */}
+      <div className="flex-1 min-h-0 flex flex-col items-center px-4 pt-6 pb-3">
         {micError ? (
           <div className="bg-white rounded-2xl p-5 text-center max-w-xs">
             <AlertTriangle className="w-8 h-8 mx-auto text-amber-500 mb-2" />
@@ -408,53 +409,9 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
             <p className="text-xs text-slate-600 mt-1">Autorisez le microphone dans les paramètres du navigateur.</p>
           </div>
         ) : (
-          <div className="relative shrink-0" style={{ width: 168, height: 168 }}>
-            {state === "listening" && (
-              <>
-                <div className="absolute inset-0 rounded-full animate-pulse" style={{ background: "rgba(46,155,220,0.1)" }} />
-                <div className="absolute inset-3 rounded-full animate-pulse" style={{ background: "rgba(46,155,220,0.2)", animationDelay: "0.3s" }} />
-                <div className="absolute inset-6 rounded-full animate-pulse" style={{ background: "rgba(46,155,220,0.4)", animationDelay: "0.6s" }} />
-                <div className="absolute inset-0 flex items-end justify-center gap-1 px-10 pb-12 pointer-events-none">
-                  {micLevels.map((h, i) => (
-                    <div key={i} className="w-1.5 rounded-full transition-all duration-75"
-                      style={{ background: "linear-gradient(180deg,#7FD8FF,#2E9BDC)", height: `${h}%` }} />
-                  ))}
-                </div>
-              </>
-            )}
-            {state === "speaking" && (
-              <div className="absolute inset-0 rounded-full flex items-center justify-center gap-1" style={{ border: "2px solid #00D4AA" }}>
-                {Array.from({ length: 7 }).map((_, i) => (
-                  <div key={i} className="w-1.5 rounded-full animate-pulse"
-                    style={{ background: "linear-gradient(180deg,#00D4AA,#00A88A)", height: `${20 + Math.random() * 60}%`, animationDelay: `${i * 80}ms` }} />
-                ))}
-              </div>
-            )}
-            {state === "processing" && (
-              <div className="absolute inset-0 rounded-full animate-spin" style={{ borderTop: "3px solid #9B7FE8", borderRight: "3px solid transparent", borderBottom: "3px solid transparent", borderLeft: "3px solid transparent" }} />
-            )}
-            {state === "tool_running" && ToolIcon && (
-              <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ border: "2px solid #9B7FE8" }}>
-                <ToolIcon className="w-12 h-12" style={{ color: "#9B7FE8" }} />
-              </div>
-            )}
-            {state === "error" && (
-              <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ border: "2px solid #EF4444" }}>
-                <AlertTriangle className="w-12 h-12 text-red-500" />
-              </div>
-            )}
-            {(state === "idle" || state === "connecting") && (
-              <div className="absolute inset-0 rounded-full flex items-center justify-center" style={{ border: "2px solid #1A2A3A" }}>
-                <Bot className="w-12 h-12" style={{ color: "#4A7FA5" }} />
-              </div>
-            )}
-            {state === "listening" && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Mic className="w-12 h-12 text-white" />
-              </div>
-            )}
-          </div>
+          <VoiceOrb state={state} analyser={analyserRef.current} />
         )}
+
 
         {/* Live transcript */}
         <div
@@ -568,3 +525,18 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
     </div>
   );
 }
+
+function VoiceOrb({ state, analyser }: { state: AgentState; analyser: AnalyserNode | null }) {
+  const level = useAnalyserLevel(analyser, state === "listening");
+  const orbState: "idle" | "connecting" | "listening" | "speaking" | "processing" | "error" =
+    state === "tool_running" ? "processing" : state;
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <AvaOrb state={orbState} level={level} size={260} />
+      <div className="text-[15px] font-semibold tracking-wide" style={{ color: "#E8EDF5", fontFamily: "Urbanist,sans-serif" }}>
+        {state === "speaking" ? "AVA parle…" : state === "listening" ? "Je vous écoute…" : state === "processing" ? "Réflexion…" : state === "tool_running" ? "Exécution…" : state === "connecting" ? "Connexion…" : state === "error" ? "Erreur" : "Prête"}
+      </div>
+    </div>
+  );
+}
+

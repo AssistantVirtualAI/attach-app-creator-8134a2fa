@@ -152,8 +152,12 @@ type NsMessage = {
   read_at?: string | null;
 };
 
-const threadId = (t: NsThread) => t.id ?? t.messagesession_id ?? t.session_id ?? t.destination ?? "";
-const threadPeer = (t: NsThread) => t.destination ?? t.remote_party ?? t.contact ?? threadId(t);
+const threadId = (t: any) => t.id ?? t.messagesession_id ?? t.session_id ?? t.destination ?? t.phonenumber ?? t.remote_party ?? "";
+const threadPeer = (t: any) =>
+  t.destination ?? t.remote_party ?? t.contact ?? t.phonenumber ?? t.phone_number ?? t.caller_id ?? t.from ?? t.to ?? t.participant ??
+  (Array.isArray(t.participants) && t.participants[0]?.destination) ??
+  (Array.isArray(t.session_participants) && t.session_participants[0]?.destination) ??
+  threadId(t);
 const threadTime = (t: NsThread) => t.last_message_at ?? t.updated_at ?? t.timestamp ?? new Date().toISOString();
 const msgId = (m: NsMessage, i: number) => m.id ?? m.message_id ?? `${m.timestamp ?? m.created_at ?? i}-${i}`;
 const msgBody = (m: NsMessage) => m.body ?? m.message ?? m.text ?? "";

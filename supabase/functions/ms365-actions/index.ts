@@ -117,6 +117,27 @@ Deno.serve(async (req) => {
         const d = await r.json();
         return j({ success: r.ok, events: d.value ?? [], error: d?.error?.message, details: d?.error, code: r.status }, r.ok ? 200 : 500);
       }
+      case "update_calendar_event": {
+        const id = String(payload.event_id ?? "");
+        if (!id) return j({ success: false, error: "event_id requis" }, 400);
+        const patch: Record<string, unknown> = {};
+        if (payload.subject) patch.subject = payload.subject;
+        if (payload.start) patch.start = payload.start;
+        if (payload.end) patch.end = payload.end;
+        if (payload.body) patch.body = { contentType: "HTML", content: payload.body };
+        if (payload.location) patch.location = { displayName: String(payload.location) };
+        if (Array.isArray(payload.attendees)) patch.attendees = payload.attendees.map((e: string) => ({ emailAddress: { address: e }, type: "required" }));
+        const r = await graph(admin, profile, `/me/events/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) });
+        const d = await r.json().catch(() => ({}));
+        return j({ success: r.ok, event: d, error: d?.error?.message, code: r.status }, r.ok ? 200 : 500);
+      }
+      case "delete_calendar_event": {
+        const id = String(payload.event_id ?? "");
+        if (!id) return j({ success: false, error: "event_id requis" }, 400);
+        const r = await graph(admin, profile, `/me/events/${encodeURIComponent(id)}`, { method: "DELETE" });
+        const txt = await r.text().catch(() => "");
+        return j({ success: r.ok, error: r.ok ? null : txt, code: r.status }, r.ok ? 200 : 500);
+      }
       case "reply_teams_message":
       case "send_teams_message": {
         const chatId = payload.chat_id;

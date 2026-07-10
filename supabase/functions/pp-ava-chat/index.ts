@@ -27,8 +27,8 @@ const OutputSchema = z.object({
   openVoice: z.boolean().optional(),
 });
 
-const MUTATING_MS365 = new Set(["send_email", "create_calendar_event", "send_teams_message", "reply_teams_message"]);
-const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "send_teams_message", "reply_teams_message"]);
+const MUTATING_MS365 = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message"]);
+const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message"]);
 
 async function invokeFunction(name: string, authHeader: string, body: Record<string, unknown>) {
   const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${name}`, {
@@ -261,8 +261,12 @@ SMS non lus: ${smsUnread ?? 0}`;
  IMPORTANT: quand des données sont fournies dans [Contexte] ci-dessous, utilise-les pour répondre concrètement. Ne dis JAMAIS que tu n'as pas d'intégration ou d'accès — tu peux consulter appels, SMS, courriels, calendrier et pipeline. Si aucune donnée n'apparaît dans le contexte pour la question posée, dis simplement qu'il n'y a rien à afficher pour cette période.
  Réponds en français, court et actionnable. Tu peux proposer jusqu'à 4 suggestions (kind: call/sms/email/reminder/maestro_action/ms365_action/open_voice/open_coach).
  Pour 'call' mets payload.number. Pour 'sms' mets payload.number et payload.message. Pour 'email' préfère ms365_action avec payload.action='send_email'. Pour 'reminder' payload.title/due_at. Pour 'maestro_action' payload.action et payload.* requis.
- Pour Microsoft utilise kind='ms365_action' et payload.action parmi: read_emails, read_email_detail, list_calendar_events, send_email, create_calendar_event, send_teams_message, reply_teams_message.
- Les actions qui envoient/modifient (send_email, create_calendar_event, send_teams_message, reply_teams_message, sms, call) exigent une confirmation utilisateur: propose une suggestion claire, ne prétends pas l'avoir exécutée.
+ Pour Microsoft utilise kind='ms365_action' et payload.action parmi: read_emails, read_email_detail, list_calendar_events, send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message.
+ Pour créer un rendez-vous: payload.action='create_calendar_event' avec subject, start:{dateTime,timeZone}, end:{dateTime,timeZone}, attendees (array d'emails), isOnlineMeeting (défaut true = lien Teams auto).
+ Pour reprogrammer/modifier un rendez-vous: payload.action='update_calendar_event' avec event_id + champs à changer (start/end/subject/location/attendees). Utilise d'abord list_calendar_events pour retrouver l'event_id.
+ Pour annuler/supprimer: payload.action='delete_calendar_event' avec event_id.
+ Quand l'utilisateur demande ses prochains rendez-vous ou une notification, appelle list_calendar_events et résume avec heure, sujet, participants et lien Teams si disponible.
+ Les actions qui envoient/modifient (send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message, sms, call) exigent une confirmation utilisateur: propose une suggestion claire, ne prétends pas l'avoir exécutée.
 Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. Mets openCoach=true si une action de coaching multi-étapes serait utile.`;
 
 

@@ -191,15 +191,57 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
       {/* Step 1 - Voice */}
       <div>
         <div className="text-[10px] uppercase tracking-widest mb-2 font-semibold" style={{ color: TOKENS.muted }}>{t("greeting.chooseVoice")}</div>
+
+        {/* Filters: category + gender */}
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {([
+            ["professional", "Pro"],
+            ["natural", t("greeting.natural")],
+            ["custom", t("greeting.custom")],
+            ["all", "Tous"],
+          ] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setCategoryFilter(k as any)}
+              className="text-[10px] px-2.5 py-1 rounded-full font-semibold transition"
+              style={categoryFilter === k
+                ? { background: TOKENS.borderActive, color: "white" }
+                : { background: TOKENS.card, color: TOKENS.muted, border: `1px solid ${TOKENS.border}` }}>
+              {label}
+            </button>
+          ))}
+          <span className="mx-1" style={{ color: TOKENS.border }}>·</span>
+          {([
+            ["all", "Tous"],
+            ["F", "👩 Femme"],
+            ["M", "👨 Homme"],
+          ] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setGenderFilter(k as any)}
+              className="text-[10px] px-2.5 py-1 rounded-full font-semibold transition"
+              style={genderFilter === k
+                ? { background: TOKENS.borderActive, color: "white" }
+                : { background: TOKENS.card, color: TOKENS.muted, border: `1px solid ${TOKENS.border}` }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
         {voicesError && <div className="text-[12px] p-3 rounded-xl" style={{ background: "rgba(239,68,68,0.1)", color: "#EF4444" }}>{t("greeting.voiceLoadFailed")} {voicesError}</div>}
         {!voices && !voicesError && (
           <div className="grid grid-cols-2 gap-2">
             {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-20 rounded-xl animate-pulse" style={{ background: TOKENS.card }} />)}
           </div>
         )}
-        {voices && (
+        {voices && (() => {
+          const filtered = voices.filter((v) => {
+            if (categoryFilter !== "all" && v.category !== categoryFilter) return false;
+            if (genderFilter !== "all" && v.gender !== genderFilter) return false;
+            return true;
+          });
+          if (filtered.length === 0) {
+            return <div className="text-[12px] p-3 rounded-xl text-center" style={{ background: TOKENS.card, color: TOKENS.muted, border: `1px solid ${TOKENS.border}` }}>Aucune voix ne correspond à ces filtres.</div>;
+          }
+          return (
           <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
-            {voices.map((v) => (
+            {filtered.map((v) => (
               <button key={v.voice_id} onClick={() => setSelectedVoice(v.voice_id)}
                 className="text-left p-3 rounded-xl transition"
                 style={{
@@ -232,7 +274,8 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
               </button>
             ))}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Step 2 - Text */}

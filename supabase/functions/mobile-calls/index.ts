@@ -144,8 +144,7 @@ Deno.serve(async (req) => {
       .select("id, pbx_uuid, organization_id, domain_uuid, direction, call_status, caller_name, caller_number, source_number, destination_number, extension, start_at, duration_seconds, missed_call, has_recording, transcribed")
       .eq("organization_id", sp.organization_id)
       .gte("start_at", since);
-    if (!isDomainAdmin) listQ = listQ.or(extFilter);
-    else if (extParam && extParam !== "all") listQ = listQ.or(`extension.eq.${extParam},caller_number.eq.${extParam},source_number.eq.${extParam},destination_number.eq.${extParam},destination.eq.${extParam}`);
+    listQ = listQ.or(extFilter);
     if (sp.domain_uuid) listQ = listQ.or(`domain_uuid.eq.${sp.domain_uuid},domain_uuid.is.null`);
     const { data: rows, error } = await listQ
       .order("start_at", { ascending: false })

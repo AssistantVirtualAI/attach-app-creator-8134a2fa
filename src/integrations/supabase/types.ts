@@ -8880,6 +8880,9 @@ export type Database = {
           pipeline_started_at: string | null
           pipeline_state: Json
           pipeline_step: string | null
+          recording_bytes: number | null
+          recording_cached_at: string | null
+          recording_storage_path: string | null
           recording_url: string | null
           started_at: string | null
           status: string | null
@@ -8951,6 +8954,9 @@ export type Database = {
           pipeline_started_at?: string | null
           pipeline_state?: Json
           pipeline_step?: string | null
+          recording_bytes?: number | null
+          recording_cached_at?: string | null
+          recording_storage_path?: string | null
           recording_url?: string | null
           started_at?: string | null
           status?: string | null
@@ -9022,6 +9028,9 @@ export type Database = {
           pipeline_started_at?: string | null
           pipeline_state?: Json
           pipeline_step?: string | null
+          recording_bytes?: number | null
+          recording_cached_at?: string | null
+          recording_storage_path?: string | null
           recording_url?: string | null
           started_at?: string | null
           status?: string | null

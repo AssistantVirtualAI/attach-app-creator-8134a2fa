@@ -197,6 +197,49 @@ function recordingHeaders(upstream: Response, meta: any, extra: Record<string, s
   return h;
 }
 
+// Persist recording bytes to the "call-recordings" bucket and remember the
+// path on the phone_calls row so subsequent playbacks are instant.
+async function persistRecording(callDbId: string | null, bytes: Uint8Array, contentType: string) {
+  if (!callDbId || !bytes?.byteLength) return null;
+  try {
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const { data: row } = await admin
+      .from("planipret_phone_calls")
+      .select("user_id, recording_storage_path")
+      .eq("id", callDbId)
+      .maybeSingle();
+    if (row?.recording_storage_path) return row.recording_storage_path;
+    const userId = row?.user_id ?? "unknown";
+    const ext = contentType.includes("mpeg") || contentType.includes("mp3") ? "mp3" : contentType.includes("wav") ? "wav" : "audio";
+    const path = `${userId}/${callDbId}.${ext}`;
+    const up = await admin.storage.from("call-recordings").upload(path, bytes, {
+      contentType: contentType.startsWith("audio/") ? contentType : "audio/mpeg",
+      upsert: true,
+    });
+    if (up.error) return null;
+    await admin
+      .from("planipret_phone_calls")
+      .update({
+        recording_storage_path: path,
+        recording_cached_at: new Date().toISOString(),
+        recording_bytes: bytes.byteLength,
+        has_recording: true,
+      })
+      .eq("id", callDbId);
+    return path;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function signCachedUrl(path: string) {
+  try {
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const { data } = await admin.storage.from("call-recordings").createSignedUrl(path, 3600);
+    return data?.signedUrl ?? null;
+  } catch { return null; }
+}
+
 function readWavChunks(bytes: Uint8Array) {
   if (bytes.length < 44 || String.fromCharCode(...bytes.slice(0, 4)) !== "RIFF" || String.fromCharCode(...bytes.slice(8, 12)) !== "WAVE") return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -299,22 +342,47 @@ function convertMsGsmWavToPcm(bytes: Uint8Array) {
   return writePcmWav(pcm.slice(0, outOffset), sampleRate);
 }
 
-async function audioResponse(upstream: Response, meta: any, extra: Record<string, string | null | undefined> = {}) {
+async function audioResponse(
+  upstream: Response,
+  meta: any,
+  extra: Record<string, string | null | undefined> = {},
+  opts: { callDbId?: string | null; preferUrl?: boolean } = {},
+) {
   const input = new Uint8Array(await upstream.arrayBuffer());
   const converted = convertMsGsmWavToPcm(input);
   const body = converted ?? input;
+  const contentType = converted ? "audio/wav" : (upstream.headers.get("Content-Type") ?? "audio/mpeg");
+
+  // Cache to storage. Await when the caller wants a URL, otherwise fire-and-forget.
+  if (opts.preferUrl && opts.callDbId) {
+    const path = await persistRecording(opts.callDbId, body, contentType);
+    if (path) {
+      const url = await signCachedUrl(path);
+      if (url) return json({ success: true, url, cached: true, path, content_type: contentType, bytes: body.byteLength });
+    }
+  } else if (opts.callDbId) {
+    try { (globalThis as any).EdgeRuntime?.waitUntil?.(persistRecording(opts.callDbId, body, contentType)); }
+    catch { /* best-effort */ }
+  }
+
   const headers = recordingHeaders(upstream, meta, {
     ...extra,
-    "Content-Type": converted ? "audio/wav" : undefined,
+    "Content-Type": contentType,
     "Content-Length": String(body.byteLength),
     "X-NS-Transcoded": converted ? "gsm-ms-to-pcm" : null,
   });
-  if (converted) headers["Content-Type"] = "audio/wav";
+  headers["Content-Type"] = contentType;
   headers["Content-Length"] = String(body.byteLength);
   return new Response(body, { status: 200, headers });
 }
 
-async function streamFromUrl(audioUrl: string, meta: any, extra: Record<string, string | null | undefined>, attempts: any[]) {
+async function streamFromUrl(
+  audioUrl: string,
+  meta: any,
+  extra: Record<string, string | null | undefined>,
+  attempts: any[],
+  opts: { callDbId?: string | null; preferUrl?: boolean } = {},
+) {
   const cfg = await getNsRuntimeConfig();
   const fullUrl = audioUrl.startsWith("http")
     ? audioUrl
@@ -327,7 +395,7 @@ async function streamFromUrl(audioUrl: string, meta: any, extra: Record<string, 
     attempts.push({ url: "audio-url-bearer", status: a.status, ct: a.headers.get("Content-Type") ?? "" });
   }
   if (!a.ok || !a.body) return null;
-  return audioResponse(a, meta, extra);
+  return audioResponse(a, meta, extra, opts);
 }
 
 Deno.serve(async (req) => {
@@ -344,12 +412,13 @@ Deno.serve(async (req) => {
   let row: any = null;
   let domain = String(body.domain ?? url.searchParams.get("domain") ?? cfg.domain);
   const attempts: any[] = [];
+  const preferUrl = body?.prefer_url === true || url.searchParams.get("prefer_url") === "1";
 
-  if ((!ns_callid || !ns_extension) && call_db_id) {
+  if ((!ns_callid || !ns_extension || preferUrl) && call_db_id) {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const { data } = await admin
       .from("planipret_phone_calls")
-      .select("id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, recording_url, started_at, duration_seconds, from_number, to_number")
+      .select("id, user_id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, ns_domain, extension, metadata, recording_url, recording_storage_path, started_at, duration_seconds, from_number, to_number")
       .eq("id", call_db_id)
       .maybeSingle();
     row = data;
@@ -357,9 +426,32 @@ Deno.serve(async (req) => {
     ns_callid = ns_callid || row?.ns_callid || row?.ns_orig_callid || row?.ns_term_callid
       || row?.metadata?.["call-orig-call-id"] || row?.metadata?.["call-term-call-id"] || row?.metadata?.["call-parent-cdr-id"] || null;
     ns_extension = ns_extension || row?.extension || row?.metadata?.["call-orig-user"]?.toString() || null;
+
+    // Fastest path: recording is already cached in our own storage.
+    if (row?.recording_storage_path) {
+      const signed = await signCachedUrl(row.recording_storage_path);
+      if (signed) {
+        if (preferUrl) return json({ success: true, url: signed, cached: true, path: row.recording_storage_path });
+        const s = await fetch(signed);
+        if (s.ok) {
+          const bytes = new Uint8Array(await s.arrayBuffer());
+          return new Response(bytes, {
+            status: 200,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": s.headers.get("Content-Type") ?? "audio/mpeg",
+              "Content-Length": String(bytes.byteLength),
+              "Cache-Control": "private, max-age=3600",
+              "X-NS-Source": "storage-cache",
+            },
+          });
+        }
+      }
+    }
+
     // If DB already has a fully-resolved http recording_url, short-circuit.
     if (row?.recording_url && String(row.recording_url).startsWith("http")) {
-      const direct = await streamFromUrl(row.recording_url, row.metadata?.ns_recording ?? null, { "X-NS-Source": "cached" }, attempts);
+      const direct = await streamFromUrl(row.recording_url, row.metadata?.ns_recording ?? null, { "X-NS-Source": "cached" }, attempts, { callDbId: call_db_id, preferUrl });
       if (direct) return direct;
     }
   }
@@ -408,7 +500,7 @@ Deno.serve(async (req) => {
 
       if (r.ok && (ct.startsWith("audio") || ct.includes("octet-stream"))) {
         if (!r.body) continue;
-        return audioResponse(r, recordingMeta, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p });
+        return audioResponse(r, recordingMeta, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, { callDbId: call_db_id, preferUrl });
       }
       if (r.ok) {
         const rawText = await r.text();
@@ -423,7 +515,7 @@ Deno.serve(async (req) => {
         const audioUrl = pickAudioUrl(recording);
         attempt.audio_url_extracted = audioUrl;
         if (audioUrl) {
-          const streamed = await streamFromUrl(audioUrl, recording, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, attempts);
+          const streamed = await streamFromUrl(audioUrl, recording, { "X-NS-CallID": lookupId, "X-NS-Source-Path": p }, attempts, { callDbId: call_db_id, preferUrl });
           if (streamed) return streamed;
         }
       }

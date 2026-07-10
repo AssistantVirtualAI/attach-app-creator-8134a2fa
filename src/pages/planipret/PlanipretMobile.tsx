@@ -624,14 +624,12 @@ export default function PlanipretMobile() {
           style={{ marginTop: "calc(env(safe-area-inset-top, 0px) + 56px)", paddingTop: 18, paddingBottom: 12 }}
         >
 
-          {/* AVA icon — left */}
+          {/* Live status pill — left */}
           <div className="flex items-center gap-1.5">
-            <AvaBadge />
-            <span className="flex items-center gap-1.5">
-              <span className="pp-live-dot" />
-              <span style={{ fontSize: 9, color: "var(--pp-success)", fontWeight: 700, letterSpacing: "0.05em" }}>REST</span>
-            </span>
+            <span className="pp-live-dot" />
+            <span style={{ fontSize: 9, color: "var(--pp-success)", fontWeight: 700, letterSpacing: "0.05em" }}>REST</span>
           </div>
+
 
           {/* Settings button — between AVA (left) and Planiprêt (center) */}
           <button

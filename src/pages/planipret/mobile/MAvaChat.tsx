@@ -361,18 +361,18 @@ export default function MAvaChat() {
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 backdrop-blur-md" style={{ background: "rgba(3,7,18,0.82)", borderTop: "1px solid var(--pp-bg-border)" }}>
-       <div className="p-3 flex items-end gap-2 max-w-3xl w-full mx-auto">
-        <Button
+      <div className="sticky bottom-0 z-10 backdrop-blur-xl px-3 pb-3 pt-2" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 70%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
+       <div className="flex items-end gap-2 max-w-3xl w-full mx-auto rounded-full pl-2 pr-1.5 py-1.5" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", boxShadow: "0 10px 30px -10px rgba(124,58,237,0.25)" }}>
+        <button
           onClick={recording ? stopRec : startRec}
           disabled={busy || transcribing || !userId}
-          size="icon"
-          variant={recording ? "destructive" : "outline"}
+          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 disabled:opacity-50 transition-transform active:scale-95"
+          style={{ background: recording ? "linear-gradient(135deg,#E84C4C,#F5A623)" : "color-mix(in srgb, var(--pp-agent) 12%, transparent)", color: recording ? "#fff" : "var(--pp-agent)" }}
           title={recording ? "Arrêter" : "Dicter"}
           aria-label={recording ? "Arrêter la dictée" : "Dicter à AVA"}
         >
           {transcribing ? <Loader2 className="w-4 h-4 animate-spin" /> : recording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-        </Button>
+        </button>
         <textarea
           ref={inputRef}
           placeholder={recording ? "Enregistrement…" : "Message à AVA…"}
@@ -381,14 +381,21 @@ export default function MAvaChat() {
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           disabled={busy || !userId || recording}
           rows={1}
-          className="flex-1 min-h-[44px] max-h-28 resize-none rounded-2xl px-3.5 py-3 text-[14px] outline-none disabled:opacity-60"
-          style={{ color: "var(--pp-text-primary)", caretColor: "var(--pp-brand-accent)", background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}
+          className="flex-1 min-h-[36px] max-h-28 resize-none bg-transparent px-2 py-2 text-[14px] outline-none disabled:opacity-60 placeholder:opacity-60"
+          style={{ color: "var(--pp-text-primary)", caretColor: "var(--pp-agent)" }}
         />
-        <Button onClick={send} disabled={busy || !input.trim()} size="icon" aria-label="Envoyer à AVA">
+        <button
+          onClick={send}
+          disabled={busy || !input.trim()}
+          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white disabled:opacity-40 transition-transform active:scale-95"
+          style={{ background: "linear-gradient(135deg,#2E9BDC,#7C3AED)", boxShadow: "0 6px 18px rgba(124,58,237,0.45)" }}
+          aria-label="Envoyer à AVA"
+        >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-        </Button>
+        </button>
       </div>
       </div>
+
     </div>
   );
 }

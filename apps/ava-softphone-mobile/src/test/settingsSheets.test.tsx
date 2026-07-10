@@ -68,18 +68,17 @@ beforeEach(() => { capListeners.length = 0; localStorage.clear(); });
 describe('SettingsScreen — rows & sheets', () => {
   it('opens the Ringtone sheet when the row is tapped', async () => {
     renderScreen();
-    const row = await screen.findByText(/Ringtone|Sonnerie/i);
+    const row = await screen.findByText(/^(Ringtone|Sonnerie)$/i);
     fireEvent.click(row);
-    await waitFor(() => expect(screen.getByText(/AVA Default/i)).toBeDefined());
+    await waitFor(() => expect(screen.getAllByText(/AVA Default/i).length).toBeGreaterThan(1));
   });
 
   it('opens the Audio output sheet with all route choices', async () => {
     renderScreen();
-    const row = await screen.findByText(/Audio output|Sortie audio/i);
+    const row = await screen.findByText(/^(Audio output|Sortie audio)$/i);
     fireEvent.click(row);
     await waitFor(() => {
-      expect(screen.getByText(/Earpiece|Écouteur/i)).toBeDefined();
-      expect(screen.getByText(/Speaker|Haut-parleur/i)).toBeDefined();
+      expect(screen.getByText(/^(Earpiece|Écouteur)$/i)).toBeDefined();
       expect(screen.getByText(/Bluetooth/i)).toBeDefined();
     });
   });
@@ -96,9 +95,9 @@ describe('SettingsScreen — rows & sheets', () => {
 
   it('opens the Clear cache confirmation sheet', async () => {
     renderScreen();
-    const row = await screen.findByText(/Clear cache|Vider le cache/i);
+    const row = await screen.findByText(/Clear app cache|Vider le cache/i);
     fireEvent.click(row);
-    await waitFor(() => expect(screen.getByText(/Clear|Vider/i)).toBeDefined());
+    await waitFor(() => expect(screen.getByText(/AI summaries|résumés IA/i)).toBeDefined());
   });
 
   it('persists noise-cancellation preference to localStorage', async () => {

@@ -56,7 +56,6 @@ export default function App() {
                   <Route path="/login" element={<Navigate to="/mplanipret" replace />} />
                   <Route path="/auth/ms365/callback" element={<Ms365Callback />} />
                   <Route path="/auth/microsoft/callback" element={<Ms365Callback />} />
-                  <Route path="/mplanipret/ms365-diagnostics" element={<Ms365Diagnostics />} />
                   <Route
                     path="/mplanipret"
                     element={<MplanipretGuard><PlanipretMobile /></MplanipretGuard>}

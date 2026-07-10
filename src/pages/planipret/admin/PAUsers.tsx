@@ -366,7 +366,8 @@ export default function PAUsers() {
 
     // ns_only broker → no Planiprêt profile yet. Provision one on the fly so
     // the toggle actually takes effect.
-    if (u.ns_only) {
+    // No Planiprêt account yet (ns_only OR simply missing user_id) → provision on the fly.
+    if (u.ns_only || !u.user_id) {
       const { data, error } = await supabase.functions.invoke("pp-admin-user", {
         body: {
           action: "provision_from_ns",
@@ -385,12 +386,6 @@ export default function PAUsers() {
       }
       toast.success("Compte Planiprêt créé et activé");
       await load();
-      return;
-    }
-
-    if (!u.user_id) {
-      setSavingId(null);
-      toast.error("Ce courtier n'a pas encore de compte Planiprêt — activez-le via « Provisionner ».");
       return;
     }
     setRows((p) => p.map((r) => r.user_id === u.user_id ? { ...r, [field]: next } : r));

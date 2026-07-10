@@ -866,10 +866,15 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
     setBusy(true);
     const full_name = `${firstName} ${lastName}`.trim();
     if (isEdit) {
+      if (!user?.user_id) {
+        setBusy(false);
+        toast.error("Courtier sans compte Planiprêt — provisionnez-le d'abord depuis la liste.");
+        return;
+      }
       const { data, error } = await supabase.functions.invoke("pp-admin-user", {
-        body: { action: "update", payload: { user_id: user!.user_id, updates: { full_name, extension, mobile_app_enabled: appEnabled, voice_agent_enabled: agentEnabled, elevenlabs_agent_id: agentId || null } } },
+        body: { action: "update", payload: { user_id: user.user_id, updates: { full_name, extension, mobile_app_enabled: appEnabled, voice_agent_enabled: agentEnabled, elevenlabs_agent_id: agentId || null } } },
       });
-      if (error || !(data as any)?.success) { setBusy(false); toast.error((data as any)?.error ?? "Erreur"); return; }
+      if (error || !(data as any)?.success) { setBusy(false); toast.error((data as any)?.error ?? error?.message ?? "Erreur"); return; }
       const p = await applyPhoneNumber(extension);
       setBusy(false);
       if (!p.ok) { toast.error(`Courtier sauvegardé, DID: ${p.error}`); return; }

@@ -50,10 +50,10 @@ export default function MAvaChat() {
     (async () => {
       const { data } = await supabase
         .from("planipret_ava_conversations")
-        .select("id,role,message,created_at")
+        .select("id,role,message,created_at,tool_calls")
         .eq("session_id", sessionId)
         .order("created_at", { ascending: true });
-      setMessages((data ?? []) as Msg[]);
+      setMessages(((data ?? []) as any[]).map((r) => ({ ...r, suggestions: Array.isArray(r.tool_calls) ? r.tool_calls : [] })) as Msg[]);
     })();
   }, [sessionId]);
 
@@ -210,57 +210,74 @@ export default function MAvaChat() {
       </div>
 
       <ScrollArea className="flex-1">
-        <div ref={scrollRef} className="p-4 space-y-3">
+        <div ref={scrollRef} className="p-4 space-y-4">
           {messages.length === 0 && (
-            <div className="text-center text-muted-foreground text-sm py-10">
+            <div className="text-center text-sm py-10" style={{ color: "var(--pp-text-muted)" }}>
               Pose ta question à AVA. Elle a accès à tes leads, appels et courriels.
             </div>
           )}
-          {messages.map((m) => (
-            <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
-                m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
-              }`}>
-                {m.message}
-                {m.role === "assistant" && (
-                  <button
-                    onClick={() => (speakingId === m.id ? (audioRef.current?.pause(), setSpeakingId(null)) : speak(m.id, m.message))}
-                    className="ml-2 inline-flex items-center align-middle text-muted-foreground hover:text-primary"
-                    title="Écouter"
+          {messages.map((m) => {
+            const cleaned = m.role === "assistant" ? cleanReply(m.message) : m.message;
+            return (
+              <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                {m.role === "assistant" ? (
+                  <div className="max-w-[92%] space-y-2">
+                    <div className="flex items-start gap-2">
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.35)" }}>
+                        <Sparkles className="w-3.5 h-3.5" style={{ color: "var(--pp-brand-accent)" }} />
+                      </div>
+                      <div className="text-[14px] leading-relaxed whitespace-pre-wrap break-words flex-1" style={{ color: "var(--pp-text-primary)" }}>
+                        {cleaned}
+                        <button
+                          onClick={() => (speakingId === m.id ? (audioRef.current?.pause(), setSpeakingId(null)) : speak(m.id, cleaned))}
+                          className="ml-2 inline-flex items-center align-middle opacity-60 hover:opacity-100"
+                          style={{ color: "var(--pp-text-muted)" }}
+                          title="Écouter"
+                        >
+                          {speakingId === m.id ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                        </button>
+                      </div>
+                    </div>
+                    {m.suggestions && m.suggestions.length > 0 && (
+                      <div className="ml-9 flex flex-wrap gap-1.5">
+                        {m.suggestions.map((s) => (
+                          <button
+                            key={s.id}
+                            onClick={() => runSuggestion(s)}
+                            disabled={!!runningSuggestion}
+                            className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 disabled:opacity-50 transition"
+                            style={{ background: "rgba(34,211,238,0.10)", border: "1px solid rgba(34,211,238,0.30)", color: "var(--pp-brand-accent)" }}
+                          >
+                            {runningSuggestion === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className="max-w-[85%] rounded-2xl px-4 py-2.5 text-[14px] whitespace-pre-wrap break-words shadow-sm"
+                    style={{ background: "var(--pp-brand-accent)", color: "#03131A", fontWeight: 500 }}
                   >
-                    {speakingId === m.id ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
-                  </button>
-                )}
-                {m.role === "assistant" && m.suggestions && m.suggestions.length > 0 && (
-                  <div className="mt-2 flex flex-col gap-1.5">
-                    {m.suggestions.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => runSuggestion(s)}
-                        disabled={!!runningSuggestion}
-                        className="text-left text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 disabled:opacity-50"
-                        style={{ background: "rgba(46,155,220,0.10)", border: "1px solid rgba(46,155,220,0.24)", color: "var(--pp-brand-accent)" }}
-                      >
-                        {runningSuggestion === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
-                        {s.label}
-                      </button>
-                    ))}
+                    {m.message}
                   </div>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
           {busy && (
-            <div className="flex justify-start">
-              <div className="rounded-2xl px-4 py-2 bg-muted text-sm text-muted-foreground flex items-center gap-2">
-                <Loader2 className="w-3 h-3 animate-spin" /> AVA réfléchit…
+            <div className="flex justify-start items-center gap-2 text-sm" style={{ color: "var(--pp-text-muted)" }}>
+              <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(34,211,238,0.15)" }}>
+                <Sparkles className="w-3.5 h-3.5" style={{ color: "var(--pp-brand-accent)" }} />
               </div>
+              <Loader2 className="w-3 h-3 animate-spin" /> AVA réfléchit…
             </div>
           )}
         </div>
       </ScrollArea>
 
-      <div className="p-3 border-t flex gap-2">
+      <div className="p-3 border-t flex gap-2" style={{ borderColor: "var(--pp-bg-border)" }}>
         <Button
           onClick={recording ? stopRec : startRec}
           disabled={busy || transcribing || !userId}
@@ -276,6 +293,7 @@ export default function MAvaChat() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           disabled={busy || !userId || recording}
+          style={{ color: "var(--pp-text-primary)", background: "var(--pp-bg-surface)", borderColor: "var(--pp-bg-border-2)" }}
         />
         <Button onClick={send} disabled={busy || !input.trim()} size="icon">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -283,4 +301,16 @@ export default function MAvaChat() {
       </div>
     </div>
   );
+}
+
+// Strip stray JSON arrays/objects the model sometimes appends after its reply.
+function cleanReply(raw: string): string {
+  if (!raw) return "";
+  let s = raw.trim();
+  // Remove fenced ```json ... ``` blocks
+  s = s.replace(/```(?:json)?\s*[\[{][\s\S]*?[\]}]\s*```/g, "").trim();
+  // Remove a trailing raw JSON array/object dump
+  const m = s.match(/^([\s\S]*?)\s*(\[[\s\S]*\]|\{[\s\S]*\})\s*$/);
+  if (m && m[1].trim().length > 0) s = m[1].trim();
+  return s;
 }

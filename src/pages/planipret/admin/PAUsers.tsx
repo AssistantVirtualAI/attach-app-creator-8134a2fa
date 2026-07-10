@@ -434,12 +434,13 @@ export default function PAUsers() {
 
   const promoteOrDemote = async (u: Profile, promote: boolean) => {
     const label = promote ? "promouvoir en admin" : "rétrograder en courtier";
+    if (!u.user_id) { toast.error("Utilisateur sans compte Planiprêt."); return; }
     if (!confirm(`Confirmer : ${label} ${u.full_name} ?`)) return;
     const { data, error } = await supabase.functions.invoke("pp-admin-user", {
       body: { action: promote ? "promote_broker" : "demote_admin", payload: { user_id: u.user_id } },
     });
     if (error || !(data as any)?.success) {
-      toast.error((data as any)?.error ?? "Échec");
+      toast.error((data as any)?.error ?? error?.message ?? "Échec");
       return;
     }
     toast.success(promote ? "Promu admin" : "Rétrogradé courtier");

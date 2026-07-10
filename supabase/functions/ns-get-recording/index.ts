@@ -342,22 +342,47 @@ function convertMsGsmWavToPcm(bytes: Uint8Array) {
   return writePcmWav(pcm.slice(0, outOffset), sampleRate);
 }
 
-async function audioResponse(upstream: Response, meta: any, extra: Record<string, string | null | undefined> = {}) {
+async function audioResponse(
+  upstream: Response,
+  meta: any,
+  extra: Record<string, string | null | undefined> = {},
+  opts: { callDbId?: string | null; preferUrl?: boolean } = {},
+) {
   const input = new Uint8Array(await upstream.arrayBuffer());
   const converted = convertMsGsmWavToPcm(input);
   const body = converted ?? input;
+  const contentType = converted ? "audio/wav" : (upstream.headers.get("Content-Type") ?? "audio/mpeg");
+
+  // Cache to storage. Await when the caller wants a URL, otherwise fire-and-forget.
+  if (opts.preferUrl && opts.callDbId) {
+    const path = await persistRecording(opts.callDbId, body, contentType);
+    if (path) {
+      const url = await signCachedUrl(path);
+      if (url) return json({ success: true, url, cached: true, path, content_type: contentType, bytes: body.byteLength });
+    }
+  } else if (opts.callDbId) {
+    try { (globalThis as any).EdgeRuntime?.waitUntil?.(persistRecording(opts.callDbId, body, contentType)); }
+    catch { /* best-effort */ }
+  }
+
   const headers = recordingHeaders(upstream, meta, {
     ...extra,
-    "Content-Type": converted ? "audio/wav" : undefined,
+    "Content-Type": contentType,
     "Content-Length": String(body.byteLength),
     "X-NS-Transcoded": converted ? "gsm-ms-to-pcm" : null,
   });
-  if (converted) headers["Content-Type"] = "audio/wav";
+  headers["Content-Type"] = contentType;
   headers["Content-Length"] = String(body.byteLength);
   return new Response(body, { status: 200, headers });
 }
 
-async function streamFromUrl(audioUrl: string, meta: any, extra: Record<string, string | null | undefined>, attempts: any[]) {
+async function streamFromUrl(
+  audioUrl: string,
+  meta: any,
+  extra: Record<string, string | null | undefined>,
+  attempts: any[],
+  opts: { callDbId?: string | null; preferUrl?: boolean } = {},
+) {
   const cfg = await getNsRuntimeConfig();
   const fullUrl = audioUrl.startsWith("http")
     ? audioUrl
@@ -370,7 +395,7 @@ async function streamFromUrl(audioUrl: string, meta: any, extra: Record<string, 
     attempts.push({ url: "audio-url-bearer", status: a.status, ct: a.headers.get("Content-Type") ?? "" });
   }
   if (!a.ok || !a.body) return null;
-  return audioResponse(a, meta, extra);
+  return audioResponse(a, meta, extra, opts);
 }
 
 Deno.serve(async (req) => {

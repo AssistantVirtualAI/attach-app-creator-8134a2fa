@@ -53,6 +53,7 @@ Deno.serve(async (req) => {
 
     const url = new URL(req.url);
     const extParam = url.searchParams.get("extension");
+    const brokerOnly = ["1", "true", "yes"].includes(String(url.searchParams.get("broker_only") ?? "").toLowerCase());
     const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 7, 1), 30);
     const sinceDate = new Date();
     sinceDate.setDate(sinceDate.getDate() - days);
@@ -68,14 +69,15 @@ Deno.serve(async (req) => {
 
     if (sp.domain_uuid) q = q.or(`domain_uuid.eq.${sp.domain_uuid},domain_uuid.is.null`);
 
-    if (!isDomainAdmin) {
-      // Hard-restrict to own extension.
+    // broker_only forces per-extension scoping even for domain admins so the
+    // mobile app only ever sees the current broker's own recordings.
+    if (!isDomainAdmin || brokerOnly) {
       if (!ext) return json([]);
       q = q.or(`extension.eq.${ext},caller_number.eq.${ext},source_number.eq.${ext},destination_number.eq.${ext}`);
     } else if (extParam && extParam !== "all") {
-      // Admin filtering on a specific extension.
       q = q.or(`extension.eq.${extParam},caller_number.eq.${extParam},source_number.eq.${extParam},destination_number.eq.${extParam}`);
     }
+
 
     const { data: rows, error } = await q.order("start_at", { ascending: false }).limit(200);
     if (error) throw error;

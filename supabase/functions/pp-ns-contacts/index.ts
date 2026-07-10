@@ -51,25 +51,81 @@ Deno.serve(async (req) => {
     }
 
     if (action === "directory") {
+      const debug = body?.debug === true || url.searchParams.get("debug") === "1";
       const res = await nsFetch(`${domainBase}/users?limit=500`, { method: "GET" });
       if (!res.ok) return jsonResponse({ error: "NS-API directory fetch failed", status: res.status, body: await res.text() }, 502);
       const raw = await res.json();
       const users = Array.isArray(raw) ? raw : (raw?.users ?? raw?.data ?? []);
-      const directory = users.map((u: any) => {
-        const first = u.first_name ?? u.firstname ?? u["first-name"] ?? "";
-        const last = u.last_name ?? u.lastname ?? u["last-name"] ?? "";
+
+      const extractName = (u: any) => {
+        const first =
+          u.first_name ?? u.firstname ?? u["first-name"] ?? u.given_name ?? u.givenName ?? u.fname ?? "";
+        const last =
+          u.last_name ?? u.lastname ?? u["last-name"] ?? u.family_name ?? u.familyName ?? u.surname ?? u.lname ?? "";
         const composed = `${first} ${last}`.trim();
-        const name = u.name ?? u.display_name ?? u.full_name ?? (composed || u.user);
+        const display =
+          u.name ?? u.display_name ?? u.displayName ?? u.full_name ?? u.fullName ?? u.caller_id_name ?? u.callerid_name ?? "";
+        return { first, last, composed, display };
+      };
+
+      // First pass — figure out who is missing a real name
+      const initial = users.map((u: any) => ({
+        u,
+        ext: u.user ?? u.extension ?? u.uid,
+        ...extractName(u),
+      }));
+
+      // Enrich in parallel (bounded concurrency) for users where name is missing
+      const missing = initial.filter((x) => !x.composed && !x.display && x.ext);
+      const CONCURRENCY = 8;
+      let idx = 0;
+      const details = new Map<string, any>();
+      async function worker() {
+        while (idx < missing.length) {
+          const i = idx++;
+          const ext = missing[i].ext;
+          try {
+            const r = await nsFetch(`${domainBase}/users/${encodeURIComponent(ext)}`, { method: "GET" });
+            if (r.ok) {
+              const j = await r.json().catch(() => null);
+              if (j) details.set(String(ext), Array.isArray(j) ? j[0] : (j?.user ?? j));
+            }
+          } catch (_) { /* ignore */ }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, missing.length) }, worker));
+
+      const directory = initial.map(({ u, ext, first, last, composed, display }) => {
+        let f = first, l = last, d = display, c = composed;
+        const detail = ext ? details.get(String(ext)) : null;
+        if (detail) {
+          const ex = extractName(detail);
+          f = f || ex.first;
+          l = l || ex.last;
+          d = d || ex.display;
+          c = `${f} ${l}`.trim();
+        }
+        const name = (c || d || ext || "").toString();
         return {
-          extension: u.user ?? u.extension ?? u.uid,
+          extension: ext,
           name,
-          first_name: first || undefined,
-          last_name: last || undefined,
-          email: u.email ?? null,
-          department: u.department ?? null,
-          presence: u.presence ?? u.status ?? "unknown",
+          first_name: f || undefined,
+          last_name: l || undefined,
+          email: u.email ?? (detail?.email ?? null),
+          department: u.department ?? (detail?.department ?? null),
+          presence: u.presence ?? u.status ?? (detail?.presence ?? detail?.status ?? "unknown"),
         };
       });
+
+      if (debug) {
+        return jsonResponse({
+          ok: true,
+          count: directory.length,
+          sample_raw: users.slice(0, 2),
+          sample_detail: Array.from(details.entries()).slice(0, 2),
+          directory,
+        });
+      }
       return jsonResponse({ ok: true, count: directory.length, directory });
     }
 

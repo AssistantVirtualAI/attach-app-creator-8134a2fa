@@ -638,7 +638,6 @@ export default function PlanipretMobile() {
       </Frame>
     );
   }
-  const location = useLocation();
 
   return (
     <Frame>

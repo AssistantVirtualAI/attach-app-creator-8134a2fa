@@ -47,9 +47,12 @@ Deno.serve(async (req) => {
     if (!cfg.url || !cfg.key) {
       // Fallback: return whatever recording_url we already have (from NS-API)
       if (call.recording_url) {
-        return json({ url: call.recording_url, expires_at: null, source: "ns" });
+        return json({ url: call.recording_url, recording_url: call.recording_url, expires_at: null, source: "ns" });
       }
-      return json({ error: "no_recording_available" }, 404);
+      // Planipret uses NS-API — Maestro isn't configured. Don't return 404
+      // (that surfaces as a red console error in the client). The primary
+      // NS fetch path already reports the real reason if audio is missing.
+      return json({ available: false, reason: "maestro_not_configured", url: null, recording_url: null });
     }
 
     const auth = await getBrokerAuth(admin, call.user_id);
@@ -62,9 +65,9 @@ Deno.serve(async (req) => {
 
     if (!res.ok) {
       if (call.recording_url) {
-        return json({ url: call.recording_url, expires_at: null, source: "ns" });
+        return json({ url: call.recording_url, recording_url: call.recording_url, expires_at: null, source: "ns" });
       }
-      return json({ error: "recording_unavailable", status: res.status }, 404);
+      return json({ available: false, reason: "maestro_status_" + res.status, url: null, recording_url: null });
     }
 
     const data = res.data ?? {};

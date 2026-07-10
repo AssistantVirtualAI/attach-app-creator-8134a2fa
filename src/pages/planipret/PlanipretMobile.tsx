@@ -727,17 +727,36 @@ export default function PlanipretMobile() {
 
           {TABS.map((tabItem) => {
             const badge = tabItem.to.endsWith("/messages") ? unreadMsg : 0;
+            const isAva = tabItem.to.endsWith("/ava");
             return (
               <NavLink key={tabItem.to} to={tabItem.to}
-                className="relative flex flex-col items-center justify-center gap-1 text-[9px] font-semibold pt-1.5"
+                className={`relative flex flex-col items-center justify-center gap-1 text-[9px] font-semibold pt-1.5 ${isAva ? "ava-tab-center" : ""}`}
                 style={({ isActive }) => ({ color: isActive ? "var(--pp-brand-accent)" : "var(--pp-text-faint)" })}>
                 {({ isActive }) => (
                   <>
-                    {isActive && (
+                    {isActive && !isAva && (
                       <span className="absolute top-1 w-1 h-1 rounded-full" style={{ background: "var(--pp-brand-accent)" }} />
                     )}
-                    <div className="relative">
-                      <tabItem.Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.4 : 1.8} />
+                    <div
+                      className="relative flex items-center justify-center transition-all duration-200"
+                      style={isAva ? {
+                        width: isActive ? 50 : 46,
+                        height: isActive ? 50 : 46,
+                        borderRadius: "50%",
+                        background: isActive
+                          ? "linear-gradient(135deg, #7C3AED, #2E9BDC)"
+                          : "var(--pp-bg-elevated)",
+                        border: isActive ? "2px solid rgba(255,255,255,0.15)" : "1px solid var(--pp-bg-border-2)",
+                        boxShadow: isActive
+                          ? "0 6px 20px rgba(124,58,237,0.5)"
+                          : "0 2px 8px rgba(0,0,0,0.12)",
+                        marginTop: -10,
+                      } : {}}>
+                      <tabItem.Icon
+                        className={isAva ? "w-[26px] h-[26px]" : "w-[22px] h-[22px]"}
+                        strokeWidth={isActive ? 2.4 : 1.8}
+                        style={{ color: isAva ? (isActive ? "#fff" : "var(--pp-brand-accent)") : undefined }}
+                      />
                       {badge > 0 && (
                         <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
                           style={{ background: "var(--pp-danger)" }}>
@@ -745,7 +764,7 @@ export default function PlanipretMobile() {
                         </span>
                       )}
                     </div>
-                    <span style={{ letterSpacing: "0.02em" }}>{"labelKey" in tabItem ? t(tabItem.labelKey) : ""}</span>
+                    {!isAva && <span style={{ letterSpacing: "0.02em" }}>{"labelKey" in tabItem ? t(tabItem.labelKey) : ""}</span>}
                   </>
                 )}
               </NavLink>

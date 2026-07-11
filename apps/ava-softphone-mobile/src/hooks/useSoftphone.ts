@@ -120,6 +120,9 @@ export function useSoftphoneJsSip(
   const retryAttemptRef = useRef(0);
   const reconnectRef = useRef<() => void>(() => {});
   const [reconnectTick, setReconnectTick] = useState(0);
+  // Live-status ref so network/foreground listeners see the current state
+  // without recreating the effect (avoids tearing down the UA on every change).
+  const sipStatusRef = useRef<SIPStatus>('idle');
 
   // --- logging helpers ---
   const log = useCallback((event: string, detail?: string, level: 'info' | 'warn' | 'error' = 'info') => {

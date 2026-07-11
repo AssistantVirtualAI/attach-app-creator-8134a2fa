@@ -113,15 +113,15 @@ class CapacitorPjsip : Plugin() {
                     val cfg = AccountConfig().apply {
                         idUri = "sip:$username@$domain"
                         regConfig.registrarUri = registrarUri(server, port, transport)
-                        regConfig.timeoutSec = 3600
-                        regConfig.retryIntervalSec = 30
-                        regConfig.firstRetryIntervalSec = 5
-                        regConfig.randomRetryIntervalSec = 0
+                        regConfig.timeoutSec = 3600L
+                        regConfig.retryIntervalSec = 30L
+                        regConfig.firstRetryIntervalSec = 5L
+                        regConfig.randomRetryIntervalSec = 0L
                         sipConfig.authCreds.add(AuthCredInfo("Digest", "*", username, 0, password))
                         sipConfig.proxies.add(proxyUri(server, port, transport))
                         sipConfig.contactUriParams = ";transport=$transport"
                         sipConfig.contactParams = ";q=1.0;+sip.instance=\"<urn:uuid:${deviceInstanceId()}>\""
-                        natConfig.udpKaIntervalSec = 15
+                        natConfig.udpKaIntervalSec = 15L
                     }
                     acc.create(cfg, true)
                 }
@@ -634,7 +634,7 @@ class CapacitorPjsip : Plugin() {
         else -> "tcp"
     }
 
-    private fun statusCodeValue(code: pjsip_status_code?): Int = try { code?.swigValue() ?: 0 } catch (_: java.lang.Exception) { 0 }
+    private fun statusCodeValue(code: Int): Int = code
 
     private fun deviceInstanceId(): String {
         val prefs = context.getSharedPreferences("lemtel-pjsip", Context.MODE_PRIVATE)

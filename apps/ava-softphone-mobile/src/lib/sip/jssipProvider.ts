@@ -29,6 +29,10 @@ export interface SIPConfig {
   wssUrls?: string[];
   displayName?: string;
   authUsername?: string;
+  /** Optional native TCP SIP hints (Android uses TCP/5060). */
+  server?: string;
+  port?: number;
+  transport?: string;
 }
 
 export class JsSIPUnavailableError extends Error {

@@ -258,9 +258,10 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     throw new JsSIPUnavailableError('JsSIP disabled — iOS native SIP plugin is active');
   }
   const JsSIP = await waitForJsSIP(timeoutMs, 100, false);
+  const isAndroid = __PLATFORM === 'android';
   // SIP/TLS over TCP 5061 — no WebRTC, no mDNS, no TURN.
   const socket = new JsSIP.Socket(`sips:pbxnode.lemtel.tel:5061;transport=tls`);
-  return new JsSIP.UA({
+  const uaConfig: any = {
     sockets: [socket],
     uri: `sip:${config.extension}@${config.domain}`,
     password: config.password,
@@ -274,5 +275,14 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     connection_recovery_min_interval: 2,
     connection_recovery_max_interval: 30,
     user_agent: "AVA Softphone 1.1",
-  } as any);
+  };
+  if (isAndroid) {
+    // FusionPBX-friendly quirks: force TCP transport in Via, patch Contact IP
+    // through NAT, and keep session timers off so PBX doesn't renegotiate.
+    uaConfig.hack_via_tcp = true;
+    uaConfig.hack_ip_in_contact = true;
+    uaConfig.session_timers = false;
+    uaConfig.register_expires = 300;
+  }
+  return new JsSIP.UA(uaConfig);
 }

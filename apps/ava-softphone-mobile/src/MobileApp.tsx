@@ -247,6 +247,10 @@ function AuthenticatedShell({
         displayName: creds.displayName || creds.email || 'User',
         password: sipPassword,
         domain: sipDomain,
+        // Native TCP SIP info (Android uses CapacitorPjsip bridge on 5060).
+        server: 'pbxnode.lemtel.tel',
+        port: isAndroidPlatform ? 5060 : 5061,
+        transport: isAndroidPlatform ? 'TCP' : 'TLS',
         wssUrl: WORKING_WSS[0],
         wssUrls: WORKING_WSS,
         authUsername: creds.authUsername || creds.extension,

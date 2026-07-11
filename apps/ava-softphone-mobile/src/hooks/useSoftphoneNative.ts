@@ -64,8 +64,12 @@ export async function forceNativeReconnect(): Promise<void> {
   try {
     await CapacitorPjsip.initAccount({
       extension: cfg.extension,
+      username: (cfg as any).authUsername || cfg.extension,
       domain: cfg.domain,
       password: cfg.password,
+      server: (cfg as any).server,
+      port: (cfg as any).port,
+      transport: (cfg as any).transport,
       wssUrl: cfg.wssUrl,
     });
     _registeredKey = `${cfg.extension}@${cfg.domain}|${cfg.password}|${cfg.wssUrl ?? ''}`;
@@ -330,8 +334,12 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
 
         await CapacitorPjsip.initAccount({
           extension: config.extension,
+          username: (config as any).authUsername || config.extension,
           domain: config.domain,
           password: config.password,
+          server: (config as any).server,
+          port: (config as any).port,
+          transport: (config as any).transport,
           wssUrl: config.wssUrl,
         });
       } catch (e: any) {

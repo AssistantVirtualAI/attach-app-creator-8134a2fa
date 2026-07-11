@@ -34,15 +34,29 @@ class CapacitorPjsip : Plugin() {
 
     @PluginMethod
     fun initAccount(call: PluginCall) {
+        val server = call.getString("server") ?: "pbxnode.lemtel.tel"
+        val port = call.getInt("port") ?: 5060
+        val username = call.getString("username") ?: call.getString("extension") ?: ""
+        val password = call.getString("password") ?: ""
+        val domain = call.getString("domain") ?: "lemtel.lemtel.tel"
+        val transport = call.getString("transport") ?: "TCP"
+
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
             requestPermissionForAlias("microphone", call, "microphonePermissionCallback")
             return
         }
         audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
+        android.util.Log.i("CapacitorPjsip",
+            "initAccount server=$server port=$port user=$username domain=$domain transport=$transport")
         val ret = JSObject()
         ret.put("ok", true)
         ret.put("status", "ok")
+        ret.put("server", server)
+        ret.put("port", port)
+        ret.put("username", username)
+        ret.put("domain", domain)
+        ret.put("transport", transport)
         call.resolve(ret)
     }
 

@@ -247,8 +247,8 @@ function AuthenticatedShell({
         domain: sipDomain,
         // Native TCP SIP info for CapacitorPjsip/PJSUA2.
         server: 'pbxnode.lemtel.tel',
-        port: isAndroidPlatform ? 5060 : 5061,
-        transport: isAndroidPlatform ? 'TCP' : 'TLS',
+        port: 5061,
+        transport: 'TLS',
         wssUrl: WORKING_WSS[0],
         wssUrls: WORKING_WSS,
         authUsername: creds.authUsername || creds.extension,

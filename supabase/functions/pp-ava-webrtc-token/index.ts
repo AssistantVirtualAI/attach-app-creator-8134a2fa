@@ -54,18 +54,31 @@ Deno.serve(async (req) => {
     if (!prof.voice_agent_enabled) return json({ error: "voice_agent_disabled" }, 403);
     if (!prof.elevenlabs_agent_id) return json({ error: "agent_not_provisioned" }, 409);
 
-    const r = await fetch(
-      `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(prof.elevenlabs_agent_id)}`,
-      { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
-    );
-    const text = await r.text();
-    if (!r.ok) {
-      console.error("elevenlabs token error", r.status, text);
-      return json({ error: "elevenlabs_error", status: r.status, details: text.slice(0, 500) }, 502);
+    const [tokenRes, signedRes] = await Promise.all([
+      fetch(
+        `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(prof.elevenlabs_agent_id)}`,
+        { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
+      ),
+      fetch(
+        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(prof.elevenlabs_agent_id)}`,
+        { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
+      ),
+    ]);
+
+    const tokenText = await tokenRes.text();
+    const signedText = await signedRes.text();
+
+    if (!tokenRes.ok && !signedRes.ok) {
+      console.error("elevenlabs token error", tokenRes.status, tokenText, signedRes.status, signedText);
+      return json({ error: "elevenlabs_error", status: tokenRes.status, details: tokenText.slice(0, 500) }, 502);
     }
-    const data = JSON.parse(text);
+
+    const tokenData = tokenRes.ok ? JSON.parse(tokenText) : null;
+    const signedData = signedRes.ok ? JSON.parse(signedText) : null;
+
     return json({
-      token: data.token,
+      token: tokenData?.token ?? null,
+      signed_url: signedData?.signed_url ?? null,
       agent_id: prof.elevenlabs_agent_id,
       broker: { name: prof.full_name, extension: prof.extension },
     });

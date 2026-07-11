@@ -551,6 +551,48 @@ export function useSoftphoneJsSip(
     };
   }, [config?.extension, config?.wssUrl, config?.domain, config?.password, opts.jsSipTimeoutMs, reconnectTick, log, setSipError, setSipStatus]);
 
+  // Auto-reconnect on network recovery / app foreground.
+  // Guarantees SIP re-registration within seconds of network coming back,
+  // instead of waiting for the JsSIP disconnected→scheduleRetry backoff.
+  useEffect(() => {
+    if (!config) return;
+    let cancelled = false;
+    let detachNative: (() => void) | null = null;
+
+    const trigger = (source: string) => {
+      if (cancelled) return;
+      if (sipStatusRef.current === 'registered') return;
+      log('reconnect.auto', `source=${source} status=${sipStatusRef.current}`, 'warn');
+      try { reconnectRef.current(); } catch (e: any) {
+        log('reconnect.auto.failed', e?.message || '', 'error');
+      }
+    };
+
+    // Capacitor Network + App foreground (Android + iOS WebView).
+    import('../lib/sip/nativeAutoReconnect')
+      .then((m) => m.attachNativeAutoReconnect(() => trigger('native')))
+      .then((d) => { if (cancelled) { try { d(); } catch {} } else { detachNative = d; } })
+      .catch(() => {});
+
+    // WebView / browser fallback — fires even if Capacitor plugins fail to load.
+    const onOnline = () => trigger('window.online');
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        trigger('visibilitychange');
+      }
+    };
+    if (typeof window !== 'undefined') window.addEventListener('online', onOnline);
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      if (typeof window !== 'undefined') window.removeEventListener('online', onOnline);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
+      if (detachNative) { try { detachNative(); } catch {} }
+    };
+  }, [config?.extension, config?.wssUrl, log]);
+
+
   // HD audio capture constraints — driven by the user's Settings preferences
   // (noise cancellation on/off + mode). Built lazily on each call so toggling
   // in Settings takes effect on the next getUserMedia().

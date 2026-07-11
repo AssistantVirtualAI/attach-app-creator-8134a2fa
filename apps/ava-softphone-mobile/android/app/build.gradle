@@ -7,7 +7,7 @@ android {
         applicationId "com.lemtel.softphone"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 40
+        versionCode 42
         versionName "1.0.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -23,6 +23,13 @@ android {
             storePassword "LemtelSoft2026!"
             keyAlias "lemtel-softphone"
             keyPassword "LemtelSoft2026!"
+        }
+    }
+
+    defaultConfig {
+        // 16 KB page size alignment — required for Android 15+
+        externalNativeBuild {
+            cmake { arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON" }
         }
     }
 

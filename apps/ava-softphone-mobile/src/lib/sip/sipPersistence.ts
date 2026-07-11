@@ -68,8 +68,10 @@ export function clearSipLog() {
   safe(() => localStorage.removeItem(LOG_KEY), undefined);
 }
 
-/** Exponential back-off with cap (ms). Skipped entirely for auth failures. */
-export const RETRY_BACKOFF_MS = [3000, 6000, 12000, 24000, 45000, 60000];
+/** Exponential back-off with cap (ms). Skipped entirely for auth failures.
+ *  Tuned so 4 attempts fit within ~60s (2s + 5s + 10s + 20s = 37s cumulative)
+ *  to satisfy the <1min re-registration SLA after transient network loss. */
+export const RETRY_BACKOFF_MS = [2000, 5000, 10000, 20000, 30000, 45000];
 
 /** Hard cap on auto-retries per session before we stop and require manual action. */
 export const MAX_AUTO_RETRIES = 6;

@@ -141,6 +141,8 @@ export function useSoftphoneJsSip(
     setSipStatusState(s);
     savePersistedStatus(s);
   }, []);
+
+  const setSipError = useCallback((msg: string, ctx?: { extension?: string; domain?: string }) => {
     setSipErrorState(msg);
     if (msg && (ctx?.extension || ctx?.domain)) {
       const persisted: PersistedSipError = {

@@ -226,16 +226,14 @@ function AuthenticatedShell({
   // Permissions are requested natively after login (see requestPermissionsAfterLogin).
 
   // Build SIP config from the same backend credentials used by desktop/portal.
-  // iOS: pin SIP/TLS (5061) for the native PJSIP plugin.
-  // Android: use a real wss:// URL because Android falls back to JsSIP (WebRTC).
+  // Native mobile SIP uses CapacitorPjsip/PJSUA2. Android must avoid JsSIP/WebView
+  // because backgrounded WebSockets are killed by the OS.
   const sipPassword = creds.sipPassword;
   const isAndroidPlatform = Capacitor.getPlatform() === 'android';
   const WSS_TLS = 'sips://pbxnode.lemtel.tel:5061';
   const WSS_PRIMARY = 'wss://pbxnode.lemtel.tel:7443';
   const WSS_FALLBACK = 'wss://node.lemtelcloud.net:7443';
-  const WORKING_WSS = isAndroidPlatform
-    ? [WSS_PRIMARY, WSS_FALLBACK]
-    : [WSS_TLS, WSS_PRIMARY, WSS_FALLBACK];
+  const WORKING_WSS = [WSS_TLS, WSS_PRIMARY, WSS_FALLBACK];
   const sipDomain = creds.sipDomain || 'lemtel.lemtel.tel';
   // credentialsReady: true once we have extension + password, regardless of token freshness
   // The freshCredentialToken check was blocking SIP from ever starting
@@ -247,7 +245,7 @@ function AuthenticatedShell({
         displayName: creds.displayName || creds.email || 'User',
         password: sipPassword,
         domain: sipDomain,
-        // Native TCP SIP info (Android uses CapacitorPjsip bridge on 5060).
+        // Native TCP SIP info for CapacitorPjsip/PJSUA2.
         server: 'pbxnode.lemtel.tel',
         port: isAndroidPlatform ? 5060 : 5061,
         transport: isAndroidPlatform ? 'TCP' : 'TLS',

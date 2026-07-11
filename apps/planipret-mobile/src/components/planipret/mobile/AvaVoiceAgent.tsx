@@ -220,17 +220,19 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
           return;
         }
 
-        // Mint a scoped WebRTC token server-side so the API key stays private.
+        // Mint a scoped WebSocket signed URL server-side so the API key stays private.
+        // WebSocket transport (not WebRTC) avoids pulling livekit-client into the mobile bundle.
         const { data: tok, error: tokErr } = await supabase.functions.invoke("pp-ava-webrtc-token", { body: {} });
-        if (tokErr || !(tok as any)?.token) {
-          toast.error((tok as any)?.error ?? "Token vocal indisponible");
+        if (tokErr || !(tok as any)?.signed_url) {
+          toast.error((tok as any)?.error ?? "Session vocale indisponible");
           setState("error");
           return;
         }
 
         const conv = await Conversation.startSession({
-          conversationToken: (tok as any).token,
-          connectionType: "webrtc",
+          signedUrl: (tok as any).signed_url,
+          connectionType: "websocket",
+
 
           overrides: {
             agent: {

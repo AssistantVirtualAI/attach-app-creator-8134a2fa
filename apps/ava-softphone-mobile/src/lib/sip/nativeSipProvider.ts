@@ -76,13 +76,14 @@ export interface CapacitorSipPlugin {
 export const CapacitorSipNative = registerPlugin<CapacitorSipPlugin>('CapacitorPjsip');
 export const CapacitorPjsip = CapacitorSipNative;
 
-// Native PJSIP is wired on iOS and Android. Android must not fall back to
-// JsSIP/WebView because backgrounded WebSockets are killed by the OS.
+// Native PJSIP is only wired on iOS. Android uses JsSIP inside the WebView;
+// the WebSocket is kept alive in background by SipForegroundService (started
+// from CapacitorPjsip.initAccount).
 import { Capacitor as __Cap } from '@capacitor/core';
 const __NATIVE_FLAG = ((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true';
 let __platform: string = 'web';
 try { __platform = __Cap.getPlatform(); } catch { /* ssr / tests */ }
-export const NATIVE_SIP_ENABLED = __platform === 'android' || (__NATIVE_FLAG && __platform === 'ios');
+export const NATIVE_SIP_ENABLED = __platform === 'ios' && __NATIVE_FLAG !== false;
 
 /**
  * Subscribe to a native SIP event. Returns a cleanup function.

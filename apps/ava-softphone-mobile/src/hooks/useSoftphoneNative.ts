@@ -334,8 +334,12 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
 
         await CapacitorPjsip.initAccount({
           extension: config.extension,
+          username: (config as any).authUsername || config.extension,
           domain: config.domain,
           password: config.password,
+          server: (config as any).server,
+          port: (config as any).port,
+          transport: (config as any).transport,
           wssUrl: config.wssUrl,
         });
       } catch (e: any) {

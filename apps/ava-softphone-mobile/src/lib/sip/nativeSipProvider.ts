@@ -9,6 +9,10 @@ export interface CapacitorSipPlugin {
     domain: string;
     password: string;
     host?: string;
+    server?: string;
+    port?: number;
+    transport?: string;
+    username?: string;
     wssUrl?: string; // legacy, ignored by native TLS plugin
     logLevel?: CapacitorSipLogLevel;
   }): Promise<void>;

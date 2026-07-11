@@ -426,7 +426,7 @@ class CapacitorPjsip : Plugin() {
                     val media = info.media[i]
                     if (media.type == pjmedia_type.PJMEDIA_TYPE_AUDIO) {
                         nativeCall.getAudioMedia(i).startTransmit(rec)
-                        endpoint?.audDevManager()?.captureDevMedia?.startTransmit(rec)
+                        endpoint?.audDevManager()?.getCaptureDevMedia()?.startTransmit(rec)
                     }
                 }
                 recorder = rec
@@ -453,12 +453,12 @@ class CapacitorPjsip : Plugin() {
 
     @PluginMethod
     fun startRecording(call: PluginCall) {
-        call.resolve(JSObject().apply { put("ok", true); put("recording", true) })
+        startRecord(call)
     }
 
     @PluginMethod
     fun stopRecording(call: PluginCall) {
-        call.resolve(JSObject().apply { put("ok", true); put("recording", false) })
+        stopRecord(call)
     }
 
     @PluginMethod
@@ -568,8 +568,10 @@ class CapacitorPjsip : Plugin() {
                         (media.status == pjsua_call_media_status.PJSUA_CALL_MEDIA_ACTIVE ||
                             media.status == pjsua_call_media_status.PJSUA_CALL_MEDIA_REMOTE_HOLD)) {
                         val audioMedia = getAudioMedia(i)
-                        endpoint?.audDevManager()?.captureDevMedia?.startTransmit(audioMedia)
-                        audioMedia.startTransmit(endpoint?.audDevManager()?.playbackDevMedia)
+                        endpoint?.audDevManager()?.let { adm ->
+                            adm.getCaptureDevMedia().startTransmit(audioMedia)
+                            audioMedia.startTransmit(adm.getPlaybackDevMedia())
+                        }
                         emit("audioStateChanged", JSObject().apply {
                             put("status", "running")
                             put("audioBackend", "pjsip")

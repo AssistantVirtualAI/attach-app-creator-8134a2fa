@@ -64,8 +64,12 @@ export async function forceNativeReconnect(): Promise<void> {
   try {
     await CapacitorPjsip.initAccount({
       extension: cfg.extension,
+      username: (cfg as any).authUsername || cfg.extension,
       domain: cfg.domain,
       password: cfg.password,
+      server: (cfg as any).server,
+      port: (cfg as any).port,
+      transport: (cfg as any).transport,
       wssUrl: cfg.wssUrl,
     });
     _registeredKey = `${cfg.extension}@${cfg.domain}|${cfg.password}|${cfg.wssUrl ?? ''}`;

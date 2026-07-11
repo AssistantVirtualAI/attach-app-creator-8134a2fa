@@ -259,16 +259,22 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
   }
   const JsSIP = await waitForJsSIP(timeoutMs, 100, false);
   const isAndroid = __PLATFORM === 'android';
-  // SIP/TLS over TCP 5061 — no WebRTC, no mDNS, no TURN.
-  const socket = new JsSIP.Socket(`sips:pbxnode.lemtel.tel:5061;transport=tls`);
+  // WebView-only transport: WebSocket Secure. Raw sips:...transport=tls is
+  // unusable inside a WebView (JsSIP only speaks WS). iOS never reaches here
+  // because __NATIVE_SIP_ACTIVE short-circuits above.
+  const wssList = buildWssFallbackList(config);
+  if (wssList.length === 0) {
+    throw new JsSIPUnavailableError('No WSS URL configured for JsSIP transport');
+  }
+  const sockets = wssList.map((url) => new JsSIP.WebSocketInterface(url));
   const uaConfig: any = {
-    sockets: [socket],
+    sockets,
     uri: `sip:${config.extension}@${config.domain}`,
     password: config.password,
-    authorization_user: config.extension,
+    authorization_user: config.authUsername || config.extension,
     realm: config.domain,
     display_name: config.displayName || config.extension,
-    contact_uri: `sip:${config.extension}@${config.domain};transport=tls`,
+    contact_uri: `sip:${config.extension}@${config.domain};transport=ws`,
     register: true,
     session_timers: false,
     register_expires: 300,
@@ -277,12 +283,10 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     user_agent: "AVA Softphone 1.1",
   };
   if (isAndroid) {
-    // FusionPBX-friendly quirks: force TCP transport in Via, patch Contact IP
-    // through NAT, and keep session timers off so PBX doesn't renegotiate.
+    // FusionPBX-friendly quirks: force TCP transport in Via and patch Contact
+    // IP through NAT so the PBX can route responses back over the WSS tunnel.
     uaConfig.hack_via_tcp = true;
     uaConfig.hack_ip_in_contact = true;
-    uaConfig.session_timers = false;
-    uaConfig.register_expires = 300;
   }
   return new JsSIP.UA(uaConfig);
 }

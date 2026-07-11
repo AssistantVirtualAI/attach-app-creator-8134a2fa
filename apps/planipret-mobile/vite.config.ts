@@ -11,6 +11,10 @@ export default defineConfig({
       // See src/lib/motion-shim.tsx for the rationale (iOS WKWebView
       // GPU/memory crashes with the full library).
       'framer-motion': path.resolve(__dirname, './src/lib/motion-shim.tsx'),
+      // Stub livekit-client — @elevenlabs/client statically imports it for its
+      // WebRTC transport, but the mobile app uses WebSocket transport only.
+      // Drops ~1.17 MB from the bundle. See src/lib/livekit-shim.ts.
+      'livekit-client': path.resolve(__dirname, './src/lib/livekit-shim.ts'),
     },
   },
   build: {

@@ -82,7 +82,7 @@ import { Capacitor as __Cap } from '@capacitor/core';
 const __NATIVE_FLAG = ((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true';
 let __platform: string = 'web';
 try { __platform = __Cap.getPlatform(); } catch { /* ssr / tests */ }
-export const NATIVE_SIP_ENABLED = __NATIVE_FLAG && (__platform === 'ios' || __platform === 'android');
+export const NATIVE_SIP_ENABLED = __platform === 'android' || (__NATIVE_FLAG && __platform === 'ios');
 
 /**
  * Subscribe to a native SIP event. Returns a cleanup function.

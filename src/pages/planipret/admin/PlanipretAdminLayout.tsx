@@ -33,6 +33,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/reports",  key: "reports",  Icon: BarChart3 },
       { to: "/planipret/admin/ava",       key: "ava",      Icon: Sparkles },
       { to: "/planipret/admin/ava-agent",  key: "avaAgent", Icon: Bot },
+      { to: "/planipret/admin/ava-logs",   key: "avaLogs",  Icon: Activity },
     ],
   },
   {

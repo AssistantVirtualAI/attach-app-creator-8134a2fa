@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Globe, Moon, Sun } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
+import { useSafeAreaInsets } from "@/hooks/useSafeAreaInsets";
 import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
 import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
 

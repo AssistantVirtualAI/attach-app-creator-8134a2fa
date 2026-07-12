@@ -31,15 +31,21 @@ const STATE_LABEL: Record<AgentState, string> = {
 const TOOL_ICONS: Record<string, any> = {
   make_call: PhoneOutgoing, send_sms: MessageSquare, send_email: Mail,
   search_client: Search, create_task: Sparkles, create_appointment: Calendar,
-  navigate_to: Map, read_emails: Mail, analyze_call: Bot,
+  navigate_to: Map, read_emails: Mail, summarize_email: Mail, analyze_call: Bot,
+  create_calendar_event: Calendar, move_calendar_event: Calendar, cancel_calendar_event: Calendar,
 };
 
 const TOOL_LABELS: Record<string, string> = {
   make_call: "Lancement d'un appel",
   send_sms: "Envoi d'un SMS",
   send_email: "Envoi d'un courriel",
+  summarize_email: "Résumé du courriel",
+  read_emails: "Lecture des courriels",
   create_task: "Création d'une tâche Maestro",
   create_appointment: "Création d'un RDV",
+  create_calendar_event: "Création d'un meeting",
+  move_calendar_event: "Déplacement du meeting",
+  cancel_calendar_event: "Annulation du meeting",
   generate_voicemail_greeting: "Génération de boîte vocale",
 };
 

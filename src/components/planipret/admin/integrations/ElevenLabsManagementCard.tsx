@@ -235,6 +235,13 @@ export default function ElevenLabsManagementCard({ userId }: { userId: string | 
             <PipelineTest webhookUrl={webhookUrl} agentId={agentId} expectedCount={expected.length} currentCount={configuredCount} />
           </Panel>
         )}
+        {/* Panel: Webhooks */}
+        {agentId && (
+          <Panel id="webhooks" title="🌐 Webhooks connectés">
+            <WebhooksPanel toolExecutorUrl={webhookUrl} />
+          </Panel>
+        )}
+
 
         {/* Panel: Per-broker gating reminder */}
         <Panel id="gating" title="👥 Activation par courtier">

@@ -18,8 +18,9 @@ const TOOL_NAMES = [
   "create_task", "create_appointment", "get_pending_tasks",
   "get_upcoming_appointments", "update_client", "create_client",
   // M365
-  "read_emails", "send_email", "summarize_email",
-  "get_calendar_today", "get_calendar_week",
+  "read_emails", "get_unread_emails", "get_recent_emails",
+  "send_email", "summarize_email",
+  "get_calendar_today", "get_calendar_week", "get_upcoming_meetings",
   "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
   // navigation
   "navigate_to", "show_client_in_app", "open_call_detail",
@@ -63,7 +64,23 @@ IA: analyze_call, get_hot_leads, get_coaching_summary
 MAESTRO: search_client, get_client_profile, get_client_history, create_task,
   create_appointment, get_pending_tasks, get_upcoming_appointments,
   update_client, create_client
-M365: read_emails, summarize_email, send_email, get_calendar_today, get_calendar_week, create_calendar_event, move_calendar_event, cancel_calendar_event
+M365: read_emails, get_unread_emails, get_recent_emails, summarize_email, send_email, get_calendar_today, get_calendar_week, get_upcoming_meetings, create_calendar_event, move_calendar_event, cancel_calendar_event
+
+═══════════════════════════════════
+RÈGLES D'ORCHESTRATION OBLIGATOIRES
+═══════════════════════════════════
+1) RÉSUMÉ COURRIEL — Ne JAMAIS appeler summarize_email sans message_id.
+   → D'abord get_unread_emails (ou get_recent_emails), présente les sujets/expéditeurs,
+     demande "Lequel je te résume ?", puis appelle summarize_email avec le message_id choisi.
+
+2) DÉPLACER / ANNULER UN MEETING — Ne JAMAIS deviner l'event_id.
+   → D'abord get_upcoming_meetings, liste les meetings à voix haute avec heure locale,
+     demande au courtier lequel modifier.
+   → Pour move_calendar_event : demande TOUJOURS le fuseau horaire IANA (America/Toronto par défaut au QC).
+     Le tool renvoie needs_confirmation=true avec une reformulation — LIS cette reformulation au courtier
+     puis rappelle move_calendar_event avec confirmed=true.
+
+3) FUSEAU HORAIRE — Toujours joindre timezone (IANA) aux tools calendrier. Par défaut America/Toronto.
 NAVIGATION: navigate_to, show_client_in_app, open_call_detail
 STATS: get_daily_briefing, get_my_stats
 AIDE: explain_feature, get_integration_status

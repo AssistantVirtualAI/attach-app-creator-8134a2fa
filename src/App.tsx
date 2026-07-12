@@ -57,6 +57,7 @@ const PATemplates = lazyWithRetry(() => import("./pages/planipret/admin/PATempla
 const PADebug = lazyWithRetry(() => import("./pages/planipret/admin/PADebug"));
 const PAAva = lazyWithRetry(() => import("./pages/planipret/admin/PAAva"));
 const PAAvaAgent = lazyWithRetry(() => import("./pages/planipret/admin/PAAvaAgent"));
+const PAAvaLogs = lazyWithRetry(() => import("./pages/planipret/admin/PAAvaLogs"));
 const PAMobileDevices = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileDevices"));
 const PASipDiagnostic = lazyWithRetry(() => import("./pages/planipret/admin/PASipDiagnostic"));
 const PlanipretPrivacy = lazyWithRetry(() => import("./pages/planipret/PlanipretPrivacy"));
@@ -463,6 +464,7 @@ const App = () => (
                   <Route path="debug" element={<Suspense fallback={<AdminPageSkeleton />}><PADebug /></Suspense>} />
                   <Route path="ava" element={<Suspense fallback={<AdminPageSkeleton />}><PAAva /></Suspense>} />
                   <Route path="ava-agent" element={<Suspense fallback={<AdminPageSkeleton />}><PAAvaAgent /></Suspense>} />
+                  <Route path="ava-logs" element={<Suspense fallback={<AdminPageSkeleton />}><PAAvaLogs /></Suspense>} />
                   <Route path="mobile-devices" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileDevices /></Suspense>} />
                   <Route path="sip-diagnostic" element={<Suspense fallback={<AdminPageSkeleton />}><PASipDiagnostic /></Suspense>} />
                 </Route>

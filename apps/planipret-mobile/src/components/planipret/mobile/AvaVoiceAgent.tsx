@@ -31,8 +31,10 @@ const STATE_LABEL: Record<AgentState, string> = {
 const TOOL_ICONS: Record<string, any> = {
   make_call: PhoneOutgoing, send_sms: MessageSquare, send_email: Mail,
   search_client: Search, create_task: Sparkles, create_appointment: Calendar,
-  navigate_to: Map, read_emails: Mail, summarize_email: Mail, analyze_call: Bot,
+  navigate_to: Map, read_emails: Mail, get_unread_emails: Mail, get_recent_emails: Mail,
+  summarize_email: Mail, analyze_call: Bot,
   create_calendar_event: Calendar, move_calendar_event: Calendar, cancel_calendar_event: Calendar,
+  get_upcoming_meetings: Calendar,
 };
 
 const TOOL_LABELS: Record<string, string> = {
@@ -41,11 +43,14 @@ const TOOL_LABELS: Record<string, string> = {
   send_email: "Envoi d'un courriel",
   summarize_email: "Résumé du courriel",
   read_emails: "Lecture des courriels",
+  get_unread_emails: "Courriels non lus",
+  get_recent_emails: "Derniers courriels",
   create_task: "Création d'une tâche Maestro",
   create_appointment: "Création d'un RDV",
   create_calendar_event: "Création d'un meeting",
   move_calendar_event: "Déplacement du meeting",
   cancel_calendar_event: "Annulation du meeting",
+  get_upcoming_meetings: "Meetings à venir",
   generate_voicemail_greeting: "Génération de boîte vocale",
 };
 

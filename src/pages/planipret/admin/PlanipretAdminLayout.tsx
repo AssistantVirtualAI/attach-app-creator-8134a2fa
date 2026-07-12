@@ -21,7 +21,7 @@ import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { toast } from "sonner";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
 type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "mobileDevices" | "sipDiagnostic";
 

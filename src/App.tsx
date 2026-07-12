@@ -464,6 +464,7 @@ const App = () => (
                   <Route path="debug" element={<Suspense fallback={<AdminPageSkeleton />}><PADebug /></Suspense>} />
                   <Route path="ava" element={<Suspense fallback={<AdminPageSkeleton />}><PAAva /></Suspense>} />
                   <Route path="ava-agent" element={<Suspense fallback={<AdminPageSkeleton />}><PAAvaAgent /></Suspense>} />
+                  <Route path="ava-logs" element={<Suspense fallback={<AdminPageSkeleton />}><PAAvaLogs /></Suspense>} />
                   <Route path="mobile-devices" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileDevices /></Suspense>} />
                   <Route path="sip-diagnostic" element={<Suspense fallback={<AdminPageSkeleton />}><PASipDiagnostic /></Suspense>} />
                 </Route>

@@ -47,6 +47,7 @@ const CONFIRM_REQUIRED = new Set([
   "make_call", "send_sms", "send_email",
   "create_task", "create_appointment", "generate_voicemail_greeting",
   "update_client",
+  "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
 ]);
 
 export default function AvaVoiceAgent({ onClose, userId }: Props) {
@@ -169,7 +170,9 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
       "search_client", "get_client_profile", "get_client_history",
       "create_task", "create_appointment", "get_pending_tasks",
       "get_upcoming_appointments", "update_client", "create_client",
-      "read_emails", "send_email", "get_calendar_today", "get_calendar_week",
+      "read_emails", "summarize_email", "send_email",
+      "get_calendar_today", "get_calendar_week",
+      "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
       "navigate_to", "show_client_in_app", "open_call_detail",
       "show_toast", "open_dialer", "open_sms_composer", "close_ava",
       "get_daily_briefing", "get_my_stats",

@@ -63,7 +63,7 @@ IA: analyze_call, get_hot_leads, get_coaching_summary
 MAESTRO: search_client, get_client_profile, get_client_history, create_task,
   create_appointment, get_pending_tasks, get_upcoming_appointments,
   update_client, create_client
-M365: read_emails, send_email, get_calendar_today, get_calendar_week
+M365: read_emails, summarize_email, send_email, get_calendar_today, get_calendar_week, create_calendar_event, move_calendar_event, cancel_calendar_event
 NAVIGATION: navigate_to, show_client_in_app, open_call_detail
 STATS: get_daily_briefing, get_my_stats
 AIDE: explain_feature, get_integration_status

@@ -371,6 +371,103 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     return await r.json().catch(() => ({ success: false }));
   },
 
+  async create_calendar_event(ctx, p) {
+    // p: { subject, start_datetime, end_datetime OR duration_minutes, attendees?, body?, location?, is_online? }
+    const startAt = new Date(p.start_datetime ?? p.start);
+    const endAt = p.end_datetime
+      ? new Date(p.end_datetime)
+      : new Date(startAt.getTime() + (Number(p.duration_minutes ?? 30)) * 60000);
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "create_calendar_event",
+        _user_id: ctx.userId,
+        payload: {
+          subject: p.subject ?? p.title ?? "Rendez-vous",
+          start: { dateTime: startAt.toISOString(), timeZone: p.timezone ?? "America/Toronto" },
+          end: { dateTime: endAt.toISOString(), timeZone: p.timezone ?? "America/Toronto" },
+          body: p.body ?? p.notes,
+          attendees: Array.isArray(p.attendees) ? p.attendees : (p.attendee_email ? [p.attendee_email] : []),
+          isOnlineMeeting: p.is_online ?? true,
+        },
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    return { success: !!j?.success, event_id: j?.event_id, message: `RDV "${p.subject ?? p.title}" créé`, raw: j };
+  },
+
+  async move_calendar_event(ctx, p) {
+    // p: { event_id, new_start, new_end? OR duration_minutes? }
+    if (!p.event_id) return { success: false, error: "event_id_required" };
+    const startAt = new Date(p.new_start ?? p.start_datetime);
+    const endAt = p.new_end
+      ? new Date(p.new_end)
+      : (p.duration_minutes
+          ? new Date(startAt.getTime() + Number(p.duration_minutes) * 60000)
+          : undefined);
+    const patch: any = {
+      event_id: p.event_id,
+      start: { dateTime: startAt.toISOString(), timeZone: p.timezone ?? "America/Toronto" },
+    };
+    if (endAt) patch.end = { dateTime: endAt.toISOString(), timeZone: p.timezone ?? "America/Toronto" };
+    if (p.subject) patch.subject = p.subject;
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "update_calendar_event", _user_id: ctx.userId, payload: patch }),
+    });
+    const j = await r.json().catch(() => ({}));
+    return { success: !!j?.success, message: "RDV déplacé", raw: j };
+  },
+
+  async cancel_calendar_event(ctx, p) {
+    if (!p.event_id) return { success: false, error: "event_id_required" };
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete_calendar_event", _user_id: ctx.userId, payload: { event_id: p.event_id } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    return { success: !!j?.success, message: "RDV annulé", raw: j };
+  },
+
+  async summarize_email(ctx, p) {
+    // p: { message_id }  or  { subject, body }
+    let subject = p.subject ?? "";
+    let bodyText = p.body ?? "";
+    if (p.message_id && !bodyText) {
+      const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "read_email_detail", _user_id: ctx.userId, payload: { message_id: p.message_id } }),
+      });
+      const j = await r.json().catch(() => ({}));
+      subject = j?.email?.subject ?? subject;
+      const raw = j?.email?.body?.content ?? j?.email?.bodyPreview ?? "";
+      bodyText = String(raw).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 8000);
+    }
+    if (!bodyText) return { success: false, error: "no_content_to_summarize" };
+
+    const key = Deno.env.get("LOVABLE_API_KEY");
+    if (!key) return { success: true, summary: bodyText.slice(0, 400), message: "Résumé indisponible (LOVABLE_API_KEY manquant)" };
+
+    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: "Tu es AVA, assistante d'un courtier hypothécaire. Résume ce courriel en 3-4 phrases courtes en français québécois. Mentionne l'expéditeur, le sujet, et l'action requise si applicable." },
+          { role: "user", content: `Sujet: ${subject}\n\n${bodyText}` },
+        ],
+      }),
+    });
+    const aj = await aiRes.json().catch(() => ({}));
+    const summary = aj?.choices?.[0]?.message?.content ?? "";
+    return { success: !!summary, summary, subject, message: "Résumé du courriel prêt" };
+  },
+
   // ===== NAVIGATION =====
   async navigate_to(ctx, p) {
     const ALLOWED = new Set([

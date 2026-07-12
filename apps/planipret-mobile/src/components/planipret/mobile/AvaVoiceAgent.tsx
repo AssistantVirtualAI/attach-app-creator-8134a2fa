@@ -31,15 +31,21 @@ const STATE_LABEL: Record<AgentState, string> = {
 const TOOL_ICONS: Record<string, any> = {
   make_call: PhoneOutgoing, send_sms: MessageSquare, send_email: Mail,
   search_client: Search, create_task: Sparkles, create_appointment: Calendar,
-  navigate_to: Map, read_emails: Mail, analyze_call: Bot,
+  navigate_to: Map, read_emails: Mail, summarize_email: Mail, analyze_call: Bot,
+  create_calendar_event: Calendar, move_calendar_event: Calendar, cancel_calendar_event: Calendar,
 };
 
 const TOOL_LABELS: Record<string, string> = {
   make_call: "Lancement d'un appel",
   send_sms: "Envoi d'un SMS",
   send_email: "Envoi d'un courriel",
+  summarize_email: "Résumé du courriel",
+  read_emails: "Lecture des courriels",
   create_task: "Création d'une tâche Maestro",
   create_appointment: "Création d'un RDV",
+  create_calendar_event: "Création d'un meeting",
+  move_calendar_event: "Déplacement du meeting",
+  cancel_calendar_event: "Annulation du meeting",
   generate_voicemail_greeting: "Génération de boîte vocale",
 };
 
@@ -47,6 +53,7 @@ const CONFIRM_REQUIRED = new Set([
   "make_call", "send_sms", "send_email",
   "create_task", "create_appointment", "generate_voicemail_greeting",
   "update_client",
+  "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
 ]);
 
 export default function AvaVoiceAgent({ onClose, userId }: Props) {
@@ -169,7 +176,9 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
       "search_client", "get_client_profile", "get_client_history",
       "create_task", "create_appointment", "get_pending_tasks",
       "get_upcoming_appointments", "update_client", "create_client",
-      "read_emails", "send_email", "get_calendar_today", "get_calendar_week",
+      "read_emails", "summarize_email", "send_email",
+      "get_calendar_today", "get_calendar_week",
+      "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
       "navigate_to", "show_client_in_app", "open_call_detail",
       "show_toast", "open_dialer", "open_sms_composer", "close_ava",
       "get_daily_briefing", "get_my_stats",

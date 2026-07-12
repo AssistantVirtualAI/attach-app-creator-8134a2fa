@@ -59,18 +59,28 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
-    const { data: claims } = await userClient.auth.getClaims(authHeader.replace("Bearer ", ""));
-    const userId = claims?.claims?.sub;
+    const token = authHeader.replace("Bearer ", "");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
+
+    const body = await req.json();
+    const { action, payload = {}, _user_id: bodyUserId } = body ?? {};
+
+    // Trusted server-to-server call (service role) may pass _user_id in body.
+    let userId: string | undefined;
+    if (token && token === serviceKey && bodyUserId) {
+      userId = String(bodyUserId);
+    } else {
+      const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
+      const { data: claims } = await userClient.auth.getClaims(token);
+      userId = claims?.claims?.sub;
+    }
     if (!userId) return new Response(JSON.stringify({ success: false, error: "Unauthorized", code: 401 }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const { data: profile } = await admin.from("planipret_profiles").select("id, user_id, full_name, ms365_access_token, ms365_refresh_token, ms365_scopes, ms365_token_expiry, ms365_email").eq("user_id", userId).maybeSingle();
     if (!profile?.ms365_access_token) {
       return new Response(JSON.stringify({ success: false, error: "Microsoft 365 non connecté pour ce courtier" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
-    const { action, payload = {} } = await req.json();
     const j = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     switch (action) {

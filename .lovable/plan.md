@@ -1,65 +1,112 @@
+# Plan — Agent vocal AI unique ElevenLabs pour tous les courtiers Planiprêt
+
 ## Objectif
+Un **seul agent ElevenLabs Conversational AI** partagé par tous les courtiers, personnalisé à la volée par variables dynamiques (nom, prénom, org), branché sur:
+- Stats & actions PBX (FusionPBX) : passer un appel, envoyer un SMS, lire stats
+- Microsoft 365 : lire/résumer/envoyer email, créer/déplacer/annuler meetings calendrier
 
-Refonte visuelle de la page AVA (chat) pour l'aligner sur le reste de l'app mobile Planiprêt, mettre en évidence le logo AVA dans le footer, et transformer le mode vocal en une orbe "AVA parle" style ChatGPT.
+## Architecture
 
-## 1. Footer (PlanipretMobile.tsx) — logo AVA en évidence
+```text
+Mobile/Web (Planiprêt)
+   │  useConversation (SDK @elevenlabs/react)
+   │  ├─ fetch  /elevenlabs-signed-url  → token WebRTC
+   │  └─ overrides: { firstName, lastName, brokerId, orgId, extension }
+   ▼
+ElevenLabs Convai Agent (1 seul, ID en config)
+   │  Server tools (webhook) → toutes routées vers :
+   ▼
+supabase/functions/ava-voice-tool-router  (nouveau, 1 endpoint)
+   │  Vérifie HMAC ElevenLabs, résout brokerId → user_id/org
+   │  Dispatch selon `tool_name` :
+   ├─► pbx.place_call        → fusionpbx-proxy (originate)
+   ├─► pbx.send_sms          → pbx-write (sms_send)
+   ├─► pbx.get_stats         → planipret-admin-ava-analytics
+   ├─► pbx.recent_calls      → pbx_call_records (RLS user)
+   ├─► ms365.read_emails     → ms365-actions:list_messages
+   ├─► ms365.summarize_email → ava-email-analyzer
+   ├─► ms365.send_email      → ms365-actions:send_email
+   ├─► calendar.create_event → ms365-actions:create_calendar_event
+   ├─► calendar.move_event   → ms365-actions:update_event
+   └─► calendar.cancel_event → ms365-actions:delete_event
+```
 
-Fichiers : `src/pages/planipret/PlanipretMobile.tsx` + `apps/planipret-mobile/src/pages/planipret/PlanipretMobile.tsx`
+Réutilise `ms365-actions` et `fusionpbx-proxy` déjà existants — pas de duplication.
 
-- Hauteur footer 34px → 48px.
-- Logo AVA au **centre** : disque 40×40 avec halo violet pulsé (var(--pp-agent)), léger anneau conique animé, drop-shadow marquée.
-- Wordmark "AVA" plus grand (18px, poids 900) accolé au logo, en gradient (agent → brand-accent).
-- Micro-textes "Powered by" et "Developed by Planiprêt Solutions" en 8px, opacité réduite, disposés en dessous sur une deuxième ligne pour ne pas voler la vedette au logo.
+## 1. Configuration ElevenLabs (une fois)
 
-## 2. Chat AVA — refonte visuelle synchronisée avec les autres pages
+Dans dashboard ElevenLabs :
+- Créer 1 agent "Ava — Assistant Courtier Planiprêt"
+- **Dynamic variables activées** : `broker_first_name`, `broker_last_name`, `broker_extension`, `org_name`
+- **System prompt** utilisant `{{broker_first_name}}` : "Tu es Ava, l'assistante vocale de {{broker_first_name}} {{broker_last_name}}…"
+- **First message** : "Bonjour {{broker_first_name}}, que puis-je faire pour vous ?"
+- **Overrides autorisés** : prompt, firstMessage, language
+- **Server tools** (webhook type) : 10 tools ci-dessus, tous pointant vers `https://<project>.supabase.co/functions/v1/ava-voice-tool-router` avec header secret HMAC
+- Stocker `ELEVENLABS_AGENT_ID` et `ELEVENLABS_TOOL_HMAC_SECRET` en secrets
 
-Fichiers : `src/pages/planipret/mobile/MAvaChat.tsx` + apps/mobile jumeau.
+## 2. Backend — nouvelles/modifs edge functions
 
-- **Header** : passer du bandeau sombre custom au style "card-header" utilisé sur MHome/MPipeline (fond `--pp-bg-surface`, border-bottom `--pp-bg-border`, radius top). Titre en Urbanist, sous-titre "Assistant Planiprêt" en petit texte muted.
-- **Switch Chat / Vocal** : remplacer les deux boutons plats par un segmented control arrondi, pill glossy, avec indicateur animé (translate). Icônes Mic/MessageSquare, actifs en gradient brand→agent.
-- **Bulles** :
-  - Assistant : fond `--pp-bg-elevated`, border subtile, radius 20/20/20/6, ombre douce, avatar AVA 32px avec halo agent.
-  - Utilisateur : gradient `brand-accent → agent` (harmonisé avec le reste de l'app plutôt que brand→success), texte `#fff`, radius 20/20/6/20.
-  - Suggestions : chips en verre (`backdrop-blur`, border agent 30%, hover translate).
-- **Composer** : conteneur pill flottant (max-w-3xl, shadow-lg, border agent/20, backdrop-blur), boutons Mic et Send en cercles gradient, animation d'onde pendant l'enregistrement.
-- **Empty state** : ajouter l'orbe AVA (petite version) + 3 suggestions cliquables ("Résumé de la journée", "Prochains rendez-vous", "Rappeler un client").
+**`elevenlabs-signed-url`** (existe déjà, à adapter)
+- Reçoit session utilisateur → renvoie `{ token, dynamicVariables: { broker_first_name, broker_last_name, broker_extension, org_name } }`
+- Le brokerId n'est PAS envoyé au client dans les variables sensibles ; injecté côté server via `conversation_config_override`
 
-## 3. Mode vocal — orbe AVA style ChatGPT
+**`ava-voice-tool-router`** (nouveau — unique webhook pour tous les tools)
+- Vérifie signature HMAC ElevenLabs
+- Extrait `conversation_id` + custom metadata (broker_id transmis à `startSession`)
+- Récupère user/org depuis `pbx_softphone_users` par extension
+- Switch sur `tool_name`, appelle la function interne appropriée avec service role
+- Log dans `planipret_ava_action_log`
+- Retourne réponse JSON structurée que l'agent verbalise
 
-Fichier : `src/components/planipret/mobile/AvaVoiceAgent.tsx` (+ jumeau).
+**Extensions ms365-actions** (vérifier présence, ajouter si manquant) :
+- `update_calendar_event` (déplacer)
+- `delete_calendar_event` (annuler)
+- `summarize_email` → délègue à `ava-email-analyzer`
 
-Créer un nouveau composant `AvaOrb.tsx` (`src/components/planipret/mobile/`) :
+## 3. Frontend — mobile & web
 
-- Cercle central 260px, gradient conique animé (violet agent → cyan brand-accent → success).
-- 3 anneaux SVG flous en rotation lente contrarotative.
-- Réactivité audio :
-  - **Idle** : respiration lente (scale 1 ↔ 1.04, 4s).
-  - **Listening** : l'orbe pulse selon `micLevels` (déjà calculés via analyser) — scale et intensité de halo proportionnels au niveau moyen.
-  - **Speaking** : ondes concentriques émises (3 anneaux `animate-ping` décalés), teinte plus chaude (brand-accent dominant).
-  - **Processing / tool_running** : rotation accélérée + shimmer.
-- Implémenté en pur CSS + `<canvas>` optionnel pour le voice-blob (fallback : `radial-gradient` + `@keyframes`).
+**Nouveau hook `useAvaVoiceAgent`** (`apps/planipret-mobile/src/hooks/`)
+- Charge session → appelle `elevenlabs-signed-url`
+- Démarre `useConversation` avec `conversationToken` + overrides dynamiques
+- Gère mic permission, statuts, VU-mètre
 
-Intégration dans AvaVoiceAgent :
+**Composant `AvaVoiceButton`** — bouton flottant micro dans header
+- États : idle / connecting / listening / speaking
+- Ouvre panneau plein écran pendant conversation
+- Affiche transcription live + suggestions
 
-- Remplace le visuel actuel (grande carte + barres micro) par l'orbe centrée verticalement.
-- Sous l'orbe : label d'état (`STATE_LABEL[state]`) en typo Urbanist 18px.
-- Transcript déplacé en bas, semi-transparent, max 3 lignes visibles avec fade.
-- Bouton "Retour au chat" en haut à gauche, cohérent avec le style pill du chat.
+Intégration : remplace/complète la voix actuelle `openVoice` dans `avaProactive.ts`.
 
-## 4. Détails techniques
+## 4. Sécurité
 
-- Aucun changement de logique (sessions, invocations edge, ElevenLabs) — uniquement UI.
-- Tokens : utiliser exclusivement `--pp-*` déjà définis dans `design-tokens`.
-- Nouveaux keyframes ajoutés localement via `<style>` inline dans `AvaOrb` pour rester scopés.
-- Miroir strict entre `src/` et `apps/planipret-mobile/src/` (règle mplanipret-isolation).
-- Build + typecheck après modification.
+- **HMAC** obligatoire sur webhook tools (rejet 401 sinon)
+- **Broker identity** : jamais fait confiance au client ; l'edge function résout depuis la session Supabase et l'injecte via `conversation_config_override.agent.prompt.variables` côté serveur uniquement
+- **Consent** : bannière première utilisation (mic + enregistrement conversation)
+- **Audit** : tous les tool calls loggés dans `planipret_ava_action_log` (existant)
+- **RLS** : les tools respectent l'org du courtier (JWT synthétique ou filtres explicites)
+- Actions destructives (send_email, cancel_event) : logguées, éventuellement confirmées vocalement avant exécution
 
-## Fichiers touchés
+## 5. Détails techniques
 
-- `src/pages/planipret/PlanipretMobile.tsx`
-- `apps/planipret-mobile/src/pages/planipret/PlanipretMobile.tsx`
-- `src/pages/planipret/mobile/MAvaChat.tsx`
-- `apps/planipret-mobile/src/pages/planipret/mobile/MAvaChat.tsx`
-- `src/components/planipret/mobile/AvaVoiceAgent.tsx`
-- `apps/planipret-mobile/src/components/planipret/mobile/AvaVoiceAgent.tsx`
-- **nouveau** `src/components/planipret/mobile/AvaOrb.tsx` (+ jumeau)
+- SDK : `npm install @elevenlabs/react` dans `apps/planipret-mobile`
+- Connexion : **WebRTC** (latence < WebSocket)
+- Modèle : `eleven_turbo_v2_5` pour temps réel FR
+- Locale par défaut : `fr` (override possible)
+- Timeout tool : 15 s max (garder handlers rapides) — pour analyses email longues, retourner "je traite en arrière-plan" et notifier via `planipret_ava_notifications`
+- Secrets requis : `ELEVENLABS_API_KEY` (via connecteur standard), `ELEVENLABS_AGENT_ID`, `ELEVENLABS_TOOL_HMAC_SECRET`
+
+## 6. Étapes de livraison
+
+1. Provisionner l'agent ElevenLabs + secrets
+2. Créer `ava-voice-tool-router` + compléter `ms365-actions`
+3. Adapter `elevenlabs-signed-url` (variables dynamiques + override serveur)
+4. Ajouter hook + bouton vocal côté mobile
+5. Tests bout-en-bout : appel, SMS, création meeting, résumé inbox
+6. Rollout progressif via feature flag `ava_voice_enabled` sur `planipret_settings`
+
+## Hors-scope (à confirmer)
+- Pas de numéro de téléphone entrant pour Ava (appel outbound depuis l'app uniquement)
+- Pas de multi-agents par courtier — 1 seul, personnalisé par variables
+- Pas de fine-tuning du modèle vocal
+
+Confirme et je passe en mode build.

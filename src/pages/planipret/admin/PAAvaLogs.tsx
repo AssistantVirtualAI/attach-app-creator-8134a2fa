@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import { Activity, CheckCircle2, XCircle, RefreshCw, Filter } from "lucide-react";
+import { Activity, CheckCircle2, XCircle, RefreshCw, Filter, Search } from "lucide-react";
+import Pagination from "@/components/planipret/admin/Pagination";
 
 type Log = {
   id: string;
@@ -33,6 +34,17 @@ export default function PAAvaLogs() {
   const [statusF, setStatusF] = useState<string>("");
   const [toolF, setToolF] = useState<string>("");
   const [since, setSince] = useState<string>("24h");
+  // Search
+  const [qEmail, setQEmail] = useState("");
+  const [qPhone, setQPhone] = useState("");
+  const [qId, setQId] = useState("");
+  const [emailDraft, setEmailDraft] = useState("");
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [idDraft, setIdDraft] = useState("");
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [total, setTotal] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -40,23 +52,41 @@ export default function PAAvaLogs() {
       const sinceIso = since === "all"
         ? undefined
         : new Date(Date.now() - ({ "1h": 1, "24h": 24, "7d": 24 * 7, "30d": 24 * 30 }[since] ?? 24) * 3600_000).toISOString();
-      const params = new URLSearchParams({ limit: "200" });
+      const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
       if (statusF) params.set("status", statusF);
       if (toolF) params.set("tool", toolF);
       if (sinceIso) params.set("since", sinceIso);
+      if (qEmail) params.set("q_email", qEmail);
+      if (qPhone) params.set("q_phone", qPhone);
+      if (qId) params.set("q_id", qId);
       const { data, error } = await supabase.functions.invoke(`ava-tool-logs?${params.toString()}`, { method: "GET" as any });
       if (error) throw error;
-      setLogs((data as any)?.logs ?? []);
-      setStats((data as any)?.stats ?? null);
+      const d = data as any;
+      setLogs(d?.logs ?? []);
+      setStats(d?.stats ?? null);
+      setTotal(d?.total ?? 0);
     } catch (e: any) {
       console.error("ava-tool-logs load", e);
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [statusF, toolF, since]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [statusF, toolF, since, page, pageSize, qEmail, qPhone, qId]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [statusF, toolF, since, qEmail, qPhone, qId]);
 
   const toolNames = useMemo(() => Array.from(new Set(logs.map((l) => l.tool_name))).sort(), [logs]);
   const locale = lang === "en" ? "en-CA" : "fr-CA";
+
+  const applySearch = () => {
+    setQEmail(emailDraft.trim());
+    setQPhone(phoneDraft.trim());
+    setQId(idDraft.trim());
+  };
+  const clearSearch = () => {
+    setEmailDraft(""); setPhoneDraft(""); setIdDraft("");
+    setQEmail(""); setQPhone(""); setQId("");
+  };
 
   return (
     <div className="space-y-5">
@@ -79,12 +109,39 @@ export default function PAAvaLogs() {
 
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Total exécutions" value={stats.total} />
+          <StatCard label="Résultats filtrés" value={stats.total} />
           <StatCard label="Succès" value={stats.success} tone="ok" />
           <StatCard label="Erreurs" value={stats.error} tone="err" />
           <StatCard label="Outils distincts" value={Object.keys(stats.by_tool).length} />
         </div>
       )}
+
+      {/* Search bar */}
+      <div className="p-3 rounded-md border space-y-2" style={{ borderColor: "var(--pp-border)" }}>
+        <div className="flex items-center gap-2" style={{ color: "var(--pp-text-faint)", fontSize: 11, fontWeight: 600 }}>
+          <Search className="w-3.5 h-3.5" /> RECHERCHE
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <SearchInput placeholder="Email du courtier" value={emailDraft} onChange={setEmailDraft} onEnter={applySearch} />
+          <SearchInput placeholder="Numéro de téléphone (+15145551234)" value={phoneDraft} onChange={setPhoneDraft} onEnter={applySearch} />
+          <SearchInput placeholder="ID exécution ou session" value={idDraft} onChange={setIdDraft} onEnter={applySearch} />
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={applySearch}
+            className="px-3 py-1.5 rounded-md text-xs font-medium"
+            style={{ background: "#1A4A8A", color: "#fff" }}>Rechercher</button>
+          {(qEmail || qPhone || qId) && (
+            <button onClick={clearSearch}
+              className="px-3 py-1.5 rounded-md text-xs border"
+              style={{ borderColor: "var(--pp-border)", color: "var(--pp-text-faint)" }}>Effacer</button>
+          )}
+          {(qEmail || qPhone || qId) && (
+            <span className="text-[11px]" style={{ color: "var(--pp-text-faint)" }}>
+              Actif : {[qEmail && `email=${qEmail}`, qPhone && `tél=${qPhone}`, qId && `id=${qId}`].filter(Boolean).join(" · ")}
+            </span>
+          )}
+        </div>
+      </div>
 
       <div className="flex items-center gap-2 flex-wrap p-3 rounded-md border" style={{ borderColor: "var(--pp-border)" }}>
         <Filter className="w-4 h-4" style={{ color: "var(--pp-text-faint)" }} />
@@ -107,7 +164,7 @@ export default function PAAvaLogs() {
           <tbody>
             {logs.length === 0 && (
               <tr><td colSpan={5} className="p-6 text-center" style={{ color: "var(--pp-text-faint)" }}>
-                {loading ? "Chargement…" : "Aucune exécution pour cette période."}
+                {loading ? "Chargement…" : "Aucune exécution pour ces critères."}
               </td></tr>
             )}
             {logs.map((l) => (
@@ -143,7 +200,10 @@ export default function PAAvaLogs() {
                         <Detail title="Paramètres" data={l.params} />
                         <Detail title="Résultat" data={l.result} />
                       </div>
-                      {l.session_id && <div className="mt-2" style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>session: {l.session_id}</div>}
+                      <div className="mt-2 flex flex-wrap gap-3" style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>
+                        <span>execution_id: <code>{l.id}</code></span>
+                        {l.session_id && <span>session_id: <code>{l.session_id}</code></span>}
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -151,6 +211,15 @@ export default function PAAvaLogs() {
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          loading={loading}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+          unit="exécutions"
+        />
       </div>
     </div>
   );
@@ -173,6 +242,18 @@ function Select({ value, onChange, options }: { value: string; onChange: (v: str
       style={{ borderColor: "var(--pp-border)", color: "var(--pp-text-primary)" }}>
       {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
     </select>
+  );
+}
+function SearchInput({ value, onChange, onEnter, placeholder }: { value: string; onChange: (v: string) => void; onEnter: () => void; placeholder: string }) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => { if (e.key === "Enter") onEnter(); }}
+      placeholder={placeholder}
+      className="text-xs px-3 py-1.5 rounded-md border bg-transparent w-full"
+      style={{ borderColor: "var(--pp-border)", color: "var(--pp-text-primary)" }}
+    />
   );
 }
 function Th({ children }: { children: any }) {

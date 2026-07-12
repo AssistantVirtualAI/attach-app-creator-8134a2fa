@@ -66,6 +66,14 @@ let started = false;
 export async function startNativeSipTracking(): Promise<void> {
   if (started) return;
   started = true;
+  // Native PJSIP only exists on iOS. On Android / web the plugin is a JS-only
+  // no-op stub (see nativeSipProvider) — don't wire listeners and don't paint
+  // the UI red with "Plugin non disponible".
+  if (Capacitor.getPlatform() !== 'ios') {
+    push('platform-skipped', { platform: Capacitor.getPlatform() });
+    setNativeRegStatus('idle', null);
+    return;
+  }
   if (!snapshot.pluginAvailable) {
     push('plugin-unavailable', { native: Capacitor.isNativePlatform() });
     setNativeRegStatus('error', 'Plugin CapacitorPjsip non disponible');

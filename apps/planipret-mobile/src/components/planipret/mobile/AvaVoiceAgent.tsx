@@ -495,22 +495,16 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
 
       {/* Confirmation modal */}
       {pending && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center px-6 bg-black/40">
-          <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: "#0A1628", border: "1px solid rgba(155,127,232,0.3)" }}>
-            <div className="flex items-center gap-2 mb-3">
-              <Bot className="w-5 h-5" style={{ color: "#9B7FE8" }} />
-              <span className="text-[13px] font-semibold text-white">AVA demande confirmation</span>
-            </div>
-            <div className="rounded-xl p-3 mb-4 text-[13px]" style={{ background: "rgba(155,127,232,0.08)", color: "#E8EDF5" }}>
-              {TOOL_LABELS[pending.tool] ?? pending.tool}
-              <pre className="text-[10px] mt-2 opacity-70 whitespace-pre-wrap">{JSON.stringify(pending.params, null, 2).slice(0, 300)}</pre>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => confirmAction(false)} className="h-11 rounded-xl text-[13px] font-medium" style={{ background: "rgba(255,255,255,0.05)", color: "#E8EDF5" }}>❌ Annuler</button>
-              <button onClick={() => confirmAction(true)} className="h-11 rounded-xl text-[13px] font-semibold text-white" style={{ background: "linear-gradient(135deg,#10B981,#00A88A)" }}>✅ Confirmer</button>
-            </div>
-          </div>
-        </div>
+        <CalendarAwareConfirm
+          pending={pending}
+          onCancel={() => confirmAction(false)}
+          onConfirm={(patchedParams) => {
+            // Overwrite params with patched (tz + confirmed) then execute
+            const p = pending;
+            setPending(null);
+            callServerTool(p.tool, { ...p.params, ...patchedParams }).then(p.resolve);
+          }}
+        />
       )}
 
       {/* Settings bottom sheet */}

@@ -235,6 +235,13 @@ export default function ElevenLabsManagementCard({ userId }: { userId: string | 
             <PipelineTest webhookUrl={webhookUrl} agentId={agentId} expectedCount={expected.length} currentCount={configuredCount} />
           </Panel>
         )}
+        {/* Panel: Webhooks */}
+        {agentId && (
+          <Panel id="webhooks" title="🌐 Webhooks connectés">
+            <WebhooksPanel toolExecutorUrl={webhookUrl} />
+          </Panel>
+        )}
+
 
         {/* Panel: Per-broker gating reminder */}
         <Panel id="gating" title="👥 Activation par courtier">
@@ -332,3 +339,101 @@ function PipelineTest({ webhookUrl, agentId, expectedCount, currentCount }: any)
     </div>
   );
 }
+
+function WebhooksPanel({ toolExecutorUrl }: { toolExecutorUrl: string }) {
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true); setErr(null);
+    const r = await call("list_workspace_webhooks");
+    const d = (r.data as any);
+    if (!d?.success) setErr(d?.error ?? "Erreur");
+    else setData(d);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const copy = (t: string) => navigator.clipboard.writeText(t);
+
+  return (
+    <div className="space-y-3 text-xs">
+      <div className="flex items-center justify-between">
+        <div className="text-slate-600">Vue d'ensemble des webhooks reliés à l'agent AVA.</div>
+        <button onClick={load} className="px-2 py-1 rounded border border-slate-300 hover:bg-slate-50 flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Recharger
+        </button>
+      </div>
+      {err && <div className="rounded bg-red-50 border border-red-200 text-red-700 px-2 py-1.5">{err}</div>}
+      {loading && <div className="text-slate-500">Chargement…</div>}
+
+      {data && (
+        <>
+          <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
+            <div className="font-semibold text-slate-700 mb-1">Webhook exécuteur d'outils (Supabase)</div>
+            <div className="flex items-center gap-2">
+              <code className="bg-white border border-slate-200 rounded px-2 py-1 flex-1 truncate">{toolExecutorUrl}</code>
+              <button onClick={() => copy(toolExecutorUrl)} className="text-slate-500 hover:text-slate-800"><Copy className="w-3 h-3" /></button>
+            </div>
+            <div className="text-slate-500 mt-1">Chaque outil AVA appelle cette URL Supabase Edge Function.</div>
+          </div>
+
+          <div>
+            <div className="font-semibold text-slate-700 mb-1">Webhook post-appel de l'agent</div>
+            {data.agent_webhook ? (
+              <div className="rounded border border-slate-200 p-2">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${data.agent_webhook.is_disabled ? "bg-slate-400" : "bg-emerald-500"}`} />
+                  <code className="flex-1 truncate">{data.agent_webhook.url ?? data.agent_webhook.webhook_id ?? "—"}</code>
+                  {data.agent_webhook.url && <button onClick={() => copy(data.agent_webhook.url)} className="text-slate-500"><Copy className="w-3 h-3" /></button>}
+                </div>
+              </div>
+            ) : (
+              <div className="text-slate-500 italic">Aucun webhook post-appel configuré.</div>
+            )}
+          </div>
+
+          <div>
+            <div className="font-semibold text-slate-700 mb-1">Webhooks workspace ElevenLabs ({data.workspace_webhooks?.length ?? 0})</div>
+            {(!data.workspace_webhooks || data.workspace_webhooks.length === 0) ? (
+              <div className="text-slate-500 italic">Aucun webhook workspace.</div>
+            ) : (
+              <div className="space-y-1 max-h-56 overflow-auto">
+                {data.workspace_webhooks.map((w: any) => (
+                  <div key={w.webhook_id} className="rounded border border-slate-200 p-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${w.is_disabled ? "bg-slate-400" : "bg-emerald-500"}`} />
+                      <span className="font-semibold text-slate-800">{w.name ?? w.webhook_id}</span>
+                      <span className="ml-auto text-slate-400">{Array.isArray(w.usages) ? `${w.usages.length} usage(s)` : ""}</span>
+                    </div>
+                    {w.webhook_url && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="flex-1 truncate">{w.webhook_url}</code>
+                        <button onClick={() => copy(w.webhook_url)} className="text-slate-500"><Copy className="w-3 h-3" /></button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="font-semibold text-slate-700 mb-1">Outils de l'agent avec webhook ({data.agent_tool_webhooks?.length ?? 0})</div>
+            <div className="rounded border border-slate-200 max-h-56 overflow-auto">
+              {(data.agent_tool_webhooks ?? []).map((t: any) => (
+                <div key={t.name} className="px-2 py-1 flex items-center gap-2 border-b border-slate-100 last:border-b-0">
+                  <span className="w-2 h-2 rounded-full bg-violet-500" />
+                  <span className="font-mono text-slate-700">{t.name}</span>
+                  <span className="text-slate-400 truncate flex-1">{t.method} {t.url ?? ""}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+

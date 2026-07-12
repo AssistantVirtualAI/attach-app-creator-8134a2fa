@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard, Users, Phone, MessageSquare, Mic, Plug,
-  BarChart3, LogOut, ShieldCheck, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap,
+  BarChart3, LogOut, ShieldCheck, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot,
 } from "lucide-react";
 import SessionTimeoutModal from "@/components/planipret/SessionTimeoutModal";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
@@ -21,9 +21,9 @@ import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { toast } from "sonner";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "mobileDevices" | "sipDiagnostic";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "mobileDevices" | "sipDiagnostic";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -31,7 +31,8 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
     items: [
       { to: "/planipret/admin/overview", key: "overview", Icon: LayoutDashboard },
       { to: "/planipret/admin/reports",  key: "reports",  Icon: BarChart3 },
-      { to: "/planipret/admin/ava",      key: "ava",      Icon: Sparkles },
+      { to: "/planipret/admin/ava",       key: "ava",      Icon: Sparkles },
+      { to: "/planipret/admin/ava-agent",  key: "avaAgent", Icon: Bot },
     ],
   },
   {
@@ -71,6 +72,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/audit-checklist": "auditChecklist",
   "/planipret/admin/compliance": "compliance",
   "/planipret/admin/ava": "ava",
+  "/planipret/admin/ava-agent": "avaAgent",
   "/planipret/admin/mobile-devices": "mobileDevices",
   "/planipret/admin/sip-diagnostic": "sipDiagnostic",
 };

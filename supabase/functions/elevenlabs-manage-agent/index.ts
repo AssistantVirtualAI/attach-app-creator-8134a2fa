@@ -424,6 +424,53 @@ Deno.serve(async (req) => {
         return json({ success: true, config: data ?? [] });
       }
 
+      case "list_workspace_webhooks": {
+        const wsRes = await elFetch(apiKey, "/workspace/webhooks?include_usages=true");
+        const workspaceWebhooks = wsRes.ok ? (wsRes.data?.webhooks ?? []) : [];
+        let agentWebhook: any = null;
+        let agentTools: any[] = [];
+        if (agentId) {
+          const agRes = await elFetch(apiKey, `/convai/agents/${agentId}`);
+          if (agRes.ok) {
+            const ag = agRes.data;
+            agentWebhook =
+              ag?.platform_settings?.webhook ??
+              ag?.conversation_config?.platform_settings?.webhook ??
+              null;
+            const inline: any[] = ag?.conversation_config?.agent?.prompt?.tools ?? [];
+            const toolIds: string[] = ag?.conversation_config?.agent?.prompt?.tool_ids ?? [];
+            agentTools = inline.map((t: any) => ({
+              name: t?.name,
+              type: t?.type ?? "webhook",
+              url: t?.api_schema?.url ?? t?.webhook?.url ?? null,
+              method: t?.api_schema?.method ?? "POST",
+            }));
+            if (agentTools.length === 0 && toolIds.length) {
+              const reg = await elFetch(apiKey, "/convai/tools");
+              if (reg.ok) {
+                const all: any[] = reg.data?.tools ?? [];
+                const idSet = new Set(toolIds);
+                agentTools = all
+                  .filter((t) => idSet.has(t?.id ?? t?.tool_id))
+                  .map((t) => ({
+                    name: t?.tool_config?.name ?? t?.name,
+                    type: t?.tool_config?.type ?? "webhook",
+                    url: t?.tool_config?.api_schema?.url ?? null,
+                    method: t?.tool_config?.api_schema?.method ?? "POST",
+                  }));
+              }
+            }
+          }
+        }
+        return json({
+          success: true,
+          workspace_webhooks: workspaceWebhooks,
+          agent_webhook: agentWebhook,
+          agent_tool_webhooks: agentTools,
+          agent_id: agentId,
+        });
+      }
+
       default:
         return json({ success: false, error: `unknown_action: ${action}` }, 400);
     }

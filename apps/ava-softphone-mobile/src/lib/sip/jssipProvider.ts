@@ -277,7 +277,9 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     contact_uri: `sip:${config.extension}@${config.domain};transport=ws`,
     register: true,
     session_timers: false,
-    register_expires: 300,
+    // 120s = standard mobile (RingCentral/8x8) — force le PBX à rafraîchir
+    // la session plus souvent, évitant les déconnexions en arrière-plan
+    register_expires: 120,
     connection_recovery_min_interval: 2,
     connection_recovery_max_interval: 30,
     user_agent: "AVA Softphone 1.1",

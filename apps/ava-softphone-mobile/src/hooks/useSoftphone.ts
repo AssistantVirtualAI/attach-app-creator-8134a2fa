@@ -669,6 +669,10 @@ export function useSoftphoneJsSip(
         },
         pcConfig: {
           iceServers: [
+            // STUN public — connexion directe (host/srflx) en priorité
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            // TURN en dernier recours (relay) si NAT symétrique
             {
               urls: 'turn:global.relay.metered.ca:443',
               username: 'e499486ca9b7d5a03a01e915',
@@ -680,7 +684,9 @@ export function useSoftphoneJsSip(
               credential: 'uMFpNAFBoFFUHOdF',
             },
           ],
-          iceTransportPolicy: 'relay',
+          // 'all' = essaie host → srflx → relay (comportement standard WebRTC)
+          // 'relay' forçait tout via TURN → timeout ACK 15s
+          iceTransportPolicy: 'all',
           bundlePolicy: 'balanced',
         },
       };
@@ -714,6 +720,10 @@ export function useSoftphoneJsSip(
       mediaConstraints: { audio: true, video: false },
       pcConfig: {
         iceServers: [
+          // STUN public — connexion directe (host/srflx) en priorité
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          // TURN en dernier recours si NAT symétrique
           {
             urls: 'turn:global.relay.metered.ca:443',
             username: 'e499486ca9b7d5a03a01e915',
@@ -725,7 +735,7 @@ export function useSoftphoneJsSip(
             credential: 'uMFpNAFBoFFUHOdF',
           },
         ],
-        iceTransportPolicy: 'relay',
+        iceTransportPolicy: 'all',
         bundlePolicy: 'balanced',
       },
     });

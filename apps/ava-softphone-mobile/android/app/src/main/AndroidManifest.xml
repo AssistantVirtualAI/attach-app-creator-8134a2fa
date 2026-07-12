@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- CHANGE_WIFI_STATE requis pour WifiLock WIFI_MODE_FULL_HIGH_PERF (maintien Wi-Fi en arrière-plan) -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 
     <!-- NOTIFICATIONS PUSH (Android 13+) -->

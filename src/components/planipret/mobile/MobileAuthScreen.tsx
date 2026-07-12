@@ -20,6 +20,7 @@ const PlanipretBadge = ({ size = 44 }: { size?: number }) => (
 export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Promise<void> | void }) {
   const { t, lang, toggle: toggleLang } = useMplanipretLang();
   const { theme, toggle: toggleTheme } = useMplanipretTheme();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);

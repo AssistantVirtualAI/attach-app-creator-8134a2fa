@@ -18,8 +18,9 @@ const TOOL_NAMES = [
   "create_task", "create_appointment", "get_pending_tasks",
   "get_upcoming_appointments", "update_client", "create_client",
   // M365
-  "read_emails", "send_email", "summarize_email",
-  "get_calendar_today", "get_calendar_week",
+  "read_emails", "get_unread_emails", "get_recent_emails",
+  "send_email", "summarize_email",
+  "get_calendar_today", "get_calendar_week", "get_upcoming_meetings",
   "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
   // navigation
   "navigate_to", "show_client_in_app", "open_call_detail",

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Globe, Moon, Sun } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
+import { useSafeAreaInsets } from "@/hooks/useSafeAreaInsets";
 
 const AvaBadge = ({ size = 14 }: { size?: number }) => (
   <div style={{ background: "#7C3AED", borderRadius: 12, padding: "8px 12px", color: "white", fontWeight: 700, fontSize: size, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>AVA</div>

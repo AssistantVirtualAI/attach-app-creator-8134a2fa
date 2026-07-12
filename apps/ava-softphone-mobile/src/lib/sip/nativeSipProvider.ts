@@ -71,19 +71,48 @@ export interface CapacitorSipPlugin {
 
 // IMPORTANT: the iOS bridge exports the plugin under the name `CapacitorPjsip`
 // (see CAP_PLUGIN(CapacitorPjsip, "CapacitorPjsip", ...) in CapacitorSip.m).
-// Registering a different JS name made every method call resolve to the
-// web-fallback no-op and left the UI stuck on "connecting" forever.
-export const CapacitorSipNative = registerPlugin<CapacitorSipPlugin>('CapacitorPjsip');
-export const CapacitorPjsip = CapacitorSipNative;
-
-// Native PJSIP is only wired on iOS. Android uses JsSIP inside the WebView;
-// the WebSocket is kept alive in background by SipForegroundService (started
-// from CapacitorPjsip.initAccount).
+// On Android the native class is intentionally NOT implemented — the app runs
+// JsSIP inside the WebView on that platform (kept alive by SipForegroundService).
+// Calling the real plugin on Android throws
+//   "CapacitorPjsip plugin is not implemented on android"
+// which used to bubble into sipError and show "SIP indisponible" in the UI.
+// We therefore expose a no-op Proxy stub on every non-iOS platform so no caller
+// (nativeSipState, deepLink, audioOutput, useSoftphoneNative, permissions…)
+// can ever hit the missing bridge.
 import { Capacitor as __Cap } from '@capacitor/core';
 const __NATIVE_FLAG = ((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true';
 let __platform: string = 'web';
 try { __platform = __Cap.getPlatform(); } catch { /* ssr / tests */ }
 export const NATIVE_SIP_ENABLED = __platform === 'ios' && __NATIVE_FLAG !== false;
+
+function makeNoopPlugin(): CapacitorSipPlugin {
+  const noopHandle = { remove: async () => {} };
+  const handler: ProxyHandler<any> = {
+    get(_t, prop: string) {
+      if (prop === 'addListener') return async () => noopHandle;
+      if (prop === 'removeAllListeners') return async () => {};
+      if (prop === 'getRtpStats') return async () => ({ running: false });
+      if (prop === 'getAudioRoute') return async () => ({ outputs: [], availableInputs: [] });
+      if (prop === 'setAudioRoute') return async () => ({ ok: false, route: 'auto', outputs: '' });
+      if (prop === 'requestMicrophonePermission') return async () => ({ ok: false, granted: false, status: 'denied' as const, reason: 'unsupported-on-android' });
+      if (prop === 'setLogLevel') return async () => ({ level: 0 });
+      if (prop === 'playTestTone') return async () => ({ ok: false, micPeak: 0, route: 'auto' });
+      if (prop === 'startRecord' || prop === 'stopRecord') return async () => ({ ok: false, recording: false });
+      if (prop === 'transfer' || prop === 'park' || prop === 'addCall') return async () => ({ ok: false, target: '', code: '' });
+      // Every other method (initAccount, disconnect, makeCall, hangup, answer,
+      // setMute, setHold, sendDTMF, setLiveTranscriptionEnabled…) resolves
+      // silently so caller `.catch()` handlers stay quiet.
+      return async () => undefined;
+    },
+  };
+  return new Proxy({}, handler) as CapacitorSipPlugin;
+}
+
+export const CapacitorSipNative: CapacitorSipPlugin =
+  __platform === 'ios'
+    ? registerPlugin<CapacitorSipPlugin>('CapacitorPjsip')
+    : makeNoopPlugin();
+export const CapacitorPjsip = CapacitorSipNative;
 
 /**
  * Subscribe to a native SIP event. Returns a cleanup function.

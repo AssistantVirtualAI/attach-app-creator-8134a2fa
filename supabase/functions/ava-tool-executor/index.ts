@@ -398,19 +398,39 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async move_calendar_event(ctx, p) {
-    // p: { event_id, new_start, new_end? OR duration_minutes? }
-    if (!p.event_id) return { success: false, error: "event_id_required" };
-    const startAt = new Date(p.new_start ?? p.start_datetime);
+    // p: { event_id, new_start (ISO), new_end? OR duration_minutes?, timezone (IANA, REQUIS), subject?, confirmed? }
+    if (!p.event_id) return { success: false, error: "event_id_required", message: "Il me faut l'ID du meeting. Utilise get_upcoming_meetings pour le retrouver." };
+    if (!p.new_start) return { success: false, error: "new_start_required" };
+    if (!p.timezone) {
+      return {
+        success: false,
+        error: "timezone_required",
+        message: "Dans quel fuseau horaire dois-je déplacer ce meeting ? (ex: America/Toronto, America/Vancouver, Europe/Paris)",
+      };
+    }
+    if (!p.confirmed) {
+      const startAt = new Date(p.new_start);
+      const endAt = p.new_end ? new Date(p.new_end) : new Date(startAt.getTime() + Number(p.duration_minutes ?? 30) * 60000);
+      const fmt = new Intl.DateTimeFormat("fr-CA", {
+        timeZone: p.timezone, weekday: "long", day: "numeric", month: "long",
+        hour: "2-digit", minute: "2-digit", timeZoneName: "short",
+      });
+      return {
+        success: false,
+        needs_confirmation: true,
+        reformulation: `Je vais déplacer le meeting au ${fmt.format(startAt)} → ${fmt.format(endAt)} (${p.timezone}). Je confirme ?`,
+        message: "Reformule au courtier puis rappelle move_calendar_event avec confirmed=true.",
+      };
+    }
+    const startAt = new Date(p.new_start);
     const endAt = p.new_end
       ? new Date(p.new_end)
-      : (p.duration_minutes
-          ? new Date(startAt.getTime() + Number(p.duration_minutes) * 60000)
-          : undefined);
+      : new Date(startAt.getTime() + Number(p.duration_minutes ?? 30) * 60000);
     const patch: any = {
       event_id: p.event_id,
-      start: { dateTime: startAt.toISOString(), timeZone: p.timezone ?? "America/Toronto" },
+      start: { dateTime: startAt.toISOString(), timeZone: p.timezone },
+      end: { dateTime: endAt.toISOString(), timeZone: p.timezone },
     };
-    if (endAt) patch.end = { dateTime: endAt.toISOString(), timeZone: p.timezone ?? "America/Toronto" };
     if (p.subject) patch.subject = p.subject;
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
       method: "POST",
@@ -422,7 +442,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async cancel_calendar_event(ctx, p) {
-    if (!p.event_id) return { success: false, error: "event_id_required" };
+    if (!p.event_id) return { success: false, error: "event_id_required", message: "Il me faut l'ID du meeting. Utilise get_upcoming_meetings pour le retrouver." };
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
@@ -430,6 +450,76 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     });
     const j = await r.json().catch(() => ({}));
     return { success: !!j?.success, message: "RDV annulé", raw: j };
+  },
+
+  // ===== EMAIL DISCOVERY (précède summarize_email) =====
+  async get_unread_emails(ctx, p) {
+    const top = Math.min(Number(p?.limit ?? 10), 25);
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "read_emails", _user_id: ctx.userId, payload: { folder: "unread", top } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    const emails = (j?.emails ?? []).map((e: any) => ({
+      message_id: e.id,
+      subject: e.subject,
+      from: e.from?.emailAddress?.name ?? e.from?.emailAddress?.address,
+      received_at: e.receivedDateTime,
+      preview: e.bodyPreview,
+    }));
+    return { success: !!j?.success, count: emails.length, emails, message: `${emails.length} courriel(s) non lu(s). Lequel je te résume ?` };
+  },
+
+  async get_recent_emails(ctx, p) {
+    const top = Math.min(Number(p?.limit ?? 10), 25);
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "read_emails", _user_id: ctx.userId, payload: { top } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    const emails = (j?.emails ?? []).map((e: any) => ({
+      message_id: e.id,
+      subject: e.subject,
+      from: e.from?.emailAddress?.name ?? e.from?.emailAddress?.address,
+      received_at: e.receivedDateTime,
+      is_read: e.isRead,
+      preview: e.bodyPreview,
+    }));
+    return { success: !!j?.success, count: emails.length, emails, message: `Voici tes ${emails.length} derniers courriels.` };
+  },
+
+  // ===== CALENDAR DISCOVERY (précède move/cancel) =====
+  async get_upcoming_meetings(ctx, p) {
+    const days = Number(p?.days ?? 7);
+    const start = new Date().toISOString();
+    const end = new Date(Date.now() + days * 86400000).toISOString();
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list_calendar_events", _user_id: ctx.userId, payload: { start, end, top: Number(p?.limit ?? 15) } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    const events = (j?.events ?? []).map((e: any) => ({
+      event_id: e.id,
+      subject: e.subject,
+      start: e.start?.dateTime,
+      end: e.end?.dateTime,
+      timezone: e.start?.timeZone ?? "UTC",
+      organizer: e.organizer?.emailAddress?.name ?? e.organizer?.emailAddress?.address,
+      attendees: (e.attendees ?? []).map((a: any) => a.emailAddress?.address).filter(Boolean),
+      is_online: e.isOnlineMeeting,
+      web_link: e.webLink,
+    }));
+    return {
+      success: !!j?.success,
+      count: events.length,
+      events,
+      message: events.length
+        ? `Tu as ${events.length} meeting(s) à venir. Lequel dois-je déplacer ou annuler ?`
+        : "Aucun meeting à venir dans cette période.",
+    };
   },
 
   async summarize_email(ctx, p) {

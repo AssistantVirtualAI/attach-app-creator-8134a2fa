@@ -74,6 +74,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/compliance": "compliance",
   "/planipret/admin/ava": "ava",
   "/planipret/admin/ava-agent": "avaAgent",
+  "/planipret/admin/ava-logs": "avaLogs",
   "/planipret/admin/mobile-devices": "mobileDevices",
   "/planipret/admin/sip-diagnostic": "sipDiagnostic",
 };

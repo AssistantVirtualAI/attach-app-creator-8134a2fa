@@ -1671,6 +1671,7 @@ export const MP_DICT = {
         reports: "Reports",
         ava: "AVA Analytics",
         avaAgent: "AVA Agent",
+        avaLogs: "AVA Logs",
         brokers: "Brokers",
         calls: "Calls",
         messages: "Messages",

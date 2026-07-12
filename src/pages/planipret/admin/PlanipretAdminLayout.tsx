@@ -23,7 +23,7 @@ import { toast } from "sonner";
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
 type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "mobileDevices" | "sipDiagnostic";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "mobileDevices" | "sipDiagnostic";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {

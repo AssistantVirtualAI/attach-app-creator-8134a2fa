@@ -774,6 +774,7 @@ export const MP_DICT = {
         auditChecklist: "Audit système",
         compliance: "Conformité PIPEDA · Loi 25",
         ava: "AVA — Analytics",
+        avaAgent: "Agent AVA — Configuration",
         mobileDevices: "Vérification devices mobiles",
         sipDiagnostic: "Diagnostic SIP — 113_web",
       },

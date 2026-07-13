@@ -58,19 +58,28 @@ Deno.serve(async (req) => {
       const raw = await res.json();
       const users = Array.isArray(raw) ? raw : (raw?.users ?? raw?.data ?? []);
 
+      const pick = (u: any, keys: string[]) => {
+        for (const k of keys) {
+          const v = u?.[k];
+          if (v !== undefined && v !== null && String(v).trim()) return String(v).trim();
+        }
+        return "";
+      };
+
       const extractName = (u: any) => {
         const first =
-          u.first_name ?? u.firstname ?? u["first-name"] ?? u.given_name ?? u.givenName ?? u.fname ?? "";
+          pick(u, ["first_name", "firstname", "first-name", "name-first-name", "given_name", "givenName", "fname"]);
         const last =
-          u.last_name ?? u.lastname ?? u["last-name"] ?? u.family_name ?? u.familyName ?? u.surname ?? u.lname ?? "";
+          pick(u, ["last_name", "lastname", "last-name", "name-last-name", "family_name", "familyName", "surname", "lname"]);
         const composed = `${first} ${last}`.trim();
         const display =
-          u.name ?? u.display_name ?? u.displayName ?? u.full_name ?? u.fullName ?? u.caller_id_name ?? u.callerid_name ?? "";
-        return { first, last, composed, display };
+          pick(u, ["name", "display_name", "displayName", "full_name", "fullName", "name-display", "name-display-name", "caller_id_name", "callerid_name"]);
+        const parts = !composed && display.includes(" ") ? display.split(/\s+/) : [];
+        return { first: first || parts.slice(0, -1).join(" "), last: last || parts.slice(-1).join(" "), composed: composed || (parts.length > 1 ? display : ""), display };
       };
 
       const extractPosition = (u: any) =>
-        u.position ?? u.job_title ?? u.jobTitle ?? u.title ?? u.role_title ?? u.roleTitle ?? u.poste ?? u.department ?? null;
+        pick(u, ["position", "job_title", "jobTitle", "title", "role_title", "roleTitle", "poste", "department", "name-job-title"]) || null;
 
       // First pass — figure out who is missing a real name
       const initial = users.map((u: any) => ({
@@ -116,8 +125,8 @@ Deno.serve(async (req) => {
           name,
           first_name: f || undefined,
           last_name: l || undefined,
-          email: u.email ?? (detail?.email ?? null),
-          department: u.department ?? (detail?.department ?? null),
+          email: pick(u, ["email", "email-address", "user-email"]) || (detail ? pick(detail, ["email", "email-address", "user-email"]) : null),
+          department: pick(u, ["department", "name-department"]) || (detail ? pick(detail, ["department", "name-department"]) : null),
           position: position ?? (detail ? extractPosition(detail) : null),
           presence: u.presence ?? u.status ?? (detail?.presence ?? detail?.status ?? "unknown"),
         };

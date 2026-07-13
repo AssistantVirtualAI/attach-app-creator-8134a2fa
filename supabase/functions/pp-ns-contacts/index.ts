@@ -68,6 +68,9 @@ Deno.serve(async (req) => {
         return { first, last, composed, display };
       };
 
+      const extractPosition = (u: any) =>
+        u.position ?? u.job_title ?? u.jobTitle ?? u.title ?? u.role_title ?? u.roleTitle ?? u.poste ?? u.department ?? null;
+
       // First pass — figure out who is missing a real name
       const initial = users.map((u: any) => ({
         u,
@@ -113,6 +116,7 @@ Deno.serve(async (req) => {
           last_name: l || undefined,
           email: u.email ?? (detail?.email ?? null),
           department: u.department ?? (detail?.department ?? null),
+          position: extractPosition(u) ?? (detail ? extractPosition(detail) : null),
           presence: u.presence ?? u.status ?? (detail?.presence ?? detail?.status ?? "unknown"),
         };
       });

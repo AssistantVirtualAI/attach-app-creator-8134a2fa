@@ -15,10 +15,16 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [lockedHeight, setLockedHeight] = useState<number | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  useEffect(() => {
+    const frame = document.getElementById("pp-mobile-frame");
+    setLockedHeight(Math.round(frame?.getBoundingClientRect().height || window.innerHeight));
+  }, []);
 
   // Reliable close: Escape key anywhere while the sheet is mounted.
   useEffect(() => {
@@ -53,8 +59,8 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
 
   return (
     <div
-      className="absolute inset-0 z-[60] flex flex-col"
-      style={{ background: "rgba(4,11,22,0.45)", backdropFilter: "blur(6px)" }}
+      className="absolute inset-x-0 top-0 z-[60] flex flex-col overflow-hidden"
+      style={{ height: lockedHeight ? `${lockedHeight}px` : "100svh", background: "rgba(4,11,22,0.45)", backdropFilter: "blur(6px)", contain: "layout paint size" }}
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -66,14 +72,15 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--pp-bg-base)",
-          marginTop: "env(safe-area-inset-top, 0px)",
+          marginTop: "-3cm",
+          paddingTop: "3cm",
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
       >
       {/* Header — matches PlanipretMobile top header (same margin/height) */}
       <header
         className="relative flex items-center px-4 shrink-0"
-        style={{ paddingTop: 4, paddingBottom: 6, background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
+        style={{ transform: "translateY(-3cm)", marginBottom: "-3cm", paddingTop: 4, paddingBottom: 6, background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
       >
         <div className="flex items-center gap-2">
           <div className="relative shrink-0">
@@ -149,7 +156,7 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
       </div>
 
       {/* Composer */}
-      <div className="px-3 pt-2 pb-3" style={{ borderTop: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-deep)" }}>
+      <div className="px-3 pt-2 pb-3 shrink-0" style={{ borderTop: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-deep)", transform: "translateZ(0)" }}>
         <div
           className="flex items-end gap-2 px-3 py-2 rounded-2xl"
           style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}

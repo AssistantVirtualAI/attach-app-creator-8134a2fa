@@ -61,6 +61,8 @@ export function buildAvaToolsArray(supabaseUrl: string, anonKey: string) {
  *  done via the `X-Ava-Tool-Name` request header (no `constant_value`). */
 export function buildAvaToolConfigs(supabaseUrl: string, anonKey: string) {
   const url = `${supabaseUrl}/functions/v1/ava-tool-executor`;
+  const avaSessionHeader = { variable_name: "secret__ava_session_token" };
+  const avaSessionFallbackHeader = { variable_name: "ava_session_token" };
   return specs().map((s) => {
     const request_body_schema: Record<string, any> = {
       type: "object",
@@ -80,8 +82,8 @@ export function buildAvaToolConfigs(supabaseUrl: string, anonKey: string) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${anonKey}`,
             "X-Ava-Tool-Name": s.name,
-            "X-Ava-Session": "{{secret__ava_session_token}}",
-            "X-Ava-Session-Fallback": "{{ava_session_token}}",
+            "X-Ava-Session": avaSessionHeader,
+            "X-Ava-Session-Fallback": avaSessionFallbackHeader,
           },
           request_body_schema,
         },

@@ -1,7 +1,5 @@
-// AvaChatSheet — Claude-powered AVA chat for brokers without the voice agent enabled.
-// Uses pp-ava-chat Edge Function (existing). Premium glass UI.
+// AvaChatSheet — Claude-powered AVA chat, styled like the other mobile pages.
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { X, Send, Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import ReactMarkdown from "react-markdown";
@@ -22,9 +20,7 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [loading]);
+  useEffect(() => { inputRef.current?.focus(); }, [loading]);
 
   const send = async () => {
     const text = input.trim();
@@ -48,120 +44,123 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
   };
 
   return (
-    <AnimatePresence>
-      <motion.div
-        className="absolute inset-0 z-40 flex min-h-0 flex-col"
-        style={{
-          background: "linear-gradient(180deg, rgba(6,13,26,0.98) 0%, rgba(10,22,40,0.99) 100%)",
-          backdropFilter: "blur(24px)",
-          paddingTop: "env(safe-area-inset-top, 0px)",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
-        }}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 20 }}
-        transition={{ duration: 0.25 }}
+    <div
+      className="absolute inset-0 z-40 flex flex-col overflow-hidden"
+      style={{
+        background: "var(--pp-bg-base)",
+        paddingTop: "env(safe-area-inset-top, 0px)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}
+    >
+      {/* Header — matches other mobile pages */}
+      <div
+        className="px-4 pt-3 pb-3 flex items-center gap-3"
+        style={{ background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
       >
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3"
-          style={{ borderBottom: "1px solid rgba(155,127,232,0.18)", background: "linear-gradient(180deg, rgba(45,26,90,0.4), transparent)" }}>
-          <div className="relative">
-            <img src={avaLogo.url} alt="AVA" className="w-10 h-10 rounded-xl object-cover"
-              style={{ boxShadow: "0 0 24px rgba(155,127,232,0.5)" }} />
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full"
-              style={{ background: "#00D4AA", border: "2px solid #060D1A" }} />
+        <div className="relative shrink-0">
+          <img
+            src={avaLogo.url}
+            alt="AVA"
+            className="w-9 h-9 rounded-xl object-cover"
+            style={{ background: "#0A1628" }}
+          />
+          <span
+            className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
+            style={{ background: "var(--pp-success)", border: "2px solid var(--pp-bg-deep)" }}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 15, color: "var(--pp-text-primary)", letterSpacing: "-0.01em" }}>AVA</span>
+            <Sparkles className="w-3.5 h-3.5" style={{ color: "var(--pp-agent)" }} />
           </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-1.5">
-              <span style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 15, color: "#fff", letterSpacing: "-0.01em" }}>AVA</span>
-              <Sparkles className="w-3.5 h-3.5" style={{ color: "#9B7FE8" }} />
+          <span style={{ fontSize: 10.5, color: "var(--pp-text-muted)", letterSpacing: "0.04em" }}>Assistante Planiprêt</span>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition shrink-0"
+          style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+          aria-label="Fermer"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
+        {messages.map((m, i) => (
+          <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div
+              className="max-w-[86%] px-3.5 py-2.5 rounded-2xl break-words"
+              style={
+                m.role === "user"
+                  ? {
+                      background: "linear-gradient(135deg, var(--pp-brand-accent2), var(--pp-brand-accent))",
+                      color: "#fff",
+                      fontWeight: 600,
+                      borderBottomRightRadius: 6,
+                      boxShadow: "var(--pp-shadow-md, 0 4px 12px rgba(30,58,95,0.15))",
+                    }
+                  : {
+                      background: "var(--pp-bg-surface)",
+                      border: "1px solid var(--pp-bg-border)",
+                      color: "var(--pp-text-primary)",
+                      borderBottomLeftRadius: 6,
+                    }
+              }
+            >
+              <div className="prose prose-sm max-w-none" style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+                <ReactMarkdown>{m.content}</ReactMarkdown>
+              </div>
             </div>
-            <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.55)", letterSpacing: "0.04em" }}>Assistante Planiprêt · Claude</span>
           </div>
-          <button onClick={onClose}
-            className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition"
-            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)" }}
-            aria-label="Fermer">
-            <X className="w-4 h-4" />
+        ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div
+              className="px-3.5 py-2.5 rounded-2xl flex items-center gap-2"
+              style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)" }}
+            >
+              <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "var(--pp-agent)" }} />
+              <span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>AVA réfléchit…</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Composer */}
+      <div className="px-3 pt-2 pb-3" style={{ borderTop: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-deep)" }}>
+        <div
+          className="flex items-end gap-2 px-3 py-2 rounded-2xl"
+          style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}
+        >
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+            placeholder="Demandez à AVA…"
+            rows={1}
+            className="flex-1 min-h-[38px] max-h-24 resize-none bg-transparent py-2 outline-none"
+            style={{ fontSize: 14, color: "var(--pp-text-primary)", caretColor: "var(--pp-brand-accent)", fontFamily: "Inter,sans-serif" }}
+          />
+          <button
+            onClick={send}
+            disabled={!input.trim() || loading}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white disabled:opacity-40 active:scale-95 transition shrink-0"
+            style={{
+              background: "linear-gradient(135deg, var(--pp-brand-accent2), var(--pp-agent))",
+              boxShadow: "0 4px 12px rgba(108,92,231,0.35)",
+            }}
+            aria-label="Envoyer"
+          >
+            <Send className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Messages */}
-        <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">
-          {messages.map((m, i) => (
-            <motion.div key={i}
-              initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className="max-w-[86%] px-3.5 py-2.5 rounded-2xl break-words"
-                style={
-                  m.role === "user"
-                    ? {
-                        background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)",
-                        color: "#03131A",
-                        fontWeight: 650,
-                        borderBottomRightRadius: 6,
-                        boxShadow: "0 4px 16px rgba(46,155,220,0.3)",
-                      }
-                    : {
-                        background: "rgba(13,31,53,0.92)",
-                        border: "1px solid rgba(46,155,220,0.22)",
-                        color: "rgba(255,255,255,0.92)",
-                        borderBottomLeftRadius: 6,
-                        backdropFilter: "blur(12px)",
-                      }
-                }
-              >
-                <div className="prose prose-invert prose-sm max-w-none" style={{ fontSize: 13.5, lineHeight: 1.5 }}>
-                  <ReactMarkdown>{m.content}</ReactMarkdown>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="px-3.5 py-2.5 rounded-2xl flex items-center gap-2"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(155,127,232,0.18)" }}>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "#9B7FE8" }} />
-                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)" }}>AVA réfléchit…</span>
-              </div>
-            </div>
-          )}
+        <div className="text-center mt-1.5" style={{ fontSize: 9, color: "var(--pp-text-faint)", letterSpacing: "0.08em" }}>
+          POWERED BY AVA
         </div>
-
-        {/* Composer */}
-        <div className="px-3 pb-4 pt-2"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          <div className="flex items-end gap-2 px-3 py-2 rounded-2xl"
-            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(155,127,232,0.22)" }}>
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="Demandez à AVA…"
-              rows={1}
-              className="flex-1 min-h-[40px] max-h-28 resize-none bg-transparent py-2 outline-none"
-              style={{ fontSize: 14, color: "#fff", caretColor: "#2E9BDC", fontFamily: "Inter,sans-serif" }}
-            />
-            <button
-              onClick={send}
-              disabled={!input.trim() || loading}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-white disabled:opacity-40 active:scale-95 transition"
-              style={{
-                background: "linear-gradient(135deg, #2D1A5A, #9B7FE8)",
-                boxShadow: "0 4px 14px rgba(155,127,232,0.45)",
-              }}
-              aria-label="Envoyer"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="text-center mt-2" style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em" }}>
-            POWERED BY AVA · CLAUDE 3
-          </div>
-        </div>
-      </motion.div>
-    </AnimatePresence>
+      </div>
+    </div>
   );
 }

@@ -211,7 +211,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
         ].filter(Boolean).join(" ").toLowerCase();
         return hay.includes(normalized);
       }).slice(0, 50)
-    : directoryOnly.slice(0, 50);
+    : contacts.slice(0, 50);
 
   return (
     <AnimatePresence>

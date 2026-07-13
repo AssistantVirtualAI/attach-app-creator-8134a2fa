@@ -81,9 +81,9 @@ export default function MAvaChat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
 
-  useEffect(() => {
-    if (!recording) inputRef.current?.focus();
-  }, [busy, recording, sessionId]);
+  // Do NOT auto-focus the textarea — it triggers the mobile keyboard + iOS
+  // viewport zoom which visually breaks the layout.
+
 
   const startNew = () => { setSessionId(null); setMessages([]); };
 

@@ -88,6 +88,15 @@ export async function authBroker(req: Request) {
     if (!authHeader?.startsWith("Bearer ")) {
       return { error: jsonResponse({ success: false, error: "Unauthorized", code: 401 }, 401) };
     }
+    const bearer = authHeader.replace("Bearer ", "");
+    if (bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+      const body = await req.clone().json().catch(() => ({}));
+      const bodyUserId = body?._user_id ?? body?.user_id ?? body?.broker_user_id;
+      if (bodyUserId) userId = String(bodyUserId);
+    }
+  }
+
+  if (!userId) {
     const userClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,

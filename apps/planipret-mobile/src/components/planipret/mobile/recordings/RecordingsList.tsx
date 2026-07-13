@@ -51,6 +51,8 @@ export type RecordingCall = {
   stream_via_proxy?: boolean | null;
   proxy_call_db_id?: string | null;
   proxy_ns_callid?: string | null;
+  analyzed_at?: string | null;
+  transcript_source?: string | null;
 };
 
 const fmtDate = (iso: string) => {

@@ -54,8 +54,8 @@ function Avatar({ name }: { name: string }) {
 function normalizeContact(c: any) {
   return {
     id: c.id ?? c.contact_id ?? c.uid ?? crypto.randomUUID(),
-    first_name: c.first_name ?? c.firstname ?? "",
-    last_name: c.last_name ?? c.lastname ?? "",
+    first_name: c.first_name ?? c.firstname ?? c.directory_first_name ?? "",
+    last_name: c.last_name ?? c.lastname ?? c.directory_last_name ?? "",
     phone: c.phone ?? c.cell_phone ?? c.work_phone ?? c.home_phone ?? "",
     email: c.email ?? "",
     company: c.company ?? c.organization ?? "",
@@ -190,7 +190,7 @@ export default function MContacts() {
     if (!ql) return src;
     return src.filter((c: any) => {
       const hay = tab === "directory"
-        ? `${c.name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""}`
+        ? `${c.directory_first_name ?? ""} ${c.directory_last_name ?? ""} ${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""}`
         : tab === "favorites"
         ? `${c.name ?? ""} ${c.phone ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.company ?? ""}`
         : `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.phone ?? ""} ${c.email ?? ""} ${c.company ?? ""}`;
@@ -325,14 +325,16 @@ export default function MContacts() {
           {visibleList.map((c: any) => {
             const isDir = tab === "directory";
             const isFav = tab === "favorites";
+            const dirFirst = c.directory_first_name ?? c.first_name ?? "";
+            const dirLast = c.directory_last_name ?? c.last_name ?? "";
             const brokerName = isDir
-              ? ([c.first_name, c.last_name].filter(Boolean).join(" ").trim() || c.name || c.display_name || c.email || "Nom non disponible")
+              ? ([dirFirst, dirLast].filter(Boolean).join(" ").trim() || c.name || c.display_name || c.email || "Nom non disponible")
               : "";
             const brokerPosition = isDir
               ? (c.position || c.job_title || c.jobTitle || c.title || c.role_title || c.department || "Poste non disponible")
               : "";
             const displayName = isDir
-              ? ([c.first_name, c.last_name].filter(Boolean).join(" ").trim()
+              ? ([dirFirst, dirLast].filter(Boolean).join(" ").trim()
                   || c.name || c.display_name
                   || (c.extension ? `${t("contacts.extension") || "Ext."} ${c.extension}` : "Nom non disponible"))
               : isFav

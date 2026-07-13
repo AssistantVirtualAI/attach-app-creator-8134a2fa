@@ -96,6 +96,8 @@ type DialerContact = {
   id?: string;
   first_name?: string;
   last_name?: string;
+  directory_first_name?: string;
+  directory_last_name?: string;
   name?: string;
   display_name?: string;
   phone?: string;
@@ -109,10 +111,13 @@ type DialerContact = {
 };
 
 function contactDisplayName(c: DialerContact): string {
+  const directoryName = [c.directory_first_name, c.directory_last_name].filter(Boolean).join(" ").trim();
+  const explicitName = [c.first_name, c.last_name].filter(Boolean).join(" ").trim();
   return (
+    directoryName ||
+    explicitName ||
     c.display_name ||
     c.name ||
-    [c.first_name, c.last_name].filter(Boolean).join(" ") ||
     c.email ||
     c.phone ||
     "—"
@@ -196,6 +201,8 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
           contactDisplayName(c),
           c.first_name,
           c.last_name,
+          c.directory_first_name,
+          c.directory_last_name,
           c.name,
           c.display_name,
           c.email,
@@ -830,26 +837,54 @@ function Frame({ children, forceDark = false }: { children: React.ReactNode; for
   const { theme } = useMplanipretTheme();
   const frameTheme = forceDark ? "dark" : theme;
   const lockedHeightRef = useRef<number | null>(null);
+  const lastStableHeightRef = useRef<number | null>(null);
 
   useEffect(() => {
     const root = document.documentElement;
+    const body = document.body;
+    const vv = window.visualViewport;
     const readHeight = () => Math.round(window.innerHeight || root.clientHeight || 844);
     const isTyping = () => ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName ?? "");
+    const setKeyboardOpen = (open: boolean) => {
+      root.classList.toggle("pp-keyboard-open", open);
+      body.classList.toggle("pp-keyboard-open", open);
+      root.style.overflow = open ? "hidden" : "";
+      body.style.overflow = open ? "hidden" : "";
+    };
     const lockHeight = (force = false) => {
       const next = readHeight();
+      const keyboardLikelyOpen = Boolean(vv && isTyping() && vv.height < next - 80);
+      if (!keyboardLikelyOpen && !isTyping()) lastStableHeightRef.current = next;
       if (force || !lockedHeightRef.current || !isTyping()) {
         lockedHeightRef.current = next;
         root.style.setProperty("--pp-app-height", `${next}px`);
       }
+      if (keyboardLikelyOpen) {
+        const stable = lockedHeightRef.current || lastStableHeightRef.current || next;
+        lockedHeightRef.current = stable;
+        root.style.setProperty("--pp-app-height", `${stable}px`);
+      }
+      setKeyboardOpen(keyboardLikelyOpen);
     };
     lockHeight(true);
     const onResize = () => lockHeight(false);
+    const onFocus = () => window.setTimeout(() => lockHeight(false), 40);
+    const onBlur = () => window.setTimeout(() => { setKeyboardOpen(false); lockHeight(false); }, 120);
     const onOrientation = () => window.setTimeout(() => lockHeight(true), 350);
     window.addEventListener("resize", onResize);
+    vv?.addEventListener("resize", onResize);
+    vv?.addEventListener("scroll", onResize);
+    document.addEventListener("focusin", onFocus);
+    document.addEventListener("focusout", onBlur);
     window.addEventListener("orientationchange", onOrientation);
     return () => {
       window.removeEventListener("resize", onResize);
+      vv?.removeEventListener("resize", onResize);
+      vv?.removeEventListener("scroll", onResize);
+      document.removeEventListener("focusin", onFocus);
+      document.removeEventListener("focusout", onBlur);
       window.removeEventListener("orientationchange", onOrientation);
+      setKeyboardOpen(false);
     };
   }, []);
 

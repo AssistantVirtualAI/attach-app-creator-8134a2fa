@@ -907,6 +907,8 @@
   border-color: var(--pp-bg-border);
   color: var(--pp-text-primary);
   font-size: 16px !important;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 .planipret-mobile-scope input:focus,
 .planipret-mobile-scope textarea:focus {

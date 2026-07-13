@@ -4,6 +4,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
+const ELEVENLABS_DEFAULT_AGENT_ID = Deno.env.get("ELEVENLABS_DEFAULT_AGENT_ID") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -52,7 +53,9 @@ Deno.serve(async (req) => {
 
     if (!prof) return json({ error: "profile_not_found" }, 404);
     if (!prof.voice_agent_enabled) return json({ error: "voice_agent_disabled" }, 403);
-    if (!prof.elevenlabs_agent_id) return json({ error: "agent_not_provisioned" }, 409);
+
+    const agentId = prof.elevenlabs_agent_id || ELEVENLABS_DEFAULT_AGENT_ID;
+    if (!agentId) return json({ error: "agent_not_provisioned" }, 409);
 
     // Accept ?type=webrtc|websocket|both — signed URLs are single-use so
     // callers should mint only what they need. Defaults to "both" for
@@ -73,13 +76,13 @@ Deno.serve(async (req) => {
     const [tokenRes, signedRes] = await Promise.all([
       needToken
         ? fetch(
-            `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(prof.elevenlabs_agent_id)}`,
+            `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`,
             { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
           )
         : Promise.resolve(null as any),
       needSigned
         ? fetch(
-            `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(prof.elevenlabs_agent_id)}`,
+            `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`,
             { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
           )
         : Promise.resolve(null as any),
@@ -108,7 +111,7 @@ Deno.serve(async (req) => {
     return json({
       token: tokenData?.token ?? null,
       signed_url: signedData?.signed_url ?? null,
-      agent_id: prof.elevenlabs_agent_id,
+      agent_id: agentId,
       broker: { name: prof.full_name, extension: prof.extension },
     });
   } catch (e) {

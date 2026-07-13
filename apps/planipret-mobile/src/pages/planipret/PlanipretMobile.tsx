@@ -801,10 +801,14 @@ export default function PlanipretMobile() {
         <PpActiveCallScreen softphone={softphone} />
         <InboundCallOverlay call={inbound} onClose={() => setInbound(null)} />
         {avaOpen && profile?.user_id && (
-          profile.voice_agent_enabled
+          profile.voice_agent_enabled && avaMode === "voice"
             ? (
               <Suspense fallback={null}>
-                <AvaVoiceAgent userId={profile.user_id} onClose={() => setAvaOpen(false)} />
+                <AvaVoiceAgent
+                  userId={profile.user_id}
+                  onClose={() => setAvaOpen(false)}
+                  onFallbackToChat={() => setAvaMode("chat")}
+                />
               </Suspense>
             )
             : <AvaChatSheet userId={profile.user_id} onClose={() => setAvaOpen(false)} />

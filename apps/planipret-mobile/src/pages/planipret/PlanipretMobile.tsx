@@ -355,10 +355,10 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                       <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Réessayer</button>
                     </div>
                   ) : filtered.length === 0 ? (
-                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{normalized ? t("dialer.noResults") : t("contacts.noDirectory")}</div>
+                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{tokens.length ? t("dialer.noResults") : t("contacts.noDirectory")}</div>
                   ) : (
                     <>
-                      {!normalized && (
+                      {!tokens.length && (
                         <div className="px-1 pb-2 text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--pp-text-muted)" }}>
                           {t("contacts.directorySection") || t("contacts.directory")}
                         </div>

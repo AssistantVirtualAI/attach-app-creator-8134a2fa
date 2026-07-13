@@ -72,15 +72,15 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
         onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--pp-bg-base)",
-          marginTop: "-3cm",
-          paddingTop: "3cm",
+          marginTop: 0,
+          paddingTop: 0,
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
       >
       {/* Header — matches PlanipretMobile top header (same margin/height) */}
       <header
         className="relative flex items-center px-4 shrink-0"
-        style={{ transform: "translateY(-3cm)", marginBottom: "-3cm", paddingTop: 4, paddingBottom: 6, background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
+        style={{ paddingTop: 4, paddingBottom: 6, background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
       >
         <div className="flex items-center gap-2">
           <div className="relative shrink-0">

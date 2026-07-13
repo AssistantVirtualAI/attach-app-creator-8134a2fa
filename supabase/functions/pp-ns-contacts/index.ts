@@ -52,7 +52,8 @@ Deno.serve(async (req) => {
 
     if (action === "directory") {
       const debug = body?.debug === true || url.searchParams.get("debug") === "1";
-      const res = await nsFetch(`${domainBase}/users?limit=500`, { method: "GET" });
+      const limit = body?.limit ?? url.searchParams.get("limit") ?? "500";
+      const res = await nsFetch(`${domainBase}/users?limit=${encodeURIComponent(String(limit))}`, { method: "GET" });
       if (!res.ok) return jsonResponse({ error: "NS-API directory fetch failed", status: res.status, body: await res.text() }, 502);
       const raw = await res.json();
       const users = Array.isArray(raw) ? raw : (raw?.users ?? raw?.data ?? []);

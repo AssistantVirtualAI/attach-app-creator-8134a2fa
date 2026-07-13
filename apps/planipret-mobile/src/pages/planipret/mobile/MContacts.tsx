@@ -111,14 +111,14 @@ export default function MContacts() {
     toast.success(exists ? (t("contacts.removeFavorite") || "Retiré des favoris") : (t("contacts.addFavorite") || "Ajouté aux favoris"));
   }, [t]);
 
-  const load = useCallback(async (which: Tab, opts: { force?: boolean } = {}) => {
+  const load = useCallback(async (which: Tab, opts: { force?: boolean; limit?: number; background?: boolean } = {}) => {
     if (which === "favorites") return; // local only
     if (!opts.force && loadedTabsRef.current.has(which)) return;
-    setLoadingTab(which);
+    if (!opts.background) setLoadingTab(which);
     setLoadError(null);
     try {
       const action = which === "personal" ? "list" : "directory";
-      const { data, error } = await supabase.functions.invoke("pp-ns-contacts", { body: { action } });
+      const { data, error } = await supabase.functions.invoke("pp-ns-contacts", { body: { action, limit: opts.limit ?? 500 } });
       const payload: any = data ?? {};
       if (error) {
         const detail = payload?.error || payload?.body || error.message;
@@ -139,18 +139,24 @@ export default function MContacts() {
       const msg = e?.message || "Erreur inconnue";
       console.error("[pp-ns-contacts]", which, e);
       setLoadError(msg);
-      toast.error(t("contacts.loadFailed") || "Échec chargement contacts", { description: msg });
+      if (!opts.background) toast.error(t("contacts.loadFailed") || "Échec chargement contacts", { description: msg });
     } finally {
-      setLoadingTab((cur) => (cur === which ? null : cur));
+      if (!opts.background) setLoadingTab((cur) => (cur === which ? null : cur));
     }
   }, [t]);
 
-  useEffect(() => { load(tab); }, [tab, load]);
+  useEffect(() => {
+    if (tab === "favorites") return;
+    void load(tab, { limit: 120 });
+    const id = window.setTimeout(() => { void load(tab, { force: true, limit: 500, background: true }); }, 700);
+    return () => window.clearTimeout(id);
+  }, [tab, load]);
 
   // Prefetch the directory after the first paint so the annuaire opens faster.
   useEffect(() => {
-    const id = window.setTimeout(() => { void load("directory"); }, 350);
-    return () => window.clearTimeout(id);
+    const quick = window.setTimeout(() => { void load("directory", { limit: 120, background: true }); }, 350);
+    const full = window.setTimeout(() => { void load("directory", { force: true, limit: 500, background: true }); }, 1200);
+    return () => { window.clearTimeout(quick); window.clearTimeout(full); };
   }, [load]);
 
   // Contacts permission: show the request on the Contacts page, then trigger the
@@ -184,7 +190,7 @@ export default function MContacts() {
     if (!ql) return src;
     return src.filter((c: any) => {
       const hay = tab === "directory"
-        ? `${c.name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""}`
+        ? `${c.name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""}`
         : tab === "favorites"
         ? `${c.name ?? ""} ${c.phone ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.company ?? ""}`
         : `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.phone ?? ""} ${c.email ?? ""} ${c.company ?? ""}`;
@@ -290,7 +296,7 @@ export default function MContacts() {
         <div className="rounded-2xl p-4 mb-3 text-sm" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", color: "#dc2626" }}>
           <div className="font-semibold mb-1">Impossible de charger les contacts</div>
           <div className="text-xs opacity-80 break-all">{loadError}</div>
-          <button onClick={() => load(tab)} className="mt-2 text-xs px-3 py-1.5 rounded-full font-semibold"
+          <button onClick={() => load(tab, { force: true })} className="mt-2 text-xs px-3 py-1.5 rounded-full font-semibold"
             style={{ background: "rgba(239,68,68,0.15)", color: "#dc2626" }}>
             Réessayer
           </button>

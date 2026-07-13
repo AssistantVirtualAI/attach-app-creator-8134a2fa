@@ -148,10 +148,10 @@ export default function MContacts() {
     } catch (e: any) {
       const msg = e?.message || "Erreur inconnue";
       console.error("[pp-ns-contacts]", which, e);
-      if (!opts.background) setLoadError(msg);
-      if (!opts.background) toast.error(t("contacts.loadFailed") || "Échec chargement contacts", { description: msg });
+      if (!runBackground) setLoadError(msg);
+      if (!runBackground) toast.error(t("contacts.loadFailed") || "Échec chargement contacts", { description: msg });
     } finally {
-      if (!opts.background) setLoadingTab((cur) => (cur === which ? null : cur));
+      if (!runBackground) setLoadingTab((cur) => (cur === which ? null : cur));
     }
   }, [t]);
 

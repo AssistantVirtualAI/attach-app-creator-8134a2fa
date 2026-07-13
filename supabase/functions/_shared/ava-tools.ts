@@ -78,6 +78,7 @@ export function buildAvaToolConfigs(supabaseUrl: string, anonKey: string) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${anonKey}`,
             "X-Ava-Tool-Name": s.name,
+            "X-Ava-Session": "{{ava_session_token}}",
           },
           request_body_schema,
         },

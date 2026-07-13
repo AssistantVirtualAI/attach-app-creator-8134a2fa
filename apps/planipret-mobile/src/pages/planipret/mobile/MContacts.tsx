@@ -193,7 +193,7 @@ export default function MContacts() {
     const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); };
-  }, []);
+  }, [load]);
 
   const requestContactsAccess = useCallback(async () => {
     setContactsPermBusy(true);

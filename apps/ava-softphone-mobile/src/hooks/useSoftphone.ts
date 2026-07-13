@@ -137,9 +137,17 @@ export function useSoftphoneJsSip(
   }, []);
 
   const setSipStatus = useCallback((s: SIPStatus) => {
+    const prev = sipStatusRef.current;
     sipStatusRef.current = s;
     setSipStatusState(s);
     savePersistedStatus(s);
+    if (prev !== s) {
+      // Journaliser chaque transition pour le panneau de debug.
+      const entry: SipLogEntry = { time: Date.now(), level: 'info', event: 'status.transition', detail: `${prev} → ${s}` };
+      const next = appendSipLog(entry);
+      setSipLog(next);
+      console.log(`[SIP][status] ${prev} → ${s}`);
+    }
   }, []);
 
   /**

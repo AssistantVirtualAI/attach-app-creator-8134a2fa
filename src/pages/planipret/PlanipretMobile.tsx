@@ -747,7 +747,7 @@ export default function PlanipretMobile() {
         <button onClick={activeCallId ? hangupActive : () => setDialerOpen(true)}
           className="absolute z-20 rounded-full flex items-center justify-center text-white active:scale-95 transition"
           style={{
-            right: 18, bottom: 84,
+            right: 18, bottom: 118,
             background: activeCallId
               ? "linear-gradient(135deg, #5A1010, #E84C4C)"
               : "linear-gradient(135deg, #1A4A8A, #2E9BDC)",

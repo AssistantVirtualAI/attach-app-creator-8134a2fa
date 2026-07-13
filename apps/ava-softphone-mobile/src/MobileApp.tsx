@@ -26,6 +26,7 @@ import { useTheme } from './lib/ThemeContext';
 import { useT } from './lib/i18n';
 import { Bell, Sun, Moon, Globe } from 'lucide-react';
 import ActiveCallSheet from './components/ActiveCallSheet';
+import SipDebugPanel from './components/SipDebugPanel';
 import SplashAva from './components/SplashAva';
 import SyncIndicator from './components/SyncIndicator';
 import ProfileSheet from './components/ProfileSheet';

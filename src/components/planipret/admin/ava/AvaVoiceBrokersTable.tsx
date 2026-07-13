@@ -25,16 +25,22 @@ export default function AvaVoiceBrokersTable() {
   useEffect(() => { load(); }, []);
 
   const toggle = async (b: Broker) => {
+    const next = !b.voice_agent_enabled;
+    if (!confirm(`${next ? "Activer" : "Désactiver"} l'agent vocal AVA pour ${b.full_name ?? "ce courtier"} ?`)) return;
     setBusy(b.user_id);
+    // Optimistic update so l'UI reflète l'état immédiatement.
+    setRows((rs) => rs.map((r) => r.user_id === b.user_id ? { ...r, voice_agent_enabled: next } : r));
     const { data, error } = await supabase.functions.invoke("pp-admin-ava-voice-toggle", {
-      body: { user_id: b.user_id, enabled: !b.voice_agent_enabled },
+      body: { user_id: b.user_id, enabled: next },
     });
     setBusy(null);
     if (error || !(data as any)?.success) {
+      // Rollback
+      setRows((rs) => rs.map((r) => r.user_id === b.user_id ? { ...r, voice_agent_enabled: b.voice_agent_enabled } : r));
       toast.error("Échec: " + (error?.message ?? (data as any)?.error ?? "inconnu"));
       return;
     }
-    toast.success(`${b.full_name}: agent vocal ${!b.voice_agent_enabled ? "activé" : "désactivé"}`);
+    toast.success(`${b.full_name ?? "Courtier"}: agent vocal ${next ? "activé ✅" : "désactivé 🚫"}`);
     load();
   };
 

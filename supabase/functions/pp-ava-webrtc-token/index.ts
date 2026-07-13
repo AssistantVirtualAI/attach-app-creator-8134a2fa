@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
       agent_id: agentId,
       broker: { name: prof.full_name, extension: prof.extension },
       ava_session_token: avaSession,
-      dynamic_variables: avaSession ? { ava_session_token: avaSession } : undefined,
+      dynamic_variables: avaSession ? { ava_session_token: avaSession, secret__ava_session_token: avaSession } : undefined,
     });
   } catch (e) {
     console.error("pp-ava-webrtc-token", e);

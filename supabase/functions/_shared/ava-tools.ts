@@ -28,6 +28,8 @@ export function buildAvaToolsArray(supabaseUrl: string, anonKey: string) {
   const TOOL_HEADERS = [
     { key: "Content-Type", value: "application/json" },
     { key: "Authorization", value: `Bearer ${anonKey}` },
+    { key: "X-Ava-Session", value: "{{secret__ava_session_token}}" },
+    { key: "X-Ava-Session-Fallback", value: "{{ava_session_token}}" },
   ];
 
   const mk = (name: string, description: string, properties: Record<string, any> = {}, required: string[] = []) => ({
@@ -78,7 +80,8 @@ export function buildAvaToolConfigs(supabaseUrl: string, anonKey: string) {
             "Content-Type": "application/json",
             Authorization: `Bearer ${anonKey}`,
             "X-Ava-Tool-Name": s.name,
-            "X-Ava-Session": "{{ava_session_token}}",
+            "X-Ava-Session": "{{secret__ava_session_token}}",
+            "X-Ava-Session-Fallback": "{{ava_session_token}}",
           },
           request_body_schema,
         },

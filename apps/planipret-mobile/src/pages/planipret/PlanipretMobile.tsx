@@ -409,7 +409,7 @@ export default function PlanipretMobile() {
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [showPrimer, setShowPrimer] = useState(false);
   const openDialer = (n?: string) => { setDialerInit(n); setDialerOpen(true); };
-  const openAva = () => setAvaOpen(true);
+  const openAva = () => { setAvaMode(profile?.voice_agent_enabled ? "voice" : "chat"); setAvaOpen(true); };
   const refreshFn = useRef<(() => Promise<void> | void) | null>(null);
   const registerRefresh = (fn: (() => Promise<void> | void) | null) => { refreshFn.current = fn; };
   const handlePull = async () => { if (refreshFn.current) await refreshFn.current(); };

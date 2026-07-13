@@ -391,11 +391,11 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
           console.warn("AVA WebRTC failed, falling back to WebSocket", webrtcErr);
           usedTransport = "websocket";
           try {
+            await new Promise((resolve) => setTimeout(resolve, 350));
             const tok = await mintToken("websocket");
             await logSession({ connection_type: "websocket", agent_id: c.agent_id });
             conv = await Conversation.startSession({
               signedUrl: tok.signed_url,
-              connectionType: "websocket",
               ...commonOptions,
             } as any);
           } catch (wsErr: any) {

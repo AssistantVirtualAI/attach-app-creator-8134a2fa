@@ -849,6 +849,28 @@ function Highlight({ text, q }: { text: string; q: string }) {
 }
 
 // ===================== AI =====================
+function AnalysisStatusBar({ call }: { call: RecordingCall }) {
+  const nsId = call.ns_callid ?? call.ns_orig_callid ?? call.ns_term_callid ?? call.ns_call_id ?? null;
+  const src = call.transcript_source ?? (call.transcript ? "ns-api" : null);
+  const analyzed = !!call.analyzed_at;
+  const synced = !!call.maestro_synced;
+  const status = synced ? "synced" : analyzed ? "analyzed" : "pending";
+  const label = status === "synced" ? "Synchronisé" : status === "analyzed" ? "Analysé" : "En attente";
+  const color = status === "synced" ? "#10b981" : status === "analyzed" ? "#2E9BDC" : "#f59e0b";
+  const ts = call.analyzed_at ? new Date(call.analyzed_at).toLocaleString("fr-CA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : null;
+  return (
+    <div className="p-2.5 rounded-lg mb-2 flex flex-wrap items-center gap-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: `${color}22`, color, border: `1px solid ${color}55`, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>● {label}</span>
+      {ts && <span style={{ fontSize: 10, color: "var(--pp-text-muted)" }}>{ts}</span>}
+      {nsId && (
+        <span style={{ fontSize: 10, color: "var(--pp-text-faint)", fontFamily: "monospace", marginLeft: "auto" }}>
+          src: {src ?? "—"} · NS {String(nsId).slice(0, 10)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function AISection({ call, onUpdated }: { call: RecordingCall; onUpdated: (c: RecordingCall) => void }) {
   const [loading, setLoading] = useState(false);
   const hasAI = !!call.ai_summary;

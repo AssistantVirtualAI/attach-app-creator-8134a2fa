@@ -733,11 +733,16 @@ export function useSoftphoneJsSip(
     return placeCallInternal(number, false);
   };
   const hangup = () => {
-    sessionRef.current?.terminate();
+    try { sessionRef.current?.terminate(); } catch {}
+    sessionRef.current = null;
     setCallState('idle');
     if (timerRef.current) clearInterval(timerRef.current);
     setCallTimer(0);
     setActiveCallNumber('');
+    // Après un raccroché manuel, garantir que l'UI ne reste pas en "Connecting".
+    if (uaRef.current?.isConnected?.() && uaRef.current?.isRegistered?.()) {
+      setSipStatus('registered');
+    }
   };
   const answer = () =>
     sessionRef.current?.answer({

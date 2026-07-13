@@ -652,7 +652,7 @@ export default function PlanipretMobile() {
         {/* Top brand header — AVA (left) · Planiprêt (center) · Settings (right) */}
         <header
           className="relative flex items-center px-4 pp-mobile-header"
-          style={{ marginTop: "calc(env(safe-area-inset-top, 0px) + 20px)", paddingTop: 10, paddingBottom: 10 }}
+          style={{ marginTop: "env(safe-area-inset-top, 0px)", paddingTop: 4, paddingBottom: 6 }}
         >
 
           {/* AVA icon — left */}

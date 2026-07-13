@@ -31,6 +31,8 @@ import PermissionsPrimer from "@/components/planipret/mobile/PermissionsPrimer";
 import { hasSeenPrimer } from "@/lib/native/permissions/orchestrator";
 import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 import { listDeviceContacts } from "@/lib/native/permissions/contacts";
+import { tokenize, matchAllTokens } from "@/lib/textNormalize";
+import { prefetchPpContacts } from "@/lib/ppContactsCache";
 
 
 const ACCENT = "#2E9BDC";
@@ -214,9 +216,9 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     return () => { cancelled = true; };
   }, [open, mode, contacts.length, loadingContacts, contactsLoadKey]);
 
-  const normalized = query.trim().toLowerCase();
-  const directoryOnly = contacts.filter((c) => c.source === "directory");
-  const filtered = normalized
+  const tokens = tokenize(query);
+  const filtered = tokens.length
+
     ? contacts.filter((c) => {
         const hay = [
           contactDisplayName(c),
@@ -234,10 +236,12 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
           (c as any).job_title,
           (c as any).position,
           (c as any).department,
-        ].filter(Boolean).join(" ").toLowerCase();
-        return hay.includes(normalized);
+        ].filter(Boolean).join(" ");
+        return matchAllTokens(hay, tokens);
       }).slice(0, 50)
     : contacts.slice(0, 50);
+  
+
 
   return (
     <AnimatePresence>
@@ -624,7 +628,11 @@ export default function PlanipretMobile() {
     const ext = profile?.ns_extension || profile?.extension || "";
     void bootstrapPushIfNative(ext);
     void hasSeenPrimer().then((seen) => { if (!seen) setShowPrimer(true); });
+    // Warm the directory/personal/shared caches in parallel so Directory,
+    // Teams and the dialer render from memory instead of blocking on network.
+    prefetchPpContacts(["list", "shared", "directory"]);
   }, [profile?.user_id, profile?.ns_extension, profile?.extension]);
+
 
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1425", color: "#2E9BDC", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;
 

@@ -382,8 +382,9 @@ export default function MAvaChat() {
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           disabled={busy || !userId || recording}
           rows={1}
-          className="flex-1 min-h-[36px] max-h-28 resize-none bg-transparent px-2 py-2 text-[14px] outline-none disabled:opacity-60 placeholder:opacity-60"
-          style={{ color: "var(--pp-text-primary)", caretColor: "var(--pp-agent)" }}
+          className="flex-1 min-h-[36px] max-h-28 resize-none bg-transparent px-2 py-2 outline-none disabled:opacity-60 placeholder:opacity-60"
+          style={{ color: "var(--pp-text-primary)", caretColor: "var(--pp-agent)", fontSize: 16 }}
+
         />
         <button
           onClick={send}

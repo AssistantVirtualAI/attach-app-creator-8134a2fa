@@ -493,10 +493,8 @@ export function useSoftphoneJsSip(
               stopStats();
               setActiveCallNumber('');
               // Le CANCEL/timeout d'un appel ne doit pas laisser l'UI en
-              // "Connecting" — le UA est toujours REGISTERED côté serveur.
-              if (uaRef.current?.isConnected?.() && uaRef.current?.isRegistered?.()) {
-                setSipStatus('registered');
-              }
+              // "Connecting" — vérifie l'UA (re-REGISTER si besoin).
+              ensureRegisteredThenRestore('session.failed');
               // ---- 488 Not Acceptable Here: auto-retry once with the legacy
               // PCMU-only SDP modifier (covers PBX profiles that refuse Opus).
               if (code === 488 && callAttemptRef.current === 1 && lastCallNumberRef.current) {
@@ -504,7 +502,7 @@ export function useSoftphoneJsSip(
                 const retryNumber = lastCallNumberRef.current;
                 log('call.retry-488', `→ ${retryNumber} with PCMU-only fallback`, 'warn');
                 setSipError('Codec refusé (488) — nouvelle tentative en PCMU…', ctx);
-                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, 250);
+                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, INVITE_RETRY_BACKOFF_MS);
               } else {
                 setSipError(msg, ctx);
               }

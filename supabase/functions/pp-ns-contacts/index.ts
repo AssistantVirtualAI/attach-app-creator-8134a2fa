@@ -52,7 +52,8 @@ Deno.serve(async (req) => {
 
     if (action === "directory") {
       const debug = body?.debug === true || url.searchParams.get("debug") === "1";
-      const res = await nsFetch(`${domainBase}/users?limit=500`, { method: "GET" });
+      const limit = body?.limit ?? url.searchParams.get("limit") ?? "500";
+      const res = await nsFetch(`${domainBase}/users?limit=${encodeURIComponent(String(limit))}`, { method: "GET" });
       if (!res.ok) return jsonResponse({ error: "NS-API directory fetch failed", status: res.status, body: await res.text() }, 502);
       const raw = await res.json();
       const users = Array.isArray(raw) ? raw : (raw?.users ?? raw?.data ?? []);
@@ -68,15 +69,19 @@ Deno.serve(async (req) => {
         return { first, last, composed, display };
       };
 
+      const extractPosition = (u: any) =>
+        u.position ?? u.job_title ?? u.jobTitle ?? u.title ?? u.role_title ?? u.roleTitle ?? u.poste ?? u.department ?? null;
+
       // First pass — figure out who is missing a real name
       const initial = users.map((u: any) => ({
         u,
         ext: u.user ?? u.extension ?? u.uid,
         ...extractName(u),
+        position: extractPosition(u),
       }));
 
-      // Enrich in parallel (bounded concurrency) for users where name is missing
-      const missing = initial.filter((x) => !x.composed && !x.display && x.ext);
+      // Enrich in parallel (bounded concurrency) for users where name/poste is missing.
+      const missing = initial.filter((x) => (!x.composed || !x.display || !x.position) && x.ext);
       const CONCURRENCY = 8;
       let idx = 0;
       const details = new Map<string, any>();
@@ -95,7 +100,7 @@ Deno.serve(async (req) => {
       }
       await Promise.all(Array.from({ length: Math.min(CONCURRENCY, missing.length) }, worker));
 
-      const directory = initial.map(({ u, ext, first, last, composed, display }) => {
+      const directory = initial.map(({ u, ext, first, last, composed, display, position }) => {
         let f = first, l = last, d = display, c = composed;
         const detail = ext ? details.get(String(ext)) : null;
         if (detail) {
@@ -113,6 +118,7 @@ Deno.serve(async (req) => {
           last_name: l || undefined,
           email: u.email ?? (detail?.email ?? null),
           department: u.department ?? (detail?.department ?? null),
+          position: position ?? (detail ? extractPosition(detail) : null),
           presence: u.presence ?? u.status ?? (detail?.presence ?? detail?.status ?? "unknown"),
         };
       });

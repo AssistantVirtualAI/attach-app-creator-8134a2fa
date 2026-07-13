@@ -13,7 +13,7 @@ import AvaOrb, { useAnalyserLevel } from "@/components/planipret/mobile/AvaOrb";
 type AgentState = "idle" | "connecting" | "listening" | "speaking" | "processing" | "tool_running" | "error";
 type AutonomyMode = "confirm" | "semi_auto" | "full_auto";
 
-interface Props { onClose: () => void; userId: string; }
+interface Props { onClose: () => void; userId: string; onFallbackToChat?: () => void; }
 
 interface TranscriptEntry { id: string; role: "user" | "agent" | "tool" | "nav"; text: string; toolIcon?: string; }
 interface PendingTool { tool: string; params: any; resolve: (v: any) => void; reject: (e: any) => void; }

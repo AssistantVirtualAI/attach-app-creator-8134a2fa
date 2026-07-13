@@ -165,6 +165,27 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       subject: { type: "string", description: "Sujet" },
       body: { type: "string", description: "Corps" },
     }, ["to_email", "subject", "body"]),
+    mk("search_contact", "Cherche un contact dans le répertoire M365 (People + Contacts) par nom ou email.", {
+      query: { type: "string", description: "Nom ou fragment d'email" },
+    }, ["query"]),
+    mk("propose_email_reply", "Résume un courriel et propose un brouillon de réponse (Claude). Toujours demander confirmation avant d'envoyer.", {
+      message_id: { type: "string", description: "ID du courriel M365" },
+      tone: { type: "string", description: "ex: professionnel, chaleureux, direct" },
+      language: { type: "string", description: "fr-CA (défaut) ou en" },
+    }, ["message_id"]),
+    mk("summarize_inbox", "Résume la boîte de réception avec priorités et actions requises.", {
+      limit: { type: "number", description: "Nombre de courriels à analyser (défaut 10)" },
+      folder: { type: "string", description: "inbox, unread (défaut: inbox)" },
+    }),
+    mk("update_calendar_event", "Modifie un rendez-vous M365 (déplacer/changer sujet).", {
+      event_id: { type: "string", description: "ID de l'événement" },
+      start: { type: "string", description: "Nouveau début ISO 8601" },
+      end: { type: "string", description: "Nouvelle fin ISO 8601" },
+      subject: { type: "string", description: "Nouveau titre (optionnel)" },
+    }, ["event_id"]),
+    mk("delete_calendar_event", "Annule un rendez-vous M365. Toujours confirmer avant.", {
+      event_id: { type: "string", description: "ID de l'événement" },
+    }, ["event_id"]),
     mk("get_calendar_today", "Rendez-vous du calendrier M365 aujourd'hui."),
     mk("get_calendar_week", "Rendez-vous des 7 prochains jours."),
 

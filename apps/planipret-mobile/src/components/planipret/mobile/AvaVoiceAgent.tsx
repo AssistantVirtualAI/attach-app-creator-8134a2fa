@@ -28,6 +28,23 @@ const STATE_LABEL: Record<AgentState, string> = {
   error: "Erreur de connexion",
 };
 
+// Retry any async op with exponential backoff. Returns the value or throws the
+// last error after `attempts` tries. Used to smooth over transient
+// ElevenLabs / edge-function hiccups before falling back to text chat.
+async function withBackoff<T>(fn: () => Promise<T>, attempts = 3, baseMs = 400): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    try { return await fn(); }
+    catch (e) {
+      lastErr = e;
+      if (i === attempts - 1) break;
+      await new Promise((r) => setTimeout(r, baseMs * Math.pow(2, i)));
+    }
+  }
+  throw lastErr;
+}
+
+
 const TOOL_ICONS: Record<string, any> = {
   make_call: PhoneOutgoing, send_sms: MessageSquare, send_email: Mail,
   search_client: Search, create_task: Sparkles, create_appointment: Calendar,

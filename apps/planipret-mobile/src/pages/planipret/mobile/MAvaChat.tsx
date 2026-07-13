@@ -220,8 +220,9 @@ export default function MAvaChat() {
   }
 
   return (
-    <div className="flex flex-col min-h-full" style={{ background: "var(--pp-bg-base)" }}>
-      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2.5 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 78%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: "var(--pp-bg-base)", marginTop: -8, paddingBottom: 130 }}>
+      <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-1 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 78%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>
+
         <Sheet>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full"><Menu className="w-5 h-5" /></Button>

@@ -191,9 +191,36 @@ Deno.serve(async (req) => {
         }
         return j({ success: true, briefing_text: briefing, emails_count: emails.length, events_count: events.length });
       }
+      case "search_contact": {
+        const q = String(payload.query ?? "").trim();
+        if (!q) return j({ success: false, error: "query requis" }, 400);
+        const enc = encodeURIComponent(q);
+        // /me/people uses relevance-ranked people (emails, colleagues, contacts).
+        // /me/contacts covers the personal address book. Query both in parallel.
+        const [peopleR, contactsR] = await Promise.all([
+          graph(admin, profile, `/me/people?$search="${enc}"&$top=10&$select=displayName,scoredEmailAddresses,phones,jobTitle,companyName`),
+          graph(admin, profile, `/me/contacts?$search="${enc}"&$top=10&$select=displayName,emailAddresses,mobilePhone,businessPhones,companyName`),
+        ]);
+        const pd = await peopleR.json().catch(() => ({}));
+        const cd = await contactsR.json().catch(() => ({}));
+        const people = (pd.value ?? []).map((p: any) => ({
+          name: p.displayName,
+          email: p.scoredEmailAddresses?.[0]?.address ?? null,
+          phone: p.phones?.[0]?.number ?? null,
+          job: p.jobTitle, company: p.companyName, source: "people",
+        }));
+        const contacts = (cd.value ?? []).map((c: any) => ({
+          name: c.displayName,
+          email: c.emailAddresses?.[0]?.address ?? null,
+          phone: c.mobilePhone ?? c.businessPhones?.[0] ?? null,
+          company: c.companyName, source: "contacts",
+        }));
+        return j({ success: peopleR.ok || contactsR.ok, results: [...people, ...contacts].filter(r => r.email || r.phone).slice(0, 15) });
+      }
       default:
         return j({ success: false, error: "Action inconnue" }, 400);
     }
+
   } catch (e: any) {
     console.error("ms365-actions error", e);
     return new Response(JSON.stringify({ success: false, error: e?.message ?? "Erreur serveur", code: 0 }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });

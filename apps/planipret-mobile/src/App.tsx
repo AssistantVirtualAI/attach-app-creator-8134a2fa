@@ -28,6 +28,7 @@ const MAvaNotifications = lazy(() => import('@/pages/planipret/mobile/MAvaNotifi
 const MExtensionSync = lazy(() => import('@/pages/planipret/mobile/MExtensionSync'));
 const Ms365Callback = lazy(() => import('@/pages/planipret/Ms365Callback'));
 const MMs365Diagnostics = lazy(() => import('@/pages/planipret/mobile/MMs365Diagnostics'));
+const MStyleDiagnostics = lazy(() => import('@/pages/planipret/mobile/MStyleDiagnostics'));
 
 const queryClient = new QueryClient();
 

@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+const buildId = `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}Z`;
+const buildTime = new Date().toISOString();
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -48,5 +51,7 @@ export default defineConfig({
   },
   define: {
     __APP_ID__: JSON.stringify('planipret'),
+    'import.meta.env.VITE_BUILD_ID': JSON.stringify(buildId),
+    'import.meta.env.VITE_BUILD_TIME': JSON.stringify(buildTime),
   },
 });

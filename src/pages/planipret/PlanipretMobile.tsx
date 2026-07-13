@@ -197,10 +197,10 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     };
     const errors: string[] = [];
     const jobs: Array<Promise<void>> = [
-      withTimeout(listDeviceContacts(), 6000, "device").then((v) => appendBatch(v, "native")).catch((e) => errors.push(`device: ${e?.message ?? e}`)),
-      withTimeout(loadNsContacts("list"), 12000, "personal").then((v) => appendBatch(v, "personal")).catch((e) => errors.push(`personal: ${e?.message ?? e}`)),
-      withTimeout(loadNsContacts("shared"), 12000, "shared").then((v) => appendBatch(v, "shared")).catch((e) => errors.push(`shared: ${e?.message ?? e}`)),
-      withTimeout(loadNsContacts("directory"), 12000, "directory").then((v) => appendBatch(v, "directory")).catch((e) => errors.push(`directory: ${e?.message ?? e}`)),
+      withTimeout(listDeviceContacts(), 6000, "device").then((v) => appendBatch(v, "native")).catch((e) => { errors.push(`device: ${e?.message ?? e}`); }),
+      withTimeout(loadNsContacts("list"), 12000, "personal").then((v) => appendBatch(v, "personal")).catch((e) => { errors.push(`personal: ${e?.message ?? e}`); }),
+      withTimeout(loadNsContacts("shared"), 12000, "shared").then((v) => appendBatch(v, "shared")).catch((e) => { errors.push(`shared: ${e?.message ?? e}`); }),
+      withTimeout(loadNsContacts("directory"), 12000, "directory").then((v) => appendBatch(v, "directory")).catch((e) => { errors.push(`directory: ${e?.message ?? e}`); }),
     ];
     Promise.allSettled(jobs).then(() => {
       if (cancelled) return;

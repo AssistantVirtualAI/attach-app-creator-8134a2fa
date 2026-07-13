@@ -109,11 +109,17 @@ Deno.serve(async (req) => {
     const tokenData = tokenOk ? JSON.parse(tokenText) : null;
     const signedData = signedOk ? JSON.parse(signedText) : null;
 
+    let avaSession: string | null = null;
+    try { avaSession = await signAvaSession(userRes.user.id, 1800); }
+    catch (e) { console.warn("ava_session_sign_failed", (e as Error).message); }
+
     return json({
       token: tokenData?.token ?? null,
       signed_url: signedData?.signed_url ?? null,
       agent_id: agentId,
       broker: { name: prof.full_name, extension: prof.extension },
+      ava_session_token: avaSession,
+      dynamic_variables: avaSession ? { ava_session_token: avaSession } : undefined,
     });
   } catch (e) {
     console.error("pp-ava-webrtc-token", e);

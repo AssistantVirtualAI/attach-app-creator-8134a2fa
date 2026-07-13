@@ -6,6 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { ensureContacts } from "@/lib/native/permissions/contacts";
+
 
 type Tab = "personal" | "favorites" | "directory";
 

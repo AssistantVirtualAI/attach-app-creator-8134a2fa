@@ -19,23 +19,20 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import org.pjsip.pjsua2.*
 
 /**
- * Android bridge stub.
+ * Android PJSIP native bridge — remplace le stub JsSIP WebView.
  *
- * The actual SIP stack on Android is JsSIP running in the WebView (WSS 7443).
- * To keep the WebSocket alive when the app goes to the background we start
- * a foreground service (SipForegroundService) with a persistent notification
- * as soon as the JS layer calls initAccount(). All SIP signalling / media is
- * handled by JsSIP; this plugin only handles:
- *   - microphone permission
- *   - audio routing (speaker / earpiece / bluetooth)
- *   - starting / stopping the foreground service so Android does not kill
- *     the WebView WebSocket connection.
+ * Utilise PJSIP 2.16 compilé avec ENABLE_16KB_PAGE_SIZE=1 (arm64-v8a).
+ * Miroir de l'interface iOS CapacitorPjsip pour que nativeSipProvider.ts
+ * fonctionne identiquement sur les deux plateformes.
  *
- * PJSUA2 native binding is intentionally NOT compiled in — the required
- * .so libraries are not shipped in this project and using them would crash
- * at UnsatisfiedLinkError.
+ * Événements émis vers JS :
+ *   registration      { status: "registered"|"unregistered"|"error", code: Int }
+ *   callReceived      { callId: String, from: String }
+ *   callStateChanged  { callId: String, state: String }
+ *   callEnded         { callId: String, reason: String }
  */
 @CapacitorPlugin(
     name = "CapacitorPjsip",
@@ -45,16 +42,35 @@ import com.getcapacitor.annotation.PermissionCallback
 )
 class CapacitorPjsip : Plugin() {
 
+    var ep: Endpoint? = null
+    var account: LemtelAccount? = null
+    var currentCall: LemtelCall? = null
     private var audioManager: AudioManager? = null
     private var foregroundServiceRunning = false
 
-    override fun load() {
-        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        android.util.Log.i("CapacitorPjsip", "Android JsSIP bridge stub loaded")
+    companion object {
+        init {
+            try {
+                System.loadLibrary("pjsua2")
+                android.util.Log.i("CapacitorPjsip", "libpjsua2.so loaded (PJSIP native)")
+            } catch (e: UnsatisfiedLinkError) {
+                android.util.Log.e("CapacitorPjsip", "libpjsua2.so NOT found: ${e.message}")
+            }
+        }
     }
 
-    // ---------- Foreground service (keeps WebView WSS alive in background) ----------
+    override fun load() {
+        audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        android.util.Log.i("CapacitorPjsip", "CapacitorPjsip PJSIP native loaded")
+    }
 
+    override fun handleOnDestroy() {
+        destroyPjsip()
+        stopForegroundServiceIfNeeded()
+        super.handleOnDestroy()
+    }
+
+    // ── Foreground service ─────────────────────────────────────────────────────
     private fun startForegroundServiceIfNeeded() {
         if (foregroundServiceRunning) return
         try {
@@ -73,14 +89,85 @@ class CapacitorPjsip : Plugin() {
 
     private fun stopForegroundServiceIfNeeded() {
         if (!foregroundServiceRunning) return
-        try {
-            context.stopService(Intent(context, SipForegroundService::class.java))
-        } catch (_: Exception) {}
+        try { context.stopService(Intent(context, SipForegroundService::class.java)) } catch (_: Exception) {}
         foregroundServiceRunning = false
     }
 
-    // ---------- SIP no-op API (JS layer uses JsSIP directly) ----------
+    // ── PJSIP init / destroy ───────────────────────────────────────────────────
+    private fun initPjsip(
+        extension: String,
+        domain: String,
+        password: String,
+        host: String,
+        port: Int,
+        transport: String,
+        logLevel: Int
+    ) {
+        destroyPjsip()
+        try {
+            val endpoint = Endpoint()
+            endpoint.libCreate()
 
+            val epConfig = EpConfig()
+            epConfig.logConfig.level = logLevel.toLong()
+            epConfig.logConfig.consoleLevel = logLevel.toLong()
+            epConfig.medConfig.noVad = true
+            endpoint.libInit(epConfig)
+
+            val transportConfig = TransportConfig()
+            transportConfig.port = 0
+            val transportType = when (transport.lowercase()) {
+                "tls" -> pjsip_transport_type_e.PJSIP_TRANSPORT_TLS
+                "tcp" -> pjsip_transport_type_e.PJSIP_TRANSPORT_TCP
+                else  -> pjsip_transport_type_e.PJSIP_TRANSPORT_TCP
+            }
+            endpoint.transportCreate(transportType, transportConfig)
+            endpoint.libStart()
+
+            val acfg = AccountConfig()
+            acfg.idUri = "sip:$extension@$domain"
+            acfg.regConfig.registrarUri = "sip:$host:$port;transport=${transport.lowercase()}"
+            acfg.regConfig.registerOnAdd = true
+            acfg.regConfig.timeoutSec = 120
+
+            val cred = AuthCredInfo("digest", "*", extension, 0, password)
+            acfg.sipConfig.authCreds.add(cred)
+
+            // SIP/TCP direct — pas de WebRTC/ICE
+            acfg.natConfig.iceEnabled = false
+            acfg.natConfig.turnEnabled = false
+
+            val acc = LemtelAccount(this)
+            acc.create(acfg)
+
+            ep = endpoint
+            account = acc
+            android.util.Log.i("CapacitorPjsip", "PJSIP initialized for sip:$extension@$domain via $transport:$port")
+        } catch (e: Exception) {
+            android.util.Log.e("CapacitorPjsip", "initPjsip error: ${e.message}")
+            emitEvent("registration", JSObject().apply {
+                put("status", "error"); put("reason", e.message)
+            })
+        }
+    }
+
+    private fun destroyPjsip() {
+        try { currentCall?.hangup(CallOpParam()) } catch (_: Exception) {}
+        currentCall = null
+        try { account?.delete() } catch (_: Exception) {}
+        account = null
+        try { ep?.libDestroy() } catch (_: Exception) {}
+        ep = null
+    }
+
+    // ── Event helper ───────────────────────────────────────────────────────────
+    fun emitEvent(event: String, data: JSObject) {
+        try { notifyListeners(event, data) } catch (e: Exception) {
+            android.util.Log.w("CapacitorPjsip", "emitEvent $event error: ${e.message}")
+        }
+    }
+
+    // ── Plugin methods ─────────────────────────────────────────────────────────
     @PluginMethod
     fun initAccount(call: PluginCall) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
@@ -88,49 +175,125 @@ class CapacitorPjsip : Plugin() {
             requestPermissionForAlias("microphone", call, "micPermCallback")
             return
         }
+        val extension = call.getString("extension") ?: run { call.reject("missing extension"); return }
+        val domain    = call.getString("domain")    ?: run { call.reject("missing domain"); return }
+        val password  = call.getString("password")  ?: ""
+        val host      = call.getString("host") ?: call.getString("server") ?: domain
+        val port      = call.getInt("port") ?: 5060
+        val transport = call.getString("transport") ?: "tcp"
+        val logLevel  = call.getInt("logLevel") ?: 3
+
         audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
         startForegroundServiceIfNeeded()
-        call.resolve(JSObject().apply {
-            put("ok", true)
-            put("status", "ok")
-            put("audioBackend", "jssip-webview")
-        })
+
+        Thread {
+            initPjsip(extension, domain, password, host, port, transport, logLevel)
+            Handler(Looper.getMainLooper()).post {
+                call.resolve(JSObject().apply { put("ok", true); put("status", "ok"); put("audioBackend", "pjsip-native") })
+            }
+        }.start()
+    }
+
+    @PermissionCallback
+    fun micPermCallback(call: PluginCall) {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (granted) initAccount(call)
+        else call.reject("microphone permission denied")
     }
 
     @PluginMethod
     fun disconnect(call: PluginCall) {
-        stopForegroundServiceIfNeeded()
-        audioManager?.mode = AudioManager.MODE_NORMAL
-        call.resolve(JSObject().apply { put("ok", true) })
+        Thread {
+            destroyPjsip()
+            stopForegroundServiceIfNeeded()
+            audioManager?.mode = AudioManager.MODE_NORMAL
+            Handler(Looper.getMainLooper()).post { call.resolve(JSObject().apply { put("ok", true) }) }
+        }.start()
     }
 
-    @PluginMethod fun makeCall(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun hangup(call: PluginCall)   { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun answer(call: PluginCall)   { call.resolve(JSObject().apply { put("ok", true) }) }
+    @PluginMethod
+    fun makeCall(call: PluginCall) {
+        val number = call.getString("number") ?: run { call.reject("missing number"); return }
+        val acc = account ?: run { call.reject("not registered"); return }
+        Thread {
+            try {
+                val c = LemtelCall(this, acc, -1)
+                val domain = acc.info.uri.substringAfter("@").substringBefore(";")
+                c.makeCall("sip:$number@$domain", CallOpParam(true))
+                currentCall = c
+                Handler(Looper.getMainLooper()).post { call.resolve() }
+            } catch (e: Exception) {
+                android.util.Log.e("CapacitorPjsip", "makeCall error: ${e.message}")
+                Handler(Looper.getMainLooper()).post { call.reject(e.message) }
+            }
+        }.start()
+    }
+
+    @PluginMethod
+    fun hangup(call: PluginCall) {
+        Thread {
+            try { currentCall?.hangup(CallOpParam()) } catch (_: Exception) {}
+            currentCall = null
+            Handler(Looper.getMainLooper()).post { call.resolve() }
+        }.start()
+    }
+
+    @PluginMethod
+    fun answer(call: PluginCall) {
+        Thread {
+            try {
+                val prm = CallOpParam()
+                prm.statusCode = pjsip_status_code.PJSIP_SC_OK
+                currentCall?.answer(prm)
+            } catch (e: Exception) {
+                android.util.Log.e("CapacitorPjsip", "answer error: ${e.message}")
+            }
+            Handler(Looper.getMainLooper()).post { call.resolve() }
+        }.start()
+    }
 
     @PluginMethod
     fun setMute(call: PluginCall) {
-        val muted = call.getBoolean("muted", false) ?: false
-        audioManager?.isMicrophoneMute = muted
+        val muted = call.getBoolean("muted") ?: false
+        try { audioManager?.isMicrophoneMute = muted } catch (_: Exception) {}
         call.resolve(JSObject().apply { put("ok", true); put("muted", muted) })
     }
 
     @PluginMethod
     fun setHold(call: PluginCall) {
-        val held = call.getBoolean("onHold") ?: call.getBoolean("held") ?: false
-        call.resolve(JSObject().apply { put("ok", true); put("onHold", held) })
+        val onHold = call.getBoolean("held") ?: call.getBoolean("onHold") ?: false
+        Thread {
+            try {
+                if (onHold) currentCall?.setHold(CallOpParam())
+                else currentCall?.reinvite(CallOpParam())
+            } catch (_: Exception) {}
+            Handler(Looper.getMainLooper()).post {
+                call.resolve(JSObject().apply { put("ok", true) })
+            }
+        }.start()
     }
 
-    @PluginMethod fun sendDTMF(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
+    @PluginMethod
+    fun sendDTMF(call: PluginCall) {
+        val digits = call.getString("digits") ?: call.getString("digit") ?: ""
+        Thread {
+            try {
+                val prm = CallSendDtmfParam()
+                prm.digits = digits
+                currentCall?.sendDtmf(prm)
+            } catch (_: Exception) {}
+            Handler(Looper.getMainLooper()).post { call.resolve() }
+        }.start()
+    }
 
     @PluginMethod
     fun setAudioRoute(call: PluginCall) {
         val route = call.getString("route", "earpiece")
         when (route) {
-            "speaker" -> { audioManager?.isSpeakerphoneOn = true; audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION }
-            "earpiece" -> { audioManager?.isSpeakerphoneOn = false; audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION }
+            "speaker"   -> { audioManager?.isSpeakerphoneOn = true; audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION }
+            "earpiece"  -> { audioManager?.isSpeakerphoneOn = false; audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION }
             "bluetooth" -> { audioManager?.isBluetoothScoOn = true }
-            else -> { audioManager?.isSpeakerphoneOn = false }
+            else        -> { audioManager?.isSpeakerphoneOn = false }
         }
         call.resolve(JSObject().apply { put("ok", true); put("route", route ?: "earpiece") })
     }
@@ -169,15 +332,9 @@ class CapacitorPjsip : Plugin() {
         }
     }
 
-    @PermissionCallback
-    fun micPermCallback(call: PluginCall) {
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        call.resolve(JSObject().apply { put("ok", granted); put("granted", granted); put("status", if (granted) "granted" else "denied") })
-    }
-
     @PluginMethod
     fun playTestTone(call: PluginCall) {
-        val seconds = (call.getDouble("seconds") ?: 2.0).coerceIn(0.1, 5.0)
+        val seconds   = (call.getDouble("seconds")   ?: 2.0).coerceIn(0.1, 5.0)
         val frequency = (call.getDouble("frequency") ?: 440.0)
         try {
             val sampleRate = 44100
@@ -209,7 +366,23 @@ class CapacitorPjsip : Plugin() {
 
     @PluginMethod
     fun getRtpStats(call: PluginCall) {
-        call.resolve(JSObject().apply { put("running", false); put("audioBackend", "jssip-webview") })
+        val c = currentCall
+        if (c == null) {
+            call.resolve(JSObject().apply { put("running", false); put("audioBackend", "pjsip-native") })
+            return
+        }
+        try {
+            val info = c.info
+            val stats = c.getStreamStat(0)
+            call.resolve(JSObject().apply {
+                put("running", info.state == pjsip_inv_state.PJSIP_INV_STATE_CONFIRMED)
+                put("txPackets", stats.rtcp.txStat.pkt)
+                put("rxPackets", stats.rtcp.rxStat.pkt)
+                put("audioBackend", "pjsip-native")
+            })
+        } catch (e: Exception) {
+            call.resolve(JSObject().apply { put("running", false); put("audioBackend", "pjsip-native") })
+        }
     }
 
     @PluginMethod fun startRecord(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true); put("recording", false) }) }
@@ -218,9 +391,96 @@ class CapacitorPjsip : Plugin() {
     @PluginMethod fun park(call: PluginCall)        { call.resolve(JSObject().apply { put("ok", true) }) }
     @PluginMethod fun addCall(call: PluginCall)     { call.resolve(JSObject().apply { put("ok", true) }) }
     @PluginMethod fun getSnapshot(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
+}
 
-    override fun handleOnDestroy() {
-        stopForegroundServiceIfNeeded()
-        super.handleOnDestroy()
+// ── PJSIP Account callbacks ────────────────────────────────────────────────────
+class LemtelAccount(private val plugin: CapacitorPjsip) : Account() {
+    override fun onRegState(prm: OnRegStateParam) {
+        try {
+            val info = info
+            val registered = info.regIsActive
+            val code = prm.code.swigValue()
+            android.util.Log.i("CapacitorPjsip", "onRegState: registered=$registered code=$code")
+            plugin.emitEvent("registration", JSObject().apply {
+                put("status", if (registered) "registered" else if (code in 200..299) "unregistered" else "error")
+                put("code", code)
+            })
+        } catch (e: Exception) {
+            android.util.Log.e("CapacitorPjsip", "onRegState error: ${e.message}")
+        }
+    }
+
+    override fun onIncomingCall(prm: OnIncomingCallParam) {
+        try {
+            val call = LemtelCall(plugin, this, prm.callId)
+            plugin.currentCall = call
+            val from = call.info.remoteUri
+            android.util.Log.i("CapacitorPjsip", "Incoming call from $from")
+            plugin.emitEvent("callReceived", JSObject().apply {
+                put("callId", prm.callId.toString())
+                put("from", from)
+            })
+        } catch (e: Exception) {
+            android.util.Log.e("CapacitorPjsip", "onIncomingCall error: ${e.message}")
+        }
+    }
+}
+
+// ── PJSIP Call callbacks ───────────────────────────────────────────────────────
+class LemtelCall(
+    private val plugin: CapacitorPjsip,
+    account: Account,
+    callId: Int
+) : Call(account, callId) {
+
+    override fun onCallState(prm: OnCallStateParam) {
+        try {
+            val info = info
+            val state = info.state
+            val stateStr = when (state) {
+                pjsip_inv_state.PJSIP_INV_STATE_NULL         -> "null"
+                pjsip_inv_state.PJSIP_INV_STATE_CALLING      -> "calling"
+                pjsip_inv_state.PJSIP_INV_STATE_INCOMING     -> "incoming"
+                pjsip_inv_state.PJSIP_INV_STATE_EARLY        -> "early"
+                pjsip_inv_state.PJSIP_INV_STATE_CONNECTING   -> "connecting"
+                pjsip_inv_state.PJSIP_INV_STATE_CONFIRMED    -> "confirmed"
+                pjsip_inv_state.PJSIP_INV_STATE_DISCONNECTED -> "disconnected"
+                else -> "unknown"
+            }
+            android.util.Log.i("CapacitorPjsip", "onCallState: $stateStr")
+            if (state == pjsip_inv_state.PJSIP_INV_STATE_DISCONNECTED) {
+                plugin.emitEvent("callEnded", JSObject().apply {
+                    put("callId", id.toString())
+                    put("reason", info.lastReason)
+                })
+                if (plugin.currentCall == this) plugin.currentCall = null
+            } else {
+                plugin.emitEvent("callStateChanged", JSObject().apply {
+                    put("callId", id.toString())
+                    put("state", stateStr)
+                })
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("CapacitorPjsip", "onCallState error: ${e.message}")
+        }
+    }
+
+    override fun onCallMediaState(prm: OnCallMediaStateParam) {
+        try {
+            val info = info
+            for (i in 0 until info.media.size().toInt()) {
+                val mi = info.media[i.toLong()]
+                if (mi.type == pjmedia_type.PJMEDIA_TYPE_AUDIO &&
+                    mi.status == pjsua_call_media_status.PJSUA_CALL_MEDIA_ACTIVE) {
+                    val aud = AudioMedia.typecastFromMedia(getMedia(i.toLong()))
+                    val ep = Endpoint.instance()
+                    aud.startTransmit(ep.audDevManager().captureDevMedia)
+                    ep.audDevManager().playbackDevMedia.startTransmit(aud)
+                    android.util.Log.i("CapacitorPjsip", "Audio media active — RTP flowing")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("CapacitorPjsip", "onCallMediaState error: ${e.message}")
+        }
     }
 }

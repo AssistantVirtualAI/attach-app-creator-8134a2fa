@@ -83,7 +83,7 @@ import { Capacitor as __Cap } from '@capacitor/core';
 const __NATIVE_FLAG = ((import.meta as any).env?.VITE_NATIVE_SIP ?? '').toString() === 'true';
 let __platform: string = 'web';
 try { __platform = __Cap.getPlatform(); } catch { /* ssr / tests */ }
-export const NATIVE_SIP_ENABLED = __platform === 'ios' && __NATIVE_FLAG !== false;
+export const NATIVE_SIP_ENABLED = (__platform === 'ios' || __platform === 'android') && __NATIVE_FLAG !== false;
 
 function makeNoopPlugin(): CapacitorSipPlugin {
   const noopHandle = { remove: async () => {} };
@@ -109,7 +109,7 @@ function makeNoopPlugin(): CapacitorSipPlugin {
 }
 
 export const CapacitorSipNative: CapacitorSipPlugin =
-  __platform === 'ios'
+  (__platform === 'ios' || __platform === 'android')
     ? registerPlugin<CapacitorSipPlugin>('CapacitorPjsip')
     : makeNoopPlugin();
 export const CapacitorPjsip = CapacitorSipNative;

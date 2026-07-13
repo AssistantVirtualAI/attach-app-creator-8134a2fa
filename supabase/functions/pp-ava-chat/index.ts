@@ -28,7 +28,7 @@ const OutputSchema = z.object({
 });
 
 const MUTATING_MS365 = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message"]);
-const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message"]);
+const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message", "search_contact"]);
 
 async function invokeFunction(name: string, authHeader: string, body: Record<string, unknown>) {
   const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${name}`, {
@@ -71,6 +71,67 @@ function wantsLeads(text: string) {
 function wantsReminders(text: string) {
   return /rappels?|reminders?|t[âa]ches?|tasks?|todo|à faire/i.test(text);
 }
+
+function wantsSendEmail(text: string) {
+  return /(envoie|envoyer|envoi|send)\s+(un\s+)?(courriel|email|mail)|(courriel|email|mail)\s+(à|a|to)\s+/i.test(text);
+}
+
+function wantsContactLookup(text: string) {
+  return /(contact|répertoire|repertoire|directory|courriel de|email de|adresse de|coordonn[ée]es|num[ée]ro de)/i.test(text)
+    || wantsSendEmail(text);
+}
+
+function extractNameTokens(text: string): { emails: string[]; names: string[] } {
+  const emails = Array.from(text.matchAll(/[\w.+-]+@[\w.-]+\.\w+/g)).map(m => m[0]);
+  const quoted = Array.from(text.matchAll(/["“']([^"”']{2,60})["”']/g)).map(m => m[1]);
+  const caps = Array.from(text.matchAll(/\b([A-ZÉÈÀÂÊÎÔÛÇ][a-zéèàâêîôûç'\-]{1,}(?:\s+[A-ZÉÈÀÂÊÎÔÛÇ][a-zéèàâêîôûç'\-]{1,}){0,2})\b/g)).map(m => m[1]);
+  const stop = new Set(["Bonjour", "Salut", "Hello", "Envoie", "Envoyer", "Envoi", "Courriel", "Email", "Mail", "Contact", "Ava", "AVA", "Microsoft", "Teams", "Outlook"]);
+  const names = Array.from(new Set([...quoted, ...caps.filter(n => !stop.has(n.split(" ")[0]))])).slice(0, 5);
+  return { emails: Array.from(new Set(emails)).slice(0, 5), names };
+}
+
+async function searchDirectory(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  tokens: { emails: string[]; names: string[] },
+) {
+  const results: any[] = [];
+  const seen = new Set<string>();
+  const push = (r: any) => {
+    const k = `${(r.email ?? "").toLowerCase()}|${(r.phone ?? "").toString()}|${(r.full_name ?? "").toLowerCase()}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    results.push(r);
+  };
+  for (const em of tokens.emails) {
+    const { data } = await admin.from("planipret_contacts")
+      .select("full_name, email, phone_display")
+      .eq("user_id", userId).ilike("email", em).limit(3);
+    (data ?? []).forEach((r: any) => push({ full_name: r.full_name, email: r.email, phone: r.phone_display, source: "contacts" }));
+  }
+  for (const name of tokens.names) {
+    const pattern = `%${name}%`;
+    const [{ data: c }, { data: mc }] = await Promise.all([
+      admin.from("planipret_contacts")
+        .select("full_name, email, phone_display")
+        .eq("user_id", userId).ilike("full_name", pattern).limit(3),
+      admin.from("planipret_maestro_clients")
+        .select("first_name, last_name, email, phone, mobile")
+        .or(`first_name.ilike.${pattern},last_name.ilike.${pattern}`)
+        .limit(3),
+    ]);
+    (c ?? []).forEach((r: any) => push({ full_name: r.full_name, email: r.email, phone: r.phone_display, source: "contacts" }));
+    (mc ?? []).forEach((r: any) => push({
+      full_name: `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim(),
+      email: r.email,
+      phone: r.phone ?? r.mobile,
+      source: "maestro",
+    }));
+  }
+  return results.slice(0, 10);
+}
+
+
 
 
 async function logAvaAction(admin: ReturnType<typeof createClient>, profile: any, userId: string, actionType: string, params: Record<string, unknown>, success: boolean, result: unknown, error?: string | null) {
@@ -228,8 +289,34 @@ Deno.serve(async (req) => {
         dataBlocks.push(`Rappels/tâches en attente: ${JSON.stringify(rem ?? []).slice(0, 3000)}`);
       }
 
+      // Directory / contact lookup — always try when the message mentions a
+      // name, email, or contact-oriented action (e.g. "envoie un email à X").
+      const tokens = extractNameTokens(userMessage);
+      if (wantsContactLookup(userMessage) || tokens.emails.length || tokens.names.length) {
+        try {
+          const matches = await searchDirectory(admin, u.user.id, tokens);
+          if (matches.length) {
+            dataBlocks.push(`Contacts trouvés (répertoire + Maestro): ${JSON.stringify(matches).slice(0, 3000)}`);
+          } else {
+            dataBlocks.push(`Contacts trouvés: aucun résultat pour ${JSON.stringify([...tokens.names, ...tokens.emails])}. Demande à l'utilisateur de préciser l'adresse courriel exacte.`);
+          }
+          // If MS365 is connected and we're composing an email, also search the
+          // Outlook address book / recent contacts for the same tokens.
+          if (profile?.ms365_access_token && wantsSendEmail(userMessage)) {
+            const q = [...tokens.emails, ...tokens.names].filter(Boolean).slice(0, 3);
+            for (const term of q) {
+              const r = await invokeFunction("ms365-actions", authHeader, { action: "search_contact", payload: { query: term } });
+              if (r.ok) dataBlocks.push(`Contact Microsoft (${term}): ${JSON.stringify(r.data).slice(0, 1500)}`);
+            }
+          }
+        } catch (e) {
+          console.error("pp-ava-chat directory lookup fail", e);
+        }
+      }
+
       if (dataBlocks.length) appContext += `\n${dataBlocks.join("\n")}`;
     }
+
 
     if (mode === "recommend" && profile?.id) {
 
@@ -261,7 +348,8 @@ SMS non lus: ${smsUnread ?? 0}`;
  IMPORTANT: quand des données sont fournies dans [Contexte] ci-dessous, utilise-les pour répondre concrètement. Ne dis JAMAIS que tu n'as pas d'intégration ou d'accès — tu peux consulter appels, SMS, courriels, calendrier et pipeline. Si aucune donnée n'apparaît dans le contexte pour la question posée, dis simplement qu'il n'y a rien à afficher pour cette période.
  Réponds en français, court et actionnable. Tu peux proposer jusqu'à 4 suggestions (kind: call/sms/email/reminder/maestro_action/ms365_action/open_voice/open_coach).
  Pour 'call' mets payload.number. Pour 'sms' mets payload.number et payload.message. Pour 'email' préfère ms365_action avec payload.action='send_email'. Pour 'reminder' payload.title/due_at. Pour 'maestro_action' payload.action et payload.* requis.
- Pour Microsoft utilise kind='ms365_action' et payload.action parmi: read_emails, read_email_detail, list_calendar_events, send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message.
+ Pour Microsoft utilise kind='ms365_action' et payload.action parmi: read_emails, read_email_detail, list_calendar_events, send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message, search_contact.
+ RÉPERTOIRE: quand l'utilisateur demande d'envoyer un courriel/SMS/appel à une personne par son nom, cherche d'abord son adresse dans [Contexte] (section "Contacts trouvés" + "Contact Microsoft"). Si tu trouves une correspondance unique, propose directement l'action ms365_action send_email (payload.to = [email], subject, body) pour confirmation. Si plusieurs correspondances, liste-les et demande laquelle. Si aucune, propose un ms365_action search_contact avec payload.query = nom, ou demande l'adresse exacte.
  Pour créer un rendez-vous: payload.action='create_calendar_event' avec subject, start:{dateTime,timeZone}, end:{dateTime,timeZone}, attendees (array d'emails), isOnlineMeeting (défaut true = lien Teams auto).
  Pour reprogrammer/modifier un rendez-vous: payload.action='update_calendar_event' avec event_id + champs à changer (start/end/subject/location/attendees). Utilise d'abord list_calendar_events pour retrouver l'event_id.
  Pour annuler/supprimer: payload.action='delete_calendar_event' avec event_id.

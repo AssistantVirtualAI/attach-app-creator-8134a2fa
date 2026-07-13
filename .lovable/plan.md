@@ -1,112 +1,98 @@
-# Plan — Agent vocal AI unique ElevenLabs pour tous les courtiers Planiprêt
+# Plan — Parité mobile↔web + Build iOS rapide
 
-## Objectif
-Un **seul agent ElevenLabs Conversational AI** partagé par tous les courtiers, personnalisé à la volée par variables dynamiques (nom, prénom, org), branché sur:
-- Stats & actions PBX (FusionPBX) : passer un appel, envoyer un SMS, lire stats
-- Microsoft 365 : lire/résumer/envoyer email, créer/déplacer/annuler meetings calendrier
+## Partie 1 — Parité totale `apps/planipret-mobile` ↔ webapp
 
-## Architecture
+### État actuel (diff détecté)
+Pages divergentes :
+- `MCalls.tsx`, `MVoicemail.tsx`
+- `MMs365Diagnostics.tsx` existe seulement côté mobile
 
-```text
-Mobile/Web (Planiprêt)
-   │  useConversation (SDK @elevenlabs/react)
-   │  ├─ fetch  /elevenlabs-signed-url  → token WebRTC
-   │  └─ overrides: { firstName, lastName, brokerId, orgId, extension }
-   ▼
-ElevenLabs Convai Agent (1 seul, ID en config)
-   │  Server tools (webhook) → toutes routées vers :
-   ▼
-supabase/functions/ava-voice-tool-router  (nouveau, 1 endpoint)
-   │  Vérifie HMAC ElevenLabs, résout brokerId → user_id/org
-   │  Dispatch selon `tool_name` :
-   ├─► pbx.place_call        → fusionpbx-proxy (originate)
-   ├─► pbx.send_sms          → pbx-write (sms_send)
-   ├─► pbx.get_stats         → planipret-admin-ava-analytics
-   ├─► pbx.recent_calls      → pbx_call_records (RLS user)
-   ├─► ms365.read_emails     → ms365-actions:list_messages
-   ├─► ms365.summarize_email → ava-email-analyzer
-   ├─► ms365.send_email      → ms365-actions:send_email
-   ├─► calendar.create_event → ms365-actions:create_calendar_event
-   ├─► calendar.move_event   → ms365-actions:update_event
-   └─► calendar.cancel_event → ms365-actions:delete_event
-```
+Composants divergents :
+- `AvaChatSheet.tsx`, `MobileAuthScreen.tsx`
+- `call/CallRecordingPlayer.tsx`, `call/MaestroTab.tsx`
+- `voicemail/GreetingStudio.tsx`
 
-Réutilise `ms365-actions` et `fusionpbx-proxy` déjà existants — pas de duplication.
+Config divergente :
+- `capacitor.config.ts` mobile OK, mais `vite.config.ts` mobile a des shims (`framer-motion`, `livekit-client`) absents du web (normal — perf iOS WKWebView).
+- Endpoints Supabase, edge functions AVA, MS365, téléphonie : mêmes URLs (client Supabase partagé), à re-vérifier.
 
-## 1. Configuration ElevenLabs (une fois)
+### Actions parité
+1. **Synchroniser les 7 fichiers divergents** : la webapp est source de vérité pour la logique métier ; recopier vers `apps/planipret-mobile/src/...` en conservant les shims mobile (framer-motion → motion-shim, livekit → stub).
+2. **Copier `MMs365Diagnostics.tsx`** de mobile vers webapp (`src/pages/planipret/mobile/`) et l'exposer dans la route `More` de la webapp pour parité complète.
+3. **Aligner AVA agent config** : vérifier que `AvaVoiceAgent.tsx` mobile appelle exactement les mêmes edge functions (`ava-agent-config`, `ava-tool-executor`, `ms365-actions`, `elevenlabs-manage-agent`) avec les mêmes tools (calendrier, mail, SMS, appel, discovery). Aucune divergence détectée pour ce fichier mais confirmer les variables (voix, prompt, `courtier_name`).
+4. **Env** : garantir que `.env` mobile pointe sur la même `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY` que la webapp.
+5. **i18n / thèmes / branding** : réutiliser `shared/planipret-design-tokens` (déjà en place) et confirmer que le `LanguageContext` mobile expose le même dictionnaire fr/en.
+6. **Ajouter un test de parité** `apps/planipret-mobile/scripts/audit-parity.mjs` qui liste les fichiers de `src/pages/planipret/mobile/` et `src/components/planipret/mobile/` et échoue si un fichier existe d'un côté sans équivalent, ou si les hashes divergent hors shims autorisés. Le brancher dans `npm run audit:native` (déjà appelé par `build:ios`).
 
-Dans dashboard ElevenLabs :
-- Créer 1 agent "Ava — Assistant Courtier Planiprêt"
-- **Dynamic variables activées** : `broker_first_name`, `broker_last_name`, `broker_extension`, `org_name`
-- **System prompt** utilisant `{{broker_first_name}}` : "Tu es Ava, l'assistante vocale de {{broker_first_name}} {{broker_last_name}}…"
-- **First message** : "Bonjour {{broker_first_name}}, que puis-je faire pour vous ?"
-- **Overrides autorisés** : prompt, firstMessage, language
-- **Server tools** (webhook type) : 10 tools ci-dessus, tous pointant vers `https://<project>.supabase.co/functions/v1/ava-voice-tool-router` avec header secret HMAC
-- Stocker `ELEVENLABS_AGENT_ID` et `ELEVENLABS_TOOL_HMAC_SECRET` en secrets
+### Résultat parité
+Mobile = webapp sur : pages, composants, endpoints Supabase, edge functions, tools AVA, variables agent, i18n, branding, env. Seules différences autorisées : shims Vite (motion, livekit) et code natif Capacitor (permissions, push, splash).
 
-## 2. Backend — nouvelles/modifs edge functions
+---
 
-**`elevenlabs-signed-url`** (existe déjà, à adapter)
-- Reçoit session utilisateur → renvoie `{ token, dynamicVariables: { broker_first_name, broker_last_name, broker_extension, org_name } }`
-- Le brokerId n'est PAS envoyé au client dans les variables sensibles ; injecté côté server via `conversation_config_override`
+## Partie 2 — Build iOS 18 min → ~2-4 min incrémental
 
-**`ava-voice-tool-router`** (nouveau — unique webhook pour tous les tools)
-- Vérifie signature HMAC ElevenLabs
-- Extrait `conversation_id` + custom metadata (broker_id transmis à `startSession`)
-- Récupère user/org depuis `pbx_softphone_users` par extension
-- Switch sur `tool_name`, appelle la function interne appropriée avec service role
-- Log dans `planipret_ava_action_log`
-- Retourne réponse JSON structurée que l'agent verbalise
+### Diagnostic probable (à confirmer au premier run)
+- `npm install` sans cache (2-4 min)
+- `vite build` chunks lourds (~2-3 min sur bundle actuel)
+- `cap sync ios` recopie tout `dist/` + réinstalle pods (3-6 min sans cache)
+- `pod install` réseau (2-4 min si specs repo se met à jour)
+- Xcode clean build (5-8 min DerivedData vide)
+Somme ≈ 18 min qui matche le vécu.
 
-**Extensions ms365-actions** (vérifier présence, ajouter si manquant) :
-- `update_calendar_event` (déplacer)
-- `delete_calendar_event` (annuler)
-- `summarize_email` → délègue à `ava-email-analyzer`
+### Actions accélération
+1. **Cache npm** : `npm ci --prefer-offline --no-audit --no-fund` + persister `~/.npm` et `node_modules` entre runs (dev machine locale, pas CI). Gain : ~2 min.
+2. **Vite build incrémental** :
+   - Activer `build.reportCompressedSize: false` (retire un pass gzip par chunk).
+   - Ajouter `--mode development` pour itérations rapides (skippe minify) via nouveau script `build:ios:dev`.
+   - Gain : ~1-2 min.
+3. **Capacitor sync ciblé** :
+   - Nouveau script `sync:ios:fast` qui fait `cap copy ios` (pas `sync`) quand aucun plugin natif n'a changé. `copy` = juste recopie `dist/`, skip `pod install` + update. Gain : ~3-5 min.
+4. **CocoaPods cache** :
+   - `pod install --repo-update` seulement quand `Podfile.lock` change ; sinon `pod install` sans update.
+   - Ajouter `COCOAPODS_DISABLE_STATS=1` et forcer le CDN `trunk` (déjà par défaut mais confirmer).
+   - Persister `~/Library/Caches/CocoaPods` (par défaut, mais vérifier).
+5. **Xcode DerivedData persistant + incrémental** :
+   - Ne PAS faire de `Clean Build Folder` entre itérations.
+   - Utiliser `xcodebuild -showBuildTimingSummary` pour identifier top targets.
+   - Passer `COMPILER_INDEX_STORE_ENABLE=NO` et `SWIFT_COMPILATION_MODE=singlefile` pour Debug (déjà default pour Debug mais confirmer).
+   - Gain : 3-6 min sur builds Debug incrémentaux.
+6. **Nouveau script `scripts/ios-fast.sh`** dans `apps/planipret-mobile/scripts/` :
+   ```
+   npm run build -- --mode development
+   npx cap copy ios          # pas sync
+   xed ios/App/App.xcworkspace   # ouvre déjà workspace
+   ```
+   Ajout d'un flag `--full` qui bascule sur l'ancien `build:ios` (avec `cap sync` + `pod install`) quand un plugin natif change.
+7. **Live-reload optionnel (dev only)** : documenter mais ne pas activer par défaut, puisque tu as choisi "build incrémental + cache". On garde `capacitor.config.ts` production ; un fichier `capacitor.config.dev.ts` séparé pourra pointer sur le preview Lovable si besoin plus tard.
 
-## 3. Frontend — mobile & web
+### Estimation post-optim
+- Premier build (cache vide) : ~10-12 min
+- Build incrémental JS seul (`ios-fast.sh`) : **~90 s à 3 min**
+- Build incrémental Xcode Run sur device : **~30-90 s**
 
-**Nouveau hook `useAvaVoiceAgent`** (`apps/planipret-mobile/src/hooks/`)
-- Charge session → appelle `elevenlabs-signed-url`
-- Démarre `useConversation` avec `conversationToken` + overrides dynamiques
-- Gère mic permission, statuts, VU-mètre
+---
 
-**Composant `AvaVoiceButton`** — bouton flottant micro dans header
-- États : idle / connecting / listening / speaking
-- Ouvre panneau plein écran pendant conversation
-- Affiche transcription live + suggestions
+## Fichiers touchés
 
-Intégration : remplace/complète la voix actuelle `openVoice` dans `avaProactive.ts`.
+**Parité (recopie + création)** :
+- `apps/planipret-mobile/src/pages/planipret/mobile/MCalls.tsx` (aligner sur web)
+- `apps/planipret-mobile/src/pages/planipret/mobile/MVoicemail.tsx` (aligner sur web)
+- `apps/planipret-mobile/src/components/planipret/mobile/AvaChatSheet.tsx`
+- `apps/planipret-mobile/src/components/planipret/mobile/MobileAuthScreen.tsx`
+- `apps/planipret-mobile/src/components/planipret/mobile/call/CallRecordingPlayer.tsx`
+- `apps/planipret-mobile/src/components/planipret/mobile/call/MaestroTab.tsx`
+- `apps/planipret-mobile/src/components/planipret/mobile/voicemail/GreetingStudio.tsx`
+- `src/pages/planipret/mobile/MMs365Diagnostics.tsx` (créé depuis mobile)
+- `src/pages/planipret/mobile/MMore.tsx` (route ajoutée)
 
-## 4. Sécurité
+**Outillage** :
+- `apps/planipret-mobile/scripts/audit-parity.mjs` (nouveau)
+- `apps/planipret-mobile/scripts/ios-fast.sh` (nouveau)
+- `apps/planipret-mobile/package.json` (scripts `build:ios:dev`, `sync:ios:fast`, `ios:fast`)
+- `apps/planipret-mobile/vite.config.ts` (`reportCompressedSize: false`)
 
-- **HMAC** obligatoire sur webhook tools (rejet 401 sinon)
-- **Broker identity** : jamais fait confiance au client ; l'edge function résout depuis la session Supabase et l'injecte via `conversation_config_override.agent.prompt.variables` côté serveur uniquement
-- **Consent** : bannière première utilisation (mic + enregistrement conversation)
-- **Audit** : tous les tool calls loggés dans `planipret_ava_action_log` (existant)
-- **RLS** : les tools respectent l'org du courtier (JWT synthétique ou filtres explicites)
-- Actions destructives (send_email, cancel_event) : logguées, éventuellement confirmées vocalement avant exécution
+Aucune modification aux edge functions, DB, ou webapp landing/admin.
 
-## 5. Détails techniques
-
-- SDK : `npm install @elevenlabs/react` dans `apps/planipret-mobile`
-- Connexion : **WebRTC** (latence < WebSocket)
-- Modèle : `eleven_turbo_v2_5` pour temps réel FR
-- Locale par défaut : `fr` (override possible)
-- Timeout tool : 15 s max (garder handlers rapides) — pour analyses email longues, retourner "je traite en arrière-plan" et notifier via `planipret_ava_notifications`
-- Secrets requis : `ELEVENLABS_API_KEY` (via connecteur standard), `ELEVENLABS_AGENT_ID`, `ELEVENLABS_TOOL_HMAC_SECRET`
-
-## 6. Étapes de livraison
-
-1. Provisionner l'agent ElevenLabs + secrets
-2. Créer `ava-voice-tool-router` + compléter `ms365-actions`
-3. Adapter `elevenlabs-signed-url` (variables dynamiques + override serveur)
-4. Ajouter hook + bouton vocal côté mobile
-5. Tests bout-en-bout : appel, SMS, création meeting, résumé inbox
-6. Rollout progressif via feature flag `ava_voice_enabled` sur `planipret_settings`
-
-## Hors-scope (à confirmer)
-- Pas de numéro de téléphone entrant pour Ava (appel outbound depuis l'app uniquement)
-- Pas de multi-agents par courtier — 1 seul, personnalisé par variables
-- Pas de fine-tuning du modèle vocal
+---
 
 Confirme et je passe en mode build.

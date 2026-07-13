@@ -22,6 +22,8 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'es2015',
     chunkSizeWarningLimit: 600,
+    // Skip gzip-size reporting per chunk — saves ~20-40s on large bundles.
+    reportCompressedSize: false,
     rollupOptions: {
       output: {
         manualChunks(id) {

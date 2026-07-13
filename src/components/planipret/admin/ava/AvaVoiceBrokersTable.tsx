@@ -22,7 +22,57 @@ export default function AvaVoiceBrokersTable() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Realtime: reflète immédiatement toute modification du toggle AVA
+    // (voice_agent_enabled / elevenlabs_agent_id) faite par un autre admin
+    // ou par une edge function.
+    const channel = supabase
+      .channel("ava-brokers-profiles")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "planipret_profiles" },
+        (payload) => {
+          const n = payload.new as any;
+          const o = payload.old as any;
+          if (!n?.user_id) return;
+          const changed =
+            n.voice_agent_enabled !== o?.voice_agent_enabled ||
+            n.elevenlabs_agent_id !== o?.elevenlabs_agent_id;
+          if (!changed) return;
+          setRows((rs) =>
+            rs.map((r) =>
+              r.user_id === n.user_id
+                ? {
+                    ...r,
+                    voice_agent_enabled: !!n.voice_agent_enabled,
+                    elevenlabs_agent_id: n.elevenlabs_agent_id ?? null,
+                  }
+                : r,
+            ),
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "planipret_profiles" },
+        () => load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "planipret_profiles" },
+        () => load(),
+      )
+      .subscribe();
+
+    // Filet de sécurité: polling léger toutes les 30s au cas où Realtime décroche.
+    const poll = setInterval(load, 30_000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(poll);
+    };
+  }, []);
 
   const toggle = async (b: Broker) => {
     const next = !b.voice_agent_enabled;

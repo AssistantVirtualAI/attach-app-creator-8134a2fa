@@ -219,8 +219,14 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
 
         const { data: cfg, error } = await supabase.functions.invoke("ava-agent-config", { body: {} });
         if (error || !(cfg as any)?.success) {
-          toast.error((cfg as any)?.error ?? "Configuration AVA introuvable");
-          setState("error");
+          const msg = (cfg as any)?.error ?? "Configuration AVA introuvable";
+          if (onFallbackToChat) {
+            toast.message("AVA vocal indisponible — passage au chat texte");
+            onFallbackToChat();
+          } else {
+            toast.error(msg);
+            setState("error");
+          }
           return;
         }
         if (cancelled) return;
@@ -229,8 +235,13 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
         setAutonomy(c.autonomy_mode ?? "confirm");
 
         if (!c.agent_id) {
-          toast.error("Aucun agent ElevenLabs configuré pour ce courtier");
-          setState("error");
+          if (onFallbackToChat) {
+            toast.message("Agent vocal non provisionné — passage au chat texte");
+            onFallbackToChat();
+          } else {
+            toast.error("Aucun agent ElevenLabs configuré pour ce courtier");
+            setState("error");
+          }
           return;
         }
 
@@ -238,8 +249,13 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
         // WebSocket transport (not WebRTC) avoids pulling livekit-client into the mobile bundle.
         const { data: tok, error: tokErr } = await supabase.functions.invoke("pp-ava-webrtc-token", { body: {} });
         if (tokErr || !(tok as any)?.signed_url) {
-          toast.error((tok as any)?.error ?? "Session vocale indisponible");
-          setState("error");
+          if (onFallbackToChat) {
+            toast.message("Session vocale indisponible — passage au chat texte");
+            onFallbackToChat();
+          } else {
+            toast.error((tok as any)?.error ?? "Session vocale indisponible");
+            setState("error");
+          }
           return;
         }
 

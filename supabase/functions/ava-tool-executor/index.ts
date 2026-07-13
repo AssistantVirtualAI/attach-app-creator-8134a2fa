@@ -394,17 +394,59 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async send_email(ctx, p) {
-    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ action: "send_email", payload: p, _user_id: ctx.userId }),
-    });
-    const j = await r.json().catch(() => ({}));
-    return { success: r.ok, message: `Courriel envoyé à ${p.to_name ?? p.to_email}`, ...j };
+    const payload = { ...p };
+    if (!payload.to && !payload.to_email && payload.contact_name) {
+      const hit = await resolveContact(ctx, payload.contact_name, "email");
+      if (!hit) return { success: false, error: "contact_not_found", message: `Aucun courriel trouvé pour ${payload.contact_name}` };
+      payload.to = hit.value; payload.to_name = hit.name;
+    }
+    const j = await msAction(ctx, "send_email", payload);
+    return { success: !!j?.success, message: `Courriel envoyé à ${payload.to_name ?? payload.to ?? payload.to_email}`, ...j };
   },
+
+  async propose_email_reply(ctx, p) {
+    // p: { message_id, tone?, language? }
+    if (!p?.message_id) return { success: false, error: "message_id_required" };
+    const detail = await msAction(ctx, "read_email_detail", { message_id: p.message_id });
+    const em = detail?.email;
+    if (!em) return { success: false, error: "email_not_found" };
+    const raw = em?.body?.content ?? em?.bodyPreview ?? "";
+    const bodyText = String(raw).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 8000);
+    const from = em?.from?.emailAddress?.address ?? em?.sender?.emailAddress?.address ?? "";
+    const fromName = em?.from?.emailAddress?.name ?? "";
+    const tone = p.tone ?? "professionnel et chaleureux";
+    const lang = p.language ?? "français québécois";
+    const system = `Tu es AVA, assistante d'un courtier hypothécaire au Québec. Réponds en JSON strict: {"summary": "3-4 phrases", "draft_reply": "corps de courriel complet avec salutation et signature", "subject_suggested": "Re: ..."}. Ton: ${tone}. Langue: ${lang}.`;
+    const user = `Expéditeur: ${fromName} <${from}>\nSujet: ${em.subject}\n\nCorps:\n${bodyText}`;
+    const out = await callClaude(system, user);
+    if (!out) return { success: false, error: "ai_unavailable" };
+    let parsed: any = {};
+    try { parsed = JSON.parse(out.match(/\{[\s\S]*\}/)?.[0] ?? out); } catch { parsed = { draft_reply: out, summary: out.slice(0, 300), subject_suggested: `Re: ${em.subject}` }; }
+    return {
+      success: true,
+      summary: parsed.summary,
+      draft_reply: parsed.draft_reply,
+      to: from,
+      to_name: fromName,
+      subject_suggested: parsed.subject_suggested ?? `Re: ${em.subject}`,
+      message: "Brouillon prêt. Veux-tu que je l'envoie ?",
+    };
+  },
+
+  async summarize_inbox(ctx, p) {
+    const limit = Math.min(Number(p?.limit ?? 10), 25);
+    const j = await msAction(ctx, "read_emails", { folder: p?.folder ?? "inbox", top: limit });
+    const emails = (j?.emails ?? j?.value ?? []).map((e: any) => ({
+      id: e.id, from: e?.from?.emailAddress?.address, name: e?.from?.emailAddress?.name,
+      subject: e.subject, preview: (e.bodyPreview ?? "").slice(0, 300), received: e.receivedDateTime, unread: !e.isRead,
+    }));
+    if (!emails.length) return { success: true, digest: "Aucun courriel récent.", emails: [] };
+    const system = "Tu es AVA. Résume la boîte de réception d'un courtier hypothécaire québécois en 5-8 puces en français : priorité, expéditeur, sujet, action requise. Marque les urgences avec 🔥.";
+    const digest = await callClaude(system, JSON.stringify(emails)) ?? emails.map((e: any) => `• ${e.name}: ${e.subject}`).join("\n");
+    return { success: true, digest, emails, count: emails.length };
+  },
+
+
 
   async get_calendar_today(ctx) {
     const today = new Date();

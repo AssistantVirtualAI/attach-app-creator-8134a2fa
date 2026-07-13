@@ -214,9 +214,10 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     return () => { cancelled = true; };
   }, [open, mode, contacts.length, loadingContacts, contactsLoadKey]);
 
-  const normalized = query.trim().toLowerCase();
+  const { normalizeText, tokenize, matchAllTokens } = require("@/lib/textNormalize") as typeof import("@/lib/textNormalize");
+  const tokens = tokenize(query);
   const directoryOnly = contacts.filter((c) => c.source === "directory");
-  const filtered = normalized
+  const filtered = tokens.length
     ? contacts.filter((c) => {
         const hay = [
           contactDisplayName(c),
@@ -234,10 +235,12 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
           (c as any).job_title,
           (c as any).position,
           (c as any).department,
-        ].filter(Boolean).join(" ").toLowerCase();
-        return hay.includes(normalized);
+        ].filter(Boolean).join(" ");
+        return matchAllTokens(hay, tokens);
       }).slice(0, 50)
     : contacts.slice(0, 50);
+  void normalizeText; void directoryOnly;
+
 
   return (
     <AnimatePresence>

@@ -121,14 +121,16 @@ async function callClaude(system: string, userText: string): Promise<string | nu
 const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   // ===== TELEPHONY =====
   async make_call(ctx, p) {
-    const { to_number, contact_name } = p ?? {};
+    let { to_number, contact_name } = p ?? {};
+    if (!to_number && contact_name) {
+      const hit = await resolveContact(ctx, contact_name, "phone");
+      if (!hit) return { success: false, error: "contact_not_found", message: `Aucun numéro trouvé pour ${contact_name}` };
+      to_number = hit.value; contact_name = hit.name;
+    }
     if (!to_number) return { success: false, error: "to_number_required" };
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ns-calls`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
       body: JSON.stringify({ action: "start", destination: to_number, _user_id: ctx.userId }),
     });
     const j = await r.json().catch(() => ({}));

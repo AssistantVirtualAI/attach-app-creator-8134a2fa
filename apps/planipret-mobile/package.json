@@ -15,6 +15,7 @@
     "cap:add:ios": "cap add ios",
     "cap:add:android": "cap add android",
     "sync:ios": "npm run build && cap sync ios",
+    "ios:build-sync": "npm run build && npx cap sync ios",
     "sync:ios:fast": "npm run build && cap copy ios",
     "sync:android": "npm run build && cap sync android",
     "build:ios": "npm run audit:parity && npm run audit:native && npm run build && cap sync ios && cap open ios",

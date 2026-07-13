@@ -31,6 +31,8 @@ import PermissionsPrimer from "@/components/planipret/mobile/PermissionsPrimer";
 import { hasSeenPrimer } from "@/lib/native/permissions/orchestrator";
 import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 import { listDeviceContacts } from "@/lib/native/permissions/contacts";
+import { tokenize, matchAllTokens } from "@/lib/textNormalize";
+import { prefetchPpContacts } from "@/lib/ppContactsCache";
 
 
 const ACCENT = "#2E9BDC";

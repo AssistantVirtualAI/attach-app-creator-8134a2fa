@@ -20,8 +20,11 @@ RUN git clone https://github.com/VoiSmart/pjsip-android-builder.git /builder
 
 WORKDIR /builder
 
+# Rendre tous les scripts exécutables
+RUN chmod +x prepare-build-system build openssl-build-target-archs opus-build bcg729-build openh264-build-target-archs 2>/dev/null || true
+
 # Config locale : arm64-v8a uniquement, 16 KB activé, pas de vidéo ni G.729
-# Désactiver les patches qui cherchent des chemins incorrects dans Docker
+# Désactiver tous les patches qui cherchent des chemins incorrects dans Docker
 RUN cat > config.local.conf << 'EOF'
 TARGET_ARCHS=("arm64-v8a")
 ENABLE_OPENH264=0
@@ -39,10 +42,10 @@ FIX_MISSING_CONTACT_HEADER=0
 EOF
 
 # Préparer le système de build (télécharge NDK, SDK, OpenSSL, Opus, PJSIP)
-RUN chmod +x prepare-build-system && ./prepare-build-system
+RUN ./prepare-build-system
 
 # Compiler PJSIP
-RUN chmod +x build && ./build
+RUN ./build
 
 # Copier les artefacts dans /output
 RUN mkdir -p /output && cp -r /builder/pjsip-output-build/. /output/

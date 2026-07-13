@@ -8,6 +8,8 @@ import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { ensureContacts, getContactsPermissionStatus, listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { openAppSettings, type PermStatus } from "@/lib/native/permissions/platform";
+import { tokenize, matchAllTokens } from "@/lib/textNormalize";
+import { peekPpContacts } from "@/lib/ppContactsCache";
 
 
 type Tab = "personal" | "favorites" | "directory";

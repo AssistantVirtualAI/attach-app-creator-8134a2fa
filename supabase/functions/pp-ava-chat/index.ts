@@ -289,8 +289,34 @@ Deno.serve(async (req) => {
         dataBlocks.push(`Rappels/tâches en attente: ${JSON.stringify(rem ?? []).slice(0, 3000)}`);
       }
 
+      // Directory / contact lookup — always try when the message mentions a
+      // name, email, or contact-oriented action (e.g. "envoie un email à X").
+      const tokens = extractNameTokens(userMessage);
+      if (wantsContactLookup(userMessage) || tokens.emails.length || tokens.names.length) {
+        try {
+          const matches = await searchDirectory(admin, u.user.id, tokens);
+          if (matches.length) {
+            dataBlocks.push(`Contacts trouvés (répertoire + Maestro): ${JSON.stringify(matches).slice(0, 3000)}`);
+          } else {
+            dataBlocks.push(`Contacts trouvés: aucun résultat pour ${JSON.stringify([...tokens.names, ...tokens.emails])}. Demande à l'utilisateur de préciser l'adresse courriel exacte.`);
+          }
+          // If MS365 is connected and we're composing an email, also search the
+          // Outlook address book / recent contacts for the same tokens.
+          if (profile?.ms365_access_token && wantsSendEmail(userMessage)) {
+            const q = [...tokens.emails, ...tokens.names].filter(Boolean).slice(0, 3);
+            for (const term of q) {
+              const r = await invokeFunction("ms365-actions", authHeader, { action: "search_contact", payload: { query: term } });
+              if (r.ok) dataBlocks.push(`Contact Microsoft (${term}): ${JSON.stringify(r.data).slice(0, 1500)}`);
+            }
+          }
+        } catch (e) {
+          console.error("pp-ava-chat directory lookup fail", e);
+        }
+      }
+
       if (dataBlocks.length) appContext += `\n${dataBlocks.join("\n")}`;
     }
+
 
     if (mode === "recommend" && profile?.id) {
 

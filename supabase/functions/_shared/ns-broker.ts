@@ -59,20 +59,36 @@ export function supaAdmin() {
 
 export async function authBroker(req: Request) {
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return { error: jsonResponse({ success: false, error: "Unauthorized", code: 401 }, 401) };
-  }
-  const userClient = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: authHeader } } },
-  );
-  const { data: claims } = await userClient.auth.getClaims(authHeader.replace("Bearer ", ""));
-  if (!claims?.claims?.sub) {
-    return { error: jsonResponse({ success: false, error: "Unauthorized", code: 401 }, 401) };
-  }
+  const avaSessionHeader = req.headers.get("x-ava-session") ?? req.headers.get("X-Ava-Session");
   const admin = supaAdmin();
-  const userId = claims.claims.sub as string;
+  let userId: string | null = null;
+
+  // Preferred path: signed AVA session token (voice agent webhook path).
+  if (avaSessionHeader && avaSessionHeader.trim() && avaSessionHeader !== "{{ava_session_token}}") {
+    try {
+      const { verifyAvaSession } = await import("./ava-session.ts");
+      const v = await verifyAvaSession(avaSessionHeader.trim());
+      if (v?.uid) userId = v.uid;
+    } catch (_) { /* fall through to JWT */ }
+  }
+
+  // Fallback: Supabase user JWT (mobile/web app path).
+  if (!userId) {
+    if (!authHeader?.startsWith("Bearer ")) {
+      return { error: jsonResponse({ success: false, error: "Unauthorized", code: 401 }, 401) };
+    }
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: claims } = await userClient.auth.getClaims(authHeader.replace("Bearer ", ""));
+    if (!claims?.claims?.sub) {
+      return { error: jsonResponse({ success: false, error: "Unauthorized", code: 401 }, 401) };
+    }
+    userId = claims.claims.sub as string;
+  }
+
   const { data: isMember } = await admin.rpc("is_planipret_member", { _user_id: userId });
   if (isMember !== true) {
     return { error: jsonResponse({ success: false, error: "Accès non autorisé", code: 403 }, 403) };

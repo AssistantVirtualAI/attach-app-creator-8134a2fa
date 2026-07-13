@@ -210,6 +210,6 @@ export const EXPECTED_TOOL_NAMES = [
   "make_call","get_active_calls","hangup_call","get_call_history","get_recording","get_transcript","send_sms","get_voicemails",
   "analyze_call","get_hot_leads","get_coaching_summary",
   "search_client","get_client_profile","get_client_history","create_task","create_appointment","get_pending_tasks","get_upcoming_appointments","create_client",
-  "read_emails","send_email","get_calendar_today","get_calendar_week",
+  "read_emails","send_email","search_contact","propose_email_reply","summarize_inbox","update_calendar_event","delete_calendar_event","get_calendar_today","get_calendar_week",
   "navigate_to","get_daily_briefing","get_my_stats","generate_voicemail_greeting","explain_feature","get_integration_status",
 ];

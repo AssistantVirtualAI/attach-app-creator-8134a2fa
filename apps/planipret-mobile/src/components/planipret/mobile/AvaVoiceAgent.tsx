@@ -234,88 +234,98 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
         catch { setMicError(true); setState("error"); return; }
 
 
-        const { data: cfg, error } = await supabase.functions.invoke("ava-agent-config", { body: {} });
-        if (error || !(cfg as any)?.success) {
-          const msg = (cfg as any)?.error ?? "Configuration AVA introuvable";
+        // Helper: switch to text chat cleanly (no lingering broken layer).
+        const fallback = (msg: string) => {
           if (onFallbackToChat) {
-            toast.message("AVA vocal indisponible — passage au chat texte");
+            toast.message(msg);
             onFallbackToChat();
           } else {
             toast.error(msg);
             setState("error");
           }
+        };
+
+        // 1) Fetch agent config with retry/backoff.
+        let cfg: any;
+        try {
+          cfg = await withBackoff(async () => {
+            const { data, error } = await supabase.functions.invoke("ava-agent-config", { body: {} });
+            if (error || !(data as any)?.success) throw new Error((data as any)?.error ?? error?.message ?? "ava-agent-config failed");
+            return data;
+          }, 3, 400);
+        } catch (e: any) {
+          fallback("AVA vocal indisponible — passage au chat texte");
           return;
         }
         if (cancelled) return;
 
-        const c = cfg as any;
+        const c = cfg;
         setAutonomy(c.autonomy_mode ?? "confirm");
 
         if (!c.agent_id) {
-          if (onFallbackToChat) {
-            toast.message("Agent vocal non provisionné — passage au chat texte");
-            onFallbackToChat();
-          } else {
-            toast.error("Aucun agent ElevenLabs configuré pour ce courtier");
-            setState("error");
-          }
+          fallback("Agent vocal non provisionné — passage au chat texte");
           return;
         }
 
-        // Mint a scoped WebSocket signed URL server-side so the API key stays private.
-        // WebSocket transport (not WebRTC) avoids pulling livekit-client into the mobile bundle.
-        const { data: tok, error: tokErr } = await supabase.functions.invoke("pp-ava-webrtc-token", { body: {} });
-        if (tokErr || !(tok as any)?.signed_url) {
-          if (onFallbackToChat) {
-            toast.message("Session vocale indisponible — passage au chat texte");
-            onFallbackToChat();
-          } else {
-            toast.error((tok as any)?.error ?? "Session vocale indisponible");
-            setState("error");
-          }
+        // 2) Mint a scoped WebSocket signed URL with retry/backoff.
+        let tok: any;
+        try {
+          tok = await withBackoff(async () => {
+            const { data, error } = await supabase.functions.invoke("pp-ava-webrtc-token", { body: {} });
+            if (error || !(data as any)?.signed_url) throw new Error((data as any)?.error ?? error?.message ?? "no signed_url");
+            return data;
+          }, 3, 500);
+        } catch (e: any) {
+          fallback("Session vocale indisponible — passage au chat texte");
           return;
         }
+        if (cancelled) return;
 
-        const conv = await Conversation.startSession({
-          signedUrl: (tok as any).signed_url,
-          connectionType: "websocket",
-
-
-          overrides: {
-            agent: {
-              prompt: { prompt: c.system_prompt },
-              firstMessage: c.first_message,
-              language: c.language ?? "fr",
+        // 3) Start ElevenLabs session with retry/backoff (transient WS failures).
+        let conv: any;
+        try {
+          conv = await withBackoff(() => Conversation.startSession({
+            signedUrl: (tok as any).signed_url,
+            connectionType: "websocket",
+            overrides: {
+              agent: {
+                prompt: { prompt: c.system_prompt },
+                firstMessage: c.first_message,
+                language: c.language ?? "fr",
+              },
+              tts: {
+                voiceId: c.voice_id,
+                ...(c.voice_settings ? { stability: c.voice_settings.stability, similarityBoost: c.voice_settings.similarity_boost, style: c.voice_settings.style } : {}),
+              },
+            } as any,
+            clientTools,
+            onConnect: () => setState("listening"),
+            onDisconnect: () => setState("idle"),
+            onError: (err: any) => { console.error("AVA error", err); setState("error"); },
+            onModeChange: (m: any) => {
+              const mode = m?.mode ?? m;
+              if (mode === "speaking") setState("speaking");
+              else if (mode === "listening") setState("listening");
+              else if (mode === "thinking" || mode === "processing") setState("processing");
             },
-            tts: {
-              voiceId: c.voice_id,
-              ...(c.voice_settings ? { stability: c.voice_settings.stability, similarityBoost: c.voice_settings.similarity_boost, style: c.voice_settings.style } : {}),
+            onMessage: (msg: any) => {
+              const source = msg?.source ?? msg?.role;
+              const text = msg?.message ?? msg?.text;
+              if (!text) return;
+              appendTranscript({ role: source === "user" ? "user" : "agent", text });
+              supabase.from("planipret_ava_conversations").insert({
+                user_id: userId,
+                role: source === "user" ? "user" : "assistant",
+                message: text,
+                session_id: sessionId,
+              }).then(() => null);
             },
-          } as any,
-          clientTools,
-          onConnect: () => setState("listening"),
-          onDisconnect: () => setState("idle"),
-          onError: (err: any) => { console.error("AVA error", err); setState("error"); toast.error("Erreur AVA"); },
-          onModeChange: (m: any) => {
-            const mode = m?.mode ?? m;
-            if (mode === "speaking") setState("speaking");
-            else if (mode === "listening") setState("listening");
-            else if (mode === "thinking" || mode === "processing") setState("processing");
-          },
-          onMessage: (msg: any) => {
-            const source = msg?.source ?? msg?.role;
-            const text = msg?.message ?? msg?.text;
-            if (!text) return;
-            appendTranscript({ role: source === "user" ? "user" : "agent", text });
-            // Persist
-            supabase.from("planipret_ava_conversations").insert({
-              user_id: userId,
-              role: source === "user" ? "user" : "assistant",
-              message: text,
-              session_id: sessionId,
-            }).then(() => null);
-          },
-        } as any);
+          } as any), 2, 600);
+        } catch (e: any) {
+          console.error("AVA startSession failed", e);
+          fallback("Connexion vocale échouée — passage au chat texte");
+          return;
+        }
 
         if (cancelled) { try { await conv.endSession(); } catch (_) { /* */ } return; }
         convRef.current = conv;

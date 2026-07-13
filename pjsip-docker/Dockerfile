@@ -15,17 +15,17 @@ RUN apt-get update && apt-get install -y \
     nasm python3 python2 openjdk-17-jdk \
     && rm -rf /var/lib/apt/lists/*
 
-# Cloner le builder VoiSmart
-RUN git clone https://github.com/VoiSmart/pjsip-android-builder.git /builder
+# Cloner le builder VoiSmart dans /home (BASEDIR=/home dans config.conf)
+RUN git clone https://github.com/VoiSmart/pjsip-android-builder.git /home/builder-src
 
-WORKDIR /builder
+# Copier tous les fichiers du builder dans /home (là où BASEDIR=/home les cherche)
+RUN cp -r /home/builder-src/. /home/ && chmod +x /home/prepare-build-system /home/build /home/openssl-build-target-archs /home/opus-build 2>/dev/null || true
 
-# Rendre tous les scripts exécutables
-RUN chmod +x prepare-build-system build openssl-build-target-archs opus-build bcg729-build openh264-build-target-archs 2>/dev/null || true
+WORKDIR /home
 
 # Config locale : arm64-v8a uniquement, 16 KB activé, pas de vidéo ni G.729
-# Désactiver tous les patches qui cherchent des chemins incorrects dans Docker
-RUN cat > config.local.conf << 'EOF'
+# Désactiver tous les patches
+RUN cat > /home/config.local.conf << 'EOF'
 TARGET_ARCHS=("arm64-v8a")
 ENABLE_OPENH264=0
 DOWNLOAD_OPENH264=0
@@ -48,6 +48,6 @@ RUN ./prepare-build-system
 RUN ./build
 
 # Copier les artefacts dans /output
-RUN mkdir -p /output && cp -r /builder/pjsip-output-build/. /output/
+RUN mkdir -p /output && cp -r /home/output/. /output/
 
 CMD ["echo", "Build terminé — artefacts dans /output"]

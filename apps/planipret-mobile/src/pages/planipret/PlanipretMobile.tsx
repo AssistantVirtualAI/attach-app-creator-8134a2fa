@@ -133,6 +133,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
   const [contacts, setContacts] = useState<DialerContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
+  const [contactsLoadKey, setContactsLoadKey] = useState(0);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { if (open) { setNumber(initial ?? ""); setMode("keypad"); setQuery(""); } }, [open, initial]);
   const append = (c: string) => setNumber((n) => (n + c).slice(0, 20));
@@ -213,7 +214,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
       }
     })();
     return () => { cancelled = true; };
-  }, [open, mode, contacts.length, loadingContacts]);
+  }, [open, mode, contacts.length, loadingContacts, contactsLoadKey]);
 
   const normalized = query.trim().toLowerCase();
   const directoryOnly = contacts.filter((c) => c.source === "directory");
@@ -349,7 +350,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                   ) : contactsError ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>
                       <div className="mb-2">{contactsError}</div>
-                      <button onClick={() => { setContacts([]); setContactsError(null); setLoadingContacts(false); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Réessayer</button>
+                      <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Réessayer</button>
                     </div>
                   ) : filtered.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{normalized ? t("dialer.noResults") : t("contacts.noDirectory")}</div>

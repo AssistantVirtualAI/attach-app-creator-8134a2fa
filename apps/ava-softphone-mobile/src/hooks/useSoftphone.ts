@@ -763,10 +763,8 @@ export function useSoftphoneJsSip(
     if (timerRef.current) clearInterval(timerRef.current);
     setCallTimer(0);
     setActiveCallNumber('');
-    // Après un raccroché manuel, garantir que l'UI ne reste pas en "Connecting".
-    if (uaRef.current?.isConnected?.() && uaRef.current?.isRegistered?.()) {
-      setSipStatus('registered');
-    }
+    // Après un raccroché manuel, vérifier l'UA (re-REGISTER si besoin).
+    ensureRegisteredThenRestore('hangup');
   };
   const answer = () =>
     sessionRef.current?.answer({

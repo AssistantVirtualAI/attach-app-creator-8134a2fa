@@ -28,7 +28,7 @@ const OutputSchema = z.object({
 });
 
 const MUTATING_MS365 = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message"]);
-const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message"]);
+const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message", "search_contact"]);
 
 async function invokeFunction(name: string, authHeader: string, body: Record<string, unknown>) {
   const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${name}`, {

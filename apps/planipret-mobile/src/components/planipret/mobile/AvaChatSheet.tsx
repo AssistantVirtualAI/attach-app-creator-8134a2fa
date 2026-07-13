@@ -45,46 +45,48 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
 
   return (
     <div
-      className="absolute inset-0 z-40 flex flex-col overflow-hidden"
+      className="absolute inset-0 z-[60] flex flex-col overflow-hidden"
       style={{
         background: "var(--pp-bg-base)",
         paddingTop: "env(safe-area-inset-top, 0px)",
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
-      {/* Header — matches other mobile pages */}
-      <div
-        className="px-4 pt-3 pb-3 flex items-center gap-3"
-        style={{ background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
+      {/* Header — matches PlanipretMobile top header (same margin/height) */}
+      <header
+        className="relative flex items-center px-4 shrink-0"
+        style={{ paddingTop: 4, paddingBottom: 6, background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
       >
-        <div className="relative shrink-0">
-          <img
-            src={avaLogo.url}
-            alt="AVA"
-            className="w-9 h-9 rounded-xl object-cover"
-            style={{ background: "#0A1628" }}
-          />
-          <span
-            className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
-            style={{ background: "var(--pp-success)", border: "2px solid var(--pp-bg-deep)" }}
-          />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 15, color: "var(--pp-text-primary)", letterSpacing: "-0.01em" }}>AVA</span>
-            <Sparkles className="w-3.5 h-3.5" style={{ color: "var(--pp-agent)" }} />
+        <div className="flex items-center gap-2">
+          <div className="relative shrink-0">
+            <img
+              src={avaLogo.url}
+              alt="AVA"
+              style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", background: "#0A1628", boxShadow: "0 0 12px rgba(124,58,237,0.35)" }}
+            />
+            <span
+              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
+              style={{ background: "var(--pp-success)", border: "2px solid var(--pp-bg-deep)" }}
+            />
           </div>
-          <span style={{ fontSize: 10.5, color: "var(--pp-text-muted)", letterSpacing: "0.04em" }}>Assistante Planiprêt</span>
+          <Sparkles className="w-3.5 h-3.5" style={{ color: "var(--pp-agent)" }} />
         </div>
+
+        {/* Centered title */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+          <span style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 14, color: "var(--pp-text-primary)", letterSpacing: "-0.01em" }}>AVA · Chat</span>
+        </div>
+
+        {/* Close — always visible, right */}
         <button
           onClick={onClose}
-          className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition shrink-0"
-          style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+          className="ml-auto flex items-center justify-center active:scale-95 transition shrink-0"
+          style={{ width: 32, height: 32, borderRadius: 10, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
           aria-label="Fermer"
         >
           <X className="w-4 h-4" />
         </button>
-      </div>
+      </header>
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3">

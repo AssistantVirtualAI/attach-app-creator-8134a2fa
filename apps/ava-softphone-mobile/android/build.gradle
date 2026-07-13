@@ -18,22 +18,23 @@ allprojects {
         mavenCentral()
         maven { url "https://jitpack.io" }
     }
+}
 
-    afterEvaluate { project ->
-        if (project.hasProperty('android')) {
+subprojects {
+    afterEvaluate {
+        if (it.plugins.hasPlugin('com.android.library') || it.plugins.hasPlugin('com.android.application')) {
             android {
-                if (compileOptions) {
-                    compileOptions {
-                        sourceCompatibility JavaVersion.VERSION_17
-                        targetCompatibility JavaVersion.VERSION_17
-                    }
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
                 }
             }
         }
-        tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-            kotlinOptions {
-                jvmTarget = "17"
-            }
+        tasks.withType(JavaCompile).configureEach {
+            options.release = 17
+        }
+        tasks.matching { it.class.name.contains('KotlinCompile') }.configureEach {
+            it.kotlinOptions.jvmTarget = "17"
         }
     }
 }

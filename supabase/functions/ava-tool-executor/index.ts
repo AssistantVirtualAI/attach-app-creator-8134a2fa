@@ -188,15 +188,19 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async send_sms(ctx, p) {
+    let to = p?.to; let name = p?.contact_name;
+    if (!to && name) {
+      const hit = await resolveContact(ctx, name, "phone");
+      if (!hit) return { success: false, error: "contact_not_found", message: `Aucun numéro trouvé pour ${name}` };
+      to = hit.value; name = hit.name;
+    }
+    if (!to || !p?.message) return { success: false, error: "to_and_message_required" };
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ns-sms`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ to: p.to, message: p.message, type: "sms", _user_id: ctx.userId }),
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ to, message: p.message, type: "sms", _user_id: ctx.userId }),
     });
-    return { success: r.ok, message: `SMS envoyé à ${p.contact_name ?? p.to}` };
+    return { success: r.ok, message: `SMS envoyé à ${name ?? to}` };
   },
 
   async get_sms_conversations(ctx, p) {

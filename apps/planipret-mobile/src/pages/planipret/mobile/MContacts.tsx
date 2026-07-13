@@ -139,6 +139,10 @@ export default function MContacts() {
 
   useEffect(() => { load(tab); }, [tab, load]);
 
+  // Request native contacts permission the first time this page opens.
+  useEffect(() => { void ensureContacts(); }, []);
+
+
   const list = useMemo(() => {
     const src: any[] = tab === "personal" ? personal : tab === "favorites" ? favorites : directory;
     const ql = q.trim().toLowerCase();

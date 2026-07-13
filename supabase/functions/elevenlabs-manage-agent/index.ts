@@ -85,16 +85,24 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, error: "method_not_allowed" }, 405);
 
-  // Auth + admin check
+  // Auth + admin check (with service_role bypass for internal server-to-server calls)
   const authHeader = req.headers.get("Authorization") ?? "";
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: { user }, error: authErr } = await userClient.auth.getUser();
-  if (authErr || !user) return json({ success: false, error: "unauthorized" }, 401);
-
+  const bearer = authHeader.replace(/^Bearer\s+/i, "");
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: user.id });
+  let userId: string | null = null;
+  if (bearer && bearer === SUPABASE_SERVICE_ROLE_KEY) {
+    const peek = await req.clone().json().catch(() => ({}));
+    userId = peek?._user_id ?? peek?.user_id ?? null;
+  } else {
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !user) return json({ success: false, error: "unauthorized" }, 401);
+    userId = userId;
+  }
+  if (!userId) return json({ success: false, error: "unauthorized" }, 401);
+  const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: userId });
   if (!isAdmin) return json({ success: false, error: "forbidden_admin_only" }, 403);
 
   const apiKey = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
@@ -202,7 +210,7 @@ Deno.serve(async (req) => {
 
         // Retry once with a guaranteed-available fallback if the LLM was rejected.
         if (!r.ok && /llm|model/i.test(String(r.error))) {
-          await broadcastSetup(admin, user.id, { type: "setup_error", step: "create_agent", error: `LLM ${chosenLlm} refusé — retry avec gemini-2.0-flash-001` });
+          await broadcastSetup(admin, userId, { type: "setup_error", step: "create_agent", error: `LLM ${chosenLlm} refusé — retry avec gemini-2.0-flash-001` });
           createBody.conversation_config.agent.prompt.llm = "gemini-2.0-flash-001";
           r = await elFetch(apiKey, "/convai/agents/create", { method: "POST", body: JSON.stringify(createBody) });
         }
@@ -215,10 +223,10 @@ Deno.serve(async (req) => {
         }
         const newId = r.data?.agent_id;
         if (newId) {
-          await setConfig(admin, "agent_id", newId, user.id);
-          await setConfig(admin, "voice_id", createBody.conversation_config.tts.voice_id, user.id);
-          await setConfig(admin, "llm", createBody.conversation_config.agent.prompt.llm, user.id);
-          await setConfig(admin, "setup_completed", "true", user.id);
+          await setConfig(admin, "agent_id", newId, userId);
+          await setConfig(admin, "voice_id", createBody.conversation_config.tts.voice_id, userId);
+          await setConfig(admin, "llm", createBody.conversation_config.agent.prompt.llm, userId);
+          await setConfig(admin, "setup_completed", "true", userId);
         }
         return json({ success: true, agent_id: newId, llm_used: createBody.conversation_config.agent.prompt.llm });
       }
@@ -236,7 +244,7 @@ Deno.serve(async (req) => {
         // 1. Load existing registry tools and index by name.
         const listRes = await elFetch(apiKey, "/convai/tools");
         if (!listRes.ok) {
-          await broadcastSetup(admin, user.id, { type: "setup_error", step: "list_tools", error: listRes.error });
+          await broadcastSetup(admin, userId, { type: "setup_error", step: "list_tools", error: listRes.error });
           return json({ success: false, error: `Impossible de lister les outils ElevenLabs: ${listRes.error}`, status: listRes.status });
         }
         const existing: any[] = listRes.data?.tools ?? [];
@@ -265,12 +273,12 @@ Deno.serve(async (req) => {
             console.log(`[sync_all_tools] ${name} FAILED status=${upRes.status} error=${msg} body=${JSON.stringify(upRes.data ?? null)}`);
             errors.push(`${name}: ${msg}`);
             errors_detailed.push({ tool: name, status: upRes.status, message: msg, data: upRes.data });
-            await broadcastSetup(admin, user.id, { type: "setup_error", step: name, error: msg });
+            await broadcastSetup(admin, userId, { type: "setup_error", step: name, error: msg });
             continue;
           }
           console.log(`[sync_all_tools] ${name} OK id=${toolId}`);
           ids.push(toolId);
-          await broadcastSetup(admin, user.id, { type: "tool_added", tool_name: name, count: i + 1, total: desired.length });
+          await broadcastSetup(admin, userId, { type: "tool_added", tool_name: name, count: i + 1, total: desired.length });
         }
 
         const uniqIds = Array.from(new Set(ids));
@@ -298,14 +306,14 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ conversation_config: { agent: { prompt: { tools: legacyTools } } } }),
           });
           if (!legacyRes.ok) {
-            await broadcastSetup(admin, user.id, { type: "setup_error", step: "attach_tools", error: patchRes.error });
+            await broadcastSetup(admin, userId, { type: "setup_error", step: "attach_tools", error: patchRes.error });
             return json({ success: false, error: `Attache outils impossible: ${patchRes.error}`, status: patchRes.status, errors_detailed });
           }
         }
 
-        await setConfig(admin, "tools_count", String(uniqIds.length), user.id);
-        await setConfig(admin, "tools_synced_at", new Date().toISOString(), user.id);
-        await broadcastSetup(admin, user.id, { type: "setup_complete", agent_id: agentId, tools_count: uniqIds.length });
+        await setConfig(admin, "tools_count", String(uniqIds.length), userId);
+        await setConfig(admin, "tools_synced_at", new Date().toISOString(), userId);
+        await broadcastSetup(admin, userId, { type: "setup_complete", agent_id: agentId, tools_count: uniqIds.length });
         return json({
           success: true,
           tools_synced: uniqIds.length,
@@ -338,7 +346,7 @@ Deno.serve(async (req) => {
           }),
         });
         if (!r.ok) return json({ success: false, error: r.error });
-        await setConfig(admin, "voice_id", payload.voice_id, user.id);
+        await setConfig(admin, "voice_id", payload.voice_id, userId);
         return json({ success: true });
       }
 
@@ -359,7 +367,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ conversation_config: { agent: { prompt: { llm: payload.llm, temperature: payload.temperature, max_tokens: payload.max_tokens } } } }),
         });
         if (!r.ok) return json({ success: false, error: r.error });
-        await setConfig(admin, "llm", payload.llm, user.id);
+        await setConfig(admin, "llm", payload.llm, userId);
         return json({ success: true });
       }
 

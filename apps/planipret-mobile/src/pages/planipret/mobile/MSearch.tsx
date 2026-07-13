@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Phone, MessageSquare, Voicemail, User, Mail, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Phone, MessageSquare, Voicemail, User, Mail, Sparkles, Loader2, BookUser } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import type { PlanipretMobileContext } from "../PlanipretMobile";
 
-type Result = { calls: any[]; messages: any[]; voicemails: any[]; insights: any[]; contacts: any[]; emails: any[] };
+type Result = { calls: any[]; messages: any[]; voicemails: any[]; insights: any[]; contacts: any[]; directory: any[]; emails: any[] };
 
 function highlight(text: string, q: string) {
   if (!text || !q) return text;
@@ -13,31 +14,48 @@ function highlight(text: string, q: string) {
   return (<>{text.slice(0, i)}<mark style={{ background: "#FEF3C7", color: "inherit" }}>{text.slice(i, i + q.length)}</mark>{text.slice(i + q.length)}</>) as any;
 }
 
+function directoryName(c: any) {
+  const first = c.directory_first_name ?? c.first_name ?? "";
+  const last = c.directory_last_name ?? c.last_name ?? "";
+  return [first, last].filter(Boolean).join(" ").trim() || c.name || c.display_name || (c.extension ? `Ext. ${c.extension}` : "Contact");
+}
+
 export default function MSearch() {
   const { t, lang } = useMplanipretLang();
+  const { openDialer } = useOutletContext<PlanipretMobileContext>();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const q = params.get("q") ?? "";
   const [data, setData] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [recent] = useState<string[]>(() => JSON.parse(localStorage.getItem("pp_recent_searches") ?? "[]"));
 
   useEffect(() => {
     if (!q) return;
+    let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data: res } = await supabase.functions.invoke("pp-search", { body: undefined, method: "GET" as any, headers: undefined as any });
-      // invoke doesn't support GET; fallback to fetch
+      setError(null);
       try {
         const sess = (await supabase.auth.getSession()).data.session;
+        if (!sess?.access_token) throw new Error("Session expirée");
         const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pp-search?q=${encodeURIComponent(q)}`, {
-          headers: { Authorization: `Bearer ${sess?.access_token}`, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "" },
+          headers: { Authorization: `Bearer ${sess.access_token}`, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "" },
         });
+        if (!r.ok) throw new Error(`Recherche impossible (${r.status})`);
         const j = await r.json();
-        setData(j);
-      } catch { setData(res as Result); }
-      setLoading(false);
+        if (!cancelled) setData({ calls: [], messages: [], voicemails: [], insights: [], contacts: [], directory: [], emails: [], ...j });
+      } catch (e: any) {
+        if (!cancelled) {
+          setError(e?.message || "Recherche impossible");
+          setData(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
+    return () => { cancelled = true; };
   }, [q]);
 
   return (
@@ -62,9 +80,25 @@ export default function MSearch() {
       )}
 
       {loading && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}
+      {error && !loading && <div className="p-3 rounded-lg text-sm" style={{ background: "rgba(239,68,68,0.08)", color: "#dc2626" }}>{error}</div>}
 
       {data && !loading && (
         <div className="space-y-4">
+          <Group icon={<BookUser className="w-4 h-4" />} title={t("contacts.directory") || "Directory"} count={data.directory?.length ?? 0}>
+            {data.directory?.map((c: any, i: number) => {
+              const name = directoryName(c);
+              const ext = c.extension;
+              return (
+                <button key={`${ext ?? "dir"}-${i}`} onClick={() => ext && openDialer(ext)} className="w-full text-left p-3 bg-white rounded-lg text-sm flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{highlight(name, q)}</div>
+                    <div className="text-xs text-slate-400 truncate">{ext ? `${t("contacts.extension") || "Ext."} ${ext}` : c.email || ""}{c.position ? ` · ${c.position}` : ""}</div>
+                  </div>
+                  {ext && <Phone className="w-4 h-4 text-slate-400" />}
+                </button>
+              );
+            })}
+          </Group>
           <Group icon={<Phone className="w-4 h-4" />} title={t("searchPage.calls")} count={data.calls?.length ?? 0}>
             {data.calls?.map((c) => (
               <button key={c.id} onClick={() => navigate("/mplanipret/calls")} className="w-full text-left p-3 bg-white rounded-lg text-sm flex items-center gap-3">

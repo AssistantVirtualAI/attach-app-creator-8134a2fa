@@ -1,105 +1,66 @@
-# Agent vocal AVA — fix déconnexion + page admin complète
+# Rendre l'agent vocal AVA pleinement opérationnel : MS365 live + téléphonie + Claude
 
-## Partie 1 — Fix de la déconnexion de l'agent vocal
+## Objectif
+Quand un courtier parle à AVA (agent vocal ElevenLabs), elle doit pouvoir, en direct, sans intervention manuelle :
+- Chercher un contact dans **le répertoire Microsoft 365** (People + Contacts + `planipret_contacts` + Maestro).
+- **Appeler** (via NS/PBX) et **envoyer un SMS**.
+- **Envoyer un courriel** MS365, **résumer** les courriels reçus et **proposer une réponse** rédigée par **Claude (Anthropic)**.
+- **Créer, modifier, annuler** un rendez‑vous dans le calendrier MS365.
+- Tout résumer (courriels, appels, journée).
 
-### Diagnostic
-Le composant `AvaVoiceAgent.tsx` (mobile) suit cette séquence :
-1. `getUserMedia` → mic OK
-2. `ava-agent-config` (retry ×3)
-3. `pp-ava-webrtc-token` (retry ×3) — renvoie `token` **et** `signed_url`
-4. `Conversation.startSession({ connectionType: "websocket", signedUrl, overrides })` (retry ×2)
-5. Si échec → `onFallbackToChat()` → bascule chatbot
+## État actuel (déjà en place — à vérifier, pas à refaire)
+- `ms365-actions` couvre déjà : `read_emails`, `read_email_detail`, `send_email`, `list_calendar_events`, `create_calendar_event`, `update_calendar_event`, `delete_calendar_event`, `send_teams_message`, `search_contact` (via `/me/people` + `/me/contacts`).
+- `ava-tool-executor` expose déjà : `make_call`, `send_sms`, `send_email`, `read_emails`, `summarize_email`, `list_calendar_events`, `create_appointment`/`create_calendar_event`, `update_calendar_event`, `delete_calendar_event`, `search_client` (Maestro), `search_contact` (MS365).
+- `pp-ava-chat` déclenche déjà l'auto‑lookup répertoire quand un nom/email est mentionné.
+- `ms365-token-refresh` + `ms365-status` + `pp-autoconfigure_from_profile` gèrent le refresh automatique du token MS365.
 
-Causes probables de la déconnexion observée :
-- **`overrides` non autorisés côté ElevenLabs** : envoyer `overrides.agent.prompt` / `firstMessage` / `language` / `tts.voiceId` alors que ces overrides ne sont pas activés dans le dashboard ElevenLabs ferme le WS immédiatement après connexion.
-- **WebSocket signed_url plus fragile que WebRTC** sur mobile iOS (proxy réseau, keepalive). Le code force `websocket` alors que le token WebRTC est déjà minté.
-- **Aucune journalisation** de la raison de la fermeture : `onError` ne stocke rien, `fallback()` masque le vrai motif.
-- **Retry trop agressif** : 2 tentatives de `startSession` back-to-back peuvent invalider le `signed_url` déjà consommé (usage unique).
+## Ce qui manque / à corriger
 
-### Correctifs
+### 1. Vérifier que l'agent ElevenLabs voit bien tous les outils MS365 + téléphonie
+Aujourd'hui l'agent peut avoir une liste d'outils partielle côté ElevenLabs (webhook tools) même si le back-end expose tout. Étape :
+- Ajouter dans `elevenlabs-manage-agent` une action `sync_tools` qui **écrit dans `platform_settings.tools` de l'agent** la liste canonique complète pointant sur `ava-tool-executor` avec le header `X-Ava-Tool-Name`, pour :
+  `make_call, hangup_call, send_sms, get_sms_conversations, get_voicemails, read_emails, summarize_email, send_email, search_contact, list_calendar_events, create_calendar_event, update_calendar_event, delete_calendar_event, search_client, create_appointment, propose_email_reply, summarize_inbox`.
+- Bouton "Resynchroniser les outils" dans `PAAvaAgent` qui appelle cette action pour l'agent par défaut et pour chaque broker ayant un `elevenlabs_agent_id`.
 
-1. **`AvaVoiceAgent.tsx`**
-   - Essayer **WebRTC en premier** avec `conversationToken`, puis fallback WebSocket avec `signedUrl` si WebRTC échoue.
-   - Ne pas relancer `startSession` sur le même `signed_url` (usage unique) — refetch le token à chaque tentative.
-   - Ne passer `overrides` que si `ava-agent-config` renvoie `overrides_enabled: true` (nouveau champ).
-   - Sur `onError` / `onDisconnect` prématuré (< 2 s après `onConnect`), loguer dans `planipret_ava_sessions` avec code + message, afficher un état "Erreur — Réessayer" avant de basculer chat (fallback seulement après clic ou 2ᵉ échec).
-   - Passer `micStream` déjà obtenu à `startSession` pour éviter une 2ᵉ demande de permission.
+### 2. Intégration Claude (Anthropic) pour résumé + brouillon de réponse
+- Vérifier que le secret `ANTHROPIC_API_KEY` est présent (utilisé par `ava-email-analyzer`, `ai-analyze-call`). Sinon le demander.
+- Nouvel outil `propose_email_reply(message_id, tone?, language?)` dans `ava-tool-executor` :
+  1. `read_email_detail` via `ms365-actions` pour récupérer le corps + expéditeur + sujet.
+  2. Appel Claude (`claude-sonnet-4` ou courant) avec un prompt système FR‑CA courtier hypothécaire : renvoie `summary` (3‑4 phrases) + `draft_reply` (ton pro, québécois, salutation adaptée).
+  3. Retourne `{ summary, draft_reply, to, subject_suggested }`. La voix lit le résumé et propose l'envoi ; confirmation → `send_email` avec le brouillon.
+- Nouvel outil `summarize_inbox(limit=10)` : `read_emails` top N → Claude → renvoie un digest priorisé (client chaud, urgent, à répondre aujourd'hui).
+- Fallback : si `ANTHROPIC_API_KEY` absent, retomber sur `google/gemini-3-flash-preview` via Lovable AI Gateway (déjà utilisé ailleurs) — l'outil ne casse pas.
 
-2. **`supabase/functions/ava-agent-config/index.ts`**
-   - Interroger `GET /v1/convai/agents/:id` ElevenLabs pour lire `platform_settings.overrides` et retourner `overrides_enabled`, `agent_status`, `voice_id_effective`.
+### 3. Répertoire "live" étendu
+- Dans `search_contact` (`ms365-actions`) : ajouter fallback `/users` (Azure AD directory) via `.default` scope si tenant B2B, puis merger avec `planipret_contacts` et `planipret_maestro_clients` — retour unifié `{source, name, email, phone, company}`.
+- Étendre `pp-ava-chat` (déjà fait pour local) pour aussi injecter les résultats MS365 people dans le contexte système avant la réponse.
 
-3. **`supabase/functions/pp-ava-webrtc-token/index.ts`**
-   - Accepter `?type=webrtc|websocket` et ne minter que ce qui est demandé (évite d'invalider inutilement les URLs).
-   - Retourner un `error_details` structuré si ElevenLabs renvoie 4xx/5xx (au lieu de `502` opaque).
+### 4. Système téléphonique lié à l'agent vocal
+- Vérifier que `make_call` et `send_sms` fonctionnent quand la commande vocale contient uniquement un **nom** : ajouter dans `ava-tool-executor.make_call` une résolution automatique si `to_number` est absent mais `contact_name` fourni → `search_contact` → prendre le premier téléphone → sinon retourner `contact_not_found`.
+- Idem pour `send_sms`.
 
-4. **Nouvelle table `planipret_ava_sessions`** (journal court terme) :
-   ```
-   id, user_id, session_id, connection_type, agent_id,
-   started_at, ended_at, disconnect_reason, error_code, error_message
-   ```
-   Avec RLS : broker lit ses propres sessions, admins voient tout.
+### 5. UI d'état "connexion live"
+- Dans `PAAvaAgent` (health panel) + page Courtiers, afficher pour chaque broker :
+  - MS365 : connecté / token valide jusqu'à / dernier refresh (`ms365-status`).
+  - Anthropic : configuré oui/non.
+  - ElevenLabs agent : outils sync'd (nb d'outils vs attendus).
+  - Téléphonie NS : extension enregistrée.
+- Bouton "Tester" : envoie une commande vocale simulée (`pp-ava-chat` en mode test) qui déclenche `search_contact` → `propose_email_reply` sur le dernier courriel, sans envoyer.
 
-## Partie 2 — Page admin complète pour l'agent vocal
+## Fichiers touchés
+- `supabase/functions/elevenlabs-manage-agent/index.ts` → action `sync_tools`.
+- `supabase/functions/ava-tool-executor/index.ts` → outils `propose_email_reply`, `summarize_inbox` ; résolution nom→numéro dans `make_call`/`send_sms`.
+- `supabase/functions/ms365-actions/index.ts` → `search_contact` élargi (Azure AD + merge).
+- `supabase/functions/pp-ava-chat/index.ts` → injection MS365 people dans le contexte.
+- `src/pages/planipret/admin/PAAvaAgent.tsx` + nouveau `AvaLiveConnectionsPanel.tsx`.
+- Migration : rien (tout existe).
 
-La page `/planipret/admin/ava-agent` existe déjà (`PAAvaAgent.tsx` + `ElevenLabsManagementCard`) mais est limitée à un seul agent partagé. On la refond en tableau de bord complet.
+## Ordre de livraison
+1. Vérifier / ajouter `ANTHROPIC_API_KEY` (via `add_secret` si absent).
+2. `ava-tool-executor` : `propose_email_reply` + `summarize_inbox` + résolution nom→numéro.
+3. `elevenlabs-manage-agent` : `sync_tools` + bouton admin.
+4. `search_contact` élargi + injection dans `pp-ava-chat`.
+5. Panneau d'état "connexions live" dans la page admin AVA et sur la page Courtiers.
+6. Test end‑to‑end vocal (via `pp-ava-chat` mode test) : "Envoie un courriel à Jean Tremblay pour reporter notre rendez‑vous de demain à vendredi 14 h" → résolution → brouillon Claude → confirmation → envoi + update calendrier.
 
-### Nouvelles sections (dans `PAAvaAgent.tsx`)
-
-1. **État de santé** (haut de page)
-   - Ping ElevenLabs API + statut compte (crédits restants, quotas)
-   - Statut de chaque agent (actif / archivé)
-   - Compteur sessions live (via `planipret_ava_sessions` où `ended_at IS NULL`)
-   - Erreurs des dernières 24h (top 5 raisons)
-
-2. **Agents (multi-brokers)**
-   - Table : broker, extension, `elevenlabs_agent_id`, `voice_agent_enabled`, dernière session, nb sessions 7j, erreurs 24h
-   - Actions par ligne : activer/désactiver, resynchroniser prompt/voix, tester (ouvre l'overlay AVA en admin sous cette identité via impersonation), voir logs sessions
-
-3. **Configuration globale** (garde `ElevenLabsManagementCard` existante)
-   - Voix par défaut, system prompt de base, outils MCP synchronisés, webhooks
-   - Ajout : toggles pour chaque `override` autorisé (prompt / firstMessage / language / tts) — écrit dans `platform_settings.overrides` via `elevenlabs-manage-agent`
-
-4. **Autonomie & sécurité**
-   - Sélecteur du `autonomy_mode` par défaut (`confirm | semi_auto | full_auto`)
-   - Outils nécessitant confirmation (édition de `CONFIRM_REQUIRED`)
-
-5. **Journal des sessions**
-   - Timeline paginée depuis `planipret_ava_sessions` (broker, durée, transport, motif de fin, erreur)
-   - Filtre par broker / erreur / période
-
-6. **Test en direct**
-   - Bouton "Lancer une session test" → mint token pour l'admin lui-même, ouvre `AvaVoiceAgent` en modale, affiche la trace bas-niveau (events WS/WebRTC) pour debug.
-
-### Nouvelles/étendues edge functions
-
-- `elevenlabs-manage-agent` : ajouter actions `update_overrides_policy`, `get_account_status`, `list_all_agents`, `impersonate_test_token`.
-- `planipret-admin-ava-analytics` : ajouter `sessions_live`, `sessions_last_24h`, `top_errors`.
-
-## Détails techniques
-
-### Fichiers modifiés
-- `apps/planipret-mobile/src/components/planipret/mobile/AvaVoiceAgent.tsx` + copie `src/components/planipret/mobile/AvaVoiceAgent.tsx`
-- `supabase/functions/ava-agent-config/index.ts`
-- `supabase/functions/pp-ava-webrtc-token/index.ts`
-- `supabase/functions/elevenlabs-manage-agent/index.ts`
-- `supabase/functions/planipret-admin-ava-analytics/index.ts`
-- `src/pages/planipret/admin/PAAvaAgent.tsx`
-- `src/components/planipret/admin/integrations/ElevenLabsManagementCard.tsx`
-- Nouveaux : `AvaAgentsTable.tsx`, `AvaSessionsTimeline.tsx`, `AvaHealthPanel.tsx`, `AvaLiveTestModal.tsx`
-
-### Nouvelle migration
-- Table `planipret_ava_sessions` + GRANTs + RLS (broker=self, admin=all) + index `(user_id, started_at desc)`.
-
-### Ordre de sortie
-```text
-1. Migration table sessions
-2. Edge functions (config + webrtc-token + manage-agent + analytics)
-3. AvaVoiceAgent (WebRTC-first + logging + no auto-fallback)
-4. PAAvaAgent refonte (health + agents + sessions + test)
-```
-
-### Ce que ça change pour l'utilisateur
-- L'agent vocal ne bascule plus silencieusement en chat : il retente proprement, affiche l'erreur réelle, ne coupe la voix qu'après confirmation ou 2ᵉ échec.
-- L'admin voit d'un coup d'œil quels courtiers ont un agent, qui a des erreurs, et peut tester + activer/désactiver la voix par broker.
-
-Confirmez pour que je lance l'implémentation (Partie 1 puis Partie 2), ou dites-moi si vous voulez qu'on fasse d'abord uniquement le fix de la déconnexion.
+Confirmez pour que je passe en mode build. Si vous voulez qu'on **saute Claude et qu'on garde uniquement Gemini** (déjà gratuit via Lovable AI), dites‑le — ça évite d'ajouter la clé Anthropic.

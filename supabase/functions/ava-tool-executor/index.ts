@@ -59,18 +59,78 @@ async function broadcastNav(ctx: Ctx, route: string, extra?: any) {
   } catch (_) { /* noop */ }
 }
 
+// ─── helpers ────────────────────────────────────────────────────────────
+async function msAction(ctx: Ctx, action: string, payload: any) {
+  const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ action, payload, _user_id: ctx.userId }),
+  });
+  return await r.json().catch(() => ({}));
+}
+
+async function resolveContact(ctx: Ctx, name: string, want: "phone" | "email"): Promise<{ value: string; name: string } | null> {
+  if (!name) return null;
+  // 1) local contacts
+  const { data: local } = await ctx.admin.from("planipret_contacts")
+    .select("full_name, phone, email").ilike("full_name", `%${name}%`).limit(3);
+  for (const c of local ?? []) {
+    const v = want === "phone" ? c.phone : c.email;
+    if (v) return { value: v, name: c.full_name };
+  }
+  // 2) Maestro cache
+  const { data: mst } = await ctx.admin.from("planipret_maestro_clients")
+    .select("name, phone, email").ilike("name", `%${name}%`).limit(3);
+  for (const c of mst ?? []) {
+    const v = want === "phone" ? c.phone : c.email;
+    if (v) return { value: v, name: c.name };
+  }
+  // 3) MS365 people/contacts
+  const r = await msAction(ctx, "search_contact", { query: name });
+  for (const c of r?.results ?? []) {
+    const v = want === "phone" ? c.phone : c.email;
+    if (v) return { value: v, name: c.name };
+  }
+  return null;
+}
+
+async function callClaude(system: string, userText: string): Promise<string | null> {
+  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  if (key) {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-4-5-20250929", max_tokens: 1200, system, messages: [{ role: "user", content: userText }] }),
+    });
+    if (r.ok) { const j = await r.json(); return j.content?.[0]?.text ?? null; }
+  }
+  // fallback Lovable AI
+  const lk = Deno.env.get("LOVABLE_API_KEY");
+  if (!lk) return null;
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Lovable-API-Key": lk },
+    body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages: [{ role: "system", content: system }, { role: "user", content: userText }] }),
+  });
+  if (!r.ok) return null;
+  const j = await r.json();
+  return j.choices?.[0]?.message?.content ?? null;
+}
+
 // ─── tool implementations ───────────────────────────────────────────────
 const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   // ===== TELEPHONY =====
   async make_call(ctx, p) {
-    const { to_number, contact_name } = p ?? {};
+    let { to_number, contact_name } = p ?? {};
+    if (!to_number && contact_name) {
+      const hit = await resolveContact(ctx, contact_name, "phone");
+      if (!hit) return { success: false, error: "contact_not_found", message: `Aucun numéro trouvé pour ${contact_name}` };
+      to_number = hit.value; contact_name = hit.name;
+    }
     if (!to_number) return { success: false, error: "to_number_required" };
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ns-calls`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
       body: JSON.stringify({ action: "start", destination: to_number, _user_id: ctx.userId }),
     });
     const j = await r.json().catch(() => ({}));
@@ -128,15 +188,19 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async send_sms(ctx, p) {
+    let to = p?.to; let name = p?.contact_name;
+    if (!to && name) {
+      const hit = await resolveContact(ctx, name, "phone");
+      if (!hit) return { success: false, error: "contact_not_found", message: `Aucun numéro trouvé pour ${name}` };
+      to = hit.value; name = hit.name;
+    }
+    if (!to || !p?.message) return { success: false, error: "to_and_message_required" };
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ns-sms`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ to: p.to, message: p.message, type: "sms", _user_id: ctx.userId }),
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ to, message: p.message, type: "sms", _user_id: ctx.userId }),
     });
-    return { success: r.ok, message: `SMS envoyé à ${p.contact_name ?? p.to}` };
+    return { success: r.ok, message: `SMS envoyé à ${name ?? to}` };
   },
 
   async get_sms_conversations(ctx, p) {
@@ -330,17 +394,59 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async send_email(ctx, p) {
-    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ action: "send_email", payload: p, _user_id: ctx.userId }),
-    });
-    const j = await r.json().catch(() => ({}));
-    return { success: r.ok, message: `Courriel envoyé à ${p.to_name ?? p.to_email}`, ...j };
+    const payload = { ...p };
+    if (!payload.to && !payload.to_email && payload.contact_name) {
+      const hit = await resolveContact(ctx, payload.contact_name, "email");
+      if (!hit) return { success: false, error: "contact_not_found", message: `Aucun courriel trouvé pour ${payload.contact_name}` };
+      payload.to = hit.value; payload.to_name = hit.name;
+    }
+    const j = await msAction(ctx, "send_email", payload);
+    return { success: !!j?.success, message: `Courriel envoyé à ${payload.to_name ?? payload.to ?? payload.to_email}`, ...j };
   },
+
+  async propose_email_reply(ctx, p) {
+    // p: { message_id, tone?, language? }
+    if (!p?.message_id) return { success: false, error: "message_id_required" };
+    const detail = await msAction(ctx, "read_email_detail", { message_id: p.message_id });
+    const em = detail?.email;
+    if (!em) return { success: false, error: "email_not_found" };
+    const raw = em?.body?.content ?? em?.bodyPreview ?? "";
+    const bodyText = String(raw).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 8000);
+    const from = em?.from?.emailAddress?.address ?? em?.sender?.emailAddress?.address ?? "";
+    const fromName = em?.from?.emailAddress?.name ?? "";
+    const tone = p.tone ?? "professionnel et chaleureux";
+    const lang = p.language ?? "français québécois";
+    const system = `Tu es AVA, assistante d'un courtier hypothécaire au Québec. Réponds en JSON strict: {"summary": "3-4 phrases", "draft_reply": "corps de courriel complet avec salutation et signature", "subject_suggested": "Re: ..."}. Ton: ${tone}. Langue: ${lang}.`;
+    const user = `Expéditeur: ${fromName} <${from}>\nSujet: ${em.subject}\n\nCorps:\n${bodyText}`;
+    const out = await callClaude(system, user);
+    if (!out) return { success: false, error: "ai_unavailable" };
+    let parsed: any = {};
+    try { parsed = JSON.parse(out.match(/\{[\s\S]*\}/)?.[0] ?? out); } catch { parsed = { draft_reply: out, summary: out.slice(0, 300), subject_suggested: `Re: ${em.subject}` }; }
+    return {
+      success: true,
+      summary: parsed.summary,
+      draft_reply: parsed.draft_reply,
+      to: from,
+      to_name: fromName,
+      subject_suggested: parsed.subject_suggested ?? `Re: ${em.subject}`,
+      message: "Brouillon prêt. Veux-tu que je l'envoie ?",
+    };
+  },
+
+  async summarize_inbox(ctx, p) {
+    const limit = Math.min(Number(p?.limit ?? 10), 25);
+    const j = await msAction(ctx, "read_emails", { folder: p?.folder ?? "inbox", top: limit });
+    const emails = (j?.emails ?? j?.value ?? []).map((e: any) => ({
+      id: e.id, from: e?.from?.emailAddress?.address, name: e?.from?.emailAddress?.name,
+      subject: e.subject, preview: (e.bodyPreview ?? "").slice(0, 300), received: e.receivedDateTime, unread: !e.isRead,
+    }));
+    if (!emails.length) return { success: true, digest: "Aucun courriel récent.", emails: [] };
+    const system = "Tu es AVA. Résume la boîte de réception d'un courtier hypothécaire québécois en 5-8 puces en français : priorité, expéditeur, sujet, action requise. Marque les urgences avec 🔥.";
+    const digest = await callClaude(system, JSON.stringify(emails)) ?? emails.map((e: any) => `• ${e.name}: ${e.subject}`).join("\n");
+    return { success: true, digest, emails, count: emails.length };
+  },
+
+
 
   async get_calendar_today(ctx) {
     const today = new Date();

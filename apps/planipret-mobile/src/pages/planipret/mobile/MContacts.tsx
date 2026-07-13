@@ -117,7 +117,11 @@ export default function MContacts() {
   const load = useCallback(async (which: Tab, opts: { force?: boolean; limit?: number; background?: boolean } = {}) => {
     if (which === "favorites") return; // local only
     if (!opts.force && loadedTabsRef.current.has(which)) return;
-    if (!opts.background) setLoadingTab(which);
+    // If the shared cache already has data for this action, skip the spinner
+    // and refresh in the background so the page renders instantly.
+    const cachedHint = which === "directory" ? peekPpContacts("directory") : peekPpContacts("list");
+    const runBackground = opts.background || (!opts.force && !!cachedHint);
+    if (!runBackground) setLoadingTab(which);
     setLoadError(null);
     try {
       const { getPpContacts } = await import("@/lib/ppContactsCache");

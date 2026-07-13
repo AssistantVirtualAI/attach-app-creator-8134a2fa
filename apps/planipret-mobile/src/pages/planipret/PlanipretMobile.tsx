@@ -355,10 +355,10 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                       <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Réessayer</button>
                     </div>
                   ) : filtered.length === 0 ? (
-                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{normalized ? t("dialer.noResults") : t("contacts.noDirectory")}</div>
+                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>{tokens.length ? t("dialer.noResults") : t("contacts.noDirectory")}</div>
                   ) : (
                     <>
-                      {!normalized && (
+                      {!tokens.length && (
                         <div className="px-1 pb-2 text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--pp-text-muted)" }}>
                           {t("contacts.directorySection") || t("contacts.directory")}
                         </div>
@@ -755,7 +755,7 @@ export default function PlanipretMobile() {
         <button onClick={activeCallId ? hangupActive : () => setDialerOpen(true)}
           className="absolute z-20 rounded-full flex items-center justify-center text-white active:scale-95 transition"
           style={{
-            right: 18, bottom: 118,
+            right: 18, bottom: "calc(env(safe-area-inset-bottom, 0px) + 116px)",
             background: activeCallId
               ? "linear-gradient(135deg, #5A1010, #E84C4C)"
               : "linear-gradient(135deg, #1A4A8A, #2E9BDC)",

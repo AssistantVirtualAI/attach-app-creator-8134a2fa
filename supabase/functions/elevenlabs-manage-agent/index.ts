@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
     });
     const { data: { user }, error: authErr } = await userClient.auth.getUser();
     if (authErr || !user) return json({ success: false, error: "unauthorized" }, 401);
-    userId = userId;
+    userId = user.id;
   }
   if (!userId) return json({ success: false, error: "unauthorized" }, 401);
   const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: userId });

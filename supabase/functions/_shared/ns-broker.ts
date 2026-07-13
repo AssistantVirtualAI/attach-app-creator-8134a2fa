@@ -59,17 +59,28 @@ export function supaAdmin() {
 
 export async function authBroker(req: Request) {
   const authHeader = req.headers.get("Authorization");
-  const avaSessionHeader = req.headers.get("x-ava-session") ?? req.headers.get("X-Ava-Session");
+  const avaSessionHeaders = [
+    req.headers.get("x-ava-session"),
+    req.headers.get("X-Ava-Session"),
+    req.headers.get("x-ava-session-fallback"),
+    req.headers.get("X-Ava-Session-Fallback"),
+  ].filter((v): v is string => !!v && !!v.trim());
   const admin = supaAdmin();
   let userId: string | null = null;
 
+  const isConcreteAvaSession = (value: string) => {
+    const v = value.trim();
+    return !!v && !v.includes("{{") && !v.includes("}}") && v.split(".").length === 2;
+  };
+
   // Preferred path: signed AVA session token (voice agent webhook path).
-  if (avaSessionHeader && avaSessionHeader.trim() && avaSessionHeader !== "{{ava_session_token}}") {
+  for (const header of avaSessionHeaders) {
+    if (!isConcreteAvaSession(header)) continue;
     try {
       const { verifyAvaSession } = await import("./ava-session.ts");
-      const v = await verifyAvaSession(avaSessionHeader.trim());
-      if (v?.uid) userId = v.uid;
-    } catch (_) { /* fall through to JWT */ }
+      const v = await verifyAvaSession(header.trim());
+      if (v?.uid) { userId = v.uid; break; }
+    } catch (_) { /* try next header / fall through to JWT */ }
   }
 
   // Fallback: Supabase user JWT (mobile/web app path).
@@ -77,6 +88,15 @@ export async function authBroker(req: Request) {
     if (!authHeader?.startsWith("Bearer ")) {
       return { error: jsonResponse({ success: false, error: "Unauthorized", code: 401 }, 401) };
     }
+    const bearer = authHeader.replace("Bearer ", "");
+    if (bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")) {
+      const body = await req.clone().json().catch(() => ({}));
+      const bodyUserId = body?._user_id ?? body?.user_id ?? body?.broker_user_id;
+      if (bodyUserId) userId = String(bodyUserId);
+    }
+  }
+
+  if (!userId) {
     const userClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,

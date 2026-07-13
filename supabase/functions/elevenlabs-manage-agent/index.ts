@@ -286,7 +286,7 @@ Deno.serve(async (req) => {
         // 3. Attach tool_ids on the agent.
         const patchRes = await elFetch(apiKey, `/convai/agents/${agentId}`, {
           method: "PATCH",
-          body: JSON.stringify({ conversation_config: { agent: { prompt: { tool_ids: uniqIds } } } }),
+          body: JSON.stringify({ conversation_config: { agent: { prompt: { tool_ids: uniqIds, tools: [] } } } }),
         });
 
         // 4. Legacy fallback: some installs still accept inline `tools`.

@@ -30,11 +30,10 @@ subprojects {
                 }
             }
         }
-        tasks.withType(JavaCompile).configureEach {
-            options.release = 17
-        }
-        tasks.matching { it.class.name.contains('KotlinCompile') }.configureEach {
-            it.kotlinOptions.jvmTarget = "17"
+        tasks.matching { task ->
+            task.class.name.contains('KotlinCompile')
+        }.configureEach { task ->
+            task.kotlinOptions.jvmTarget = "17"
         }
     }
 }

@@ -915,6 +915,7 @@ function AISection({ call, onUpdated }: { call: RecordingCall; onUpdated: (c: Re
   if (!hasAI) {
     return (
       <div className="mt-3 p-3 rounded-xl" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+        <AnalysisStatusBar call={call} />
         <button onClick={run} disabled={loading}
                 className="w-full py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
                 style={{ background: "linear-gradient(135deg, var(--pp-agent), var(--pp-brand-accent-2))", color: "white" }}>

@@ -145,7 +145,7 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
             placeholder="Demandez à AVA…"
             rows={1}
             className="flex-1 min-h-[38px] max-h-24 resize-none bg-transparent py-2 outline-none"
-            style={{ fontSize: 14, color: "var(--pp-text-primary)", caretColor: "var(--pp-brand-accent)", fontFamily: "Inter,sans-serif" }}
+            style={{ fontSize: 16, color: "var(--pp-text-primary)", caretColor: "var(--pp-brand-accent)", fontFamily: "Inter,sans-serif" }}
           />
           <button
             onClick={send}

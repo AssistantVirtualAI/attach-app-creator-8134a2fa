@@ -240,7 +240,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
         return matchAllTokens(hay, tokens);
       }).slice(0, 50)
     : contacts.slice(0, 50);
-  void normalizeText; void directoryOnly;
+  
 
 
   return (

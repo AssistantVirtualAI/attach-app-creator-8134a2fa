@@ -321,19 +321,38 @@ export function useSoftphoneJsSip(
               }
             });
 
-            // Post-INVITE health-check: warn if session/ICE never reach connected.
-            watchCallEstablishment(session, session.connection, 15000).then((res) => {
+            // Post-INVITE health-check: RFC 3261 Timer B = 32 s (5 s laissait
+            // le PBX FusionPBX court quand il négocie DTLS-SRTP derrière NAT).
+            watchCallEstablishment(session, session.connection, 32000).then((res) => {
               if (res.ok) {
                 log('call.established', `ice=${res.iceState}`);
                 return;
               }
               const msg =
-                res.reason === 'timeout-session' ? 'Appel non confirmé (pas d’ACK en 15 s)'
+                res.reason === 'timeout-session' ? 'Appel non confirmé (pas d’ACK en 32 s)'
                 : res.reason === 'timeout-ice'   ? `ICE bloqué (state=${res.iceState ?? '?'}) — STUN/TURN probablement filtré`
                 : res.reason === 'ice-failed'    ? 'Échec ICE — chemin média bloqué'
                 : 'Établissement de l’appel échoué';
               log('call.establishment-failed', `${res.reason} ice=${res.iceState}`, 'error');
               try { showMobileToast(msg, 'error'); } catch {}
+
+              // Auto-retry en SDP PCMU sécurisé si le 1er essai timeoute
+              // (PBX qui refuse silencieusement Opus/DTLS-SRTP en WebRTC).
+              if (
+                (res.reason === 'timeout-session' || res.reason === 'timeout-ice') &&
+                callAttemptRef.current === 1 &&
+                lastCallNumberRef.current
+              ) {
+                callAttemptRef.current = 2;
+                const retryNumber = lastCallNumberRef.current;
+                log('call.retry-timeout', `→ ${retryNumber} PCMU-only fallback`, 'warn');
+                try { sessionRef.current?.terminate(); } catch {}
+                // Restaure le statut UA (le CANCEL ne doit pas laisser "connecting")
+                if (uaRef.current?.isConnected?.() && uaRef.current?.isRegistered?.()) {
+                  setSipStatus('registered');
+                }
+                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, 400);
+              }
             });
             session.on('confirmed', () => {
               setCallState('active');

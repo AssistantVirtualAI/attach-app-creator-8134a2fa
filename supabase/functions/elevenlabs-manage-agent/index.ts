@@ -85,16 +85,24 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ success: false, error: "method_not_allowed" }, 405);
 
-  // Auth + admin check
+  // Auth + admin check (with service_role bypass for internal server-to-server calls)
   const authHeader = req.headers.get("Authorization") ?? "";
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: { user }, error: authErr } = await userClient.auth.getUser();
-  if (authErr || !user) return json({ success: false, error: "unauthorized" }, 401);
-
+  const bearer = authHeader.replace(/^Bearer\s+/i, "");
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: user.id });
+  let userId: string | null = null;
+  if (bearer && bearer === SUPABASE_SERVICE_ROLE_KEY) {
+    const peek = await req.clone().json().catch(() => ({}));
+    userId = peek?._user_id ?? peek?.user_id ?? null;
+  } else {
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: authErr } = await userClient.auth.getUser();
+    if (authErr || !user) return json({ success: false, error: "unauthorized" }, 401);
+    userId = user.id;
+  }
+  if (!userId) return json({ success: false, error: "unauthorized" }, 401);
+  const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: userId });
   if (!isAdmin) return json({ success: false, error: "forbidden_admin_only" }, 403);
 
   const apiKey = Deno.env.get("ELEVENLABS_API_KEY") ?? "";

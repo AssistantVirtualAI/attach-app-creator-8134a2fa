@@ -136,6 +136,33 @@ Deno.serve(async (req) => {
   const firstName = (p.full_name ?? "courtier").split(" ")[0];
   const voiceId = p.ava_voice_id || Deno.env.get("ELEVENLABS_AVA_VOICE_ID") || DEFAULT_VOICE_ID;
 
+  // Probe ElevenLabs to detect which overrides the agent allows.
+  // Sending disallowed overrides closes the WS right after connect.
+  const overrides_allowed = { prompt: false, first_message: false, language: false, voice: false };
+  let agent_status: string | null = null;
+  const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
+  if (ELEVENLABS_API_KEY) {
+    try {
+      const r = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${encodeURIComponent(agentId)}`, {
+        headers: { "xi-api-key": ELEVENLABS_API_KEY },
+      });
+      if (r.ok) {
+        const agent = await r.json();
+        agent_status = "ok";
+        const ov = agent?.platform_settings?.overrides?.conversation_config_override ?? {};
+        overrides_allowed.prompt = !!ov?.agent?.prompt?.prompt;
+        overrides_allowed.first_message = !!ov?.agent?.first_message;
+        overrides_allowed.language = !!ov?.agent?.language;
+        overrides_allowed.voice = !!ov?.tts?.voice_id;
+      } else {
+        agent_status = `error_${r.status}`;
+      }
+    } catch (e) {
+      console.warn("ava-agent-config overrides probe failed", e);
+      agent_status = "probe_failed";
+    }
+  }
+
   return jsonResponse({
     success: true,
     agent_id: agentId,
@@ -150,6 +177,8 @@ Deno.serve(async (req) => {
     },
     language: p.ava_preferred_lang ?? "fr",
     autonomy_mode: p.ava_autonomy_mode ?? "confirm",
+    overrides_allowed,
+    agent_status,
     tools: TOOL_NAMES,
   });
 });

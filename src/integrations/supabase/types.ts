@@ -8214,6 +8214,54 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_ava_sessions: {
+        Row: {
+          agent_id: string | null
+          connection_type: string
+          created_at: string
+          disconnect_reason: string | null
+          duration_ms: number | null
+          ended_at: string | null
+          error_code: string | null
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          session_id: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id?: string | null
+          connection_type?: string
+          created_at?: string
+          disconnect_reason?: string | null
+          duration_ms?: number | null
+          ended_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          session_id: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string | null
+          connection_type?: string
+          created_at?: string
+          disconnect_reason?: string | null
+          duration_ms?: number | null
+          ended_at?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          session_id?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_calendar_sync: {
         Row: {
           created_at: string

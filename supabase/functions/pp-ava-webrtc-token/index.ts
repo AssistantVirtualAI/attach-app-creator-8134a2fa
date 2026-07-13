@@ -54,27 +54,56 @@ Deno.serve(async (req) => {
     if (!prof.voice_agent_enabled) return json({ error: "voice_agent_disabled" }, 403);
     if (!prof.elevenlabs_agent_id) return json({ error: "agent_not_provisioned" }, 409);
 
+    // Accept ?type=webrtc|websocket|both — signed URLs are single-use so
+    // callers should mint only what they need. Defaults to "both" for
+    // backward compat.
+    const url = new URL(req.url);
+    let type = (url.searchParams.get("type") ?? "").toLowerCase();
+    if (req.method === "POST") {
+      try {
+        const body = await req.json().catch(() => null);
+        if (body?.type) type = String(body.type).toLowerCase();
+      } catch (_) { /* ignore */ }
+    }
+    if (!["webrtc", "websocket", "both"].includes(type)) type = "both";
+
+    const needToken = type === "webrtc" || type === "both";
+    const needSigned = type === "websocket" || type === "both";
+
     const [tokenRes, signedRes] = await Promise.all([
-      fetch(
-        `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(prof.elevenlabs_agent_id)}`,
-        { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
-      ),
-      fetch(
-        `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(prof.elevenlabs_agent_id)}`,
-        { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
-      ),
+      needToken
+        ? fetch(
+            `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(prof.elevenlabs_agent_id)}`,
+            { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
+          )
+        : Promise.resolve(null as any),
+      needSigned
+        ? fetch(
+            `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(prof.elevenlabs_agent_id)}`,
+            { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
+          )
+        : Promise.resolve(null as any),
     ]);
 
-    const tokenText = await tokenRes.text();
-    const signedText = await signedRes.text();
+    const tokenText = tokenRes ? await tokenRes.text() : "";
+    const signedText = signedRes ? await signedRes.text() : "";
 
-    if (!tokenRes.ok && !signedRes.ok) {
-      console.error("elevenlabs token error", tokenRes.status, tokenText, signedRes.status, signedText);
-      return json({ error: "elevenlabs_error", status: tokenRes.status, details: tokenText.slice(0, 500) }, 502);
+    const tokenOk = tokenRes ? tokenRes.ok : false;
+    const signedOk = signedRes ? signedRes.ok : false;
+
+    if ((needToken && !tokenOk) && (needSigned && !signedOk)) {
+      const status = (tokenRes?.status ?? signedRes?.status ?? 502);
+      console.error("elevenlabs token error", tokenRes?.status, tokenText, signedRes?.status, signedText);
+      return json({
+        error: "elevenlabs_error",
+        status,
+        token_error: tokenRes ? { status: tokenRes.status, body: tokenText.slice(0, 400) } : null,
+        signed_error: signedRes ? { status: signedRes.status, body: signedText.slice(0, 400) } : null,
+      }, 502);
     }
 
-    const tokenData = tokenRes.ok ? JSON.parse(tokenText) : null;
-    const signedData = signedRes.ok ? JSON.parse(signedText) : null;
+    const tokenData = tokenOk ? JSON.parse(tokenText) : null;
+    const signedData = signedOk ? JSON.parse(signedText) : null;
 
     return json({
       token: tokenData?.token ?? null,

@@ -1,98 +1,105 @@
-# Plan — Parité mobile↔web + Build iOS rapide
+# Agent vocal AVA — fix déconnexion + page admin complète
 
-## Partie 1 — Parité totale `apps/planipret-mobile` ↔ webapp
+## Partie 1 — Fix de la déconnexion de l'agent vocal
 
-### État actuel (diff détecté)
-Pages divergentes :
-- `MCalls.tsx`, `MVoicemail.tsx`
-- `MMs365Diagnostics.tsx` existe seulement côté mobile
+### Diagnostic
+Le composant `AvaVoiceAgent.tsx` (mobile) suit cette séquence :
+1. `getUserMedia` → mic OK
+2. `ava-agent-config` (retry ×3)
+3. `pp-ava-webrtc-token` (retry ×3) — renvoie `token` **et** `signed_url`
+4. `Conversation.startSession({ connectionType: "websocket", signedUrl, overrides })` (retry ×2)
+5. Si échec → `onFallbackToChat()` → bascule chatbot
 
-Composants divergents :
-- `AvaChatSheet.tsx`, `MobileAuthScreen.tsx`
-- `call/CallRecordingPlayer.tsx`, `call/MaestroTab.tsx`
-- `voicemail/GreetingStudio.tsx`
+Causes probables de la déconnexion observée :
+- **`overrides` non autorisés côté ElevenLabs** : envoyer `overrides.agent.prompt` / `firstMessage` / `language` / `tts.voiceId` alors que ces overrides ne sont pas activés dans le dashboard ElevenLabs ferme le WS immédiatement après connexion.
+- **WebSocket signed_url plus fragile que WebRTC** sur mobile iOS (proxy réseau, keepalive). Le code force `websocket` alors que le token WebRTC est déjà minté.
+- **Aucune journalisation** de la raison de la fermeture : `onError` ne stocke rien, `fallback()` masque le vrai motif.
+- **Retry trop agressif** : 2 tentatives de `startSession` back-to-back peuvent invalider le `signed_url` déjà consommé (usage unique).
 
-Config divergente :
-- `capacitor.config.ts` mobile OK, mais `vite.config.ts` mobile a des shims (`framer-motion`, `livekit-client`) absents du web (normal — perf iOS WKWebView).
-- Endpoints Supabase, edge functions AVA, MS365, téléphonie : mêmes URLs (client Supabase partagé), à re-vérifier.
+### Correctifs
 
-### Actions parité
-1. **Synchroniser les 7 fichiers divergents** : la webapp est source de vérité pour la logique métier ; recopier vers `apps/planipret-mobile/src/...` en conservant les shims mobile (framer-motion → motion-shim, livekit → stub).
-2. **Copier `MMs365Diagnostics.tsx`** de mobile vers webapp (`src/pages/planipret/mobile/`) et l'exposer dans la route `More` de la webapp pour parité complète.
-3. **Aligner AVA agent config** : vérifier que `AvaVoiceAgent.tsx` mobile appelle exactement les mêmes edge functions (`ava-agent-config`, `ava-tool-executor`, `ms365-actions`, `elevenlabs-manage-agent`) avec les mêmes tools (calendrier, mail, SMS, appel, discovery). Aucune divergence détectée pour ce fichier mais confirmer les variables (voix, prompt, `courtier_name`).
-4. **Env** : garantir que `.env` mobile pointe sur la même `VITE_SUPABASE_URL` et `VITE_SUPABASE_PUBLISHABLE_KEY` que la webapp.
-5. **i18n / thèmes / branding** : réutiliser `shared/planipret-design-tokens` (déjà en place) et confirmer que le `LanguageContext` mobile expose le même dictionnaire fr/en.
-6. **Ajouter un test de parité** `apps/planipret-mobile/scripts/audit-parity.mjs` qui liste les fichiers de `src/pages/planipret/mobile/` et `src/components/planipret/mobile/` et échoue si un fichier existe d'un côté sans équivalent, ou si les hashes divergent hors shims autorisés. Le brancher dans `npm run audit:native` (déjà appelé par `build:ios`).
+1. **`AvaVoiceAgent.tsx`**
+   - Essayer **WebRTC en premier** avec `conversationToken`, puis fallback WebSocket avec `signedUrl` si WebRTC échoue.
+   - Ne pas relancer `startSession` sur le même `signed_url` (usage unique) — refetch le token à chaque tentative.
+   - Ne passer `overrides` que si `ava-agent-config` renvoie `overrides_enabled: true` (nouveau champ).
+   - Sur `onError` / `onDisconnect` prématuré (< 2 s après `onConnect`), loguer dans `planipret_ava_sessions` avec code + message, afficher un état "Erreur — Réessayer" avant de basculer chat (fallback seulement après clic ou 2ᵉ échec).
+   - Passer `micStream` déjà obtenu à `startSession` pour éviter une 2ᵉ demande de permission.
 
-### Résultat parité
-Mobile = webapp sur : pages, composants, endpoints Supabase, edge functions, tools AVA, variables agent, i18n, branding, env. Seules différences autorisées : shims Vite (motion, livekit) et code natif Capacitor (permissions, push, splash).
+2. **`supabase/functions/ava-agent-config/index.ts`**
+   - Interroger `GET /v1/convai/agents/:id` ElevenLabs pour lire `platform_settings.overrides` et retourner `overrides_enabled`, `agent_status`, `voice_id_effective`.
 
----
+3. **`supabase/functions/pp-ava-webrtc-token/index.ts`**
+   - Accepter `?type=webrtc|websocket` et ne minter que ce qui est demandé (évite d'invalider inutilement les URLs).
+   - Retourner un `error_details` structuré si ElevenLabs renvoie 4xx/5xx (au lieu de `502` opaque).
 
-## Partie 2 — Build iOS 18 min → ~2-4 min incrémental
-
-### Diagnostic probable (à confirmer au premier run)
-- `npm install` sans cache (2-4 min)
-- `vite build` chunks lourds (~2-3 min sur bundle actuel)
-- `cap sync ios` recopie tout `dist/` + réinstalle pods (3-6 min sans cache)
-- `pod install` réseau (2-4 min si specs repo se met à jour)
-- Xcode clean build (5-8 min DerivedData vide)
-Somme ≈ 18 min qui matche le vécu.
-
-### Actions accélération
-1. **Cache npm** : `npm ci --prefer-offline --no-audit --no-fund` + persister `~/.npm` et `node_modules` entre runs (dev machine locale, pas CI). Gain : ~2 min.
-2. **Vite build incrémental** :
-   - Activer `build.reportCompressedSize: false` (retire un pass gzip par chunk).
-   - Ajouter `--mode development` pour itérations rapides (skippe minify) via nouveau script `build:ios:dev`.
-   - Gain : ~1-2 min.
-3. **Capacitor sync ciblé** :
-   - Nouveau script `sync:ios:fast` qui fait `cap copy ios` (pas `sync`) quand aucun plugin natif n'a changé. `copy` = juste recopie `dist/`, skip `pod install` + update. Gain : ~3-5 min.
-4. **CocoaPods cache** :
-   - `pod install --repo-update` seulement quand `Podfile.lock` change ; sinon `pod install` sans update.
-   - Ajouter `COCOAPODS_DISABLE_STATS=1` et forcer le CDN `trunk` (déjà par défaut mais confirmer).
-   - Persister `~/Library/Caches/CocoaPods` (par défaut, mais vérifier).
-5. **Xcode DerivedData persistant + incrémental** :
-   - Ne PAS faire de `Clean Build Folder` entre itérations.
-   - Utiliser `xcodebuild -showBuildTimingSummary` pour identifier top targets.
-   - Passer `COMPILER_INDEX_STORE_ENABLE=NO` et `SWIFT_COMPILATION_MODE=singlefile` pour Debug (déjà default pour Debug mais confirmer).
-   - Gain : 3-6 min sur builds Debug incrémentaux.
-6. **Nouveau script `scripts/ios-fast.sh`** dans `apps/planipret-mobile/scripts/` :
+4. **Nouvelle table `planipret_ava_sessions`** (journal court terme) :
    ```
-   npm run build -- --mode development
-   npx cap copy ios          # pas sync
-   xed ios/App/App.xcworkspace   # ouvre déjà workspace
+   id, user_id, session_id, connection_type, agent_id,
+   started_at, ended_at, disconnect_reason, error_code, error_message
    ```
-   Ajout d'un flag `--full` qui bascule sur l'ancien `build:ios` (avec `cap sync` + `pod install`) quand un plugin natif change.
-7. **Live-reload optionnel (dev only)** : documenter mais ne pas activer par défaut, puisque tu as choisi "build incrémental + cache". On garde `capacitor.config.ts` production ; un fichier `capacitor.config.dev.ts` séparé pourra pointer sur le preview Lovable si besoin plus tard.
+   Avec RLS : broker lit ses propres sessions, admins voient tout.
 
-### Estimation post-optim
-- Premier build (cache vide) : ~10-12 min
-- Build incrémental JS seul (`ios-fast.sh`) : **~90 s à 3 min**
-- Build incrémental Xcode Run sur device : **~30-90 s**
+## Partie 2 — Page admin complète pour l'agent vocal
 
----
+La page `/planipret/admin/ava-agent` existe déjà (`PAAvaAgent.tsx` + `ElevenLabsManagementCard`) mais est limitée à un seul agent partagé. On la refond en tableau de bord complet.
 
-## Fichiers touchés
+### Nouvelles sections (dans `PAAvaAgent.tsx`)
 
-**Parité (recopie + création)** :
-- `apps/planipret-mobile/src/pages/planipret/mobile/MCalls.tsx` (aligner sur web)
-- `apps/planipret-mobile/src/pages/planipret/mobile/MVoicemail.tsx` (aligner sur web)
-- `apps/planipret-mobile/src/components/planipret/mobile/AvaChatSheet.tsx`
-- `apps/planipret-mobile/src/components/planipret/mobile/MobileAuthScreen.tsx`
-- `apps/planipret-mobile/src/components/planipret/mobile/call/CallRecordingPlayer.tsx`
-- `apps/planipret-mobile/src/components/planipret/mobile/call/MaestroTab.tsx`
-- `apps/planipret-mobile/src/components/planipret/mobile/voicemail/GreetingStudio.tsx`
-- `src/pages/planipret/mobile/MMs365Diagnostics.tsx` (créé depuis mobile)
-- `src/pages/planipret/mobile/MMore.tsx` (route ajoutée)
+1. **État de santé** (haut de page)
+   - Ping ElevenLabs API + statut compte (crédits restants, quotas)
+   - Statut de chaque agent (actif / archivé)
+   - Compteur sessions live (via `planipret_ava_sessions` où `ended_at IS NULL`)
+   - Erreurs des dernières 24h (top 5 raisons)
 
-**Outillage** :
-- `apps/planipret-mobile/scripts/audit-parity.mjs` (nouveau)
-- `apps/planipret-mobile/scripts/ios-fast.sh` (nouveau)
-- `apps/planipret-mobile/package.json` (scripts `build:ios:dev`, `sync:ios:fast`, `ios:fast`)
-- `apps/planipret-mobile/vite.config.ts` (`reportCompressedSize: false`)
+2. **Agents (multi-brokers)**
+   - Table : broker, extension, `elevenlabs_agent_id`, `voice_agent_enabled`, dernière session, nb sessions 7j, erreurs 24h
+   - Actions par ligne : activer/désactiver, resynchroniser prompt/voix, tester (ouvre l'overlay AVA en admin sous cette identité via impersonation), voir logs sessions
 
-Aucune modification aux edge functions, DB, ou webapp landing/admin.
+3. **Configuration globale** (garde `ElevenLabsManagementCard` existante)
+   - Voix par défaut, system prompt de base, outils MCP synchronisés, webhooks
+   - Ajout : toggles pour chaque `override` autorisé (prompt / firstMessage / language / tts) — écrit dans `platform_settings.overrides` via `elevenlabs-manage-agent`
 
----
+4. **Autonomie & sécurité**
+   - Sélecteur du `autonomy_mode` par défaut (`confirm | semi_auto | full_auto`)
+   - Outils nécessitant confirmation (édition de `CONFIRM_REQUIRED`)
 
-Confirme et je passe en mode build.
+5. **Journal des sessions**
+   - Timeline paginée depuis `planipret_ava_sessions` (broker, durée, transport, motif de fin, erreur)
+   - Filtre par broker / erreur / période
+
+6. **Test en direct**
+   - Bouton "Lancer une session test" → mint token pour l'admin lui-même, ouvre `AvaVoiceAgent` en modale, affiche la trace bas-niveau (events WS/WebRTC) pour debug.
+
+### Nouvelles/étendues edge functions
+
+- `elevenlabs-manage-agent` : ajouter actions `update_overrides_policy`, `get_account_status`, `list_all_agents`, `impersonate_test_token`.
+- `planipret-admin-ava-analytics` : ajouter `sessions_live`, `sessions_last_24h`, `top_errors`.
+
+## Détails techniques
+
+### Fichiers modifiés
+- `apps/planipret-mobile/src/components/planipret/mobile/AvaVoiceAgent.tsx` + copie `src/components/planipret/mobile/AvaVoiceAgent.tsx`
+- `supabase/functions/ava-agent-config/index.ts`
+- `supabase/functions/pp-ava-webrtc-token/index.ts`
+- `supabase/functions/elevenlabs-manage-agent/index.ts`
+- `supabase/functions/planipret-admin-ava-analytics/index.ts`
+- `src/pages/planipret/admin/PAAvaAgent.tsx`
+- `src/components/planipret/admin/integrations/ElevenLabsManagementCard.tsx`
+- Nouveaux : `AvaAgentsTable.tsx`, `AvaSessionsTimeline.tsx`, `AvaHealthPanel.tsx`, `AvaLiveTestModal.tsx`
+
+### Nouvelle migration
+- Table `planipret_ava_sessions` + GRANTs + RLS (broker=self, admin=all) + index `(user_id, started_at desc)`.
+
+### Ordre de sortie
+```text
+1. Migration table sessions
+2. Edge functions (config + webrtc-token + manage-agent + analytics)
+3. AvaVoiceAgent (WebRTC-first + logging + no auto-fallback)
+4. PAAvaAgent refonte (health + agents + sessions + test)
+```
+
+### Ce que ça change pour l'utilisateur
+- L'agent vocal ne bascule plus silencieusement en chat : il retente proprement, affiche l'erreur réelle, ne coupe la voix qu'après confirmation ou 2ᵉ échec.
+- L'admin voit d'un coup d'œil quels courtiers ont un agent, qui a des erreurs, et peut tester + activer/désactiver la voix par broker.
+
+Confirmez pour que je lance l'implémentation (Partie 1 puis Partie 2), ou dites-moi si vous voulez qu'on fasse d'abord uniquement le fix de la déconnexion.

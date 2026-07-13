@@ -568,6 +568,19 @@ export default function PARecordings() {
               <div>De: {detail.from_number ?? "—"} → Vers: {detail.to_number ?? "—"}</div>
               <div>Date: {detail.started_at ? new Date(detail.started_at).toLocaleString("fr-CA") : "—"} · Durée: {detail.duration_seconds ? `${Math.floor(detail.duration_seconds / 60)}m${detail.duration_seconds % 60}s` : "—"}</div>
               <div style={{ fontSize: 10, color: "var(--pp-text-faint)", fontFamily: "monospace" }}>NS callid: {detail.ns_callid ?? detail.ns_orig_callid ?? "—"}</div>
+              {(() => {
+                const status = detail.maestro_synced ? "synced" : detail.analyzed_at ? "analyzed" : detail.transcript ? "transcribed" : "pending";
+                const label = status === "synced" ? "Synchronisé" : status === "analyzed" ? "Analysé" : status === "transcribed" ? "Transcrit" : "En attente";
+                const color = status === "synced" ? "#10b981" : status === "analyzed" ? "#2E9BDC" : status === "transcribed" ? "#9B7FE8" : "#f59e0b";
+                const ts = detail.analyzed_at ? new Date(detail.analyzed_at).toLocaleString("fr-CA") : null;
+                return (
+                  <div className="flex flex-wrap items-center gap-2" style={{ fontSize: 10 }}>
+                    <span style={{ padding: "2px 8px", borderRadius: 999, background: `${color}22`, color, border: `1px solid ${color}55`, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>● {label}</span>
+                    {ts && <span style={{ color: "var(--pp-text-muted)" }}>analyzed_at: {ts}</span>}
+                    <span style={{ color: "var(--pp-text-faint)", fontFamily: "monospace" }}>src: {detail.transcript_source ?? (detail.transcript ? "ns-api" : "—")}</span>
+                  </div>
+                );
+              })()}
               {String(detail.recording_url ?? "").startsWith("blob:") && resolving !== detail.id && (
                 <div style={{ fontSize: 10, color: "var(--pp-success)" }}>● Audio streamé depuis NS-API</div>
               )}

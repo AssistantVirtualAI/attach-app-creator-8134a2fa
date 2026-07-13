@@ -13,7 +13,7 @@ import AvaOrb, { useAnalyserLevel } from "@/components/planipret/mobile/AvaOrb";
 type AgentState = "idle" | "connecting" | "listening" | "speaking" | "processing" | "tool_running" | "error";
 type AutonomyMode = "confirm" | "semi_auto" | "full_auto";
 
-interface Props { onClose: () => void; userId: string; }
+interface Props { onClose: () => void; userId: string; onFallbackToChat?: () => void; }
 
 interface TranscriptEntry { id: string; role: "user" | "agent" | "tool" | "nav"; text: string; toolIcon?: string; }
 interface PendingTool { tool: string; params: any; resolve: (v: any) => void; reject: (e: any) => void; }
@@ -61,7 +61,7 @@ const CONFIRM_REQUIRED = new Set([
   "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
 ]);
 
-export default function AvaVoiceAgent({ onClose, userId }: Props) {
+export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Props) {
   const navigate = useNavigate();
   const [state, setState] = useState<AgentState>("idle");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
@@ -219,8 +219,14 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
 
         const { data: cfg, error } = await supabase.functions.invoke("ava-agent-config", { body: {} });
         if (error || !(cfg as any)?.success) {
-          toast.error((cfg as any)?.error ?? "Configuration AVA introuvable");
-          setState("error");
+          const msg = (cfg as any)?.error ?? "Configuration AVA introuvable";
+          if (onFallbackToChat) {
+            toast.message("AVA vocal indisponible — passage au chat texte");
+            onFallbackToChat();
+          } else {
+            toast.error(msg);
+            setState("error");
+          }
           return;
         }
         if (cancelled) return;
@@ -229,8 +235,13 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
         setAutonomy(c.autonomy_mode ?? "confirm");
 
         if (!c.agent_id) {
-          toast.error("Aucun agent ElevenLabs configuré pour ce courtier");
-          setState("error");
+          if (onFallbackToChat) {
+            toast.message("Agent vocal non provisionné — passage au chat texte");
+            onFallbackToChat();
+          } else {
+            toast.error("Aucun agent ElevenLabs configuré pour ce courtier");
+            setState("error");
+          }
           return;
         }
 
@@ -238,8 +249,13 @@ export default function AvaVoiceAgent({ onClose, userId }: Props) {
         // WebSocket transport (not WebRTC) avoids pulling livekit-client into the mobile bundle.
         const { data: tok, error: tokErr } = await supabase.functions.invoke("pp-ava-webrtc-token", { body: {} });
         if (tokErr || !(tok as any)?.signed_url) {
-          toast.error((tok as any)?.error ?? "Session vocale indisponible");
-          setState("error");
+          if (onFallbackToChat) {
+            toast.message("Session vocale indisponible — passage au chat texte");
+            onFallbackToChat();
+          } else {
+            toast.error((tok as any)?.error ?? "Session vocale indisponible");
+            setState("error");
+          }
           return;
         }
 

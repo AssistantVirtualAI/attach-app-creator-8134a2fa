@@ -339,7 +339,10 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
       analysis_locked_at: null,
       analysis_locked_by: null,
     };
-    if (corrected && corrected.length > 20) update.transcript = corrected;
+    // NOTE: on ne remplace JAMAIS `transcript` ni `transcript_segments` par la version
+    // corrigée par l'IA — ces colonnes doivent rester le texte brut renvoyé par le
+    // système téléphonique (NetSapiens) pour rester alignées avec l'enregistrement audio.
+    // La version corrigée + segments IA sont conservés dans `ai_analysis_json`.
     if (summary) { update.ai_summary = summary; update.ai_summary_short = summary.slice(0, 200); }
     if (coaching) update.ai_coaching = coaching;
     if (score10 != null) update.lead_score = score10;
@@ -347,8 +350,8 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
     if (parsed) update.ai_analysis_json = parsed;
     if (topics && topics.length) update.ai_topics = topics;
     if (actionItems && actionItems.length) update.ai_action_items = actionItems;
-    if (segments && segments.length) update.transcript_segments = segments;
     if (coaching?.next_steps) update.next_actions = coaching.next_steps;
+
 
     const { error: upErr } = await admin.from("planipret_phone_calls").update(update).eq("id", call_id);
     if (upErr) {

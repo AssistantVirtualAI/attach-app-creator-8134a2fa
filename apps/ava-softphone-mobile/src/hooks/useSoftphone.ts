@@ -142,6 +142,35 @@ export function useSoftphoneJsSip(
     savePersistedStatus(s);
   }, []);
 
+  /**
+   * Vérifie que l'UA est toujours REGISTERED après un CANCEL/timeout.
+   * Si oui → repasse sipStatus à 'registered'.
+   * Si le WSS est connecté mais l'UA n'est plus enregistré → tente un
+   * re-REGISTER silencieux (le sipStatus repassera à 'registered' via
+   * l'event `registered` du UA).
+   */
+  const ensureRegisteredThenRestore = useCallback((from: string) => {
+    const ua = uaRef.current;
+    if (!ua) return;
+    try {
+      if (ua.isConnected?.() && ua.isRegistered?.()) {
+        setSipStatus('registered');
+        return;
+      }
+      if (ua.isConnected?.() && !ua.isRegistered?.()) {
+        log('register.re-check', `${from}: UA connected but not registered — silent re-REGISTER`, 'warn');
+        try { ua.register?.(); } catch (e: any) {
+          log('register.re-check.failed', e?.message || '', 'error');
+        }
+      } else {
+        log('register.re-check', `${from}: WSS not connected — leaving status as is`, 'warn');
+      }
+    } catch {}
+  }, [log, setSipStatus]);
+
+  // Backoff court entre 2 tentatives INVITE (ms).
+  const INVITE_RETRY_BACKOFF_MS = 600;
+
   const setSipError = useCallback((msg: string, ctx?: { extension?: string; domain?: string }) => {
     setSipErrorState(msg);
     if (msg && (ctx?.extension || ctx?.domain)) {

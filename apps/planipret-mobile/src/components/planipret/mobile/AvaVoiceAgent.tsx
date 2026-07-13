@@ -410,7 +410,16 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
             } as any);
           } catch (wsErr: any) {
             console.error("AVA startSession failed on both transports", wsErr);
-            fallback("Connexion vocale échouée", "start_failed");
+            const code = wsErr?.code ?? webrtcErr?.code;
+            if (code === "voice_agent_disabled") {
+              fallback("Agent vocal AVA désactivé — contactez votre administrateur pour l'activer.", "voice_agent_disabled");
+            } else if (code === "agent_not_provisioned") {
+              fallback("Agent vocal non provisionné — contactez votre administrateur.", "agent_not_provisioned");
+            } else if (code === "profile_not_found") {
+              fallback("Profil courtier introuvable — contactez le support.", "profile_not_found");
+            } else {
+              fallback("Connexion vocale échouée", "start_failed");
+            }
             return;
           }
         }

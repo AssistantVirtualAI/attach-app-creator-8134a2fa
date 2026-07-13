@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState, useCallback } from "react";
+import { FormEvent, useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { useNavigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,8 +14,10 @@ import UniversalSearchBar from "@/components/planipret/UniversalSearchBar";
 import { OnboardingTutorial } from "@/components/planipret/OnboardingTutorial";
 
 import { useAvaNavigation } from "@/hooks/useAvaNavigation";
-import AvaVoiceAgent from "@/components/planipret/mobile/AvaVoiceAgent";
+const AvaVoiceAgent = lazy(() => import("@/components/planipret/mobile/AvaVoiceAgent"));
 import AvaChatSheet from "@/components/planipret/mobile/AvaChatSheet";
+import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
+import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
 import MobileAuthScreen from "@/components/planipret/mobile/MobileAuthScreen";
 import MobileHeaderControls from "@/components/planipret/mobile/MobileHeaderControls";
 import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
@@ -33,31 +35,45 @@ import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 
 const ACCENT = "#2E9BDC";
 
-import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
-import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
-
-const AvaBadge = ({ compact = false, circle = false }: { compact?: boolean; circle?: boolean }) => (
-  <img
-    src={avaLogoAsset.url}
-    alt="AVA"
-    style={{
-      width: circle ? "100%" : compact ? 18 : 32,
-      height: circle ? "100%" : compact ? 18 : 32,
-      borderRadius: circle ? "50%" : 8,
-      objectFit: "contain",
-      display: "inline-block",
-    }}
-  />
-);
+const AvaBadge = ({ compact = false, circle = false }: { compact?: boolean; circle?: boolean }) => {
+  const size = circle ? "100%" : compact ? 18 : 34;
+  return (
+    <div
+      aria-label="AVA"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        overflow: "hidden",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#0A1628",
+        boxShadow: compact ? undefined : "0 0 12px rgba(124,58,237,0.35)",
+      }}
+    >
+      <img src={avaLogoAsset.url} alt="AVA" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+    </div>
+  );
+};
 
 const PlanipretBadge = () => (
-  <img
-    src={planipretLogoAsset.url}
-    alt="Planiprêt"
-    style={{ width: 28, height: 28, borderRadius: 8, objectFit: "contain", display: "inline-block" }}
-  />
+  <div
+    aria-label="Planiprêt"
+    style={{
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      overflow: "hidden",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#fff",
+    }}
+  >
+    <img src={planipretLogoAsset.url} alt="Planiprêt" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+  </div>
 );
-
 
 export type PlanipretMobileContext = { profile: any; reloadProfile: () => Promise<void>; openDialer: (number?: string) => void; openAva: () => void; registerRefresh: (fn: (() => Promise<void> | void) | null) => void; softphone: ReturnType<typeof useMplanipretSoftphone> };
 
@@ -163,10 +179,8 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
   };
 
   const loadNsContacts = async (action: "list" | "shared" | "directory") => {
-    const { data, error } = await supabase.functions.invoke("pp-ns-contacts", { body: { action, limit: 500 } });
-    const payload: any = data ?? {};
-    if (error || payload?.error) throw new Error(payload?.error || error?.message || action);
-    return action === "directory" ? (payload.directory ?? []) : (payload.contacts ?? []);
+    const { getPpContacts } = await import("@/lib/ppContactsCache");
+    return getPpContacts(action, { limit: 500 });
   };
 
   useEffect(() => {
@@ -206,6 +220,10 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     ? contacts.filter((c) => {
         const hay = [
           contactDisplayName(c),
+          c.first_name,
+          c.last_name,
+          c.name,
+          c.display_name,
           c.email,
           c.company,
           c.extension,
@@ -213,10 +231,13 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
           c.cell_phone,
           c.work_phone,
           c.home_phone,
+          (c as any).job_title,
+          (c as any).position,
+          (c as any).department,
         ].filter(Boolean).join(" ").toLowerCase();
         return hay.includes(normalized);
-      }).slice(0, 30)
-    : directoryOnly.slice(0, 50);
+      }).slice(0, 50)
+    : contacts.slice(0, 50);
 
   return (
     <AnimatePresence>
@@ -309,12 +330,11 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
                   <SearchIcon className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} />
                   <input
-                    autoFocus
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder={t("dialer.searchPh")}
                     className="flex-1 bg-transparent outline-none text-sm"
-                    style={{ color: "var(--pp-text-primary)" }}
+                    style={{ color: "var(--pp-text-primary)", fontSize: 16 }}
                   />
                   {query && (
                     <button onClick={() => setQuery("")} aria-label={t("dialer.clear")} style={{ color: "var(--pp-text-muted)" }}>
@@ -422,10 +442,11 @@ export default function PlanipretMobile() {
   const [unreadVm, setUnreadVm] = useState(0);
   const [inbound, setInbound] = useState<InboundCall>(null);
   const [avaOpen, setAvaOpen] = useState(false);
+  const [avaMode, setAvaMode] = useState<"voice" | "chat">("voice");
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [showPrimer, setShowPrimer] = useState(false);
   const openDialer = (n?: string) => { setDialerInit(n); setDialerOpen(true); };
-  const openAva = () => setAvaOpen(true);
+  const openAva = () => { setAvaMode(profile?.voice_agent_enabled ? "voice" : "chat"); setAvaOpen(true); };
   const refreshFn = useRef<(() => Promise<void> | void) | null>(null);
   const registerRefresh = (fn: (() => Promise<void> | void) | null) => { refreshFn.current = fn; };
   const handlePull = async () => { if (refreshFn.current) await refreshFn.current(); };
@@ -605,23 +626,6 @@ export default function PlanipretMobile() {
     void hasSeenPrimer().then((seen) => { if (!seen) setShowPrimer(true); });
   }, [profile?.user_id, profile?.ns_extension, profile?.extension]);
 
-  // Realtime: react instantly when an admin toggles mobile_app_enabled /
-  // voice_agent_enabled or updates any other profile field.
-  useEffect(() => {
-    if (!profile?.user_id) return;
-    const ch = supabase
-      .channel(`mplanipret-profile-${profile.user_id}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "planipret_profiles", filter: `user_id=eq.${profile.user_id}` },
-        () => { void loadProfile(); },
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.user_id]);
-
-
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1425", color: "#2E9BDC", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;
 
   if (accessError === "unauthenticated") {
@@ -655,7 +659,7 @@ export default function PlanipretMobile() {
     );
   }
 
-  if (profile && profile.mobile_app_enabled !== true) {
+  if (profile && profile.mobile_app_enabled === false) {
     return (
       <Frame>
         <div className="h-full flex items-center justify-center p-6" style={{ background: "var(--pp-bg-base)" }}>
@@ -672,6 +676,7 @@ export default function PlanipretMobile() {
     );
   }
 
+
   return (
     <Frame>
       {showPrimer && (
@@ -685,15 +690,18 @@ export default function PlanipretMobile() {
         {/* Top brand header — AVA (left) · Planiprêt (center) · Settings (right) */}
         <header
           className="relative flex items-center px-4 pp-mobile-header"
-          style={{ marginTop: "calc(env(safe-area-inset-top, 0px) + 56px)", paddingTop: 18, paddingBottom: 12 }}
+          style={{ marginTop: "calc(env(safe-area-inset-top, 0px) * 0.35)", paddingTop: 2, paddingBottom: 4 }}
         >
 
-          {/* Live status pill — left */}
-          <div className="flex items-center gap-1.5">
-            <span className="pp-live-dot" />
-            <span style={{ fontSize: 9, color: "var(--pp-success)", fontWeight: 700, letterSpacing: "0.05em" }}>REST</span>
-          </div>
 
+          {/* AVA icon — left */}
+          <div className="flex items-center gap-1.5">
+            <AvaBadge />
+            <span className="flex items-center gap-1.5">
+              <span className="pp-live-dot" />
+              <span style={{ fontSize: 9, color: "var(--pp-success)", fontWeight: 700, letterSpacing: "0.05em" }}>REST</span>
+            </span>
+          </div>
 
           {/* Settings button — between AVA (left) and Planiprêt (center) */}
           <button
@@ -723,7 +731,7 @@ export default function PlanipretMobile() {
         </header>
 
         <UniversalSearchBar />
-        <div ref={scrollRef} className="flex-1 overflow-y-auto pb-[110px]">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto pb-[130px]">
           <PullIndicator pullDist={pullDist} refreshing={refreshing} threshold={threshold} color={ACCENT} />
           <PlanipretErrorBoundary key={location.pathname}>
             <Outlet context={{ profile, reloadProfile: loadProfile, openDialer, openAva, registerRefresh, softphone } satisfies PlanipretMobileContext} />
@@ -756,14 +764,14 @@ export default function PlanipretMobile() {
 
         {/* Tab bar (5 tabs) */}
         <nav className="absolute bottom-[22px] inset-x-0 grid grid-cols-5 z-10 pp-mobile-tabbar"
-          style={{ height: 70 }}>
+          style={{ height: 84 }}>
 
           {TABS.map((tabItem) => {
             const badge = tabItem.to.endsWith("/messages") ? unreadMsg : 0;
             const isAva = tabItem.to.endsWith("/ava");
             return (
               <NavLink key={tabItem.to} to={tabItem.to}
-                className={`relative flex flex-col items-center justify-center gap-1 text-[9px] font-semibold pt-1.5 ${isAva ? "ava-tab-center" : ""}`}
+                className={`relative flex flex-col items-center justify-center gap-1 text-[11px] font-semibold pt-2 ${isAva ? "ava-tab-center" : ""}`}
                 style={({ isActive }) => ({ color: isActive ? "var(--pp-brand-accent)" : "var(--pp-text-faint)" })}>
                 {({ isActive }) => (
                   <>
@@ -773,8 +781,8 @@ export default function PlanipretMobile() {
                     <div
                       className="relative flex items-center justify-center transition-all duration-200"
                       style={isAva ? {
-                        width: isActive ? 50 : 46,
-                        height: isActive ? 50 : 46,
+                        width: isActive ? 58 : 54,
+                        height: isActive ? 58 : 54,
                         borderRadius: "50%",
                         background: isActive
                           ? "linear-gradient(135deg, #7C3AED, #2E9BDC)"
@@ -783,10 +791,10 @@ export default function PlanipretMobile() {
                         boxShadow: isActive
                           ? "0 6px 20px rgba(124,58,237,0.5)"
                           : "0 2px 8px rgba(0,0,0,0.12)",
-                        marginTop: -10,
+                        marginTop: -12,
                       } : {}}>
                       <tabItem.Icon
-                        className={isAva ? "w-[26px] h-[26px]" : "w-[22px] h-[22px]"}
+                        className={isAva ? "w-[30px] h-[30px]" : "w-[26px] h-[26px]"}
                         strokeWidth={isActive ? 2.4 : 1.8}
                         style={{ color: isAva ? (isActive ? "#fff" : "var(--pp-brand-accent)") : undefined }}
                       />
@@ -813,9 +821,7 @@ export default function PlanipretMobile() {
             <div className="relative flex items-center justify-center" style={{ width: 24, height: 24 }}>
               <div className="absolute inset-0 rounded-full" style={{ background: "radial-gradient(circle, rgba(124,58,237,0.45) 0%, rgba(46,155,220,0.18) 50%, transparent 75%)", filter: "blur(5px)", animation: "ava-footer-pulse 3s ease-in-out infinite" }} />
               <div className="absolute inset-0 rounded-full flex items-center justify-center overflow-hidden" style={{ background: "conic-gradient(from 0deg, #7C3AED, #2E9BDC, #00D4AA, #7C3AED)", padding: 1.5, animation: "ava-footer-spin 6s linear infinite" }}>
-                <div className="w-full h-full rounded-full flex items-center justify-center overflow-hidden" style={{ background: "var(--pp-bg-surface, #0A1628)" }}>
-                  <img src={avaLogoAsset.url} alt="AVA Statistics" style={{ height: 16, width: 16, objectFit: "contain", borderRadius: 4 }} />
-                </div>
+                <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: "var(--pp-bg-surface, #0A1628)", color: "#fff", fontWeight: 800, fontSize: 8, fontFamily: "Urbanist,sans-serif", letterSpacing: "0.02em" }}>AVA</div>
               </div>
             </div>
             <span style={{ fontFamily: "Urbanist,sans-serif", fontSize: 12, letterSpacing: "0.06em", fontWeight: 800, background: "linear-gradient(90deg,#7C3AED,#2E9BDC)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>AVA</span>
@@ -828,15 +834,23 @@ export default function PlanipretMobile() {
         </div>
 
 
+
         <Dialer open={dialerOpen} onClose={() => setDialerOpen(false)} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); navigate(`/mplanipret/messages${n ? `?to=${encodeURIComponent(n)}` : ""}`); }} softphone={softphone} />
         <PpActiveCallScreen softphone={softphone} />
         <InboundCallOverlay call={inbound} onClose={() => setInbound(null)} />
         {avaOpen && profile?.user_id && (
-          profile.voice_agent_enabled
-            ? <AvaVoiceAgent userId={profile.user_id} onClose={() => setAvaOpen(false)} />
+          profile.voice_agent_enabled && avaMode === "voice"
+            ? (
+              <Suspense fallback={null}>
+                <AvaVoiceAgent
+                  userId={profile.user_id}
+                  onClose={() => setAvaOpen(false)}
+                  onFallbackToChat={() => setAvaMode("chat")}
+                />
+              </Suspense>
+            )
             : <AvaChatSheet userId={profile.user_id} onClose={() => setAvaOpen(false)} />
         )}
-
         <OfflineBanner />
       </div>
     </Frame>
@@ -846,13 +860,41 @@ export default function PlanipretMobile() {
 function Frame({ children, forceDark = false }: { children: React.ReactNode; forceDark?: boolean }) {
   const { theme } = useMplanipretTheme();
   const frameTheme = forceDark ? "dark" : theme;
+  const lockedHeightRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const readHeight = () => Math.round(window.innerHeight || root.clientHeight || 844);
+    const isTyping = () => ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName ?? "");
+    const lockHeight = (force = false) => {
+      const next = readHeight();
+      if (force || !lockedHeightRef.current || !isTyping()) {
+        lockedHeightRef.current = next;
+        root.style.setProperty("--pp-app-height", `${next}px`);
+      }
+    };
+    lockHeight(true);
+    const onResize = () => lockHeight(false);
+    const onOrientation = () => window.setTimeout(() => lockHeight(true), 350);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onOrientation);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onOrientation);
+    };
+  }, []);
+
   return (
     <div className="planipret-scope planipret-mobile-scope planipret-mobile-frame-bg min-h-screen w-full flex items-center justify-center md:p-6"
       data-pp-theme={frameTheme}
-      style={{ background: frameTheme === "dark"
-        ? "linear-gradient(160deg, #060D1A 0%, #0A1425 100%)"
-        : "linear-gradient(160deg, #EEF2F8 0%, #DCE3EC 100%)" }}>
-      <div id="pp-mobile-frame" className="planipret-mobile-phone overflow-hidden w-full md:w-[390px] md:h-[844px] h-screen md:rounded-[44px] relative"
+      style={{
+        height: "var(--pp-app-height, 100dvh)",
+        minHeight: "var(--pp-app-height, 100dvh)",
+        background: frameTheme === "dark"
+          ? "linear-gradient(160deg, #060D1A 0%, #0A1425 100%)"
+          : "linear-gradient(160deg, #EEF2F8 0%, #DCE3EC 100%)",
+      }}>
+      <div id="pp-mobile-frame" className="planipret-mobile-phone overflow-hidden w-full h-full md:w-[390px] md:h-[844px] md:rounded-[44px] relative"
         style={{
           background: "var(--pp-bg-base)",
           border: "1px solid var(--pp-bg-border-2)",

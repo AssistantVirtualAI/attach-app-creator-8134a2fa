@@ -179,10 +179,8 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
   };
 
   const loadNsContacts = async (action: "list" | "shared" | "directory") => {
-    const { data, error } = await supabase.functions.invoke("pp-ns-contacts", { body: { action, limit: 500 } });
-    const payload: any = data ?? {};
-    if (error || payload?.error) throw new Error(payload?.error || error?.message || action);
-    return action === "directory" ? (payload.directory ?? []) : (payload.contacts ?? []);
+    const { getPpContacts } = await import("@/lib/ppContactsCache");
+    return getPpContacts(action, { limit: 500 });
   };
 
   useEffect(() => {

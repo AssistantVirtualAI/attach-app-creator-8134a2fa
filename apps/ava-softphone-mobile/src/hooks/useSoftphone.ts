@@ -466,6 +466,11 @@ export function useSoftphoneJsSip(
               if (timerRef.current) clearInterval(timerRef.current);
               stopStats();
               setActiveCallNumber('');
+              // Le CANCEL/timeout d'un appel ne doit pas laisser l'UI en
+              // "Connecting" — le UA est toujours REGISTERED côté serveur.
+              if (uaRef.current?.isConnected?.() && uaRef.current?.isRegistered?.()) {
+                setSipStatus('registered');
+              }
               // ---- 488 Not Acceptable Here: auto-retry once with the legacy
               // PCMU-only SDP modifier (covers PBX profiles that refuse Opus).
               if (code === 488 && callAttemptRef.current === 1 && lastCallNumberRef.current) {

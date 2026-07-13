@@ -936,6 +936,7 @@ function AISection({ call, onUpdated }: { call: RecordingCall; onUpdated: (c: Re
 
   return (
     <div className="mt-3 space-y-2">
+      <AnalysisStatusBar call={call} />
       {/* Résumé */}
       <Block title="Résumé" icon={<Bot className="w-3.5 h-3.5" />}>
         <p className="text-xs leading-relaxed" style={{ color: "var(--pp-text-secondary)" }}>{call.ai_summary}</p>

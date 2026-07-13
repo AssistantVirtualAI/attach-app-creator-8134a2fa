@@ -59,6 +59,64 @@ async function broadcastNav(ctx: Ctx, route: string, extra?: any) {
   } catch (_) { /* noop */ }
 }
 
+// ─── helpers ────────────────────────────────────────────────────────────
+async function msAction(ctx: Ctx, action: string, payload: any) {
+  const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ action, payload, _user_id: ctx.userId }),
+  });
+  return await r.json().catch(() => ({}));
+}
+
+async function resolveContact(ctx: Ctx, name: string, want: "phone" | "email"): Promise<{ value: string; name: string } | null> {
+  if (!name) return null;
+  // 1) local contacts
+  const { data: local } = await ctx.admin.from("planipret_contacts")
+    .select("full_name, phone, email").ilike("full_name", `%${name}%`).limit(3);
+  for (const c of local ?? []) {
+    const v = want === "phone" ? c.phone : c.email;
+    if (v) return { value: v, name: c.full_name };
+  }
+  // 2) Maestro cache
+  const { data: mst } = await ctx.admin.from("planipret_maestro_clients")
+    .select("name, phone, email").ilike("name", `%${name}%`).limit(3);
+  for (const c of mst ?? []) {
+    const v = want === "phone" ? c.phone : c.email;
+    if (v) return { value: v, name: c.name };
+  }
+  // 3) MS365 people/contacts
+  const r = await msAction(ctx, "search_contact", { query: name });
+  for (const c of r?.results ?? []) {
+    const v = want === "phone" ? c.phone : c.email;
+    if (v) return { value: v, name: c.name };
+  }
+  return null;
+}
+
+async function callClaude(system: string, userText: string): Promise<string | null> {
+  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  if (key) {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-4-5-20250929", max_tokens: 1200, system, messages: [{ role: "user", content: userText }] }),
+    });
+    if (r.ok) { const j = await r.json(); return j.content?.[0]?.text ?? null; }
+  }
+  // fallback Lovable AI
+  const lk = Deno.env.get("LOVABLE_API_KEY");
+  if (!lk) return null;
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Lovable-API-Key": lk },
+    body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages: [{ role: "system", content: system }, { role: "user", content: userText }] }),
+  });
+  if (!r.ok) return null;
+  const j = await r.json();
+  return j.choices?.[0]?.message?.content ?? null;
+}
+
 // ─── tool implementations ───────────────────────────────────────────────
 const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   // ===== TELEPHONY =====

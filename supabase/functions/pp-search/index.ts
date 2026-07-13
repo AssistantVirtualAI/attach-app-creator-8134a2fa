@@ -7,7 +7,7 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const q = (url.searchParams.get("q") ?? "").trim();
     const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? "20", 10) || 20, 1), 50);
-    if (!q) return json({ calls: [], messages: [], voicemails: [], insights: [], contacts: [], emails: [] });
+    if (!q) return json({ calls: [], messages: [], voicemails: [], insights: [], contacts: [], directory: [], emails: [] });
 
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader) return json({ error: "unauthorized" }, 401);
@@ -38,10 +38,25 @@ Deno.serve(async (req) => {
         .ilike("summary", like).order("created_at", { ascending: false }).limit(limit),
     ]);
 
-    const [contacts, emails] = await Promise.all([
+    const [contacts, directoryRaw, emails] = await Promise.all([
       tryInvoke(supa, "maestro-actions", { action: "list_contacts", q }, "contacts"),
+      tryInvoke(supa, "pp-ns-contacts", { action: "directory", limit: 500 }, "directory"),
       tryInvoke(supa, "ms365-actions", { action: "read_emails", q }, "emails"),
     ]);
+    const needle = q.toLowerCase();
+    const directory = directoryRaw.filter((c: any) => [
+      c.directory_first_name,
+      c.directory_last_name,
+      c.first_name,
+      c.last_name,
+      c.name,
+      c.display_name,
+      c.extension,
+      c.email,
+      c.department,
+      c.position,
+      c.job_title,
+    ].filter(Boolean).join(" ").toLowerCase().includes(needle));
 
     return json({
       calls: calls.data ?? [],
@@ -49,6 +64,7 @@ Deno.serve(async (req) => {
       voicemails: voicemails.data ?? [],
       insights: insights.data ?? [],
       contacts: contacts.slice(0, limit),
+      directory: directory.slice(0, limit),
       emails: emails.slice(0, limit),
     });
   } catch (e) {

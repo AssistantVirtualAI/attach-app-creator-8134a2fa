@@ -1,12 +1,17 @@
-FROM ubuntu:20.04
+# Force amd64 — le builder VoiSmart est conçu pour Linux x86_64
+# Sur Mac M1/M2, Docker Desktop émule amd64 via Rosetta
+FROM --platform=linux/amd64 ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
 
-# Dépendances de base (Ubuntu 20.04 supporte python2 nativement)
+# Désactiver i386 pour éviter les erreurs 404 sur ports.ubuntu.com
+RUN dpkg --remove-architecture i386 2>/dev/null || true
+
+# Dépendances de base
 RUN apt-get update && apt-get install -y \
     git curl wget unzip bzip2 binutils make autoconf \
-    openssl libssl-dev libopus0 libpcre2-dev build-essential \
+    openssl libssl-dev libpcre2-dev build-essential \
     nasm python3 python2 openjdk-17-jdk \
     && rm -rf /var/lib/apt/lists/*
 

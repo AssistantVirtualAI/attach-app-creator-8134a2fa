@@ -1,9 +1,21 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
 
 const buildId = `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}Z`;
 const buildTime = new Date().toISOString();
+
+function readCapacitorVersion(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'node_modules/@capacitor/core/package.json'), 'utf8'));
+    return pkg.version ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+const capacitorVersion = readCapacitorVersion();
 
 export default defineConfig({
   plugins: [react()],

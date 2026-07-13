@@ -137,10 +137,47 @@ export function useSoftphoneJsSip(
   }, []);
 
   const setSipStatus = useCallback((s: SIPStatus) => {
+    const prev = sipStatusRef.current;
     sipStatusRef.current = s;
     setSipStatusState(s);
     savePersistedStatus(s);
+    if (prev !== s) {
+      // Journaliser chaque transition pour le panneau de debug.
+      const entry: SipLogEntry = { time: Date.now(), level: 'info', event: 'status.transition', detail: `${prev} → ${s}` };
+      const next = appendSipLog(entry);
+      setSipLog(next);
+      console.log(`[SIP][status] ${prev} → ${s}`);
+    }
   }, []);
+
+  /**
+   * Vérifie que l'UA est toujours REGISTERED après un CANCEL/timeout.
+   * Si oui → repasse sipStatus à 'registered'.
+   * Si le WSS est connecté mais l'UA n'est plus enregistré → tente un
+   * re-REGISTER silencieux (le sipStatus repassera à 'registered' via
+   * l'event `registered` du UA).
+   */
+  const ensureRegisteredThenRestore = useCallback((from: string) => {
+    const ua = uaRef.current;
+    if (!ua) return;
+    try {
+      if (ua.isConnected?.() && ua.isRegistered?.()) {
+        setSipStatus('registered');
+        return;
+      }
+      if (ua.isConnected?.() && !ua.isRegistered?.()) {
+        log('register.re-check', `${from}: UA connected but not registered — silent re-REGISTER`, 'warn');
+        try { ua.register?.(); } catch (e: any) {
+          log('register.re-check.failed', e?.message || '', 'error');
+        }
+      } else {
+        log('register.re-check', `${from}: WSS not connected — leaving status as is`, 'warn');
+      }
+    } catch {}
+  }, [log, setSipStatus]);
+
+  // Backoff court entre 2 tentatives INVITE (ms).
+  const INVITE_RETRY_BACKOFF_MS = 600;
 
   const setSipError = useCallback((msg: string, ctx?: { extension?: string; domain?: string }) => {
     setSipErrorState(msg);
@@ -347,11 +384,8 @@ export function useSoftphoneJsSip(
                 const retryNumber = lastCallNumberRef.current;
                 log('call.retry-timeout', `→ ${retryNumber} PCMU-only fallback`, 'warn');
                 try { sessionRef.current?.terminate(); } catch {}
-                // Restaure le statut UA (le CANCEL ne doit pas laisser "connecting")
-                if (uaRef.current?.isConnected?.() && uaRef.current?.isRegistered?.()) {
-                  setSipStatus('registered');
-                }
-                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, 400);
+                ensureRegisteredThenRestore('invite-timeout');
+                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, INVITE_RETRY_BACKOFF_MS);
               }
             });
             session.on('confirmed', () => {
@@ -467,10 +501,8 @@ export function useSoftphoneJsSip(
               stopStats();
               setActiveCallNumber('');
               // Le CANCEL/timeout d'un appel ne doit pas laisser l'UI en
-              // "Connecting" — le UA est toujours REGISTERED côté serveur.
-              if (uaRef.current?.isConnected?.() && uaRef.current?.isRegistered?.()) {
-                setSipStatus('registered');
-              }
+              // "Connecting" — vérifie l'UA (re-REGISTER si besoin).
+              ensureRegisteredThenRestore('session.failed');
               // ---- 488 Not Acceptable Here: auto-retry once with the legacy
               // PCMU-only SDP modifier (covers PBX profiles that refuse Opus).
               if (code === 488 && callAttemptRef.current === 1 && lastCallNumberRef.current) {
@@ -478,7 +510,7 @@ export function useSoftphoneJsSip(
                 const retryNumber = lastCallNumberRef.current;
                 log('call.retry-488', `→ ${retryNumber} with PCMU-only fallback`, 'warn');
                 setSipError('Codec refusé (488) — nouvelle tentative en PCMU…', ctx);
-                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, 250);
+                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, INVITE_RETRY_BACKOFF_MS);
               } else {
                 setSipError(msg, ctx);
               }
@@ -739,10 +771,8 @@ export function useSoftphoneJsSip(
     if (timerRef.current) clearInterval(timerRef.current);
     setCallTimer(0);
     setActiveCallNumber('');
-    // Après un raccroché manuel, garantir que l'UI ne reste pas en "Connecting".
-    if (uaRef.current?.isConnected?.() && uaRef.current?.isRegistered?.()) {
-      setSipStatus('registered');
-    }
+    // Après un raccroché manuel, vérifier l'UA (re-REGISTER si besoin).
+    ensureRegisteredThenRestore('hangup');
   };
   const answer = () =>
     sessionRef.current?.answer({

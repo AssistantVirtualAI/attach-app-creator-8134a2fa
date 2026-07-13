@@ -376,11 +376,8 @@ export function useSoftphoneJsSip(
                 const retryNumber = lastCallNumberRef.current;
                 log('call.retry-timeout', `→ ${retryNumber} PCMU-only fallback`, 'warn');
                 try { sessionRef.current?.terminate(); } catch {}
-                // Restaure le statut UA (le CANCEL ne doit pas laisser "connecting")
-                if (uaRef.current?.isConnected?.() && uaRef.current?.isRegistered?.()) {
-                  setSipStatus('registered');
-                }
-                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, 400);
+                ensureRegisteredThenRestore('invite-timeout');
+                setTimeout(() => { try { placeCallInternal(retryNumber, true); } catch {} }, INVITE_RETRY_BACKOFF_MS);
               }
             });
             session.on('confirmed', () => {

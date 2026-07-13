@@ -194,6 +194,10 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     ? contacts.filter((c) => {
         const hay = [
           contactDisplayName(c),
+          c.first_name,
+          c.last_name,
+          c.name,
+          c.display_name,
           c.email,
           c.company,
           c.extension,
@@ -201,9 +205,12 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
           c.cell_phone,
           c.work_phone,
           c.home_phone,
+          (c as any).job_title,
+          (c as any).position,
+          (c as any).department,
         ].filter(Boolean).join(" ").toLowerCase();
         return hay.includes(normalized);
-      }).slice(0, 30)
+      }).slice(0, 50)
     : directoryOnly.slice(0, 50);
 
   return (

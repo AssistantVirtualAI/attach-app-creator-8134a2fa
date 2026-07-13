@@ -72,6 +72,67 @@ function wantsReminders(text: string) {
   return /rappels?|reminders?|t[âa]ches?|tasks?|todo|à faire/i.test(text);
 }
 
+function wantsSendEmail(text: string) {
+  return /(envoie|envoyer|envoi|send)\s+(un\s+)?(courriel|email|mail)|(courriel|email|mail)\s+(à|a|to)\s+/i.test(text);
+}
+
+function wantsContactLookup(text: string) {
+  return /(contact|répertoire|repertoire|directory|courriel de|email de|adresse de|coordonn[ée]es|num[ée]ro de)/i.test(text)
+    || wantsSendEmail(text);
+}
+
+function extractNameTokens(text: string): { emails: string[]; names: string[] } {
+  const emails = Array.from(text.matchAll(/[\w.+-]+@[\w.-]+\.\w+/g)).map(m => m[0]);
+  const quoted = Array.from(text.matchAll(/["“']([^"”']{2,60})["”']/g)).map(m => m[1]);
+  const caps = Array.from(text.matchAll(/\b([A-ZÉÈÀÂÊÎÔÛÇ][a-zéèàâêîôûç'\-]{1,}(?:\s+[A-ZÉÈÀÂÊÎÔÛÇ][a-zéèàâêîôûç'\-]{1,}){0,2})\b/g)).map(m => m[1]);
+  const stop = new Set(["Bonjour", "Salut", "Hello", "Envoie", "Envoyer", "Envoi", "Courriel", "Email", "Mail", "Contact", "Ava", "AVA", "Microsoft", "Teams", "Outlook"]);
+  const names = Array.from(new Set([...quoted, ...caps.filter(n => !stop.has(n.split(" ")[0]))])).slice(0, 5);
+  return { emails: Array.from(new Set(emails)).slice(0, 5), names };
+}
+
+async function searchDirectory(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  tokens: { emails: string[]; names: string[] },
+) {
+  const results: any[] = [];
+  const seen = new Set<string>();
+  const push = (r: any) => {
+    const k = `${(r.email ?? "").toLowerCase()}|${(r.phone ?? "").toString()}|${(r.full_name ?? "").toLowerCase()}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    results.push(r);
+  };
+  for (const em of tokens.emails) {
+    const { data } = await admin.from("planipret_contacts")
+      .select("full_name, email, phone_display")
+      .eq("user_id", userId).ilike("email", em).limit(3);
+    (data ?? []).forEach((r: any) => push({ full_name: r.full_name, email: r.email, phone: r.phone_display, source: "contacts" }));
+  }
+  for (const name of tokens.names) {
+    const pattern = `%${name}%`;
+    const [{ data: c }, { data: mc }] = await Promise.all([
+      admin.from("planipret_contacts")
+        .select("full_name, email, phone_display")
+        .eq("user_id", userId).ilike("full_name", pattern).limit(3),
+      admin.from("planipret_maestro_clients")
+        .select("first_name, last_name, email, phone, mobile")
+        .or(`first_name.ilike.${pattern},last_name.ilike.${pattern}`)
+        .limit(3),
+    ]);
+    (c ?? []).forEach((r: any) => push({ full_name: r.full_name, email: r.email, phone: r.phone_display, source: "contacts" }));
+    (mc ?? []).forEach((r: any) => push({
+      full_name: `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim(),
+      email: r.email,
+      phone: r.phone ?? r.mobile,
+      source: "maestro",
+    }));
+  }
+  return results.slice(0, 10);
+}
+
+
+
 
 async function logAvaAction(admin: ReturnType<typeof createClient>, profile: any, userId: string, actionType: string, params: Record<string, unknown>, success: boolean, result: unknown, error?: string | null) {
   try {

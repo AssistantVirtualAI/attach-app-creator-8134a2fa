@@ -39,6 +39,7 @@ import MExtensionSync from "./pages/planipret/mobile/MExtensionSync";
 import PlanipretAudit from "./pages/planipret/PlanipretAudit";
 import Ms365Callback from "./pages/planipret/Ms365Callback";
 import Ms365Diagnostics from "./pages/planipret/Ms365Diagnostics";
+import MStyleDiagnosticsWeb from "./pages/MStyleDiagnosticsWeb";
 import SoftphoneSetup from "./pages/lemtel/SoftphoneSetup";
 // Lazy-load admin pages (each is its own chunk)
 const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin/PlanipretAdminLayout"));

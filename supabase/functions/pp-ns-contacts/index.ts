@@ -12,7 +12,6 @@ import {
   jsonResponse,
   requirePlanipretBroker,
   nsFetch,
-  AVA_ORG_ID,
 } from "../_shared/planipret-ns.ts";
 
 Deno.serve(async (req) => {
@@ -20,7 +19,7 @@ Deno.serve(async (req) => {
 
   const guard = await requirePlanipretBroker(req);
   if (guard instanceof Response) return guard;
-  const { ctx, supabase } = guard;
+  const { ctx } = guard;
 
   const url = new URL(req.url);
   let body: any = {};
@@ -59,26 +58,14 @@ Deno.serve(async (req) => {
       const raw = await res.json();
       const users = Array.isArray(raw) ? raw : (raw?.users ?? raw?.data ?? []);
 
-      const extValues = users
-        .map((u: any) => String(u.user ?? u.extension ?? u.uid ?? "").trim())
-        .filter(Boolean);
-      const { data: localExtRows } = extValues.length
-        ? await supabase
-          .from("pbx_extensions_real")
-          .select("extension,directory_first_name,directory_last_name,directory_visible,directory_exten_visible,effective_cid_name,outbound_cid_name,description,voicemail_mail_to,do_not_disturb,enabled")
-          .eq("organization_id", AVA_ORG_ID)
-          .in("extension", extValues)
-        : { data: [] as any[] };
-      const localByExt = new Map((localExtRows ?? []).map((r: any) => [String(r.extension), r]));
-
       const extractName = (u: any) => {
         const first =
-          u.directory_first_name ?? u.first_name ?? u.firstname ?? u["first-name"] ?? u.given_name ?? u.givenName ?? u.fname ?? "";
+          u.first_name ?? u.firstname ?? u["first-name"] ?? u.given_name ?? u.givenName ?? u.fname ?? "";
         const last =
-          u.directory_last_name ?? u.last_name ?? u.lastname ?? u["last-name"] ?? u.family_name ?? u.familyName ?? u.surname ?? u.lname ?? "";
+          u.last_name ?? u.lastname ?? u["last-name"] ?? u.family_name ?? u.familyName ?? u.surname ?? u.lname ?? "";
         const composed = `${first} ${last}`.trim();
         const display =
-          u.name ?? u.display_name ?? u.displayName ?? u.full_name ?? u.fullName ?? u.caller_id_name ?? u.callerid_name ?? u.effective_cid_name ?? "";
+          u.name ?? u.display_name ?? u.displayName ?? u.full_name ?? u.fullName ?? u.caller_id_name ?? u.callerid_name ?? "";
         return { first, last, composed, display };
       };
 
@@ -116,18 +103,11 @@ Deno.serve(async (req) => {
       const directory = initial.map(({ u, ext, first, last, composed, display, position }) => {
         let f = first, l = last, d = display, c = composed;
         const detail = ext ? details.get(String(ext)) : null;
-        const local = ext ? localByExt.get(String(ext)) : null;
         if (detail) {
           const ex = extractName(detail);
           f = f || ex.first;
           l = l || ex.last;
           d = d || ex.display;
-          c = `${f} ${l}`.trim();
-        }
-        if (local) {
-          f = local.directory_first_name || f;
-          l = local.directory_last_name || l;
-          d = d || local.effective_cid_name || local.outbound_cid_name || local.description || "";
           c = `${f} ${l}`.trim();
         }
         const name = (c || d || ext || "").toString();
@@ -136,17 +116,12 @@ Deno.serve(async (req) => {
           name,
           first_name: f || undefined,
           last_name: l || undefined,
-          directory_first_name: f || undefined,
-          directory_last_name: l || undefined,
-          display_name: d || name,
-          email: u.email ?? (detail?.email ?? local?.voicemail_mail_to ?? null),
+          email: u.email ?? (detail?.email ?? null),
           department: u.department ?? (detail?.department ?? null),
           position: position ?? (detail ? extractPosition(detail) : null),
-          directory_visible: local?.directory_visible ?? u.directory_visible ?? true,
-          directory_exten_visible: local?.directory_exten_visible ?? u.directory_exten_visible ?? true,
-          presence: local?.enabled === false ? "offline" : local?.do_not_disturb ? "busy" : (u.presence ?? u.status ?? (detail?.presence ?? detail?.status ?? "unknown")),
+          presence: u.presence ?? u.status ?? (detail?.presence ?? detail?.status ?? "unknown"),
         };
-      }).filter((c) => c.directory_visible !== false);
+      });
 
       if (debug) {
         return jsonResponse({

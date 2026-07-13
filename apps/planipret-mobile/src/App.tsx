@@ -76,6 +76,7 @@ export default function App() {
                     <Route path="notifications" element={<MAvaNotifications />} />
                     <Route path="extension-sync" element={<MExtensionSync />} />
                     <Route path="ms365-diagnostics" element={<MMs365Diagnostics />} />
+                    <Route path="style-diagnostics" element={<MStyleDiagnostics />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/mplanipret" replace />} />
                 </Routes>

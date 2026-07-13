@@ -20,6 +20,13 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  // Reliable close: Escape key anywhere while the sheet is mounted.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   // NOTE: do NOT auto-focus the textarea on mount — it triggers the mobile
   // keyboard + iOS viewport zoom which makes the layout appear to "grow".
 
@@ -46,13 +53,23 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
 
   return (
     <div
-      className="absolute inset-0 z-[60] flex flex-col overflow-hidden"
-      style={{
-        background: "var(--pp-bg-base)",
-        paddingTop: "env(safe-area-inset-top, 0px)",
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
-      }}
+      className="absolute inset-0 z-[60] flex flex-col"
+      style={{ background: "rgba(4,11,22,0.45)", backdropFilter: "blur(6px)" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="AVA Chat"
     >
+      {/* Inner sheet — same top offset / header height as PlanipretMobile pages */}
+      <div
+        className="flex-1 min-h-0 flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--pp-bg-base)",
+          marginTop: "env(safe-area-inset-top, 0px)",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        }}
+      >
       {/* Header — matches PlanipretMobile top header (same margin/height) */}
       <header
         className="relative flex items-center px-4 shrink-0"
@@ -163,6 +180,7 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
         <div className="text-center mt-1.5" style={{ fontSize: 9, color: "var(--pp-text-faint)", letterSpacing: "0.08em" }}>
           POWERED BY AVA
         </div>
+      </div>
       </div>
     </div>
   );

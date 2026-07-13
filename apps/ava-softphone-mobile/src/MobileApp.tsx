@@ -539,6 +539,14 @@ function AuthenticatedShell({
 
       {inCall && <ActiveCallSheet sp={sp} haptic={haptic} />}
 
+      <SipDebugPanel
+        sipStatus={softphone.sipStatus}
+        sipLog={softphone.sipLog}
+        onClear={softphone.clearSipLog}
+      />
+
+
+
       {profileOpen && (
         <ProfileSheet
           creds={creds}

@@ -82,14 +82,31 @@ export default function AvaVoiceBrokersTable() {
                 </td>
                 <td className="px-3 py-2 text-slate-500">{b.ava_last_session_at ? new Date(b.ava_last_session_at).toLocaleString("fr-CA") : "—"}</td>
                 <td className="px-3 py-2">
-                  {b.voice_agent_enabled
-                    ? <span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 className="w-3.5 h-3.5" />Activé</span>
-                    : <span className="inline-flex items-center gap-1 text-slate-500"><XCircle className="w-3.5 h-3.5" />Désactivé</span>}
+                  {b.voice_agent_enabled ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                      <CheckCircle2 className="w-3.5 h-3.5" />Activé
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-semibold">
+                      <XCircle className="w-3.5 h-3.5" />Désactivé
+                    </span>
+                  )}
+                  {b.voice_agent_enabled && !b.elevenlabs_agent_id && (
+                    <div className="text-[10px] text-amber-700 mt-1">⚠️ Aucun agent ElevenLabs — fallback par défaut</div>
+                  )}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  <button disabled={busy === b.user_id} onClick={() => toggle(b)}
-                    className="text-[11px] px-2.5 py-1 rounded border border-slate-300 hover:bg-slate-100 disabled:opacity-50">
-                    {b.voice_agent_enabled ? "Désactiver" : "Activer"}
+                  <button
+                    disabled={busy === b.user_id}
+                    onClick={() => toggle(b)}
+                    className={`text-[11px] px-2.5 py-1 rounded border font-medium disabled:opacity-50 ${
+                      b.voice_agent_enabled
+                        ? "border-red-300 text-red-700 hover:bg-red-50"
+                        : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    }`}
+                    title={b.voice_agent_enabled ? "Retirer l'accès à l'agent vocal AVA" : "Autoriser ce courtier à utiliser l'agent vocal AVA"}
+                  >
+                    {busy === b.user_id ? "..." : b.voice_agent_enabled ? "Désactiver" : "Activer"}
                   </button>
                 </td>
               </tr>

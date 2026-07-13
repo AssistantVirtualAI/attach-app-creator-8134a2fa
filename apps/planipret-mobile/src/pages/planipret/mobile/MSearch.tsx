@@ -1,21 +1,52 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useSearchParams, useNavigate, useOutletContext } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Phone, MessageSquare, Voicemail, User, Mail, Sparkles, Loader2, BookUser, AlertCircle, RefreshCw } from "lucide-react";
+import { ArrowLeft, Phone, MessageSquare, Voicemail, User, Mail, Sparkles, Loader2, BookUser, AlertCircle, RefreshCw, ChevronDown } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 
 type DirEntry = { extension?: string; name?: string; first_name?: string; last_name?: string; email?: string; department?: string; position?: string; presence?: string };
+type BackendKey = "calls" | "messages" | "voicemails" | "insights" | "contacts" | "emails";
+type Scope = "all" | "directory" | BackendKey;
+type HasMore = Record<BackendKey, boolean>;
 type Result = {
   calls: any[]; messages: any[]; voicemails: any[]; insights: any[]; contacts: any[]; emails: any[]; directory: DirEntry[];
+  has_more: HasMore;
+  dir_visible: number;
 };
-type Scope = "all" | "directory" | "calls" | "messages" | "voicemails" | "insights" | "contacts" | "emails";
+
+const PAGE_SIZE = 20;
+const DIR_PAGE = 20;
 
 function highlight(text: string, q: string) {
   if (!text || !q) return text;
   const i = text.toLowerCase().indexOf(q.toLowerCase());
   if (i < 0) return text;
   return (<>{text.slice(0, i)}<mark style={{ background: "#FEF3C7", color: "inherit" }}>{text.slice(i, i + q.length)}</mark>{text.slice(i + q.length)}</>) as any;
+}
+
+async function callSearch(q: string, scope: Scope, offset: number, limit: number) {
+  const sess = (await supabase.auth.getSession()).data.session;
+  const backendScope = scope === "directory" ? "all" : scope; // directory is client-side
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pp-search?q=${encodeURIComponent(q)}&scope=${backendScope}&offset=${offset}&limit=${limit}`;
+  const r = await fetch(url, {
+    headers: { Authorization: `Bearer ${sess?.access_token}`, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "" },
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+  return j;
+}
+
+async function fetchDirectory(q: string): Promise<DirEntry[]> {
+  const { data, error } = await supabase.functions.invoke("pp-ns-contacts", { body: { action: "directory", limit: 500 } });
+  if (error) throw new Error(error.message);
+  if ((data as any)?.error) throw new Error((data as any).error);
+  const dir: DirEntry[] = (data as any)?.directory ?? [];
+  const ql = q.toLowerCase();
+  return dir.filter((d) => {
+    const hay = `${d.first_name ?? ""} ${d.last_name ?? ""} ${d.name ?? ""} ${d.extension ?? ""} ${d.email ?? ""} ${d.department ?? ""} ${d.position ?? ""}`.toLowerCase();
+    return hay.includes(ql);
+  });
 }
 
 export default function MSearch() {
@@ -25,10 +56,13 @@ export default function MSearch() {
   const outlet = useOutletContext<PlanipretMobileContext | undefined>();
   const q = params.get("q") ?? "";
   const scope = (params.get("scope") as Scope) || "all";
+
   const [data, setData] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState<BackendKey | "directory" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recent] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("pp_recent_searches") ?? "[]"); } catch { return []; } });
+  const reqIdRef = useRef(0);
 
   const setScope = useCallback((s: Scope) => {
     const next = new URLSearchParams(params);
@@ -36,34 +70,18 @@ export default function MSearch() {
     setParams(next, { replace: true });
   }, [params, setParams]);
 
+  // Initial / re-run with same params. Cancels stale responses via reqId.
   const run = useCallback(async () => {
-    if (!q) return;
+    if (!q) { setData(null); setError(null); return; }
+    const id = ++reqIdRef.current;
     setLoading(true);
     setError(null);
     try {
-      const sess = (await supabase.auth.getSession()).data.session;
-      // Run backend search + directory in parallel (same source as Contacts > Annuaire)
-      const [searchRes, dirRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pp-search?q=${encodeURIComponent(q)}`, {
-          headers: { Authorization: `Bearer ${sess?.access_token}`, apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "" },
-        }).then(async (r) => {
-          const j = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
-          return j;
-        }),
-        supabase.functions.invoke("pp-ns-contacts", { body: { action: "directory", limit: 500 } })
-          .then(({ data, error }) => {
-            if (error) throw new Error(error.message);
-            if ((data as any)?.error) throw new Error((data as any).error);
-            return (data as any)?.directory ?? [];
-          })
-          .catch((e) => { console.warn("[search] directory fallback:", e?.message); return []; }),
+      const [searchRes, directory] = await Promise.all([
+        callSearch(q, scope, 0, PAGE_SIZE),
+        fetchDirectory(q).catch((e) => { console.warn("[search] directory:", e?.message); return [] as DirEntry[]; }),
       ]);
-      const ql = q.toLowerCase();
-      const directory: DirEntry[] = (dirRes as DirEntry[]).filter((d) => {
-        const hay = `${d.first_name ?? ""} ${d.last_name ?? ""} ${d.name ?? ""} ${d.extension ?? ""} ${d.email ?? ""} ${d.department ?? ""} ${d.position ?? ""}`.toLowerCase();
-        return hay.includes(ql);
-      });
+      if (id !== reqIdRef.current) return;
       setData({
         calls: searchRes.calls ?? [],
         messages: searchRes.messages ?? [],
@@ -72,21 +90,56 @@ export default function MSearch() {
         contacts: searchRes.contacts ?? [],
         emails: searchRes.emails ?? [],
         directory,
+        has_more: {
+          calls: !!searchRes.has_more?.calls,
+          messages: !!searchRes.has_more?.messages,
+          voicemails: !!searchRes.has_more?.voicemails,
+          insights: !!searchRes.has_more?.insights,
+          contacts: !!searchRes.has_more?.contacts,
+          emails: !!searchRes.has_more?.emails,
+        },
+        dir_visible: Math.min(directory.length, DIR_PAGE),
       });
     } catch (e: any) {
+      if (id !== reqIdRef.current) return;
       console.error("[pp-search]", e);
       setError(e?.message || "Erreur inconnue");
       setData(null);
     } finally {
-      setLoading(false);
+      if (id === reqIdRef.current) setLoading(false);
     }
-  }, [q]);
+  }, [q, scope]);
 
+  // Re-run whenever query/scope change (keeps results consistent with directory filters).
   useEffect(() => { void run(); }, [run]);
+
+  const loadMore = useCallback(async (key: BackendKey | "directory") => {
+    if (!data || loadingMore) return;
+    setLoadingMore(key);
+    try {
+      if (key === "directory") {
+        setData({ ...data, dir_visible: Math.min(data.directory.length, data.dir_visible + DIR_PAGE) });
+        return;
+      }
+      const current = (data[key] as any[]).length;
+      const res = await callSearch(q, key, current, PAGE_SIZE);
+      const appended = (res[key] ?? []) as any[];
+      setData({
+        ...data,
+        [key]: [...(data[key] as any[]), ...appended],
+        has_more: { ...data.has_more, [key]: !!res.has_more?.[key] },
+      } as Result);
+    } catch (e: any) {
+      console.error("[pp-search] loadMore", key, e);
+      setError(e?.message || "Erreur de chargement");
+    } finally {
+      setLoadingMore(null);
+    }
+  }, [data, loadingMore, q]);
 
   const total = useMemo(() => {
     if (!data) return 0;
-    return (data.directory?.length ?? 0) + (data.calls?.length ?? 0) + (data.messages?.length ?? 0) + (data.voicemails?.length ?? 0) + (data.insights?.length ?? 0) + (data.contacts?.length ?? 0) + (data.emails?.length ?? 0);
+    return data.directory.length + data.calls.length + data.messages.length + data.voicemails.length + data.insights.length + data.contacts.length + data.emails.length;
   }, [data]);
 
   const show = (s: Scope) => scope === "all" || scope === s;
@@ -95,13 +148,26 @@ export default function MSearch() {
   const scopeChips: { id: Scope; label: string; count?: number }[] = data ? [
     { id: "all", label: t("common.all") || "Tout", count: total },
     { id: "directory", label: t("contacts.directory") || "Annuaire", count: data.directory.length },
-    { id: "calls", label: t("searchPage.calls"), count: data.calls.length },
-    { id: "messages", label: t("searchPage.messages"), count: data.messages.length },
-    { id: "voicemails", label: t("searchPage.voicemails"), count: data.voicemails.length },
-    { id: "insights", label: t("searchPage.aiInsights"), count: data.insights.length },
-    { id: "contacts", label: t("searchPage.maestroContacts"), count: data.contacts.length },
-    { id: "emails", label: t("searchPage.emails"), count: data.emails.length },
+    { id: "calls", label: t("searchPage.calls"), count: data.calls.length + (data.has_more.calls ? 1 : 0) },
+    { id: "messages", label: t("searchPage.messages"), count: data.messages.length + (data.has_more.messages ? 1 : 0) },
+    { id: "voicemails", label: t("searchPage.voicemails"), count: data.voicemails.length + (data.has_more.voicemails ? 1 : 0) },
+    { id: "insights", label: t("searchPage.aiInsights"), count: data.insights.length + (data.has_more.insights ? 1 : 0) },
+    { id: "contacts", label: t("searchPage.maestroContacts"), count: data.contacts.length + (data.has_more.contacts ? 1 : 0) },
+    { id: "emails", label: t("searchPage.emails"), count: data.emails.length + (data.has_more.emails ? 1 : 0) },
   ] : [];
+
+  const renderLoadMore = (key: BackendKey | "directory", hasMore: boolean) => {
+    if (!hasMore) return null;
+    const busy = loadingMore === key;
+    return (
+      <button onClick={() => void loadMore(key)} disabled={busy}
+        className="w-full py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-60"
+        style={{ background: "var(--pp-bg-elevated, #f1f5f9)", color: "var(--pp-text-secondary, #475569)", border: "1px solid var(--pp-bg-border-2, #e5e7eb)" }}>
+        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        {busy ? (t("common.loading") || "Chargement…") : (t("common.loadMore") || "Charger plus")}
+      </button>
+    );
+  };
 
   return (
     <div className="p-3">
@@ -154,9 +220,12 @@ export default function MSearch() {
         <div className="rounded-2xl p-4 text-sm flex flex-col items-start gap-2" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", color: "#dc2626" }}>
           <div className="flex items-center gap-2 font-semibold"><AlertCircle className="w-4 h-4" /> Recherche impossible</div>
           <div className="text-xs opacity-80 break-all">{error}</div>
-          <button onClick={() => void run()} className="mt-1 flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-semibold"
+          <div className="text-[11px] opacity-70">Requête : « {q} » · Filtre : {scope}</div>
+          <button onClick={() => void run()} disabled={loading}
+            className="mt-1 flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-semibold disabled:opacity-60"
             style={{ background: "rgba(239,68,68,0.15)", color: "#dc2626" }}>
-            <RefreshCw className="w-3 h-3" /> Réessayer
+            {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            {loading ? "Réessai…" : "Réessayer"}
           </button>
         </div>
       )}
@@ -170,8 +239,8 @@ export default function MSearch() {
       {data && !loading && !error && (
         <div className="space-y-4">
           {show("directory") && (
-            <Group icon={<BookUser className="w-4 h-4" />} title={t("contacts.directory") || "Annuaire"} count={data.directory?.length ?? 0}>
-              {data.directory?.map((d, i) => {
+            <Group icon={<BookUser className="w-4 h-4" />} title={t("contacts.directory") || "Annuaire"} count={data.directory.length}>
+              {data.directory.slice(0, data.dir_visible).map((d, i) => {
                 const name = [d.first_name, d.last_name].filter(Boolean).join(" ").trim() || d.name || (d.extension ? `Ext. ${d.extension}` : "—");
                 return (
                   <button key={`${d.extension ?? i}`} onClick={() => d.extension && openDialer?.(d.extension)}
@@ -186,11 +255,12 @@ export default function MSearch() {
                   </button>
                 );
               })}
+              {renderLoadMore("directory", data.dir_visible < data.directory.length)}
             </Group>
           )}
           {show("calls") && (
-            <Group icon={<Phone className="w-4 h-4" />} title={t("searchPage.calls")} count={data.calls?.length ?? 0}>
-              {data.calls?.map((c) => (
+            <Group icon={<Phone className="w-4 h-4" />} title={t("searchPage.calls")} count={data.calls.length}>
+              {data.calls.map((c) => (
                 <button key={c.id} onClick={() => navigate("/mplanipret/calls")} className="w-full text-left p-3 bg-white rounded-lg text-sm flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{highlight(c.from_name ?? c.to_name ?? c.caller_number ?? c.callee_number ?? t("common.unknown"), q)}</div>
@@ -198,53 +268,59 @@ export default function MSearch() {
                   </div>
                 </button>
               ))}
+              {renderLoadMore("calls", data.has_more.calls)}
             </Group>
           )}
           {show("messages") && (
-            <Group icon={<MessageSquare className="w-4 h-4" />} title={t("searchPage.messages")} count={data.messages?.length ?? 0}>
-              {data.messages?.map((m) => (
+            <Group icon={<MessageSquare className="w-4 h-4" />} title={t("searchPage.messages")} count={data.messages.length}>
+              {data.messages.map((m) => (
                 <button key={m.id} onClick={() => navigate("/mplanipret/messages")} className="w-full text-left p-3 bg-white rounded-lg text-sm">
                   <div className="text-xs text-slate-400">{m.direction === "outbound" ? m.to_number : m.from_number}</div>
                   <div className="truncate">{highlight(m.body ?? "", q)}</div>
                 </button>
               ))}
+              {renderLoadMore("messages", data.has_more.messages)}
             </Group>
           )}
           {show("voicemails") && (
-            <Group icon={<Voicemail className="w-4 h-4" />} title={t("searchPage.voicemails")} count={data.voicemails?.length ?? 0}>
-              {data.voicemails?.map((v) => (
+            <Group icon={<Voicemail className="w-4 h-4" />} title={t("searchPage.voicemails")} count={data.voicemails.length}>
+              {data.voicemails.map((v) => (
                 <button key={v.id} onClick={() => navigate("/mplanipret/voicemail")} className="w-full text-left p-3 bg-white rounded-lg text-sm">
                   <div className="text-xs text-slate-400">{v.from_number} · {v.duration_seconds}s</div>
                   <div className="truncate text-slate-600">{highlight((v.transcript ?? "").slice(0, 120), q)}</div>
                 </button>
               ))}
+              {renderLoadMore("voicemails", data.has_more.voicemails)}
             </Group>
           )}
           {show("insights") && (
-            <Group icon={<Sparkles className="w-4 h-4" />} title={t("searchPage.aiInsights")} count={data.insights?.length ?? 0}>
-              {data.insights?.map((i) => (
+            <Group icon={<Sparkles className="w-4 h-4" />} title={t("searchPage.aiInsights")} count={data.insights.length}>
+              {data.insights.map((i) => (
                 <div key={i.id} className="p-3 bg-white rounded-lg text-sm text-slate-600 truncate">{highlight((i.summary ?? "").slice(0, 160), q)}</div>
               ))}
+              {renderLoadMore("insights", data.has_more.insights)}
             </Group>
           )}
           {show("contacts") && (
-            <Group icon={<User className="w-4 h-4" />} title={t("searchPage.maestroContacts")} count={data.contacts?.length ?? 0}>
-              {data.contacts?.map((c: any, i: number) => (
+            <Group icon={<User className="w-4 h-4" />} title={t("searchPage.maestroContacts")} count={data.contacts.length}>
+              {data.contacts.map((c: any, i: number) => (
                 <div key={i} className="p-3 bg-white rounded-lg text-sm">
                   <div className="font-medium">{c.name ?? c.full_name ?? "Contact"}</div>
                   <div className="text-xs text-slate-400">{c.phone ?? c.email}</div>
                 </div>
               ))}
+              {renderLoadMore("contacts", data.has_more.contacts)}
             </Group>
           )}
           {show("emails") && (
-            <Group icon={<Mail className="w-4 h-4" />} title={t("searchPage.emails")} count={data.emails?.length ?? 0}>
-              {data.emails?.map((e: any, i: number) => (
+            <Group icon={<Mail className="w-4 h-4" />} title={t("searchPage.emails")} count={data.emails.length}>
+              {data.emails.map((e: any, i: number) => (
                 <div key={i} className="p-3 bg-white rounded-lg text-sm">
                   <div className="font-medium truncate">{e.subject ?? t("searchPage.noSubject")}</div>
                   <div className="text-xs text-slate-400 truncate">{e.from ?? ""}</div>
                 </div>
               ))}
+              {renderLoadMore("emails", data.has_more.emails)}
             </Group>
           )}
         </div>

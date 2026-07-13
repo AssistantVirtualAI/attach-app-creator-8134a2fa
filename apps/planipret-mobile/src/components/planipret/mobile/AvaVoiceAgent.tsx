@@ -61,7 +61,7 @@ const CONFIRM_REQUIRED = new Set([
   "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
 ]);
 
-export default function AvaVoiceAgent({ onClose, userId }: Props) {
+export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Props) {
   const navigate = useNavigate();
   const [state, setState] = useState<AgentState>("idle");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);

@@ -556,6 +556,18 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
             <p className="font-semibold text-slate-900">🎙️ Microphone requis</p>
             <p className="text-xs text-slate-600 mt-1">Autorisez le microphone dans les paramètres du navigateur.</p>
           </div>
+        ) : state === "error" ? (
+          <div className="bg-white rounded-2xl p-5 text-center max-w-xs">
+            <AlertTriangle className="w-8 h-8 mx-auto text-amber-500 mb-2" />
+            <p className="font-semibold text-slate-900">Connexion vocale interrompue</p>
+            <p className="text-xs text-slate-600 mt-1">Réessaie la connexion ou continue en chat texte.</p>
+            <div className="flex gap-2 mt-3">
+              <button onClick={retryConnection} className="flex-1 h-10 rounded-lg text-white text-sm font-medium" style={{ background: "linear-gradient(135deg,#2E9BDC,#6C3CE1)" }}>Réessayer</button>
+              {onFallbackToChat && (
+                <button onClick={onFallbackToChat} className="flex-1 h-10 rounded-lg text-sm font-medium border border-slate-300 text-slate-700">Chat texte</button>
+              )}
+            </div>
+          </div>
         ) : (
           <VoiceOrb state={state} analyser={analyserRef.current} />
         )}

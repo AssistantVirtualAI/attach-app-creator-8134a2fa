@@ -216,10 +216,9 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     return () => { cancelled = true; };
   }, [open, mode, contacts.length, loadingContacts, contactsLoadKey]);
 
-  const { normalizeText, tokenize, matchAllTokens } = require("@/lib/textNormalize") as typeof import("@/lib/textNormalize");
   const tokens = tokenize(query);
-  const directoryOnly = contacts.filter((c) => c.source === "directory");
   const filtered = tokens.length
+
     ? contacts.filter((c) => {
         const hay = [
           contactDisplayName(c),

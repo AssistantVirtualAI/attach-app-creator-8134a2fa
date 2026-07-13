@@ -20,7 +20,8 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  useEffect(() => { inputRef.current?.focus(); }, [loading]);
+  // NOTE: do NOT auto-focus the textarea on mount — it triggers the mobile
+  // keyboard + iOS viewport zoom which makes the layout appear to "grow".
 
   const send = async () => {
     const text = input.trim();

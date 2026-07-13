@@ -304,12 +304,11 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
                   <SearchIcon className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} />
                   <input
-                    autoFocus
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder={t("dialer.searchPh")}
                     className="flex-1 bg-transparent outline-none text-sm"
-                    style={{ color: "var(--pp-text-primary)" }}
+                    style={{ color: "var(--pp-text-primary)", fontSize: 16 }}
                   />
                   {query && (
                     <button onClick={() => setQuery("")} aria-label={t("dialer.clear")} style={{ color: "var(--pp-text-muted)" }}>

@@ -1,9 +1,9 @@
-FROM ubuntu:22.04
+FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
 
-# Dépendances de base
+# Dépendances de base (Ubuntu 20.04 supporte python2 nativement)
 RUN apt-get update && apt-get install -y \
     git curl wget unzip bzip2 binutils make autoconf \
     openssl libssl-dev libopus0 libpcre2-dev build-essential \
@@ -36,4 +36,4 @@ RUN chmod +x build && ./build
 # Copier les artefacts dans /output
 RUN mkdir -p /output && cp -r /builder/pjsip-output-build/. /output/
 
-CMD ["echo", "Build complete — artefacts dans /output"]
+CMD ["echo", "Build terminé — artefacts dans /output"]

@@ -181,6 +181,7 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
           POWERED BY AVA
         </div>
       </div>
+      </div>
     </div>
   );
 }

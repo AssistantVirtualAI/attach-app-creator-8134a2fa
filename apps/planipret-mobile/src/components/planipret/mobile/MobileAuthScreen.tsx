@@ -5,13 +5,16 @@ import { Globe, Moon, Sun } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import { useSafeAreaInsets } from "@/hooks/useSafeAreaInsets";
+import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
+import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
 
-const AvaBadge = ({ size = 14 }: { size?: number }) => (
-  <div style={{ background: "#7C3AED", borderRadius: 12, padding: "8px 12px", color: "white", fontWeight: 700, fontSize: size, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>AVA</div>
+const AvaBadge = ({ size = 44 }: { size?: number }) => (
+  <img src={avaLogoAsset.url} alt="AVA" style={{ width: size, height: size, objectFit: "contain", borderRadius: 10 }} />
 );
-const PlanipretBadge = () => (
-  <div style={{ background: "#1A4A8A", borderRadius: 12, padding: "8px 12px", color: "white", fontWeight: 700, fontSize: 14, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>P</div>
+const PlanipretBadge = ({ size = 44 }: { size?: number }) => (
+  <img src={planipretLogoAsset.url} alt="Planiprêt" style={{ width: size, height: size, objectFit: "contain", borderRadius: 10 }} />
 );
+
 
 /** Auth screen for /mplanipret. Bilingual, App Store / Play Store-ready. */
 export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Promise<void> | void }) {

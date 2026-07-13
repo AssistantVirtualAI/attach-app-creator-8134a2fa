@@ -99,7 +99,7 @@ export default function MContacts() {
       window.removeEventListener("planipret:favorites-changed", onChange);
       window.removeEventListener("storage", onChange);
     };
-  }, [load]);
+  }, []);
 
   const favKeys = useMemo(() => new Set(favorites.map((f) => f.key)), [favorites]);
 

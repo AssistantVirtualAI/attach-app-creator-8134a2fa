@@ -916,10 +916,10 @@
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--pp-bg-border);
-  /* Header intentionally raised by 3cm while keeping the same open/close margin. */
-  margin-top: calc(env(safe-area-inset-top, 0px) + 56px - 3cm) !important;
-  padding-top: 18px !important;
-  padding-bottom: 12px !important;
+  /* Respect iOS safe area — sit just below the status bar. */
+  margin-top: env(safe-area-inset-top, 0px) !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
 }
 .planipret-mobile-scope .pp-mobile-tabbar {
   background: rgba(255,255,255,0.95);

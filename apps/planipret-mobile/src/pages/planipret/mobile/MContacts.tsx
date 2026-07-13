@@ -207,17 +207,18 @@ export default function MContacts() {
 
   const list = useMemo(() => {
     const src: any[] = tab === "personal" ? personal : tab === "favorites" ? favorites : directory;
-    const ql = q.trim().toLowerCase();
-    if (!ql) return src;
+    const tokens = tokenize(q);
+    if (!tokens.length) return src;
     return src.filter((c: any) => {
       const hay = tab === "directory"
         ? `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""}`
         : tab === "favorites"
         ? `${c.name ?? ""} ${c.phone ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.company ?? ""}`
         : `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.display_name ?? ""} ${c.phone ?? ""} ${c.email ?? ""} ${c.company ?? ""}`;
-      return hay.toLowerCase().includes(ql);
+      return matchAllTokens(hay, tokens);
     });
   }, [tab, personal, favorites, directory, q]);
+
 
   useEffect(() => {
     setVisibleCount(40);

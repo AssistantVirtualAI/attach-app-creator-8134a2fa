@@ -77,10 +77,11 @@ Deno.serve(async (req) => {
         u,
         ext: u.user ?? u.extension ?? u.uid,
         ...extractName(u),
+        position: extractPosition(u),
       }));
 
-      // Enrich in parallel (bounded concurrency) for users where name is missing
-      const missing = initial.filter((x) => !x.composed && !x.display && x.ext);
+      // Enrich in parallel (bounded concurrency) for users where name/poste is missing.
+      const missing = initial.filter((x) => (!x.composed || !x.display || !x.position) && x.ext);
       const CONCURRENCY = 8;
       let idx = 0;
       const details = new Map<string, any>();
@@ -99,7 +100,7 @@ Deno.serve(async (req) => {
       }
       await Promise.all(Array.from({ length: Math.min(CONCURRENCY, missing.length) }, worker));
 
-      const directory = initial.map(({ u, ext, first, last, composed, display }) => {
+      const directory = initial.map(({ u, ext, first, last, composed, display, position }) => {
         let f = first, l = last, d = display, c = composed;
         const detail = ext ? details.get(String(ext)) : null;
         if (detail) {
@@ -117,7 +118,7 @@ Deno.serve(async (req) => {
           last_name: l || undefined,
           email: u.email ?? (detail?.email ?? null),
           department: u.department ?? (detail?.department ?? null),
-          position: extractPosition(u) ?? (detail ? extractPosition(detail) : null),
+          position: position ?? (detail ? extractPosition(detail) : null),
           presence: u.presence ?? u.status ?? (detail?.presence ?? detail?.status ?? "unknown"),
         };
       });

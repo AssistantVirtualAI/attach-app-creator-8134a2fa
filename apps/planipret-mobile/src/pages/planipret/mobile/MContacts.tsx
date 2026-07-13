@@ -138,7 +138,7 @@ export default function MContacts() {
     } catch (e: any) {
       const msg = e?.message || "Erreur inconnue";
       console.error("[pp-ns-contacts]", which, e);
-      setLoadError(msg);
+      if (!opts.background) setLoadError(msg);
       if (!opts.background) toast.error(t("contacts.loadFailed") || "Échec chargement contacts", { description: msg });
     } finally {
       if (!opts.background) setLoadingTab((cur) => (cur === which ? null : cur));

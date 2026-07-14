@@ -113,13 +113,27 @@ Deno.serve(async (req) => {
     try { avaSession = await signAvaSession(userRes.user.id, 1800); }
     catch (e) { console.warn("ava_session_sign_failed", (e as Error).message); }
 
+    const brokerName = prof.full_name ?? "Courtier";
+    const brokerFirstName = brokerName.trim().split(/\s+/)[0] ?? brokerName;
+    const brokerExtension = prof.extension ?? "";
+
+    const dynamicVars: Record<string, string> = {
+      ava_broker_name: brokerName,
+      ava_broker_first_name: brokerFirstName,
+      ava_broker_extension: brokerExtension,
+    };
+    if (avaSession) {
+      dynamicVars.ava_session_token = avaSession;
+      dynamicVars.secret__ava_session_token = avaSession;
+    }
+
     return json({
       token: tokenData?.token ?? null,
       signed_url: signedData?.signed_url ?? null,
       agent_id: agentId,
-      broker: { name: prof.full_name, extension: prof.extension },
+      broker: { name: brokerName, first_name: brokerFirstName, extension: brokerExtension },
       ava_session_token: avaSession,
-      dynamic_variables: avaSession ? { ava_session_token: avaSession, secret__ava_session_token: avaSession } : undefined,
+      dynamic_variables: dynamicVars,
     });
   } catch (e) {
     console.error("pp-ava-webrtc-token", e);

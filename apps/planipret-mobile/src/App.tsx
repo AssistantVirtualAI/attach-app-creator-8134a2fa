@@ -32,6 +32,18 @@ const MStyleDiagnostics = lazy(() => import('@/pages/planipret/mobile/MStyleDiag
 
 const queryClient = new QueryClient();
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+      retry: 1,
+    },
+  },
+});
+
 function Fallback() {
   return (
     <div style={{

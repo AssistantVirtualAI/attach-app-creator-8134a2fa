@@ -154,6 +154,36 @@ Deno.serve(async (req) => {
         overrides_allowed.first_message = !!ov?.agent?.first_message;
         overrides_allowed.language = !!ov?.agent?.language;
         overrides_allowed.voice = !!ov?.tts?.voice_id;
+
+        // Auto-enable per-user overrides so each broker gets a personalized greeting/prompt/voice.
+        if (!overrides_allowed.first_message || !overrides_allowed.prompt || !overrides_allowed.language || !overrides_allowed.voice) {
+          try {
+            const patch = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${encodeURIComponent(agentId)}`, {
+              method: "PATCH",
+              headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                platform_settings: {
+                  overrides: {
+                    conversation_config_override: {
+                      agent: { prompt: { prompt: true }, first_message: true, language: true },
+                      tts: { voice_id: true },
+                    },
+                  },
+                },
+              }),
+            });
+            if (patch.ok) {
+              overrides_allowed.prompt = true;
+              overrides_allowed.first_message = true;
+              overrides_allowed.language = true;
+              overrides_allowed.voice = true;
+            } else {
+              console.warn("ava-agent-config auto-enable overrides failed", patch.status, await patch.text());
+            }
+          } catch (e) {
+            console.warn("ava-agent-config auto-enable overrides threw", e);
+          }
+        }
       } else {
         agent_status = `error_${r.status}`;
       }

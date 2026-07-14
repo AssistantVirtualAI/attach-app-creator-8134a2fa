@@ -17,6 +17,7 @@ import { useAvaNavigation } from "@/hooks/useAvaNavigation";
 const AvaVoiceAgent = lazy(() => import("@/components/planipret/mobile/AvaVoiceAgent"));
 import MobileScreenSkeleton from "@/components/planipret/mobile/MobileScreenSkeleton";
 import { prefetchRoute, scheduleIdlePrefetch } from "@/lib/routePrefetch";
+import { useQueryClient } from "@tanstack/react-query";
 import AvaChatSheet from "@/components/planipret/mobile/AvaChatSheet";
 import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
 import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
@@ -488,6 +489,45 @@ export default function PlanipretMobile() {
       "/mplanipret/voicemail",
     ]);
   }, []);
+
+  // When the app returns to the foreground (Capacitor resume or tab visibility),
+  // revalidate active queries and re-warm the sibling tab chunks so the next
+  // interaction after a background pause feels instant instead of stale.
+  const qc = useQueryClient();
+  useEffect(() => {
+    const onResume = () => {
+      // 1) Prefetch current + neighboring route chunks (idempotent, cheap).
+      prefetchRoute(location.pathname);
+      scheduleIdlePrefetch([
+        "/mplanipret/home",
+        "/mplanipret/calls",
+        "/mplanipret/messages",
+        "/mplanipret/voicemail",
+        "/mplanipret/contacts",
+      ]);
+      // 2) Revalidate active queries so on-screen data refreshes in background.
+      qc.invalidateQueries({ refetchType: "active" });
+    };
+    const onVisibility = () => { if (document.visibilityState === "visible") onResume(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onResume);
+    let capUnsub: null | (() => void) = null;
+    (async () => {
+      try {
+        const { App } = await import("@capacitor/app");
+        const h = await App.addListener("appStateChange", (s: { isActive: boolean }) => {
+          if (s.isActive) onResume();
+        });
+        capUnsub = () => { try { h.remove(); } catch {} };
+      } catch { /* not native — visibilitychange is enough */ }
+    })();
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onResume);
+      capUnsub?.();
+    };
+  }, [qc, location.pathname]);
+
 
   // Detect active outbound/in-progress call → FAB pulses red & hangs up on tap
   useEffect(() => {

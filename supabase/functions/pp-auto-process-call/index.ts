@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
   // Step 1 — ensure transcript exists. pp-admin-transcribe backs off if the
   // recording isn't fetchable yet (returns { pending: true }) — trigger will
   // fire again on the next recording_url / transcript update.
-  let transcript = row.transcript ?? row.raw_transcript ?? null;
+  let transcript = row.transcript ?? row.transcript_raw ?? null;
   if (!transcript || transcript.trim().length < 20) {
     try {
       const r = await fetch(`${SUPABASE_URL}/functions/v1/pp-admin-transcribe`, {

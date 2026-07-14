@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const { data: row, error } = await admin
     .from("planipret_phone_calls")
-    .select("id, recording_url, transcript, raw_transcript, analyzed_at, analysis_in_progress, analysis_locked_at")
+    .select("id, recording_url, transcript, transcript_raw, analyzed_at, analysis_in_progress, analysis_locked_at")
     .eq("id", callId)
     .maybeSingle();
   if (error) return json({ error: "load failed", details: error.message }, 500);

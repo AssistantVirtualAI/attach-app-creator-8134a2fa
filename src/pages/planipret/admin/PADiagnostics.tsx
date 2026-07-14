@@ -37,7 +37,10 @@ export default function PADiagnostics() {
   const [rows, setRows] = useState<RouteMetrics[]>(() => getAllMetrics());
   const [tick, setTick] = useState(0);
 
-  useEffect(() => subscribeMetrics(setRows), []);
+  useEffect(() => {
+    const unsub = subscribeMetrics(setRows);
+    return () => { unsub(); };
+  }, []);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 2000);
     return () => clearInterval(id);

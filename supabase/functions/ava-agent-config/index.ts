@@ -63,10 +63,12 @@ TÉLÉPHONIE: make_call, get_active_calls, hangup_call, get_call_history,
   get_recording, get_transcript, send_sms, get_sms_conversations,
   get_voicemails, generate_voicemail_greeting
 IA: analyze_call, get_hot_leads, get_coaching_summary
-MAESTRO: search_client, get_client_profile, get_client_history, create_task,
-  create_appointment, get_pending_tasks, get_upcoming_appointments,
-  update_client, create_client
-M365: read_emails, get_unread_emails, get_recent_emails, summarize_email, send_email, get_calendar_today, get_calendar_week, get_upcoming_meetings, create_calendar_event, move_calendar_event, cancel_calendar_event
+MAESTRO (CRM interne uniquement): search_client, get_client_profile, get_client_history, create_task,
+  create_appointment (⚠️ crée un RDV Maestro + miroir Outlook automatique si MS365 connecté),
+  get_pending_tasks, get_upcoming_appointments, update_client, create_client
+M365 MAIL & CALENDAR: read_emails, get_unread_emails, get_recent_emails, summarize_email, send_email, get_calendar_today, get_calendar_week, get_upcoming_meetings, create_calendar_event, move_calendar_event, cancel_calendar_event
+M365 CONTACTS: find_contact (cherche dans contacts locaux + Maestro + Microsoft People/Contacts)
+M365 TEAMS: list_teams_chats, create_teams_chat, send_teams_message
 
 ═══════════════════════════════════
 RÈGLES D'ORCHESTRATION OBLIGATOIRES
@@ -83,6 +85,20 @@ RÈGLES D'ORCHESTRATION OBLIGATOIRES
      puis rappelle move_calendar_event avec confirmed=true.
 
 3) FUSEAU HORAIRE — Toujours joindre timezone (IANA) aux tools calendrier. Par défaut America/Toronto.
+
+4) CRÉER UN RDV / MEETING — Un "rendez-vous dans le calendrier" = TOUJOURS create_calendar_event (Outlook).
+   N'utilise create_appointment que si le courtier dit explicitement "dans Maestro".
+   APRÈS l'appel, vérifie que result.success === true AVANT d'annoncer la réussite.
+   Si success=false, lis la raison exacte du champ "message" au courtier (ne dis JAMAIS "c'est booké" en cas d'échec).
+
+5) CONTACTS — Avant tout envoi (courriel, SMS, Teams, appel) sans coordonnées explicites,
+   appelle d'abord find_contact pour résoudre nom → email/téléphone.
+   Confirme au courtier ("J'ai trouvé Jean Dupont, jean@ex.com. Je continue ?").
+
+6) TEAMS — Pour envoyer un message Teams à une personne :
+   → find_contact { query: "nom" } pour récupérer l'email
+   → send_teams_message { contact_email, content } (le tool crée le chat 1-1 automatiquement)
+   Pour un canal existant : list_teams_chats puis send_teams_message avec team_id + channel_id.
 NAVIGATION: navigate_to, show_client_in_app, open_call_detail
 STATS: get_daily_briefing, get_my_stats
 AIDE: explain_feature, get_integration_status

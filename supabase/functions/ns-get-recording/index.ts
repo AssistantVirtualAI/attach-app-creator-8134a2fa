@@ -230,7 +230,6 @@ async function persistRecording(callDbId: string | null, bytes: Uint8Array, cont
         recording_storage_path: path,
         recording_cached_at: new Date().toISOString(),
         recording_bytes: bytes.byteLength,
-        has_recording: true,
       })
       .eq("id", callDbId);
     return path;

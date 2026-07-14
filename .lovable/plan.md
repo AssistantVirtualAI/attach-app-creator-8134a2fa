@@ -1,68 +1,57 @@
-# Plan — Intégration ElevenLabs (Overview + Enregistrements)
 
-## Objectif
-1. Afficher les statistiques de l'agent vocal AVA (ElevenLabs) dans l'Overview Planiprêt, avec vue globale + détail par agent.
-2. Afficher les enregistrements audio des conversations ElevenLabs dans la page Enregistrements, aux côtés des enregistrements PBX existants.
+## Diagnostic
 
-Les deux utilisent la clé `ELEVENLABS_API_KEY` déjà configurée et les endpoints `/v1/convai/*` déjà exploités par les fonctions edge existantes (`elevenlabs-all-agents-analytics`, `elevenlabs-all-agents-conversations`, `elevenlabs-convai-conversations`).
+Trois problèmes distincts confirmés en lisant le code :
 
----
+1. **RDV créé « virtuellement » mais pas dans Outlook**  
+   Le prompt liste deux outils quasi identiques : `create_appointment` (Maestro CRM uniquement, aucun appel à Graph) et `create_calendar_event` (Outlook via `ms365-actions`). L'agent choisit souvent `create_appointment` quand on lui dit « prends un RDV », ce qui écrit dans Maestro mais **jamais** dans le calendrier Microsoft. De plus, `create_calendar_event` retourne `success: !!j?.success` mais le message affiché est toujours « RDV créé » — donc en cas d'échec Graph (token expiré, scope manquant), l'agent l'annonce comme un succès.
 
-## 1. Overview — Section "Agent vocal AVA"
+2. **Contacts Microsoft introuvables**  
+   `resolveContact` interroge bien `/me/people` + `/me/contacts` via `msAction("search_contact")`, mais **aucun tool `find_contact` / `search_contact` n'est exposé** dans `TOOL_NAMES` (ava-agent-config). L'agent ne peut donc chercher un contact que de manière indirecte (via `send_email` avec `contact_name`), pas explicitement. En plus, le scope OAuth actuel manque `Contacts.Read`, ce qui fait tomber `/me/contacts` sur certains tenants.
 
-**Fichier concerné :** `src/pages/planipret/admin/PADashboard.tsx` (ou l'Overview courante — à confirmer par lecture) + nouveau composant.
+3. **Teams non branché**  
+   Aucun tool Teams n'est exposé à l'agent (ni `send_teams_message`, ni `list_teams_chats`, ni `create_teams_chat`). Les fonctions existent (`ms365-actions` → `send_teams_message`, `ms365-teams-list`, `ms365-teams-messages`) mais ne sont pas déclarées dans `TOOL_NAMES` ni implémentées dans `ava-tool-executor`.
 
-**Nouveau composant :** `src/components/planipret/admin/ava/AvaElevenLabsOverviewCard.tsx`
+## Correctifs
 
-Contenu affiché :
-- **KPIs globaux** (7 derniers jours, sélecteur 24h/7j/30j) :
-  - Nombre total d'appels/conversations
-  - Durée totale et durée moyenne
-  - Taux de succès (completed vs failed)
-  - Nombre d'agents actifs
-- **Tableau par agent** (une ligne par agent ElevenLabs) :
-  - Nom de l'agent, courtier assigné (join sur `planipret_profiles.elevenlabs_agent_id`)
-  - Nb d'appels, durée totale, durée moyenne, dernier appel
-  - Bouton "Voir les conversations" → ouvre un drawer avec la liste
-- **Liste des appels récents** (top 20) : date, agent, durée, statut, bouton lecture audio.
+### 1. `supabase/functions/ava-tool-executor/index.ts`
+Ajouter les tools manquants :
+- **`find_contact`** — wrap direct de `msAction("search_contact")` + fallback contacts locaux/Maestro. Retourne `{ email, phone, name, source }` pour que l'agent puisse ensuite appeler `send_email`, `make_call`, `send_teams_message`.
+- **`list_teams_chats`** — appelle `ms365-teams-list` pour lister les chats récents (id + participants).
+- **`send_teams_message`** — route vers `ms365-actions/send_teams_message`. Accepte : `chat_id` OU (`team_id` + `channel_id`) OU `contact_name` / `contact_email` → résout l'utilisateur Graph (`/users?$filter=mail eq …`), crée un chat 1-1 via `ms365-teams-messages/create_chat`, puis envoie.
+- **`create_teams_chat`** — wrap `ms365-teams-messages/create_chat` (1-1 ou groupe).
 
-**Backend :** réutilise les edge functions déjà présentes :
-- `elevenlabs-all-agents-analytics` pour les agrégats
-- `elevenlabs-all-agents-conversations` pour la liste
-- Pas de nouvelle fonction sauf si un endpoint manque après vérification.
+Modifier :
+- **`create_calendar_event`** — si `j.success` est faux, retourner `{ success: false, error, message: "Le rendez-vous n'a PAS été créé dans Outlook : <raison Graph>" }` pour empêcher AVA d'annoncer un faux succès.
+- **`create_appointment` (Maestro)** — après création Maestro, si MS365 est connecté, **mirroir automatique** dans Outlook via `create_calendar_event` (mêmes participants, dates, sujet). Retourner `{ maestro_id, outlook_event_id, outlook_synced: true|false }`.
 
----
+### 2. `supabase/functions/ava-agent-config/index.ts`
+- Ajouter à `TOOL_NAMES` : `find_contact`, `list_teams_chats`, `send_teams_message`, `create_teams_chat`.
+- Section CAPACITÉS du prompt : ajouter bloc « TEAMS » et « CONTACTS ».
+- Nouvelle règle d'orchestration explicite :
+  > **RDV/MEETING** — Un « rendez-vous dans le calendrier » = **TOUJOURS** `create_calendar_event` (Outlook). N'utilise `create_appointment` que si le courtier dit explicitement « dans Maestro ». Après appel, vérifie `success === true` avant d'annoncer la réussite ; si `false`, lis la raison au courtier.
+  > **CONTACT** — Avant tout envoi (courriel, SMS, Teams, appel) sans coordonnées explicites, appelle d'abord `find_contact` pour résoudre nom → email/téléphone/id Microsoft.
+  > **TEAMS** — Pour envoyer un message Teams à une personne : `find_contact` → `send_teams_message { contact_email }` (le tool crée le chat 1-1 automatiquement).
 
-## 2. Page Enregistrements — Onglet "Appels AVA (IA)"
+### 3. Scopes OAuth Microsoft
+Ajouter `Contacts.Read` (et confirmer `User.Read.All` pour la résolution des IDs Teams) dans la constante `MS_SCOPE` de :
+- `supabase/functions/ms365-actions/index.ts`
+- `supabase/functions/ms365-teams-messages/index.ts`
+- `supabase/functions/ms365-oauth-exchange/index.ts` (à vérifier)
 
-**Fichier concerné :** `src/pages/my/Recordings.tsx` (page actuelle des recordings PBX).
+Les courtiers déjà connectés devront **reconnecter** Microsoft une fois (message dans l'UI). J'ajoute une détection : si `ms365_scopes` ne contient pas `Contacts.Read`, le tool `find_contact` retourne `{ success: false, needs_reconnect: true, message: "Reconnecte Microsoft 365 pour activer les contacts" }`.
 
-**Changement :** transformer en interface à onglets :
-- Onglet **PBX** (contenu actuel inchangé)
-- Onglet **AVA (Agent IA)** — nouveau
+## Vérification
 
-**Nouveau composant :** `src/components/recordings/AvaRecordingsList.tsx`
+1. `tsgo` sur les fonctions modifiées.
+2. Depuis l'app mobile, session AVA :
+   - « Trouve Jean Dupont » → doit appeler `find_contact` et retourner email/tél.
+   - « Envoie un message Teams à Jean : test » → `find_contact` → `send_teams_message` → confirmer dans Teams.
+   - « Book un RDV demain 14h avec Jean » → `create_calendar_event` → vérifier l'évènement dans Outlook mobile ; en cas d'échec Graph, AVA doit dire « pas créé » et pourquoi.
+3. `supabase--edge_function_logs` sur `ava-tool-executor` et `ms365-actions` pour valider les appels réels.
 
-Fonctionnalités :
-- Liste paginée des conversations ElevenLabs (via `elevenlabs-convai-conversations` action `list`)
-- Colonnes : date, agent, durée, statut, transcript disponible
-- Player audio inline utilisant l'endpoint audio ElevenLabs `/v1/convai/conversations/{id}/audio` (action `audio` de la fonction existante, qui retourne l'audio signé)
-- Bouton "Voir transcript" ouvre un modal avec la transcription
-- Filtres : agent, date, statut
+## Aucun impact
 
-**Backend :** aucune nouvelle fonction requise — `elevenlabs-convai-conversations` supporte déjà `list`, `details`, `audio`.
-
----
-
-## Détails techniques
-
-- Toutes les requêtes ElevenLabs passent par des edge functions (jamais d'appel direct depuis le browser) — la clé API reste server-side.
-- Les composants utilisent `supabase.functions.invoke(...)` + `useQuery` avec `refetchInterval: 60_000` pour rafraîchir.
-- Le player audio charge l'URL signée à la demande (pas au montage) pour éviter de générer N URLs.
-- Le mapping agent ↔ courtier utilise `planipret_profiles.elevenlabs_agent_id` (déjà présent d'après le contexte AVA existant).
-- i18n FR par défaut, cohérent avec le reste du portail Planiprêt.
-
-## Fichiers touchés (résumé)
-- **créés** : `AvaElevenLabsOverviewCard.tsx`, `AvaRecordingsList.tsx`
-- **modifiés** : la page Overview (à confirmer par lecture), `src/pages/my/Recordings.tsx`
-- **aucune migration DB**, **aucune nouvelle edge function** (sauf découverte contraire durant l'implémentation)
+- Aucune migration DB.
+- Aucun changement UI (les tools sont côté serveur/agent).
+- Comportement existant (`send_email`, `read_emails`, `create_calendar_event`, etc.) conservé, juste plus robuste.

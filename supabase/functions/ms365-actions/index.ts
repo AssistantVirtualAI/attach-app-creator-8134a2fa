@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
-const MS_SCOPE = "openid profile email offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All";
+const MS_SCOPE = "openid profile email offline_access User.Read User.ReadBasic.All User.Read.All Contacts.Read Contacts.ReadWrite People.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite ChatMessage.Send Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All";
 
 async function getMsConfig(admin: any) {
   const [{ data: secret }, { data: cfg }] = await Promise.all([
@@ -215,7 +215,50 @@ Deno.serve(async (req) => {
           phone: c.mobilePhone ?? c.businessPhones?.[0] ?? null,
           company: c.companyName, source: "contacts",
         }));
-        return j({ success: peopleR.ok || contactsR.ok, results: [...people, ...contacts].filter(r => r.email || r.phone).slice(0, 15) });
+        return j({ success: peopleR.ok || contactsR.ok, results: [...people, ...contacts].filter(r => r.email || r.phone).slice(0, 15), error: (!peopleR.ok && !contactsR.ok) ? (pd?.error?.message || cd?.error?.message) : undefined });
+      }
+      case "resolve_user_id": {
+        const email = String(payload.email ?? "").trim();
+        if (!email) return j({ success: false, error: "email required" }, 400);
+        const enc = encodeURIComponent(email);
+        const r = await graph(admin, profile, `/users?$filter=${encodeURIComponent(`mail eq '${email}' or userPrincipalName eq '${email}'`)}&$select=id,displayName,mail,userPrincipalName&$top=1`);
+        const d = await r.json().catch(() => ({}));
+        const u = d?.value?.[0];
+        if (!u) {
+          // Fallback: /me/people
+          const pr = await graph(admin, profile, `/me/people?$search="${enc}"&$top=1&$select=displayName,scoredEmailAddresses,userPrincipalName`);
+          const pd = await pr.json().catch(() => ({}));
+          const p2 = pd?.value?.[0];
+          if (p2?.userPrincipalName) {
+            const r2 = await graph(admin, profile, `/users/${encodeURIComponent(p2.userPrincipalName)}?$select=id,displayName,mail`);
+            const d2 = await r2.json().catch(() => ({}));
+            if (d2?.id) return j({ success: true, user_id: d2.id, display_name: d2.displayName, email: d2.mail });
+          }
+          return j({ success: false, error: d?.error?.message ?? "user_not_found" });
+        }
+        return j({ success: true, user_id: u.id, display_name: u.displayName, email: u.mail ?? u.userPrincipalName });
+      }
+      case "create_teams_chat": {
+        const userIds: string[] = Array.isArray(payload.user_ids) ? payload.user_ids : [];
+        if (!userIds.length) return j({ success: false, error: "user_ids required" }, 400);
+        const meR = await graph(admin, profile, "/me?$select=id");
+        const meB = await meR.json().catch(() => ({}));
+        if (!meR.ok || !meB?.id) return j({ success: false, error: "graph_me", details: meB }, meR.status);
+        const allIds = Array.from(new Set([meB.id, ...userIds]));
+        const isGroup = allIds.length > 2;
+        const body: any = {
+          chatType: isGroup ? "group" : "oneOnOne",
+          members: allIds.map((id: string) => ({
+            "@odata.type": "#microsoft.graph.aadUserConversationMember",
+            roles: ["owner"],
+            "user@odata.bind": `https://graph.microsoft.com/v1.0/users('${id}')`,
+          })),
+        };
+        if (isGroup && payload.topic) body.topic = payload.topic;
+        const cr = await graph(admin, profile, "/chats", { method: "POST", body: JSON.stringify(body) });
+        const cd = await cr.json().catch(() => ({}));
+        if (!cr.ok) return j({ success: false, error: cd?.error?.message ?? "create_chat_failed", details: cd }, 200);
+        return j({ success: true, chat_id: cd.id, chatType: cd.chatType });
       }
       default:
         return j({ success: false, error: "Action inconnue" }, 400);

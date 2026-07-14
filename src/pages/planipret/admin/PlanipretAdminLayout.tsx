@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { PrefetchNavLink } from "@/components/PrefetchLink";
 import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard, Users, Phone, MessageSquare, Mic, Plug,
-  BarChart3, LogOut, ShieldCheck, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity,
+  BarChart3, LogOut, ShieldCheck, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge,
 } from "lucide-react";
 import SessionTimeoutModal from "@/components/planipret/SessionTimeoutModal";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
@@ -21,9 +22,9 @@ import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { toast } from "sonner";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist" | "diagnostics";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "mobileDevices" | "sipDiagnostic";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "mobileDevices" | "sipDiagnostic" | "diagnostics";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -56,6 +57,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/integrations",    key: "integrations",    Icon: Plug,        badge: "integrations" },
       { to: "/planipret/admin/mobile-devices",  key: "mobileDevices",   Icon: Smartphone },
       { to: "/planipret/admin/sip-diagnostic",  key: "sipDiagnostic",   Icon: PlugZap },
+      { to: "/planipret/admin/diagnostics",     key: "diagnostics",     Icon: Gauge },
       { to: "/planipret/admin/compliance",      key: "compliance",      Icon: ShieldCheck },
       { to: "/planipret/admin/audit-checklist", key: "auditChecklist",  Icon: CheckSquare, badge: "audit" },
     ],
@@ -77,6 +79,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/ava-logs": "avaLogs",
   "/planipret/admin/mobile-devices": "mobileDevices",
   "/planipret/admin/sip-diagnostic": "sipDiagnostic",
+  "/planipret/admin/diagnostics": "diagnostics",
 };
 
 const initials = (n?: string) =>

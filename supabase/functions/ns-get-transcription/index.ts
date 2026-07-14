@@ -135,6 +135,37 @@ function parseTranscript(raw: any): Array<{ speaker: string; text: string }> {
   return [];
 }
 
+function cdrMatchScore(cdr: any, row: any, knownIds: string[]) {
+  let score = 0;
+  const cIds: string[] = [];
+  addIds(cIds, cdr);
+  if (knownIds.some((id) => cIds.includes(id))) score += 100;
+  if (row?.extension && ["call-orig-user", "call-term-user", "call-through-user"].some((k) => String(cdr?.[k] ?? "") === String(row.extension))) score += 20;
+  const dur = Number(row?.duration_seconds ?? 0);
+  const cDur = Number(val(cdr, ["call-talking-duration-seconds", "call-total-duration-seconds", "duration"], 0));
+  if (dur && cDur && Math.abs(dur - cDur) <= 3) score += 20;
+  const started = row?.started_at ? new Date(row.started_at).getTime() : 0;
+  const cStartRaw = val(cdr, ["call-start-datetime", "call-batch-start-datetime", "start-time", "time-start", "started_at"], null);
+  const cStart = cStartRaw ? new Date(cStartRaw).getTime() : 0;
+  if (started && cStart && Math.abs(started - cStart) <= 120_000) score += 25;
+  const from = normalizePhone(row?.from_number);
+  const to = normalizePhone(row?.to_number);
+  const cFrom = normalizePhone(val(cdr, ["call-orig-from-uri", "from", "from_number"], ""));
+  const cTo = normalizePhone(val(cdr, ["call-term-to-uri", "call-orig-to-uri", "to", "to_number", "destination"], ""));
+  if (from && cFrom && (from.endsWith(cFrom) || cFrom.endsWith(from))) score += 10;
+  if (to && cTo && (to.endsWith(cTo) || cTo.endsWith(to))) score += 10;
+  return score;
+}
+
+function transcriptionMatches(item: any, knownIds: string[], jobId: string) {
+  if (!item || typeof item !== "object") return false;
+  const itemIds: string[] = [];
+  addIds(itemIds, item);
+  if (itemIds.length && knownIds.some((id) => itemIds.includes(id))) return true;
+  const itemJob = String(item?.["call-intelligence-job-id"] ?? item?.["job-id"] ?? item?.id ?? item?.["cdr-id"] ?? "").replace(/\.0$/, "").trim();
+  return !!jobId && itemJob === jobId;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   let cfg;
@@ -183,27 +214,10 @@ Deno.serve(async (req) => {
           const r = await nsJson(p, cfg);
         attempts.push({ url: p, status: r.status, kind: "cdr_lookup", body_preview: String(r.rawText).slice(0, 160) });
         if (!r.ok) continue;
-        const rows = asArray(r.data).map((cdr) => {
-          let score = 0;
-          const cIds: string[] = [];
-          addIds(cIds, cdr);
-          if (ids.some((id) => cIds.includes(id))) score += 100;
-          if (row.extension && ["call-orig-user", "call-term-user", "call-through-user"].some((k) => String(cdr?.[k] ?? "") === String(row.extension))) score += 20;
-          const dur = Number(row.duration_seconds ?? 0);
-          const cDur = Number(val(cdr, ["call-talking-duration-seconds", "call-total-duration-seconds", "duration"], 0));
-          if (dur && cDur && Math.abs(dur - cDur) <= 3) score += 20;
-          const started = row.started_at ? new Date(row.started_at).getTime() : 0;
-          const cStartRaw = val(cdr, ["call-start-datetime", "call-batch-start-datetime", "start-time", "time-start", "started_at"], null);
-          const cStart = cStartRaw ? new Date(cStartRaw).getTime() : 0;
-          if (started && cStart && Math.abs(started - cStart) <= 120_000) score += 25;
-          const from = normalizePhone(row.from_number);
-          const to = normalizePhone(row.to_number);
-          const cFrom = normalizePhone(val(cdr, ["call-orig-from-uri", "from", "from_number"], ""));
-          const cTo = normalizePhone(val(cdr, ["call-term-to-uri", "call-orig-to-uri", "to", "to_number", "destination"], ""));
-          if (from && cFrom && (from.endsWith(cFrom) || cFrom.endsWith(from))) score += 10;
-          if (to && cTo && (to.endsWith(cTo) || cTo.endsWith(to))) score += 10;
-          return { score, cdr };
-        }).filter((x) => x.score >= 40).sort((a, b) => b.score - a.score);
+          const rows = asArray(r.data)
+            .map((cdr) => ({ score: cdrMatchScore(cdr, row, ids), cdr }))
+            .filter((x) => x.score >= 60)
+            .sort((a, b) => b.score - a.score);
         attempts.push({ url: p, kind: "cdr_matches", count: rows.length, top: rows.slice(0, 5).map((x) => ({ score: x.score, id: x.cdr?.id, orig: x.cdr?.["call-orig-call-id"], term: x.cdr?.["call-term-call-id"] })) });
         for (const m of rows.slice(0, 8)) {
           cdrs.push(m.cdr);
@@ -227,8 +241,10 @@ Deno.serve(async (req) => {
         if (r.ok) {
           const items = asArray(r.data);
           for (const cdr of items) {
-            cdrs.push(cdr);
-            addIds(ids, cdr);
+            if (cdrMatchScore(cdr, row, ids) >= 60) {
+              cdrs.push(cdr);
+              addIds(ids, cdr);
+            }
           }
         }
       } catch (e) {
@@ -256,6 +272,9 @@ Deno.serve(async (req) => {
           if (r.ok) {
             const items = Array.isArray(r.data) ? r.data : [r.data];
             for (const item of items) {
+              const itemJobId = String(item?.["call-intelligence-job-id"] ?? item?.["job-id"] ?? item?.id ?? item?.["cdr-id"] ?? "").replace(/\.0$/, "").trim();
+              const cdrJobId = String(cdr?.["call-intelligence-job-id"] ?? cdr?.id ?? cdr?.["cdr-id"] ?? "").replace(/\.0$/, "").trim();
+              if (item && typeof item === "object" && itemJobId && cdrJobId && itemJobId !== cdrJobId) continue;
               const found = extractTranscript(item);
               if (found) { transcript = found; break; }
             }
@@ -320,6 +339,7 @@ Deno.serve(async (req) => {
       let transcript_found = false;
       let localTranscript: any = null;
       for (const item of items) {
+        if (item && typeof item === "object" && !transcriptionMatches(item, ids, jobId)) continue;
         const found = extractTranscript(item);
         if (found) { localTranscript = found; transcript_found = true; break; }
       }

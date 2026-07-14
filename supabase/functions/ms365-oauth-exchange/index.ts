@@ -1,6 +1,19 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
+const MS365_DELEGATED_SCOPES = "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite";
+
+function microsoftOAuthErrorMessage(details: any) {
+  const description = String(details?.error_description ?? "");
+  if (details?.suberror === "consent_required" || details?.error_codes?.includes(65001) || description.includes("AADSTS65001")) {
+    return "Microsoft demande un consentement pour les permissions demandées. Un administrateur Microsoft doit approuver l'application AVA Soft Phone, ou autoriser le consentement utilisateur dans Entra.";
+  }
+  if (description.includes("AADSTS50011") || /redirect_uri/i.test(description)) {
+    return "L'adresse de redirection Microsoft ne correspond pas exactement à celle configurée dans Entra.";
+  }
+  return description || details?.error || "Échec OAuth Microsoft";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -24,7 +37,7 @@ Deno.serve(async (req) => {
     const tenant = c.tenant_id ?? Deno.env.get("MICROSOFT_TENANT_ID") ?? "common";
     if (!clientId || !clientSecret) return new Response(JSON.stringify({ success: false, error: "MS365 non configuré côté admin" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const requestedScope = "openid profile email offline_access User.Read User.ReadBasic.All User.Read.All Contacts.Read Contacts.ReadWrite People.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite ChatMessage.Send Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All";
+    const requestedScope = MS365_DELEGATED_SCOPES;
     const body = new URLSearchParams({
       client_id: clientId, client_secret: clientSecret, grant_type: "authorization_code",
       code, redirect_uri, scope: requestedScope,
@@ -34,7 +47,7 @@ Deno.serve(async (req) => {
     const d = await r.json();
     if (!r.ok) {
       console.error("[ms365-oauth-exchange] MS token error", r.status, JSON.stringify(d));
-      return new Response(JSON.stringify({ success: false, error: d.error_description ?? "OAuth failed", details: d }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: false, error: microsoftOAuthErrorMessage(d), details: d }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const meRes = await fetch("https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName", {

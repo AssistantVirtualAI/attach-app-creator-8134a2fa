@@ -30,7 +30,19 @@ const Ms365Callback = lazy(() => import('@/pages/planipret/Ms365Callback'));
 const MMs365Diagnostics = lazy(() => import('@/pages/planipret/mobile/MMs365Diagnostics'));
 const MStyleDiagnostics = lazy(() => import('@/pages/planipret/mobile/MStyleDiagnostics'));
 
-const queryClient = new QueryClient();
+
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+      retry: 1,
+    },
+  },
+});
 
 function Fallback() {
   return (

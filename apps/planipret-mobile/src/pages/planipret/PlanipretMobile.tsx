@@ -795,9 +795,9 @@ export default function PlanipretMobile() {
         <div ref={scrollRef} className="flex-1 overflow-y-auto pb-[130px]">
           <PullIndicator pullDist={pullDist} refreshing={refreshing} threshold={threshold} color={ACCENT} />
           <PlanipretErrorBoundary key={location.pathname}>
-            <Suspense fallback={<MobileScreenSkeleton />}>
+            <LazyRouteBoundary>
               <Outlet context={{ profile, reloadProfile: loadProfile, openDialer, openAva, registerRefresh, softphone } satisfies PlanipretMobileContext} />
-            </Suspense>
+            </LazyRouteBoundary>
           </PlanipretErrorBoundary>
         </div>
         <SessionTimeoutModal />

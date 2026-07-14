@@ -26,6 +26,21 @@ const registry: Record<string, Factory> = {
   "/planipret/admin/mobile-devices": () => import("@/pages/planipret/admin/PAMobileDevices"),
   "/planipret/admin/sip-diagnostic": () => import("@/pages/planipret/admin/PASipDiagnostic"),
   "/planipret/admin/diagnostics": () => import("@/pages/planipret/admin/PADiagnostics"),
+
+  // Planipret mobile screens
+  "/mplanipret": () => import("@/pages/planipret/mobile/MHome"),
+  "/mplanipret/home": () => import("@/pages/planipret/mobile/MHome"),
+  "/mplanipret/calls": () => import("@/pages/planipret/mobile/MCalls"),
+  "/mplanipret/messages": () => import("@/pages/planipret/mobile/MMessages"),
+  "/mplanipret/voicemail": () => import("@/pages/planipret/mobile/MVoicemail"),
+  "/mplanipret/contacts": () => import("@/pages/planipret/mobile/MContacts"),
+  "/mplanipret/more": () => import("@/pages/planipret/mobile/MMore"),
+  "/mplanipret/pipeline": () => import("@/pages/planipret/mobile/MPipeline"),
+  "/mplanipret/search": () => import("@/pages/planipret/mobile/MSearch"),
+  "/mplanipret/stats": () => import("@/pages/planipret/mobile/MStats"),
+  "/mplanipret/ava": () => import("@/pages/planipret/mobile/MAvaChat"),
+  "/mplanipret/notifications": () => import("@/pages/planipret/mobile/MAvaNotifications"),
+  "/mplanipret/extension-sync": () => import("@/pages/planipret/mobile/MExtensionSync"),
 };
 
 const started = new Set<string>();

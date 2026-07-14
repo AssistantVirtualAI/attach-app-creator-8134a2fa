@@ -10,10 +10,7 @@ import { toast } from "sonner";
 
 const MS_SCOPES = [
   "openid", "profile", "email", "offline_access",
-  "User.Read", "Mail.ReadWrite", "Mail.Send",
-  "Calendars.ReadWrite", "Chat.Read", "Chat.ReadWrite",
-  "Channel.ReadBasic.All", "ChannelMessage.Read.All", "ChannelMessage.Send",
-  "Team.ReadBasic.All",
+  "User.Read", "Mail.ReadWrite", "Mail.Send", "MailboxSettings.Read", "Calendars.ReadWrite",
 ];
 
 export default function MMs365Diagnostics() {
@@ -34,7 +31,7 @@ export default function MMs365Diagnostics() {
       redirect_uri: callbackUrl,
       response_mode: "query",
       scope: MS_SCOPES.join(" "),
-      prompt: "select_account",
+      prompt: "consent",
     });
     window.location.href = `https://login.microsoftonline.com/${data.detection.tenant_id}/oauth2/v2.0/authorize?${params}`;
   }

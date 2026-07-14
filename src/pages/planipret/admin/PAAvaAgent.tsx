@@ -5,12 +5,13 @@ import ElevenLabsManagementCard from "@/components/planipret/admin/integrations/
 import AvaVoiceHealthPanel from "@/components/planipret/admin/ava/AvaVoiceHealthPanel";
 import AvaVoiceBrokersTable from "@/components/planipret/admin/ava/AvaVoiceBrokersTable";
 import AvaVoiceSessionsLog from "@/components/planipret/admin/ava/AvaVoiceSessionsLog";
+import AvaVoiceSimulatorPanel from "@/components/planipret/admin/ava/AvaVoiceSimulatorPanel";
 import { Bot } from "lucide-react";
 
 export default function PAAvaAgent() {
   const { t } = useMplanipretLang();
   const [userId, setUserId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"health" | "brokers" | "sessions" | "config">("health");
+  const [tab, setTab] = useState<"health" | "brokers" | "sessions" | "simulator" | "config">("health");
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));

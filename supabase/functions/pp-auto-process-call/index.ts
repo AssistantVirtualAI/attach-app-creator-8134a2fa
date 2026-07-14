@@ -34,14 +34,15 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const { data: row, error } = await admin
     .from("planipret_phone_calls")
-    .select("id, recording_url, transcript, transcript_raw, analyzed_at, analysis_in_progress, analysis_locked_at, ns_call_id, ns_cdr_id, ns_orig_callid, has_recording, duration_seconds")
+    .select("id, recording_url, transcript, transcript_raw, analyzed_at, ai_summary, ai_coaching, coaching_score, analysis_in_progress, analysis_locked_at, ns_call_id, ns_callid, ns_cdr_id, ns_orig_callid, has_recording, duration_seconds")
     .eq("id", callId)
     .maybeSingle();
   if (error) return json({ error: "load failed", details: error.message }, 500);
   if (!row) return json({ error: "call not found" }, 404);
 
   // Idempotency short-circuits — cheap and avoids any downstream cost.
-  if (row.analyzed_at) return json({ ok: true, skipped: "already_analyzed" });
+  const hasCompleteAnalysis = !!row.analyzed_at && !!row.ai_summary && !!row.ai_coaching && row.coaching_score != null;
+  if (hasCompleteAnalysis) return json({ ok: true, skipped: "already_analyzed" });
   if (row.analysis_in_progress) {
     const lockedAt = new Date(row.analysis_locked_at || 0).getTime();
     if (Date.now() - lockedAt < 5 * 60_000) {
@@ -55,6 +56,7 @@ Deno.serve(async (req) => {
   const hasAnySource =
     !!row.recording_url ||
     !!row.ns_call_id ||
+    !!row.ns_callid ||
     !!row.ns_cdr_id ||
     !!row.ns_orig_callid ||
     row.has_recording === true;
@@ -77,6 +79,9 @@ Deno.serve(async (req) => {
       const j = await r.json().catch(() => ({}));
       if (j?.transcript) transcript = j.transcript;
       if (j?.pending) return json({ ok: true, pending: true, stage: "transcribe" });
+      if (!r.ok || j?.ok === false || j?.error) {
+        return json({ ok: false, stage: "transcribe", status: r.status, detail: j }, r.ok ? 500 : r.status);
+      }
       // pp-admin-transcribe already re-invokes pp-coach-call when it produced
       // the transcript itself, so nothing more to do here.
       if (j?.ok && !row.analyzed_at) return json({ ok: true, stage: "transcribed" });

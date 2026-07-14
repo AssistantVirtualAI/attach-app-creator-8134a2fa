@@ -34,6 +34,7 @@ Deno.serve(async (req) => {
       const { data: isMember } = await admin.rpc("is_planipret_member", { _user_id: userData.user.id });
       if (isAdmin !== true && isMember !== true) return json({ error: "Forbidden" }, 403);
     }
+    const internalAuth = `Bearer ${SERVICE_ROLE}`;
 
     const body = await req.json().catch(() => ({}));
     const callId = body.call_id ?? body.call_row_id ?? body.id;
@@ -50,14 +51,15 @@ Deno.serve(async (req) => {
         try {
           await fetch(`${SUPABASE_URL}/functions/v1/pp-coach-call`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: auth },
+            headers: { "Content-Type": "application/json", Authorization: internalAuth },
             body: JSON.stringify({ call_id: callId, transcript: row.transcript }),
           });
         } catch (_) { /* best-effort */ }
       }
-      await admin.from("planipret_phone_calls")
+      const { error: cacheErr } = await admin.from("planipret_phone_calls")
         .update({ transcript_pending: false })
         .eq("id", callId);
+      if (cacheErr) return json({ ok: false, error: "DB_UPDATE_FAILED", hint: cacheErr.message }, 500);
       return json({ ok: true, transcript: row.transcript, cached: true });
     }
 
@@ -75,26 +77,27 @@ Deno.serve(async (req) => {
     try {
       const nsTxRes = await fetch(`${SUPABASE_URL}/functions/v1/ns-get-transcription`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: auth },
+        headers: { "Content-Type": "application/json", Authorization: internalAuth },
         body: JSON.stringify({ call_db_id: callId }),
       });
       const nsTx = await nsTxRes.json().catch(() => ({} as any));
       if (nsTx?.success && Array.isArray(nsTx.segments) && nsTx.segments.length) {
         const transcript = nsTx.segments.map((s: any) => `${s.speaker ?? "Speaker"}: ${s.text}`).join("\n");
-        await admin.from("planipret_phone_calls")
+        const { error: txUpErr } = await admin.from("planipret_phone_calls")
           .update({
             transcript,
             transcript_segments: nsTx.segments,
             transcript_language: nsTx.language ?? null,
-            transcript_source: "ns-api",
+            transcript_source: "netsapiens",
             transcript_pending: false,
-            has_transcript: true,
+            transcript_fetched_at: new Date().toISOString(),
           })
           .eq("id", callId);
+        if (txUpErr) return json({ ok: false, error: "DB_UPDATE_FAILED", hint: txUpErr.message }, 500);
         try {
           await fetch(`${SUPABASE_URL}/functions/v1/pp-coach-call`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: auth },
+            headers: { "Content-Type": "application/json", Authorization: internalAuth },
             body: JSON.stringify({ call_id: callId, transcript }),
           });
         } catch (_) { /* best-effort */ }
@@ -106,7 +109,7 @@ Deno.serve(async (req) => {
     let recUrl = row.recording_url as string | null;
     const resolveRes = await fetch(`${SUPABASE_URL}/functions/v1/pp-admin-recording-resolve`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: auth },
+      headers: { "Content-Type": "application/json", Authorization: internalAuth },
       body: JSON.stringify({ call_row_id: callId, force: true }),
     });
     const resolveJson = await resolveRes.json().catch(() => ({} as any));
@@ -119,7 +122,7 @@ Deno.serve(async (req) => {
     try {
       const proxyRes = await fetch(`${SUPABASE_URL}/functions/v1/ns-get-recording`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: auth },
+        headers: { "Content-Type": "application/json", Authorization: internalAuth },
         body: JSON.stringify({ call_db_id: callId }),
       });
       const proxyCt = proxyRes.headers.get("content-type") ?? "";
@@ -158,21 +161,23 @@ Deno.serve(async (req) => {
     const transcript = String(sttJson?.text ?? "").trim();
     if (!transcript) return await markPending("Aucun texte détecté dans l'audio.");
 
-    await admin.from("planipret_phone_calls")
+    const { error: sttUpErr } = await admin.from("planipret_phone_calls")
       .update({
         transcript,
         transcript_source: "whisper-fallback",
         transcript_pending: false,
         recording_url: recUrl ?? row.recording_url,
+        transcript_fetched_at: new Date().toISOString(),
       })
       .eq("id", callId);
+    if (sttUpErr) return json({ ok: false, error: "DB_UPDATE_FAILED", hint: sttUpErr.message }, 500);
 
     // Chain to Claude-powered coaching (same config as /planipret/admin) so the record is
     // instantly enriched with corrected transcript + summary + coaching + score.
     try {
       await fetch(`${SUPABASE_URL}/functions/v1/pp-coach-call`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: auth },
+        headers: { "Content-Type": "application/json", Authorization: internalAuth },
         body: JSON.stringify({ call_id: callId, transcript }),
       });
     } catch (_) { /* best-effort */ }

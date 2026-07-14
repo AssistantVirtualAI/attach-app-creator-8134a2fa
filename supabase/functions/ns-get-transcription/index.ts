@@ -357,8 +357,8 @@ Deno.serve(async (req) => {
       await admin.from("planipret_phone_calls").update({
         transcript: text,
         transcript_segments: segments,
-        transcript_source: "ns-api",
-        has_transcript: true,
+        transcript_source: "netsapiens",
+        transcript_fetched_at: new Date().toISOString(),
       }).eq("id", call_db_id);
     } catch { /* best-effort cache */ }
   }

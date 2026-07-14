@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const { data: row, error } = await admin
     .from("planipret_phone_calls")
-    .select("id, recording_url, transcript, raw_transcript, analyzed_at, analysis_in_progress, analysis_locked_at")
+    .select("id, recording_url, transcript, transcript_raw, analyzed_at, analysis_in_progress, analysis_locked_at")
     .eq("id", callId)
     .maybeSingle();
   if (error) return json({ error: "load failed", details: error.message }, 500);
@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
   // Step 1 — ensure transcript exists. pp-admin-transcribe backs off if the
   // recording isn't fetchable yet (returns { pending: true }) — trigger will
   // fire again on the next recording_url / transcript update.
-  let transcript = row.transcript ?? row.raw_transcript ?? null;
+  let transcript = row.transcript ?? row.transcript_raw ?? null;
   if (!transcript || transcript.trim().length < 20) {
     try {
       const r = await fetch(`${SUPABASE_URL}/functions/v1/pp-admin-transcribe`, {

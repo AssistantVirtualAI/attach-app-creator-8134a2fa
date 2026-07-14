@@ -745,6 +745,125 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     return { success: true };
   },
 
+  // ===== M365 CONTACTS =====
+  async find_contact(ctx, p) {
+    const query = String(p?.query ?? p?.name ?? "").trim();
+    if (!query) return { success: false, error: "query_required" };
+    const results: any[] = [];
+    // 1) local
+    const { data: local } = await ctx.admin.from("planipret_contacts")
+      .select("full_name, phone, email").ilike("full_name", `%${query}%`).limit(5);
+    for (const c of local ?? []) results.push({ name: c.full_name, email: c.email, phone: c.phone, source: "local" });
+    // 2) Maestro
+    const { data: mst } = await ctx.admin.from("planipret_maestro_clients")
+      .select("name, phone, email").ilike("name", `%${query}%`).limit(5);
+    for (const c of mst ?? []) results.push({ name: c.name, email: c.email, phone: c.phone, source: "maestro" });
+    // 3) MS365
+    const ms = await msAction(ctx, "search_contact", { query });
+    if (ms?.results) for (const r of ms.results) results.push(r);
+    if (ms?.error && !results.length) {
+      return { success: false, error: ms.error, needs_reconnect: /scope|permission|Insufficient/i.test(String(ms.error)), message: `Impossible de chercher dans Microsoft : ${ms.error}` };
+    }
+    // Dédupliquer par email
+    const seen = new Set<string>();
+    const unique = results.filter((r) => {
+      const k = (r.email || r.phone || r.name || "").toLowerCase();
+      if (!k || seen.has(k)) return false;
+      seen.add(k); return true;
+    }).slice(0, 10);
+    return { success: true, count: unique.length, contacts: unique, message: unique.length ? `${unique.length} contact(s) trouvé(s) pour "${query}"` : `Aucun contact trouvé pour "${query}"` };
+  },
+
+  // ===== M365 TEAMS =====
+  async list_teams_chats(ctx, _p) {
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-teams-list`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json", "X-Ava-User-Id": ctx.userId },
+      body: JSON.stringify({ _user_id: ctx.userId }),
+    });
+    const j = await r.json().catch(() => ({}));
+    const chats = (j?.chats ?? []).slice(0, 20).map((c: any) => ({
+      chat_id: c.id, topic: c.topic ?? null, type: c.chatType,
+      members: (c.members ?? []).map((m: any) => m.displayName ?? m.email).filter(Boolean),
+      last_message_at: c.lastMessagePreview?.createdDateTime,
+    }));
+    const teams = (j?.teams ?? []).map((t: any) => ({
+      team_id: t.team?.id, team_name: t.team?.displayName,
+      channels: (t.channels ?? []).map((ch: any) => ({ channel_id: ch.id, name: ch.displayName })),
+    }));
+    return { success: !j?.error, chats, teams, count_chats: chats.length, count_teams: teams.length };
+  },
+
+  async create_teams_chat(ctx, p) {
+    // p: { user_ids?: string[], contact_emails?: string[], contact_name?, topic? }
+    let userIds: string[] = Array.isArray(p.user_ids) ? p.user_ids.slice() : [];
+    const emails: string[] = Array.isArray(p.contact_emails) ? p.contact_emails.slice() : [];
+    if (p.contact_email) emails.push(p.contact_email);
+    if (!emails.length && p.contact_name) {
+      const hit = await resolveContact(ctx, p.contact_name, "email");
+      if (hit?.value) emails.push(hit.value);
+    }
+    // Résoudre emails → IDs Graph
+    for (const email of emails) {
+      const res = await msAction(ctx, "resolve_user_id", { email });
+      if (res?.user_id) userIds.push(res.user_id);
+    }
+    userIds = Array.from(new Set(userIds.filter(Boolean)));
+    if (!userIds.length) return { success: false, error: "no_recipients", message: "Aucun destinataire résolu pour créer le chat Teams." };
+
+    const authHeader = ctx.profile.user_jwt ? `Bearer ${ctx.profile.user_jwt}` : `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create_teams_chat", _user_id: ctx.userId, payload: { user_ids: userIds, topic: p.topic } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    return { success: !!j?.success, chat_id: j?.chat_id, message: j?.success ? "Chat Teams créé" : `Échec : ${j?.error ?? "inconnu"}` };
+  },
+
+  async send_teams_message(ctx, p) {
+    // p: { chat_id? | (team_id + channel_id) | contact_name | contact_email, content, contentType? }
+    const content = p.content ?? p.message;
+    if (!content) return { success: false, error: "content_required" };
+    let chatId = p.chat_id;
+    const teamId = p.team_id, channelId = p.channel_id;
+
+    if (!chatId && !(teamId && channelId)) {
+      // Résoudre par contact
+      let email = p.contact_email;
+      if (!email && p.contact_name) {
+        const hit = await resolveContact(ctx, p.contact_name, "email");
+        email = hit?.value;
+        if (!email) return { success: false, error: "contact_not_found", message: `Aucun email trouvé pour ${p.contact_name}` };
+      }
+      if (email) {
+        const created = await TOOLS.create_teams_chat(ctx, { contact_email: email });
+        if (!created.success) return { success: false, error: created.error, message: `Impossible de créer le chat Teams : ${created.error}` };
+        chatId = created.chat_id as string;
+      }
+    }
+
+    if (!chatId && !(teamId && channelId)) {
+      return { success: false, error: "no_destination", message: "Fournis chat_id, team_id+channel_id, ou contact_name/contact_email." };
+    }
+
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "send_teams_message",
+        _user_id: ctx.userId,
+        payload: { chat_id: chatId, team_id: teamId, channel_id: channelId, content, contentType: p.contentType ?? "text" },
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!j?.success) {
+      return { success: false, error: j?.error ?? j?.details?.message, message: `Message Teams NON envoyé : ${j?.error ?? j?.details?.message ?? "erreur inconnue"}` };
+    }
+    return { success: true, message_id: j?.message_id, message: "Message Teams envoyé" };
+  },
+
+
   // ===== STATS =====
   async get_daily_briefing(ctx) {
     try {

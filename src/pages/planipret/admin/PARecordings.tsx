@@ -7,6 +7,7 @@ import Pagination from "@/components/planipret/admin/Pagination";
 import DebugPanel, { type DebugEntry } from "@/components/planipret/admin/DebugPanel";
 import { TableErrorState, TableEmptyState } from "@/components/planipret/admin/TableStates";
 import { getPlanipretBrokerDirectory } from "@/lib/planipret/adminDirectory";
+import { getAiCorrectedTranscript, getAiTranscriptSegments, getDisplayTranscript } from "@/lib/planipretTranscript";
 import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import AvaCallRecordingsPanel from "@/components/planipret/admin/ava/AvaCallRecordingsPanel";
@@ -151,13 +152,7 @@ export default function PARecordings() {
       const d = data as any;
       if (d?.ok && d?.transcript) {
         const segments = Array.isArray(d.segments) ? d.segments : null;
-        await supabase.from("planipret_phone_calls").update({
-          transcript: d.transcript,
-          transcript_segments: segments,
-          transcript_source: d.source ?? "ai",
-          has_transcript: true,
-        }).eq("id", callId);
-        setDetail((cur: any) => cur && cur.id === callId ? { ...cur, transcript: d.transcript, transcript_segments: segments, has_transcript: true } : cur);
+        setDetail((cur: any) => cur && cur.id === callId ? { ...cur, transcript: d.transcript, transcript_segments: segments, transcript_source: d.source ?? cur.transcript_source, has_transcript: true } : cur);
         await load(page, pageSize);
       } else if (d?.pending) {
         // Transcript pas encore prêt côté téléphone — polling automatique
@@ -286,7 +281,14 @@ export default function PARecordings() {
       }
       if (d?.success) {
         toast.success(`Coaching généré (score ${d.score ?? "—"}/100)`);
-        setDetail((c: any) => c && c.id === callId ? { ...c, ai_summary: d.summary, ai_coaching: d.coaching, raw_transcript: c.raw_transcript ?? c.transcript, transcript: d.corrected_transcript ?? c.transcript, lead_score: d.score } : c);
+        setDetail((c: any) => c && c.id === callId ? {
+          ...c,
+          ai_summary: d.summary,
+          ai_coaching: d.coaching,
+          ai_analysis_json: d.corrected_transcript ? { ...(c.ai_analysis_json ?? {}), corrected_transcript: d.corrected_transcript } : c.ai_analysis_json,
+          lead_score: d.score,
+          coaching_score: d.coaching_score ?? c.coaching_score,
+        } : c);
         setCoachStatus((s) => ({ ...s, [callId]: "done" }));
       }
     } catch (e: any) {
@@ -388,8 +390,9 @@ export default function PARecordings() {
 
 
   const inputStyle = { background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" };
-  const detailSegments = Array.isArray(detail?.transcript_segments) ? detail.transcript_segments.filter((s: any) => s?.text) : [];
-  const hasDetailTranscript = Boolean(detail?.transcript) || detailSegments.length > 0;
+  const detailSegments = getAiTranscriptSegments(detail).filter((s: any) => s?.text);
+  const detailTranscript = getDisplayTranscript(detail);
+  const hasDetailTranscript = Boolean(detailTranscript) || detailSegments.length > 0;
 
   const tab = (params.get("tab") ?? "pbx") as "pbx" | "ava";
   const setTab = (v: "pbx" | "ava") => updateParams({ tab: v === "pbx" ? null : v });
@@ -689,7 +692,7 @@ export default function PARecordings() {
               {hasDetailTranscript ? (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <p style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Transcription de l'appel</p>
+                    <p style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Transcription corrigée par l'IA</p>
                     {detail.ai_coaching && (
                       <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: "rgba(16,185,129,0.14)", color: "#10b981", border: "1px solid #10b98155", fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>● Analysé</span>
                     )}
@@ -717,12 +720,12 @@ export default function PARecordings() {
                     </div>
                   ) : (
                     <div className="p-3 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
-                      <div className="whitespace-pre-wrap">{detail.raw_transcript || detail.transcript}</div>
+                      <div className="whitespace-pre-wrap">{detailTranscript}</div>
                     </div>
                   )}
-                  {detail.ai_coaching && detail.transcript && detail.raw_transcript && detail.transcript !== detail.raw_transcript && (
+                  {getAiCorrectedTranscript(detail) && detail.transcript && getAiCorrectedTranscript(detail) !== detail.transcript && (
                     <details className="mt-2">
-                      <summary style={{ fontSize: 11, color: "var(--pp-text-muted)", cursor: "pointer", padding: "6px 0" }}>Version corrigée par Claude</summary>
+                      <summary style={{ fontSize: 11, color: "var(--pp-text-muted)", cursor: "pointer", padding: "6px 0" }}>Version brute NetSapiens</summary>
                       <div className="p-3 rounded-lg mt-1" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
                         <div className="whitespace-pre-wrap">{detail.transcript}</div>
                       </div>

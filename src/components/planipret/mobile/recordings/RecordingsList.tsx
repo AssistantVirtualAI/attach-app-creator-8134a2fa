@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { getAiTranscriptSegments } from "@/lib/planipretTranscript";
 import {
   Play, Pause, Download, RotateCcw, RotateCw, Sparkles, FileText, Bot,
   Loader2, Search, Copy, Check, ChevronDown, Link2, User, Flame, Snowflake, Thermometer, ListChecks,
@@ -38,6 +39,7 @@ export type RecordingCall = {
   transcript_segments?: any;
   transcript_language?: string | null;
   ai_summary: string | null;
+  ai_analysis_json?: any;
   ai_coaching?: any;
   ai_key_points?: any;
   ai_client_insights?: any;
@@ -93,7 +95,11 @@ const recordingLookupBody = (c: RecordingCall) => ({
 });
 const applyCoachPayload = (call: RecordingCall, payload: any): RecordingCall => ({
   ...call,
-  transcript: payload?.corrected_transcript ?? payload?.transcript ?? call.transcript,
+  transcript: payload?.transcript ?? call.transcript,
+  ai_analysis_json: payload?.ai_analysis_json ?? payload?.analysis ?? (payload?.corrected_transcript ? {
+    ...(call.ai_analysis_json ?? {}),
+    corrected_transcript: payload.corrected_transcript,
+  } : call.ai_analysis_json),
   ai_summary: payload?.summary ?? payload?.ai_summary ?? call.ai_summary,
   ai_coaching: payload?.coaching ?? payload?.ai_coaching ?? call.ai_coaching,
   lead_score: payload?.score ?? call.lead_score,
@@ -398,6 +404,7 @@ function RecordingCard({
             ...call,
             transcript: n.transcript ?? call.transcript,
             transcript_segments: n.transcript_segments ?? call.transcript_segments,
+            ai_analysis_json: n.ai_analysis_json ?? call.ai_analysis_json,
             transcript_language: n.transcript_language ?? call.transcript_language,
             ai_summary: n.ai_summary ?? call.ai_summary,
             ai_coaching: n.ai_coaching ?? call.ai_coaching,
@@ -733,10 +740,8 @@ function TranscriptSection({ call, onUpdated }: { call: RecordingCall; onUpdated
   const [copied, setCopied] = useState(false);
 
   const segments: Array<{ speaker?: string; text: string; start?: number }> = useMemo(() => {
-    if (Array.isArray(call.transcript_segments) && call.transcript_segments.length) return call.transcript_segments;
-    if (call.transcript) return [{ text: call.transcript }];
-    return [];
-  }, [call.transcript_segments, call.transcript]);
+    return getAiTranscriptSegments(call) as Array<{ speaker?: string; text: string; start?: number }>;
+  }, [call]);
 
   const run = async () => {
     setLoading(true);

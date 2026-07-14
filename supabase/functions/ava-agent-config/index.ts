@@ -17,11 +17,13 @@ const TOOL_NAMES = [
   "search_client", "get_client_profile", "get_client_history",
   "create_task", "create_appointment", "get_pending_tasks",
   "get_upcoming_appointments", "update_client", "create_client",
-  // M365
+  // M365 Mail + Calendar
   "read_emails", "get_unread_emails", "get_recent_emails",
   "send_email", "summarize_email",
   "get_calendar_today", "get_calendar_week", "get_upcoming_meetings",
   "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
+  // M365 Contacts & Teams
+  "find_contact", "list_teams_chats", "create_teams_chat", "send_teams_message",
   // navigation
   "navigate_to", "show_client_in_app", "open_call_detail",
   // stats

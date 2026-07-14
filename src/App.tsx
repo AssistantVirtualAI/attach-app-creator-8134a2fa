@@ -61,6 +61,7 @@ const PAAvaAgent = lazyWithRetry(() => import("./pages/planipret/admin/PAAvaAgen
 const PAAvaLogs = lazyWithRetry(() => import("./pages/planipret/admin/PAAvaLogs"));
 const PAMobileDevices = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileDevices"));
 const PASipDiagnostic = lazyWithRetry(() => import("./pages/planipret/admin/PASipDiagnostic"));
+const PADiagnostics = lazyWithRetry(() => import("./pages/planipret/admin/PADiagnostics"));
 const PlanipretPrivacy = lazyWithRetry(() => import("./pages/planipret/PlanipretPrivacy"));
 const PlanipretIntegrationsLazy = lazyWithRetry(() => import("./pages/planipret/PlanipretIntegrations"));
 import { AdminPageSkeleton } from "./components/planipret/Skeletons";
@@ -283,7 +284,19 @@ import MyDashboardLanding from "./pages/portals/MyDashboardLanding";
 const DesignPreview = lazyWithRetry(() => import("./pages/DesignPreview"));
 
 
-const queryClient = new QueryClient();
+// SWR-friendly defaults: keep data on screen while revalidating in background,
+// dedupe repeated fetches from many components, avoid noisy refetch-on-focus.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+      retry: 1,
+    },
+  },
+});
 
 import { TrialExpiredGate } from "./components/billing/TrialExpiredGate";
 
@@ -369,7 +382,7 @@ const App = () => (
 
             <OrganizationProvider>
               <RouteDebugOverlay />
-              <Suspense fallback={<div>Loading...</div>}>
+              <Suspense fallback={<AdminPageSkeleton />}>
               <Routes>
                 {/* Landing page on root */}
                 <Route path="/" element={<Landing />} />
@@ -471,6 +484,7 @@ const App = () => (
                   <Route path="ava-logs" element={<Suspense fallback={<AdminPageSkeleton />}><PAAvaLogs /></Suspense>} />
                   <Route path="mobile-devices" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileDevices /></Suspense>} />
                   <Route path="sip-diagnostic" element={<Suspense fallback={<AdminPageSkeleton />}><PASipDiagnostic /></Suspense>} />
+                  <Route path="diagnostics" element={<Suspense fallback={<AdminPageSkeleton />}><PADiagnostics /></Suspense>} />
                 </Route>
                 <Route path="/planipret/privacy" element={<Suspense fallback={<AdminPageSkeleton />}><PlanipretPrivacy /></Suspense>} />
 

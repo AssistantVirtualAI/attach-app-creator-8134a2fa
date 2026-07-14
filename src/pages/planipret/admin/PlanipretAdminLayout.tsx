@@ -308,19 +308,25 @@ export default function PlanipretAdminLayout() {
           {NAV.map((group) => (
             <div key={group.sectionKey}>
               <div className="pp-nav-section">{tt(`adminPortal.sections.${group.sectionKey}`)}</div>
-              {group.items.map(({ to, key, Icon, badge }) => (
-                <NavLink key={to} to={to} end
-                  className={({ isActive }) => `pp-nav-item ${isActive ? "is-active" : ""}`}>
-                  {({ isActive }) => (
-                    <>
-                      <Icon className="w-[17px] h-[17px] flex-shrink-0"
-                        style={{ color: isActive ? "var(--pp-brand-accent-2)" : "var(--pp-text-muted)" }} />
-                      <span className="flex-1 truncate">{tt(`adminPortal.nav.${key}`)}</span>
-                      {renderBadge(badge)}
-                    </>
-                  )}
-                </NavLink>
-              ))}
+              {group.items.map(({ to, key, Icon, badge }) => {
+                const raw = tt(`adminPortal.nav.${key}`);
+                const label = raw && !raw.startsWith("adminPortal.")
+                  ? raw
+                  : (key === "diagnostics" ? (lang === "en" ? "Diagnostics" : "Diagnostic") : key);
+                return (
+                  <PrefetchNavLink key={to} to={to} end
+                    className={({ isActive }) => `pp-nav-item ${isActive ? "is-active" : ""}`}>
+                    {({ isActive }) => (
+                      <>
+                        <Icon className="w-[17px] h-[17px] flex-shrink-0"
+                          style={{ color: isActive ? "var(--pp-brand-accent-2)" : "var(--pp-text-muted)" }} />
+                        <span className="flex-1 truncate">{label}</span>
+                        {renderBadge(badge)}
+                      </>
+                    )}
+                  </PrefetchNavLink>
+                );
+              })}
             </div>
           ))}
         </nav>

@@ -20,6 +20,21 @@ import { consumeAppLoginToken } from "./lib/auth/consumeAppLoginToken";
 // Initialize Sentry for error monitoring (if configured)
 initSentry();
 
+// Start collecting Core Web Vitals + timings as soon as the app boots.
+initPerfMetrics();
+
+// After React mounts, idle-prefetch the routes admins hit right after Overview.
+setTimeout(() => {
+  scheduleIdlePrefetch([
+    "/planipret/admin/overview",
+    "/planipret/admin/calls",
+    "/planipret/admin/messages",
+    "/planipret/admin/recordings",
+    "/planipret/admin/ava",
+    "/planipret/admin/reports",
+  ]);
+}, 500);
+
 // Auto-login via ?ava_token=... (mobile/desktop app invites). Best-effort; runs
 // before React mounts so the session is ready when ProtectedRoute evaluates.
 consumeAppLoginToken().finally(() => {

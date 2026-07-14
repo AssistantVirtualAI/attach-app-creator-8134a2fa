@@ -214,7 +214,7 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
         },
         body: JSON.stringify({
           model,
-          max_tokens: 4096,
+          max_tokens: 12000,
           system: SYSTEM_PROMPT,
           tools: [ANALYSIS_TOOL],
           tool_choice: { type: "tool", name: "record_call_analysis" },
@@ -279,6 +279,36 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
         analysis_in_progress: false, analysis_locked_at: null, analysis_locked_by: null,
       }).eq("id", call_id);
       return json({ error: "AI returned invalid JSON", provider: usedProvider, raw }, 502);
+    }
+
+    const hasText = (v: any) => typeof v === "string" && v.trim().length > 0;
+    const hasRequiredOutput = (v: any) => !!(
+      hasText(v?.corrected_transcript)
+      && hasText(v?.summary)
+      && v?.coaching && typeof v.coaching === "object"
+      && typeof v?.score === "number"
+    );
+    if (!hasRequiredOutput(parsed) && usedProvider === "claude" && LOVABLE_API_KEY) {
+      const retry = await callLovable();
+      if (retry.ok) {
+        try {
+          const cleaned = String(retry.content ?? "{}").replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+          const extra = JSON.parse(cleaned);
+          parsed = {
+            ...parsed,
+            corrected_transcript: hasText(parsed.corrected_transcript) ? parsed.corrected_transcript : extra.corrected_transcript,
+            segments: Array.isArray(parsed.segments) && parsed.segments.length ? parsed.segments : extra.segments,
+            summary: hasText(parsed.summary) ? parsed.summary : extra.summary,
+            topics: Array.isArray(parsed.topics) && parsed.topics.length ? parsed.topics : extra.topics,
+            action_items: Array.isArray(parsed.action_items) && parsed.action_items.length ? parsed.action_items : extra.action_items,
+            coaching: parsed.coaching && typeof parsed.coaching === "object" ? parsed.coaching : extra.coaching,
+            score: typeof parsed.score === "number" ? parsed.score : extra.score,
+          };
+          usedProvider = "lovable";
+        } catch (e) {
+          console.warn("[coach] fallback JSON parse failed", (e as Error).message);
+        }
+      }
     }
 
     const corrected = typeof parsed.corrected_transcript === "string" ? parsed.corrected_transcript : null;

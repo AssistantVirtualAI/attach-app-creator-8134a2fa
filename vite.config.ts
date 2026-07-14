@@ -227,7 +227,7 @@ export default defineConfig(({ mode }) => {
         assetFileNames: "assets/[name]-[hash][extname]",
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) return "vendor-react";
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react\/jsx-runtime|react\/jsx-dev-runtime)[\\/]/.test(id)) return "vendor-react";
           if (id.includes("react-router")) return "vendor-router";
           if (id.includes("@supabase")) return "vendor-supabase";
           if (id.includes("@tanstack")) return "vendor-tanstack";

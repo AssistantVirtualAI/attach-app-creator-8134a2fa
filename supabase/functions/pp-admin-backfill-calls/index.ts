@@ -21,17 +21,26 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-async function processOne(callId: string, downstreamAuth: string) {
+async function processOne(row: any, downstreamAuth: string, forceAi: boolean) {
   try {
+    if (forceAi && row?.transcript) {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/pp-coach-call`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: downstreamAuth },
+        body: JSON.stringify({ call_id: row.id, force: true, reprocess: true }),
+      });
+      const j = await r.json().catch(() => ({}));
+      return { call_id: row.id, ok: r.ok && j?.error == null, status: r.status, detail: j };
+    }
     const r = await fetch(`${SUPABASE_URL}/functions/v1/pp-admin-transcribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: downstreamAuth },
-      body: JSON.stringify({ call_id: callId }),
+      body: JSON.stringify({ call_id: row.id }),
     });
     const j = await r.json().catch(() => ({}));
-    return { call_id: callId, ok: r.ok && (j?.ok !== false), status: r.status, detail: j };
+    return { call_id: row.id, ok: r.ok && (j?.ok !== false), status: r.status, detail: j };
   } catch (e) {
-    return { call_id: callId, ok: false, error: (e as Error).message };
+    return { call_id: row?.id, ok: false, error: (e as Error).message };
   }
 }
 
@@ -66,6 +75,7 @@ Deno.serve(async (req) => {
     const concurrency = Math.min(Math.max(Number(body.concurrency) || 4, 1), 8);
     const dryRun = body.dry_run === true;
     const minDuration = Number.isFinite(Number(body.min_duration)) ? Number(body.min_duration) : 5;
+    const forceAi = body.force_ai === true || body.reprocess === true || body.force_reprocess === true;
 
     // Éligibilité large: NetSapiens auto-enregistre tous les appels.
     // On prend TOUT appel avec un identifiant NS + durée > minDuration qui n'a
@@ -85,7 +95,6 @@ Deno.serve(async (req) => {
         "ns_orig_callid.not.is.null",
       ].join(","))
       .gte("duration_seconds", minDuration)
-      .or("transcript.is.null,analyzed_at.is.null,ai_summary.is.null,ai_coaching.is.null,coaching_score.is.null")
       .order("started_at", { ascending: false })
       .limit(limit);
     if (error) return json({ error: error.message }, 500);
@@ -99,6 +108,7 @@ Deno.serve(async (req) => {
       // Skip retry storm: if a transcript attempt failed in the last 10 min,
       // wait — the audio is probably still not on the PBX yet.
       if (r.transcript_last_attempt_at && !r.transcript && r.transcript_last_attempt_at > tenMinAgo) return false;
+      if (!forceAi && r.transcript && r.analyzed_at && r.ai_summary && r.ai_coaching && r.coaching_score != null) return false;
       return true;
     });
 
@@ -115,7 +125,7 @@ Deno.serve(async (req) => {
         while (cursor < eligible.length) {
           const idx = cursor++;
           const row = eligible[idx];
-          const res = await processOne(row.id, downstreamAuth);
+          const res = await processOne(row, downstreamAuth, forceAi);
           results.push(res);
           if (!res.ok) {
             console.log(`[backfill] ${row.id} FAILED status=${res.status} err=${JSON.stringify(res.detail ?? res.error).slice(0, 200)}`);

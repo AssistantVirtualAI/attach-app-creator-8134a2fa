@@ -406,6 +406,7 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
     return json({
       success: true, call_id,
       corrected_transcript: corrected,
+      ai_analysis_json: parsed,
       summary, coaching, score: score10,
       coaching_score: score100,
     });

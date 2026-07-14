@@ -21,7 +21,11 @@ export default function Ms365Callback() {
       const redirect_uri = `${window.location.origin}/auth/microsoft/callback`;
       const { data, error: e } = await supabase.functions.invoke("ms365-oauth-exchange", { body: { code, redirect_uri } });
       if (e || !(data as any)?.success) {
-        setStatus("error"); setError((data as any)?.error ?? e?.message ?? "Échec OAuth");
+        const details = (data as any)?.details;
+        const msg = (data as any)?.error ?? e?.message ?? "Échec OAuth";
+        const full = details ? `${msg} — ${details.error ?? ""} ${details.error_description ?? ""}`.trim() : msg;
+        console.error("ms365 exchange failed", { data, e });
+        setStatus("error"); setError(full);
         return;
       }
       // Active automatiquement l'abonnement AVA aux nouveaux courriels (non-bloquant)

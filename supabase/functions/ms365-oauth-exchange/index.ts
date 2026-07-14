@@ -29,9 +29,13 @@ Deno.serve(async (req) => {
       client_id: clientId, client_secret: clientSecret, grant_type: "authorization_code",
       code, redirect_uri, scope: requestedScope,
     });
+    console.log("[ms365-oauth-exchange] token request", { tenant, redirect_uri, clientId: clientId?.slice(0, 8) });
     const r = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
     const d = await r.json();
-    if (!r.ok) return new Response(JSON.stringify({ success: false, error: d.error_description ?? "OAuth failed", details: d }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!r.ok) {
+      console.error("[ms365-oauth-exchange] MS token error", r.status, JSON.stringify(d));
+      return new Response(JSON.stringify({ success: false, error: d.error_description ?? "OAuth failed", details: d }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const meRes = await fetch("https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName", {
       headers: { Authorization: `Bearer ${d.access_token}` },
@@ -47,6 +51,7 @@ Deno.serve(async (req) => {
     }).eq("user_id", userId);
     return new Response(JSON.stringify({ success: true, account: { email: me?.mail ?? me?.userPrincipalName ?? null, name: me?.displayName ?? null }, scopes: d.scope ?? requestedScope }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
+    console.error("[ms365-oauth-exchange] unhandled", e?.message, e?.stack);
     return new Response(JSON.stringify({ success: false, error: e?.message ?? "Erreur" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

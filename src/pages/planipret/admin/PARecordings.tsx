@@ -9,6 +9,7 @@ import { TableErrorState, TableEmptyState } from "@/components/planipret/admin/T
 import { getPlanipretBrokerDirectory } from "@/lib/planipret/adminDirectory";
 import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
+import AvaCallRecordingsPanel from "@/components/planipret/admin/ava/AvaCallRecordingsPanel";
 
 const ACCENT = "#2E9BDC";
 const AGENT = "#9B7FE8";
@@ -390,8 +391,34 @@ export default function PARecordings() {
   const detailSegments = Array.isArray(detail?.transcript_segments) ? detail.transcript_segments.filter((s: any) => s?.text) : [];
   const hasDetailTranscript = Boolean(detail?.transcript) || detailSegments.length > 0;
 
+  const tab = (params.get("tab") ?? "pbx") as "pbx" | "ava";
+  const setTab = (v: "pbx" | "ava") => updateParams({ tab: v === "pbx" ? null : v });
+
   return (
     <div className="space-y-4">
+      <div className="flex gap-1 border-b" style={{ borderColor: "var(--pp-bg-border-2)" }}>
+        {([
+          ["pbx", "Enregistrements PBX"],
+          ["ava", "Agent AVA (IA)"],
+        ] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setTab(k)}
+            className="px-4 py-2 -mb-px transition"
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: tab === k ? "#2E9BDC" : "var(--pp-text-muted)",
+              borderBottom: tab === k ? "2px solid #2E9BDC" : "2px solid transparent",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "ava" ? <AvaCallRecordingsPanel /> : (
+        <>
       <DebugPanel entries={debug} />
 
       <NsSyncBar features={["recordings", "cdrs"]} onReload={() => load(page, pageSize)} />
@@ -858,6 +885,8 @@ export default function PARecordings() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

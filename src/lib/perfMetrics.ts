@@ -217,24 +217,20 @@ export function initPerfMetrics() {
   });
   window.addEventListener("pagehide", flush);
 
-  // React to SPA navigation
+  // React to SPA navigation (history API is patched so pushState/replaceState fire onNav)
   const onNav = () => {
     ensureCurrent();
     notify();
   };
-  const origPush = history_pushWrap("pushState");
-  const origReplace = history_pushWrap("replaceState");
   window.addEventListener("popstate", onNav);
-
-  function history_pushWrap(k: "pushState" | "replaceState") {
-    const orig = history[k as any];
-    (window.history as any)[k] = function (...args: any[]) {
-      const r = (History.prototype as any)[k].apply(this, args);
+  (["pushState", "replaceState"] as const).forEach((k) => {
+    const orig = (window.history as any)[k].bind(window.history);
+    (window.history as any)[k] = (...args: any[]) => {
+      const r = orig(...args);
       queueMicrotask(onNav);
       return r;
     };
-    return orig;
-  }
+  });
 }
 
 export function getCurrentMetrics(): RouteMetrics | null {

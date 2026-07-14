@@ -13,6 +13,7 @@ import { readAdminReportFilters, writeAdminReportFilters, type AdminPeriod } fro
 import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import AvaElevenLabsOverviewCard from "@/components/planipret/admin/ava/AvaElevenLabsOverviewCard";
 
 const ACCENT = "#2E9BDC";
 const SUCCESS = "#00D4AA";
@@ -631,6 +632,9 @@ export default function PAOverview() {
           )}
         </ChartCard>
       </div>
+
+      {/* ElevenLabs AVA voice-agent stats */}
+      <AvaElevenLabsOverviewCard />
 
       {/* Recent activity + Brokers online */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">

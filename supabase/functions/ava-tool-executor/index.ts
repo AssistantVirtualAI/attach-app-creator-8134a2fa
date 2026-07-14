@@ -333,7 +333,39 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       }),
     });
     const j = await r.json().catch(() => ({}));
-    return { success: r.ok, appointment_id: j.appointment_id, message: `RDV "${p.title}" créé` };
+
+    // Miroir Outlook si MS365 connecté (sauf explicitement désactivé)
+    let outlook_synced = false;
+    let outlook_event_id: string | undefined;
+    let outlook_error: string | undefined;
+    if (p.sync_outlook !== false) {
+      const { data: prof } = await ctx.admin.from("planipret_profiles")
+        .select("ms365_access_token").eq("id", ctx.profile.id).maybeSingle();
+      if (prof?.ms365_access_token) {
+        const mirror = await TOOLS.create_calendar_event(ctx, {
+          subject: p.title,
+          start_datetime: startAt.toISOString(),
+          end_datetime: endAt.toISOString(),
+          attendees: p.attendees,
+          contact_name: p.contact_name,
+          contact_email: p.contact_email,
+          body: p.notes,
+          timezone: p.timezone ?? "America/Toronto",
+          is_online: p.is_online ?? true,
+        });
+        outlook_synced = !!mirror.success;
+        outlook_event_id = mirror.event_id as string | undefined;
+        if (!mirror.success) outlook_error = String(mirror.error ?? mirror.message ?? "");
+      }
+    }
+    return {
+      success: r.ok,
+      appointment_id: j.appointment_id,
+      outlook_synced,
+      outlook_event_id,
+      outlook_error,
+      message: `RDV "${p.title}" créé dans Maestro${outlook_synced ? " et synchronisé dans Outlook" : (outlook_error ? ` (Outlook a échoué : ${outlook_error})` : "")}.`,
+    };
   },
 
   async get_pending_tasks(ctx, p) {

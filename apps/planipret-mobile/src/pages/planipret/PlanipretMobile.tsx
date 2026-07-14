@@ -56,7 +56,7 @@ const AvaBadge = ({ compact = false, circle = false }: { compact?: boolean; circ
         boxShadow: compact ? undefined : "0 0 12px rgba(124,58,237,0.35)",
       }}
     >
-      <img src={avaLogoAsset.url} alt="AVA" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      <img src={avaLogoAsset.url} alt="AVA" decoding="async" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
     </div>
   );
 };
@@ -75,7 +75,7 @@ const PlanipretBadge = () => (
       background: "#fff",
     }}
   >
-    <img src={planipretLogoAsset.url} alt="Planiprêt" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+    <img src={planipretLogoAsset.url} alt="Planiprêt" decoding="async" fetchPriority="high" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
   </div>
 );
 

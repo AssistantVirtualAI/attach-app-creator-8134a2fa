@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
     }).eq("user_id", userId);
     return new Response(JSON.stringify({ success: true, account: { email: me?.mail ?? me?.userPrincipalName ?? null, name: me?.displayName ?? null }, scopes: d.scope ?? requestedScope }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
+    console.error("[ms365-oauth-exchange] unhandled", e?.message, e?.stack);
     return new Response(JSON.stringify({ success: false, error: e?.message ?? "Erreur" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

@@ -56,13 +56,6 @@ export default function AvaElevenLabsOverviewCard() {
     setLoading(true);
     setError(null);
     try {
-      const { data: res, error } = await supabase.functions.invoke("pp-admin-ava-elevenlabs", {
-        method: "GET",
-        headers: {},
-        body: undefined,
-        // supabase-js doesn't support query params natively; use fetch below instead
-      } as any);
-      // Fallback: direct fetch to control query string
       const { data: { session } } = await supabase.auth.getSession();
       const projectId = (import.meta as any).env?.VITE_SUPABASE_PROJECT_ID ?? "gejxisrqtvxavbrfcoxz";
       const anonKey = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY ?? "";
@@ -78,7 +71,6 @@ export default function AvaElevenLabsOverviewCard() {
       const j = await resp.json();
       if (!resp.ok) throw new Error(j?.error ?? `HTTP ${resp.status}`);
       setData(j as Overview);
-      void res; void error;
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {

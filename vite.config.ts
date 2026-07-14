@@ -217,12 +217,31 @@ export default defineConfig(({ mode }) => {
     minify: "esbuild",
     target: "chrome120",
     sourcemap: false,
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 900,
+    reportCompressedSize: false,
+    cssCodeSplit: true,
     rollupOptions: {
       output: {
         entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) return "vendor-react";
+          if (id.includes("react-router")) return "vendor-router";
+          if (id.includes("@supabase")) return "vendor-supabase";
+          if (id.includes("@tanstack")) return "vendor-tanstack";
+          if (id.includes("@radix-ui")) return "vendor-radix";
+          if (id.includes("recharts") || id.includes("/d3-") || id.includes("victory-vendor")) return "vendor-charts";
+          if (id.includes("lucide-react")) return "vendor-lucide";
+          if (id.includes("framer-motion")) return "vendor-motion";
+          if (id.includes("date-fns") || id.includes("dayjs")) return "vendor-date";
+          if (id.includes("jssip") || id.includes("sip.js")) return "vendor-sip";
+          if (id.includes("@elevenlabs")) return "vendor-elevenlabs";
+          if (id.includes("tinymce") || id.includes("@tinymce")) return "vendor-tinymce";
+          if (id.includes("react-hook-form") || id.includes("zod") || id.includes("@hookform")) return "vendor-forms";
+          return "vendor-misc";
+        },
       },
     },
   },

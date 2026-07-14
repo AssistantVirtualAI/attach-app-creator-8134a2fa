@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
+const MS365_DELEGATED_SCOPES = "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite";
 const j = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
@@ -22,7 +23,7 @@ async function refreshToken(admin: any, profile: any) {
   const body = new URLSearchParams({
     client_id: cfg.clientId, client_secret: cfg.clientSecret, grant_type: "refresh_token",
     refresh_token: profile.ms365_refresh_token,
-    scope: "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send Calendars.ReadWrite Chat.Read Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All Team.ReadBasic.All",
+    scope: MS365_DELEGATED_SCOPES,
   });
   const r = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
   if (!r.ok) return null;

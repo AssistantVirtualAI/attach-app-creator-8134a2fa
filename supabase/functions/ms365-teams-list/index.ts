@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
+const MS365_DELEGATED_SCOPES = "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite";
 const j = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
@@ -25,7 +26,7 @@ async function refreshToken(admin: any, profile: any) {
     client_secret: cfg.clientSecret,
     grant_type: "refresh_token",
     refresh_token: profile.ms365_refresh_token,
-    scope: "openid profile email offline_access User.Read User.ReadBasic.All User.Read.All Contacts.Read Contacts.ReadWrite People.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite ChatMessage.Send Files.ReadWrite Files.ReadWrite.All Sites.ReadWrite.All Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All",
+    scope: MS365_DELEGATED_SCOPES,
   });
   const r = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,
@@ -35,7 +36,7 @@ async function refreshToken(admin: any, profile: any) {
   await admin.from("planipret_profiles").update({
     ms365_access_token: d.access_token,
     ms365_refresh_token: d.refresh_token ?? profile.ms365_refresh_token,
-    ms365_scopes: d.scope ?? "openid profile email offline_access User.Read User.ReadBasic.All User.Read.All Contacts.Read Contacts.ReadWrite People.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite ChatMessage.Send Files.ReadWrite Files.ReadWrite.All Sites.ReadWrite.All Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All",
+    ms365_scopes: d.scope ?? MS365_DELEGATED_SCOPES,
     ms365_token_expiry: new Date(Date.now() + (Number(d.expires_in ?? 3600)) * 1000).toISOString(),
   }).eq("id", profile.id);
   return d.access_token as string;

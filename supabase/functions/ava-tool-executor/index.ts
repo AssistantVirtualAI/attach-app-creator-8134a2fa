@@ -478,11 +478,22 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async create_calendar_event(ctx, p) {
-    // p: { subject, start_datetime, end_datetime OR duration_minutes, attendees?, body?, location?, is_online? }
+    // p: { subject, start_datetime, end_datetime OR duration_minutes, attendees?, body?, location?, is_online?, contact_name?, contact_email? }
+    // Auto-resolve attendee by contact_name if not provided.
+    let attendees: string[] = Array.isArray(p.attendees) ? p.attendees.slice() : [];
+    if (p.attendee_email) attendees.push(p.attendee_email);
+    if (p.contact_email) attendees.push(p.contact_email);
+    if (!attendees.length && p.contact_name) {
+      const hit = await resolveContact(ctx, p.contact_name, "email");
+      if (hit?.value) attendees.push(hit.value);
+    }
+    attendees = Array.from(new Set(attendees.filter(Boolean)));
+
     const startAt = new Date(p.start_datetime ?? p.start);
     const endAt = p.end_datetime
       ? new Date(p.end_datetime)
       : new Date(startAt.getTime() + (Number(p.duration_minutes ?? 30)) * 60000);
+    const subject = p.subject ?? p.title ?? "Rendez-vous";
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
@@ -490,17 +501,32 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
         action: "create_calendar_event",
         _user_id: ctx.userId,
         payload: {
-          subject: p.subject ?? p.title ?? "Rendez-vous",
+          subject,
           start: { dateTime: startAt.toISOString(), timeZone: p.timezone ?? "America/Toronto" },
           end: { dateTime: endAt.toISOString(), timeZone: p.timezone ?? "America/Toronto" },
           body: p.body ?? p.notes,
-          attendees: Array.isArray(p.attendees) ? p.attendees : (p.attendee_email ? [p.attendee_email] : []),
+          attendees,
           isOnlineMeeting: p.is_online ?? true,
         },
       }),
     });
     const j = await r.json().catch(() => ({}));
-    return { success: !!j?.success, event_id: j?.event_id, message: `RDV "${p.subject ?? p.title}" créé`, raw: j };
+    if (!j?.success) {
+      const reason = j?.error || j?.details?.message || `HTTP ${j?.code ?? r.status}`;
+      return {
+        success: false,
+        error: reason,
+        message: `Le rendez-vous "${subject}" n'a PAS été créé dans Outlook. Raison : ${reason}. Vérifie que Microsoft 365 est bien connecté.`,
+        raw: j,
+      };
+    }
+    return {
+      success: true,
+      event_id: j?.event_id,
+      web_link: j?.event?.webLink,
+      attendees,
+      message: `RDV "${subject}" créé dans Outlook${attendees.length ? ` avec ${attendees.join(", ")}` : ""}.`,
+    };
   },
 
   async move_calendar_event(ctx, p) {

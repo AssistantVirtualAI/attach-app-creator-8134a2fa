@@ -312,7 +312,7 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
     }
 
     const corrected = typeof parsed.corrected_transcript === "string" ? parsed.corrected_transcript : null;
-    const summary = typeof parsed.summary === "string" ? parsed.summary : null;
+    let summary = typeof parsed.summary === "string" ? parsed.summary : null;
     let coaching = parsed.coaching && typeof parsed.coaching === "object" ? parsed.coaching : null;
     let score100 = typeof parsed.score === "number" ? Math.max(0, Math.min(100, Math.round(parsed.score))) : null;
     let topics = Array.isArray(parsed.topics) ? parsed.topics.filter((t: any) => typeof t === "string").slice(0, 8) : null;
@@ -363,6 +363,14 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
       const hasSegments = Array.isArray(segments) && segments.length > 3;
       score100 = Math.max(55, Math.min(85, 60 + (hasSummary ? 8 : 0) + (hasActions ? 8 : 0) + (hasSegments ? 6 : 0)));
       parsed.score = score100;
+    }
+    if (!summary || summary.trim().length < 20) {
+      const basis = String(corrected || effectiveTranscript).replace(/\s+/g, " ").trim();
+      const who = `${brokerName}${clientName && clientName !== "Client" ? ` et ${clientName}` : " et le client"}`;
+      summary = basis
+        ? `${who} échangent pendant cet appel. Points principaux détectés: ${basis.slice(0, 420)}${basis.length > 420 ? "…" : ""}`
+        : `${who} échangent pendant cet appel; le résumé détaillé n'a pas pu être extrait automatiquement.`;
+      parsed.summary = summary;
     }
     const score10 = Math.max(1, Math.min(10, Math.round(score100 / 10)));
 

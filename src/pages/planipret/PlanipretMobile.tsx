@@ -476,6 +476,18 @@ export default function PlanipretMobile() {
   useRealtimeManager(profile?.user_id, { onInboundRinging, onAiInsight });
   useAvaNavigation(profile?.user_id);
 
+  // Warm up sibling tab chunks during idle time so tab switches feel instant.
+  useEffect(() => {
+    scheduleIdlePrefetch([
+      "/mplanipret/home",
+      "/mplanipret/calls",
+      "/mplanipret/ava",
+      "/mplanipret/messages",
+      "/mplanipret/contacts",
+      "/mplanipret/more",
+    ]);
+  }, []);
+
   // Detect active outbound/in-progress call → FAB pulses red & hangs up on tap
   useEffect(() => {
     if (!profile?.user_id) return;

@@ -20,6 +20,8 @@ import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
 
+const MS365_DELEGATED_SCOPES = "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite";
+
 export default function MMore() {
   const { profile, reloadProfile } = useOutletContext<PlanipretMobileContext>();
   const { t, lang, setLang } = useMplanipretLang();
@@ -102,10 +104,10 @@ export default function MMore() {
     const clientId = cfg.client_id;
     const tenant = cfg.tenant_id || "common";
     const redirect = `${window.location.origin}/auth/microsoft/callback`;
-    const scope = encodeURIComponent("openid profile email offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All");
+    const scope = encodeURIComponent(MS365_DELEGATED_SCOPES);
     supabase.auth.getUser().then(({ data: { user } }) => {
       const state = user?.id ?? "";
-      window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirect)}&response_mode=query&scope=${scope}&state=${state}`;
+      window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirect)}&response_mode=query&scope=${scope}&prompt=consent&state=${state}`;
     });
   };
 

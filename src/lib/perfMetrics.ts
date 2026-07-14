@@ -247,7 +247,7 @@ export function getAllMetrics(): RouteMetrics[] {
 }
 export function subscribeMetrics(cb: Listener) {
   listeners.add(cb);
-  return () => listeners.delete(cb);
+  return () => { listeners.delete(cb); };
 }
 export function clearMetrics() {
   history = [];

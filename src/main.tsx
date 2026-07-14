@@ -11,6 +11,8 @@ import "./lib/reloadDiagnostics";
 import "./lib/devPreviewGuard";
 import "./lib/styleHealthGuard";
 import "./lib/buildVersionPoller";
+import { initPerfMetrics } from "./lib/perfMetrics";
+import { scheduleIdlePrefetch } from "./lib/routePrefetch";
 import App from "./App.tsx";
 import { initSentry } from "./lib/sentry";
 import { consumeAppLoginToken } from "./lib/auth/consumeAppLoginToken";

@@ -12,6 +12,8 @@ import SessionTimeoutModal from "@/components/planipret/SessionTimeoutModal";
 import PrivacyConsentGate from "@/components/planipret/PrivacyConsentGate";
 import UniversalSearchBar from "@/components/planipret/UniversalSearchBar";
 import { OnboardingTutorial } from "@/components/planipret/OnboardingTutorial";
+import MobileScreenSkeleton from "@/components/planipret/mobile/MobileScreenSkeleton";
+import { prefetchRoute, scheduleIdlePrefetch } from "@/lib/routePrefetch";
 
 import { useAvaNavigation } from "@/hooks/useAvaNavigation";
 const AvaVoiceAgent = lazy(() => import("@/components/planipret/mobile/AvaVoiceAgent"));
@@ -474,6 +476,18 @@ export default function PlanipretMobile() {
   useRealtimeManager(profile?.user_id, { onInboundRinging, onAiInsight });
   useAvaNavigation(profile?.user_id);
 
+  // Warm up sibling tab chunks during idle time so tab switches feel instant.
+  useEffect(() => {
+    scheduleIdlePrefetch([
+      "/mplanipret/home",
+      "/mplanipret/calls",
+      "/mplanipret/ava",
+      "/mplanipret/messages",
+      "/mplanipret/contacts",
+      "/mplanipret/more",
+    ]);
+  }, []);
+
   // Detect active outbound/in-progress call → FAB pulses red & hangs up on tap
   useEffect(() => {
     if (!profile?.user_id) return;
@@ -740,7 +754,9 @@ export default function PlanipretMobile() {
         <div ref={scrollRef} className="flex-1 overflow-y-auto pb-[130px]">
           <PullIndicator pullDist={pullDist} refreshing={refreshing} threshold={threshold} color={ACCENT} />
           <PlanipretErrorBoundary key={location.pathname}>
-            <Outlet context={{ profile, reloadProfile: loadProfile, openDialer, openAva, registerRefresh, softphone } satisfies PlanipretMobileContext} />
+            <Suspense fallback={<MobileScreenSkeleton />}>
+              <Outlet context={{ profile, reloadProfile: loadProfile, openDialer, openAva, registerRefresh, softphone } satisfies PlanipretMobileContext} />
+            </Suspense>
           </PlanipretErrorBoundary>
         </div>
         <SessionTimeoutModal />
@@ -777,6 +793,8 @@ export default function PlanipretMobile() {
             const isAva = tabItem.to.endsWith("/ava");
             return (
               <NavLink key={tabItem.to} to={tabItem.to}
+                onTouchStart={() => prefetchRoute(tabItem.to)}
+                onMouseEnter={() => prefetchRoute(tabItem.to)}
                 className={`relative flex flex-col items-center justify-center gap-1 text-[11px] font-semibold pt-2 ${isAva ? "ava-tab-center" : ""}`}
                 style={({ isActive }) => ({ color: isActive ? "var(--pp-brand-accent)" : "var(--pp-text-faint)" })}>
                 {({ isActive }) => (

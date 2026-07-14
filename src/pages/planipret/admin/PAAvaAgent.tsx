@@ -36,6 +36,7 @@ export default function PAAvaAgent() {
           ["health", "État de santé"],
           ["brokers", "Courtiers"],
           ["sessions", "Sessions"],
+          ["simulator", "Test multi-comptes"],
           ["config", "Configuration"],
         ] as const).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
@@ -52,6 +53,7 @@ export default function PAAvaAgent() {
       {tab === "health" && <AvaVoiceHealthPanel />}
       {tab === "brokers" && <AvaVoiceBrokersTable />}
       {tab === "sessions" && <AvaVoiceSessionsLog />}
+      {tab === "simulator" && <AvaVoiceSimulatorPanel />}
       {tab === "config" && <ElevenLabsManagementCard userId={userId} />}
     </div>
   );

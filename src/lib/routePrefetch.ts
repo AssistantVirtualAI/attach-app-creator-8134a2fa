@@ -1,0 +1,58 @@
+// Prefetch lazy route chunks on hover/focus/idle so navigation feels instant.
+// The factories mirror the lazy() imports in App.tsx. Adding a new lazy route
+// here is optional — hovering a <PrefetchLink> to that path just becomes a no-op.
+
+type Factory = () => Promise<any>;
+
+const registry: Record<string, Factory> = {
+  // Planipret admin
+  "/planipret/admin": () => import("@/pages/planipret/admin/PlanipretAdminLayout"),
+  "/planipret/admin/overview": () => import("@/pages/planipret/admin/PAOverview"),
+  "/planipret/admin/users": () => import("@/pages/planipret/admin/PAUsers"),
+  "/planipret/admin/calls": () => import("@/pages/planipret/admin/PACalls"),
+  "/planipret/admin/messages": () => import("@/pages/planipret/admin/PAMessages"),
+  "/planipret/admin/recordings": () => import("@/pages/planipret/admin/PARecordings"),
+  "/planipret/admin/reports": () => import("@/pages/planipret/admin/PAReports"),
+  "/planipret/admin/leads": () => import("@/pages/planipret/admin/PALeads"),
+  "/planipret/admin/templates": () => import("@/pages/planipret/admin/PATemplates"),
+  "/planipret/admin/integrations": () => import("@/pages/planipret/PlanipretIntegrations"),
+  "/planipret/admin/debug": () => import("@/pages/planipret/admin/PADebug"),
+  "/planipret/admin/ava": () => import("@/pages/planipret/admin/PAAva"),
+  "/planipret/admin/ava-agent": () => import("@/pages/planipret/admin/PAAvaAgent"),
+  "/planipret/admin/ava-logs": () => import("@/pages/planipret/admin/PAAvaLogs"),
+  "/planipret/admin/audit": () => import("@/pages/planipret/admin/PAAuditLog"),
+  "/planipret/admin/audit-checklist": () => import("@/pages/planipret/admin/PAAuditChecklist"),
+  "/planipret/admin/compliance": () => import("@/pages/planipret/admin/PACompliance"),
+  "/planipret/admin/mobile-devices": () => import("@/pages/planipret/admin/PAMobileDevices"),
+  "/planipret/admin/sip-diagnostic": () => import("@/pages/planipret/admin/PASipDiagnostic"),
+  "/planipret/admin/diagnostics": () => import("@/pages/planipret/admin/PADiagnostics"),
+};
+
+const started = new Set<string>();
+const done = new Set<string>();
+
+export function prefetchRoute(path: string): void {
+  if (!path || done.has(path) || started.has(path)) return;
+  // Match by exact path, or by best prefix match.
+  const factory =
+    registry[path] ||
+    Object.entries(registry)
+      .filter(([k]) => path === k || path.startsWith(k + "/"))
+      .sort((a, b) => b[0].length - a[0].length)[0]?.[1];
+  if (!factory) return;
+  started.add(path);
+  Promise.resolve()
+    .then(factory)
+    .then(() => done.add(path))
+    .catch(() => started.delete(path));
+}
+
+/**
+ * Fire-and-forget: prefetch common next-hops during idle time after boot.
+ */
+export function scheduleIdlePrefetch(paths: string[]): void {
+  const run = () => paths.forEach(prefetchRoute);
+  const ric: any = (window as any).requestIdleCallback;
+  if (typeof ric === "function") ric(run, { timeout: 4000 });
+  else setTimeout(run, 1500);
+}

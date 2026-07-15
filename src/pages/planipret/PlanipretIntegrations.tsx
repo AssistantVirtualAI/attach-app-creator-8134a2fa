@@ -199,7 +199,6 @@ export default function PlanipretIntegrations() {
   }
 
   const ACCENT = "#2E9BDC";
-  const totalConfigured = health.connected;
   return (
     <div className="planipret-scope planipret-admin-scope p-6 space-y-6">
       {/* Header — aligned with other admin pages (PAMaestroSync) */}

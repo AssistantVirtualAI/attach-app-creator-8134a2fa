@@ -4,34 +4,15 @@
 //   token expires within 10 minutes.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-
-const MS365_DELEGATED_SCOPES = "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite";
+import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
 
 async function refreshToken(refresh_token: string) {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: cfg } = await admin.from("planipret_integration_secrets").select("config").eq("provider", "microsoft").maybeSingle();
-  const c = (cfg?.config ?? {}) as Record<string, string>;
-  const clientId = c.client_id ?? Deno.env.get("MICROSOFT_CLIENT_ID");
-  const clientSecret = c.client_secret ?? Deno.env.get("MICROSOFT_CLIENT_SECRET");
-  const tenant = c.tenant_id ?? Deno.env.get("MICROSOFT_TENANT_ID") ?? "common";
-  if (!clientId || !clientSecret) throw new Error("MS365 not configured");
-
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: "refresh_token",
-    refresh_token,
-    scope: MS365_DELEGATED_SCOPES,
-  });
-  const r = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
-    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error_description ?? "refresh failed");
+  const d = { refresh_token };
   return {
-    access_token: d.access_token as string,
+    access_token: await refreshMicrosoftAccessToken(admin, { id: "__direct__", ms365_refresh_token: refresh_token }, MS365_DELEGATED_SCOPES),
     refresh_token: (d.refresh_token as string) ?? refresh_token,
-    expires_in: Number(d.expires_in ?? 3600),
+    expires_in: 3600,
   };
 }
 
@@ -50,13 +31,8 @@ Deno.serve(async (req) => {
       let ok = 0, fail = 0;
       for (const r of rows ?? []) {
         try {
-          const tok = await refreshToken(r.ms365_refresh_token!);
-          await admin.from("planipret_profiles").update({
-            ms365_access_token: tok.access_token,
-            ms365_refresh_token: tok.refresh_token,
-            ms365_scopes: MS365_DELEGATED_SCOPES,
-            ms365_token_expiry: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
-          }).eq("id", r.id);
+          const accessToken = await refreshMicrosoftAccessToken(admin, r, MS365_DELEGATED_SCOPES);
+          if (!accessToken) throw new Error("refresh failed");
           ok++;
         } catch (_) { fail++; }
       }
@@ -76,14 +52,9 @@ Deno.serve(async (req) => {
       .select("ms365_refresh_token").eq("user_id", userId).maybeSingle();
     if (!profile?.ms365_refresh_token) return j({ error: "no_refresh_token" }, 400);
 
-    const tok = await refreshToken(profile.ms365_refresh_token);
-    await admin.from("planipret_profiles").update({
-      ms365_access_token: tok.access_token,
-      ms365_refresh_token: tok.refresh_token,
-      ms365_scopes: MS365_DELEGATED_SCOPES,
-      ms365_token_expiry: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
-    }).eq("user_id", userId);
-    return j({ success: true, expires_in: tok.expires_in });
+    const accessToken = await refreshMicrosoftAccessToken(admin, { ...profile, user_id: userId }, MS365_DELEGATED_SCOPES);
+    if (!accessToken) return j({ error: "refresh_failed" }, 400);
+    return j({ success: true, expires_in: 3600 });
   } catch (e) {
     return j({ error: (e as Error).message }, 500);
   }

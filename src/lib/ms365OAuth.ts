@@ -9,11 +9,7 @@ export const MS365_NATIVE_REDIRECT_URI = "planipret://auth/microsoft/callback";
 const REDIRECT_STORAGE_KEY = "pp_ms365_redirect_uri";
 
 export function getMs365RedirectUri(): string {
-  if (Capacitor.isNativePlatform()) {
-    const origin = window.location.origin;
-    if (origin && origin !== "null") return `${origin}${MS365_WEB_CALLBACK_PATH}`;
-    return MS365_NATIVE_REDIRECT_URI;
-  }
+  if (Capacitor.isNativePlatform()) return MS365_NATIVE_REDIRECT_URI;
   return `${window.location.origin}${MS365_WEB_CALLBACK_PATH}`;
 }
 

@@ -2,6 +2,7 @@
 // Returns real cross-broker AVA activity and, when broker tokens exist, Microsoft Graph email/meeting stats.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -48,34 +49,7 @@ async function getMsConfig(admin: any) {
 
 async function refreshToken(admin: any, profile: Profile) {
   if (!profile.ms365_refresh_token) return null;
-  const cfg = await getMsConfig(admin);
-  if (!cfg.clientId || !cfg.clientSecret) return null;
-
-  const body = new URLSearchParams({
-    client_id: cfg.clientId,
-    client_secret: cfg.clientSecret,
-    grant_type: "refresh_token",
-    refresh_token: profile.ms365_refresh_token,
-    scope:
-      "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send Calendars.ReadWrite Chat.Read Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All Team.ReadBasic.All",
-  });
-
-  const res = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  await admin
-    .from("planipret_profiles")
-    .update({
-      ms365_access_token: data.access_token,
-      ms365_refresh_token: data.refresh_token ?? profile.ms365_refresh_token,
-      ms365_token_expiry: new Date(Date.now() + Number(data.expires_in ?? 3600) * 1000).toISOString(),
-    })
-    .eq("id", profile.id);
-  return data.access_token as string;
+  return await refreshMicrosoftAccessToken(admin, profile, MS365_DELEGATED_SCOPES);
 }
 
 async function graph(admin: any, profile: Profile, path: string, retry = true): Promise<{ ok: boolean; status: number; data: any }> {

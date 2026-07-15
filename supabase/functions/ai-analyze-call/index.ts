@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { mirrorCallAnalysisToMaestro } from "../_shared/maestro-telecom.ts";
 
 const SYSTEM_PROMPT = `Tu es un analyste IA spécialisé en appels téléphoniques et coaching d'agents.
 Analyse cette transcription d'appel et retourne UNIQUEMENT un JSON valide, sans texte avant ou après, avec cette structure exacte:
@@ -198,7 +199,7 @@ Deno.serve(async (req) => {
 
     // Load call context from planipret_phone_calls to enrich the prompt.
     const { data: ppCall } = await admin.from("planipret_phone_calls")
-      .select("id, user_id, organization_id, metadata, direction, duration_seconds, from_number, to_number, started_at, transcript, transcript_segments, ai_analysis_json")
+      .select("id, user_id, organization_id, metadata, direction, duration_seconds, from_number, to_number, started_at, transcript, transcript_segments, transcript_language, ai_analysis_json, maestro_call_id, maestro_client_id")
       .eq("id", call_id).maybeSingle();
 
     if (!ppCall) {
@@ -389,6 +390,31 @@ ${String(transcript).slice(0, 18000)}`;
       raw_response: analysis,
       model: modelUsed,
     });
+
+    // Fire-and-forget mirror to Maestro Télécom (summary + full analysis).
+    try {
+      mirrorCallAnalysisToMaestro(
+        admin,
+        (ppCall as any).user_id,
+        ppCall as any,
+        analysis,
+        {
+          ai_summary: summary.detailed ?? null,
+          ai_summary_short: summary.short ?? null,
+          coaching_message: coaching.coaching_message ?? coaching.overall ?? null,
+          next_actions: summary.next_steps ?? [],
+          topics: leadA.buying_signals ?? [],
+          sentiment: leadTemp === "hot" ? "positive" : leadTemp === "cold" ? "negative" : "neutral",
+          lead_score: leadScore,
+          lead_temperature: leadTemp,
+          lead_reason: leadA.recommendation ?? null,
+          model: modelUsed,
+        },
+      );
+    } catch (e) {
+      console.warn("[ai-analyze-call] maestro mirror scheduling failed", (e as Error)?.message);
+    }
+
 
     // Realtime broadcast
     try {

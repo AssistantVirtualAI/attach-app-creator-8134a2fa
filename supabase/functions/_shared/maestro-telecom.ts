@@ -244,3 +244,91 @@ export async function getMaestroBrokerId(admin: SupabaseClient, userId: string):
     return null;
   }
 }
+
+/**
+ * Mirror a completed AI analysis (summary + full analysis JSON + coaching)
+ * to the Maestro Telecom API for the given Planiprêt call.
+ *
+ * Fire-and-forget: never throws, never blocks the caller. If the broker or
+ * the Maestro call id is missing, the attempt is still logged with
+ * success=false so it shows up in the admin dashboard.
+ */
+export function mirrorCallAnalysisToMaestro(
+  admin: SupabaseClient,
+  userId: string,
+  ppCall: Record<string, any>,
+  analysis: Record<string, any>,
+  extra?: {
+    ai_summary?: string | null;
+    ai_summary_short?: string | null;
+    coaching_message?: string | null;
+    next_actions?: unknown;
+    topics?: unknown;
+    sentiment?: string | null;
+    lead_score?: number | null;
+    lead_temperature?: string | null;
+    lead_reason?: string | null;
+    model?: string | null;
+  },
+): void {
+  void (async () => {
+    try {
+      const maestroCallId = ppCall?.maestro_call_id ? String(ppCall.maestro_call_id) : null;
+      const brokerId = await getMaestroBrokerId(admin, userId);
+      const payload = {
+        ai_summary: extra?.ai_summary ?? null,
+        ai_summary_short: extra?.ai_summary_short ?? null,
+        ai_analysis: analysis ?? null,
+        ai_coaching: extra?.coaching_message ?? null,
+        ai_next_actions: extra?.next_actions ?? [],
+        ai_topics: extra?.topics ?? [],
+        sentiment: extra?.sentiment ?? null,
+        lead_score: extra?.lead_score ?? null,
+        lead_temperature: extra?.lead_temperature ?? null,
+        lead_reason: extra?.lead_reason ?? null,
+        transcript_language: ppCall?.transcript_language ?? null,
+        model: extra?.model ?? null,
+        analyzed_at: new Date().toISOString(),
+      };
+
+      if (!brokerId || !maestroCallId) {
+        const reason = !brokerId ? "no_maestro_broker_id" : "no_maestro_call_id";
+        console.warn(`[maestro-telecom.analysis] skip pp_call=${ppCall?.id} — ${reason}`);
+        try {
+          await admin.from("planipret_maestro_sync_log").insert({
+            user_id: userId,
+            action: "call.analysis.summary",
+            maestro_endpoint: `PUT /users/{broker}/calls/${maestroCallId ?? "?"}`,
+            request_body: { pp_call_id: ppCall?.id, payload },
+            response_body: { error: reason },
+            response_status: 0,
+            duration_ms: 0,
+            success: false,
+          });
+        } catch { /* ignore */ }
+        return;
+      }
+
+      const cfg = await getMaestroTelecomConfig(admin);
+      if (!isMaestroTelecomConfigured(cfg)) {
+        console.warn("[maestro-telecom.analysis] skipped — not configured");
+        return;
+      }
+
+      const path = `/users/${encodeURIComponent(brokerId)}/calls/${encodeURIComponent(maestroCallId)}`;
+      console.log(`[maestro-telecom.analysis] → PUT ${path} pp_call=${ppCall?.id}`);
+      const r = await maestroTelecomFetch(cfg, path, { method: "PUT", body: payload });
+      console.log(`[maestro-telecom.analysis] ← ok=${r.ok} status=${r.status} attempts=${r.attempts} ms=${r.ms}`);
+      await logSync(admin, {
+        user_id: userId,
+        action: "call.analysis.summary",
+        endpoint: path,
+        method: "PUT",
+        request_body: payload,
+        result: r,
+      });
+    } catch (e) {
+      console.warn("[maestro-telecom.analysis] unexpected", (e as Error)?.message ?? e);
+    }
+  })();
+}

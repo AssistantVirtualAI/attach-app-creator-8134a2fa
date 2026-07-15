@@ -184,10 +184,12 @@ export default function MContacts() {
     return () => window.clearTimeout(id);
   }, [tab, load]);
 
-  // Prefetch the directory after the first paint so the annuaire opens faster.
+  // Prefetch personal + directory in parallel after first paint so subsequent
+  // tab switches render from memory. Dedup + TTL handled by ppContactsCache.
   useEffect(() => {
-    const quick = window.setTimeout(() => { void load("directory", { limit: 120, background: true }); }, 350);
-    const full = window.setTimeout(() => { void load("directory", { force: true, limit: 500, background: true }); }, 1200);
+    prefetchPpContacts(["list", "directory"], 500);
+    const quick = window.setTimeout(() => { void load("directory", { limit: 120, background: true }); }, 250);
+    const full = window.setTimeout(() => { void load("directory", { force: true, limit: 500, background: true }); }, 1000);
     return () => { window.clearTimeout(quick); window.clearTimeout(full); };
   }, [load]);
 

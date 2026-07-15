@@ -85,9 +85,24 @@ Deno.serve(async (req) => {
       const message = pick("message") as string | undefined;
       const type = (pick("type") as string) ?? "sms";
       const thread_id = pick("thread_id") as string | undefined;
+      let from = pick("from") as string | undefined;
 
       if (!to || !message) {
         return jsonResponse({ error: "to et message sont requis" }, 400);
+      }
+
+      // If no from was passed, auto-detect from the user's SMS numbers so NS
+      // doesn't reject the request with "no source".
+      if (!from && !thread_id) {
+        try {
+          const nres = await nsFetch(`${userBase}/smsnumbers`, { method: "GET" });
+          if (nres.ok) {
+            const nraw = await nres.json();
+            const list = Array.isArray(nraw) ? nraw : (nraw?.smsnumbers ?? nraw?.data ?? []);
+            const first = list?.[0];
+            from = (typeof first === "string" && first) || first?.number || first?.phonenumber || first?.smsnumber || first?.did || undefined;
+          }
+        } catch (_) { /* ignore, NS will reject with a clear message */ }
       }
 
       const nsPath = thread_id
@@ -95,12 +110,16 @@ Deno.serve(async (req) => {
         : `${userBase}/messagesessions`;
       const nsBody: Record<string, unknown> = thread_id
         ? { message, type }
-        : { type, destination: to, message };
+        : { type, destination: to, message, ...(from ? { from } : {}) };
 
       const res = await nsFetch(nsPath, { method: "POST", body: JSON.stringify(nsBody) });
       if (!res.ok) {
         const txt = await res.text();
-        return jsonResponse({ error: "NS-API send failed", status: res.status, body: txt }, 502);
+        console.error("[pp-ns-sms] NS send failed", res.status, txt);
+        return jsonResponse(
+          { error: `NS-API send failed (${res.status}): ${txt || "no body"}`, status: res.status, body: txt, from, to },
+          502,
+        );
       }
       const result = await res.json().catch(() => ({}));
 
@@ -111,7 +130,7 @@ Deno.serve(async (req) => {
             user_id: ctx.profileId,
             direction: "outbound",
             to_number: to,
-            from_number: ctx.extension,
+            from_number: from ?? ctx.extension,
             body: message,
             type,
             ns_thread_id: thread_id ?? result?.messagesession_id ?? null,
@@ -121,7 +140,7 @@ Deno.serve(async (req) => {
         console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
       }
 
-      return jsonResponse({ ok: true, result });
+      return jsonResponse({ ok: true, result, from, to });
     }
 
     return jsonResponse({ error: `Action inconnue: ${action}` }, 400);

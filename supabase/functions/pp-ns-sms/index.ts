@@ -191,9 +191,8 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "to et message sont requis" }, 400);
       }
 
-      // If no from was passed, auto-detect the broker DID/SMS number. NS-API
-      // requires this exact body key for SMS: "from-number".
-      if (!from && !thread_id) {
+      // Auto-detect broker DID/SMS number if not provided.
+      if (!from) {
         const first = (await getAssignedSmsNumbers(supabase, ctx))[0];
         from = pickSmsNumber(first) ?? undefined;
       }
@@ -202,54 +201,43 @@ Deno.serve(async (req) => {
       if (!destination) return jsonResponse({ error: "numéro destinataire invalide" }, 400);
 
       const fromNumber = normalizeE164(from);
-      const baseBody: Record<string, unknown> = {
+      if (!fromNumber) {
+        return jsonResponse({ ok: false, error: "Aucun numéro SMS (DID) assigné à ce courtier" }, 200);
+      }
+
+      // NS-API v2 SMS body — recipient=destination, sender="from-number".
+      const nsBody: Record<string, unknown> = {
         type: type === "chat" ? "chat" : "sms",
         destination,
         message,
-        ...(fromNumber ? { "from-number": fromNumber } : {}),
+        "from-number": fromNumber,
       };
-      const generatedThreadId = thread_id || newMessageSessionId();
-      const domains = Array.from(new Set([ctx.nsDomain, "planipret.ca"].filter(Boolean)));
-      const sendAttempts: Array<{ path: string; body: Record<string, unknown> }> = [];
-      for (const domain of domains) {
-        const domainBase = `/domains/${encodeURIComponent(domain)}`;
-        const scopedUserBase = `${domainBase}/users/${encodeURIComponent(ctx.extension)}`;
-        const canonicalPath = `${scopedUserBase}/messagesessions/${encodeURIComponent(generatedThreadId)}/messages`;
-        sendAttempts.push({ path: canonicalPath, body: baseBody });
-        if (thread_id) {
-          sendAttempts.push(
-            { path: `${scopedUserBase}/messagesessions/messages`, body: baseBody },
-            { path: `${domainBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`, body: { ...baseBody, user: ctx.extension, extension: ctx.extension } },
-          );
-        } else {
-          sendAttempts.push(
-            { path: `${scopedUserBase}/messagesessions`, body: { ...baseBody, messagesession: generatedThreadId } },
-            { path: `${domainBase}/messagesessions/${encodeURIComponent(generatedThreadId)}/messages`, body: { ...baseBody, user: ctx.extension, extension: ctx.extension } },
-          );
-        }
-      }
 
-      let res: Response | null = null;
+      // If we have an existing thread_id, POST to that session; otherwise POST
+      // to the /messagesessions collection and NS-API will create the session
+      // AND send the message in one step, returning { messagesession_id }.
+      const path = thread_id
+        ? `${userBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`
+        : `${userBase}/messagesessions`;
+
+      const res = await nsFetch(path, { method: "POST", body: JSON.stringify(nsBody) });
+      const lastText = await res.text();
       let result: any = null;
-      let lastText = "";
-      let lastPath = "";
-      for (const attempt of sendAttempts) {
-        lastPath = attempt.path;
-        res = await nsFetch(attempt.path, { method: "POST", body: JSON.stringify(attempt.body) });
-        lastText = await res.text();
-        try { result = lastText ? JSON.parse(lastText) : {}; } catch { result = { raw: lastText }; }
-        if (res.ok) break;
-        const msg = typeof result === "object" ? String(result?.message ?? result?.error ?? lastText) : lastText;
-        if (!/destination/i.test(msg) && res.status !== 404) break;
-      }
-      if (!res || !res.ok) {
-        const status = res?.status ?? 502;
-        console.error("[pp-ns-sms] NS send failed", status, lastPath, lastText);
+      try { result = lastText ? JSON.parse(lastText) : {}; } catch { result = { raw: lastText }; }
+
+      if (!res.ok) {
+        console.error("[pp-ns-sms] NS send failed", res.status, path, lastText);
         return jsonResponse(
-          { ok: false, error: `Envoi SMS refusé (${status})`, status, body: lastText, from: fromNumber, to: destination, endpoint: lastPath },
+          { ok: false, error: `Envoi SMS refusé (${res.status})`, status: res.status, body: lastText, from: fromNumber, to: destination, endpoint: path },
           200,
         );
       }
+
+      const resolvedThreadId = thread_id
+        ?? result?.messagesession_id
+        ?? result?.["messagesession-id"]
+        ?? result?.messagesession
+        ?? null;
 
       try {
         await supabase
@@ -258,19 +246,17 @@ Deno.serve(async (req) => {
             user_id: ctx.profileId,
             direction: "outbound",
             to_number: destination,
-            from_number: fromNumber ?? ctx.extension,
+            from_number: fromNumber,
             body: message,
             type,
-            ns_thread_id: thread_id ?? result?.messagesession_id ?? result?.["messagesession-id"] ?? generatedThreadId,
+            ns_thread_id: resolvedThreadId,
             sent_at: new Date().toISOString(),
           });
       } catch (logErr) {
         console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
       }
 
-      // Mirror the outbound SMS to Maestro Telecom — fire-and-forget with
-      // exponential-backoff retry + sync-log so an outage there never fails
-      // the NS-API send.
+      // Mirror the outbound SMS to Maestro Telecom — fire-and-forget.
       if (ctx.maestroBrokerId) {
         maestroTelecomMirror(supabase, `/users/${encodeURIComponent(ctx.maestroBrokerId)}/messages`, {
           method: "POST",
@@ -280,8 +266,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      return jsonResponse({ ok: true, result, from: fromNumber, to: destination, thread_id: thread_id ?? result?.messagesession_id ?? result?.["messagesession-id"] ?? generatedThreadId });
-
+      return jsonResponse({ ok: true, result, from: fromNumber, to: destination, thread_id: resolvedThreadId });
     }
 
     return jsonResponse({ error: `Action inconnue: ${action}` }, 400);

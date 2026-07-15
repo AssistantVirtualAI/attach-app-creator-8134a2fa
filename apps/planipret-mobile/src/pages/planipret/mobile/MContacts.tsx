@@ -840,8 +840,8 @@ function ContactDetailSheet({
         onClose={() => setSummarizeOpen(false)}
       />
 
-      {smsOpen && rawPhone && (
-        <SmsComposerSheet to={rawPhone} contactName={name} onClose={() => setSmsOpen(false)} />
+      {smsOpen && (rawPhone || extension) && (
+        <SmsComposerSheet to={(rawPhone || extension)!} contactName={name} onClose={() => setSmsOpen(false)} />
       )}
 
       {emailOpen && email && (

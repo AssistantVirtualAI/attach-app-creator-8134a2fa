@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     ]);
 
     const [contactsAll, emailsAll] = await Promise.all([
-      want("contacts") ? tryInvoke(supa, "maestro-actions", { action: "list_contacts", q }, "contacts") : Promise.resolve([]),
+      want("contacts") ? tryInvoke(supa, "maestro-actions", { action: "list_contacts", payload: { query: q } }, "contacts") : Promise.resolve([]),
       want("emails") ? tryInvoke(supa, "ms365-actions", { action: "read_emails", q }, "emails") : Promise.resolve([]),
     ]);
 

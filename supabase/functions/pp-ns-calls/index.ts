@@ -72,13 +72,16 @@ Deno.serve(async (req) => {
       }
 
       const requestedClientType = String(payload.client_type ?? "mobile").toLowerCase();
-      const clientType = "mobile";
+      // "web"/"widget" → {ext}_web device (SIP.js in the browser).
+      // Anything else (default) → {ext}_mobile device (Capacitor app).
+      const clientType: "web" | "mobile" = (requestedClientType === "web" || requestedClientType === "widget") ? "web" : "mobile";
+      const deviceColumn = clientType === "web" ? "ns_web_device_id" : "ns_mobile_device_id";
       const { data: profileDevice } = await guard.supabase
         .from("planipret_profiles")
-        .select("ns_mobile_device_id")
+        .select(deviceColumn)
         .eq("user_id", ctx.userId)
         .maybeSingle();
-      const deviceName = String(profileDevice?.ns_mobile_device_id || `${ctx.extension}_mobile`);
+      const deviceName = String((profileDevice as any)?.[deviceColumn] || `${ctx.extension}_${clientType}`);
 
       // Fetch device to build the exact call-orig-user SIP URI.
       let callOrigUser = payload.call_orig_user ?? `${deviceName}@${ctx.nsDomain}`;

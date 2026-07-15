@@ -104,20 +104,22 @@ Deno.serve(async (req) => {
       }
       const result = await res.json().catch(() => ({}));
 
-      await supabase
-        .from("planipret_phone_messages")
-        .insert({
-          user_id: ctx.profileId,
-          direction: "outbound",
-          to_number: to,
-          from_number: ctx.extension,
-          body: message,
-          type,
-          ns_thread_id: thread_id ?? result?.messagesession_id ?? null,
-          sent_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+      try {
+        await supabase
+          .from("planipret_phone_messages")
+          .insert({
+            user_id: ctx.profileId,
+            direction: "outbound",
+            to_number: to,
+            from_number: ctx.extension,
+            body: message,
+            type,
+            ns_thread_id: thread_id ?? result?.messagesession_id ?? null,
+            sent_at: new Date().toISOString(),
+          });
+      } catch (logErr) {
+        console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
+      }
 
       return jsonResponse({ ok: true, result });
     }

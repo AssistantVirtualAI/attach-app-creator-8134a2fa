@@ -896,7 +896,6 @@ function EmailsList({ profile }: { profile: any }) {
           <Plus className="w-3.5 h-3.5" /> {t("messages.emailCompose")}
         </button>
         <div className="flex items-center gap-2">
-          <Ms365TestNowButton feature="mail" compact />
           <button
             onClick={load}
             className="text-xs flex items-center gap-1 px-2 py-1"

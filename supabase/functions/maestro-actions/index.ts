@@ -62,6 +62,28 @@ Deno.serve(async (req) => {
         const d = await r.json().catch(() => ({}));
         return j({ success: r.ok, events: d.events ?? d ?? [] }, r.ok ? 200 : 500);
       }
+      case "find_user_by_email": {
+        const email = String(payload.email ?? "").trim().toLowerCase();
+        if (!email) return j({ success: false, error: "email required" }, 400);
+        const tryPaths = [
+          `${cfg.url}/users?email=${encodeURIComponent(email)}`,
+          `${cfg.url}/telecom/users?email=${encodeURIComponent(email)}`,
+          `${cfg.url}/users?search=${encodeURIComponent(email)}`,
+        ];
+        let user: any = null;
+        let lastStatus = 0;
+        for (const url of tryPaths) {
+          const r = await fetch(url, { headers: h });
+          lastStatus = r.status;
+          if (!r.ok) continue;
+          const d = await r.json().catch(() => ({}));
+          const list = Array.isArray(d) ? d : (d.users ?? d.data ?? []);
+          user = list.find((u: any) => String(u.email ?? "").toLowerCase() === email) ?? list[0] ?? null;
+          if (user) break;
+        }
+        if (!user) return j({ success: false, error: "user_not_found", status: lastStatus }, 404);
+        return j({ success: true, user: { id: user.id ?? user.user_id, email: user.email, first_name: user.first_name, last_name: user.last_name } });
+      }
       case "test": {
         const r = await fetch(`${cfg.url}/contacts?limit=1`, { headers: h });
         return j({ success: r.ok, status: r.status });

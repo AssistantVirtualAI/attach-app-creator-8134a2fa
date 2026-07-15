@@ -9349,6 +9349,9 @@ export type Database = {
           maestro_broker_token: string | null
           maestro_connected: boolean
           maestro_last_sync_at: string | null
+          maestro_telecom_email: string | null
+          maestro_telecom_linked_at: string | null
+          maestro_telecom_user_id: string | null
           maestro_token_expires_at: string | null
           metadata: Json
           mobile_app_enabled: boolean
@@ -9444,6 +9447,9 @@ export type Database = {
           maestro_broker_token?: string | null
           maestro_connected?: boolean
           maestro_last_sync_at?: string | null
+          maestro_telecom_email?: string | null
+          maestro_telecom_linked_at?: string | null
+          maestro_telecom_user_id?: string | null
           maestro_token_expires_at?: string | null
           metadata?: Json
           mobile_app_enabled?: boolean
@@ -9539,6 +9545,9 @@ export type Database = {
           maestro_broker_token?: string | null
           maestro_connected?: boolean
           maestro_last_sync_at?: string | null
+          maestro_telecom_email?: string | null
+          maestro_telecom_linked_at?: string | null
+          maestro_telecom_user_id?: string | null
           maestro_token_expires_at?: string | null
           metadata?: Json
           mobile_app_enabled?: boolean

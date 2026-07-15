@@ -16,11 +16,10 @@ import MNetworkSection from "@/components/planipret/mobile/MNetworkSection";
 import MCallAudioSettings from "@/components/planipret/mobile/MCallAudioSettings";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
+import { openMs365Authorize } from "@/lib/ms365OAuth";
 
 const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
-
-const MS365_DELEGATED_SCOPES = "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite";
 
 export default function MMore() {
   const { profile, reloadProfile } = useOutletContext<PlanipretMobileContext>();
@@ -103,11 +102,9 @@ export default function MMore() {
   const startMs365OAuth = (cfg: { client_id: string; tenant_id?: string }) => {
     const clientId = cfg.client_id;
     const tenant = cfg.tenant_id || "common";
-    const redirect = `${window.location.origin}/auth/microsoft/callback`;
-    const scope = encodeURIComponent(MS365_DELEGATED_SCOPES);
     supabase.auth.getUser().then(({ data: { user } }) => {
       const state = user?.id ?? "";
-      window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirect)}&response_mode=query&scope=${scope}&prompt=select_account&state=${state}`;
+      openMs365Authorize({ clientId, tenant, state });
     });
   };
 

@@ -602,6 +602,10 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
         body: { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) },
       });
       if (err) throw err;
+      if ((data as any)?.ok === false || (data as any)?.error) {
+        const detail = (data as any)?.body || (data as any)?.error || t("messages.sendFailed");
+        throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      }
       const result = (data as any)?.result ?? {};
       const newThreadId = result?.messagesession_id ?? result?.["messagesession-id"] ?? result?.session_id ?? result?.id;
       if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);

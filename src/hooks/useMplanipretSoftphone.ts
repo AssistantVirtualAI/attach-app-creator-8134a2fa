@@ -68,7 +68,7 @@ function ensureGumProxy() {
 
 export type OutboundResult =
   | { via: "webrtc"; ok: true }
-  | { via: "pbx"; ok: true }
+  | { via: "pbx"; ok: true; callId?: string }
   | { via: "none"; ok: false; error: string; micState?: MicPermissionState };
 
 type RestCallAttachment = {
@@ -268,7 +268,18 @@ export function useMplanipretSoftphone() {
       const msg = (data as any)?.message ?? (data as any)?.error ?? error?.message ?? "PBX call failed";
       return { via: "none", ok: false, error: msg };
     }
-    return { via: "pbx", ok: true };
+    const callId = String((data as any)?.call_id ?? "");
+    if (callId) {
+      setRestCall({
+        id: callId,
+        direction: "out",
+        other: destination,
+        number: destination,
+        status: "ringing-out",
+        startedAt: Date.now(),
+      });
+    }
+    return { via: "pbx", ok: true, callId };
   }, []);
 
   const placeCall = useCallback(async (destination: string): Promise<OutboundResult> => {
@@ -279,7 +290,14 @@ export function useMplanipretSoftphone() {
       return { via: "none", ok: false, error: mic.error ?? "microphone unavailable", micState: mic.state };
     }
     try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
-    if (registered) {
+    let canUseSip = registered;
+    if (!canUseSip) {
+      try { ppSipProvider.forceReregister(); } catch {}
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+      const st = ppSipProvider.getSnapshot().status;
+      canUseSip = st === "registered" || st === "connected";
+    }
+    if (canUseSip) {
       try {
         await ppSipProvider.call(destination);
         return { via: "webrtc", ok: true };

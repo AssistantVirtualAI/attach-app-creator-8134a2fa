@@ -105,23 +105,42 @@ Deno.serve(async (req) => {
         } catch (_) { /* ignore, NS will reject with a clear message */ }
       }
 
-      const nsPath = thread_id
-        ? `${userBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`
-        : `${userBase}/messagesessions`;
-      const nsBody: Record<string, unknown> = thread_id
-        ? { message, type }
-        : { type, destination: to, message, ...(from ? { from } : {}) };
+      const normalizedTo = String(to).replace(/[^\d+]/g, "");
+      const destination = normalizedTo.startsWith("+")
+        ? normalizedTo
+        : `+${normalizedTo.replace(/^1?(\d{10})$/, "1$1")}`;
+      const directBody: Record<string, unknown> = { type, destination, message, ...(from ? { from, source: from } : {}) };
+      const sendAttempts: Array<{ path: string; body: Record<string, unknown> }> = thread_id
+        ? [
+            { path: `${userBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`, body: { message, type, destination, ...(from ? { from, source: from } : {}) } },
+            { path: `${userBase}/messagesessions/messages`, body: directBody },
+          ]
+        : [
+            { path: `${userBase}/messagesessions/messages`, body: directBody },
+            { path: `${userBase}/messagesessions`, body: directBody },
+          ];
 
-      const res = await nsFetch(nsPath, { method: "POST", body: JSON.stringify(nsBody) });
-      if (!res.ok) {
-        const txt = await res.text();
-        console.error("[pp-ns-sms] NS send failed", res.status, txt);
+      let res: Response | null = null;
+      let result: any = null;
+      let lastText = "";
+      let lastPath = "";
+      for (const attempt of sendAttempts) {
+        lastPath = attempt.path;
+        res = await nsFetch(attempt.path, { method: "POST", body: JSON.stringify(attempt.body) });
+        lastText = await res.text();
+        try { result = lastText ? JSON.parse(lastText) : {}; } catch { result = { raw: lastText }; }
+        if (res.ok) break;
+        const msg = typeof result === "object" ? String(result?.message ?? result?.error ?? lastText) : lastText;
+        if (!/destination/i.test(msg) && res.status !== 404) break;
+      }
+      if (!res || !res.ok) {
+        const status = res?.status ?? 502;
+        console.error("[pp-ns-sms] NS send failed", status, lastPath, lastText);
         return jsonResponse(
-          { error: `NS-API send failed (${res.status}): ${txt || "no body"}`, status: res.status, body: txt, from, to },
-          502,
+          { ok: false, error: `Envoi SMS refusé (${status})`, status, body: lastText, from, to: destination, endpoint: lastPath },
+          200,
         );
       }
-      const result = await res.json().catch(() => ({}));
 
       try {
         await supabase
@@ -129,7 +148,7 @@ Deno.serve(async (req) => {
           .insert({
             user_id: ctx.profileId,
             direction: "outbound",
-            to_number: to,
+            to_number: destination,
             from_number: from ?? ctx.extension,
             body: message,
             type,
@@ -140,7 +159,7 @@ Deno.serve(async (req) => {
         console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
       }
 
-      return jsonResponse({ ok: true, result, from, to });
+      return jsonResponse({ ok: true, result, from, to: destination });
     }
 
     return jsonResponse({ error: `Action inconnue: ${action}` }, 400);

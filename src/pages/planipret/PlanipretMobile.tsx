@@ -448,6 +448,7 @@ export default function PlanipretMobile() {
   const [avaOpen, setAvaOpen] = useState(false);
   const [avaMode, setAvaMode] = useState<"voice" | "chat">("voice");
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const endedCallIds = useRef<Map<string, number>>(new Map());
   const [showPrimer, setShowPrimer] = useState(false);
   const openDialer = (n?: string) => { setDialerInit(n); setDialerOpen(true); };
   const openAva = () => { setAvaMode(profile?.voice_agent_enabled ? "voice" : "chat"); setAvaOpen(true); };
@@ -455,6 +456,14 @@ export default function PlanipretMobile() {
   const registerRefresh = (fn: (() => Promise<void> | void) | null) => { refreshFn.current = fn; };
   const handlePull = async () => { if (refreshFn.current) await refreshFn.current(); };
   const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull);
+
+  const isDismissed = (id?: string | null) => {
+    if (!id) return false;
+    const ts = endedCallIds.current.get(id);
+    if (!ts) return false;
+    if (Date.now() - ts > 30_000) { endedCallIds.current.delete(id); return false; }
+    return true;
+  };
 
   const onInboundRinging = useCallback((row: any) => {
     const controlId = row.ns_callid ?? row.ns_call_id ?? row.call_id ?? row.id;
@@ -494,7 +503,7 @@ export default function PlanipretMobile() {
     const refreshActive = async () => {
       let q: any = supabase
         .from("planipret_phone_calls")
-        .select("id,ns_call_id,ns_callid,status,direction,from_number,to_number,from_name,to_name,started_at,answered_at")
+        .select("id,ns_call_id,ns_callid,status,direction,from_number,to_number,from_name,to_name,started_at,answered_at,created_at")
         .in("status", ["active", "in_progress", "answered", "ringing", "outbound_ringing"])
         .order("created_at", { ascending: false })
         .limit(1);
@@ -508,6 +517,18 @@ export default function PlanipretMobile() {
       const { data } = await q.maybeSingle();
       const row = data as any;
       const controlId = row?.ns_callid ?? row?.ns_call_id ?? row?.id ?? null;
+      if (isDismissed(controlId) || isDismissed(row?.id)) {
+        setActiveCallId(null);
+        attachRestCall?.(null);
+        return;
+      }
+      const createdAt = row?.created_at ? new Date(row.created_at).getTime() : 0;
+      const isRinging = String(row?.status ?? "").includes("ring");
+      if (row && isRinging && createdAt && Date.now() - createdAt > 120_000) {
+        setActiveCallId(null);
+        attachRestCall?.(null);
+        return;
+      }
       setActiveCallId(controlId);
       if (!row?.id) attachRestCall?.(null);
       if (row?.id) {
@@ -517,7 +538,7 @@ export default function PlanipretMobile() {
           direction: out ? "out" : "in",
           other: (out ? row.to_name || row.to_number : row.from_name || row.from_number) || "—",
           number: (out ? row.to_number : row.from_number) || "",
-          status: String(row.status).includes("ring") ? (out ? "ringing-out" : "ringing-in") : "active",
+          status: isRinging ? (out ? "ringing-out" : "ringing-in") : "active",
           startedAt: row.answered_at ? new Date(row.answered_at).getTime() : row.started_at ? new Date(row.started_at).getTime() : Date.now(),
         });
       }
@@ -532,9 +553,20 @@ export default function PlanipretMobile() {
 
   const hangupActive = async () => {
     if (!activeCallId) return;
-    softphone.hangup();
-    const { error } = await supabase.functions.invoke("pp-ns-calls", { body: { action: "disconnect", call_id: activeCallId } });
+    const id = activeCallId;
+    endedCallIds.current.set(id, Date.now());
+    setActiveCallId(null);
+    attachRestCall?.(null);
+    try { softphone.hangup(); } catch {}
+    const { error } = await supabase.functions.invoke("pp-ns-calls", { body: { action: "disconnect", call_id: id } });
     if (error) toast.error(t("dialer.hangupFailed")); else toast.success(t("dialer.hungUp"));
+    try {
+      const nowIso = new Date().toISOString();
+      await supabase
+        .from("planipret_phone_calls")
+        .update({ status: "ended", ended_at: nowIso } as any)
+        .or(`id.eq.${id},ns_callid.eq.${id},ns_call_id.eq.${id}`);
+    } catch {}
   };
 
   useEffect(() => {

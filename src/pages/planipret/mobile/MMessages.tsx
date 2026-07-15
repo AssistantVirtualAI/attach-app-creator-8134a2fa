@@ -432,6 +432,10 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
         body: { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) },
       });
       if (err) throw err;
+      if ((data as any)?.ok === false || (data as any)?.error) {
+        const detail = (data as any)?.body || (data as any)?.error || t("messages.sendFailed");
+        throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      }
       const newThreadId = (data as any)?.result?.messagesession_id;
       if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);
       // Refresh from server to reconcile optimistic message

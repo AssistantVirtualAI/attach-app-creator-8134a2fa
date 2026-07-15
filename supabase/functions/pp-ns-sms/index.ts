@@ -133,10 +133,11 @@ Deno.serve(async (req) => {
         const msg = typeof result === "object" ? String(result?.message ?? result?.error ?? lastText) : lastText;
         if (!/destination/i.test(msg) && res.status !== 404) break;
       }
-      if (!res.ok) {
-        console.error("[pp-ns-sms] NS send failed", res.status, lastPath, lastText);
+      if (!res || !res.ok) {
+        const status = res?.status ?? 502;
+        console.error("[pp-ns-sms] NS send failed", status, lastPath, lastText);
         return jsonResponse(
-          { ok: false, error: `Envoi SMS refusé (${res.status})`, status: res.status, body: lastText, from, to: destination, endpoint: lastPath },
+          { ok: false, error: `Envoi SMS refusé (${status})`, status, body: lastText, from, to: destination, endpoint: lastPath },
           200,
         );
       }

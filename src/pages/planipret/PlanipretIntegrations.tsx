@@ -805,3 +805,22 @@ function HealthPill({ color, bg, border, label }: { color: string; bg: string; b
   );
 }
 
+function HealthChip({ icon, color, label }: { icon: React.ReactNode; color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full tabular-nums"
+      style={{ fontSize: 11, fontWeight: 600, color, background: `${color}14`, border: `1px solid ${color}44` }}>
+      {icon} {label}
+    </span>
+  );
+}
+
+function MiniKpi({ color, label, value }: { color: string; label: string; value: number }) {
+  return (
+    <div className="pp-card relative overflow-hidden" style={{ padding: 14 }}>
+      <div aria-hidden className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, ${color}, transparent)` }} />
+      <div style={{ fontSize: 22, fontWeight: 700, color, lineHeight: 1 }} className="tabular-nums">{value}</div>
+      <div style={{ fontSize: 11, color: "var(--pp-text-secondary)", marginTop: 6, fontWeight: 500 }}>{label}</div>
+    </div>
+  );
+}
+

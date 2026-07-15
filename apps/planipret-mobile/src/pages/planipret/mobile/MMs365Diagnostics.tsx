@@ -8,6 +8,7 @@ import { useMs365Status } from "@/components/planipret/Ms365StatusBadge";
 import { ArrowLeft, RefreshCw, LogIn, Copy, Loader2, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { buildMs365AuthorizeUrl, getMs365RedirectUri } from "@/lib/ms365OAuth";
+import Ms365TestNowButton from "@/components/planipret/Ms365TestNowButton";
 
 export default function MMs365Diagnostics() {
   const nav = useNavigate();

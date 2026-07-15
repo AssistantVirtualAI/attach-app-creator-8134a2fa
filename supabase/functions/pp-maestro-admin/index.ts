@@ -188,12 +188,26 @@ Deno.serve(async (req) => {
       const mirroredOk = okSet.size;
       const mirroredFailed = [...failSet].filter((id) => !okSet.has(id)).length;
 
+      // Skipped: rows logged as call.analysis.skipped.* (recent window)
+      const { count: skippedTotal } = await admin
+        .from("planipret_maestro_sync_log")
+        .select("id", { count: "exact", head: true })
+        .like("action", "call.analysis.skipped.%");
+      // Errors: failed summary attempts (recent window)
+      const { count: errorsTotal } = await admin
+        .from("planipret_maestro_sync_log")
+        .select("id", { count: "exact", head: true })
+        .eq("action", "call.analysis.summary")
+        .eq("success", false);
+
       return jsonResponse({
         ok: true,
         eligible: eligible ?? 0,
         with_maestro_call_id: withMaestroId ?? 0,
         mirrored_ok: mirroredOk,
         mirrored_failed: mirroredFailed,
+        skipped_total: skippedTotal ?? 0,
+        errors_total: errorsTotal ?? 0,
         pending: Math.max(0, (eligible ?? 0) - mirroredOk),
         window_first_log: firstAt,
         window_last_log: lastAt,
@@ -211,6 +225,8 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(limit);
       if (body.only_failures) q = q.eq("success", false);
+      if (body.action_like) q = q.like("action", String(body.action_like));
+      if (body.action_eq) q = q.eq("action", String(body.action_eq));
       const { data, error } = await q;
       if (error) return jsonResponse({ error: error.message }, 500);
       return jsonResponse({ ok: true, entries: data ?? [], count: data?.length ?? 0 });

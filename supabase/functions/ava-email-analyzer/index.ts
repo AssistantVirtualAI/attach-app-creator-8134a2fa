@@ -3,9 +3,9 @@
 // Auth : JWT du courtier. Retourne l'analyse et l'insère dans planipret_ava_email_analyses.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
-const MS365_DELEGATED_SCOPES = "openid profile email offline_access User.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite";
 
 async function getMsConfig(admin: any) {
   const { data } = await admin.from("planipret_integration_secrets").select("config").eq("provider", "microsoft").maybeSingle();
@@ -39,27 +39,7 @@ async function getAppAccessToken(admin: any): Promise<string | null> {
 }
 
 async function refreshToken(admin: any, profile: any) {
-  const cfg = await getMsConfig(admin);
-  if (!profile.ms365_refresh_token) return null;
-  const body = new URLSearchParams({
-    client_id: cfg.clientId,
-    client_secret: cfg.clientSecret,
-    grant_type: "refresh_token",
-    refresh_token: profile.ms365_refresh_token,
-    scope: MS365_DELEGATED_SCOPES,
-  });
-  const r = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
-    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,
-  });
-  if (!r.ok) { console.error("[ava-email-analyzer] MS refresh failed", await r.text()); return null; }
-  const d = await r.json();
-  await admin.from("planipret_profiles").update({
-    ms365_access_token: d.access_token,
-    ms365_refresh_token: d.refresh_token ?? profile.ms365_refresh_token,
-    ms365_scopes: d.scope ?? MS365_DELEGATED_SCOPES,
-    ms365_token_expiry: new Date(Date.now() + (Number(d.expires_in ?? 3600)) * 1000).toISOString(),
-  }).eq("id", profile.id);
-  return d.access_token as string;
+  return await refreshMicrosoftAccessToken(admin, profile, MS365_DELEGATED_SCOPES);
 }
 
 async function graph(admin: any, profile: any, path: string, init: RequestInit = {}, retry = true): Promise<Response> {

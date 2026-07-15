@@ -2,39 +2,13 @@
 // Peut être appelé sans JWT (idempotent, filtre par expiration). Sécurise via header ou tolère cron.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const MAX_MINUTES = 4230;
 
-async function getMsConfig(admin: any) {
-  const { data } = await admin.from("planipret_integration_secrets").select("config").eq("provider", "microsoft").maybeSingle();
-  const c = (data?.config ?? {}) as Record<string, string>;
-  return {
-    clientId: c.client_id ?? Deno.env.get("MICROSOFT_CLIENT_ID") ?? "",
-    clientSecret: c.client_secret ?? Deno.env.get("MICROSOFT_CLIENT_SECRET") ?? "",
-    tenant: c.tenant_id ?? Deno.env.get("MICROSOFT_TENANT_ID") ?? "common",
-  };
-}
 async function refreshToken(admin: any, profile: any) {
-  const cfg = await getMsConfig(admin);
-  if (!profile.ms365_refresh_token) return null;
-  const body = new URLSearchParams({
-    client_id: cfg.clientId, client_secret: cfg.clientSecret, grant_type: "refresh_token",
-    refresh_token: profile.ms365_refresh_token,
-    scope: "openid profile email offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All",
-  });
-  const r = await fetch(`https://login.microsoftonline.com/${cfg.tenant}/oauth2/v2.0/token`, {
-    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body,
-  });
-  if (!r.ok) return null;
-  const d = await r.json();
-  await admin.from("planipret_profiles").update({
-    ms365_access_token: d.access_token,
-    ms365_refresh_token: d.refresh_token ?? profile.ms365_refresh_token,
-    ms365_scopes: d.scope ?? "openid profile email offline_access User.Read User.ReadBasic.All Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Organization.Read.All Application.Read.All",
-    ms365_token_expiry: new Date(Date.now() + Number(d.expires_in ?? 3600) * 1000).toISOString(),
-  }).eq("id", profile.id);
-  return d.access_token as string;
+  return await refreshMicrosoftAccessToken(admin, profile, MS365_DELEGATED_SCOPES);
 }
 async function graph(admin: any, profile: any, path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const r = await fetch(`${GRAPH}${path}`, {

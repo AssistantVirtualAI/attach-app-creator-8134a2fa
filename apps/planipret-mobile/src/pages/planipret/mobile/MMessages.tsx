@@ -271,14 +271,16 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
 
   if (activeThread) {
     return (
-      <ThreadView
-        threadId={activeThread.id}
-        number={activeThread.number}
-        myExt={myExt}
-        userId={profile.user_id}
-        onBack={() => { setActiveThread(null); load(); }}
-        onCall={(n) => openDialer(n)}
-      />
+      <div className="relative h-full w-full">
+        <ThreadView
+          threadId={activeThread.id}
+          number={activeThread.number}
+          myExt={myExt}
+          userId={profile.user_id}
+          onBack={() => { setActiveThread(null); load(); }}
+          onCall={(n) => openDialer(n)}
+        />
+      </div>
     );
   }
 

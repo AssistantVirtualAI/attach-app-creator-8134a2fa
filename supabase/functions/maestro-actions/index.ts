@@ -72,6 +72,8 @@ Deno.serve(async (req) => {
         const results: any[] = [];
         if (isMaestroTelecomConfigured(tCfg)) {
           const paths = [
+            `/users/lookup?email=${encodeURIComponent(email)}`,
+            `/users/by-email/${encodeURIComponent(email)}`,
             `/users?email=${encodeURIComponent(email)}`,
             `/users?search=${encodeURIComponent(email)}`,
             `/users?q=${encodeURIComponent(email)}`,

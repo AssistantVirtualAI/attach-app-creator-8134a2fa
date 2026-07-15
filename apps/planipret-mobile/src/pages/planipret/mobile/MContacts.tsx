@@ -672,7 +672,7 @@ function ContactDetailSheet({
   };
   const openEmail = () => {
     if (!email) return;
-    window.location.href = `mailto:${email}`;
+    setEmailOpen(true);
   };
 
 

@@ -229,7 +229,7 @@ const AuthPage = () => {
                     <rect x="1" y="12" width="10" height="10" fill="#00A4EF"/>
                     <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
                   </svg>
-                  Continue with Microsoft
+                  {t('auth.buttons.continueWithMicrosoft') || 'Continuer avec Microsoft 365 (SSO)'}
                 </Button>
 
                 <Button

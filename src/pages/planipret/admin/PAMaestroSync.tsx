@@ -219,6 +219,14 @@ export default function PAMaestroSync() {
             <Activity className="w-4 h-4" /> Resync analyses (72h)
           </button>
           <button
+            className="pp-btn flex items-center gap-2"
+            onClick={() => void mirrorAll()}
+            disabled={mirroring || loading}
+            style={{ padding: "8px 14px", fontSize: 13, borderColor: `${AGENT}55`, color: AGENT }}
+          >
+            <Activity className={`w-4 h-4 ${mirroring ? "animate-spin" : ""}`} /> Mirror everything
+          </button>
+          <button
             className="pp-btn pp-btn-primary flex items-center gap-2"
             onClick={() => void load()}
             disabled={loading}

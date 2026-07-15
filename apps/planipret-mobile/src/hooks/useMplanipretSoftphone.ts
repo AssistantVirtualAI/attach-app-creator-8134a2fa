@@ -178,6 +178,60 @@ export function useMplanipretSoftphone() {
     };
   }, [user?.id]);
 
+  // Watchdog: keep the SIP registration alive. If we drift into
+  // `disconnected` / `error` for more than 10s, force a re-REGISTER. If still
+  // KO after 20s, ask the boot flow to re-init credentials from scratch. Also
+  // trigger an immediate re-register on visibility/online/focus resume so the
+  // user never sees "Offline" while a call is ringing.
+  useEffect(() => {
+    if (!user) return;
+    let disconnectedSince = 0;
+    let softTimer: ReturnType<typeof setTimeout> | null = null;
+    let hardTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearTimers = () => {
+      if (softTimer) { clearTimeout(softTimer); softTimer = null; }
+      if (hardTimer) { clearTimeout(hardTimer); hardTimer = null; }
+    };
+    const evaluate = () => {
+      const st = ppSipProvider.getSnapshot().status;
+      if (st === "registered" || st === "connected") {
+        disconnectedSince = 0;
+        clearTimers();
+        return;
+      }
+      if (!disconnectedSince) disconnectedSince = Date.now();
+      clearTimers();
+      softTimer = setTimeout(() => {
+        const s = ppSipProvider.getSnapshot().status;
+        if (s !== "registered" && s !== "connected") {
+          try { ppSipProvider.forceReregister(); } catch {}
+        }
+      }, 10_000);
+      hardTimer = setTimeout(() => {
+        const s = ppSipProvider.getSnapshot().status;
+        if (s !== "registered" && s !== "connected") {
+          try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister")); } catch {}
+        }
+      }, 20_000);
+    };
+    const un = ppSipProvider.subscribe(() => evaluate());
+    const onResume = () => {
+      try { ppSipProvider.forceReregister(); } catch {}
+      evaluate();
+    };
+    const onVis = () => { if (document.visibilityState === "visible") onResume(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onResume);
+    window.addEventListener("online", onResume);
+    return () => {
+      un();
+      clearTimers();
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onResume);
+      window.removeEventListener("online", onResume);
+    };
+  }, [user?.id]);
+
 
   // Live call quality only while a call is active.
   useEffect(() => {
@@ -322,11 +376,14 @@ export function useMplanipretSoftphone() {
     });
   }, []);
 
+  const sipConnected = snap.status === "registered" || snap.status === "connected";
+
   return useMemo(() => ({
     snap: effectiveSnap,
     loading,
     net,
     quality,
+    sipConnected,
     placeCall,
     answeredElsewhere,
     dismissAnsweredElsewhere: () => setAnsweredElsewhere(null),
@@ -334,6 +391,7 @@ export function useMplanipretSoftphone() {
     call: (n: string) => ppSipProvider.call(n),
     answer,
     hangup,
+    reregister: () => { try { ppSipProvider.forceReregister(); } catch {} },
     mute: () => restCall?.id ? void restControl("mute", { muted: true }) : ppSipProvider.mute(),
     unmute: () => restCall?.id ? void restControl("mute", { muted: false }) : ppSipProvider.unmute(),
     hold: () => restCall?.id ? void restControl("hold") : ppSipProvider.hold(),
@@ -342,6 +400,6 @@ export function useMplanipretSoftphone() {
     transfer: (t: string) => restCall?.id ? void restControl("transfer", { destination: t, target: t }) : ppSipProvider.transfer(t),
     setAudioEl: (el: HTMLAudioElement | null) => { ppSipProvider.audioEl = el; },
     forceHandover: () => handoverController.forceHandover(),
-  }), [effectiveSnap, loading, net, quality, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl]);
+  }), [effectiveSnap, loading, net, quality, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl]);
 
 }

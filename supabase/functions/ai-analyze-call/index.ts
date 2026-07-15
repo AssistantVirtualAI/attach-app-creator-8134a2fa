@@ -391,6 +391,31 @@ ${String(transcript).slice(0, 18000)}`;
       model: modelUsed,
     });
 
+    // Fire-and-forget mirror to Maestro Télécom (summary + full analysis).
+    try {
+      mirrorCallAnalysisToMaestro(
+        admin,
+        (ppCall as any).user_id,
+        ppCall as any,
+        analysis,
+        {
+          ai_summary: summary.detailed ?? null,
+          ai_summary_short: summary.short ?? null,
+          coaching_message: coaching.coaching_message ?? coaching.overall ?? null,
+          next_actions: summary.next_steps ?? [],
+          topics: leadA.buying_signals ?? [],
+          sentiment: leadTemp === "hot" ? "positive" : leadTemp === "cold" ? "negative" : "neutral",
+          lead_score: leadScore,
+          lead_temperature: leadTemp,
+          lead_reason: leadA.recommendation ?? null,
+          model: modelUsed,
+        },
+      );
+    } catch (e) {
+      console.warn("[ai-analyze-call] maestro mirror scheduling failed", (e as Error)?.message);
+    }
+
+
     // Realtime broadcast
     try {
       await admin.channel(`ai-insights:${(ppCall as any).user_id}`).send({

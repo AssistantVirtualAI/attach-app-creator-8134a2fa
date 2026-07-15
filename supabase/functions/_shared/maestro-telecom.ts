@@ -2,8 +2,11 @@
 // functions. Config is stored in `planipret_integration_secrets` under provider
 // `maestro_telecom` and falls back to env vars for local development.
 //
-// This module intentionally never throws on missing config — callers use it
-// in fire-and-forget flows where NS-API remains the source of truth.
+// Features:
+//  - Exponential backoff retry (0/408/429/5xx) with jitter, bounded attempts
+//  - Best-effort persistence into `planipret_maestro_sync_log` for every mirror
+//  - Detailed console logging: method, path, status, ms, attempts, error
+//  - Never throws in mirror mode — NS-API remains the source of truth.
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
@@ -16,6 +19,9 @@ export interface MaestroTelecomResult<T = any> {
   ok: boolean;
   status: number;
   data: T | null;
+  ms?: number;
+  attempts?: number;
+  error?: string;
 }
 
 let cachedConfig: { at: number; cfg: MaestroTelecomConfig } | null = null;
@@ -49,56 +55,175 @@ export function isMaestroTelecomConfigured(cfg: MaestroTelecomConfig): boolean {
   return Boolean(cfg.url && cfg.key);
 }
 
+const RETRYABLE_STATUS = new Set([0, 408, 425, 429, 500, 502, 503, 504]);
+
+function backoffMs(attempt: number): number {
+  const base = 400 * Math.pow(2, attempt); // 400, 800, 1600
+  const jitter = Math.floor(Math.random() * 250);
+  return Math.min(base + jitter, 5000);
+}
+
 export async function maestroTelecomFetch<T = any>(
   cfg: MaestroTelecomConfig,
   path: string,
-  opts: { method?: string; body?: unknown; timeoutMs?: number } = {},
+  opts: { method?: string; body?: unknown; timeoutMs?: number; maxAttempts?: number } = {},
 ): Promise<MaestroTelecomResult<T>> {
-  if (!isMaestroTelecomConfigured(cfg)) return { ok: false, status: 0, data: null };
+  if (!isMaestroTelecomConfigured(cfg)) {
+    console.warn("[maestro-telecom] not configured — skip", opts.method ?? "GET", path);
+    return { ok: false, status: 0, data: null, attempts: 0, error: "not_configured" };
+  }
+  const method = opts.method ?? "GET";
   const url = `${cfg.url}${path.startsWith("/") ? path : `/${path}`}${path.includes("?") ? "&" : "?"}machine=1`;
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), opts.timeoutMs ?? 8000);
+  const maxAttempts = Math.max(1, opts.maxAttempts ?? 3);
+  const t0 = Date.now();
+  let lastErr: string | undefined;
+  let lastStatus = 0;
+  let lastData: any = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), opts.timeoutMs ?? 8000);
+    const attemptStart = Date.now();
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Authorization": `Bearer ${cfg.key}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+        signal: controller.signal,
+      });
+      let data: any = null;
+      try { data = await res.json(); } catch { data = null; }
+      const ms = Date.now() - attemptStart;
+      lastStatus = res.status;
+      lastData = data;
+
+      if (res.ok) {
+        console.log(`[maestro-telecom] ${method} ${path} → ${res.status} in ${ms}ms (attempt ${attempt + 1}/${maxAttempts})`);
+        return { ok: true, status: res.status, data, ms: Date.now() - t0, attempts: attempt + 1 };
+      }
+
+      const errSnippet = typeof data === "object" ? JSON.stringify(data).slice(0, 200) : String(data ?? "").slice(0, 200);
+      lastErr = `HTTP ${res.status} ${errSnippet}`;
+      console.warn(`[maestro-telecom] ${method} ${path} → ${res.status} in ${ms}ms (attempt ${attempt + 1}/${maxAttempts}) ${errSnippet}`);
+
+      if (!RETRYABLE_STATUS.has(res.status) || attempt === maxAttempts - 1) {
+        return { ok: false, status: res.status, data, ms: Date.now() - t0, attempts: attempt + 1, error: lastErr };
+      }
+    } catch (e) {
+      const ms = Date.now() - attemptStart;
+      lastErr = (e as Error)?.message ?? String(e);
+      console.warn(`[maestro-telecom] ${method} ${path} → network error in ${ms}ms (attempt ${attempt + 1}/${maxAttempts}) ${lastErr}`);
+      lastStatus = 0;
+      if (attempt === maxAttempts - 1) {
+        return { ok: false, status: 0, data: null, ms: Date.now() - t0, attempts: attempt + 1, error: lastErr };
+      }
+    } finally {
+      clearTimeout(t);
+    }
+
+    const wait = backoffMs(attempt);
+    console.log(`[maestro-telecom] backoff ${wait}ms before retry ${attempt + 2}/${maxAttempts}`);
+    await new Promise((r) => setTimeout(r, wait));
+  }
+
+  return { ok: false, status: lastStatus, data: lastData, ms: Date.now() - t0, attempts: maxAttempts, error: lastErr };
+}
+
+async function logSync(
+  admin: SupabaseClient,
+  entry: {
+    user_id?: string | null;
+    action: string;
+    endpoint: string;
+    method: string;
+    request_body?: unknown;
+    result: MaestroTelecomResult;
+  },
+): Promise<void> {
   try {
-    const res = await fetch(url, {
-      method: opts.method ?? "GET",
-      headers: {
-        "Authorization": `Bearer ${cfg.key}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-      signal: controller.signal,
+    await admin.from("planipret_maestro_sync_log").insert({
+      user_id: entry.user_id ?? null,
+      action: entry.action,
+      maestro_endpoint: `${entry.method} ${entry.endpoint}`,
+      request_body: entry.request_body ? (entry.request_body as any) : null,
+      response_body: (entry.result.data as any) ?? (entry.result.error ? { error: entry.result.error } : null),
+      response_status: entry.result.status ?? 0,
+      duration_ms: entry.result.ms ?? null,
+      success: !!entry.result.ok,
     });
-    let data: any = null;
-    try { data = await res.json(); } catch { data = null; }
-    return { ok: res.ok, status: res.status, data };
   } catch (e) {
-    console.warn("[maestro-telecom]", (e as Error)?.message ?? e);
-    return { ok: false, status: 0, data: null };
-  } finally {
-    clearTimeout(t);
+    console.warn("[maestro-telecom] sync-log insert failed (non-fatal):", (e as Error)?.message);
   }
 }
 
 /**
- * Best-effort mirror to Maestro. Never throws, never blocks the caller.
- * Use for duplicating side-effects (SMS sent, call started, call ended) that
- * NS-API already persisted authoritatively.
+ * Best-effort mirror to Maestro with retry+backoff and full sync-log entry.
+ * Never throws, never blocks the caller. Use for duplicating side-effects
+ * (SMS sent, call started, call ended) that NS-API already persisted.
  */
 export function maestroTelecomMirror(
   admin: SupabaseClient,
   path: string,
-  opts: { method?: string; body?: unknown } = {},
+  opts: { method?: string; body?: unknown; action?: string; userId?: string | null } = {},
 ): void {
+  const method = opts.method ?? "GET";
+  const action = opts.action ?? `mirror:${method}:${path.split("?")[0]}`;
   void (async () => {
     try {
       const cfg = await getMaestroTelecomConfig(admin);
-      if (!isMaestroTelecomConfigured(cfg)) return;
-      await maestroTelecomFetch(cfg, path, opts);
+      if (!isMaestroTelecomConfigured(cfg)) {
+        console.warn(`[maestro-telecom.mirror] skipped ${action} — not configured`);
+        return;
+      }
+      console.log(`[maestro-telecom.mirror] → ${action} ${method} ${path}`);
+      const r = await maestroTelecomFetch(cfg, path, { method, body: opts.body });
+      console.log(`[maestro-telecom.mirror] ← ${action} ok=${r.ok} status=${r.status} attempts=${r.attempts} ms=${r.ms}`);
+      await logSync(admin, {
+        user_id: opts.userId ?? null,
+        action,
+        endpoint: path,
+        method,
+        request_body: opts.body,
+        result: r,
+      });
     } catch (e) {
-      console.warn("[maestro-telecom.mirror]", (e as Error)?.message ?? e);
+      console.warn("[maestro-telecom.mirror] unexpected", action, (e as Error)?.message ?? e);
     }
   })();
+}
+
+/**
+ * Lightweight health probe used by MDiagnostics and the admin dashboard.
+ * Returns config presence and a live ping against a cheap endpoint.
+ */
+export async function pingMaestroTelecom(admin: SupabaseClient, userId?: string | null): Promise<{
+  configured: boolean;
+  base_url: string;
+  ok: boolean;
+  status: number;
+  ms?: number;
+  error?: string;
+}> {
+  const cfg = await getMaestroTelecomConfig(admin);
+  if (!isMaestroTelecomConfigured(cfg)) {
+    return { configured: false, base_url: cfg.url || "", ok: false, status: 0, error: "not_configured" };
+  }
+  // A cheap authenticated GET. If the broker isn't linked, fall back to a
+  // generic /health path — either way we're testing auth + connectivity.
+  const path = userId ? `/users/${encodeURIComponent(userId)}/communications/recent` : `/health`;
+  const r = await maestroTelecomFetch(cfg, path, { method: "GET", maxAttempts: 1, timeoutMs: 5000 });
+  return {
+    configured: true,
+    base_url: cfg.url,
+    ok: r.ok,
+    status: r.status,
+    ms: r.ms,
+    error: r.error,
+  };
 }
 
 /**

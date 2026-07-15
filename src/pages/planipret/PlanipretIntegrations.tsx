@@ -238,7 +238,7 @@ export default function PlanipretIntegrations() {
         <MiniKpi color="#00D4AA" label="Connectées" value={health.connected} />
         <MiniKpi color="#F5A623" label="En attente" value={health.pending} />
         <MiniKpi color="#E84C4C" label="Erreurs" value={health.errors} />
-        <MiniKpi color={ACCENT} label="Total configurées" value={totalConfigured + health.errors} />
+        <MiniKpi color={ACCENT} label="Clés backend détectées" value={backendKeyCount} />
       </div>
 
 

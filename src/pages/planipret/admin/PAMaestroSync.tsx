@@ -16,6 +16,7 @@ type Status = {
   stats24h: { total: number; failed: number; success_rate: number | null };
   last_call_mirror: any;
   last_sms_mirror: any;
+  last_analysis_mirror?: any;
 };
 
 type LogRow = {
@@ -160,6 +161,25 @@ export default function PAMaestroSync() {
             <span style={{ color: "var(--pp-text-secondary)" }}>Échecs seulement</span>
           </label>
           <button
+            className="pp-btn flex items-center gap-2"
+            onClick={async () => {
+              try {
+                const { data, error } = await supabase.functions.invoke("pp-maestro-admin", {
+                  body: { action: "resync-analysis", since_hours: 72, limit: 200 },
+                });
+                if (error) throw error;
+                alert(`Resync planifié : ${data?.scheduled ?? 0} analyse(s)`);
+                await load();
+              } catch (e: any) {
+                alert(`Erreur resync : ${e?.message ?? e}`);
+              }
+            }}
+            disabled={loading}
+            style={{ padding: "8px 14px", fontSize: 13 }}
+          >
+            <Activity className="w-4 h-4" /> Resync analyses (72h)
+          </button>
+          <button
             className="pp-btn pp-btn-primary flex items-center gap-2"
             onClick={() => void load()}
             disabled={loading}
@@ -230,6 +250,13 @@ export default function PAMaestroSync() {
                   {fmtAgo(status?.last_sms_mirror?.created_at)}
                 </span>
                 {status?.last_sms_mirror && <Pill ok={!!status.last_sms_mirror.success} label={String(status.last_sms_mirror.response_status ?? 0)} />}
+              </div>
+              <div className="flex items-center gap-2" style={{ fontSize: 12 }}>
+                <span style={{ color: "var(--pp-text-secondary)" }}>Analyse IA</span>
+                <span className="tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>
+                  {fmtAgo(status?.last_analysis_mirror?.created_at)}
+                </span>
+                {status?.last_analysis_mirror && <Pill ok={!!status.last_analysis_mirror.success} label={String(status.last_analysis_mirror.response_status ?? 0)} />}
               </div>
             </div>
           }

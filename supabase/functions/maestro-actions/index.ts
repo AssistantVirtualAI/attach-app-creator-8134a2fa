@@ -19,7 +19,9 @@ Deno.serve(async (req) => {
     const { action, payload = {} } = await req.json();
     const cfg = await getMaestroConfig(admin);
     if (!cfg.url || !cfg.key) {
-      return new Response(JSON.stringify({ success: false, error: "Maestro non configuré" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (action !== "find_user_by_email" && action !== "test") {
+        return new Response(JSON.stringify({ success: false, error: "Maestro non configuré" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
     const h = { Authorization: `Bearer ${cfg.key}`, "Content-Type": "application/json", "X-Account-Id": cfg.accountId };
     const j = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });

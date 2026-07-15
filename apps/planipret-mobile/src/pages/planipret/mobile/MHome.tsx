@@ -193,7 +193,12 @@ export default function MHome() {
           body: { action: "list_calendar_events", payload: { start: calStart.toISOString(), end: calEnd.toISOString(), top: 200 } },
         });
         if (msError || (msData as any)?.success === false) {
-          setMsCalendarError((msData as any)?.error ?? msError?.message ?? "Calendrier Microsoft indisponible");
+          const errMsg = (msData as any)?.error ?? msError?.message ?? "Calendrier Microsoft indisponible";
+          setMsCalendarError(errMsg);
+          if (/token|expir|unauthor|401|invalid_grant/i.test(errMsg)) {
+            const { startMs365Reconnect } = await import("@/lib/ms365E2E");
+            startMs365Reconnect("Erreur d'authentification sur le calendrier");
+          }
         } else {
           microsoftEvents = (msData as any)?.events ?? [];
         }

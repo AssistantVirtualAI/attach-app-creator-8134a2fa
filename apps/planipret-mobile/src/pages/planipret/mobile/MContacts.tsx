@@ -723,7 +723,7 @@ function ContactDetailSheet({
   };
 
   const openSms = () => {
-    if (!rawPhone) { toast.error("Aucun numéro mobile"); return; }
+    if (!rawPhone && !extension) { toast.error("Aucun numéro disponible"); return; }
     setSmsOpen(true);
   };
   const openEmail = () => {

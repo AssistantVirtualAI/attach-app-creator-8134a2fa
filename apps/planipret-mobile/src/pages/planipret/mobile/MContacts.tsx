@@ -105,6 +105,7 @@ export default function MContacts() {
   const [visibleCount, setVisibleCount] = useState(40);
   const [filterDept, setFilterDept] = useState<string>("");
   const [filterTeam, setFilterTeam] = useState<string>("");
+  const [sortBy, setSortBy] = useState<"relevance" | "name" | "team" | "department">("relevance");
   const loadedTabsRef = useRef<Set<Tab>>(new Set(["favorites"]));
 
   useEffect(() => {
@@ -227,16 +228,51 @@ export default function MContacts() {
       if (filterDept) out = out.filter((c: any) => (c.department ?? "") === filterDept);
       if (filterTeam) out = out.filter((c: any) => (c.team ?? c.group ?? c.site ?? "") === filterTeam);
     }
-    if (!tokens.length) return out;
-    return out.filter((c: any) => {
-      const hay = tab === "directory"
-        ? `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""} ${c.team ?? ""}`
-        : tab === "favorites"
-        ? `${c.name ?? ""} ${c.phone ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.company ?? ""}`
-        : `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.display_name ?? ""} ${c.phone ?? ""} ${c.email ?? ""} ${c.company ?? ""}`;
-      return matchAllTokens(hay, tokens);
-    });
-  }, [tab, personal, favorites, directory, q, filterDept, filterTeam]);
+    if (tokens.length) {
+      out = out.filter((c: any) => {
+        const hay = tab === "directory"
+          ? `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""} ${c.team ?? ""}`
+          : tab === "favorites"
+          ? `${c.name ?? ""} ${c.phone ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.company ?? ""}`
+          : `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.display_name ?? ""} ${c.phone ?? ""} ${c.email ?? ""} ${c.company ?? ""}`;
+        return matchAllTokens(hay, tokens);
+      });
+    }
+    // Sort — Directory tab only; other tabs keep their source order.
+    if (tab === "directory") {
+      const nameOf = (c: any) => (`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || c.name || c.display_name || "").toLowerCase();
+      const teamOf = (c: any) => String(c.team ?? c.group ?? c.site ?? "").toLowerCase();
+      const deptOf = (c: any) => String(c.department ?? "").toLowerCase();
+      if (sortBy === "name") {
+        out = [...out].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+      } else if (sortBy === "team") {
+        out = [...out].sort((a, b) => teamOf(a).localeCompare(teamOf(b)) || nameOf(a).localeCompare(nameOf(b)));
+      } else if (sortBy === "department") {
+        out = [...out].sort((a, b) => deptOf(a).localeCompare(deptOf(b)) || nameOf(a).localeCompare(nameOf(b)));
+      } else {
+        // relevance: when a query is typed, rank by best token match; otherwise alpha.
+        if (tokens.length) {
+          const score = (c: any) => {
+            const n = nameOf(c);
+            let s = 0;
+            for (const tk of tokens) {
+              if (!tk) continue;
+              const idx = n.indexOf(tk);
+              if (idx === 0) s += 100;
+              else if (idx > 0) s += 40;
+              if (String(c.extension ?? "").includes(tk)) s += 60;
+              if (String(c.email ?? "").toLowerCase().includes(tk)) s += 20;
+            }
+            return -s;
+          };
+          out = [...out].sort((a, b) => score(a) - score(b) || nameOf(a).localeCompare(nameOf(b)));
+        } else {
+          out = [...out].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+        }
+      }
+    }
+    return out;
+  }, [tab, personal, favorites, directory, q, filterDept, filterTeam, sortBy]);
 
   const deptOptions = useMemo(() => {
     const s = new Set<string>();
@@ -368,7 +404,7 @@ export default function MContacts() {
         })}
       </div>
 
-      {tab === "directory" && (deptOptions.length > 0 || teamOptions.length > 0) && (
+      {tab === "directory" && (
         <div className="flex items-center gap-2 mb-3 overflow-x-auto no-scrollbar">
           <Filter className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--pp-text-muted)" }} />
           {deptOptions.length > 0 && (
@@ -394,6 +430,15 @@ export default function MContacts() {
               Effacer
             </button>
           )}
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}
+            className="ml-auto text-xs px-2 py-1.5 rounded-full outline-none shrink-0"
+            style={{ background: "var(--pp-bg-surface)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}
+            aria-label="Trier">
+            <option value="relevance">Trier : Pertinence</option>
+            <option value="name">Trier : Nom</option>
+            <option value="team">Trier : Équipe</option>
+            <option value="department">Trier : Département</option>
+          </select>
         </div>
       )}
 
@@ -697,10 +742,10 @@ function ContactDetailSheet({
           <div className="min-w-0 flex-1">
             <div className="text-lg font-bold truncate" style={{ color: "var(--pp-text-primary)" }}>{name}</div>
             {rawPhone && (
-              <ContactField label="Tél" value={rawPhone} />
+              <ContactField label="Tél" value={rawPhone} onCall={() => onCall(rawPhone)} />
             )}
             {extension && (
-              <ContactField label="Ext" value={extension} />
+              <ContactField label="Ext" value={extension} onCall={() => onCall(extension)} />
             )}
             {email && (
               <ContactField label="Email" value={email} />
@@ -795,7 +840,7 @@ function ContactDetailSheet({
   );
 }
 
-function ContactField({ label, value }: { label: string; value: string }) {
+function ContactField({ label, value, onCall }: { label: string; value: string; onCall?: () => void }) {
   return (
     <div className="flex items-center gap-1.5 mt-0.5">
       <span className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-faint)" }}>{label}</span>
@@ -808,6 +853,16 @@ function ContactField({ label, value }: { label: string; value: string }) {
       >
         <Copy className="w-3 h-3" />
       </button>
+      {onCall && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onCall(); }}
+          className="p-1 rounded-full active:scale-95"
+          style={{ background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.3)", color: "var(--pp-brand-accent)" }}
+          aria-label={`Appeler ${label}`}
+        >
+          <Phone className="w-3 h-3" />
+        </button>
+      )}
     </div>
   );
 }

@@ -1090,6 +1090,93 @@ function EmailComposerSheet({ to, contactName, onClose }: { to: string; contactN
 }
 
 
+function AppointmentSheet({ maestroClientId, contactName, onClose }: { maestroClientId: string; contactName: string; onClose: () => void }) {
+  const now = new Date();
+  const in1h = new Date(now.getTime() + 60 * 60 * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const toLocal = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const [title, setTitle] = useState(`RDV — ${contactName}`);
+  const [startAt, setStartAt] = useState(toLocal(in1h));
+  const [duration, setDuration] = useState(30);
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!title.trim() || !startAt) { toast.error("Titre et date requis"); return; }
+    setSaving(true);
+    try {
+      const start = new Date(startAt);
+      const end = new Date(start.getTime() + duration * 60 * 1000);
+      const { data, error } = await supabase.functions.invoke("maestro-appointment", {
+        body: {
+          maestro_client_id: maestroClientId,
+          title: title.trim(),
+          start_at: start.toISOString(),
+          end_at: end.toISOString(),
+          notes: notes.trim() || null,
+          type: "phone",
+        },
+      });
+      if (error) throw error;
+      if ((data as any)?.success === false) throw new Error((data as any)?.error || "appointment_failed");
+      toast.success("RDV créé");
+      onClose();
+    } catch (e: any) {
+      toast.error("Échec création RDV", { description: e?.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-4"
+        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouveau RDV</div>
+            <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Avec {contactName} · via Maestro</div>
+          </div>
+          <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>
+        </div>
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Titre</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)}
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Début</label>
+        <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)}
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Durée (min)</label>
+        <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}>
+          {[15, 30, 45, 60, 90].map((n) => <option key={n} value={n}>{n} min</option>)}
+        </select>
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Notes</label>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
+
+        <button onClick={save} disabled={saving}
+          className="w-full py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+          style={{ background: "var(--pp-brand-accent)" }}>
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+          {saving ? "Création…" : "Créer le RDV"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 function QuickAction({ icon, label, onClick, disabled }: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button

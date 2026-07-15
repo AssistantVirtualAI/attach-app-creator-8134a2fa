@@ -93,13 +93,17 @@ export default function MMore() {
   const reconnectNs = async () => {
     setReconnecting(true);
     const { data, error, status } = await safeEdgeFunction("ns-auth", { body: { action: "refresh" } });
-    setReconnecting(false);
     if (error || (data as any)?.success === false) {
+      setReconnecting(false);
       toast.error(status === 403 ? t("more.phoneUnauthorized") : ((data as any)?.error ?? error ?? t("more.connectionFailed")));
       return;
     }
-    toast.success(t("more.phoneConnected"));
+    // Refresh profile then force the softphone to re-init SIP credentials.
     await reloadProfile();
+    try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister", { detail: { force: true } })); } catch {}
+    try { reregister?.(); } catch {}
+    setReconnecting(false);
+    toast.success(t("more.phoneConnected"));
   };
 
   const startMs365OAuth = (cfg: { client_id: string; tenant_id?: string }) => {

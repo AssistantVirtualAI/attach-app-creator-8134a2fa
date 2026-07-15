@@ -793,23 +793,15 @@ export default function PlanipretMobile() {
           <OnboardingTutorial profile={profile} onDone={loadProfile} />
         )}
 
-        {/* Right FAB — Keypad (bleu) ou raccrocher (rouge) si appel actif */}
-        <button onClick={activeCallId ? hangupActive : () => setDialerOpen(true)}
-          className="absolute z-20 rounded-full flex items-center justify-center text-white active:scale-95 transition"
-          style={{
-            right: 18, bottom: "calc(env(safe-area-inset-bottom, 0px) + 116px)",
-            background: activeCallId
-              ? "linear-gradient(135deg, #5A1010, #E84C4C)"
-              : "linear-gradient(135deg, #1A4A8A, #2E9BDC)",
-            boxShadow: activeCallId
-              ? "0 4px 20px rgba(232,76,76,0.6)"
-              : "0 4px 20px rgba(46,155,220,0.55)",
-            animation: activeCallId ? "pp-pulse-red 1.5s infinite" : undefined,
-            width: 50, height: 50,
-          }}
-          aria-label={activeCallId ? t("dialer.hangup") : t("dialer.dialNumber")}>
-          {activeCallId ? <PhoneOff className="w-5 h-5" /> : <PhoneIcon className="w-5 h-5" />}
-        </button>
+        {/* Right FAB — hidden on Messages/AVA and while any composer input is focused */}
+        <FabDialer
+          activeCallId={activeCallId}
+          hangupActive={hangupActive}
+          onOpen={() => setDialerOpen(true)}
+          pathname={location.pathname}
+          label={activeCallId ? t("dialer.hangup") : t("dialer.dialNumber")}
+        />
+
 
 
         {/* Tab bar (5 tabs) */}

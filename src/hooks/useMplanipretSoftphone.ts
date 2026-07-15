@@ -139,7 +139,8 @@ export function useMplanipretSoftphone() {
         if (opts?.force) {
           try { ppSipProvider.stop(); } catch {}
         }
-        const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", { body: { client_type: "mobile" } });
+        const clientType = (typeof window !== "undefined" && (window as any)?.Capacitor?.isNativePlatform?.()) ? "mobile" : "web";
+        const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", { body: { client_type: clientType } });
         if (cancelled) return;
         if (error || !data || (data as any)?.error) return;
         const d = data as any;

@@ -1003,7 +1003,13 @@ function EmailsList({ profile }: { profile: any }) {
   );
 }
 
-function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: () => void; onReply: (init: { to?: string; subject?: string; body?: string }) => void }) {
+function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
+  email: any;
+  onClose: () => void;
+  onReply: (init: { to?: string; subject?: string; body?: string }) => void;
+  onForward: (init: { to?: string; subject?: string; body?: string }) => void;
+  onChanged: () => void;
+}) {
   const { t } = useMplanipretLang();
   const from = email.from?.emailAddress?.name ?? email.from?.emailAddress?.address ?? t("messages.sender");
   const fromAddr = email.from?.emailAddress?.address ?? "";
@@ -1012,6 +1018,34 @@ function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: ()
   const [sumOpen, setSumOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any | null>(null);
+  const [busy, setBusy] = useState<"" | "flag" | "archive" | "delete">("");
+  const [flagged, setFlagged] = useState<boolean>(email?.flag?.flagStatus === "flagged");
+
+  const runAction = async (
+    kind: "flag" | "archive" | "delete",
+    action: string,
+    payload: Record<string, unknown>,
+    successMsg: string,
+  ) => {
+    if (!email.id) { toast.error("Message ID manquant"); return; }
+    setBusy(kind);
+    try {
+      const { data, error } = await supabase.functions.invoke("ms365-actions", {
+        body: { action, payload: { message_id: email.id, ...payload } },
+      });
+      if (error || !(data as any)?.success) {
+        throw new Error((data as any)?.error ?? error?.message ?? "Échec");
+      }
+      toast.success(successMsg);
+      if (kind === "flag") setFlagged((v) => !v);
+      else onChanged();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erreur");
+    } finally {
+      setBusy("");
+    }
+  };
+
 
   const analyzeWithAva = async () => {
     if (!email.id) { toast.error("Message ID manquant"); return; }

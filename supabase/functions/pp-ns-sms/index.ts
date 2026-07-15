@@ -25,6 +25,74 @@ import {
   maestroTelecomMirror,
 } from "../_shared/maestro-telecom.ts";
 
+function normalizeE164(raw: unknown): string | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  if (s.startsWith("+")) return "+" + s.slice(1).replace(/\D/g, "");
+  const digits = s.replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return `+${digits}`;
+}
+
+function pickSmsNumber(row: any): string | null {
+  return normalizeE164(
+    (typeof row === "string" && row) ||
+    row?.["from-number"] ||
+    row?.from_number ||
+    row?.number ||
+    row?.phone_number_e164 ||
+    row?.phonenumber ||
+    row?.smsnumber ||
+    row?.did ||
+    row?.phone_number_digits ||
+    null,
+  );
+}
+
+async function getAssignedSmsNumbers(supabase: any, ctx: any): Promise<any[]> {
+  const numbers: any[] = [];
+  try {
+    const res = await nsFetch(`/domains/${encodeURIComponent(ctx.nsDomain)}/users/${encodeURIComponent(ctx.extension)}/smsnumbers`, { method: "GET" });
+    if (res.ok) {
+      const raw = await res.json();
+      const list = Array.isArray(raw) ? raw : (raw?.smsnumbers ?? raw?.data ?? []);
+      for (const n of list) {
+        const e164 = pickSmsNumber(n);
+        if (e164) numbers.push({ ...(typeof n === "object" ? n : {}), number: e164, "from-number": e164, source: "ns_api" });
+      }
+    }
+  } catch { /* DB fallback below */ }
+
+  if (!numbers.length) {
+    try {
+      const { data } = await supabase
+        .from("planipret_did_assignments")
+        .select("phone_number_e164,phone_number_digits,extension,domain,callerid_name")
+        .eq("extension", String(ctx.extension))
+        .eq("domain", String(ctx.nsDomain))
+        .limit(5);
+      for (const n of data ?? []) {
+        const e164 = pickSmsNumber(n);
+        if (e164) numbers.push({ ...n, number: e164, "from-number": e164, source: "did_assignment" });
+      }
+    } catch { /* ignore */ }
+  }
+
+  const seen = new Set<string>();
+  return numbers.filter((n) => {
+    const v = pickSmsNumber(n);
+    if (!v || seen.has(v)) return false;
+    seen.add(v);
+    return true;
+  });
+}
+
+function newMessageSessionId() {
+  return crypto.randomUUID().replace(/-/g, "");
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -108,13 +176,7 @@ Deno.serve(async (req) => {
 
 
     if (action === "sms-numbers") {
-      const res = await nsFetch(`${userBase}/smsnumbers`, { method: "GET" });
-      if (!res.ok) {
-        const txt = await res.text();
-        return jsonResponse({ error: "NS-API SMS numbers fetch failed", status: res.status, body: txt }, 502);
-      }
-      const raw = await res.json();
-      const numbers = Array.isArray(raw) ? raw : (raw?.smsnumbers ?? raw?.data ?? []);
+      const numbers = await getAssignedSmsNumbers(supabase, ctx);
       return jsonResponse({ ok: true, numbers });
     }
 
@@ -129,42 +191,40 @@ Deno.serve(async (req) => {
         return jsonResponse({ error: "to et message sont requis" }, 400);
       }
 
-      // If no from was passed, auto-detect from the user's SMS numbers so NS
-      // doesn't reject the request with "no source".
+      // If no from was passed, auto-detect the broker DID/SMS number. NS-API
+      // requires this exact body key for SMS: "from-number".
       if (!from && !thread_id) {
-        try {
-          const nres = await nsFetch(`${userBase}/smsnumbers`, { method: "GET" });
-          if (nres.ok) {
-            const nraw = await nres.json();
-            const list = Array.isArray(nraw) ? nraw : (nraw?.smsnumbers ?? nraw?.data ?? []);
-            const first = list?.[0];
-            from = (typeof first === "string" && first) || first?.number || first?.phonenumber || first?.smsnumber || first?.did || undefined;
-          }
-        } catch (_) { /* ignore, NS will reject with a clear message */ }
+        const first = (await getAssignedSmsNumbers(supabase, ctx))[0];
+        from = pickSmsNumber(first) ?? undefined;
       }
 
-      const normalizedTo = String(to).replace(/[^\d+]/g, "");
-      const destination = normalizedTo.startsWith("+")
-        ? normalizedTo
-        : `+${normalizedTo.replace(/^1?(\d{10})$/, "1$1")}`;
-      const directBody: Record<string, unknown> = { type, destination, message, ...(from ? { from, source: from } : {}) };
+      const destination = normalizeE164(to);
+      if (!destination) return jsonResponse({ error: "numéro destinataire invalide" }, 400);
+
+      const fromNumber = normalizeE164(from);
+      const baseBody: Record<string, unknown> = {
+        type: type === "chat" ? "chat" : "sms",
+        destination,
+        message,
+        ...(fromNumber ? { "from-number": fromNumber } : {}),
+      };
+      const generatedThreadId = thread_id || newMessageSessionId();
       const domains = Array.from(new Set([ctx.nsDomain, "planipret.ca"].filter(Boolean)));
       const sendAttempts: Array<{ path: string; body: Record<string, unknown> }> = [];
       for (const domain of domains) {
         const domainBase = `/domains/${encodeURIComponent(domain)}`;
         const scopedUserBase = `${domainBase}/users/${encodeURIComponent(ctx.extension)}`;
+        const canonicalPath = `${scopedUserBase}/messagesessions/${encodeURIComponent(generatedThreadId)}/messages`;
+        sendAttempts.push({ path: canonicalPath, body: baseBody });
         if (thread_id) {
           sendAttempts.push(
-            { path: `${scopedUserBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`, body: { message, type, destination, ...(from ? { from, source: from } : {}) } },
-            { path: `${scopedUserBase}/messagesessions/messages`, body: directBody },
-            { path: `${domainBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`, body: { ...directBody, user: ctx.extension, extension: ctx.extension } },
+            { path: `${scopedUserBase}/messagesessions/messages`, body: baseBody },
+            { path: `${domainBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`, body: { ...baseBody, user: ctx.extension, extension: ctx.extension } },
           );
         } else {
           sendAttempts.push(
-            { path: `${scopedUserBase}/messagesessions/messages`, body: directBody },
-            { path: `${scopedUserBase}/messagesessions`, body: directBody },
-            { path: `${domainBase}/messagesessions/messages`, body: { ...directBody, user: ctx.extension, extension: ctx.extension } },
-            { path: `${domainBase}/messagesessions`, body: { ...directBody, user: ctx.extension, extension: ctx.extension } },
+            { path: `${scopedUserBase}/messagesessions`, body: { ...baseBody, messagesession: generatedThreadId } },
+            { path: `${domainBase}/messagesessions/${encodeURIComponent(generatedThreadId)}/messages`, body: { ...baseBody, user: ctx.extension, extension: ctx.extension } },
           );
         }
       }
@@ -186,7 +246,7 @@ Deno.serve(async (req) => {
         const status = res?.status ?? 502;
         console.error("[pp-ns-sms] NS send failed", status, lastPath, lastText);
         return jsonResponse(
-          { ok: false, error: `Envoi SMS refusé (${status})`, status, body: lastText, from, to: destination, endpoint: lastPath },
+          { ok: false, error: `Envoi SMS refusé (${status})`, status, body: lastText, from: fromNumber, to: destination, endpoint: lastPath },
           200,
         );
       }
@@ -198,10 +258,10 @@ Deno.serve(async (req) => {
             user_id: ctx.profileId,
             direction: "outbound",
             to_number: destination,
-            from_number: from ?? ctx.extension,
+            from_number: fromNumber ?? ctx.extension,
             body: message,
             type,
-            ns_thread_id: thread_id ?? result?.messagesession_id ?? null,
+            ns_thread_id: thread_id ?? result?.messagesession_id ?? result?.["messagesession-id"] ?? generatedThreadId,
             sent_at: new Date().toISOString(),
           });
       } catch (logErr) {
@@ -220,7 +280,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      return jsonResponse({ ok: true, result, from, to: destination });
+      return jsonResponse({ ok: true, result, from: fromNumber, to: destination, thread_id: thread_id ?? result?.messagesession_id ?? result?.["messagesession-id"] ?? generatedThreadId });
 
     }
 

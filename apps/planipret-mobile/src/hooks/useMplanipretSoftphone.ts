@@ -230,13 +230,21 @@ export function useMplanipretSoftphone() {
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("focus", onResume);
     window.addEventListener("online", onResume);
+    // Heartbeat: SIP transport can go silent without emitting a status event
+    // (background tab, radio switch, NS keepalive drop). Poll every 15s so the
+    // watchdog escalates to forceReregister even without a subscribe callback.
+    const heartbeat = window.setInterval(evaluate, 15_000);
+    // Initial evaluation — don't wait for the first SIP event.
+    evaluate();
     return () => {
       un();
       clearTimers();
+      window.clearInterval(heartbeat);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("focus", onResume);
       window.removeEventListener("online", onResume);
     };
+
   }, [user?.id]);
 
 

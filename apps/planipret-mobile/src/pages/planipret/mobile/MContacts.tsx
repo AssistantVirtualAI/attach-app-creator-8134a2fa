@@ -623,6 +623,7 @@ function ContactDetailSheet({
   const [creatingTask, setCreatingTask] = useState(false);
   const [summarizeOpen, setSummarizeOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
 
   const name = `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim()
     || contact.name || contact.display_name || contact.phone || contact.email || "Contact";

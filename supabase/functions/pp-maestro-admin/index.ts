@@ -13,6 +13,7 @@ import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
   pingMaestroTelecom,
+  mirrorCallAnalysisToMaestro,
 } from "../_shared/maestro-telecom.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -50,8 +51,9 @@ Deno.serve(async (req) => {
       const rows = recent ?? [];
       const total = rows.length;
       const failed = rows.filter((r: any) => !r.success).length;
-      const lastCall = rows.find((r: any) => String(r.action ?? "").startsWith("call."));
+      const lastCall = rows.find((r: any) => String(r.action ?? "").startsWith("call.") && !String(r.action ?? "").startsWith("call.analysis"));
       const lastSms = rows.find((r: any) => String(r.action ?? "").startsWith("sms."));
+      const lastAnalysis = rows.find((r: any) => String(r.action ?? "").startsWith("call.analysis"));
 
       return jsonResponse({
         ok: true,
@@ -65,7 +67,44 @@ Deno.serve(async (req) => {
         },
         last_call_mirror: lastCall ?? null,
         last_sms_mirror: lastSms ?? null,
+        last_analysis_mirror: lastAnalysis ?? null,
       });
+    }
+
+    if (action === "resync-analysis") {
+      const limit = Math.min(500, Math.max(1, Number(body.limit ?? 100)));
+      const sinceHours = Math.max(1, Number(body.since_hours ?? 72));
+      const since = new Date(Date.now() - sinceHours * 3600_000).toISOString();
+      let q = admin
+        .from("planipret_phone_calls")
+        .select("id, user_id, organization_id, maestro_call_id, maestro_client_id, transcript_language, ai_summary, ai_summary_short, ai_analysis_json, ai_topics, ai_coaching, next_actions, coaching_score, lead_score, lead_temperature, lead_score_reason, analyzed_at, metadata")
+        .not("ai_analysis_json", "is", null)
+        .not("maestro_call_id", "is", null)
+        .order("analyzed_at", { ascending: false })
+        .limit(limit);
+      if (body.call_id) q = q.eq("id", String(body.call_id));
+      else q = q.gte("analyzed_at", since);
+      const { data: calls, error } = await q;
+      if (error) return jsonResponse({ error: error.message }, 500);
+      let scheduled = 0;
+      for (const c of calls ?? []) {
+        const analysis = (c as any).ai_analysis_json ?? {};
+        const meta = ((c as any).metadata ?? {}) as Record<string, any>;
+        mirrorCallAnalysisToMaestro(admin, (c as any).user_id, c as any, analysis, {
+          ai_summary: (c as any).ai_summary ?? analysis?.summary?.detailed ?? null,
+          ai_summary_short: (c as any).ai_summary_short ?? analysis?.summary?.short ?? null,
+          coaching_message: meta.ai_coaching ?? analysis?.coaching?.coaching_message ?? null,
+          next_actions: (c as any).next_actions ?? analysis?.summary?.next_steps ?? [],
+          topics: (c as any).ai_topics ?? analysis?.lead_analysis?.buying_signals ?? [],
+          sentiment: (c as any).lead_temperature === "hot" ? "positive" : (c as any).lead_temperature === "cold" ? "negative" : "neutral",
+          lead_score: (c as any).lead_score ?? null,
+          lead_temperature: (c as any).lead_temperature ?? null,
+          lead_reason: (c as any).lead_score_reason ?? null,
+          model: analysis?.model ?? null,
+        });
+        scheduled += 1;
+      }
+      return jsonResponse({ ok: true, scheduled, since_hours: sinceHours });
     }
 
     if (action === "sync-log") {

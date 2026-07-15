@@ -198,9 +198,8 @@ export default function PAMaestroSync() {
               </thead>
               <tbody>
                 {logs.map((r) => (
-                  <>
+                  <Fragment key={r.id}>
                     <tr
-                      key={r.id}
                       className="border-t border-border/40 hover:bg-muted/30 cursor-pointer"
                       onClick={() => setExpanded(expanded === r.id ? null : r.id)}
                     >
@@ -227,7 +226,7 @@ export default function PAMaestroSync() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
                 {logs.length === 0 && (
                   <tr><td colSpan={6} className="px-3 py-8 text-center text-sm text-muted-foreground">Aucune entrée dans le journal.</td></tr>

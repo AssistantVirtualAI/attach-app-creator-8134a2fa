@@ -339,9 +339,16 @@ export function useMplanipretSoftphone() {
         status: "ringing-out",
         startedAt: Date.now(),
       });
+      maestroLog(() => maestroTelecom.createCall({
+        provider_call_id: callId,
+        to_user_number: destination,
+        status: "dialing",
+        direction: "outbound",
+      }));
     }
     return { via: "pbx", ok: true, callId };
   }, []);
+
 
   const placeCall = useCallback(async (destination: string): Promise<OutboundResult> => {
     if (!destination) return { via: "none", ok: false, error: "empty destination" };

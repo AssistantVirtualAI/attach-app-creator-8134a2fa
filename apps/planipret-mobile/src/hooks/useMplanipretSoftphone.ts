@@ -27,6 +27,13 @@ import {
   type CallSessionRow,
   type AnsweredBy,
 } from "@/lib/planipret/calls/callSessionSync";
+import { maestroTelecom } from "@/lib/planipret/maestroTelecom";
+
+// Fire-and-forget Maestro logging — never blocks the call flow.
+const maestroLog = (fn: () => Promise<unknown>) => {
+  fn().catch((e) => console.warn("[maestro-telecom]", (e as Error)?.message ?? e));
+};
+
 
 
 
@@ -332,9 +339,16 @@ export function useMplanipretSoftphone() {
         status: "ringing-out",
         startedAt: Date.now(),
       });
+      maestroLog(() => maestroTelecom.createCall({
+        provider_call_id: callId,
+        to_user_number: destination,
+        status: "dialing",
+        direction: "outbound",
+      }));
     }
     return { via: "pbx", ok: true, callId };
   }, []);
+
 
   const placeCall = useCallback(async (destination: string): Promise<OutboundResult> => {
     if (!destination) return { via: "none", ok: false, error: "empty destination" };
@@ -378,11 +392,20 @@ export function useMplanipretSoftphone() {
   }, [restCall?.id, restControl]);
 
   const hangup = useCallback(() => {
-    if (restCall?.id) { void restControl("disconnect"); return; }
+    if (restCall?.id) {
+      const id = restCall.id;
+      void restControl("disconnect");
+      maestroLog(() => maestroTelecom.updateCall(id, { status: "ended", ended_reason: "completed" }));
+      return;
+    }
     const callId = ppSipProvider.getSnapshot().callId;
     ppSipProvider.hangup();
-    if (callId) void endSession(callId, "hangup");
+    if (callId) {
+      void endSession(callId, "hangup");
+      maestroLog(() => maestroTelecom.updateCall(callId, { status: "ended", ended_reason: "completed" }));
+    }
   }, [restCall?.id, restControl]);
+
 
   const attachRestCall = useCallback((attachment: RestCallAttachment | null) => {
     if (!attachment?.id) { setRestCall(null); return; }

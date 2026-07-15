@@ -609,8 +609,13 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
       const result = (data as any)?.result ?? {};
       const newThreadId = result?.messagesession_id ?? result?.["messagesession-id"] ?? result?.session_id ?? result?.id;
       if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);
+      // Mirror to Maestro Telecom (best-effort, non-blocking).
+      supabase.functions.invoke("maestro-telecom", {
+        body: { path: "/users/{me}/messages", method: "POST", body: { to_user_number: number, message: body } },
+      }).catch((e) => console.warn("[maestro-telecom] send", e?.message));
       // Refresh from server to reconcile optimistic message
       setTimeout(() => loadMessages(), 600);
+
     } catch (e: any) {
       toast.error(e?.message ?? t("messages.sendFailed"));
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));

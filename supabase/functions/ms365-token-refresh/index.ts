@@ -6,16 +6,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
 
-async function refreshToken(refresh_token: string) {
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const d = { refresh_token };
-  return {
-    access_token: await refreshMicrosoftAccessToken(admin, { id: "__direct__", ms365_refresh_token: refresh_token }, MS365_DELEGATED_SCOPES),
-    refresh_token: (d.refresh_token as string) ?? refresh_token,
-    expires_in: 3600,
-  };
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -49,7 +39,7 @@ Deno.serve(async (req) => {
     if (!userId) return j({ error: "Unauthorized" }, 401);
 
     const { data: profile } = await admin.from("planipret_profiles")
-      .select("ms365_refresh_token").eq("user_id", userId).maybeSingle();
+      .select("id, ms365_refresh_token").eq("user_id", userId).maybeSingle();
     if (!profile?.ms365_refresh_token) return j({ error: "no_refresh_token" }, 400);
 
     const accessToken = await refreshMicrosoftAccessToken(admin, { ...profile, user_id: userId }, MS365_DELEGATED_SCOPES);

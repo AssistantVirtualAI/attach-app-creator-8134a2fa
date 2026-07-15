@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -226,6 +227,16 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
   const [activeThread, setActiveThread] = useState<{ id: string; number: string } | null>(null);
   const [newOpen, setNewOpen] = useState(false);
 
+  const openSmsThread = (thread: { id: string; number: string }, focusComposer = true) => {
+    flushSync(() => {
+      setNewOpen(false);
+      setActiveThread(thread);
+    });
+    if (focusComposer) {
+      document.querySelector<HTMLInputElement>('[data-sms-composer-input="true"]')?.focus({ preventScroll: true });
+    }
+  };
+
   const load = async () => {
     if (!profile?.user_id) return;
     setLoading(true);
@@ -251,7 +262,7 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
   useEffect(() => { registerRefresh(load); return () => registerRefresh(null); /* eslint-disable-next-line */ }, [profile?.user_id]);
   useEffect(() => {
     const to = searchParams.get("to")?.trim();
-    if (to) setActiveThread({ id: "", number: to });
+    if (to) openSmsThread({ id: "", number: to }, false);
   }, [searchParams]);
 
   if (activeThread) {
@@ -323,7 +334,7 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
                 unread={unread}
                 preview={preview}
                 time={threadTime(th)}
-                onOpen={() => setActiveThread({ id, number: peer })}
+                onOpen={() => openSmsThread({ id, number: peer })}
                 emptyLabel={t("messages.noContent")}
               />
             );
@@ -334,10 +345,7 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
       {newOpen && (
         <NewSmsSheet
           onClose={() => setNewOpen(false)}
-          onStart={(number) => {
-            setActiveThread({ id: "", number });
-            setNewOpen(false);
-          }}
+          onStart={(number) => openSmsThread({ id: "", number })}
         />
       )}
     </div>
@@ -1193,6 +1201,7 @@ function Composer({
       {extra}
       {leftAction}
       <input
+        data-sms-composer-input="true"
         ref={inputRef}
         autoFocus={autoFocus}
         value={text}

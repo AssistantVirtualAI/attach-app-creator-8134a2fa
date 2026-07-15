@@ -296,12 +296,13 @@ export default function NsLiveTestPanel({ domain = "planipret.ca" }: { domain?: 
         </div>
       )}
 
-      {/* ─── Section B: Extensions table ─── */}
+      {/* ─── Section B: Extensions table (collapsed by default) ─── */}
       {summary && (
-        <div className="mt-5">
-          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <details className="mt-5 group" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 }}>
+          <summary className="cursor-pointer list-none flex items-center justify-between gap-3 px-4 py-3 select-none">
             <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
               👥 Extensions {domain} — {users.length} utilisateurs
+              <span style={{ marginLeft: 8, fontSize: 11, color: C.dim, fontWeight: 500 }}>(cliquer pour afficher)</span>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => syncToProfiles(false)}

@@ -27,6 +27,13 @@ import {
   type CallSessionRow,
   type AnsweredBy,
 } from "@/lib/planipret/calls/callSessionSync";
+import { maestroTelecom } from "@/lib/planipret/maestroTelecom";
+
+// Fire-and-forget Maestro logging — never blocks the call flow.
+const maestroLog = (fn: () => Promise<unknown>) => {
+  fn().catch((e) => console.warn("[maestro-telecom]", (e as Error)?.message ?? e));
+};
+
 
 
 

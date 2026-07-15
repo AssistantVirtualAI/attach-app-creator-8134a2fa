@@ -742,10 +742,10 @@ function ContactDetailSheet({
           <div className="min-w-0 flex-1">
             <div className="text-lg font-bold truncate" style={{ color: "var(--pp-text-primary)" }}>{name}</div>
             {rawPhone && (
-              <ContactField label="Tél" value={rawPhone} />
+              <ContactField label="Tél" value={rawPhone} onCall={() => onCall(rawPhone)} />
             )}
             {extension && (
-              <ContactField label="Ext" value={extension} />
+              <ContactField label="Ext" value={extension} onCall={() => onCall(extension)} />
             )}
             {email && (
               <ContactField label="Email" value={email} />

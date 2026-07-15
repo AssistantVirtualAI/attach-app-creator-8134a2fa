@@ -678,7 +678,7 @@ export default function PlanipretIntegrations() {
             <Field label="Firebase Server Key (FCM)" hint="Notifications push Android">
               <SecretInput value={draft.mobile_app?.fcm_server_key ?? ""}
                 onChange={(v) => setField("mobile_app", "fcm_server_key", v)}
-                hasSavedValue={!!rows.mobile_app?.config_data?.fcm_server_key} />
+                {...secretState("mobile_app", "fcm_server_key")} />
             </Field>
             <Field label="APNs Key ID (iOS)" hint="Notifications push iOS">
               <TextInput value={getField("mobile_app", "apns_key_id")}

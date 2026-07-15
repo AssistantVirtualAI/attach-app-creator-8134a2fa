@@ -7,33 +7,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMs365Status } from "@/components/planipret/Ms365StatusBadge";
 import { ArrowLeft, RefreshCw, LogIn, Copy, Loader2, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-
-const MS_SCOPES = [
-  "openid", "profile", "email", "offline_access",
-  "User.Read", "Mail.ReadWrite", "Mail.Send", "MailboxSettings.Read", "Calendars.ReadWrite",
-];
+import { buildMs365AuthorizeUrl, getMs365RedirectUri } from "@/lib/ms365OAuth";
 
 export default function MMs365Diagnostics() {
   const nav = useNavigate();
   const { data, loading, refresh } = useMs365Status(30_000);
   const [teamsCheck, setTeamsCheck] = useState<{ loading: boolean; ok: boolean | null; message: string; sample?: any[] }>({ loading: false, ok: null, message: "" });
 
-  const callbackUrl = `${window.location.origin}/auth/microsoft/callback`;
+  const callbackUrl = getMs365RedirectUri();
 
   async function startLogin() {
     if (!data?.detection.tenant_id || !data?.detection.client_id) {
       toast.error("Configuration Microsoft manquante");
       return;
     }
-    const params = new URLSearchParams({
-      client_id: data.detection.client_id,
-      response_type: "code",
-      redirect_uri: callbackUrl,
-      response_mode: "query",
-      scope: MS_SCOPES.join(" "),
-      prompt: "consent",
+    window.location.href = buildMs365AuthorizeUrl({
+      clientId: data.detection.client_id,
+      tenant: data.detection.tenant_id,
+      prompt: "select_account",
     });
-    window.location.href = `https://login.microsoftonline.com/${data.detection.tenant_id}/oauth2/v2.0/authorize?${params}`;
   }
 
   async function testTeams() {
@@ -116,7 +108,7 @@ export default function MMs365Diagnostics() {
             </button>
           </div>
           <p className="text-[11px] mt-2" style={{ color: "#8FA8C0" }}>
-            Doit correspondre exactement à une redirect URI enregistrée dans Azure App Registration (Web).
+            Doit correspondre exactement à une redirect URI enregistrée dans Azure App Registration.
           </p>
         </Card>
 

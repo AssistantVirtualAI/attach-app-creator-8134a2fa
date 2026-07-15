@@ -91,7 +91,7 @@ export default function MMore() {
   const reconnectNs = async () => {
     setReconnecting(true);
     const { data, error, status } = await safeEdgeFunction("ns-resolve-sip-credentials", { body: { client_type: "mobile" } });
-    if (error || (data as any)?.success === false) {
+    if (error || (data as any)?.success === false || (data as any)?.ok === false || (data as any)?.error) {
       setReconnecting(false);
       toast.error(status === 403 ? t("more.phoneUnauthorized") : ((data as any)?.error ?? error ?? t("more.connectionFailed")));
       return;

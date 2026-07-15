@@ -148,15 +148,26 @@ Deno.serve(async (req) => {
         ? normalizedTo
         : `+${normalizedTo.replace(/^1?(\d{10})$/, "1$1")}`;
       const directBody: Record<string, unknown> = { type, destination, message, ...(from ? { from, source: from } : {}) };
-      const sendAttempts: Array<{ path: string; body: Record<string, unknown> }> = thread_id
-        ? [
-            { path: `${userBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`, body: { message, type, destination, ...(from ? { from, source: from } : {}) } },
-            { path: `${userBase}/messagesessions/messages`, body: directBody },
-          ]
-        : [
-            { path: `${userBase}/messagesessions/messages`, body: directBody },
-            { path: `${userBase}/messagesessions`, body: directBody },
-          ];
+      const domains = Array.from(new Set([ctx.nsDomain, "planipret.ca"].filter(Boolean)));
+      const sendAttempts: Array<{ path: string; body: Record<string, unknown> }> = [];
+      for (const domain of domains) {
+        const domainBase = `/domains/${encodeURIComponent(domain)}`;
+        const scopedUserBase = `${domainBase}/users/${encodeURIComponent(ctx.extension)}`;
+        if (thread_id) {
+          sendAttempts.push(
+            { path: `${scopedUserBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`, body: { message, type, destination, ...(from ? { from, source: from } : {}) } },
+            { path: `${scopedUserBase}/messagesessions/messages`, body: directBody },
+            { path: `${domainBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`, body: { ...directBody, user: ctx.extension, extension: ctx.extension } },
+          );
+        } else {
+          sendAttempts.push(
+            { path: `${scopedUserBase}/messagesessions/messages`, body: directBody },
+            { path: `${scopedUserBase}/messagesessions`, body: directBody },
+            { path: `${domainBase}/messagesessions/messages`, body: { ...directBody, user: ctx.extension, extension: ctx.extension } },
+            { path: `${domainBase}/messagesessions`, body: { ...directBody, user: ctx.extension, extension: ctx.extension } },
+          );
+        }
+      }
 
       let res: Response | null = null;
       let result: any = null;

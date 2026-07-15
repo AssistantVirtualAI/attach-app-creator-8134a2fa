@@ -17,7 +17,7 @@ import { OnboardingTutorial } from "@/components/planipret/OnboardingTutorial";
 import { useAvaNavigation } from "@/hooks/useAvaNavigation";
 const AvaVoiceAgent = lazy(() => import("@/components/planipret/mobile/AvaVoiceAgent"));
 import MobileScreenSkeleton from "@/components/planipret/mobile/MobileScreenSkeleton";
-import { prefetchRoute, scheduleIdlePrefetch } from "@/lib/routePrefetch";
+import { prefetchRoute, scheduleIdlePrefetch, ALL_MOBILE_TAB_PATHS } from "@/lib/routePrefetch";
 import { useQueryClient } from "@tanstack/react-query";
 import AvaChatSheet from "@/components/planipret/mobile/AvaChatSheet";
 import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";

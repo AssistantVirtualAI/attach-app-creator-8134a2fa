@@ -35,7 +35,7 @@ export async function connectMs365(): Promise<void> {
       `&redirect_uri=${encodeURIComponent(redirect)}` +
       `&response_mode=query` +
       `&scope=${scope}` +
-      `&prompt=consent` +
+      `&prompt=select_account` +
       `&state=${state}`;
   } catch (e: any) {
     toast.error("Connexion Microsoft impossible", { description: e?.message });

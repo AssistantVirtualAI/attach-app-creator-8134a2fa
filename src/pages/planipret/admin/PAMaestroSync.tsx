@@ -24,6 +24,8 @@ type MirrorStatus = {
   with_maestro_call_id: number;
   mirrored_ok: number;
   mirrored_failed: number;
+  skipped_total: number;
+  errors_total: number;
   pending: number;
   window_first_log: string | null;
   window_last_log: string | null;

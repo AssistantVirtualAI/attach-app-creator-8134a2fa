@@ -85,13 +85,12 @@ export default function MMore() {
   }, [profile?.id]);
 
   const { sipConnected, reregister } = useMplanipretSoftphone();
-  const jwtOk = !!profile?.ns_jwt && (!profile?.ns_jwt_expires_at || new Date(profile.ns_jwt_expires_at) > new Date());
-  const nsConnected = jwtOk && sipConnected;
+  const nsConnected = !!(profile?.ns_extension ?? profile?.extension) && sipConnected;
   const ms365Connected = !!profile?.ms365_access_token;
 
   const reconnectNs = async () => {
     setReconnecting(true);
-    const { data, error, status } = await safeEdgeFunction("ns-auth", { body: { action: "refresh" } });
+    const { data, error, status } = await safeEdgeFunction("ns-resolve-sip-credentials", { body: { client_type: "mobile" } });
     if (error || (data as any)?.success === false) {
       setReconnecting(false);
       toast.error(status === 403 ? t("more.phoneUnauthorized") : ((data as any)?.error ?? error ?? t("more.connectionFailed")));

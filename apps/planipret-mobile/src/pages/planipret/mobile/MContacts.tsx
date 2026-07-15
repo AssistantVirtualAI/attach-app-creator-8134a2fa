@@ -967,7 +967,8 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
     setStatus("sending");
     setErrorMsg(null);
     try {
-      await callEdge("pp-ns-sms", { action: "send", to: number, message: msg, from: smsFrom || undefined });
+      const res = await callEdge<any>("pp-ns-sms", { action: "send", to: number, message: msg, from: smsFrom || undefined });
+      if (res?.ok === false || res?.error) throw { name: "EdgeError", message: res?.body || res?.error || "SMS failed", status: res?.status ?? 200, body: res, fn: "pp-ns-sms" };
       setStatus("sent");
       toast.success("SMS envoyé", { description: `À ${contactName} · ${number}` });
       window.setTimeout(() => onClose(), 1200);

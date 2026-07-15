@@ -99,14 +99,7 @@ Deno.serve(async (req) => {
       } catch { /* fallback to constructed */ }
 
       if (!deviceRegistered) {
-        return jsonResponse({
-          success: false,
-          error: "mobile_device_not_registered",
-          message: "Le téléphone mobile n’est pas enregistré. Ouvrez l’app SIP/mobile et assurez-vous que le device est en ligne avant d’appeler.",
-          client_type: clientType,
-          device_name: deviceName,
-          device_state: deviceState,
-        }, 200);
+        callOrigUser = `${ctx.extension}@${ctx.nsDomain}`;
       }
 
       const clientCallId = crypto.randomUUID();
@@ -189,7 +182,11 @@ Deno.serve(async (req) => {
           device_name: deviceName,
           destination: dest,
           status: "initiated",
-          message: "Votre téléphone va sonner — décrochez pour parler au client",
+          device_registered: deviceRegistered,
+          device_state: deviceState,
+          message: deviceRegistered
+            ? "Votre téléphone va sonner — décrochez pour parler au client"
+            : "Appel lancé via l’extension — le device mobile n’était pas enregistré",
         }, 200);
       }
 

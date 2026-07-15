@@ -29,7 +29,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 type ClientType = "mobile" | "web" | "widget";
 
 // Point WSS at the same core cluster the widget uses as its Outbound Proxy.
-const NS_SIP_WSS_URL = Deno.env.get("NS_SIP_WSS_URL") ?? "wss://core1.cluster1.ucstack.io:9002";
+const NS_SIP_WSS_URL = Deno.env.get("NS_SIP_WSS_URL") ?? "wss://voice.ava-telecom.ca:9002";
 
 function json(b: unknown, s = 200) {
   return new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -127,6 +127,7 @@ Deno.serve(async (req) => {
         const pwd = d.sip_password ?? d.password;
         if (r.ok && ext && dom && pwd) {
           const wss = d.sip_wss_url ?? d.wss_url ?? NS_SIP_WSS_URL;
+          const wssUrls = Array.from(new Set([wss, NS_SIP_WSS_URL, "wss://core1.cluster1.ucstack.io:9002"].filter(Boolean)));
           return json({
             ok: true,
             source: "maestro_telecom",
@@ -142,8 +143,8 @@ Deno.serve(async (req) => {
             sip_uri: d.sip_uri ?? `sip:${ext}@${dom}`,
             sip_ws_url: wss,
             sip_wss_url: wss,
-            sip_ws_urls: [wss],
-            sip_wss_urls: [wss],
+            sip_ws_urls: wssUrls,
+            sip_wss_urls: wssUrls,
             display_name: d.display_name ?? String(ext),
             sip_state: d.sip_state ?? null,
             device_registered: d.device_registered ?? true,
@@ -222,8 +223,8 @@ Deno.serve(async (req) => {
     sip_uri: sipUri,
     sip_ws_url: NS_SIP_WSS_URL,
     sip_wss_url: NS_SIP_WSS_URL,
-    sip_ws_urls: [NS_SIP_WSS_URL],
-    sip_wss_urls: [NS_SIP_WSS_URL],
+    sip_ws_urls: Array.from(new Set([NS_SIP_WSS_URL, `wss://${coreServer}:9002`, "wss://core1.cluster1.ucstack.io:9002"])),
+    sip_wss_urls: Array.from(new Set([NS_SIP_WSS_URL, `wss://${coreServer}:9002`, "wss://core1.cluster1.ucstack.io:9002"])),
     display_name: device["display-name"] ?? device.display_name ?? device.name ?? ext,
     sip_state: sipState,
     device_registered: sipState === "registered",

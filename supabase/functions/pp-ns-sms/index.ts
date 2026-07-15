@@ -56,7 +56,20 @@ Deno.serve(async (req) => {
       }
       const raw = await res.json();
       const threads = Array.isArray(raw) ? raw : (raw?.messagesessions ?? raw?.data ?? []);
-      return jsonResponse({ ok: true, count: threads.length, threads });
+
+      // Best-effort Maestro inbox enrichment.
+      let maestroInbox: any[] = [];
+      if (ctx.maestroBrokerId) {
+        try {
+          const cfg = await getMaestroTelecomConfig(supabase);
+          if (isMaestroTelecomConfigured(cfg)) {
+            const r = await maestroTelecomFetch<any>(cfg, `/users/${encodeURIComponent(ctx.maestroBrokerId)}/inbox`);
+            const list = Array.isArray(r.data) ? r.data : (r.data?.inbox ?? r.data?.threads ?? r.data?.data ?? []);
+            if (Array.isArray(list)) maestroInbox = list;
+          }
+        } catch { /* ignore */ }
+      }
+      return jsonResponse({ ok: true, count: threads.length, threads, maestro_inbox: maestroInbox });
     }
 
     if (action === "messages") {
@@ -73,8 +86,26 @@ Deno.serve(async (req) => {
       }
       const raw = await res.json();
       const messages = Array.isArray(raw) ? raw : (raw?.messages ?? raw?.data ?? []);
-      return jsonResponse({ ok: true, count: messages.length, messages });
+
+      // Best-effort Maestro conversation enrichment (needs a phone hint).
+      let maestroMessages: any[] = [];
+      const phoneHint = pick("phone_number") as string | undefined;
+      if (ctx.maestroBrokerId && phoneHint) {
+        try {
+          const cfg = await getMaestroTelecomConfig(supabase);
+          if (isMaestroTelecomConfigured(cfg)) {
+            const r = await maestroTelecomFetch<any>(
+              cfg,
+              `/users/${encodeURIComponent(ctx.maestroBrokerId)}/messages/with/${encodeURIComponent(phoneHint)}`,
+            );
+            const list = Array.isArray(r.data) ? r.data : (r.data?.messages ?? r.data?.data ?? []);
+            if (Array.isArray(list)) maestroMessages = list;
+          }
+        } catch { /* ignore */ }
+      }
+      return jsonResponse({ ok: true, count: messages.length, messages, maestro_messages: maestroMessages });
     }
+
 
     if (action === "sms-numbers") {
       const res = await nsFetch(`${userBase}/smsnumbers`, { method: "GET" });

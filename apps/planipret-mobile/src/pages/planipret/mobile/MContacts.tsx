@@ -679,10 +679,14 @@ function ContactDetailSheet({
 
   const name = `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim()
     || contact.name || contact.display_name || contact.phone || contact.email || "Contact";
-  const rawPhone: string | undefined = contact.phone || contact.cell_phone || contact.work_phone;
-  const extension: string | undefined = contact.extension;
+  const rawPhone: string | undefined =
+    contact.phone || contact.mobile || contact.cell_phone || contact.cellphone ||
+    contact.cell || contact.mobile_phone || contact.mobilePhone || contact.phoneNumber ||
+    contact.phone_number || contact.work_phone || contact.workPhone || contact.telephone ||
+    contact.home_phone || contact.homePhone || undefined;
+  const extension: string | undefined = contact.extension || contact.ext;
   const phone: string | undefined = rawPhone || extension;
-  const email: string | undefined = contact.email;
+  const email: string | undefined = contact.email || contact.mail || contact.email_address;
   const maestroId: string | undefined = contact.maestro_client_id || contact.external_id || contact.id;
 
   useEffect(() => {

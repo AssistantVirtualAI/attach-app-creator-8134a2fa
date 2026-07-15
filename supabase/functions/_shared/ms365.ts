@@ -62,6 +62,10 @@ export function isPublicClientSecretError(data: any): boolean {
   return /AADSTS700025|client is public|client_secret should be presented|client_assertion/i.test(parseMicrosoftError(data));
 }
 
+export function isConfidentialClientSecretRequiredError(data: any): boolean {
+  return /AADSTS7000218|client_secret.*required|client_assertion.*required|must contain.*client_secret|invalid_client/i.test(parseMicrosoftError(data));
+}
+
 export function microsoftOAuthErrorMessage(details: any) {
   const description = String(details?.error_description ?? "");
   if (isPublicClientSecretError(details)) {
@@ -103,6 +107,10 @@ export async function requestMicrosoftToken(
   if (!first.ok && first.usedClientSecret && options.allowPublicRetry !== false && isPublicClientSecretError(first.data)) {
     const second = await run(false);
     return { ...second, retriedPublic: true };
+  }
+  if (!first.ok && !first.usedClientSecret && cfg.authMode !== "public" && !!cfg.clientSecret && isConfidentialClientSecretRequiredError(first.data)) {
+    const second = await run(true);
+    return { ...second, retriedPublic: false };
   }
   return { ...first, retriedPublic: false };
 }

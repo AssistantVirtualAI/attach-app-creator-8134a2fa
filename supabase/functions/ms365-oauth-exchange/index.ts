@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
     const tokenParams: Record<string, string> = { grant_type: "authorization_code", code, redirect_uri, scope: requestedScope };
     if (code_verifier) tokenParams.code_verifier = String(code_verifier);
     console.log("[ms365-oauth-exchange] token request", { tenant: cfg.tenant, redirect_uri, clientId: cfg.clientId?.slice(0, 8), mode: cfg.authMode, pkce: !!code_verifier });
-    const token = await requestMicrosoftToken(cfg, tokenParams, { preferPublic: cfg.authMode === "public" });
+    const token = await requestMicrosoftToken(cfg, tokenParams, { preferPublic: cfg.authMode === "public" || (cfg.authMode === "auto" && !!code_verifier) });
     const d = token.data;
     if (!token.ok) {
       console.error("[ms365-oauth-exchange] MS token error", token.status, JSON.stringify(d));

@@ -392,11 +392,20 @@ export function useMplanipretSoftphone() {
   }, [restCall?.id, restControl]);
 
   const hangup = useCallback(() => {
-    if (restCall?.id) { void restControl("disconnect"); return; }
+    if (restCall?.id) {
+      const id = restCall.id;
+      void restControl("disconnect");
+      maestroLog(() => maestroTelecom.updateCall(id, { status: "ended", ended_reason: "completed" }));
+      return;
+    }
     const callId = ppSipProvider.getSnapshot().callId;
     ppSipProvider.hangup();
-    if (callId) void endSession(callId, "hangup");
+    if (callId) {
+      void endSession(callId, "hangup");
+      maestroLog(() => maestroTelecom.updateCall(callId, { status: "ended", ended_reason: "completed" }));
+    }
   }, [restCall?.id, restControl]);
+
 
   const attachRestCall = useCallback((attachment: RestCallAttachment | null) => {
     if (!attachment?.id) { setRestCall(null); return; }

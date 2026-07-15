@@ -14,6 +14,7 @@ import AvaProposedActionsCard from "@/components/planipret/mobile/AvaProposedAct
 import { callAva, type AvaSuggestion } from "@/services/avaProactive";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
+import { connectMs365 } from "@/lib/ms365Connect";
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "roster";
 

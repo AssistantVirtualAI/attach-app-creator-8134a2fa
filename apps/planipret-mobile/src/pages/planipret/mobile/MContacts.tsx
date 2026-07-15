@@ -840,7 +840,7 @@ function ContactDetailSheet({
   );
 }
 
-function ContactField({ label, value }: { label: string; value: string }) {
+function ContactField({ label, value, onCall }: { label: string; value: string; onCall?: () => void }) {
   return (
     <div className="flex items-center gap-1.5 mt-0.5">
       <span className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-faint)" }}>{label}</span>
@@ -853,6 +853,16 @@ function ContactField({ label, value }: { label: string; value: string }) {
       >
         <Copy className="w-3 h-3" />
       </button>
+      {onCall && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onCall(); }}
+          className="p-1 rounded-full active:scale-95"
+          style={{ background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.3)", color: "var(--pp-brand-accent)" }}
+          aria-label={`Appeler ${label}`}
+        >
+          <Phone className="w-3 h-3" />
+        </button>
+      )}
     </div>
   );
 }

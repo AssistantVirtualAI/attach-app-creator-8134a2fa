@@ -1,50 +1,32 @@
-## Objectif
-Réduire drastiquement le temps de chargement de toutes les pages (admin, portail client, mobile Planiprêt, landing).
+## Goals
+1. Eliminate the visible loading delay when switching between mobile tabs.
+2. Make Directory contact actions (Call, SMS, Email) act **inside** the app instead of opening iOS Phone/Messages/Mail.
 
-## Diagnostic actuel
-- `src/App.tsx` charge probablement beaucoup de routes en synchrone → bundle initial gros.
-- Les pages admin (PAOverview, PARecordings, PAAvaAgent, etc.) font plusieurs `supabase.functions.invoke` en série au mount.
-- Pas de cache partagé côté web admin (contrairement au mobile qui a `useAutoSync` + `prefetch`).
-- Pas de skeleton immédiat → l'écran reste blanc pendant le fetch.
-- Vite `manualChunks` n'est configuré que sur mobile, pas sur l'app web principale.
+## 1. Faster page loads
 
-## Plan d'optimisation
+Chunks are lazy but only fetched on first visit → each new tab shows a spinner.
 
-### 1. Code-splitting agressif (bundle initial)
-- Convertir toutes les routes de `src/App.tsx` en `lazyWithRetry(() => import(...))` (déjà dispo dans `src/lib/lazyWithRetry.ts`).
-- Wrapper `<Suspense>` global avec un skeleton neutre (utiliser `LoadingSkeleton` existant).
-- Ajouter `manualChunks` dans `vite.config.ts` racine : vendor-react, vendor-supabase, vendor-radix, vendor-recharts, vendor-lucide, vendor-tanstack.
+- Warm every mobile tab chunk right after the shell mounts (idle-time prefetch) via `routePrefetch.ts` — pre-import `MHome`, `MCalls`, `MMessages`, `MVoicemail`, `MContacts`, `MPipeline`, `MStats`, `MMore`, `MAvaChat`, `MAvaNotifications` in the background.
+- Also prefetch on tab-bar hover / touchstart (already scaffolded — wire it up for all bottom-tab buttons).
+- Replace the blank `Suspense` fallback with an instant skeleton matching the tab layout, so perceived load is 0.
+- Cache the per-tab first-paint data (contacts, messages, calls) in memory so returning to a tab is instant; refresh in background.
 
-### 2. Cache + dédup des appels edge functions (web admin)
-- Créer `src/lib/edgeCache.ts` : wrapper autour de `supabase.functions.invoke` avec TTL configurable, dédup in-flight, et `stale-while-revalidate` (inspiré de `ppContactsCache.ts` et `useAutoSync` mobile).
-- Migrer les appels lourds répétés (`pp-admin-ava-elevenlabs`, `pp-ns-contacts`, `ava-agent-config`, stats overview) vers ce cache.
+## 2. In-app actions from ContactDetailSheet (Directory)
 
-### 3. Parallélisation des fetch au mount
-- Auditer les pages admin (`PAOverview`, `PARecordings`, `PAAvaAgent`, `PAContacts`, etc.) : remplacer les `await` séquentiels par `Promise.all`.
-- Rendre le premier paint immédiat (skeleton) puis hydrater au fur et à mesure.
+Current: SMS goes through in-app composer ✅, but **Call** falls back to native dialer and **Email** uses `mailto:` (opens iOS Mail).
 
-### 4. Prefetch inter-pages (navigation)
-- Adapter le pattern `prefetchForTab` du mobile pour le web : au hover/focus d'un lien de la sidebar admin, précharger le chunk de la route + la première requête de données.
+- **Call** → route through the app's phone system: open `MCalls` with the number preloaded and trigger the existing dial flow (WebRTC / edge function used elsewhere in `MCalls`). Close the sheet, navigate to `/mobile/calls?dial=<e164>`, auto-start the call.
+- **SMS** → keep the in-app composer sheet (already working); ensure it's launched from Directory too and pre-fills recipient + focuses input.
+- **Email** → replace `window.location.href = mailto:` with an in-app **Compose Email sheet** that sends via the Microsoft 365 integration (`ms365Connect` → Graph `sendMail`). If MS365 not connected, prompt to connect (reuse existing `ms365Connect.ts` flow), never fall back to `mailto:`.
 
-### 5. Skeletons systématiques
-- Remplacer les écrans blancs par `StatCardSkeleton`, `TableSkeleton`, `ChartCardSkeleton` (déjà présents) sur toutes les pages qui font un fetch au mount.
+## 3. Consistency
 
-### 6. Micro-optims
-- `reportCompressedSize: false` + `chunkSizeWarningLimit: 800` dans vite web.
-- Ajouter `<link rel="preconnect">` vers Supabase dans `index.html`.
-- Lazy-import de `recharts` uniquement dans les composants qui l'utilisent.
+- Audit remaining `tel:`, `sms:`, `mailto:` usages in `apps/planipret-mobile/src` and replace with in-app equivalents (except the support link on the locked-access screen).
 
-## Détails techniques
-- Aucune modif backend, aucune migration.
-- Zéro changement fonctionnel — uniquement performance et UX de chargement.
-- Compatible avec le comportement existant (auth, RLS, impersonation).
-
-## Livrables
-- `src/App.tsx` : routes lazy + Suspense global.
-- `vite.config.ts` (racine) : manualChunks + flags perf.
-- `src/lib/edgeCache.ts` (nouveau) : cache TTL + dédup.
-- Pages admin critiques migrées vers le cache + Promise.all + skeletons.
-- `index.html` : preconnect Supabase.
-
-## Question rapide avant d'implémenter
-Veux-tu que j'applique ces optimisations à **toutes les surfaces** (admin web + portail client + landing + mobile Planiprêt) ou seulement à l'**admin web** (là où tu passes le plus de temps) pour un premier lot rapide et mesurable ?
+## Files to touch
+- `apps/planipret-mobile/src/App.tsx` — idle prefetch of all tab chunks, skeleton fallback.
+- `apps/planipret-mobile/src/lib/routePrefetch.ts` — expose `prefetchAllMobileTabs()`.
+- `apps/planipret-mobile/src/pages/planipret/PlanipretMobile.tsx` — hover/touch prefetch on bottom tabs, skeleton.
+- `apps/planipret-mobile/src/pages/planipret/mobile/MContacts.tsx` — Call routes to `MCalls` dialer; Email opens new in-app compose sheet.
+- New `apps/planipret-mobile/src/components/planipret/mobile/EmailComposerSheet.tsx` — MS365 Graph sendMail.
+- `apps/planipret-mobile/src/pages/planipret/mobile/MCalls.tsx` — accept `?dial=` query param and auto-start call.

@@ -430,6 +430,15 @@ export default function MContacts() {
               Effacer
             </button>
           )}
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}
+            className="ml-auto text-xs px-2 py-1.5 rounded-full outline-none shrink-0"
+            style={{ background: "var(--pp-bg-surface)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}
+            aria-label="Trier">
+            <option value="relevance">Trier : Pertinence</option>
+            <option value="name">Trier : Nom</option>
+            <option value="team">Trier : Équipe</option>
+            <option value="department">Trier : Département</option>
+          </select>
         </div>
       )}
 

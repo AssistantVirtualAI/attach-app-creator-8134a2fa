@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       auth_mode: authMode,
       redirect_uris: {
         web: ["/auth/microsoft/callback", "/auth/ms365/callback"],
-        native: ["planipret://auth/microsoft/callback"],
+        native: ["capacitor://localhost/auth/microsoft/callback"],
       },
     };
 

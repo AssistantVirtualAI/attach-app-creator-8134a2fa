@@ -146,7 +146,7 @@ export default function Ms365Diagnostics() {
             </button>
           </div>
           <p className="text-[11px] mt-2" style={{ color: "#8FA8C0" }}>
-            Web: {callbackUrl} · Native: {data?.detection.redirect_uris?.native?.[0] ?? "planipret://auth/microsoft/callback"}
+            Web: {callbackUrl} · Native: {data?.detection.redirect_uris?.native?.[0] ?? "capacitor://localhost/auth/microsoft/callback"}
           </p>
         </Card>
 

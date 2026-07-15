@@ -608,7 +608,7 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
   };
 
   return (
-    <div className="h-full min-h-0 flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
+    <div className="absolute inset-0 z-40 min-h-0 flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
       <header
         className="flex items-center gap-2 px-3 py-3"
         style={{ background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}

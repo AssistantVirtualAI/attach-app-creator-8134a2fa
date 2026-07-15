@@ -105,6 +105,7 @@ export default function MContacts() {
   const [visibleCount, setVisibleCount] = useState(40);
   const [filterDept, setFilterDept] = useState<string>("");
   const [filterTeam, setFilterTeam] = useState<string>("");
+  const [sortBy, setSortBy] = useState<"relevance" | "name" | "team" | "department">("relevance");
   const loadedTabsRef = useRef<Set<Tab>>(new Set(["favorites"]));
 
   useEffect(() => {

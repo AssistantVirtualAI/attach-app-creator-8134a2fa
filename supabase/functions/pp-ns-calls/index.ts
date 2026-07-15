@@ -250,7 +250,7 @@ Deno.serve(async (req) => {
               maestroTelecomMirror(
                 guard.supabase,
                 `/users/${encodeURIComponent(ctx.maestroBrokerId)}/calls/${encodeURIComponent(maestroId)}`,
-                { method: "PUT", body: { status: "ended", ended_reason: endedReason } },
+                { method: "PUT", body: { status: "ended", ended_reason: endedReason }, action: "call.end", userId: ctx.userId },
               );
             } else {
               // No maestro id — try updating by provider_call_id path (some
@@ -258,7 +258,7 @@ Deno.serve(async (req) => {
               maestroTelecomMirror(
                 guard.supabase,
                 `/users/${encodeURIComponent(ctx.maestroBrokerId)}/calls/${encodeURIComponent(String(callId))}`,
-                { method: "PUT", body: { status: "ended", ended_reason: endedReason } },
+                { method: "PUT", body: { status: "ended", ended_reason: endedReason }, action: "call.end", userId: ctx.userId },
               );
             }
           } catch (e) {

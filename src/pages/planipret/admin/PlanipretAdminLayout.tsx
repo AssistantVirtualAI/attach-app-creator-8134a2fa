@@ -4,7 +4,7 @@ import { PrefetchNavLink } from "@/components/PrefetchLink";
 import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard, Users, Phone, MessageSquare, Mic, Plug,
-  BarChart3, LogOut, ShieldCheck, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge,
+  BarChart3, LogOut, ShieldCheck, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap,
 } from "lucide-react";
 import SessionTimeoutModal from "@/components/planipret/SessionTimeoutModal";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
@@ -22,9 +22,9 @@ import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { toast } from "sonner";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist" | "diagnostics";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist" | "diagnostics" | "maestroSync";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "mobileDevices" | "sipDiagnostic" | "diagnostics";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "mobileDevices" | "sipDiagnostic" | "diagnostics" | "maestroSync";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -58,6 +58,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/mobile-devices",  key: "mobileDevices",   Icon: Smartphone },
       { to: "/planipret/admin/sip-diagnostic",  key: "sipDiagnostic",   Icon: PlugZap },
       { to: "/planipret/admin/diagnostics",     key: "diagnostics",     Icon: Gauge },
+      { to: "/planipret/admin/maestro-sync",    key: "maestroSync",     Icon: Zap },
       { to: "/planipret/admin/compliance",      key: "compliance",      Icon: ShieldCheck },
       { to: "/planipret/admin/audit-checklist", key: "auditChecklist",  Icon: CheckSquare, badge: "audit" },
     ],
@@ -80,6 +81,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/mobile-devices": "mobileDevices",
   "/planipret/admin/sip-diagnostic": "sipDiagnostic",
   "/planipret/admin/diagnostics": "diagnostics",
+  "/planipret/admin/maestro-sync": "maestroSync",
 };
 
 const initials = (n?: string) =>
@@ -312,7 +314,9 @@ export default function PlanipretAdminLayout() {
                 const raw = tt(`adminPortal.nav.${key}`);
                 const label = raw && !raw.startsWith("adminPortal.")
                   ? raw
-                  : (key === "diagnostics" ? (lang === "en" ? "Diagnostics" : "Diagnostic") : key);
+                  : (key === "diagnostics" ? (lang === "en" ? "Diagnostics" : "Diagnostic")
+                    : key === "maestroSync" ? (lang === "en" ? "Maestro sync" : "Sync Maestro")
+                    : key);
                 return (
                   <PrefetchNavLink key={to} to={to} end
                     className={({ isActive }) => `pp-nav-item ${isActive ? "is-active" : ""}`}>

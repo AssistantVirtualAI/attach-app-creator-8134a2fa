@@ -16,6 +16,32 @@ export const useAuth = () => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // Auto-link Microsoft 365 tokens when the user signed in via Azure SSO.
+        // We defer to avoid blocking the auth callback, and only fire on
+        // SIGNED_IN with a provider_token present.
+        if (
+          event === "SIGNED_IN" &&
+          (session as any)?.provider_token &&
+          (session?.user?.app_metadata?.provider === "azure" ||
+            session?.user?.app_metadata?.provider === "microsoft")
+        ) {
+          setTimeout(() => {
+            supabase.functions
+              .invoke("ms365-store-session", {
+                body: {
+                  provider_token: (session as any).provider_token,
+                  provider_refresh_token: (session as any).provider_refresh_token,
+                  expires_in: (session as any).expires_in ?? 3600,
+                  email: session.user?.email,
+                  display_name:
+                    session.user?.user_metadata?.full_name ??
+                    session.user?.user_metadata?.name,
+                },
+              })
+              .catch((err) => console.warn("[MS365 SSO link] failed:", err));
+          }, 0);
+        }
       }
     );
 
@@ -144,11 +170,28 @@ export const useAuth = () => {
 
   const signInWithMicrosoft = async () => {
     try {
+      // Request the same Graph scopes the app needs so the SSO session also
+      // links Mail / Calendar / Teams automatically via ms365-store-session.
+      const scopes = [
+        "openid",
+        "profile",
+        "email",
+        "offline_access",
+        "User.Read",
+        "Mail.ReadWrite",
+        "Mail.Send",
+        "Calendars.ReadWrite",
+        "Chat.ReadWrite",
+        "ChatMessage.Send",
+        "Contacts.ReadWrite",
+        "Presence.Read.All",
+      ].join(" ");
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'azure',
         options: {
-          redirectTo: `${window.location.origin}/`,
-          scopes: 'email openid profile',
+          redirectTo: `${window.location.origin}/post-login`,
+          scopes,
         },
       });
 
@@ -163,6 +206,7 @@ export const useAuth = () => {
       return { error };
     }
   };
+
 
   const signInWithApple = async () => {
     try {

@@ -60,18 +60,45 @@ export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} style={{ ...inputStyle, ...(props.style ?? {}) }} />;
 }
 
-export function SecretInput({ value, onChange, placeholder, hasSavedValue }: {
+export function SecretInput({ value, onChange, placeholder, hasSavedValue, savedSource }: {
   value: string; onChange: (v: string) => void; placeholder?: string; hasSavedValue?: boolean;
+  /** Where the saved value comes from — shown as a small badge. */
+  savedSource?: "backend" | "db" | "both";
 }) {
   const [show, setShow] = useState(false);
+  const filled = hasSavedValue && !value;
+  const badgeLabel =
+    savedSource === "backend" ? "Backend" :
+    savedSource === "both"    ? "Backend + BDD" :
+    savedSource === "db"      ? "Sauvegardé" : "Sauvegardé";
   return (
     <div className="relative">
       <input
-        type={show ? "text" : "password"} value={value} onChange={(e) => onChange(e.target.value)}
-        placeholder={hasSavedValue && !value ? "•••••••• Masqué — laissez vide pour conserver" : (placeholder ?? "")}
-        style={{ ...inputStyle, paddingRight: 38 }}
+        type={show ? "text" : "password"}
+        value={filled ? "••••••••••••••••••••••••" : value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={(e) => { if (filled) e.target.select(); }}
+        placeholder={placeholder ?? ""}
+        style={{
+          ...inputStyle,
+          paddingRight: filled ? 130 : 38,
+          background: filled ? "#0B1A2E" : "#0D1F35",
+          borderColor: filled ? "#1A5A3F" : "#0E2A45",
+          color: filled ? "#8FB8A8" : "#E8EDF5",
+          fontFamily: filled ? "monospace" : undefined,
+          letterSpacing: filled ? "0.05em" : undefined,
+        }}
       />
+      {filled && (
+        <span
+          className="absolute top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold pointer-events-none"
+          style={{ right: 40, background: "rgba(0,212,170,0.1)", border: "1px solid #1A5A3F", color: "#00D4AA" }}
+        >
+          <CheckCircle2 className="w-2.5 h-2.5" /> {badgeLabel}
+        </span>
+      )}
       <button type="button" onClick={() => setShow((v) => !v)}
+        title={filled ? "Valeur masquée — la clé réelle n'est jamais exposée dans le navigateur" : (show ? "Masquer" : "Afficher")}
         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-white/5"
         style={{ color: "#4A7FA5" }}>
         {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}

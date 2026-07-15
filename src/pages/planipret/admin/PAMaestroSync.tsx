@@ -19,6 +19,16 @@ type Status = {
   last_analysis_mirror?: any;
 };
 
+type MirrorStatus = {
+  eligible: number;
+  with_maestro_call_id: number;
+  mirrored_ok: number;
+  mirrored_failed: number;
+  pending: number;
+  window_first_log: string | null;
+  window_last_log: string | null;
+};
+
 type LogRow = {
   id: string;
   created_at: string;

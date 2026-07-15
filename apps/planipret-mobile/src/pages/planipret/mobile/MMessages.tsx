@@ -1135,8 +1135,7 @@ function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
           </div>
         </div>
 
-        <div className="px-4 py-3 flex gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
-
+        <div className="px-4 py-3 flex items-center gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
           <button
             onClick={() => onReply({
               to: fromAddr,
@@ -1147,6 +1146,39 @@ function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
             style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}
           >
             <Reply className="w-4 h-4" /> {t("messages.reply")}
+          </button>
+          <button
+            onClick={() => onForward({
+              to: "",
+              subject: subject.startsWith("Fw:") ? subject : `Fw: ${subject}`,
+              body: `\n\n---------- Message transféré ----------\nDe: ${from} <${fromAddr}>\nObjet: ${subject}\n\n${preview}`,
+            })}
+            title="Transférer"
+            className="w-11 h-11 rounded-full flex items-center justify-center"
+            style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+          >
+            <Forward className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => runAction("archive", "archive_email", {}, "Archivé")}
+            disabled={busy === "archive"}
+            title="Archiver"
+            className="w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-50"
+            style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+          >
+            {busy === "archive" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => {
+              if (!confirm("Supprimer ce message ? (déplacé dans Éléments supprimés)")) return;
+              runAction("delete", "delete_email", {}, "Supprimé");
+            }}
+            disabled={busy === "delete"}
+            title="Supprimer"
+            className="w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-50"
+            style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.30)", color: "#EF4444" }}
+          >
+            {busy === "delete" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
           </button>
         </div>
       </div>

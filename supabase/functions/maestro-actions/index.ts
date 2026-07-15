@@ -82,7 +82,12 @@ Deno.serve(async (req) => {
             const r = await maestroTelecomFetch(tCfg, p, { method: "GET", maxAttempts: 1, timeoutMs: 6000 });
             results.push({ path: p, status: r.status, sample: Array.isArray(r.data) ? r.data.slice(0, 2) : r.data });
             if (!r.ok) continue;
-            const list = Array.isArray(r.data) ? r.data : ((r.data as any)?.users ?? (r.data as any)?.data ?? []);
+            const dataObj: any = r.data;
+            // Single-user response (e.g. /users/lookup)
+            if (dataObj && typeof dataObj === "object" && !Array.isArray(dataObj) && (dataObj.email || dataObj.id)) {
+              return j({ success: true, user: { id: dataObj.id ?? dataObj.user_id, email: dataObj.email, first_name: dataObj.first_name, last_name: dataObj.last_name }, source: "telecom" });
+            }
+            const list = Array.isArray(dataObj) ? dataObj : (dataObj?.users ?? dataObj?.data ?? []);
             const user = list.find((u: any) => String(u.email ?? "").toLowerCase() === email) ?? list[0];
             if (user) {
               return j({ success: true, user: { id: user.id ?? user.user_id, email: user.email, first_name: user.first_name, last_name: user.last_name }, source: "telecom" });

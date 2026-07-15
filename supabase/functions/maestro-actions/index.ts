@@ -5,8 +5,8 @@ async function getMaestroConfig(admin: any) {
   const { data } = await admin.from("planipret_integration_secrets").select("config").eq("provider", "maestro").maybeSingle();
   const c = (data?.config ?? {}) as Record<string, string>;
   return {
-    url: (c.api_url ?? Deno.env.get("MAESTRO_API_URL") ?? "").replace(/\/$/, ""),
-    key: c.api_key ?? Deno.env.get("MAESTRO_API_KEY") ?? "",
+    url: (c.api_url ?? Deno.env.get("MAESTRO_TELECOM_BASE_URL") ?? Deno.env.get("MAESTRO_API_URL") ?? "").replace(/\/$/, ""),
+    key: c.api_key ?? Deno.env.get("MAESTRO_TELECOM_API_KEY") ?? Deno.env.get("MAESTRO_API_KEY") ?? "",
     accountId: c.account_id ?? Deno.env.get("MAESTRO_ACCOUNT_ID") ?? "",
   };
 }

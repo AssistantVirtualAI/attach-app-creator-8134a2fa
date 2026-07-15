@@ -635,7 +635,10 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
           <Calendar className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />
           Calendrier Microsoft
         </h2>
-        <span className="pp-eyebrow">{events.length}</span>
+        <div className="flex items-center gap-2">
+          <Ms365TestNowButton feature="calendar" compact />
+          <span className="pp-eyebrow">{events.length}</span>
+        </div>
       </div>
 
       {!profile?.ms365_access_token ? (

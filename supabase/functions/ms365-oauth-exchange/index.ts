@@ -34,14 +34,35 @@ Deno.serve(async (req) => {
     });
     const me = await meRes.json().catch(() => ({}));
 
+    const msEmail = me?.mail ?? me?.userPrincipalName ?? null;
+
+    // Auto-link Maestro Telecom user by email (best-effort, non-blocking).
+    let maestroLink: { user_id?: string; email?: string } | null = null;
+    if (msEmail) {
+      try {
+        const linkRes = await admin.functions.invoke("maestro-actions", {
+          body: { action: "find_user_by_email", payload: { email: msEmail } },
+        });
+        const u = (linkRes.data as any)?.user;
+        if (u?.id) maestroLink = { user_id: String(u.id), email: u.email ?? msEmail };
+      } catch (e) {
+        console.warn("[ms365-oauth-exchange] maestro link failed", (e as any)?.message);
+      }
+    }
+
     await admin.from("planipret_profiles").update({
       ms365_access_token: d.access_token,
       ms365_refresh_token: d.refresh_token,
       ms365_scopes: d.scope ?? requestedScope,
       ms365_token_expiry: new Date(Date.now() + Number(d.expires_in ?? 3600) * 1000).toISOString(),
-      ms365_email: me?.mail ?? me?.userPrincipalName ?? null,
+      ms365_email: msEmail,
+      ...(maestroLink ? {
+        maestro_telecom_user_id: maestroLink.user_id,
+        maestro_telecom_email: maestroLink.email,
+        maestro_telecom_linked_at: new Date().toISOString(),
+      } : {}),
     }).eq("user_id", userId);
-    return new Response(JSON.stringify({ success: true, account: { email: me?.mail ?? me?.userPrincipalName ?? null, name: me?.displayName ?? null }, scopes: d.scope ?? requestedScope, auth_mode: token.usedClientSecret ? "confidential" : "public", retried_public: token.retriedPublic }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true, account: { email: msEmail, name: me?.displayName ?? null }, scopes: d.scope ?? requestedScope, auth_mode: token.usedClientSecret ? "confidential" : "public", retried_public: token.retriedPublic, maestro_link: maestroLink }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
     console.error("[ms365-oauth-exchange] unhandled", e?.message, e?.stack);
     return new Response(JSON.stringify({ success: false, error: e?.message ?? "Erreur" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });

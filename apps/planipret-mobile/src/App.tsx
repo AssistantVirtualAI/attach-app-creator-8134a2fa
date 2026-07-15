@@ -3,6 +3,8 @@
  * Uses the exact same shell + routes + providers as /mplanipret on web.
  */
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 // (UI toaster removed — sonner is enough for the mobile app)
@@ -53,6 +55,51 @@ const queryClient = new QueryClient({
   },
 });
 
+function NativeDeepLinkBridge() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const routeFromUrl = (rawUrl?: string | null) => {
+      if (!rawUrl) return;
+      try {
+        const url = new URL(rawUrl);
+        const pathWithHost = `/${[url.hostname, url.pathname].filter(Boolean).join('/')}`.replace(/\/+/g, '/');
+        const isMs365Callback =
+          url.pathname === '/auth/microsoft/callback' ||
+          url.pathname === '/auth/ms365/callback' ||
+          pathWithHost === '/auth/microsoft/callback' ||
+          pathWithHost === '/auth/ms365/callback';
+
+        if (isMs365Callback) {
+          localStorage.setItem('pp_ms365_callback_url', rawUrl);
+          navigate(`/auth/microsoft/callback${url.search}`, { replace: true });
+        }
+      } catch {
+        // Ignore non-URL events.
+      }
+    };
+
+    let unsubscribe: null | (() => void) = null;
+    (async () => {
+      try {
+        const { App: CapacitorApp } = await import('@capacitor/app');
+        const launch = await CapacitorApp.getLaunchUrl();
+        routeFromUrl(launch?.url);
+        const listener = await CapacitorApp.addListener('appUrlOpen', (event: { url: string }) => {
+          routeFromUrl(event.url);
+        });
+        unsubscribe = () => { try { listener.remove(); } catch {} };
+      } catch {
+        // Web preview: no native deep links.
+      }
+    })();
+
+    return () => unsubscribe?.();
+  }, [navigate]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -64,6 +111,7 @@ export default function App() {
             <OrganizationProvider>
               <PlanipretErrorBoundary>
                 <LazyRouteBoundary>
+                  <NativeDeepLinkBridge />
                   <Routes>
                     <Route path="/" element={<Navigate to="/mplanipret" replace />} />
                     <Route path="/login" element={<Navigate to="/mplanipret" replace />} />

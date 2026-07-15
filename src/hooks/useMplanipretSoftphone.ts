@@ -333,7 +333,8 @@ export function useMplanipretSoftphone() {
   }, [restCall?.id]);
 
   const callViaPBX = useCallback(async (destination: string): Promise<OutboundResult> => {
-    const { data, error } = await supabase.functions.invoke("pp-ns-calls", { body: { action: "start", to_number: destination } });
+    const clientType = (typeof window !== "undefined" && (window as any)?.Capacitor?.isNativePlatform?.()) ? "mobile" : "web";
+    const { data, error } = await supabase.functions.invoke("pp-ns-calls", { body: { action: "start", to_number: destination, client_type: clientType } });
     if (error || (data as any)?.success === false) {
       const msg = (data as any)?.message ?? (data as any)?.error ?? error?.message ?? "PBX call failed";
       return { via: "none", ok: false, error: msg };

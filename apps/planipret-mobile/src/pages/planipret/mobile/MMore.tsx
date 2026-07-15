@@ -102,9 +102,9 @@ export default function MMore() {
   const startMs365OAuth = (cfg: { client_id: string; tenant_id?: string }) => {
     const clientId = cfg.client_id;
     const tenant = cfg.tenant_id || "common";
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       const state = user?.id ?? "";
-      openMs365Authorize({ clientId, tenant, state });
+      await openMs365Authorize({ clientId, tenant, state });
     });
   };
 

@@ -20,6 +20,7 @@ function compactPublicConfig(config: Record<string, any>, provider: string) {
     publicConfig.tenant_id = config?.tenant_id ?? null;
     publicConfig.client_id = config?.client_id ?? config?.client_secret_id ?? null;
     publicConfig.redirect_uri = config?.redirect_uri ?? null;
+    publicConfig.auth_mode = config?.auth_mode ?? config?.client_type ?? (config?.public_client === "true" ? "public" : null);
   } else if (provider === "nsapi") {
     publicConfig.base_url = config?.base_url ?? null;
     publicConfig.domain = config?.domain ?? config?.default_domain ?? null;

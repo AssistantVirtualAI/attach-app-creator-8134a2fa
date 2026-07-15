@@ -85,8 +85,8 @@ const PROBES: Probe[] = [
     label: "ms365-status · connexion",
     run: async () => {
       const d = await callEdge<any>("ms365-status", {});
-      const ok = !!(d?.connected || d?.linked || d?.ok);
-      return { ok, degraded: !ok, detail: ok ? (d?.email || "connecté") : "non authentifié" };
+      const ok = d?.status === "ok" || !!d?.user?.connected;
+      return { ok, degraded: !ok, detail: ok ? (d?.user?.email || "connecté") : `non authentifié · config ${d?.admin_cfg_ok ? "OK" : "incomplète"}` };
     },
   },
   {

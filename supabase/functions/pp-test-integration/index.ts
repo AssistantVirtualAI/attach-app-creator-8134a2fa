@@ -132,7 +132,12 @@ async function testMs365(cfg: Record<string, string>): Promise<TestResult> {
   const id = cfg.client_id || Deno.env.get("MICROSOFT_CLIENT_ID") || "";
   const secret = cfg.client_secret || Deno.env.get("MICROSOFT_CLIENT_SECRET") || "";
   const tenant = cfg.tenant_id || Deno.env.get("MICROSOFT_TENANT_ID") || "common";
-  if (!id || !secret) return { success: false, message: "Missing client_id / client_secret (config ou MICROSOFT_*)" };
+  const mode = String(cfg.auth_mode || cfg.client_type || (cfg.public_client === "true" ? "public" : "auto")).toLowerCase();
+  if (!id) return { success: false, message: "Missing client_id (config ou MICROSOFT_CLIENT_ID)" };
+  if (!secret && (mode === "public" || mode === "auto")) {
+    return { success: true, message: `Microsoft OAuth public OK · client ${id.slice(0, 8)}… · reconnecter l’utilisateur pour Mail/Calendar/Teams`, details: { auth_mode: "public", tenant } };
+  }
+  if (!secret) return { success: false, message: "Missing client_secret pour le mode confidential" };
   if (tenant === "common") return { success: false, message: "Tenant must be a real tenant ID for client-credentials test" };
   const r = await fetch(`https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`, {
     method: "POST",

@@ -21,7 +21,7 @@ export default function MMs365Diagnostics() {
       toast.error("Configuration Microsoft manquante");
       return;
     }
-    window.location.href = buildMs365AuthorizeUrl({
+    window.location.href = await buildMs365AuthorizeUrl({
       clientId: data.detection.client_id,
       tenant: data.detection.tenant_id,
       prompt: "select_account",
@@ -87,7 +87,8 @@ export default function MMs365Diagnostics() {
           <Card title="Configuration admin détectée">
             <Row ok={!!data?.detection.tenant_id} label="Tenant ID" value={data?.detection.tenant_id ?? "Non détecté"} mono />
             <Row ok={!!data?.detection.client_id} label="Client ID" value={data?.detection.client_id ?? "Non détecté"} mono />
-            <Row ok={!!data?.detection.has_secret} label="Client Secret" value={data?.detection.has_secret ? "Enregistré" : "Manquant"} />
+            <Row ok={true} label="Mode OAuth" value={data?.detection.auth_mode ?? "auto"} />
+            <Row ok={!!data?.detection.has_secret || data?.detection.auth_mode !== "confidential"} label="Client Secret" value={data?.detection.has_secret ? "Enregistré" : "Non requis si client public"} />
           </Card>
           <Card title="Session utilisateur">
             <Row ok={!!data?.user.connected} label="Compte connecté" value={data?.user.email ?? "—"} />
@@ -108,7 +109,7 @@ export default function MMs365Diagnostics() {
             </button>
           </div>
           <p className="text-[11px] mt-2" style={{ color: "#8FA8C0" }}>
-            Doit correspondre exactement à une redirect URI enregistrée dans Azure App Registration.
+            Web: {callbackUrl} · Native: {data?.detection.redirect_uris?.native?.[0] ?? "capacitor://localhost/auth/microsoft/callback"}
           </p>
         </Card>
 

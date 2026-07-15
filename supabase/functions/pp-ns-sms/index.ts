@@ -18,6 +18,13 @@ import {
   requirePlanipretBroker,
   nsFetch,
 } from "../_shared/planipret-ns.ts";
+import {
+  getMaestroTelecomConfig,
+  isMaestroTelecomConfigured,
+  maestroTelecomFetch,
+  maestroTelecomMirror,
+} from "../_shared/maestro-telecom.ts";
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

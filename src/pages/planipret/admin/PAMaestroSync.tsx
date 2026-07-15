@@ -434,12 +434,34 @@ export default function PAMaestroSync() {
       </div>
 
       {/* Detailed log */}
-      <div className="pp-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--pp-bg-border-2)" }}>
+      <div id="pp-maestro-journal" className="pp-card" style={{ padding: 0, overflow: "hidden", scrollMarginTop: 16 }}>
+        <div className="flex items-center justify-between px-5 py-4 flex-wrap gap-2" style={{ borderBottom: "1px solid var(--pp-bg-border-2)" }}>
           <div>
             <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--pp-text-primary)" }}>Journal détaillé</h2>
             <p style={{ fontSize: 11, color: "var(--pp-text-faint)", marginTop: 2 }}>{logs.length} entrée(s) · cliquer pour voir requête/réponse</p>
           </div>
+          {(actionFilter || onlyFailures) && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {actionFilter?.label && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md" style={{ fontSize: 11, color: ACCENT, background: `${ACCENT}14`, border: `1px solid ${ACCENT}44` }}>
+                  Filtre : {actionFilter.label}
+                </span>
+              )}
+              {onlyFailures && !actionFilter && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md" style={{ fontSize: 11, color: DANGER, background: `${DANGER}14`, border: `1px solid ${DANGER}44` }}>
+                  Échecs seulement
+                </span>
+              )}
+              <button
+                type="button"
+                className="pp-btn"
+                onClick={() => { setActionFilter(null); setOnlyFailures(false); }}
+                style={{ padding: "4px 10px", fontSize: 11 }}
+              >
+                Réinitialiser
+              </button>
+            </div>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full" style={{ fontSize: 12 }}>

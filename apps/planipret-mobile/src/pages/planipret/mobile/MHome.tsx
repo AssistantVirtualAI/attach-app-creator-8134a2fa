@@ -16,6 +16,7 @@ import PermissionBanners from "@/components/planipret/mobile/PermissionBanners";
 import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import Ms365TestNowButton from "@/components/planipret/Ms365TestNowButton";
 
 type Period = "day" | "week" | "month" | "shift";
 const DEFAULT_PERIOD: Period = "month";

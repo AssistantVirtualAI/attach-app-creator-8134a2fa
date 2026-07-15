@@ -893,6 +893,110 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
 }
 
 
+function EmailComposerSheet({ to, contactName, onClose }: { to: string; contactName: string; onClose: () => void }) {
+  const [recipient, setRecipient] = useState(to);
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => taRef.current?.focus(), 80);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  const send = async () => {
+    const rcpt = recipient.trim();
+    const subj = subject.trim();
+    const msg = body.trim();
+    if (!rcpt || !msg) { toast.error("Destinataire et message requis"); return; }
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ms365-actions", {
+        body: { action: "send_email", payload: { to: [rcpt], subject: subj || "(sans objet)", body: msg } },
+      });
+      if (error) throw error;
+      if ((data as any)?.success === false) {
+        const errCode = (data as any)?.code;
+        const errMsg = (data as any)?.error || "Envoi impossible";
+        if (errCode === "ms365_not_connected" || /not.?connected|no.?token|unauthor/i.test(String(errMsg))) {
+          setConnecting(true);
+          try {
+            const { connectMs365 } = await import("@/lib/ms365Connect");
+            await connectMs365();
+          } finally { setConnecting(false); }
+          return;
+        }
+        throw new Error(errMsg);
+      }
+      toast.success("Email envoyé");
+      onClose();
+    } catch (e: any) {
+      toast.error("Échec envoi email", { description: e?.message });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-4"
+        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouvel email</div>
+            <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>À {contactName} · via Microsoft 365</div>
+          </div>
+          <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>
+        </div>
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Destinataire</label>
+        <input
+          value={recipient}
+          onChange={(e) => setRecipient(e.target.value)}
+          inputMode="email"
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+        />
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Sujet</label>
+        <input
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+        />
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Message</label>
+        <textarea
+          ref={taRef}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={6}
+          placeholder="Écrire votre message…"
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+        />
+
+        <button
+          onClick={send}
+          disabled={sending || connecting || !recipient.trim() || !body.trim()}
+          className="w-full py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+          style={{ background: "var(--pp-brand-accent)" }}
+        >
+          {(sending || connecting) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          {connecting ? "Connexion Microsoft…" : sending ? "Envoi…" : "Envoyer"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 function QuickAction({ icon, label, onClick, disabled }: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button

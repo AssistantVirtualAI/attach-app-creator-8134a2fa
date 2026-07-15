@@ -1079,7 +1079,15 @@ function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <p className="text-xs uppercase tracking-wider" style={{ color: "var(--pp-text-muted)" }}>Email</p>
-          <div className="w-7" />
+          <button
+            onClick={() => runAction("flag", "flag_email", { unflag: flagged }, flagged ? "Drapeau retiré" : "Message marqué")}
+            disabled={busy === "flag"}
+            title={flagged ? "Retirer le drapeau" : "Marquer d'un drapeau"}
+            className="p-1.5 rounded-full disabled:opacity-50"
+            style={{ color: flagged ? "#F59E0B" : "var(--pp-text-secondary)" }}
+          >
+            {busy === "flag" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flag className="w-4 h-4" style={{ fill: flagged ? "#F59E0B" : "transparent" }} />}
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           <div>

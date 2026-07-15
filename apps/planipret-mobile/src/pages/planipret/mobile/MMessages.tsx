@@ -236,6 +236,10 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
       document.querySelector<HTMLInputElement>('[data-sms-composer-input="true"]')?.focus({ preventScroll: true });
     }
   };
+  const openNewSmsSheet = () => {
+    flushSync(() => setNewOpen(true));
+    document.querySelector<HTMLInputElement>('[data-sms-recipient-search="true"]')?.focus({ preventScroll: true });
+  };
 
   const load = async () => {
     if (!profile?.user_id) return;
@@ -289,7 +293,7 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
         </button>
         <button
-          onClick={() => setNewOpen(true)}
+          onClick={openNewSmsSheet}
           className="px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold text-white"
           style={{
             background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))",
@@ -424,6 +428,7 @@ function NewSmsSheet({ onClose, onStart }: { onClose: () => void; onStart: (numb
           <div className="flex items-center gap-2 px-3 rounded-xl" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", height: 44 }}>
             <Search className="w-4 h-4 shrink-0" style={{ color: "var(--pp-text-faint)" }} />
             <input
+              data-sms-recipient-search="true"
               ref={searchRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}

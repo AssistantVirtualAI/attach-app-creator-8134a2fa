@@ -24,6 +24,8 @@ type MirrorStatus = {
   with_maestro_call_id: number;
   mirrored_ok: number;
   mirrored_failed: number;
+  skipped_total: number;
+  errors_total: number;
   pending: number;
   window_first_log: string | null;
   window_last_log: string | null;
@@ -104,6 +106,7 @@ export default function PAMaestroSync() {
   const [loading, setLoading] = useState(false);
   const [mirroring, setMirroring] = useState(false);
   const [onlyFailures, setOnlyFailures] = useState(false);
+  const [actionFilter, setActionFilter] = useState<{ like?: string; eq?: string; label?: string } | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -113,7 +116,14 @@ export default function PAMaestroSync() {
     try {
       const [s, l, m] = await Promise.all([
         supabase.functions.invoke("pp-maestro-admin", { body: { action: "status" } }),
-        supabase.functions.invoke("pp-maestro-admin", { body: { action: "sync-log", limit: 200, since_hours: 72, only_failures: onlyFailures } }),
+        supabase.functions.invoke("pp-maestro-admin", {
+          body: {
+            action: "sync-log", limit: 200, since_hours: 72,
+            only_failures: onlyFailures,
+            action_like: actionFilter?.like,
+            action_eq: actionFilter?.eq,
+          },
+        }),
         supabase.functions.invoke("pp-maestro-admin", { body: { action: "mirror-status" } }),
       ]);
       if (s.error) throw new Error(s.error.message);
@@ -126,7 +136,7 @@ export default function PAMaestroSync() {
     } finally {
       setLoading(false);
     }
-  }, [onlyFailures]);
+  }, [onlyFailures, actionFilter]);
 
   const mirrorAll = useCallback(async () => {
     if (!confirm("Mirror TOUS les appels avec résumé/analyse IA vers Maestro (depuis le début) ?")) return;
@@ -314,13 +324,15 @@ export default function PAMaestroSync() {
         />
       </div>
 
-      {/* Mirror everything panel */}
+      {/* Live analytics summary → clickable filters into the journal below */}
       <div className="pp-card mb-5" style={{ padding: 20 }}>
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div>
-            <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--pp-text-primary)" }}>Mirror everything · résumés &amp; analyses IA</h2>
+            <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--pp-text-primary)" }}>
+              Analytics live · miroir vers Maestro
+            </h2>
             <p style={{ fontSize: 11, color: "var(--pp-text-faint)", marginTop: 2 }}>
-              État global des sommaires d'appel et analyses IA poussés vers Maestro depuis le début de l'historique.
+              Cliquer sur une carte pour filtrer le journal détaillé ci-dessous. Rafraîchi toutes les 10 s.
             </p>
           </div>
           {mirror && (
@@ -329,19 +341,49 @@ export default function PAMaestroSync() {
             </span>
           )}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {[
-            { label: "Éligibles (résumé ou analyse)", value: mirror?.eligible ?? "—", color: ACCENT },
-            { label: "Avec maestro_call_id", value: mirror?.with_maestro_call_id ?? "—", color: AGENT },
-            { label: "Mirrorés OK", value: mirror?.mirrored_ok ?? "—", color: SUCCESS },
-            { label: "En échec", value: mirror?.mirrored_failed ?? "—", color: DANGER },
-            { label: "À pousser", value: mirror?.pending ?? "—", color: WARNING },
-          ].map((c) => (
-            <div key={c.label} className="pp-card" style={{ padding: 14, borderColor: `${c.color}33`, background: `${c.color}0A` }}>
-              <div style={{ fontSize: 22, fontWeight: 700, color: c.color, lineHeight: 1 }} className="tabular-nums">{c.value}</div>
-              <div style={{ fontSize: 11, color: "var(--pp-text-secondary)", marginTop: 6 }}>{c.label}</div>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {([
+            { label: "Éligibles", value: mirror?.eligible ?? "—", color: ACCENT, sub: "résumé ou analyse", filter: null },
+            { label: "Avec maestro_call_id", value: mirror?.with_maestro_call_id ?? "—", color: AGENT, sub: "prêts à mirrorer", filter: null },
+            { label: "Transférés OK", value: mirror?.mirrored_ok ?? "—", color: SUCCESS, sub: "voir dans le journal →", filter: { eq: "call.analysis.summary", label: "Transférés (call.analysis.summary OK)", onlyFailures: false } },
+            { label: "Skipped", value: mirror?.skipped_total ?? "—", color: WARNING, sub: "sans broker / maestro_id →", filter: { like: "call.analysis.skipped.%", label: "Skipped (call.analysis.skipped.*)", onlyFailures: false } },
+            { label: "Erreurs", value: mirror?.errors_total ?? "—", color: DANGER, sub: "échecs de transfert →", filter: { eq: "call.analysis.summary", label: "Erreurs (call.analysis.summary ✕)", onlyFailures: true } },
+            { label: "À pousser", value: mirror?.pending ?? "—", color: AGENT, sub: "éligibles − OK", filter: null },
+          ] as const).map((c) => {
+            const isActive =
+              !!c.filter &&
+              (actionFilter?.eq === (c.filter as any).eq &&
+               actionFilter?.like === (c.filter as any).like &&
+               onlyFailures === !!(c.filter as any).onlyFailures);
+            const clickable = !!c.filter;
+            return (
+              <button
+                key={c.label}
+                type="button"
+                disabled={!clickable}
+                onClick={() => {
+                  if (!c.filter) return;
+                  setActionFilter({ eq: (c.filter as any).eq, like: (c.filter as any).like, label: (c.filter as any).label });
+                  setOnlyFailures(!!(c.filter as any).onlyFailures);
+                  requestAnimationFrame(() => {
+                    document.getElementById("pp-maestro-journal")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  });
+                }}
+                className="pp-card text-left transition-transform"
+                style={{
+                  padding: 14,
+                  borderColor: isActive ? c.color : `${c.color}33`,
+                  background: isActive ? `${c.color}1F` : `${c.color}0A`,
+                  cursor: clickable ? "pointer" : "default",
+                  outline: isActive ? `1px solid ${c.color}` : "none",
+                }}
+              >
+                <div style={{ fontSize: 22, fontWeight: 700, color: c.color, lineHeight: 1 }} className="tabular-nums">{c.value}</div>
+                <div style={{ fontSize: 11, color: "var(--pp-text-secondary)", marginTop: 6, fontWeight: 600 }}>{c.label}</div>
+                <div style={{ fontSize: 10, color: "var(--pp-text-faint)", marginTop: 2 }}>{c.sub}</div>
+              </button>
+            );
+          })}
         </div>
         {mirror && mirror.eligible > 0 && (
           <div className="mt-3" style={{ height: 6, background: "var(--pp-bg-deep)", borderRadius: 999, overflow: "hidden" }}>
@@ -392,12 +434,34 @@ export default function PAMaestroSync() {
       </div>
 
       {/* Detailed log */}
-      <div className="pp-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--pp-bg-border-2)" }}>
+      <div id="pp-maestro-journal" className="pp-card" style={{ padding: 0, overflow: "hidden", scrollMarginTop: 16 }}>
+        <div className="flex items-center justify-between px-5 py-4 flex-wrap gap-2" style={{ borderBottom: "1px solid var(--pp-bg-border-2)" }}>
           <div>
             <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--pp-text-primary)" }}>Journal détaillé</h2>
             <p style={{ fontSize: 11, color: "var(--pp-text-faint)", marginTop: 2 }}>{logs.length} entrée(s) · cliquer pour voir requête/réponse</p>
           </div>
+          {(actionFilter || onlyFailures) && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {actionFilter?.label && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md" style={{ fontSize: 11, color: ACCENT, background: `${ACCENT}14`, border: `1px solid ${ACCENT}44` }}>
+                  Filtre : {actionFilter.label}
+                </span>
+              )}
+              {onlyFailures && !actionFilter && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md" style={{ fontSize: 11, color: DANGER, background: `${DANGER}14`, border: `1px solid ${DANGER}44` }}>
+                  Échecs seulement
+                </span>
+              )}
+              <button
+                type="button"
+                className="pp-btn"
+                onClick={() => { setActionFilter(null); setOnlyFailures(false); }}
+                style={{ padding: "4px 10px", fontSize: 11 }}
+              >
+                Réinitialiser
+              </button>
+            </div>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full" style={{ fontSize: 12 }}>

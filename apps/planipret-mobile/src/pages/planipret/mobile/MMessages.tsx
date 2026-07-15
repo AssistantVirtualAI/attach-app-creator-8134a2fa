@@ -889,13 +889,16 @@ function EmailsList({ profile }: { profile: any }) {
         >
           <Plus className="w-3.5 h-3.5" /> {t("messages.emailCompose")}
         </button>
-        <button
-          onClick={load}
-          className="text-xs flex items-center gap-1 px-2 py-1"
-          style={{ color: "var(--pp-text-muted)" }}
-        >
-          <RefreshCw className={`w-3 h-3 ${state === "loading" ? "animate-spin" : ""}`} /> {t("common.refresh")}
-        </button>
+        <div className="flex items-center gap-2">
+          <Ms365TestNowButton feature="mail" compact />
+          <button
+            onClick={load}
+            className="text-xs flex items-center gap-1 px-2 py-1"
+            style={{ color: "var(--pp-text-muted)" }}
+          >
+            <RefreshCw className={`w-3 h-3 ${state === "loading" ? "animate-spin" : ""}`} /> {t("common.refresh")}
+          </button>
+        </div>
       </div>
 
       {state === "loading" && (

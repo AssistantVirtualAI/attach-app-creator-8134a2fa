@@ -228,16 +228,51 @@ export default function MContacts() {
       if (filterDept) out = out.filter((c: any) => (c.department ?? "") === filterDept);
       if (filterTeam) out = out.filter((c: any) => (c.team ?? c.group ?? c.site ?? "") === filterTeam);
     }
-    if (!tokens.length) return out;
-    return out.filter((c: any) => {
-      const hay = tab === "directory"
-        ? `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""} ${c.team ?? ""}`
-        : tab === "favorites"
-        ? `${c.name ?? ""} ${c.phone ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.company ?? ""}`
-        : `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.display_name ?? ""} ${c.phone ?? ""} ${c.email ?? ""} ${c.company ?? ""}`;
-      return matchAllTokens(hay, tokens);
-    });
-  }, [tab, personal, favorites, directory, q, filterDept, filterTeam]);
+    if (tokens.length) {
+      out = out.filter((c: any) => {
+        const hay = tab === "directory"
+          ? `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""} ${c.team ?? ""}`
+          : tab === "favorites"
+          ? `${c.name ?? ""} ${c.phone ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.company ?? ""}`
+          : `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.display_name ?? ""} ${c.phone ?? ""} ${c.email ?? ""} ${c.company ?? ""}`;
+        return matchAllTokens(hay, tokens);
+      });
+    }
+    // Sort — Directory tab only; other tabs keep their source order.
+    if (tab === "directory") {
+      const nameOf = (c: any) => (`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || c.name || c.display_name || "").toLowerCase();
+      const teamOf = (c: any) => String(c.team ?? c.group ?? c.site ?? "").toLowerCase();
+      const deptOf = (c: any) => String(c.department ?? "").toLowerCase();
+      if (sortBy === "name") {
+        out = [...out].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+      } else if (sortBy === "team") {
+        out = [...out].sort((a, b) => teamOf(a).localeCompare(teamOf(b)) || nameOf(a).localeCompare(nameOf(b)));
+      } else if (sortBy === "department") {
+        out = [...out].sort((a, b) => deptOf(a).localeCompare(deptOf(b)) || nameOf(a).localeCompare(nameOf(b)));
+      } else {
+        // relevance: when a query is typed, rank by best token match; otherwise alpha.
+        if (tokens.length) {
+          const score = (c: any) => {
+            const n = nameOf(c);
+            let s = 0;
+            for (const tk of tokens) {
+              if (!tk) continue;
+              const idx = n.indexOf(tk);
+              if (idx === 0) s += 100;
+              else if (idx > 0) s += 40;
+              if (String(c.extension ?? "").includes(tk)) s += 60;
+              if (String(c.email ?? "").toLowerCase().includes(tk)) s += 20;
+            }
+            return -s;
+          };
+          out = [...out].sort((a, b) => score(a) - score(b) || nameOf(a).localeCompare(nameOf(b)));
+        } else {
+          out = [...out].sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+        }
+      }
+    }
+    return out;
+  }, [tab, personal, favorites, directory, q, filterDept, filterTeam, sortBy]);
 
   const deptOptions = useMemo(() => {
     const s = new Set<string>();

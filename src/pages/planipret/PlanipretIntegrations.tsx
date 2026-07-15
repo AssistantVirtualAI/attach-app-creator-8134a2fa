@@ -541,12 +541,12 @@ export default function PlanipretIntegrations() {
             <Field label="API Key" required>
               <SecretInput value={draft.maestro?.api_key ?? ""}
                 onChange={(v) => setField("maestro", "api_key", v)}
-                hasSavedValue={!!rows.maestro?.config_data?.api_key} />
+                {...secretState("maestro", "api_key", ["MAESTRO_API_KEY"])} />
             </Field>
             <Field label="Webhook secret" hint="Pour vérifier les webhooks entrants Maestro">
               <SecretInput value={draft.maestro?.webhook_secret ?? ""}
                 onChange={(v) => setField("maestro", "webhook_secret", v)}
-                hasSavedValue={!!rows.maestro?.config_data?.webhook_secret} />
+                {...secretState("maestro", "webhook_secret", ["MAESTRO_WEBHOOK_SECRET"])} />
             </Field>
             <Field label="Pipeline par défaut (ID)">
               <TextInput value={getField("maestro", "default_pipeline_id")}

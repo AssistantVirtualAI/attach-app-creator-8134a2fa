@@ -122,6 +122,11 @@ export default function PlanipretIntegrations() {
     };
   }, [rows]);
 
+  const backendKeyCount = useMemo(
+    () => Object.values(backendSecrets).reduce((n, s) => n + (s?.present?.length ?? 0), 0),
+    [backendSecrets],
+  );
+
   function getField(key: string, field: string, fallback = "") {
     const backendValues = (backendSecrets[key] as any)?.values as Record<string, string> | undefined;
     return draft[key]?.[field]
@@ -131,6 +136,20 @@ export default function PlanipretIntegrations() {
   }
   function setField(key: string, field: string, value: string) {
     setDraft((d) => ({ ...d, [key]: { ...(d[key] ?? {}), [field]: value } }));
+  }
+
+  /**
+   * Does a given secret field already exist somewhere (DB row or backend secret)?
+   * Returns undefined when not saved anywhere so the input shows its normal empty state.
+   */
+  function secretState(key: string, field: string, backendSecretNames: string[] = []):
+    { hasSavedValue: boolean; savedSource?: "backend" | "db" | "both" } {
+    const inDb = !!rows[key]?.config_data?.[field];
+    const inBackend = backendSecretNames.some((n) => (backendSecrets[key]?.present ?? []).includes(n));
+    if (inDb && inBackend) return { hasSavedValue: true, savedSource: "both" };
+    if (inDb) return { hasSavedValue: true, savedSource: "db" };
+    if (inBackend) return { hasSavedValue: true, savedSource: "backend" };
+    return { hasSavedValue: false };
   }
 
   async function save(key: string, requiredFields: string[]) {
@@ -180,7 +199,6 @@ export default function PlanipretIntegrations() {
   }
 
   const ACCENT = "#2E9BDC";
-  const totalConfigured = health.connected;
   return (
     <div className="planipret-scope planipret-admin-scope p-6 space-y-6">
       {/* Header — aligned with other admin pages (PAMaestroSync) */}
@@ -219,7 +237,7 @@ export default function PlanipretIntegrations() {
         <MiniKpi color="#00D4AA" label="Connectées" value={health.connected} />
         <MiniKpi color="#F5A623" label="En attente" value={health.pending} />
         <MiniKpi color="#E84C4C" label="Erreurs" value={health.errors} />
-        <MiniKpi color={ACCENT} label="Total configurées" value={totalConfigured + health.errors} />
+        <MiniKpi color={ACCENT} label="Clés backend détectées" value={backendKeyCount} />
       </div>
 
 
@@ -259,8 +277,9 @@ export default function PlanipretIntegrations() {
             <Field label="API Key" required hint="Format: nsr_XXXXXXXXXX — fournie par Keeny">
               <SecretInput value={draft.ns_api?.api_key ?? ""}
                 onChange={(v) => setField("ns_api", "api_key", v)}
-                hasSavedValue={!!rows.ns_api?.config_data?.api_key}
+                {...secretState("ns_api", "api_key", ["NS_API_KEY"])}
                 placeholder="nsr_••••••••••••••••••••••••••••••••" />
+
             </Field>
             <Field label="Domaine par défaut" required>
               <TextInput value={getField("ns_api", "domain", "planipret.ca")}
@@ -311,8 +330,9 @@ export default function PlanipretIntegrations() {
             <Field label="Anthropic API Key" required hint="console.anthropic.com → API Keys">
               <SecretInput value={draft.anthropic?.api_key ?? ""}
                 onChange={(v) => setField("anthropic", "api_key", v)}
-                hasSavedValue={!!rows.anthropic?.config_data?.api_key}
+                {...secretState("anthropic", "api_key", ["ANTHROPIC_API_KEY", "LOVABLE_API_KEY"])}
                 placeholder="sk-ant-••••••••••••••••••••••••" />
+
             </Field>
             <Field label="Modèle IA" hint="claude-sonnet-4-5 recommandé (rapide & intelligent)">
               <select
@@ -473,8 +493,9 @@ export default function PlanipretIntegrations() {
             <Field label="ElevenLabs API Key" required hint="elevenlabs.io → Profile → API Keys">
               <SecretInput value={draft.elevenlabs?.api_key ?? ""}
                 onChange={(v) => setField("elevenlabs", "api_key", v)}
-                hasSavedValue={!!rows.elevenlabs?.config_data?.api_key}
+                {...secretState("elevenlabs", "api_key", ["ELEVENLABS_API_KEY"])}
                 placeholder="sk_•••••••••••••••••••••••••••••" />
+
             </Field>
             <Field label="Agent ID par défaut" hint="ID de l'agent à utiliser pour les nouveaux courtiers">
               <TextInput value={getField("elevenlabs", "default_agent_id")}
@@ -519,12 +540,12 @@ export default function PlanipretIntegrations() {
             <Field label="API Key" required>
               <SecretInput value={draft.maestro?.api_key ?? ""}
                 onChange={(v) => setField("maestro", "api_key", v)}
-                hasSavedValue={!!rows.maestro?.config_data?.api_key} />
+                {...secretState("maestro", "api_key", ["MAESTRO_API_KEY"])} />
             </Field>
             <Field label="Webhook secret" hint="Pour vérifier les webhooks entrants Maestro">
               <SecretInput value={draft.maestro?.webhook_secret ?? ""}
                 onChange={(v) => setField("maestro", "webhook_secret", v)}
-                hasSavedValue={!!rows.maestro?.config_data?.webhook_secret} />
+                {...secretState("maestro", "webhook_secret", ["MAESTRO_WEBHOOK_SECRET"])} />
             </Field>
             <Field label="Pipeline par défaut (ID)">
               <TextInput value={getField("maestro", "default_pipeline_id")}
@@ -569,7 +590,7 @@ export default function PlanipretIntegrations() {
               <div className="flex gap-2">
                 <SecretInput value={draft.webhooks?.secret ?? ""}
                   onChange={(v) => setField("webhooks", "secret", v)}
-                  hasSavedValue={!!rows.webhooks?.config_data?.secret} />
+                  {...secretState("webhooks", "secret", ["NS_WEBHOOK_SECRET"])} />
                 <button type="button"
                   onClick={() => {
                     const buf = new Uint8Array(32);
@@ -656,7 +677,7 @@ export default function PlanipretIntegrations() {
             <Field label="Firebase Server Key (FCM)" hint="Notifications push Android">
               <SecretInput value={draft.mobile_app?.fcm_server_key ?? ""}
                 onChange={(v) => setField("mobile_app", "fcm_server_key", v)}
-                hasSavedValue={!!rows.mobile_app?.config_data?.fcm_server_key} />
+                {...secretState("mobile_app", "fcm_server_key")} />
             </Field>
             <Field label="APNs Key ID (iOS)" hint="Notifications push iOS">
               <TextInput value={getField("mobile_app", "apns_key_id")}
@@ -796,14 +817,7 @@ export default function PlanipretIntegrations() {
   );
 }
 
-function HealthPill({ color, bg, border, label }: { color: string; bg: string; border: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-      style={{ background: bg, border: `1px solid ${border}`, color }}>
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} /> {label}
-    </span>
-  );
-}
+
 
 function HealthChip({ icon, color, label }: { icon: React.ReactNode; color: string; label: string }) {
   return (

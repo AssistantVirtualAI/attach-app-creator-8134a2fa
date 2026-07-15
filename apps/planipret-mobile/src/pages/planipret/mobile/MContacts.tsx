@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
-import { Search, Phone, MessageSquare, Mail, Users, UserCog, BookUser, X, Calendar, ListChecks, Loader2, ExternalLink, Sparkles, Plus, Star } from "lucide-react";
+import { Search, Phone, MessageSquare, Mail, Users, UserCog, BookUser, X, Calendar, ListChecks, Loader2, ExternalLink, Sparkles, Plus, Star, Copy, Send, Filter } from "lucide-react";
 import AvaSummarizeSheet from "@/components/planipret/ava/AvaSummarizeSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -10,6 +10,18 @@ import { ensureContacts, getContactsPermissionStatus, listDeviceContacts } from 
 import { openAppSettings, type PermStatus } from "@/lib/native/permissions/platform";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { peekPpContacts } from "@/lib/ppContactsCache";
+
+async function copyToClipboard(value: string, label: string) {
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+    else {
+      const ta = document.createElement("textarea");
+      ta.value = value; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+    }
+    toast.success(`${label} copié`);
+  } catch { toast.error("Copie impossible"); }
+}
 
 
 type Tab = "personal" | "favorites" | "directory";
@@ -91,6 +103,8 @@ export default function MContacts() {
   const [contactsPerm, setContactsPerm] = useState<PermStatus>("unavailable");
   const [contactsPermBusy, setContactsPermBusy] = useState(false);
   const [visibleCount, setVisibleCount] = useState(40);
+  const [filterDept, setFilterDept] = useState<string>("");
+  const [filterTeam, setFilterTeam] = useState<string>("");
   const loadedTabsRef = useRef<Set<Tab>>(new Set(["favorites"]));
 
   useEffect(() => {
@@ -208,16 +222,32 @@ export default function MContacts() {
   const list = useMemo(() => {
     const src: any[] = tab === "personal" ? personal : tab === "favorites" ? favorites : directory;
     const tokens = tokenize(q);
-    if (!tokens.length) return src;
-    return src.filter((c: any) => {
+    let out = src;
+    if (tab === "directory") {
+      if (filterDept) out = out.filter((c: any) => (c.department ?? "") === filterDept);
+      if (filterTeam) out = out.filter((c: any) => (c.team ?? c.group ?? c.site ?? "") === filterTeam);
+    }
+    if (!tokens.length) return out;
+    return out.filter((c: any) => {
       const hay = tab === "directory"
-        ? `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""}`
+        ? `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""} ${c.team ?? ""}`
         : tab === "favorites"
         ? `${c.name ?? ""} ${c.phone ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.company ?? ""}`
         : `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.display_name ?? ""} ${c.phone ?? ""} ${c.email ?? ""} ${c.company ?? ""}`;
       return matchAllTokens(hay, tokens);
     });
-  }, [tab, personal, favorites, directory, q]);
+  }, [tab, personal, favorites, directory, q, filterDept, filterTeam]);
+
+  const deptOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of directory) { const v = (c as any).department; if (v) s.add(String(v)); }
+    return Array.from(s).sort();
+  }, [directory]);
+  const teamOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of directory) { const v = (c as any).team ?? (c as any).group ?? (c as any).site; if (v) s.add(String(v)); }
+    return Array.from(s).sort();
+  }, [directory]);
 
 
   useEffect(() => {
@@ -337,6 +367,36 @@ export default function MContacts() {
           );
         })}
       </div>
+
+      {tab === "directory" && (deptOptions.length > 0 || teamOptions.length > 0) && (
+        <div className="flex items-center gap-2 mb-3 overflow-x-auto no-scrollbar">
+          <Filter className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--pp-text-muted)" }} />
+          {deptOptions.length > 0 && (
+            <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)}
+              className="text-xs px-2 py-1.5 rounded-full outline-none"
+              style={{ background: filterDept ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: filterDept ? "#fff" : "var(--pp-text-secondary)", border: `1px solid ${filterDept ? "var(--pp-brand-accent)" : "var(--pp-bg-border-2)"}` }}>
+              <option value="">Département</option>
+              {deptOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+          {teamOptions.length > 0 && (
+            <select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}
+              className="text-xs px-2 py-1.5 rounded-full outline-none"
+              style={{ background: filterTeam ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: filterTeam ? "#fff" : "var(--pp-text-secondary)", border: `1px solid ${filterTeam ? "var(--pp-brand-accent)" : "var(--pp-bg-border-2)"}` }}>
+              <option value="">Équipe</option>
+              {teamOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+          {(filterDept || filterTeam) && (
+            <button onClick={() => { setFilterDept(""); setFilterTeam(""); }}
+              className="text-[11px] px-2 py-1 rounded-full font-semibold"
+              style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
+              Effacer
+            </button>
+          )}
+        </div>
+      )}
+
 
       {loadError && !loading && (
         <div className="rounded-2xl p-4 mb-3 text-sm" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", color: "#dc2626" }}>
@@ -562,10 +622,13 @@ function ContactDetailSheet({
   const [loading, setLoading] = useState(true);
   const [creatingTask, setCreatingTask] = useState(false);
   const [summarizeOpen, setSummarizeOpen] = useState(false);
+  const [smsOpen, setSmsOpen] = useState(false);
 
   const name = `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim()
     || contact.name || contact.display_name || contact.phone || contact.email || "Contact";
-  const phone: string | undefined = contact.phone || contact.extension;
+  const rawPhone: string | undefined = contact.phone || contact.cell_phone || contact.work_phone;
+  const extension: string | undefined = contact.extension;
+  const phone: string | undefined = rawPhone || extension;
   const email: string | undefined = contact.email;
   const maestroId: string | undefined = contact.maestro_client_id || contact.external_id || contact.id;
 
@@ -603,13 +666,14 @@ function ContactDetailSheet({
   };
 
   const openSms = () => {
-    if (!phone) return;
-    window.location.href = `sms:${phone}`;
+    if (!rawPhone) { toast.error("Aucun numéro mobile"); return; }
+    setSmsOpen(true);
   };
   const openEmail = () => {
     if (!email) return;
     window.location.href = `mailto:${email}`;
   };
+
 
   const iconFor = (kind: string) => {
     const k = (kind || "").toLowerCase();
@@ -629,10 +693,17 @@ function ContactDetailSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-lg font-bold truncate" style={{ color: "var(--pp-text-primary)" }}>{name}</div>
-            {phone && <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>{phone}</div>}
-            {email && <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>{email}</div>}
+            {rawPhone && (
+              <ContactField label="Tél" value={rawPhone} />
+            )}
+            {extension && (
+              <ContactField label="Ext" value={extension} />
+            )}
+            {email && (
+              <ContactField label="Email" value={email} />
+            )}
           </div>
           <button onClick={onClose} className="p-1" style={{ color: "var(--pp-text-muted)" }} aria-label={t("common.close")}><X className="w-5 h-5" /></button>
         </div>
@@ -640,11 +711,12 @@ function ContactDetailSheet({
         {/* Quick actions */}
         <div className="grid grid-cols-5 gap-2 mb-4">
           <QuickAction icon={<Phone className="w-4 h-4" />} label={t("common.call")} onClick={() => phone && onCall(phone)} disabled={!phone} />
-          <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={openSms} disabled={!phone} />
+          <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={openSms} disabled={!rawPhone} />
           <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={openEmail} disabled={!email} />
           <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={createTask} disabled={creatingTask} />
           <QuickAction icon={<Calendar className="w-4 h-4" />} label="RDV" onClick={() => toast.info("Bientôt disponible")} />
         </div>
+
 
         {history.length > 0 && (
           <button onClick={() => setSummarizeOpen(true)}
@@ -710,9 +782,111 @@ function ContactDetailSheet({
         contextMeta={{ contact_name: name, phone, email: contact.email }}
         onClose={() => setSummarizeOpen(false)}
       />
+
+      {smsOpen && rawPhone && (
+        <SmsComposerSheet to={rawPhone} contactName={name} onClose={() => setSmsOpen(false)} />
+      )}
     </div>
   );
 }
+
+function ContactField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-1.5 mt-0.5">
+      <span className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-faint)" }}>{label}</span>
+      <span className="text-xs truncate" style={{ color: "var(--pp-text-muted)" }}>{value}</span>
+      <button
+        onClick={(e) => { e.stopPropagation(); void copyToClipboard(value, label); }}
+        className="ml-0.5 p-1 rounded active:scale-95"
+        style={{ color: "var(--pp-text-faint)" }}
+        aria-label={`Copier ${label}`}
+      >
+        <Copy className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
+function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactName: string; onClose: () => void }) {
+  const [recipient, setRecipient] = useState(to);
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => taRef.current?.focus(), 80);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  const send = async () => {
+    const number = recipient.trim();
+    const msg = body.trim();
+    if (!number || !msg) { toast.error("Numéro et message requis"); return; }
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-ns-sms", {
+        body: { action: "send", to: number, message: msg },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success("SMS envoyé");
+      onClose();
+    } catch (e: any) {
+      toast.error("Échec envoi SMS", { description: e?.message });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-4"
+        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouveau SMS</div>
+            <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>À {contactName}</div>
+          </div>
+          <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>
+        </div>
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Destinataire</label>
+        <input
+          value={recipient}
+          onChange={(e) => setRecipient(e.target.value)}
+          inputMode="tel"
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+        />
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Message</label>
+        <textarea
+          ref={taRef}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={4}
+          placeholder="Écrire un message…"
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+        />
+
+        <button
+          onClick={send}
+          disabled={sending || !recipient.trim() || !body.trim()}
+          className="w-full py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+          style={{ background: "var(--pp-brand-accent)" }}
+        >
+          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          {sending ? "Envoi…" : "Envoyer"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 
 function QuickAction({ icon, label, onClick, disabled }: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
   return (

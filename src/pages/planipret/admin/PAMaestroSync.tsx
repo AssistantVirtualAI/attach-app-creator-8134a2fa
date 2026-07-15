@@ -99,8 +99,10 @@ function KpiCard({
 
 export default function PAMaestroSync() {
   const [status, setStatus] = useState<Status | null>(null);
+  const [mirror, setMirror] = useState<MirrorStatus | null>(null);
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [mirroring, setMirroring] = useState(false);
   const [onlyFailures, setOnlyFailures] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -109,20 +111,47 @@ export default function PAMaestroSync() {
     setLoading(true);
     setErr(null);
     try {
-      const [s, l] = await Promise.all([
+      const [s, l, m] = await Promise.all([
         supabase.functions.invoke("pp-maestro-admin", { body: { action: "status" } }),
         supabase.functions.invoke("pp-maestro-admin", { body: { action: "sync-log", limit: 200, since_hours: 72, only_failures: onlyFailures } }),
+        supabase.functions.invoke("pp-maestro-admin", { body: { action: "mirror-status" } }),
       ]);
       if (s.error) throw new Error(s.error.message);
       if (l.error) throw new Error(l.error.message);
       setStatus(s.data as Status);
       setLogs(((l.data as any)?.entries ?? []) as LogRow[]);
+      if (!m.error) setMirror(m.data as MirrorStatus);
     } catch (e: any) {
       setErr(e?.message ?? "erreur");
     } finally {
       setLoading(false);
     }
   }, [onlyFailures]);
+
+  const mirrorAll = useCallback(async () => {
+    if (!confirm("Mirror TOUS les appels avec résumé/analyse IA vers Maestro (depuis le début) ?")) return;
+    setMirroring(true);
+    try {
+      let cursor: string | null = null;
+      let total = 0;
+      for (let i = 0; i < 20; i++) {
+        const { data, error } = await supabase.functions.invoke("pp-maestro-admin", {
+          body: { action: "mirror-all", batch_size: 200, max_batches: 5, cursor },
+        });
+        if (error) throw error;
+        total += (data as any)?.scheduled ?? 0;
+        const next = (data as any)?.next_cursor;
+        if (!next || next === cursor) break;
+        cursor = next;
+      }
+      alert(`Miroir global : ${total} appel(s) planifié(s).`);
+      await load();
+    } catch (e: any) {
+      alert(`Erreur mirror-all : ${e?.message ?? e}`);
+    } finally {
+      setMirroring(false);
+    }
+  }, [load]);
 
   useEffect(() => { void load(); }, [load]);
 

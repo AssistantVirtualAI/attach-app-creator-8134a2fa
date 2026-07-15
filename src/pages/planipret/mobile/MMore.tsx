@@ -107,7 +107,7 @@ export default function MMore() {
     const scope = encodeURIComponent(MS365_DELEGATED_SCOPES);
     supabase.auth.getUser().then(({ data: { user } }) => {
       const state = user?.id ?? "";
-      window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirect)}&response_mode=query&scope=${scope}&prompt=consent&state=${state}`;
+      window.location.href = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirect)}&response_mode=query&scope=${scope}&prompt=select_account&state=${state}`;
     });
   };
 

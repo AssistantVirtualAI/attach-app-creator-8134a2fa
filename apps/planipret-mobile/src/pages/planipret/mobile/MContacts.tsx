@@ -93,8 +93,11 @@ export default function MContacts() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("personal");
   const [q, setQ] = useState("");
-  const [personal, setPersonal] = useState<any[]>([]);
-  const [directory, setDirectory] = useState<any[]>([]);
+  const [personal, setPersonal] = useState<any[]>(() => {
+    const cached = peekPpContacts("list");
+    return cached ? (cached as any[]).map(normalizeContact) : [];
+  });
+  const [directory, setDirectory] = useState<any[]>(() => peekPpContacts("directory") ?? []);
   const [favorites, setFavorites] = useState<FavEntry[]>(() => loadFavs());
   const [loadingTab, setLoadingTab] = useState<Tab | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -106,7 +109,11 @@ export default function MContacts() {
   const [filterDept, setFilterDept] = useState<string>("");
   const [filterTeam, setFilterTeam] = useState<string>("");
   const [sortBy, setSortBy] = useState<"relevance" | "name" | "team" | "department">("relevance");
-  const loadedTabsRef = useRef<Set<Tab>>(new Set(["favorites"]));
+  const loadedTabsRef = useRef<Set<Tab>>(new Set<Tab>([
+    "favorites",
+    ...(peekPpContacts("directory") ? (["directory"] as Tab[]) : []),
+    ...(peekPpContacts("list") ? (["personal"] as Tab[]) : []),
+  ]));
 
   useEffect(() => {
     const onChange = () => setFavorites(loadFavs());

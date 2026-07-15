@@ -39,10 +39,23 @@ Deno.serve(async (req) => {
     if (action === "list") {
       const res = await nsFetch(base, { method: "GET" });
       const body = await res.text();
-      return new Response(body, {
-        status: res.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      let parsed: any = null;
+      try { parsed = body ? JSON.parse(body) : null; } catch { parsed = body; }
+
+      // Best-effort enrich with Maestro Telecom history. Never fail the NS response.
+      let maestroCalls: any[] = [];
+      if (ctx.maestroBrokerId) {
+        try {
+          const cfg = await getMaestroTelecomConfig(guard.supabase);
+          if (isMaestroTelecomConfigured(cfg)) {
+            const r = await maestroTelecomFetch<any>(cfg, `/users/${encodeURIComponent(ctx.maestroBrokerId)}/calls`);
+            const list = Array.isArray(r.data) ? r.data : (r.data?.calls ?? r.data?.data ?? []);
+            if (Array.isArray(list)) maestroCalls = list;
+          }
+        } catch { /* ignore */ }
+      }
+
+      return jsonResponse({ ns: parsed, maestro_calls: maestroCalls }, res.status);
     }
 
     if (action === "start") {
@@ -51,6 +64,7 @@ Deno.serve(async (req) => {
       if (!raw || typeof raw !== "string") {
         return jsonResponse({ success: false, error: "destination required" }, 200);
       }
+
       let dest = raw.replace(/[^\d+]/g, "");
       if (!dest.startsWith("+")) {
         const digits = dest.replace(/\D/g, "");

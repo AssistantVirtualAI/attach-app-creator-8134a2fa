@@ -296,29 +296,34 @@ export default function NsLiveTestPanel({ domain = "planipret.ca" }: { domain?: 
         </div>
       )}
 
-      {/* ─── Section B: Extensions table ─── */}
+      {/* ─── Section B: Extensions table (collapsed by default) ─── */}
       {summary && (
-        <div className="mt-5">
-          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <details className="mt-5 group" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 }}>
+          <summary className="cursor-pointer list-none flex items-center justify-between gap-3 px-4 py-3 select-none">
             <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
               👥 Extensions {domain} — {users.length} utilisateurs
+              <span style={{ marginLeft: 8, fontSize: 11, color: C.dim, fontWeight: 500 }}>(cliquer pour afficher)</span>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => syncToProfiles(false)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold"
-                style={{ background: "linear-gradient(135deg,#1A3D2A,#00D4AA)", color: "#060D1A", border: "none" }}>
-                🔄 Synchroniser les courtiers
-              </button>
-              <button onClick={() => syncToProfiles(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold"
-                style={{ background: "linear-gradient(135deg,#1A4A8A,#2E9BDC)", color: "#fff", border: "none" }}>
-                ⚡ Synchro complète (CDRs)
-              </button>
-            </div>
+            <span style={{ fontSize: 11, color: C.dim }} className="group-open:hidden">▾</span>
+            <span style={{ fontSize: 11, color: C.dim }} className="hidden group-open:inline">▴</span>
+          </summary>
 
+          <div className="px-4 pb-4 pt-1 border-t" style={{ borderColor: C.borderSoft }}>
+          <div className="flex items-center justify-end gap-2 flex-wrap mb-3 mt-3">
+            <button onClick={() => syncToProfiles(false)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold"
+              style={{ background: "linear-gradient(135deg,#1A3D2A,#00D4AA)", color: "#060D1A", border: "none" }}>
+              🔄 Synchroniser les courtiers
+            </button>
+            <button onClick={() => syncToProfiles(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-bold"
+              style={{ background: "linear-gradient(135deg,#1A4A8A,#2E9BDC)", color: "#fff", border: "none" }}>
+              ⚡ Synchro complète (CDRs)
+            </button>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap mb-3">
+
             {[
               { k: "all", label: "Tous" },
               { k: "online", label: "En ligne" },
@@ -430,8 +435,10 @@ export default function NsLiveTestPanel({ domain = "planipret.ca" }: { domain?: 
               </table>
             </div>
           </div>
-        </div>
+          </div>
+        </details>
       )}
+
 
       {/* ─── Section C: collapsible other results ─── */}
       {summary && (

@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plug, CheckCircle2, Clock, AlertTriangle, RefreshCw } from "lucide-react";
 import {
   IntegrationCard, IntegrationStatus, Field, TextInput, SecretInput,
   InfoBanner, CopyButton,
@@ -173,34 +173,55 @@ export default function PlanipretIntegrations() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20" style={{ color: "#4A7FA5" }}>
+      <div className="planipret-scope planipret-admin-scope flex items-center justify-center py-20" style={{ color: "var(--pp-text-secondary)" }}>
         <Loader2 className="w-5 h-5 animate-spin mr-2" /> Chargement des intégrations…
       </div>
     );
   }
 
+  const ACCENT = "#2E9BDC";
+  const totalConfigured = health.connected;
   return (
-    <div className="space-y-6">
-      {/* Header strip */}
+    <div className="planipret-scope planipret-admin-scope p-6 space-y-6">
+      {/* Header — aligned with other admin pages (PAMaestroSync) */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <p style={{ fontSize: 13, color: "#4A7FA5", maxWidth: 720 }}>
-            Configurez vos intégrations une seule fois — elles se synchronisent automatiquement
-            avec l'application mobile pour les 350 courtiers.
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center"
+            style={{ background: `${ACCENT}1A`, color: ACCENT, border: `1px solid ${ACCENT}33` }}>
+            <Plug className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--pp-text-primary)", letterSpacing: "-0.01em" }}>
+              Intégrations
+            </h1>
+            <p style={{ fontSize: 13, color: "var(--pp-text-secondary)", marginTop: 2, maxWidth: 640 }}>
+              Configurez chaque service une seule fois — la synchro vers l'app mobile de tous les courtiers est automatique.
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <HealthPill color="#00D4AA" bg="#0D3D2A" border="#1A5A3F" label={`${health.connected} connectées`} />
-          <HealthPill color="#F5A623" bg="#2A1A00" border="#4A3000" label={`${health.pending} en attente`} />
-          <HealthPill color="#E84C4C" bg="#3D1010" border="#5A1A1A" label={`${health.errors} erreurs`} />
+          <HealthChip icon={<CheckCircle2 className="w-3.5 h-3.5" />} color="#00D4AA" label={`${health.connected} connectée${health.connected > 1 ? "s" : ""}`} />
+          <HealthChip icon={<Clock className="w-3.5 h-3.5" />} color="#F5A623" label={`${health.pending} en attente`} />
+          <HealthChip icon={<AlertTriangle className="w-3.5 h-3.5" />} color="#E84C4C" label={`${health.errors} erreur${health.errors > 1 ? "s" : ""}`} />
           <button
             onClick={() => autosync(true)}
-            className="text-xs px-3 py-1.5 rounded-full font-medium transition hover:opacity-80"
-            style={{ background: "#003D7A", color: "#B8DCFC", border: "1px solid #1A5A9A" }}
+            className="pp-btn pp-btn-primary flex items-center gap-2"
+            style={{ padding: "8px 14px", fontSize: 13 }}
             title="Re-détecte toutes les intégrations depuis les secrets et lance un ping live"
-          >⟳ Auto-sync + tests</button>
+          >
+            <RefreshCw className="w-4 h-4" /> Auto-sync + tests
+          </button>
         </div>
       </div>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MiniKpi color="#00D4AA" label="Connectées" value={health.connected} />
+        <MiniKpi color="#F5A623" label="En attente" value={health.pending} />
+        <MiniKpi color="#E84C4C" label="Erreurs" value={health.errors} />
+        <MiniKpi color={ACCENT} label="Total configurées" value={totalConfigured + health.errors} />
+      </div>
+
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* ───────── CARD 2 — NS-API ───────── */}
@@ -781,6 +802,25 @@ function HealthPill({ color, bg, border, label }: { color: string; bg: string; b
       style={{ background: bg, border: `1px solid ${border}`, color }}>
       <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} /> {label}
     </span>
+  );
+}
+
+function HealthChip({ icon, color, label }: { icon: React.ReactNode; color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full tabular-nums"
+      style={{ fontSize: 11, fontWeight: 600, color, background: `${color}14`, border: `1px solid ${color}44` }}>
+      {icon} {label}
+    </span>
+  );
+}
+
+function MiniKpi({ color, label, value }: { color: string; label: string; value: number }) {
+  return (
+    <div className="pp-card relative overflow-hidden" style={{ padding: 14 }}>
+      <div aria-hidden className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: `linear-gradient(90deg, ${color}, transparent)` }} />
+      <div style={{ fontSize: 22, fontWeight: 700, color, lineHeight: 1 }} className="tabular-nums">{value}</div>
+      <div style={{ fontSize: 11, color: "var(--pp-text-secondary)", marginTop: 6, fontWeight: 500 }}>{label}</div>
+    </div>
   );
 }
 

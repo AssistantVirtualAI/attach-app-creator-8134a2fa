@@ -782,9 +782,111 @@ function ContactDetailSheet({
         contextMeta={{ contact_name: name, phone, email: contact.email }}
         onClose={() => setSummarizeOpen(false)}
       />
+
+      {smsOpen && rawPhone && (
+        <SmsComposerSheet to={rawPhone} contactName={name} onClose={() => setSmsOpen(false)} />
+      )}
     </div>
   );
 }
+
+function ContactField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-1.5 mt-0.5">
+      <span className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-faint)" }}>{label}</span>
+      <span className="text-xs truncate" style={{ color: "var(--pp-text-muted)" }}>{value}</span>
+      <button
+        onClick={(e) => { e.stopPropagation(); void copyToClipboard(value, label); }}
+        className="ml-0.5 p-1 rounded active:scale-95"
+        style={{ color: "var(--pp-text-faint)" }}
+        aria-label={`Copier ${label}`}
+      >
+        <Copy className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
+function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactName: string; onClose: () => void }) {
+  const [recipient, setRecipient] = useState(to);
+  const [body, setBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => taRef.current?.focus(), 80);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  const send = async () => {
+    const number = recipient.trim();
+    const msg = body.trim();
+    if (!number || !msg) { toast.error("Numéro et message requis"); return; }
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-ns-sms", {
+        body: { action: "send", to: number, message: msg },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success("SMS envoyé");
+      onClose();
+    } catch (e: any) {
+      toast.error("Échec envoi SMS", { description: e?.message });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-4"
+        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouveau SMS</div>
+            <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>À {contactName}</div>
+          </div>
+          <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>
+        </div>
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Destinataire</label>
+        <input
+          value={recipient}
+          onChange={(e) => setRecipient(e.target.value)}
+          inputMode="tel"
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+        />
+
+        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Message</label>
+        <textarea
+          ref={taRef}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={4}
+          placeholder="Écrire un message…"
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none"
+          style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+        />
+
+        <button
+          onClick={send}
+          disabled={sending || !recipient.trim() || !body.trim()}
+          className="w-full py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+          style={{ background: "var(--pp-brand-accent)" }}
+        >
+          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          {sending ? "Envoi…" : "Envoyer"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 
 function QuickAction({ icon, label, onClick, disabled }: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
   return (

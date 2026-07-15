@@ -2,9 +2,8 @@
  * Planiprêt Mobile — Standalone Capacitor app
  * Uses the exact same shell + routes + providers as /mplanipret on web.
  */
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 // (UI toaster removed — sonner is enough for the mobile app)

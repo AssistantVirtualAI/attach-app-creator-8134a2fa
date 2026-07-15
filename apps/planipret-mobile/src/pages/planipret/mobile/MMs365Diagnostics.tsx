@@ -108,7 +108,7 @@ export default function MMs365Diagnostics() {
             </button>
           </div>
           <p className="text-[11px] mt-2" style={{ color: "#8FA8C0" }}>
-            Doit correspondre exactement à une redirect URI enregistrée dans Azure App Registration (Web).
+            Doit correspondre exactement à une redirect URI enregistrée dans Azure App Registration.
           </p>
         </Card>
 

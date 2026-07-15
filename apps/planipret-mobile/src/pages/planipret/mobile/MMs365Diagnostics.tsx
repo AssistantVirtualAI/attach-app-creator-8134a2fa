@@ -21,7 +21,7 @@ export default function MMs365Diagnostics() {
       toast.error("Configuration Microsoft manquante");
       return;
     }
-    window.location.href = buildMs365AuthorizeUrl({
+    window.location.href = await buildMs365AuthorizeUrl({
       clientId: data.detection.client_id,
       tenant: data.detection.tenant_id,
       prompt: "select_account",

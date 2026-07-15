@@ -678,6 +678,7 @@ function ContactDetailSheet({
   const [summarizeOpen, setSummarizeOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [apptOpen, setApptOpen] = useState(false);
 
   const name = `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim()
     || contact.name || contact.display_name || contact.phone || contact.email || "Contact";
@@ -687,6 +688,8 @@ function ContactDetailSheet({
     contact.phone_number || contact.work_phone || contact.workPhone || contact.telephone ||
     contact.home_phone || contact.homePhone || undefined;
   const extension: string | undefined = contact.extension || contact.ext;
+  // Best number for SMS: real phone preferred; extension fallback (for internal chat).
+  const smsTarget: string | undefined = rawPhone || extension;
   const phone: string | undefined = rawPhone || extension;
   const email: string | undefined = contact.email || contact.mail || contact.email_address;
   const maestroId: string | undefined = contact.maestro_client_id || contact.external_id || contact.id;
@@ -710,27 +713,38 @@ function ContactDetailSheet({
   }, [maestroId, phone]);
 
   const createTask = async () => {
+    if (!maestroId) { toast.error("Client Maestro requis pour créer une tâche"); return; }
     setCreatingTask(true);
     try {
-      const { error } = await supabase.functions.invoke("maestro-task", {
-        body: { client_id: maestroId, title: `${t("contacts.followUp")} ${name}`, priority: "medium" },
+      const { data, error } = await supabase.functions.invoke("maestro-task", {
+        body: {
+          maestro_client_id: maestroId,
+          title: `${t("contacts.followUp") || "Suivi"} — ${name}`,
+          priority: "medium",
+          source: "mobile_contact",
+        },
       });
       if (error) throw error;
-      toast.success(t("contacts.taskCreated"));
+      if ((data as any)?.success === false) throw new Error((data as any)?.error || "task_failed");
+      toast.success(t("contacts.taskCreated") || "Tâche créée");
     } catch (e: any) {
-      toast.error(t("contacts.taskCreateFailed"), { description: e?.message });
+      toast.error(t("contacts.taskCreateFailed") || "Échec création tâche", { description: e?.message });
     } finally {
       setCreatingTask(false);
     }
   };
 
   const openSms = () => {
-    if (!rawPhone && !extension) { toast.error("Aucun numéro disponible"); return; }
+    if (!smsTarget) { toast.error("Aucun numéro disponible"); return; }
     setSmsOpen(true);
   };
   const openEmail = () => {
-    if (!email) return;
+    if (!email) { toast.error("Aucun email disponible"); return; }
     setEmailOpen(true);
+  };
+  const openAppt = () => {
+    if (!maestroId) { toast.error("Client Maestro requis pour un RDV"); return; }
+    setApptOpen(true);
   };
 
 

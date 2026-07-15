@@ -1,57 +1,59 @@
-# Plan — SSO Microsoft sur Auth + perfs
+# Plan — Fix « Ringing + Offline » et bouton End Call qui reste en ringing
 
-## 1. SSO Microsoft natif sur la page /auth
+## Diagnostic
 
-Objectif : un seul bouton « Continuer avec Microsoft » qui connecte l'utilisateur ET lie automatiquement son compte MS365 (Mail, Calendar, Teams) sans passer par un second flow OAuth manuel.
+Deux bugs distincts se cumulent :
 
-- Activer le provider **Azure** dans Lovable Cloud Auth (via `supabase--configure_social_auth` si dispo pour azure, sinon garder le flow OAuth managé existant).
-- Ajouter dans `src/pages/Auth.tsx` et `apps/planipret-mobile/src/pages/...Auth` un bouton **« Continuer avec Microsoft 365 »** qui :
-  1. Lance `supabase.auth.signInWithOAuth({ provider: 'azure', scopes: 'openid profile email offline_access Mail.Read Calendars.ReadWrite ChannelMessage.Send Chat.ReadWrite User.Read' })`.
-  2. Au retour (callback), une nouvelle edge function `ms365-link-from-auth` récupère le `provider_token` + `provider_refresh_token` de la session Supabase et les persiste dans `planipret_integration_secrets` pour l'utilisateur/org courant → l'intégration MS365 est marquée connectée immédiatement.
-  3. Hook côté client dans `useAuth` : après login, si `session.provider_token` et provider = azure, appeler l'edge function une seule fois.
-- Fallback : garder le flux `connectMs365()` existant pour les comptes créés en email/password qui veulent lier MS365 après coup.
-- Mettre à jour `Ms365StatusBadge` pour refléter l'état lié via SSO.
+### A. Statut « Offline / Idle » alors qu'un appel sonne
+- La pastille de statut (`MMore.tsx`) est calculée uniquement à partir de `profile.ns_jwt` (présence d'un JWT NS-API). Elle n'inspecte **jamais** l'état réel de l'enregistrement SIP (`ppSipProvider` → `snap.status`).
+- Résultat : la registration SIP peut être `disconnected` / `unregistered` sans que l'UI le signale, tandis qu'une ligne `planipret_phone_calls.status='ringing'` remontée par la webhook fait apparaître l'overlay « Ringing ».
+- Aucune reconnexion « best-effort » n'est déclenchée quand la registration tombe > quelques secondes.
 
-## 2. Accélération de la page /auth
+### B. Le bouton End Call ne coupe pas l'overlay
+- `PlanipretMobile.hangupActive()` appelle `softphone.hangup()` + edge `pp-ns-calls disconnect` mais **ne met pas à jour** `planipret_phone_calls.status` en local.
+- L'overlay se ferme uniquement quand un `postgres_changes` amène la ligne vers `completed/ended/cancelled/failed/no_answer`. Si l'edge répond OK sans mettre à jour la ligne (fréquent quand NS ferme l'appel côté trunk asynchronement), la ligne reste `ringing` et **`refreshActive` re-sélectionne la même ligne** → l'overlay se rouvre.
+- `ActiveCallOverlay.hangup()` fait bien un `onClosed()` optimiste, mais le parent réattache aussitôt le call à cause de la subscription realtime.
 
-Causes actuelles probables (à confirmer à l'implémentation) : bundle Auth chargé avec tout App.tsx, polices bloquantes, `initSentry`/`perfMetrics`/`buildVersionPoller` exécutés avant mount, `consumeAppLoginToken` bloque le render.
+## Correctifs
 
-- **Lazy-load** la page Auth via `React.lazy` + `Suspense` avec un skeleton léger (déjà partiel — vérifier `App.tsx`).
-- **Rendre React avant** `consumeAppLoginToken()` : lancer le token consume en tâche de fond après mount, montrer un skeleton si un token est présent.
-- Décaler `initSentry`, `initPerfMetrics`, `scheduleIdlePrefetch`, `buildVersionPoller`, `reloadDiagnostics`, `styleHealthGuard`, `devPreviewGuard` dans un `requestIdleCallback` (fallback `setTimeout(…, 0)`) après le premier paint.
-- Précharger uniquement les polices **critiques** (Urbanist 600 + Epilogue 400), `font-display: swap`, retirer les poids non utilisés au-dessus du fold sur /auth.
-- Supprimer l'import synchrone des icônes lucide non utilisées sur Auth (tree-shake déjà en place, vérifier).
-- Ajouter `<link rel="preconnect">` vers Supabase + CDN polices dans `index.html`.
+### 1. Pastille de connexion = état SIP réel
+- Dans `MMore.tsx` et le header mobile : brancher la pastille sur `ppSipProvider.snap.status` via `useMplanipretSoftphone()`. `nsConnected = jwtOk && (snap.status === 'registered' || snap.status === 'connected')`.
+- Ajouter 3 états visuels : `Connecté` (registered), `Connexion…` (connecting/disconnected < 5s), `Hors ligne` (error/disconnected > 5s).
 
-## 3. Accélération globale (autres pages)
+### 2. Auto-recovery SIP agressive
+- Ajouter dans `useMplanipretSoftphone` un watchdog : si `snap.status ∈ {disconnected, error}` pendant > 10 s, forcer :
+  1. `ppSipProvider.forceReregister()`
+  2. Si toujours KO après 20 s → re-`invoke("ns-resolve-sip-credentials")` + `ppSipProvider.init(...)` (déjà supporté via l'event `pp:sip-force-reregister`).
+- Sur reprise (visibilitychange visible / online / focus) : forcer un `register()` immédiat.
 
-- **Route-level code splitting** : auditer `src/App.tsx` et `apps/planipret-mobile/src/App.tsx` — convertir tous les `import Page from …` restants en `lazy(() => import(…))`. Grouper les pages admin lourdes dans un chunk séparé via `/* webpackChunkName */` (Vite : `/* @vite-ignore */` + `manualChunks`).
-- **`manualChunks`** dans `vite.config.ts` : séparer `react`, `@radix-ui`, `recharts`, `@supabase`, `lucide-react` en vendor chunks pour caching long-terme.
-- **Prefetch intelligent** : étendre `scheduleIdlePrefetch` à la première page probable après login (Mobile home, Admin overview) — déjà en place, à vérifier pour /auth → next route.
-- **Requêtes réseau au boot** : batcher les appels initiaux (org, roles, integrations) en un seul edge function `bootstrap-session` renvoyant tout en 1 round-trip; utiliser `react-query` `staleTime` long + `placeholderData`.
-- Ajouter `<link rel="modulepreload">` pour le chunk du dashboard après authentification.
-- Activer la compression Brotli/HTTP2 push si pas déjà fait côté hosting (Lovable gère normalement).
-- Skeletons dédiés (au lieu de spinners plein écran) sur : Auth, MHome, MContacts, MMessages, Admin Overview.
+### 3. End Call fiable + anti-rebond de l'overlay
+- `PlanipretMobile.hangupActive()` :
+  1. `softphone.hangup()`
+  2. Marquer localement `endedCallIds.add(activeCallId)` (ref) et faire `setActiveCallId(null)` immédiatement.
+  3. `UPDATE planipret_phone_calls SET status='ended', ended_at=now() WHERE id=activeCallId` (via RPC ou direct update — même id est déjà scopé par RLS user).
+  4. Appeler `pp-ns-calls disconnect` en arrière-plan (best-effort).
+- `refreshActive()` : ignorer toute ligne dont l'id appartient à `endedCallIds` **pendant 30 s** ; ignorer aussi les lignes `ringing` de plus de 2 minutes (stales orphelines).
+- `ActiveCallOverlay` : mêmes garde-fous locaux (bouton hangup pose un flag qui masque immédiatement l'overlay quoi qu'il arrive dans la subscription realtime).
+
+### 4. Nettoyage cohérent après hangup
+- Assurer que `endSession()` (déjà présent dans le hook) écrit bien `state='ended'` dans `planipret_call_sessions` **et** que la ligne `planipret_phone_calls` est bien terminée : ajouter dans l'edge `pp-ns-calls` (action `disconnect`) un `UPDATE planipret_phone_calls SET status='ended'` si NS renvoie OK.
 
 ## Détails techniques
 
-### Fichiers créés
-- `supabase/functions/ms365-link-from-auth/index.ts` — persiste provider_token/refresh_token Azure du SSO dans `planipret_integration_secrets`.
-- `src/lib/bootstrap.ts` — orchestrateur d'appels initiaux non-bloquants.
-
 ### Fichiers modifiés
-- `src/pages/Auth.tsx` + variante mobile : bouton MS365 SSO en tête, layout skeleton.
-- `src/hooks/useAuth.tsx` + `apps/planipret-mobile/src/hooks/useAuth.tsx` : ajouter `signInWithMicrosoft365SSO()` avec les scopes Graph, et hook post-login qui appelle `ms365-link-from-auth`.
-- `src/main.tsx` : rendre React d'abord, différer `consumeAppLoginToken`, `initSentry`, `initPerfMetrics`, `scheduleIdlePrefetch` via `requestIdleCallback`.
-- `src/App.tsx` + `apps/planipret-mobile/src/App.tsx` : `lazy()` sur toutes les routes non-critiques.
-- `vite.config.ts` (racine + planipret-mobile) : `build.rollupOptions.output.manualChunks` pour split vendor.
-- `index.html` : `preconnect` Supabase, `font-display: swap`, preload chunk Auth.
-- `src/components/planipret/Ms365StatusBadge.tsx` : refléter statut « lié via SSO ».
+- `apps/planipret-mobile/src/hooks/useMplanipretSoftphone.ts` — watchdog SIP + expose `sipConnected`.
+- `apps/planipret-mobile/src/pages/planipret/PlanipretMobile.tsx` — `hangupActive` optimiste, ref `endedCallIds`, filtre stale.
+- `apps/planipret-mobile/src/components/planipret/mobile/ActiveCallOverlay.tsx` — `dismissed` local + verrou anti re-mount.
+- `apps/planipret-mobile/src/pages/planipret/mobile/MMore.tsx` — pastille basée sur snap.status.
+- `apps/planipret-mobile/src/lib/planipret/sip/ppSipProvider.ts` — expose `ensureRegistered()` déclencheur (déjà via `forceReregister`).
+- `supabase/functions/pp-ns-calls/index.ts` — sur action `disconnect` réussie, `UPDATE planipret_phone_calls status='ended', ended_at=now()`.
 
 ### Hors scope
-- Refonte visuelle de la page Auth.
-- Migration du provider Google.
-- Changement du modèle RLS.
+- Refonte du provider SIP.
+- Changement des schémas DB (uniquement des UPDATE existants).
+- UI/UX de l'overlay au-delà du fix de fermeture.
 
-## Action requise après merge
-Reconnecte-toi via « Continuer avec Microsoft 365 » sur /auth pour que le SSO lie automatiquement Mail/Calendar/Teams.
+## Résultat attendu
+- La pastille reflète en temps réel la registration SIP (plus jamais « Offline » pendant qu'un appel sonne).
+- Une registration perdue est reprise seule en < 20 s.
+- Appuyer sur End Call ferme l'overlay immédiatement et de manière définitive, même si l'edge NS répond lentement ou si la ligne DB n'est pas mise à jour côté webhook.

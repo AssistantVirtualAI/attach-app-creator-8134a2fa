@@ -1,10 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { OrganizationProvider, useOrganization } from "@/context/OrganizationContext";
 import { ThemeProvider } from "@/context/ThemeContext";
@@ -366,6 +366,49 @@ const LemtelTelephonyPage = ({ children }: { children: React.ReactNode }) => (
   <ProtectedRoute><AppSeparationGuard app="lemtel"><LemtelGuard><TelephonyLayout>{children}</TelephonyLayout></LemtelGuard></AppSeparationGuard></ProtectedRoute>
 );
 
+function NativeDeepLinkBridge() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const routeFromUrl = (rawUrl?: string | null) => {
+      if (!rawUrl) return;
+      try {
+        const url = new URL(rawUrl);
+        const pathWithHost = `/${[url.hostname, url.pathname].filter(Boolean).join('/')}`.replace(/\/+/g, '/');
+        const isMs365Callback =
+          url.pathname === '/auth/microsoft/callback' ||
+          url.pathname === '/auth/ms365/callback' ||
+          pathWithHost === '/auth/microsoft/callback' ||
+          pathWithHost === '/auth/ms365/callback';
+
+        if (isMs365Callback) {
+          localStorage.setItem('pp_ms365_callback_url', rawUrl);
+          navigate(`/auth/microsoft/callback${url.search}`, { replace: true });
+        }
+      } catch {
+        // Ignore non-URL events.
+      }
+    };
+
+    let unsubscribe: null | (() => void) = null;
+    (async () => {
+      try {
+        const { App: CapacitorApp } = await import('@capacitor/app');
+        const launch = await CapacitorApp.getLaunchUrl();
+        routeFromUrl(launch?.url);
+        const listener = await CapacitorApp.addListener('appUrlOpen', (event: { url: string }) => routeFromUrl(event.url));
+        unsubscribe = () => { try { listener.remove(); } catch {} };
+      } catch {
+        // Web preview: no native deep links.
+      }
+    })();
+
+    return () => unsubscribe?.();
+  }, [navigate]);
+
+  return null;
+}
+
 const App = () => (
   <AppErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -375,6 +418,7 @@ const App = () => (
             <Toaster />
           <Sonner />
           <BrowserRouter>
+            <NativeDeepLinkBridge />
 
             <OrganizationProvider>
               <RouteDebugOverlay />

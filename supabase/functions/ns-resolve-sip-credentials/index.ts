@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
 
   const { data: profile } = await userClient
     .from("planipret_profiles")
-    .select("id, user_id, ns_extension, ns_domain")
+    .select("id, user_id, ns_extension, ns_domain, maestro_broker_id")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -111,11 +111,56 @@ Deno.serve(async (req) => {
     }, 200);
   }
 
+  // Fast path: Maestro Telecom returns SIP credentials directly for the broker.
+  // Only take that path when it returns a complete credential set; otherwise
+  // fall through to the NS-API device query below (never break the flow).
+  const maestroBrokerId = (profile as any).maestro_broker_id as string | null;
+  if (maestroBrokerId) {
+    try {
+      const admin = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+      const cfg = await getMaestroTelecomConfig(admin);
+      if (isMaestroTelecomConfigured(cfg)) {
+        const r = await maestroTelecomFetch<any>(cfg, `/users/${encodeURIComponent(maestroBrokerId)}/sip`);
+        const d = r.data ?? {};
+        const ext = d.sip_extension ?? d.extension;
+        const dom = d.sip_domain ?? d.domain;
+        const pwd = d.sip_password ?? d.password;
+        if (r.ok && ext && dom && pwd) {
+          const wss = d.sip_wss_url ?? d.wss_url ?? NS_SIP_WSS_URL;
+          return json({
+            ok: true,
+            source: "maestro_telecom",
+            client_type: clientType,
+            device_id: d.device_id ?? `${ext}_${clientType}`,
+            sip_username: d.sip_username ?? ext,
+            sip_auth_user: d.sip_auth_user ?? d.sip_username ?? ext,
+            sip_password: pwd,
+            sip_extension: ext,
+            sip_domain: dom,
+            sip_proxy: d.sip_proxy ?? FALLBACK_PROXY,
+            sip_core_server: d.sip_core_server ?? d.sip_proxy ?? FALLBACK_PROXY,
+            sip_uri: d.sip_uri ?? `sip:${ext}@${dom}`,
+            sip_ws_url: wss,
+            sip_wss_url: wss,
+            sip_ws_urls: [wss],
+            sip_wss_urls: [wss],
+            display_name: d.display_name ?? String(ext),
+            sip_state: d.sip_state ?? null,
+            device_registered: d.device_registered ?? true,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("[ns-resolve] maestro_telecom fallback failed:", (e as Error)?.message);
+    }
+  }
+
   const ext = String(profile.ns_extension);
   const domain = profile.ns_domain || NS_DEFAULT_DOMAIN;
   const deviceName = deviceNameFor(ext, clientType);
 
   console.log(`[ns-resolve] client_type=${clientType} ext=${ext} device=${deviceName}`);
+
 
   // Try the specific device first.
   let detail = await nsGet(`/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(deviceName)}`);

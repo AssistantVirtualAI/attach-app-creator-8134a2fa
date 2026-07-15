@@ -107,6 +107,100 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: true, scheduled, since_hours: sinceHours });
     }
 
+    if (action === "mirror-all") {
+      // Push EVERY call with an AI summary or analysis (from the beginning of time)
+      // to Maestro. Batched to avoid timeouts.
+      const batchSize = Math.min(500, Math.max(50, Number(body.batch_size ?? 200)));
+      const maxBatches = Math.min(50, Math.max(1, Number(body.max_batches ?? 20)));
+      let scheduled = 0;
+      let skippedNoBroker = 0;
+      let skippedNoMaestroId = 0;
+      let cursor: string | null = body.cursor ? String(body.cursor) : null;
+      let lastAt: string | null = null;
+
+      for (let i = 0; i < maxBatches; i++) {
+        let q = admin
+          .from("planipret_phone_calls")
+          .select("id, user_id, organization_id, maestro_call_id, maestro_client_id, transcript_language, ai_summary, ai_summary_short, ai_analysis_json, ai_topics, ai_coaching, next_actions, coaching_score, lead_score, lead_temperature, lead_score_reason, analyzed_at, created_at, metadata")
+          .or("ai_analysis_json.not.is.null,ai_summary.not.is.null")
+          .order("created_at", { ascending: false })
+          .limit(batchSize);
+        if (cursor) q = q.lt("created_at", cursor);
+        const { data: calls, error } = await q;
+        if (error) return jsonResponse({ error: error.message }, 500);
+        if (!calls || calls.length === 0) break;
+
+        for (const c of calls) {
+          const analysis = (c as any).ai_analysis_json ?? {};
+          const meta = ((c as any).metadata ?? {}) as Record<string, any>;
+          if (!(c as any).maestro_call_id) skippedNoMaestroId += 1;
+          mirrorCallAnalysisToMaestro(admin, (c as any).user_id, c as any, analysis, {
+            ai_summary: (c as any).ai_summary ?? analysis?.summary?.detailed ?? null,
+            ai_summary_short: (c as any).ai_summary_short ?? analysis?.summary?.short ?? null,
+            coaching_message: meta.ai_coaching ?? analysis?.coaching?.coaching_message ?? null,
+            next_actions: (c as any).next_actions ?? analysis?.summary?.next_steps ?? [],
+            topics: (c as any).ai_topics ?? analysis?.lead_analysis?.buying_signals ?? [],
+            sentiment: (c as any).lead_temperature === "hot" ? "positive" : (c as any).lead_temperature === "cold" ? "negative" : "neutral",
+            lead_score: (c as any).lead_score ?? null,
+            lead_temperature: (c as any).lead_temperature ?? null,
+            lead_reason: (c as any).lead_score_reason ?? null,
+            model: analysis?.model ?? null,
+          });
+          scheduled += 1;
+          lastAt = (c as any).created_at ?? lastAt;
+        }
+        cursor = lastAt;
+        if (calls.length < batchSize) break;
+      }
+      return jsonResponse({ ok: true, scheduled, skipped_no_maestro_call_id: skippedNoMaestroId, skipped_no_broker: skippedNoBroker, next_cursor: cursor });
+    }
+
+    if (action === "mirror-status") {
+      // Eligibility: any call with ai_summary OR ai_analysis_json
+      const { count: eligible } = await admin
+        .from("planipret_phone_calls")
+        .select("id", { count: "exact", head: true })
+        .or("ai_analysis_json.not.is.null,ai_summary.not.is.null");
+      const { count: withMaestroId } = await admin
+        .from("planipret_phone_calls")
+        .select("id", { count: "exact", head: true })
+        .or("ai_analysis_json.not.is.null,ai_summary.not.is.null")
+        .not("maestro_call_id", "is", null);
+
+      // Distinct pp_call_id successfully mirrored (pull recent 5000 rows and dedupe in memory)
+      const { data: sinceRows } = await admin
+        .from("planipret_maestro_sync_log")
+        .select("success, request_body, created_at")
+        .eq("action", "call.analysis.summary")
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      const okSet = new Set<string>();
+      const failSet = new Set<string>();
+      let firstAt: string | null = null;
+      let lastAt: string | null = null;
+      for (const r of sinceRows ?? []) {
+        const id = (r as any).request_body?.pp_call_id ?? (r as any).request_body?.payload?.pp_call_id ?? null;
+        if (!id) continue;
+        if ((r as any).success) okSet.add(String(id)); else failSet.add(String(id));
+        const at = (r as any).created_at;
+        if (at) { lastAt ??= at; firstAt = at; }
+      }
+      const mirroredOk = okSet.size;
+      const mirroredFailed = [...failSet].filter((id) => !okSet.has(id)).length;
+
+      return jsonResponse({
+        ok: true,
+        eligible: eligible ?? 0,
+        with_maestro_call_id: withMaestroId ?? 0,
+        mirrored_ok: mirroredOk,
+        mirrored_failed: mirroredFailed,
+        pending: Math.max(0, (eligible ?? 0) - mirroredOk),
+        window_first_log: firstAt,
+        window_last_log: lastAt,
+        note: "mirrored counts derived from last 5000 sync_log rows",
+      });
+    }
+
     if (action === "sync-log") {
       const limit = Math.min(500, Math.max(1, Number(body.limit ?? 100)));
       const since = new Date(Date.now() - Math.max(1, Number(body.since_hours ?? 72)) * 3600_000).toISOString();

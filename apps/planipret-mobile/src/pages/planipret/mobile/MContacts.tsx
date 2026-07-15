@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
-import { Search, Phone, MessageSquare, Mail, Users, UserCog, BookUser, X, Calendar, ListChecks, Loader2, ExternalLink, Sparkles, Plus, Star } from "lucide-react";
+import { Search, Phone, MessageSquare, Mail, Users, UserCog, BookUser, X, Calendar, ListChecks, Loader2, ExternalLink, Sparkles, Plus, Star, Copy, Send, Filter } from "lucide-react";
 import AvaSummarizeSheet from "@/components/planipret/ava/AvaSummarizeSheet";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -10,6 +10,18 @@ import { ensureContacts, getContactsPermissionStatus, listDeviceContacts } from 
 import { openAppSettings, type PermStatus } from "@/lib/native/permissions/platform";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { peekPpContacts } from "@/lib/ppContactsCache";
+
+async function copyToClipboard(value: string, label: string) {
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+    else {
+      const ta = document.createElement("textarea");
+      ta.value = value; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+    }
+    toast.success(`${label} copié`);
+  } catch { toast.error("Copie impossible"); }
+}
 
 
 type Tab = "personal" | "favorites" | "directory";

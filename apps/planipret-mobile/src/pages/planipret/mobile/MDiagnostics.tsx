@@ -140,12 +140,14 @@ const PROBES: Probe[] = [
         const pingOk = !!d?.ping?.ok;
         const lastCall = d?.last_call_mirror;
         const lastSms = d?.last_sms_mirror;
+        const lastAna = d?.last_analysis_mirror;
         const parts = [
           `config ${cfgOk ? "OK" : "manquante"}`,
           `auth ${pingOk ? `OK (${d?.ping?.status})` : `KO (${d?.ping?.status ?? 0})`}`,
           `24h ${d?.stats24h?.total ?? 0}× · ${d?.stats24h?.success_rate ?? "—"}%`,
           `dernier call ${lastCall ? (lastCall.success ? "✓" : "✗") : "—"}`,
           `dernier sms ${lastSms ? (lastSms.success ? "✓" : "✗") : "—"}`,
+          `dernière analyse IA ${lastAna ? (lastAna.success ? "✓" : "✗") : "—"}`,
         ];
         return { ok: cfgOk && pingOk, degraded: cfgOk && !pingOk, detail: parts.join(" · ") };
       }

@@ -817,14 +817,7 @@ export default function PlanipretIntegrations() {
   );
 }
 
-function HealthPill({ color, bg, border, label }: { color: string; bg: string; border: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
-      style={{ background: bg, border: `1px solid ${border}`, color }}>
-      <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} /> {label}
-    </span>
-  );
-}
+
 
 function HealthChip({ icon, color, label }: { icon: React.ReactNode; color: string; label: string }) {
   return (

@@ -693,10 +693,17 @@ function ContactDetailSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-lg font-bold truncate" style={{ color: "var(--pp-text-primary)" }}>{name}</div>
-            {phone && <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>{phone}</div>}
-            {email && <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>{email}</div>}
+            {rawPhone && (
+              <ContactField label="Tél" value={rawPhone} />
+            )}
+            {extension && (
+              <ContactField label="Ext" value={extension} />
+            )}
+            {email && (
+              <ContactField label="Email" value={email} />
+            )}
           </div>
           <button onClick={onClose} className="p-1" style={{ color: "var(--pp-text-muted)" }} aria-label={t("common.close")}><X className="w-5 h-5" /></button>
         </div>
@@ -704,11 +711,12 @@ function ContactDetailSheet({
         {/* Quick actions */}
         <div className="grid grid-cols-5 gap-2 mb-4">
           <QuickAction icon={<Phone className="w-4 h-4" />} label={t("common.call")} onClick={() => phone && onCall(phone)} disabled={!phone} />
-          <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={openSms} disabled={!phone} />
+          <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={openSms} disabled={!rawPhone} />
           <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={openEmail} disabled={!email} />
           <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={createTask} disabled={creatingTask} />
           <QuickAction icon={<Calendar className="w-4 h-4" />} label="RDV" onClick={() => toast.info("Bientôt disponible")} />
         </div>
+
 
         {history.length > 0 && (
           <button onClick={() => setSummarizeOpen(true)}

@@ -3,8 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { AVA_OWNER_USER_ID } from "@/lib/avaOwner";
 import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch";
 
+type Provider = "microsoft" | "maestro" | "maestro_telecom";
+
 type Item = {
-  provider: "microsoft" | "maestro";
+  provider: Provider;
   updated_at: string | null;
   config_masked: Record<string, string>;
   has_keys: string[];
@@ -21,6 +23,10 @@ const MAESTRO_FIELDS = [
   { key: "api_url", label: "API URL" },
   { key: "api_key", label: "API Key", secret: true },
 ];
+const MAESTRO_TELECOM_FIELDS = [
+  { key: "api_url", label: "API URL (ex : https://client-dev.planipret.com/telecom/api/v1)" },
+  { key: "api_key", label: "Machine API Key", secret: true },
+];
 
 export default function PlanipretIntegrationSecrets() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
@@ -29,9 +35,11 @@ export default function PlanipretIntegrationSecrets() {
   const [form, setForm] = useState<Record<string, Record<string, string>>>({
     microsoft: {},
     maestro: {},
+    maestro_telecom: {},
   });
   const [savingFor, setSavingFor] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
 
   const reload = async () => {
     setLoading(true);

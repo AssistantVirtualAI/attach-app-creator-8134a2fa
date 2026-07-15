@@ -197,7 +197,17 @@ Deno.serve(async (req) => {
         console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
       }
 
+      // Mirror the outbound SMS to Maestro Telecom — fire-and-forget so an
+      // outage there never fails the NS-API send.
+      if (ctx.maestroBrokerId) {
+        maestroTelecomMirror(supabase, `/users/${encodeURIComponent(ctx.maestroBrokerId)}/messages`, {
+          method: "POST",
+          body: { to_user_number: destination, message },
+        });
+      }
+
       return jsonResponse({ ok: true, result, from, to: destination });
+
     }
 
     return jsonResponse({ error: `Action inconnue: ${action}` }, 400);

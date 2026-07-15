@@ -249,11 +249,17 @@ export async function getMaestroBrokerId(admin: SupabaseClient, userId: string):
   try {
     const { data } = await admin
       .from("planipret_profiles")
-      .select("maestro_broker_id")
+      .select("maestro_broker_id, email")
       .eq("user_id", userId)
       .maybeSingle();
     const id = (data as any)?.maestro_broker_id;
-    return id ? String(id) : null;
+    if (id) return String(id);
+    // Fallback: Maestro identifies brokers by their email address.
+    const email = (data as any)?.email;
+    if (email && typeof email === "string" && email.includes("@")) {
+      return email.trim().toLowerCase();
+    }
+    return null;
   } catch {
     return null;
   }

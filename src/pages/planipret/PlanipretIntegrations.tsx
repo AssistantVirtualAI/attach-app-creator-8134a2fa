@@ -278,8 +278,9 @@ export default function PlanipretIntegrations() {
             <Field label="API Key" required hint="Format: nsr_XXXXXXXXXX — fournie par Keeny">
               <SecretInput value={draft.ns_api?.api_key ?? ""}
                 onChange={(v) => setField("ns_api", "api_key", v)}
-                hasSavedValue={!!rows.ns_api?.config_data?.api_key}
+                {...secretState("ns_api", "api_key", ["NS_API_KEY"])}
                 placeholder="nsr_••••••••••••••••••••••••••••••••" />
+
             </Field>
             <Field label="Domaine par défaut" required>
               <TextInput value={getField("ns_api", "domain", "planipret.ca")}

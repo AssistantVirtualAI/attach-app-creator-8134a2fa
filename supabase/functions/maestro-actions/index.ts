@@ -66,24 +66,42 @@ Deno.serve(async (req) => {
       case "find_user_by_email": {
         const email = String(payload.email ?? "").trim().toLowerCase();
         if (!email) return j({ success: false, error: "email required" }, 400);
-        const tryPaths = [
-          `${cfg.url}/users?email=${encodeURIComponent(email)}`,
-          `${cfg.url}/telecom/users?email=${encodeURIComponent(email)}`,
-          `${cfg.url}/users?search=${encodeURIComponent(email)}`,
-        ];
-        let user: any = null;
-        let lastStatus = 0;
-        for (const url of tryPaths) {
-          const r = await fetch(url, { headers: h });
-          lastStatus = r.status;
-          if (!r.ok) continue;
-          const d = await r.json().catch(() => ({}));
-          const list = Array.isArray(d) ? d : (d.users ?? d.data ?? []);
-          user = list.find((u: any) => String(u.email ?? "").toLowerCase() === email) ?? list[0] ?? null;
-          if (user) break;
+        const tCfg = await getMaestroTelecomConfig(admin);
+        const results: any[] = [];
+        if (isMaestroTelecomConfigured(tCfg)) {
+          const paths = [
+            `/users?email=${encodeURIComponent(email)}`,
+            `/users?search=${encodeURIComponent(email)}`,
+            `/users?q=${encodeURIComponent(email)}`,
+          ];
+          for (const p of paths) {
+            const r = await maestroTelecomFetch(tCfg, p, { method: "GET", maxAttempts: 1, timeoutMs: 6000 });
+            results.push({ path: p, status: r.status, sample: Array.isArray(r.data) ? r.data.slice(0, 2) : r.data });
+            if (!r.ok) continue;
+            const list = Array.isArray(r.data) ? r.data : ((r.data as any)?.users ?? (r.data as any)?.data ?? []);
+            const user = list.find((u: any) => String(u.email ?? "").toLowerCase() === email) ?? list[0];
+            if (user) {
+              return j({ success: true, user: { id: user.id ?? user.user_id, email: user.email, first_name: user.first_name, last_name: user.last_name }, source: "telecom" });
+            }
+          }
         }
-        if (!user) return j({ success: false, error: "user_not_found", status: lastStatus }, 404);
-        return j({ success: true, user: { id: user.id ?? user.user_id, email: user.email, first_name: user.first_name, last_name: user.last_name } });
+        // Legacy fallback to CRM (non-telecom) if configured
+        if (cfg.url && cfg.key) {
+          const tryPaths = [
+            `${cfg.url}/users?email=${encodeURIComponent(email)}`,
+            `${cfg.url}/telecom/users?email=${encodeURIComponent(email)}`,
+          ];
+          for (const url of tryPaths) {
+            const r = await fetch(url, { headers: h });
+            results.push({ path: url, status: r.status });
+            if (!r.ok) continue;
+            const d = await r.json().catch(() => ({}));
+            const list = Array.isArray(d) ? d : (d.users ?? d.data ?? []);
+            const user = list.find((u: any) => String(u.email ?? "").toLowerCase() === email) ?? list[0];
+            if (user) return j({ success: true, user: { id: user.id ?? user.user_id, email: user.email, first_name: user.first_name, last_name: user.last_name }, source: "crm" });
+          }
+        }
+        return j({ success: false, error: "user_not_found", debug: results }, 404);
       }
       case "test": {
         const r = await fetch(`${cfg.url}/contacts?limit=1`, { headers: h });

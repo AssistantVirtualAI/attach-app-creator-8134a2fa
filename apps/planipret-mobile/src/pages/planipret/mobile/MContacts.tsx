@@ -222,16 +222,32 @@ export default function MContacts() {
   const list = useMemo(() => {
     const src: any[] = tab === "personal" ? personal : tab === "favorites" ? favorites : directory;
     const tokens = tokenize(q);
-    if (!tokens.length) return src;
-    return src.filter((c: any) => {
+    let out = src;
+    if (tab === "directory") {
+      if (filterDept) out = out.filter((c: any) => (c.department ?? "") === filterDept);
+      if (filterTeam) out = out.filter((c: any) => (c.team ?? c.group ?? c.site ?? "") === filterTeam);
+    }
+    if (!tokens.length) return out;
+    return out.filter((c: any) => {
       const hay = tab === "directory"
-        ? `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""}`
+        ? `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.department ?? ""} ${c.position ?? ""} ${c.job_title ?? ""} ${c.team ?? ""}`
         : tab === "favorites"
         ? `${c.name ?? ""} ${c.phone ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.company ?? ""}`
         : `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.display_name ?? ""} ${c.phone ?? ""} ${c.email ?? ""} ${c.company ?? ""}`;
       return matchAllTokens(hay, tokens);
     });
-  }, [tab, personal, favorites, directory, q]);
+  }, [tab, personal, favorites, directory, q, filterDept, filterTeam]);
+
+  const deptOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of directory) { const v = (c as any).department; if (v) s.add(String(v)); }
+    return Array.from(s).sort();
+  }, [directory]);
+  const teamOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of directory) { const v = (c as any).team ?? (c as any).group ?? (c as any).site; if (v) s.add(String(v)); }
+    return Array.from(s).sort();
+  }, [directory]);
 
 
   useEffect(() => {

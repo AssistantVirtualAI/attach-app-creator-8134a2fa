@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const OWNER_UUID = "e5d025c9-eef2-4422-b97d-3190388b7376";
-const ALLOWED = new Set(["microsoft", "maestro", "elevenlabs", "anthropic", "nsapi", "webpush"]);
+const ALLOWED = new Set(["microsoft", "maestro", "maestro_telecom", "elevenlabs", "anthropic", "nsapi", "webpush"]);
 
 function mask(v: unknown): string {
   if (typeof v !== "string" || !v) return "";

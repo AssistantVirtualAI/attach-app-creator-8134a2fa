@@ -13,7 +13,9 @@ export type NsContext = {
   profileId: string;
   extension: string;
   nsDomain: string;
+  maestroBrokerId: string | null;
 };
+
 
 let cachedToken: { token: string; exp: number } | null = null;
 
@@ -279,7 +281,7 @@ export async function requirePlanipretBroker(
 
   const { data: profile, error: profErr } = await supabase
     .from("planipret_profiles")
-    .select("id, extension, ns_extension, ns_domain, organization_id")
+    .select("id, extension, ns_extension, ns_domain, organization_id, maestro_broker_id")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -313,11 +315,18 @@ export async function requirePlanipretBroker(
   }
 
   return {
-    ctx: { userId, profileId: profile.id, extension, nsDomain: profile.ns_domain },
+    ctx: {
+      userId,
+      profileId: profile.id,
+      extension,
+      nsDomain: profile.ns_domain,
+      maestroBrokerId: (profile as any).maestro_broker_id ?? null,
+    },
     supabase,
     userClient,
   };
 }
+
 
 export function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

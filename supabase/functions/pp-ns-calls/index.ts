@@ -10,6 +10,13 @@ import {
   requirePlanipretBroker,
   nsFetch,
 } from "../_shared/planipret-ns.ts";
+import {
+  getMaestroTelecomConfig,
+  isMaestroTelecomConfigured,
+  maestroTelecomFetch,
+  maestroTelecomMirror,
+} from "../_shared/maestro-telecom.ts";
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -32,10 +39,23 @@ Deno.serve(async (req) => {
     if (action === "list") {
       const res = await nsFetch(base, { method: "GET" });
       const body = await res.text();
-      return new Response(body, {
-        status: res.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      let parsed: any = null;
+      try { parsed = body ? JSON.parse(body) : null; } catch { parsed = body; }
+
+      // Best-effort enrich with Maestro Telecom history. Never fail the NS response.
+      let maestroCalls: any[] = [];
+      if (ctx.maestroBrokerId) {
+        try {
+          const cfg = await getMaestroTelecomConfig(guard.supabase);
+          if (isMaestroTelecomConfigured(cfg)) {
+            const r = await maestroTelecomFetch<any>(cfg, `/users/${encodeURIComponent(ctx.maestroBrokerId)}/calls`);
+            const list = Array.isArray(r.data) ? r.data : (r.data?.calls ?? r.data?.data ?? []);
+            if (Array.isArray(list)) maestroCalls = list;
+          }
+        } catch { /* ignore */ }
+      }
+
+      return jsonResponse({ ns: parsed, maestro_calls: maestroCalls }, res.status);
     }
 
     if (action === "start") {
@@ -44,6 +64,7 @@ Deno.serve(async (req) => {
       if (!raw || typeof raw !== "string") {
         return jsonResponse({ success: false, error: "destination required" }, 200);
       }
+
       let dest = raw.replace(/[^\d+]/g, "");
       if (!dest.startsWith("+")) {
         const digits = dest.replace(/\D/g, "");
@@ -111,6 +132,35 @@ Deno.serve(async (req) => {
       const ok = res.ok || res.status === 202;
       if (ok) {
         const nsCallId = parsed?.["call-id"] ?? parsed?.call_id ?? parsed?.id ?? clientCallId;
+        let maestroCallIdCreated: string | null = null;
+
+        // Mirror to Maestro Telecom (best-effort, blocking here so we can
+        // capture the returned maestro id and persist it locally). The
+        // configured timeout in maestroTelecomFetch keeps this bounded.
+        if (ctx.maestroBrokerId) {
+          try {
+            const cfg = await getMaestroTelecomConfig(guard.supabase);
+            if (isMaestroTelecomConfigured(cfg)) {
+              const r = await maestroTelecomFetch<any>(
+                cfg,
+                `/users/${encodeURIComponent(ctx.maestroBrokerId)}/calls`,
+                {
+                  method: "POST",
+                  body: {
+                    provider_call_id: nsCallId,
+                    to_user_number: dest,
+                    status: "dialing",
+                    direction: "outbound",
+                  },
+                },
+              );
+              maestroCallIdCreated = r.data?.id ?? r.data?.call_id ?? null;
+            }
+          } catch (e) {
+            console.warn("[pp-ns-calls] maestro mirror (start) failed:", (e as Error)?.message);
+          }
+        }
+
         try {
           await guard.supabase.from("planipret_phone_calls").insert({
             user_id: ctx.profileId,
@@ -123,9 +173,12 @@ Deno.serve(async (req) => {
             to_number: dest,
             status: "outbound_ringing",
             started_at: new Date().toISOString(),
+            maestro_call_id: maestroCallIdCreated,
             metadata: { rest_originated: true, requested_client_type: requestedClientType, forced_client_type: clientType, client_call_id: clientCallId, call_orig_user: callOrigUser, device_name: deviceName },
           });
         } catch { /* non-fatal */ }
+
+
 
         return jsonResponse({
           success: true,
@@ -182,6 +235,37 @@ Deno.serve(async (req) => {
         } catch (e) {
           console.warn("[pp-ns-calls] failed to mark row ended", (e as Error).message);
         }
+        // Mirror end to Maestro Telecom — fire-and-forget by maestro_call_id
+        // if we captured one, otherwise by the NS provider_call_id.
+        if (ctx.maestroBrokerId) {
+          try {
+            const { data: row } = await guard.supabase
+              .from("planipret_phone_calls")
+              .select("maestro_call_id")
+              .or(`ns_callid.eq.${callId},ns_call_id.eq.${callId}`)
+              .maybeSingle();
+            const maestroId = (row as any)?.maestro_call_id;
+            const endedReason = nsAction === "reject" ? "rejected" : "completed";
+            if (maestroId) {
+              maestroTelecomMirror(
+                guard.supabase,
+                `/users/${encodeURIComponent(ctx.maestroBrokerId)}/calls/${encodeURIComponent(maestroId)}`,
+                { method: "PUT", body: { status: "ended", ended_reason: endedReason } },
+              );
+            } else {
+              // No maestro id — try updating by provider_call_id path (some
+              // Maestro deployments accept it interchangeably).
+              maestroTelecomMirror(
+                guard.supabase,
+                `/users/${encodeURIComponent(ctx.maestroBrokerId)}/calls/${encodeURIComponent(String(callId))}`,
+                { method: "PUT", body: { status: "ended", ended_reason: endedReason } },
+              );
+            }
+          } catch (e) {
+            console.warn("[pp-ns-calls] maestro mirror (end) failed:", (e as Error)?.message);
+          }
+        }
+
       }
 
       return new Response(txt || JSON.stringify({ success: res.ok, status: res.status }), {

@@ -112,7 +112,7 @@ type DialerContact = {
   extension?: string;
   email?: string;
   company?: string;
-  source?: "personal" | "shared" | "directory" | "native";
+  source?: "personal" | "shared" | "directory" | "native" | "maestro";
 };
 
 function contactDisplayName(c: DialerContact): string {

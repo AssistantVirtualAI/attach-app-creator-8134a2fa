@@ -139,7 +139,8 @@ export function useMplanipretSoftphone() {
         if (opts?.force) {
           try { ppSipProvider.stop(); } catch {}
         }
-        const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", { body: { client_type: "mobile" } });
+        const clientType = (typeof window !== "undefined" && (window as any)?.Capacitor?.isNativePlatform?.()) ? "mobile" : "web";
+        const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", { body: { client_type: clientType } });
         if (cancelled) return;
         if (error || !data || (data as any)?.error) return;
         const d = data as any;
@@ -332,7 +333,8 @@ export function useMplanipretSoftphone() {
   }, [restCall?.id]);
 
   const callViaPBX = useCallback(async (destination: string): Promise<OutboundResult> => {
-    const { data, error } = await supabase.functions.invoke("pp-ns-calls", { body: { action: "start", to_number: destination } });
+    const clientType = (typeof window !== "undefined" && (window as any)?.Capacitor?.isNativePlatform?.()) ? "mobile" : "web";
+    const { data, error } = await supabase.functions.invoke("pp-ns-calls", { body: { action: "start", to_number: destination, client_type: clientType } });
     if (error || (data as any)?.success === false) {
       const msg = (data as any)?.message ?? (data as any)?.error ?? error?.message ?? "PBX call failed";
       return { via: "none", ok: false, error: msg };

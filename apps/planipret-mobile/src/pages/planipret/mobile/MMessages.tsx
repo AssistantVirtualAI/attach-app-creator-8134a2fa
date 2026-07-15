@@ -1615,7 +1615,7 @@ function Teams365Panel({ profile }: { profile: any }) {
                 );
               })}
             </div>
-            <Ms365TestNowButton feature="teams" compact />
+            
           </div>
 
           {/* Active discussions tab */}

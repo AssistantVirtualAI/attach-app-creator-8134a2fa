@@ -153,7 +153,11 @@ export default function PAMaestroSync() {
     }
   }, [load]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    const t = setInterval(() => { void load(); }, 10_000);
+    return () => clearInterval(t);
+  }, [load]);
 
   const byAction = useMemo(() => {
     const m: Record<string, { total: number; failed: number }> = {};

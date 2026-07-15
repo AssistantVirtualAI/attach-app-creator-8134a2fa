@@ -591,7 +591,7 @@ export default function PlanipretIntegrations() {
               <div className="flex gap-2">
                 <SecretInput value={draft.webhooks?.secret ?? ""}
                   onChange={(v) => setField("webhooks", "secret", v)}
-                  hasSavedValue={!!rows.webhooks?.config_data?.secret} />
+                  {...secretState("webhooks", "secret", ["NS_WEBHOOK_SECRET"])} />
                 <button type="button"
                   onClick={() => {
                     const buf = new Uint8Array(32);

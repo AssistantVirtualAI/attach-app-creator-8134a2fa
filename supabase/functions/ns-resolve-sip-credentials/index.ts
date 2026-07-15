@@ -1,6 +1,16 @@
 // Resolve per-broker SIP credentials by querying NS-API for the real device.
 // Uses NS_API_KEY server-side; the browser never sees the NS token.
+//
+// If the broker is linked to Maestro (`planipret_profiles.maestro_broker_id`)
+// and the Maestro Telecom REST API returns valid SIP credentials, those are
+// used first. Otherwise the existing NS-API flow runs unchanged.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  getMaestroTelecomConfig,
+  isMaestroTelecomConfigured,
+  maestroTelecomFetch,
+} from "../_shared/maestro-telecom.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

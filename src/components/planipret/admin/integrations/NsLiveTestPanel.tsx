@@ -435,8 +435,10 @@ export default function NsLiveTestPanel({ domain = "planipret.ca" }: { domain?: 
               </table>
             </div>
           </div>
-        </div>
+          </div>
+        </details>
       )}
+
 
       {/* ─── Section C: collapsible other results ─── */}
       {summary && (

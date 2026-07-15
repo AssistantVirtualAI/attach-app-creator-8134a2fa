@@ -310,6 +310,46 @@ export default function PAMaestroSync() {
         />
       </div>
 
+      {/* Mirror everything panel */}
+      <div className="pp-card mb-5" style={{ padding: 20 }}>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div>
+            <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--pp-text-primary)" }}>Mirror everything · résumés &amp; analyses IA</h2>
+            <p style={{ fontSize: 11, color: "var(--pp-text-faint)", marginTop: 2 }}>
+              État global des sommaires d'appel et analyses IA poussés vers Maestro depuis le début de l'historique.
+            </p>
+          </div>
+          {mirror && (
+            <span style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>
+              Fenêtre journal : {fmtAgo(mirror.window_first_log)} → {fmtAgo(mirror.window_last_log)}
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {[
+            { label: "Éligibles (résumé ou analyse)", value: mirror?.eligible ?? "—", color: ACCENT },
+            { label: "Avec maestro_call_id", value: mirror?.with_maestro_call_id ?? "—", color: AGENT },
+            { label: "Mirrorés OK", value: mirror?.mirrored_ok ?? "—", color: SUCCESS },
+            { label: "En échec", value: mirror?.mirrored_failed ?? "—", color: DANGER },
+            { label: "À pousser", value: mirror?.pending ?? "—", color: WARNING },
+          ].map((c) => (
+            <div key={c.label} className="pp-card" style={{ padding: 14, borderColor: `${c.color}33`, background: `${c.color}0A` }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: c.color, lineHeight: 1 }} className="tabular-nums">{c.value}</div>
+              <div style={{ fontSize: 11, color: "var(--pp-text-secondary)", marginTop: 6 }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+        {mirror && mirror.eligible > 0 && (
+          <div className="mt-3" style={{ height: 6, background: "var(--pp-bg-deep)", borderRadius: 999, overflow: "hidden" }}>
+            <div style={{
+              width: `${Math.min(100, Math.round((mirror.mirrored_ok / Math.max(1, mirror.eligible)) * 100))}%`,
+              height: "100%", background: SUCCESS, transition: "width .4s",
+            }} />
+          </div>
+        )}
+      </div>
+
+
       {/* By-action breakdown */}
       <div className="pp-card mb-5" style={{ padding: 20 }}>
         <div className="flex items-center justify-between mb-3">

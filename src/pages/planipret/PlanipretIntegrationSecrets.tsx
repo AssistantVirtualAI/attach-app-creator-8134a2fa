@@ -14,6 +14,7 @@ const MS_FIELDS = [
   { key: "client_id", label: "Client ID" },
   { key: "client_secret", label: "Client Secret", secret: true },
   { key: "tenant_id", label: "Tenant ID" },
+  { key: "auth_mode", label: "Auth mode (auto, public, confidential)" },
   { key: "redirect_uri", label: "Redirect URI" },
 ];
 const MAESTRO_FIELDS = [

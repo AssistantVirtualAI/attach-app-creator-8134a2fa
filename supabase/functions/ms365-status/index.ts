@@ -39,11 +39,17 @@ Deno.serve(async (req) => {
         .maybeSingle(),
     ]);
 
-    const c = (secret?.config ?? {}) as Record<string, string>;
+    const c = { ...((cfg as any)?.config_data ?? {}), ...((secret?.config ?? {}) as Record<string, string>) } as Record<string, string>;
+    const authMode = c.public_client === "true" || c.is_public_client === "true" || c.no_client_secret === "true" || c.auth_mode === "public" || c.client_type === "public" ? "public" : c.auth_mode === "confidential" || c.client_type === "confidential" ? "confidential" : "auto";
     const detection = {
       tenant_id: c.tenant_id ?? null,
-      client_id: c.client_id ?? null,
+      client_id: c.client_id ?? c.client_secret_id ?? null,
       has_secret: !!c.client_secret,
+      auth_mode: authMode,
+      redirect_uris: {
+        web: ["/auth/microsoft/callback", "/auth/ms365/callback"],
+        native: ["planipret://auth/microsoft/callback"],
+      },
     };
 
     const expiry = profile?.ms365_token_expiry ? new Date(profile.ms365_token_expiry).getTime() : 0;
@@ -57,7 +63,7 @@ Deno.serve(async (req) => {
       scopes: (profile?.ms365_scopes ?? "").split(/\s+/).filter(Boolean),
     };
 
-    const admin_cfg_ok = !!(detection.tenant_id && detection.client_id && detection.has_secret);
+    const admin_cfg_ok = !!(detection.tenant_id && detection.client_id && (detection.has_secret || authMode === "public" || authMode === "auto"));
     const last = cfg
       ? { tested_at: cfg.last_tested_at, success: cfg.last_test_success, message: cfg.last_test_result }
       : null;

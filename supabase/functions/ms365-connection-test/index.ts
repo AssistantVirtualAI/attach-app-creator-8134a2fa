@@ -31,10 +31,11 @@ Deno.serve(async (req) => {
   const TENANT_ID = saved.tenant_id ?? Deno.env.get("MICROSOFT_TENANT_ID") ?? "";
   const CLIENT_ID = saved.client_id ?? saved.client_secret_id ?? Deno.env.get("MICROSOFT_CLIENT_ID") ?? "";
   const CLIENT_SECRET = saved.client_secret ?? Deno.env.get("MICROSOFT_CLIENT_SECRET") ?? "";
+  const AUTH_MODE = String(saved.auth_mode ?? saved.client_type ?? (saved.public_client === "true" ? "public" : "auto")).toLowerCase();
 
   const results: Record<string, any> = {};
 
-  if (!TENANT_ID || !CLIENT_ID || !CLIENT_SECRET) {
+  if (!TENANT_ID || !CLIENT_ID || (!CLIENT_SECRET && AUTH_MODE === "confidential")) {
     return new Response(
       JSON.stringify({
         summary: {
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
             missing: [
               !TENANT_ID && "MICROSOFT_TENANT_ID",
               !CLIENT_ID && "MICROSOFT_CLIENT_ID",
-              !CLIENT_SECRET && "MICROSOFT_CLIENT_SECRET",
+              !CLIENT_SECRET && AUTH_MODE === "confidential" && "MICROSOFT_CLIENT_SECRET",
             ].filter(Boolean),
           },
         },
@@ -64,8 +65,15 @@ Deno.serve(async (req) => {
 
   let appToken = "";
 
-  // TEST 1 — app-only token
-  try {
+  // TEST 1 — app-only token (only for confidential Microsoft apps)
+  if (!CLIENT_SECRET) {
+    results.auth = {
+      success: true,
+      informational: true,
+      auth_mode: "public",
+      message: "ℹ️ App Microsoft publique détectée — aucun client secret envoyé; les tests réels passent par le token utilisateur.",
+    };
+  } else try {
     const tokenRes = await fetch(
       `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`,
       {
@@ -217,7 +225,8 @@ Deno.serve(async (req) => {
   }
 
   const nonInfo = Object.values(results).filter((r: any) => !r.informational);
-  const corePassed = !!results.auth?.success;
+  const delegatedPresent = !!results.delegated && !results.delegated?.degraded;
+  const corePassed = !!results.auth?.success && (AUTH_MODE !== "public" || delegatedPresent);
   const summary = {
     total_tests: Object.keys(results).length,
     passed: Object.values(results).filter((r: any) => r.success).length,
@@ -231,6 +240,7 @@ Deno.serve(async (req) => {
     elapsed_ms: Date.now() - startedAt,
     tenant_id: TENANT_ID,
     client_id: CLIENT_ID.substring(0, 8) + "...",
+    auth_mode: AUTH_MODE === "public" || !CLIENT_SECRET ? "public" : "confidential",
   };
 
   return new Response(JSON.stringify({ summary, results }), {

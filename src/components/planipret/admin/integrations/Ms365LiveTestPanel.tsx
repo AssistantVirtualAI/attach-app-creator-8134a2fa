@@ -53,8 +53,9 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
     tenant_id: string | null;
     client_id: string | null;
     has_secret: boolean;
+    auth_mode: string | null;
     loading: boolean;
-  }>({ tenant_id: null, client_id: null, has_secret: false, loading: true });
+  }>({ tenant_id: null, client_id: null, has_secret: false, auth_mode: null, loading: true });
 
   const expectedCallback = typeof window !== "undefined" ? `${window.location.origin}/auth/microsoft/callback` : "";
 
@@ -68,6 +69,7 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
       tenant_id: pc.tenant_id ?? null,
       client_id: pc.client_id ?? pc.client_secret_id ?? null,
       has_secret: keys.includes("client_secret") || keys.includes("MICROSOFT_CLIENT_SECRET"),
+      auth_mode: pc.auth_mode ?? null,
       loading: false,
     });
   }
@@ -137,10 +139,11 @@ export default function Ms365LiveTestPanel({ onCompleted }: { onCompleted?: () =
         <div style={{ fontSize: 11, fontWeight: 700, color: "#8FA8C0", letterSpacing: "0.08em" }}>
           🔎 DÉTECTION CONFIGURATION MICROSOFT 365
         </div>
-        <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-[12px]">
+        <div className="mt-2 grid grid-cols-1 md:grid-cols-4 gap-2 text-[12px]">
           <DetectionRow label="Tenant ID" value={detection.tenant_id} loading={detection.loading} mono />
           <DetectionRow label="Client ID" value={detection.client_id} loading={detection.loading} mono />
-          <DetectionRow label="Client Secret" value={detection.has_secret ? "Enregistré" : null} loading={detection.loading} />
+          <DetectionRow label="Auth mode" value={detection.auth_mode ?? (detection.has_secret ? "confidential" : "public/auto")} loading={detection.loading} />
+          <DetectionRow label="Client Secret" value={detection.has_secret ? "Enregistré" : "Non requis si public"} loading={detection.loading} />
         </div>
       </div>
 

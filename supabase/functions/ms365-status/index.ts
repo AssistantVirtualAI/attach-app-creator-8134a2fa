@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
         .maybeSingle(),
       admin
         .from("planipret_integration_config")
-        .select("last_tested_at, last_test_success, last_test_result")
+        .select("config_data, last_tested_at, last_test_success, last_test_result")
         .eq("integration_key", "ms365")
         .maybeSingle(),
     ]);

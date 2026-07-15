@@ -122,6 +122,11 @@ export default function PlanipretIntegrations() {
     };
   }, [rows]);
 
+  const backendKeyCount = useMemo(
+    () => Object.values(backendSecrets).reduce((n, s) => n + (s?.present?.length ?? 0), 0),
+    [backendSecrets],
+  );
+
   function getField(key: string, field: string, fallback = "") {
     const backendValues = (backendSecrets[key] as any)?.values as Record<string, string> | undefined;
     return draft[key]?.[field]
@@ -131,6 +136,20 @@ export default function PlanipretIntegrations() {
   }
   function setField(key: string, field: string, value: string) {
     setDraft((d) => ({ ...d, [key]: { ...(d[key] ?? {}), [field]: value } }));
+  }
+
+  /**
+   * Does a given secret field already exist somewhere (DB row or backend secret)?
+   * Returns undefined when not saved anywhere so the input shows its normal empty state.
+   */
+  function secretState(key: string, field: string, backendSecretNames: string[] = []):
+    { hasSavedValue: boolean; savedSource?: "backend" | "db" | "both" } {
+    const inDb = !!rows[key]?.config_data?.[field];
+    const inBackend = backendSecretNames.some((n) => (backendSecrets[key]?.present ?? []).includes(n));
+    if (inDb && inBackend) return { hasSavedValue: true, savedSource: "both" };
+    if (inDb) return { hasSavedValue: true, savedSource: "db" };
+    if (inBackend) return { hasSavedValue: true, savedSource: "backend" };
+    return { hasSavedValue: false };
   }
 
   async function save(key: string, requiredFields: string[]) {

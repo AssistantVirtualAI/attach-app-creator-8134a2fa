@@ -17,6 +17,7 @@ import MCallAudioSettings from "@/components/planipret/mobile/MCallAudioSettings
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { openMs365Authorize } from "@/lib/ms365OAuth";
+import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 
 const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
@@ -84,7 +85,9 @@ export default function MMore() {
     })();
   }, [profile?.id]);
 
-  const nsConnected = !!profile?.ns_jwt && (!profile?.ns_jwt_expires_at || new Date(profile.ns_jwt_expires_at) > new Date());
+  const { sipConnected, reregister } = useMplanipretSoftphone();
+  const jwtOk = !!profile?.ns_jwt && (!profile?.ns_jwt_expires_at || new Date(profile.ns_jwt_expires_at) > new Date());
+  const nsConnected = jwtOk && sipConnected;
   const ms365Connected = !!profile?.ms365_access_token;
 
   const reconnectNs = async () => {

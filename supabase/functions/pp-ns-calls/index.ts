@@ -169,6 +169,21 @@ Deno.serve(async (req) => {
         res = await nsFetch(path, { method: "PATCH", body: JSON.stringify({ transfer_to: payload.destination ?? payload.target }) });
       }
       const txt = await res.text();
+
+      // On disconnect/reject: force-mark the row as ended locally so the
+      // client overlay closes even if the NS webhook is slow/missing.
+      if (nsAction === "disconnect" || nsAction === "reject") {
+        try {
+          const nowIso = new Date().toISOString();
+          await guard.supabase
+            .from("planipret_phone_calls")
+            .update({ status: "ended", ended_at: nowIso })
+            .or(`id.eq.${callId},ns_callid.eq.${callId},ns_call_id.eq.${callId}`);
+        } catch (e) {
+          console.warn("[pp-ns-calls] failed to mark row ended", (e as Error).message);
+        }
+      }
+
       return new Response(txt || JSON.stringify({ success: res.ok, status: res.status }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

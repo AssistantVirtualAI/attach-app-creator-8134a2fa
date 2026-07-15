@@ -859,12 +859,20 @@ function ContactDetailSheet({
         onClose={() => setSummarizeOpen(false)}
       />
 
-      {smsOpen && (rawPhone || extension) && (
-        <SmsComposerSheet to={(rawPhone || extension)!} contactName={name} onClose={() => setSmsOpen(false)} />
+      {smsOpen && smsTarget && (
+        <SmsComposerSheet to={smsTarget} contactName={name} onClose={() => setSmsOpen(false)} />
       )}
 
       {emailOpen && email && (
         <EmailComposerSheet to={email} contactName={name} onClose={() => setEmailOpen(false)} />
+      )}
+
+      {apptOpen && maestroId && (
+        <AppointmentSheet
+          maestroClientId={maestroId}
+          contactName={name}
+          onClose={() => setApptOpen(false)}
+        />
       )}
     </div>
   );

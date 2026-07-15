@@ -368,6 +368,36 @@ export default function MContacts() {
         })}
       </div>
 
+      {tab === "directory" && (deptOptions.length > 0 || teamOptions.length > 0) && (
+        <div className="flex items-center gap-2 mb-3 overflow-x-auto no-scrollbar">
+          <Filter className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--pp-text-muted)" }} />
+          {deptOptions.length > 0 && (
+            <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)}
+              className="text-xs px-2 py-1.5 rounded-full outline-none"
+              style={{ background: filterDept ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: filterDept ? "#fff" : "var(--pp-text-secondary)", border: `1px solid ${filterDept ? "var(--pp-brand-accent)" : "var(--pp-bg-border-2)"}` }}>
+              <option value="">Département</option>
+              {deptOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+          {teamOptions.length > 0 && (
+            <select value={filterTeam} onChange={(e) => setFilterTeam(e.target.value)}
+              className="text-xs px-2 py-1.5 rounded-full outline-none"
+              style={{ background: filterTeam ? "var(--pp-brand-accent-2)" : "var(--pp-bg-surface)", color: filterTeam ? "#fff" : "var(--pp-text-secondary)", border: `1px solid ${filterTeam ? "var(--pp-brand-accent)" : "var(--pp-bg-border-2)"}` }}>
+              <option value="">Équipe</option>
+              {teamOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+          {(filterDept || filterTeam) && (
+            <button onClick={() => { setFilterDept(""); setFilterTeam(""); }}
+              className="text-[11px] px-2 py-1 rounded-full font-semibold"
+              style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
+              Effacer
+            </button>
+          )}
+        </div>
+      )}
+
+
       {loadError && !loading && (
         <div className="rounded-2xl p-4 mb-3 text-sm" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", color: "#dc2626" }}>
           <div className="font-semibold mb-1">Impossible de charger les contacts</div>

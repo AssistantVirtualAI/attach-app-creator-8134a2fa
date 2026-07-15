@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { flushSync } from "react-dom";
+import { useOutletContext, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Plus, X, ArrowLeft, Phone, Send, Paperclip, MessageSquare, Zap,
   Users, Mail, Sparkles, Loader2, RefreshCw, Reply, Circle, CheckCircle2, AlertTriangle, RotateCw,
-  UsersRound, Contact,
+  UsersRound, Contact, Search, BookUser,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import SmsTemplatesSheet from "@/components/planipret/SmsTemplatesSheet";
@@ -14,6 +15,9 @@ import AvaProposedActionsCard from "@/components/planipret/mobile/AvaProposedAct
 import { callAva, type AvaSuggestion } from "@/services/avaProactive";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
+import { connectMs365 } from "@/lib/ms365Connect";
+import { getPpContacts } from "@/lib/ppContactsCache";
+import Ms365TestNowButton from "@/components/planipret/Ms365TestNowButton";
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "roster";
 
@@ -146,10 +150,10 @@ type NsMessage = {
 };
 
 const threadId = (t: any) =>
-  t.id ?? t.messagesession_id ?? t["messagesession-id"] ?? t.session_id ?? t.destination ?? t.phonenumber ?? t.remote_party ?? "";
+  String(t.messagesession_id ?? t["messagesession-id"] ?? t.session_id ?? t["session-id"] ?? t.thread_id ?? t["thread-id"] ?? t.conversation_id ?? t.id ?? "").trim();
 const threadPeer = (t: any) => {
-  const raw = t.destination ?? t.remote_party ?? t.contact ?? t.phonenumber ?? t.phone_number ?? t.caller_id ?? t.from ?? t.to ?? t.participant ??
-    t["messagesession-remote"] ?? t["messagesession-remote-party"] ??
+  const raw = t.destination ?? t["messagesession-destination"] ?? t.remote_party ?? t.contact ?? t.phonenumber ?? t.phone_number ?? t.caller_id ?? t.from ?? t.to ?? t.participant ??
+    t["messagesession-remote"] ?? t["messagesession-remote-party"] ?? t["messagesession-source"] ?? t["messagesession-from"] ?? t["messagesession-to"] ??
     (Array.isArray(t.participants) && t.participants[0]?.destination) ??
     (Array.isArray(t.session_participants) && t.session_participants[0]?.destination) ??
     "";
@@ -176,15 +180,67 @@ const msgIsOut = (m: any, myExt: string) => {
   return fromStr === myExt || fromStr.startsWith(`${myExt}@`);
 };
 
+type SmsRecipient = {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  extension?: string;
+  department?: string;
+  source: "contact" | "directory" | "manual";
+};
+
+const cleanPhoneTarget = (value: unknown) => String(value ?? "").trim();
+const contactName = (c: any) =>
+  String(c.display_name ?? c.name ?? c.full_name ?? `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() ?? "").trim();
+const contactPhone = (c: any) => cleanPhoneTarget(
+  c.phone ?? c.cell_phone ?? c.mobile_phone ?? c.mobile ?? c.work_phone ?? c.home_phone ?? c.phone_number ?? c.number ?? c.direct_number ?? c.extension
+);
+const contactEmail = (c: any) => String(c.email ?? c.mail ?? c.userPrincipalName ?? "").trim();
+const contactExtension = (c: any) => String(c.extension ?? c.ext ?? c.ns_extension ?? "").trim();
+const contactDept = (c: any) => String(c.department ?? c.team ?? c.group ?? c.site ?? "").trim();
+const recipientFromRow = (c: any, source: SmsRecipient["source"], index: number): SmsRecipient | null => {
+  const phone = contactPhone(c);
+  const extension = contactExtension(c);
+  if (!phone && !extension) return null;
+  const email = contactEmail(c);
+  const name = contactName(c) || email || phone || extension;
+  return {
+    id: `${source}:${c.id ?? c.contact_id ?? c.uid ?? email ?? phone ?? extension ?? index}`,
+    name,
+    phone: phone || extension,
+    email,
+    extension,
+    department: contactDept(c),
+    source,
+  };
+};
+const recipientHay = (r: SmsRecipient) => `${r.name} ${r.phone} ${r.email ?? ""} ${r.extension ?? ""} ${r.department ?? ""}`.toLowerCase();
+const looksLikePhone = (value: string) => /^[+]?[-() .\d]{3,}$/.test(value.trim());
+
 function SmsList({ profile, openDialer, registerRefresh }: any) {
   const { t } = useMplanipretLang();
+  const [searchParams] = useSearchParams();
   const myExt = profile?.extension ?? "";
   const [threads, setThreads] = useState<NsThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeThread, setActiveThread] = useState<{ id: string; number: string } | null>(null);
   const [newOpen, setNewOpen] = useState(false);
-  const [newNumber, setNewNumber] = useState("");
+
+  const openSmsThread = (thread: { id: string; number: string }, focusComposer = true) => {
+    flushSync(() => {
+      setNewOpen(false);
+      setActiveThread(thread);
+    });
+    if (focusComposer) {
+      document.querySelector<HTMLInputElement>('[data-sms-composer-input="true"]')?.focus({ preventScroll: true });
+    }
+  };
+  const openNewSmsSheet = () => {
+    flushSync(() => setNewOpen(true));
+    document.querySelector<HTMLInputElement>('[data-sms-recipient-search="true"]')?.focus({ preventScroll: true });
+  };
 
   const load = async () => {
     if (!profile?.user_id) return;
@@ -209,17 +265,23 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [profile?.user_id]);
   useEffect(() => { registerRefresh(load); return () => registerRefresh(null); /* eslint-disable-next-line */ }, [profile?.user_id]);
+  useEffect(() => {
+    const to = searchParams.get("to")?.trim();
+    if (to) openSmsThread({ id: "", number: to }, false);
+  }, [searchParams]);
 
   if (activeThread) {
     return (
-      <ThreadView
-        threadId={activeThread.id}
-        number={activeThread.number}
-        myExt={myExt}
-        userId={profile.user_id}
-        onBack={() => { setActiveThread(null); load(); }}
-        onCall={(n) => openDialer(n)}
-      />
+      <div className="relative h-full w-full">
+        <ThreadView
+          threadId={activeThread.id}
+          number={activeThread.number}
+          myExt={myExt}
+          userId={profile.user_id}
+          onBack={() => { setActiveThread(null); load(); }}
+          onCall={(n) => openDialer(n)}
+        />
+      </div>
     );
   }
 
@@ -234,7 +296,7 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
         </button>
         <button
-          onClick={() => { setNewNumber(""); setNewOpen(true); }}
+          onClick={openNewSmsSheet}
           className="px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold text-white"
           style={{
             background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))",
@@ -279,7 +341,7 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
                 unread={unread}
                 preview={preview}
                 time={threadTime(th)}
-                onOpen={() => setActiveThread({ id, number: peer })}
+                onOpen={() => openSmsThread({ id, number: peer })}
                 emptyLabel={t("messages.noContent")}
               />
             );
@@ -288,42 +350,143 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
       )}
 
       {newOpen && (
-        <div className="fixed inset-0 z-40 flex items-end md:items-center md:justify-center bg-black/60 backdrop-blur-sm" onClick={() => setNewOpen(false)}>
-          <div
-            className="w-full md:w-[360px] rounded-t-3xl md:rounded-2xl p-4"
-            style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold" style={{ color: "var(--pp-text-primary)" }}>{t("messages.newMessage")}</h2>
-              <button onClick={() => setNewOpen(false)} className="p-1 rounded-full" style={{ color: "var(--pp-text-muted)" }} aria-label={t("common.close")}>
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <input
-              type="tel"
-              inputMode="tel"
-              placeholder={t("messages.phoneNumber")}
-              value={newNumber}
-              onChange={(e) => setNewNumber(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg text-sm outline-none"
-              style={{
-                background: "var(--pp-bg-elevated)",
-                border: "1px solid var(--pp-bg-border-2)",
-                color: "var(--pp-text-primary)",
-              }}
-            />
-            <button
-              disabled={!newNumber.trim()}
-              onClick={() => { setActiveThread({ id: "", number: newNumber.trim() }); setNewOpen(false); }}
-              className="w-full mt-3 py-2.5 rounded-lg text-white font-medium text-sm disabled:opacity-50"
-              style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}
-            >
-              {t("common.continue")}
-            </button>
-          </div>
-        </div>
+        <NewSmsSheet
+          onClose={() => setNewOpen(false)}
+          onStart={(number) => openSmsThread({ id: "", number })}
+        />
       )}
+    </div>
+  );
+}
+
+function NewSmsSheet({ onClose, onStart }: { onClose: () => void; onStart: (number: string) => void }) {
+  const { lang } = useMplanipretLang();
+  const [query, setQuery] = useState("");
+  const [recipients, setRecipients] = useState<SmsRecipient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => searchRef.current?.focus({ preventScroll: true }), 80);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const nativePromise = import("@/lib/native/permissions/contacts")
+        .then((m) => m.listDeviceContacts())
+        .catch(() => [] as any[]);
+      const [contacts, directory, native] = await Promise.allSettled([
+        getPpContacts("list", { limit: 500 }),
+        getPpContacts("directory", { limit: 500 }),
+        nativePromise,
+      ]);
+      if (cancelled) return;
+      const rows: SmsRecipient[] = [];
+      const addRows = (value: PromiseSettledResult<any[]>, source: SmsRecipient["source"]) => {
+        if (value.status !== "fulfilled") return;
+        value.value.forEach((c, i) => {
+          const r = recipientFromRow(c, source, i);
+          if (r) rows.push(r);
+        });
+      };
+      addRows(contacts, "contact");
+      addRows(directory, "directory");
+      addRows(native, "contact");
+      const seen = new Set<string>();
+      setRecipients(rows.filter((r) => {
+        const k = `${r.phone}|${r.email ?? ""}`.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      }));
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const q = query.trim().toLowerCase();
+  const matches = useMemo(() => {
+    if (!q) return recipients.slice(0, 20);
+    return recipients.filter((r) => recipientHay(r).includes(q)).slice(0, 30);
+  }, [q, recipients]);
+  const manual = query.trim();
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end md:items-center md:justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full md:w-[390px] rounded-t-3xl md:rounded-2xl flex flex-col"
+        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", maxHeight: "86dvh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
+          <h2 className="font-semibold" style={{ color: "var(--pp-text-primary)" }}>Nouveau SMS</h2>
+          <button onClick={onClose} className="p-1 rounded-full" style={{ color: "var(--pp-text-muted)" }} aria-label="Fermer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-4 pt-3 pb-2">
+          <div className="flex items-center gap-2 px-3 rounded-xl" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", height: 44 }}>
+            <Search className="w-4 h-4 shrink-0" style={{ color: "var(--pp-text-faint)" }} />
+            <input
+              data-sms-recipient-search="true"
+              ref={searchRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && manual) onStart(manual);
+              }}
+              placeholder="Nom, numéro ou courriel"
+              inputMode="search"
+              className="flex-1 bg-transparent outline-none text-base"
+              style={{ color: "var(--pp-text-primary)" }}
+            />
+          </div>
+          {manual && looksLikePhone(manual) && (
+            <button
+              onClick={() => onStart(manual)}
+              className="w-full mt-2 px-3 py-2 rounded-xl text-left flex items-center gap-3 active:opacity-80"
+              style={{ background: "rgba(46,155,220,0.12)", border: "1px solid var(--pp-brand-accent)", color: "var(--pp-text-primary)" }}
+            >
+              <Phone className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />
+              <span className="flex-1 min-w-0 text-sm font-semibold truncate">Texter {manual}</span>
+              <Send className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1.5">
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-14 rounded-2xl animate-pulse" style={{ background: "var(--pp-bg-surface)" }} />
+            ))
+          ) : matches.length === 0 ? (
+            <div className="py-8 text-center text-sm" style={{ color: "var(--pp-text-muted)" }}>
+              {lang === "en" ? "No contact found." : "Aucun contact trouvé."}
+            </div>
+          ) : matches.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => onStart(r.phone)}
+              className="w-full px-3 py-2.5 rounded-2xl text-left flex items-center gap-3 active:opacity-80"
+              style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}
+            >
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                style={{ background: r.source === "directory" ? "linear-gradient(135deg, #1A4A8A, #2E9BDC)" : "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
+                {r.source === "directory" ? <BookUser className="w-4 h-4" /> : initials(r.name)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold truncate" style={{ color: "var(--pp-text-primary)" }}>{r.name}</div>
+                <div className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }}>
+                  {r.phone}{r.email ? ` · ${r.email}` : ""}{r.department ? ` · ${r.department}` : ""}
+                </div>
+              </div>
+              <MessageSquare className="w-4 h-4 shrink-0" style={{ color: "var(--pp-brand-accent)" }} />
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -389,6 +552,7 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
   const [error, setError] = useState<string | null>(null);
   const [currentThreadId, setCurrentThreadId] = useState<string>(thId);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const loadMessages = async () => {
     if (!currentThreadId) { setLoading(false); return; }
@@ -412,6 +576,12 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
 
   useEffect(() => { loadMessages(); /* eslint-disable-next-line */ }, [currentThreadId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
+  useEffect(() => {
+    const focus = () => inputRef.current?.focus({ preventScroll: true });
+    const raf = window.requestAnimationFrame(focus);
+    const id = window.setTimeout(focus, 180);
+    return () => { window.cancelAnimationFrame(raf); window.clearTimeout(id); };
+  }, [number]);
 
   const send = async () => {
     const body = text.trim();
@@ -436,10 +606,16 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
         const detail = (data as any)?.body || (data as any)?.error || t("messages.sendFailed");
         throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
       }
-      const newThreadId = (data as any)?.result?.messagesession_id;
+      const result = (data as any)?.result ?? {};
+      const newThreadId = result?.messagesession_id ?? result?.["messagesession-id"] ?? result?.session_id ?? result?.id;
       if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);
+      // Mirror to Maestro Telecom (best-effort, non-blocking).
+      supabase.functions.invoke("maestro-telecom", {
+        body: { path: "/users/{me}/messages", method: "POST", body: { to_user_number: number, message: body } },
+      }).catch((e) => console.warn("[maestro-telecom] send", e?.message));
       // Refresh from server to reconcile optimistic message
       setTimeout(() => loadMessages(), 600);
+
     } catch (e: any) {
       toast.error(e?.message ?? t("messages.sendFailed"));
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
@@ -449,7 +625,7 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
   };
 
   return (
-    <div className="absolute inset-0 flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
+    <div className="absolute inset-0 flex flex-col min-h-0" style={{ background: "var(--pp-bg-base)" }}>
       <header
         className="flex items-center gap-2 px-3 py-3"
         style={{ background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
@@ -512,6 +688,8 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
       </div>
 
       <Composer
+        inputRef={inputRef}
+        autoFocus
         text={text} setText={setText} onSend={send} sending={sending}
         leftAction={
           <button onClick={() => setTplOpen(true)} className="p-2 rounded-full" style={{ color: "var(--pp-brand-accent)" }} title={t("messages.templates")}>
@@ -564,20 +742,24 @@ function TeamChat({ profile }: { profile: any }) {
       .from("planipret_team_messages")
       .select("id, sender_id, channel, message, created_at")
       .eq("channel", channel)
-      .order("created_at", { ascending: true })
-      .limit(200);
-    setMsgs((data ?? []) as TeamMsg[]);
+      .order("created_at", { ascending: false })
+      .limit(50);
+    const rows = ((data ?? []) as TeamMsg[]).reverse();
+    setMsgs(rows);
     setLoading(false);
 
-    const ids = Array.from(new Set((data ?? []).map((m: any) => m.sender_id)));
+    // Fire-and-forget sender name lookup so chat renders immediately.
+    const ids = Array.from(new Set(rows.map((m) => m.sender_id)));
     if (ids.length) {
-      const { data: profs } = await supabase
+      supabase
         .from("planipret_profiles")
         .select("id, full_name")
-        .in("id", ids);
-      const map: Record<string, string> = {};
-      (profs ?? []).forEach((p: any) => { map[p.id] = p.full_name ?? t("messages.broker"); });
-      setSenderNames(map);
+        .in("id", ids)
+        .then(({ data: profs }) => {
+          const map: Record<string, string> = {};
+          (profs ?? []).forEach((p: any) => { map[p.id] = p.full_name ?? t("messages.broker"); });
+          setSenderNames(map);
+        });
     }
   };
 
@@ -716,13 +898,16 @@ function EmailsList({ profile }: { profile: any }) {
         >
           <Plus className="w-3.5 h-3.5" /> {t("messages.emailCompose")}
         </button>
-        <button
-          onClick={load}
-          className="text-xs flex items-center gap-1 px-2 py-1"
-          style={{ color: "var(--pp-text-muted)" }}
-        >
-          <RefreshCw className={`w-3 h-3 ${state === "loading" ? "animate-spin" : ""}`} /> {t("common.refresh")}
-        </button>
+        <div className="flex items-center gap-2">
+          <Ms365TestNowButton feature="mail" compact />
+          <button
+            onClick={load}
+            className="text-xs flex items-center gap-1 px-2 py-1"
+            style={{ color: "var(--pp-text-muted)" }}
+          >
+            <RefreshCw className={`w-3 h-3 ${state === "loading" ? "animate-spin" : ""}`} /> {t("common.refresh")}
+          </button>
+        </div>
       </div>
 
       {state === "loading" && (
@@ -1017,11 +1202,11 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: { to?: string; sub
 // SHARED PRIMITIVES
 // ============================================================
 function Composer({
-  text, setText, onSend, sending, placeholder, leftAction, extra, accent = "brand",
+  text, setText, onSend, sending, placeholder, leftAction, extra, accent = "brand", inputRef, autoFocus = false,
 }: {
   text: string; setText: (v: string) => void; onSend: () => void; sending: boolean;
   placeholder?: string; leftAction?: React.ReactNode; extra?: React.ReactNode;
-  accent?: "brand" | "agent";
+  accent?: "brand" | "agent"; inputRef?: React.RefObject<HTMLInputElement>; autoFocus?: boolean;
 }) {
   const { t } = useMplanipretLang();
   const accentBg =
@@ -1036,6 +1221,9 @@ function Composer({
       {extra}
       {leftAction}
       <input
+        data-sms-composer-input="true"
+        ref={inputRef}
+        autoFocus={autoFocus}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(); } }}
@@ -1261,14 +1449,24 @@ function isChatUnread(chat: any, reads: Record<string, string>): boolean {
   return new Date(chat.lastUpdated).getTime() > new Date(last).getTime();
 }
 
+const TEAMS_CACHE_KEY = "planipret.teams365.cache.v1";
+function loadTeamsCache(): any | null {
+  try { const raw = sessionStorage.getItem(TEAMS_CACHE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function saveTeamsCache(payload: any) {
+  try { sessionStorage.setItem(TEAMS_CACHE_KEY, JSON.stringify({ ...payload, cachedAt: Date.now() })); } catch { /* */ }
+}
+
 function Teams365Panel({ profile }: { profile: any }) {
   const [innerTab, setInnerTab] = useState<Teams365SubTab>("active");
-  const [loading, setLoading] = useState(true);
+  const cached = loadTeamsCache();
+  const [loading, setLoading] = useState(!cached);
+  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [diag, setDiag] = useState<any>({});
-  const [chats, setChats] = useState<any[]>([]);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [people, setPeople] = useState<any[]>([]);
+  const [diag, setDiag] = useState<any>(cached?.diagnostics ?? {});
+  const [chats, setChats] = useState<any[]>(cached?.chats ?? []);
+  const [teams, setTeams] = useState<any[]>(cached?.teams ?? []);
+  const [people, setPeople] = useState<any[]>(cached?.people ?? []);
   const [reads, setReads] = useState<Record<string, string>>(() => loadTeamsReads());
   const [search, setSearch] = useState("");
   const [chatSearch, setChatSearch] = useState("");
@@ -1286,16 +1484,17 @@ function Teams365Panel({ profile }: { profile: any }) {
   const connected = !!profile?.ms365_access_token;
 
   const load = async () => {
-    if (!connected) { setLoading(false); setErr("ms365_not_connected"); return; }
-    setLoading(true); setErr(null);
+    if (!connected) { setLoading(false); setRefreshing(false); setErr("ms365_not_connected"); return; }
+    const hasData = chats.length > 0 || people.length > 0 || teams.length > 0;
+    if (hasData) setRefreshing(true); else setLoading(true);
+    setErr(null);
     const { data, error } = await supabase.functions.invoke("ms365-teams-list", { body: {} });
-    setLoading(false);
+    setLoading(false); setRefreshing(false);
     const payload = (data as any) ?? {};
     if (error && !payload.chats) { setErr(error.message || "Erreur"); return; }
     if (payload.connected === false || payload.error === "ms365_not_connected") { setErr("ms365_not_connected"); return; }
     if (payload.error) { setErr(payload.error); return; }
     const nextChats = payload.chats || [];
-    // Notify on new unread chats appearing since last load
     const currentReads = loadTeamsReads();
     const nowUnread = new Set<string>(nextChats.filter((c: any) => isChatUnread(c, currentReads)).map((c: any) => c.id));
     const newly: any[] = [];
@@ -1314,6 +1513,7 @@ function Teams365Panel({ profile }: { profile: any }) {
     setPeople(payload.people || []);
     setDiag(payload.diagnostics || {});
     setReads(currentReads);
+    saveTeamsCache({ chats: nextChats, teams: payload.teams || [], people: payload.people || [], diagnostics: payload.diagnostics || {} });
   };
   useEffect(() => {
     load(); /* eslint-disable-next-line */
@@ -1383,10 +1583,12 @@ function Teams365Panel({ profile }: { profile: any }) {
           <p className="text-xs mt-1 mb-3" style={{ color: "var(--pp-text-muted)" }}>
             Connectez votre compte Microsoft pour voir vos discussions Teams et coéquipiers.
           </p>
-          <a href="/mplanipret/more" className="inline-block text-xs px-4 py-2 rounded-full text-white font-semibold"
+          <button
+            onClick={() => { void connectMs365(); }}
+            className="inline-block text-xs px-4 py-2 rounded-full text-white font-semibold"
             style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
             Connecter Microsoft 365
-          </a>
+          </button>
         </div>
       )}
       {err && err !== "ms365_not_connected" && (
@@ -1396,25 +1598,28 @@ function Teams365Panel({ profile }: { profile: any }) {
       {!err && (
         <>
           {/* Inner tabs */}
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar" style={{ scrollbarWidth: "none" }}>
-            {tabs.map((t) => {
-              const isActive = innerTab === t.k;
-              return (
-                <button key={t.k} onClick={() => setInnerTab(t.k)}
-                  className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-full flex items-center gap-1.5"
-                  style={isActive
-                    ? { background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))", color: "white" }
-                    : { background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
-                  {t.label}
-                  {!!t.badge && (
-                    <span className="min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
-                      style={{ background: isActive ? "rgba(255,255,255,0.25)" : "#ef4444", color: "white" }}>
-                      {t.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar flex-1" style={{ scrollbarWidth: "none" }}>
+              {tabs.map((t) => {
+                const isActive = innerTab === t.k;
+                return (
+                  <button key={t.k} onClick={() => setInnerTab(t.k)}
+                    className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-full flex items-center gap-1.5"
+                    style={isActive
+                      ? { background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))", color: "white" }
+                      : { background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}>
+                    {t.label}
+                    {!!t.badge && (
+                      <span className="min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
+                        style={{ background: isActive ? "rgba(255,255,255,0.25)" : "#ef4444", color: "white" }}>
+                        {t.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <Ms365TestNowButton feature="teams" compact />
           </div>
 
           {/* Active discussions tab */}

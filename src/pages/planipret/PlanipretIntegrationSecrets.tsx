@@ -68,7 +68,7 @@ export default function PlanipretIntegrationSecrets() {
   }
   if (authorized === null) return null;
 
-  const save = async (provider: "microsoft" | "maestro") => {
+  const save = async (provider: Provider) => {
     setSavingFor(provider);
     setMsg(null);
     const { error } = await supabase.functions.invoke("pp-integration-secrets", {
@@ -84,7 +84,7 @@ export default function PlanipretIntegrationSecrets() {
   };
 
   const renderCard = (
-    provider: "microsoft" | "maestro",
+    provider: Provider,
     title: string,
     fields: { key: string; label: string; secret?: boolean }[]
   ) => {
@@ -162,6 +162,8 @@ export default function PlanipretIntegrationSecrets() {
           <>
             {renderCard("microsoft", "Microsoft 365", MS_FIELDS)}
             {renderCard("maestro", "Maestro", MAESTRO_FIELDS)}
+            {renderCard("maestro_telecom", "Maestro · API Télécom", MAESTRO_TELECOM_FIELDS)}
+
           </>
         )}
       </main>

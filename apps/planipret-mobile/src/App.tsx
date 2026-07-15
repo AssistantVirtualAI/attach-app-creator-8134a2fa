@@ -39,6 +39,7 @@ const MExtensionSync = lazyWithRetry(() => import('@/pages/planipret/mobile/MExt
 const Ms365Callback = lazyWithRetry(() => import('@/pages/planipret/Ms365Callback'), 'Ms365Callback');
 const MMs365Diagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MMs365Diagnostics'), 'MMs365Diagnostics');
 const MStyleDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MStyleDiagnostics'), 'MStyleDiagnostics');
+const MDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MDiagnostics'), 'MDiagnostics');
 
 
 
@@ -135,6 +136,7 @@ export default function App() {
                       <Route path="extension-sync" element={<MExtensionSync />} />
                       <Route path="ms365-diagnostics" element={<MMs365Diagnostics />} />
                       <Route path="style-diagnostics" element={<MStyleDiagnostics />} />
+                      <Route path="diagnostics" element={<MDiagnostics />} />
                     </Route>
                     <Route path="*" element={<Navigate to="/mplanipret" replace />} />
                   </Routes>

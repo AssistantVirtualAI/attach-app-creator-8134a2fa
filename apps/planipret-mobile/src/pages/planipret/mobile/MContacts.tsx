@@ -909,7 +909,8 @@ function ContactField({ label, value, onCall }: { label: string; value: string; 
 function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactName: string; onClose: () => void }) {
   const [recipient, setRecipient] = useState(to);
   const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -921,21 +922,28 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
     const number = recipient.trim();
     const msg = body.trim();
     if (!number || !msg) { toast.error("Numéro et message requis"); return; }
-    setSending(true);
+    setStatus("sending");
+    setErrorMsg(null);
     try {
       const { data, error } = await supabase.functions.invoke("pp-ns-sms", {
         body: { action: "send", to: number, message: msg },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      toast.success("SMS envoyé");
-      onClose();
+      setStatus("sent");
+      toast.success("SMS envoyé", { description: `À ${contactName} · ${number}` });
+      window.setTimeout(() => onClose(), 1200);
     } catch (e: any) {
-      toast.error("Échec envoi SMS", { description: e?.message });
-    } finally {
-      setSending(false);
+      const m = e?.message || "Erreur inconnue";
+      setStatus("error");
+      setErrorMsg(m);
+      toast.error("Échec envoi SMS", { description: m });
     }
   };
+
+  const sending = status === "sending";
+  const sent = status === "sent";
+  const errored = status === "error";
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -952,12 +960,34 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
           <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>
         </div>
 
+        {sent && (
+          <div className="mb-3 p-3 rounded-lg flex items-start gap-2"
+            style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)" }}>
+            <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#22c55e" }} />
+            <div className="text-xs" style={{ color: "var(--pp-text-primary)" }}>
+              <div className="font-semibold">SMS envoyé</div>
+              <div style={{ color: "var(--pp-text-muted)" }}>Livraison au {recipient}</div>
+            </div>
+          </div>
+        )}
+        {errored && (
+          <div className="mb-3 p-3 rounded-lg flex items-start gap-2"
+            style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)" }}>
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#ef4444" }} />
+            <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
+              <div className="font-semibold">Échec envoi SMS</div>
+              <div style={{ color: "var(--pp-text-muted)" }}>{errorMsg || "Erreur inconnue"}</div>
+            </div>
+          </div>
+        )}
+
         <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Destinataire</label>
         <input
           value={recipient}
           onChange={(e) => setRecipient(e.target.value)}
           inputMode="tel"
-          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none"
+          disabled={sending || sent}
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg text-sm outline-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
         />
 
@@ -968,18 +998,19 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
           onChange={(e) => setBody(e.target.value)}
           rows={4}
           placeholder="Écrire un message…"
-          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none"
+          disabled={sending || sent}
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
         />
 
         <button
           onClick={send}
-          disabled={sending || !recipient.trim() || !body.trim()}
+          disabled={sending || sent || !recipient.trim() || !body.trim()}
           className="w-full py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
-          style={{ background: "var(--pp-brand-accent)" }}
+          style={{ background: sent ? "#22c55e" : "var(--pp-brand-accent)" }}
         >
-          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          {sending ? "Envoi…" : "Envoyer"}
+          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : sent ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+          {sending ? "Envoi…" : sent ? "Envoyé" : errored ? "Réessayer" : "Envoyer"}
         </button>
       </div>
     </div>

@@ -331,8 +331,9 @@ export default function PlanipretIntegrations() {
             <Field label="Anthropic API Key" required hint="console.anthropic.com → API Keys">
               <SecretInput value={draft.anthropic?.api_key ?? ""}
                 onChange={(v) => setField("anthropic", "api_key", v)}
-                hasSavedValue={!!rows.anthropic?.config_data?.api_key}
+                {...secretState("anthropic", "api_key", ["ANTHROPIC_API_KEY", "LOVABLE_API_KEY"])}
                 placeholder="sk-ant-••••••••••••••••••••••••" />
+
             </Field>
             <Field label="Modèle IA" hint="claude-sonnet-4-5 recommandé (rapide & intelligent)">
               <select

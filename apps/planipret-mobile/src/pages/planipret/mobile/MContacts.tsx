@@ -103,6 +103,8 @@ export default function MContacts() {
   const [contactsPerm, setContactsPerm] = useState<PermStatus>("unavailable");
   const [contactsPermBusy, setContactsPermBusy] = useState(false);
   const [visibleCount, setVisibleCount] = useState(40);
+  const [filterDept, setFilterDept] = useState<string>("");
+  const [filterTeam, setFilterTeam] = useState<string>("");
   const loadedTabsRef = useRef<Set<Tab>>(new Set(["favorites"]));
 
   useEffect(() => {

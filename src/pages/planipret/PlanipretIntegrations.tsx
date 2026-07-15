@@ -494,8 +494,9 @@ export default function PlanipretIntegrations() {
             <Field label="ElevenLabs API Key" required hint="elevenlabs.io → Profile → API Keys">
               <SecretInput value={draft.elevenlabs?.api_key ?? ""}
                 onChange={(v) => setField("elevenlabs", "api_key", v)}
-                hasSavedValue={!!rows.elevenlabs?.config_data?.api_key}
+                {...secretState("elevenlabs", "api_key", ["ELEVENLABS_API_KEY"])}
                 placeholder="sk_•••••••••••••••••••••••••••••" />
+
             </Field>
             <Field label="Agent ID par défaut" hint="ID de l'agent à utiliser pour les nouveaux courtiers">
               <TextInput value={getField("elevenlabs", "default_agent_id")}

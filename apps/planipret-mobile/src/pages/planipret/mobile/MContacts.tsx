@@ -622,10 +622,13 @@ function ContactDetailSheet({
   const [loading, setLoading] = useState(true);
   const [creatingTask, setCreatingTask] = useState(false);
   const [summarizeOpen, setSummarizeOpen] = useState(false);
+  const [smsOpen, setSmsOpen] = useState(false);
 
   const name = `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim()
     || contact.name || contact.display_name || contact.phone || contact.email || "Contact";
-  const phone: string | undefined = contact.phone || contact.extension;
+  const rawPhone: string | undefined = contact.phone || contact.cell_phone || contact.work_phone;
+  const extension: string | undefined = contact.extension;
+  const phone: string | undefined = rawPhone || extension;
   const email: string | undefined = contact.email;
   const maestroId: string | undefined = contact.maestro_client_id || contact.external_id || contact.id;
 
@@ -663,13 +666,14 @@ function ContactDetailSheet({
   };
 
   const openSms = () => {
-    if (!phone) return;
-    window.location.href = `sms:${phone}`;
+    if (!rawPhone) { toast.error("Aucun numéro mobile"); return; }
+    setSmsOpen(true);
   };
   const openEmail = () => {
     if (!email) return;
     window.location.href = `mailto:${email}`;
   };
+
 
   const iconFor = (kind: string) => {
     const k = (kind || "").toLowerCase();

@@ -787,6 +787,10 @@ function ContactDetailSheet({
       {smsOpen && rawPhone && (
         <SmsComposerSheet to={rawPhone} contactName={name} onClose={() => setSmsOpen(false)} />
       )}
+
+      {emailOpen && email && (
+        <EmailComposerSheet to={email} contactName={name} onClose={() => setEmailOpen(false)} />
+      )}
     </div>
   );
 }

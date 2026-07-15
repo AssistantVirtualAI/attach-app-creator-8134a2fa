@@ -85,6 +85,54 @@ Deno.serve(async (req) => {
         const txt = await r.text().catch(() => "");
         return j({ success: r.ok, error: r.ok ? null : txt, code: r.status }, r.ok ? 200 : 500);
       }
+      case "delete_email": {
+        const id = String(payload.message_id ?? "");
+        if (!id) return j({ success: false, error: "message_id requis" }, 400);
+        // Default: move to Deleted Items (like a normal inbox). Set payload.hard=true to permanently delete.
+        if (payload.hard) {
+          const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}`, { method: "DELETE" });
+          return j({ success: r.ok, code: r.status, error: r.ok ? null : await r.text().catch(() => "") }, r.ok ? 200 : 500);
+        }
+        const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/move`, { method: "POST", body: JSON.stringify({ destinationId: "deleteditems" }) });
+        const d = await r.json().catch(() => ({}));
+        return j({ success: r.ok, code: r.status, error: r.ok ? null : (d?.error?.message ?? "") }, r.ok ? 200 : 500);
+      }
+      case "archive_email": {
+        const id = String(payload.message_id ?? "");
+        if (!id) return j({ success: false, error: "message_id requis" }, 400);
+        const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/move`, { method: "POST", body: JSON.stringify({ destinationId: "archive" }) });
+        const d = await r.json().catch(() => ({}));
+        return j({ success: r.ok, code: r.status, error: r.ok ? null : (d?.error?.message ?? "") }, r.ok ? 200 : 500);
+      }
+      case "flag_email": {
+        const id = String(payload.message_id ?? "");
+        if (!id) return j({ success: false, error: "message_id requis" }, 400);
+        const flagStatus = payload.unflag ? "notFlagged" : (payload.flagStatus ?? "flagged");
+        const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ flag: { flagStatus } }) });
+        const d = await r.json().catch(() => ({}));
+        return j({ success: r.ok, code: r.status, error: r.ok ? null : (d?.error?.message ?? "") }, r.ok ? 200 : 500);
+      }
+      case "mark_read_email": {
+        const id = String(payload.message_id ?? "");
+        if (!id) return j({ success: false, error: "message_id requis" }, 400);
+        const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ isRead: payload.isRead !== false }) });
+        const d = await r.json().catch(() => ({}));
+        return j({ success: r.ok, code: r.status, error: r.ok ? null : (d?.error?.message ?? "") }, r.ok ? 200 : 500);
+      }
+      case "forward_email": {
+        const id = String(payload.message_id ?? "");
+        const to = Array.isArray(payload.to) ? payload.to : [payload.to].filter(Boolean);
+        if (!id || !to.length) return j({ success: false, error: "message_id + to requis" }, 400);
+        const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/forward`, {
+          method: "POST",
+          body: JSON.stringify({
+            comment: payload.comment ?? "",
+            toRecipients: to.map((e: string) => ({ emailAddress: { address: e } })),
+          }),
+        });
+        const txt = await r.text().catch(() => "");
+        return j({ success: r.ok, code: r.status, error: r.ok ? null : txt }, r.ok ? 200 : 500);
+      }
       case "create_calendar_event": {
         if (!payload.subject || !payload.start || !payload.end) return j({ success: false, error: "subject, start, end requis" }, 400);
         const r = await graph(admin, profile, `/me/events`, { method: "POST", body: JSON.stringify({ subject: payload.subject, start: payload.start, end: payload.end, body: { contentType: "HTML", content: payload.body ?? "" }, attendees: (payload.attendees ?? []).map((e: string) => ({ emailAddress: { address: e }, type: "required" })), isOnlineMeeting: payload.isOnlineMeeting ?? true, onlineMeetingProvider: payload.onlineMeetingProvider ?? "teamsForBusiness" }) });

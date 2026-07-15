@@ -16,7 +16,7 @@ import PermissionBanners from "@/components/planipret/mobile/PermissionBanners";
 import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import Ms365TestNowButton from "@/components/planipret/Ms365TestNowButton";
+
 
 type Period = "day" | "week" | "month" | "shift";
 const DEFAULT_PERIOD: Period = "month";
@@ -642,7 +642,6 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
           Calendrier Microsoft
         </h2>
         <div className="flex items-center gap-2">
-          <Ms365TestNowButton feature="calendar" compact />
           <span className="pp-eyebrow">{events.length}</span>
         </div>
       </div>

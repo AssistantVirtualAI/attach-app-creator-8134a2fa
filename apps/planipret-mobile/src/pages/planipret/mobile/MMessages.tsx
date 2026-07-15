@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   Plus, X, ArrowLeft, Phone, Send, Paperclip, MessageSquare, Zap,
   Users, Mail, Sparkles, Loader2, RefreshCw, Reply, Circle, CheckCircle2, AlertTriangle, RotateCw,
-  UsersRound, Contact, Search, BookUser,
+  UsersRound, Contact, Search, BookUser, Trash2, Archive, Flag, Forward,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import SmsTemplatesSheet from "@/components/planipret/SmsTemplatesSheet";
@@ -17,7 +17,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { connectMs365 } from "@/lib/ms365Connect";
 import { getPpContacts } from "@/lib/ppContactsCache";
-import Ms365TestNowButton from "@/components/planipret/Ms365TestNowButton";
+
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "roster";
 
@@ -896,7 +896,6 @@ function EmailsList({ profile }: { profile: any }) {
           <Plus className="w-3.5 h-3.5" /> {t("messages.emailCompose")}
         </button>
         <div className="flex items-center gap-2">
-          <Ms365TestNowButton feature="mail" compact />
           <button
             onClick={load}
             className="text-xs flex items-center gap-1 px-2 py-1"
@@ -989,6 +988,8 @@ function EmailsList({ profile }: { profile: any }) {
           email={active}
           onClose={() => setActive(null)}
           onReply={(init) => { setActive(null); setComposeInit(init); setComposeOpen(true); }}
+          onForward={(init) => { setActive(null); setComposeInit(init); setComposeOpen(true); }}
+          onChanged={() => { setActive(null); load(); }}
         />
       )}
       {composeOpen && (
@@ -1002,7 +1003,13 @@ function EmailsList({ profile }: { profile: any }) {
   );
 }
 
-function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: () => void; onReply: (init: { to?: string; subject?: string; body?: string }) => void }) {
+function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
+  email: any;
+  onClose: () => void;
+  onReply: (init: { to?: string; subject?: string; body?: string }) => void;
+  onForward: (init: { to?: string; subject?: string; body?: string }) => void;
+  onChanged: () => void;
+}) {
   const { t } = useMplanipretLang();
   const from = email.from?.emailAddress?.name ?? email.from?.emailAddress?.address ?? t("messages.sender");
   const fromAddr = email.from?.emailAddress?.address ?? "";
@@ -1011,6 +1018,34 @@ function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: ()
   const [sumOpen, setSumOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any | null>(null);
+  const [busy, setBusy] = useState<"" | "flag" | "archive" | "delete">("");
+  const [flagged, setFlagged] = useState<boolean>(email?.flag?.flagStatus === "flagged");
+
+  const runAction = async (
+    kind: "flag" | "archive" | "delete",
+    action: string,
+    payload: Record<string, unknown>,
+    successMsg: string,
+  ) => {
+    if (!email.id) { toast.error("Message ID manquant"); return; }
+    setBusy(kind);
+    try {
+      const { data, error } = await supabase.functions.invoke("ms365-actions", {
+        body: { action, payload: { message_id: email.id, ...payload } },
+      });
+      if (error || !(data as any)?.success) {
+        throw new Error((data as any)?.error ?? error?.message ?? "Échec");
+      }
+      toast.success(successMsg);
+      if (kind === "flag") setFlagged((v) => !v);
+      else onChanged();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erreur");
+    } finally {
+      setBusy("");
+    }
+  };
+
 
   const analyzeWithAva = async () => {
     if (!email.id) { toast.error("Message ID manquant"); return; }
@@ -1044,7 +1079,15 @@ function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: ()
             <ArrowLeft className="w-5 h-5" />
           </button>
           <p className="text-xs uppercase tracking-wider" style={{ color: "var(--pp-text-muted)" }}>Email</p>
-          <div className="w-7" />
+          <button
+            onClick={() => runAction("flag", "flag_email", { unflag: flagged }, flagged ? "Drapeau retiré" : "Message marqué")}
+            disabled={busy === "flag"}
+            title={flagged ? "Retirer le drapeau" : "Marquer d'un drapeau"}
+            className="p-1.5 rounded-full disabled:opacity-50"
+            style={{ color: flagged ? "#F59E0B" : "var(--pp-text-secondary)" }}
+          >
+            {busy === "flag" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flag className="w-4 h-4" style={{ fill: flagged ? "#F59E0B" : "transparent" }} />}
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           <div>
@@ -1092,8 +1135,7 @@ function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: ()
           </div>
         </div>
 
-        <div className="px-4 py-3 flex gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
-
+        <div className="px-4 py-3 flex items-center gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
           <button
             onClick={() => onReply({
               to: fromAddr,
@@ -1104,6 +1146,39 @@ function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: ()
             style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}
           >
             <Reply className="w-4 h-4" /> {t("messages.reply")}
+          </button>
+          <button
+            onClick={() => onForward({
+              to: "",
+              subject: subject.startsWith("Fw:") ? subject : `Fw: ${subject}`,
+              body: `\n\n---------- Message transféré ----------\nDe: ${from} <${fromAddr}>\nObjet: ${subject}\n\n${preview}`,
+            })}
+            title="Transférer"
+            className="w-11 h-11 rounded-full flex items-center justify-center"
+            style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+          >
+            <Forward className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => runAction("archive", "archive_email", {}, "Archivé")}
+            disabled={busy === "archive"}
+            title="Archiver"
+            className="w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-50"
+            style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+          >
+            {busy === "archive" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={() => {
+              if (!confirm("Supprimer ce message ? (déplacé dans Éléments supprimés)")) return;
+              runAction("delete", "delete_email", {}, "Supprimé");
+            }}
+            disabled={busy === "delete"}
+            title="Supprimer"
+            className="w-11 h-11 rounded-full flex items-center justify-center disabled:opacity-50"
+            style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.30)", color: "#EF4444" }}
+          >
+            {busy === "delete" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -1616,7 +1691,7 @@ function Teams365Panel({ profile }: { profile: any }) {
                 );
               })}
             </div>
-            <Ms365TestNowButton feature="teams" compact />
+            
           </div>
 
           {/* Active discussions tab */}

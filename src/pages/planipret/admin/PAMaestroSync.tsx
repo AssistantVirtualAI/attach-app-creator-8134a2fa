@@ -106,6 +106,7 @@ export default function PAMaestroSync() {
   const [loading, setLoading] = useState(false);
   const [mirroring, setMirroring] = useState(false);
   const [onlyFailures, setOnlyFailures] = useState(false);
+  const [actionFilter, setActionFilter] = useState<{ like?: string; eq?: string; label?: string } | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -115,7 +116,14 @@ export default function PAMaestroSync() {
     try {
       const [s, l, m] = await Promise.all([
         supabase.functions.invoke("pp-maestro-admin", { body: { action: "status" } }),
-        supabase.functions.invoke("pp-maestro-admin", { body: { action: "sync-log", limit: 200, since_hours: 72, only_failures: onlyFailures } }),
+        supabase.functions.invoke("pp-maestro-admin", {
+          body: {
+            action: "sync-log", limit: 200, since_hours: 72,
+            only_failures: onlyFailures,
+            action_like: actionFilter?.like,
+            action_eq: actionFilter?.eq,
+          },
+        }),
         supabase.functions.invoke("pp-maestro-admin", { body: { action: "mirror-status" } }),
       ]);
       if (s.error) throw new Error(s.error.message);
@@ -128,7 +136,7 @@ export default function PAMaestroSync() {
     } finally {
       setLoading(false);
     }
-  }, [onlyFailures]);
+  }, [onlyFailures, actionFilter]);
 
   const mirrorAll = useCallback(async () => {
     if (!confirm("Mirror TOUS les appels avec résumé/analyse IA vers Maestro (depuis le début) ?")) return;

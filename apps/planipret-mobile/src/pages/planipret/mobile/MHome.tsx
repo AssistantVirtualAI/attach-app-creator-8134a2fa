@@ -642,7 +642,6 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
           Calendrier Microsoft
         </h2>
         <div className="flex items-center gap-2">
-          <Ms365TestNowButton feature="calendar" compact />
           <span className="pp-eyebrow">{events.length}</span>
         </div>
       </div>

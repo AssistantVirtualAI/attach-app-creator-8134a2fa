@@ -988,6 +988,8 @@ function EmailsList({ profile }: { profile: any }) {
           email={active}
           onClose={() => setActive(null)}
           onReply={(init) => { setActive(null); setComposeInit(init); setComposeOpen(true); }}
+          onForward={(init) => { setActive(null); setComposeInit(init); setComposeOpen(true); }}
+          onChanged={() => { setActive(null); load(); }}
         />
       )}
       {composeOpen && (

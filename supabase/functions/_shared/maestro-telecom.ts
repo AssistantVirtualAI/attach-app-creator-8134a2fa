@@ -212,17 +212,31 @@ export async function pingMaestroTelecom(admin: SupabaseClient, userId?: string 
   if (!isMaestroTelecomConfigured(cfg)) {
     return { configured: false, base_url: cfg.url || "", ok: false, status: 0, error: "not_configured" };
   }
-  // A cheap authenticated GET. If the broker isn't linked, fall back to a
-  // generic /health path — either way we're testing auth + connectivity.
-  const path = userId ? `/users/${encodeURIComponent(userId)}/communications/recent` : `/health`;
-  const r = await maestroTelecomFetch(cfg, path, { method: "GET", maxAttempts: 1, timeoutMs: 5000 });
+  // A cheap authenticated GET. If the broker is linked we hit their
+  // communications feed (guaranteed to exist). Otherwise we probe a couple
+  // of endpoints and infer auth from the status code: 401/403 = bad token,
+  // anything else (200, 404, 400…) means the API reached us and accepted
+  // the Bearer token, so we consider connectivity + auth as OK.
+  const paths = userId
+    ? [`/users/${encodeURIComponent(userId)}/communications/recent`]
+    : [`/users/me`, `/me`, `/health`, `/`];
+  let last: Awaited<ReturnType<typeof maestroTelecomFetch>> | null = null;
+  for (const p of paths) {
+    const r = await maestroTelecomFetch(cfg, p, { method: "GET", maxAttempts: 1, timeoutMs: 5000 });
+    last = r;
+    if (r.ok) break;
+    // Auth accepted but endpoint absent → still a valid connectivity signal.
+    if (r.status && r.status !== 401 && r.status !== 403 && r.status < 500) break;
+  }
+  const r = last!;
+  const authOk = r.ok || (r.status > 0 && r.status !== 401 && r.status !== 403 && r.status < 500);
   return {
     configured: true,
     base_url: cfg.url,
-    ok: r.ok,
+    ok: authOk,
     status: r.status,
     ms: r.ms,
-    error: r.error,
+    error: authOk ? undefined : r.error,
   };
 }
 

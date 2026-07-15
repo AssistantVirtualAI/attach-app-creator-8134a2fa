@@ -19,6 +19,16 @@ type Status = {
   last_analysis_mirror?: any;
 };
 
+type MirrorStatus = {
+  eligible: number;
+  with_maestro_call_id: number;
+  mirrored_ok: number;
+  mirrored_failed: number;
+  pending: number;
+  window_first_log: string | null;
+  window_last_log: string | null;
+};
+
 type LogRow = {
   id: string;
   created_at: string;
@@ -89,8 +99,10 @@ function KpiCard({
 
 export default function PAMaestroSync() {
   const [status, setStatus] = useState<Status | null>(null);
+  const [mirror, setMirror] = useState<MirrorStatus | null>(null);
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [mirroring, setMirroring] = useState(false);
   const [onlyFailures, setOnlyFailures] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -99,20 +111,47 @@ export default function PAMaestroSync() {
     setLoading(true);
     setErr(null);
     try {
-      const [s, l] = await Promise.all([
+      const [s, l, m] = await Promise.all([
         supabase.functions.invoke("pp-maestro-admin", { body: { action: "status" } }),
         supabase.functions.invoke("pp-maestro-admin", { body: { action: "sync-log", limit: 200, since_hours: 72, only_failures: onlyFailures } }),
+        supabase.functions.invoke("pp-maestro-admin", { body: { action: "mirror-status" } }),
       ]);
       if (s.error) throw new Error(s.error.message);
       if (l.error) throw new Error(l.error.message);
       setStatus(s.data as Status);
       setLogs(((l.data as any)?.entries ?? []) as LogRow[]);
+      if (!m.error) setMirror(m.data as MirrorStatus);
     } catch (e: any) {
       setErr(e?.message ?? "erreur");
     } finally {
       setLoading(false);
     }
   }, [onlyFailures]);
+
+  const mirrorAll = useCallback(async () => {
+    if (!confirm("Mirror TOUS les appels avec résumé/analyse IA vers Maestro (depuis le début) ?")) return;
+    setMirroring(true);
+    try {
+      let cursor: string | null = null;
+      let total = 0;
+      for (let i = 0; i < 20; i++) {
+        const { data, error } = await supabase.functions.invoke("pp-maestro-admin", {
+          body: { action: "mirror-all", batch_size: 200, max_batches: 5, cursor },
+        });
+        if (error) throw error;
+        total += (data as any)?.scheduled ?? 0;
+        const next = (data as any)?.next_cursor;
+        if (!next || next === cursor) break;
+        cursor = next;
+      }
+      alert(`Miroir global : ${total} appel(s) planifié(s).`);
+      await load();
+    } catch (e: any) {
+      alert(`Erreur mirror-all : ${e?.message ?? e}`);
+    } finally {
+      setMirroring(false);
+    }
+  }, [load]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -178,6 +217,14 @@ export default function PAMaestroSync() {
             style={{ padding: "8px 14px", fontSize: 13 }}
           >
             <Activity className="w-4 h-4" /> Resync analyses (72h)
+          </button>
+          <button
+            className="pp-btn flex items-center gap-2"
+            onClick={() => void mirrorAll()}
+            disabled={mirroring || loading}
+            style={{ padding: "8px 14px", fontSize: 13, borderColor: `${AGENT}55`, color: AGENT }}
+          >
+            <Activity className={`w-4 h-4 ${mirroring ? "animate-spin" : ""}`} /> Mirror everything
           </button>
           <button
             className="pp-btn pp-btn-primary flex items-center gap-2"
@@ -262,6 +309,46 @@ export default function PAMaestroSync() {
           }
         />
       </div>
+
+      {/* Mirror everything panel */}
+      <div className="pp-card mb-5" style={{ padding: 20 }}>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div>
+            <h2 style={{ fontSize: 14, fontWeight: 600, color: "var(--pp-text-primary)" }}>Mirror everything · résumés &amp; analyses IA</h2>
+            <p style={{ fontSize: 11, color: "var(--pp-text-faint)", marginTop: 2 }}>
+              État global des sommaires d'appel et analyses IA poussés vers Maestro depuis le début de l'historique.
+            </p>
+          </div>
+          {mirror && (
+            <span style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>
+              Fenêtre journal : {fmtAgo(mirror.window_first_log)} → {fmtAgo(mirror.window_last_log)}
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {[
+            { label: "Éligibles (résumé ou analyse)", value: mirror?.eligible ?? "—", color: ACCENT },
+            { label: "Avec maestro_call_id", value: mirror?.with_maestro_call_id ?? "—", color: AGENT },
+            { label: "Mirrorés OK", value: mirror?.mirrored_ok ?? "—", color: SUCCESS },
+            { label: "En échec", value: mirror?.mirrored_failed ?? "—", color: DANGER },
+            { label: "À pousser", value: mirror?.pending ?? "—", color: WARNING },
+          ].map((c) => (
+            <div key={c.label} className="pp-card" style={{ padding: 14, borderColor: `${c.color}33`, background: `${c.color}0A` }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: c.color, lineHeight: 1 }} className="tabular-nums">{c.value}</div>
+              <div style={{ fontSize: 11, color: "var(--pp-text-secondary)", marginTop: 6 }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+        {mirror && mirror.eligible > 0 && (
+          <div className="mt-3" style={{ height: 6, background: "var(--pp-bg-deep)", borderRadius: 999, overflow: "hidden" }}>
+            <div style={{
+              width: `${Math.min(100, Math.round((mirror.mirrored_ok / Math.max(1, mirror.eligible)) * 100))}%`,
+              height: "100%", background: SUCCESS, transition: "width .4s",
+            }} />
+          </div>
+        )}
+      </div>
+
 
       {/* By-action breakdown */}
       <div className="pp-card mb-5" style={{ padding: 20 }}>

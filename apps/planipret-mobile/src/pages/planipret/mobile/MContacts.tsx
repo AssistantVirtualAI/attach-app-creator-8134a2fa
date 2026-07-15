@@ -11,6 +11,20 @@ import { ensureContacts, getContactsPermissionStatus, listDeviceContacts } from 
 import { openAppSettings, type PermStatus } from "@/lib/native/permissions/platform";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { peekPpContacts, prefetchPpContacts } from "@/lib/ppContactsCache";
+import { callEdge, toE164 } from "@/lib/callEdge";
+
+// One-shot cache of the broker's assigned SMS numbers.
+let __ppSmsNumbersCache: { ts: number; numbers: any[] } | null = null;
+async function fetchSmsNumbers(force = false): Promise<any[]> {
+  const now = Date.now();
+  if (!force && __ppSmsNumbersCache && now - __ppSmsNumbersCache.ts < 5 * 60_000) {
+    return __ppSmsNumbersCache.numbers;
+  }
+  const data = await callEdge<{ numbers: any[] }>("pp-ns-sms", { action: "sms-numbers" });
+  const nums = Array.isArray(data?.numbers) ? data.numbers : [];
+  __ppSmsNumbersCache = { ts: now, numbers: nums };
+  return nums;
+}
 
 async function copyToClipboard(value: string, label: string) {
   try {
@@ -911,6 +925,9 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
   const [body, setBody] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [preflight, setPreflight] = useState<"loading" | "ok" | "no-number" | "error">("loading");
+  const [preflightErr, setPreflightErr] = useState<string | null>(null);
+  const [smsFrom, setSmsFrom] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -918,32 +935,65 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
     return () => window.clearTimeout(id);
   }, []);
 
-  const send = async () => {
-    const number = recipient.trim();
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const nums = await fetchSmsNumbers();
+        if (!alive) return;
+        if (!nums.length) {
+          setPreflight("no-number");
+        } else {
+          const first = nums[0];
+          const num =
+            (typeof first === "string" && first) ||
+            first?.number || first?.phonenumber || first?.smsnumber || first?.did || null;
+          setSmsFrom(num);
+          setPreflight("ok");
+        }
+      } catch (e: any) {
+        if (!alive) return;
+        setPreflight("error");
+        setPreflightErr(e?.message || "Impossible de vérifier les numéros SMS");
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const doSend = async (retry = false): Promise<void> => {
+    const number = toE164(recipient);
     const msg = body.trim();
     if (!number || !msg) { toast.error("Numéro et message requis"); return; }
     setStatus("sending");
     setErrorMsg(null);
     try {
-      const { data, error } = await supabase.functions.invoke("pp-ns-sms", {
-        body: { action: "send", to: number, message: msg },
-      });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      await callEdge("pp-ns-sms", { action: "send", to: number, message: msg, from: smsFrom || undefined });
       setStatus("sent");
       toast.success("SMS envoyé", { description: `À ${contactName} · ${number}` });
       window.setTimeout(() => onClose(), 1200);
     } catch (e: any) {
-      const m = e?.message || "Erreur inconnue";
+      const status = e?.status ?? 0;
+      // Retry once on transient NS 502
+      if (!retry && status === 502) {
+        setTimeout(() => { void doSend(true); }, 400);
+        return;
+      }
+      const detail =
+        (e?.body && typeof e.body === "object" && (e.body.body || e.body.error)) ||
+        e?.message || "Erreur inconnue";
+      const m = typeof detail === "string" ? detail : JSON.stringify(detail);
       setStatus("error");
       setErrorMsg(m);
       toast.error("Échec envoi SMS", { description: m });
     }
   };
+  const send = () => { void doSend(false); };
 
   const sending = status === "sending";
   const sent = status === "sent";
   const errored = status === "error";
+  const noNumber = preflight === "no-number";
+  const disabled = sending || sent || preflight === "loading" || noNumber || !recipient.trim() || !body.trim();
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -955,18 +1005,46 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
         <div className="flex items-center justify-between mb-3">
           <div>
             <div className="text-base font-bold" style={{ color: "var(--pp-text-primary)" }}>Nouveau SMS</div>
-            <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>À {contactName}</div>
+            <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>
+              À {contactName}{smsFrom ? ` · De ${smsFrom}` : ""}
+            </div>
           </div>
           <button onClick={onClose} style={{ color: "var(--pp-text-muted)" }}><X className="w-5 h-5" /></button>
         </div>
 
+        {preflight === "loading" && (
+          <div className="mb-3 p-2 rounded-lg text-xs flex items-center gap-2"
+            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-muted)" }}>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Vérification des numéros SMS…
+          </div>
+        )}
+        {noNumber && (
+          <div className="mb-3 p-3 rounded-lg flex items-start gap-2"
+            style={{ background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.35)" }}>
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#f59e0b" }} />
+            <div className="text-xs" style={{ color: "var(--pp-text-primary)" }}>
+              <div className="font-semibold">Aucun numéro SMS assigné</div>
+              <div style={{ color: "var(--pp-text-muted)" }}>Contactez l'administrateur pour activer l'envoi SMS.</div>
+            </div>
+          </div>
+        )}
+        {preflight === "error" && (
+          <div className="mb-3 p-3 rounded-lg flex items-start gap-2"
+            style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)" }}>
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#ef4444" }} />
+            <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
+              <div className="font-semibold">Vérification impossible</div>
+              <div style={{ color: "var(--pp-text-muted)" }}>{preflightErr}</div>
+            </div>
+          </div>
+        )}
         {sent && (
           <div className="mb-3 p-3 rounded-lg flex items-start gap-2"
             style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.35)" }}>
             <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#22c55e" }} />
             <div className="text-xs" style={{ color: "var(--pp-text-primary)" }}>
               <div className="font-semibold">SMS envoyé</div>
-              <div style={{ color: "var(--pp-text-muted)" }}>Livraison au {recipient}</div>
+              <div style={{ color: "var(--pp-text-muted)" }}>Livraison au {toE164(recipient)}</div>
             </div>
           </div>
         )}
@@ -976,7 +1054,9 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#ef4444" }} />
             <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
               <div className="font-semibold">Échec envoi SMS</div>
-              <div style={{ color: "var(--pp-text-muted)" }}>{errorMsg || "Erreur inconnue"}</div>
+              <div style={{ color: "var(--pp-text-muted)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {errorMsg || "Erreur inconnue"}
+              </div>
             </div>
           </div>
         )}
@@ -1005,7 +1085,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
 
         <button
           onClick={send}
-          disabled={sending || sent || !recipient.trim() || !body.trim()}
+          disabled={disabled}
           className="w-full py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
           style={{ background: sent ? "#22c55e" : "var(--pp-brand-accent)" }}
         >

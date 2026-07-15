@@ -308,16 +308,18 @@ export function mirrorCallAnalysisToMaestro(
       if (!brokerId || !maestroCallId) {
         const reason = !brokerId ? "no_maestro_broker_id" : "no_maestro_call_id";
         console.warn(`[maestro-telecom.analysis] skip pp_call=${ppCall?.id} — ${reason}`);
+        // Log as a distinct "skipped" action so it doesn't pollute the
+        // real success/failure rate of actual Maestro API calls.
         try {
           await admin.from("planipret_maestro_sync_log").insert({
             user_id: userId,
-            action: "call.analysis.summary",
+            action: `call.analysis.skipped.${reason}`,
             maestro_endpoint: `PUT /users/{broker}/calls/${maestroCallId ?? "?"}`,
-            request_body: { pp_call_id: ppCall?.id, payload },
-            response_body: { error: reason },
+            request_body: { pp_call_id: ppCall?.id },
+            response_body: { skipped: reason },
             response_status: 0,
             duration_ms: 0,
-            success: false,
+            success: true,
           });
         } catch { /* ignore */ }
         return;

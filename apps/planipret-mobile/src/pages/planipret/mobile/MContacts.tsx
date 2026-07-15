@@ -93,8 +93,11 @@ export default function MContacts() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("personal");
   const [q, setQ] = useState("");
-  const [personal, setPersonal] = useState<any[]>([]);
-  const [directory, setDirectory] = useState<any[]>([]);
+  const [personal, setPersonal] = useState<any[]>(() => {
+    const cached = peekPpContacts("list");
+    return cached ? (cached as any[]).map(normalizeContact) : [];
+  });
+  const [directory, setDirectory] = useState<any[]>(() => peekPpContacts("directory") ?? []);
   const [favorites, setFavorites] = useState<FavEntry[]>(() => loadFavs());
   const [loadingTab, setLoadingTab] = useState<Tab | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -106,7 +109,11 @@ export default function MContacts() {
   const [filterDept, setFilterDept] = useState<string>("");
   const [filterTeam, setFilterTeam] = useState<string>("");
   const [sortBy, setSortBy] = useState<"relevance" | "name" | "team" | "department">("relevance");
-  const loadedTabsRef = useRef<Set<Tab>>(new Set(["favorites"]));
+  const loadedTabsRef = useRef<Set<Tab>>(new Set<Tab>([
+    "favorites",
+    ...(peekPpContacts("directory") ? (["directory"] as Tab[]) : []),
+    ...(peekPpContacts("list") ? (["personal"] as Tab[]) : []),
+  ]));
 
   useEffect(() => {
     const onChange = () => setFavorites(loadFavs());
@@ -672,10 +679,14 @@ function ContactDetailSheet({
 
   const name = `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim()
     || contact.name || contact.display_name || contact.phone || contact.email || "Contact";
-  const rawPhone: string | undefined = contact.phone || contact.cell_phone || contact.work_phone;
-  const extension: string | undefined = contact.extension;
+  const rawPhone: string | undefined =
+    contact.phone || contact.mobile || contact.cell_phone || contact.cellphone ||
+    contact.cell || contact.mobile_phone || contact.mobilePhone || contact.phoneNumber ||
+    contact.phone_number || contact.work_phone || contact.workPhone || contact.telephone ||
+    contact.home_phone || contact.homePhone || undefined;
+  const extension: string | undefined = contact.extension || contact.ext;
   const phone: string | undefined = rawPhone || extension;
-  const email: string | undefined = contact.email;
+  const email: string | undefined = contact.email || contact.mail || contact.email_address;
   const maestroId: string | undefined = contact.maestro_client_id || contact.external_id || contact.id;
 
   useEffect(() => {
@@ -712,7 +723,7 @@ function ContactDetailSheet({
   };
 
   const openSms = () => {
-    if (!rawPhone) { toast.error("Aucun numéro mobile"); return; }
+    if (!rawPhone && !extension) { toast.error("Aucun numéro disponible"); return; }
     setSmsOpen(true);
   };
   const openEmail = () => {
@@ -757,7 +768,7 @@ function ContactDetailSheet({
         {/* Quick actions */}
         <div className="grid grid-cols-5 gap-2 mb-4">
           <QuickAction icon={<Phone className="w-4 h-4" />} label={t("common.call")} onClick={() => phone && onCall(phone)} disabled={!phone} />
-          <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={openSms} disabled={!rawPhone} />
+          <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={openSms} disabled={!rawPhone && !extension} />
           <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={openEmail} disabled={!email} />
           <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={createTask} disabled={creatingTask} />
           <QuickAction icon={<Calendar className="w-4 h-4" />} label="RDV" onClick={() => toast.info("Bientôt disponible")} />
@@ -829,8 +840,8 @@ function ContactDetailSheet({
         onClose={() => setSummarizeOpen(false)}
       />
 
-      {smsOpen && rawPhone && (
-        <SmsComposerSheet to={rawPhone} contactName={name} onClose={() => setSmsOpen(false)} />
+      {smsOpen && (rawPhone || extension) && (
+        <SmsComposerSheet to={(rawPhone || extension)!} contactName={name} onClose={() => setSmsOpen(false)} />
       )}
 
       {emailOpen && email && (

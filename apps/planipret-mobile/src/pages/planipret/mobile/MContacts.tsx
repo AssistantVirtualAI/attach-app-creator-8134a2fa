@@ -404,7 +404,7 @@ export default function MContacts() {
         })}
       </div>
 
-      {tab === "directory" && (deptOptions.length > 0 || teamOptions.length > 0) && (
+      {tab === "directory" && (
         <div className="flex items-center gap-2 mb-3 overflow-x-auto no-scrollbar">
           <Filter className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--pp-text-muted)" }} />
           {deptOptions.length > 0 && (

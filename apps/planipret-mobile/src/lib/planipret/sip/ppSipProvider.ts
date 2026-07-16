@@ -39,11 +39,22 @@ export interface PpSipSnapshot {
 
 type Listener = (s: PpSipSnapshot) => void;
 
+export interface PpSipEvent {
+  time: number;
+  level: "info" | "warn" | "error";
+  event: string;
+  detail?: string;
+}
+type EventListener = (events: PpSipEvent[]) => void;
+const EVENT_BUFFER_MAX = 120;
+
 class PpSipProvider {
   private ua: any = null;
   private session: any = null;
   private cfg: PpSipConfig | null = null;
   private listeners = new Set<Listener>();
+  private eventListeners = new Set<EventListener>();
+  private events: PpSipEvent[] = [];
   private snap: PpSipSnapshot = {
     status: "idle",
     callState: "idle",
@@ -68,16 +79,41 @@ class PpSipProvider {
   getSnapshot(): PpSipSnapshot { return this.snap; }
   getConfig(): PpSipConfig | null { return this.cfg; }
 
+  /** Subscribe to the SIP event ring buffer used by the debug screen. */
+  subscribeEvents(fn: EventListener): () => void {
+    this.eventListeners.add(fn);
+    fn(this.events);
+    return () => { this.eventListeners.delete(fn); };
+  }
+  getEvents(): PpSipEvent[] { return this.events; }
+  clearEvents() {
+    this.events = [];
+    this.eventListeners.forEach((l) => { try { l(this.events); } catch {} });
+  }
+
+  private pushEvent(level: PpSipEvent["level"], event: string, detail?: string) {
+    const entry: PpSipEvent = { time: Date.now(), level, event, detail };
+    this.events = [entry, ...this.events].slice(0, EVENT_BUFFER_MAX);
+    this.eventListeners.forEach((l) => { try { l(this.events); } catch {} });
+  }
+
   private update(patch: Partial<PpSipSnapshot>) {
+    const prev = this.snap.status;
     this.snap = { ...this.snap, ...patch };
+    if (patch.status && patch.status !== prev) {
+      this.pushEvent("info", "status", `${prev} → ${patch.status}${patch.errorCause ? ` (${patch.errorCause})` : ""}`);
+    }
     this.listeners.forEach((l) => { try { l(this.snap); } catch {} });
   }
 
   private log(level: "info" | "warn" | "error", msg: string, detail?: any) {
     const fn = level === "error" ? "error" : level === "warn" ? "warn" : "log";
+    const detailStr = detail == null ? "" : typeof detail === "string" ? detail : (() => { try { return JSON.stringify(detail); } catch { return String(detail); } })();
     // eslint-disable-next-line no-console
     (console as any)[fn](`[pp-sip] ${msg}`, detail ?? "");
+    this.pushEvent(level, msg, detailStr || undefined);
   }
+
 
   async init(cfg: PpSipConfig) {
     const wssUrl = String(cfg.wssUrl ?? "").trim();

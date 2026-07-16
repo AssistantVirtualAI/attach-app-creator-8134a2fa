@@ -479,6 +479,8 @@ export default function PlanipretMobile() {
   const [dialerInit, setDialerInit] = useState<string | undefined>(undefined);
   const [unreadMsg, setUnreadMsg] = useState(0);
   const [unreadVm, setUnreadVm] = useState(0);
+  const [unreadNotif, setUnreadNotif] = useState(0);
+  const totalUnread = unreadMsg + unreadVm + unreadNotif;
   const [inbound, setInbound] = useState<InboundCall>(null);
   const [avaOpen, setAvaOpen] = useState(false);
   const [avaMode, setAvaMode] = useState<"voice" | "chat">("voice");

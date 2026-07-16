@@ -369,6 +369,27 @@ const LemtelTelephonyPage = ({ children }: { children: React.ReactNode }) => (
 
 function NativeDeepLinkBridge() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // On Capacitor native shells the initial URL is `capacitor://localhost/`
+  // (or `/index.html`), which would otherwise match the public Landing route.
+  // Force the mobile app entry so the native build always boots into /mplanipret.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (!Capacitor.isNativePlatform()) return;
+        const p = location.pathname;
+        if (p === '/' || p === '/index.html' || p === '') {
+          navigate(ROUTES.MPLANIPRET, { replace: true });
+        }
+      } catch {
+        // Not running under Capacitor — no-op.
+      }
+    })();
+    // Only run on first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const routeFromUrl = (rawUrl?: string | null) => {

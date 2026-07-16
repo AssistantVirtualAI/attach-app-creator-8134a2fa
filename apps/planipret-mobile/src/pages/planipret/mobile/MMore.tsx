@@ -90,6 +90,19 @@ export default function MMore() {
   const nsConnected = !!(profile?.ns_extension ?? profile?.extension) && sipConnected;
   const ms365Connected = !!profile?.ms365_access_token;
 
+  const [sipSnap, setSipSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
+  useEffect(() => ppSipProvider.subscribe(setSipSnap), []);
+  const sipStatusColor: Record<string, string> = {
+    idle: "#94A3B8", connecting: "#F59E0B", connected: "#3B82F6",
+    registered: "#10B981", disconnected: "#94A3B8", error: "#EF4444",
+  };
+  const sipStatusLabel = sipSnap.status === "registered" ? "Enregistré"
+    : sipSnap.status === "connecting" ? "Connexion…"
+    : sipSnap.status === "connected" ? "Connecté (non enregistré)"
+    : sipSnap.status === "error" ? "Erreur"
+    : sipSnap.status === "disconnected" ? "Déconnecté"
+    : "Inactif";
+
   const reconnectNs = async () => {
     setReconnecting(true);
     const { data, error, status } = await safeEdgeFunction("ns-resolve-sip-credentials", { body: { client_type: "mobile" } });

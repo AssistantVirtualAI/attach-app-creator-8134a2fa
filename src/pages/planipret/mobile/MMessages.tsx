@@ -61,7 +61,7 @@ export default function MMessages() {
   // Warm the Teams cache on mount so switching to the Teams tab is instant.
   useEffect(() => {
     if (!profile?.ms365_access_token) return;
-    const cacheKey = "pp:teams365:cache:v1";
+    const cacheKey = "planipret.teams365.cache.v1";
     const hasCache = (() => { try { return !!localStorage.getItem(cacheKey); } catch { return false; } })();
     if (hasCache) return; // already warm
     const run = () => { void supabase.functions.invoke("ms365-teams-list", { body: {} }).catch(() => {}); };

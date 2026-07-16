@@ -111,7 +111,7 @@ function makeNoopPlugin(): CapacitorSipPlugin {
 }
 
 export const CapacitorSipNative: CapacitorSipPlugin =
-  (__platform === 'ios' || __platform === 'android')
+  (__platform === 'ios')
     ? registerPlugin<CapacitorSipPlugin>('CapacitorPjsip')
     : makeNoopPlugin();
 export const CapacitorPjsip = CapacitorSipNative;

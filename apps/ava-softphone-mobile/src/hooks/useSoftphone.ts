@@ -605,7 +605,7 @@ export function useSoftphoneJsSip(
       uaRef.current = null;
       reconnectRef.current = () => {};
     };
-  }, [config?.extension, config?.wssUrl, config?.domain, config?.password, opts.jsSipTimeoutMs, reconnectTick, log, setSipError, setSipStatus]);
+  }, [config?.extension, config?.wssUrl, config?.domain, config?.password, config?.refreshNonce, opts.jsSipTimeoutMs, reconnectTick, log, setSipError, setSipStatus]);
 
   // Auto-reconnect on network recovery / app foreground.
   // Guarantees SIP re-registration within seconds of network coming back,

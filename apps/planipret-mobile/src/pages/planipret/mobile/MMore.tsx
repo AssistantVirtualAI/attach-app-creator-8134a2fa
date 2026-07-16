@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
-import { CalendarSyncCard } from "@/components/planipret/CalendarSyncCard";
+
 import { Ms365ScopesCard } from "@/components/planipret/Ms365ScopesCard";
 import { SiriShortcutsCard } from "@/components/planipret/SiriShortcutsCard";
 import { safeEdgeFunction } from "@/lib/safeEdgeFunction";

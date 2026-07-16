@@ -419,6 +419,8 @@ function Dialer({ open, onClose, initial, openMessages, softphone, maestroConfig
                               <div className="text-xs truncate" style={{ color: "var(--pp-text-muted)" }}>
                                 {c.extension ? `${t("contacts.extension") || "Ext."} ${c.extension}` : dest || c.email || ""}
                                 {c.source === "directory" && ` · ${t("dialer.internal")}`}
+                                {c.source === "maestro" && ` · Maestro`}
+                                {c.source === "native" && ` · Téléphone`}
                               </div>
                             </div>
                             <button

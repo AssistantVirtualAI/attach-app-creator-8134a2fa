@@ -58,6 +58,18 @@ export default function MMessages() {
   const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();
   const [sub, setSub] = useState<SubTab>("sms");
 
+  // Warm the Teams cache on mount so switching to the Teams tab is instant.
+  useEffect(() => {
+    if (!profile?.ms365_access_token) return;
+    const cacheKey = "pp:teams365:cache:v1";
+    const hasCache = (() => { try { return !!localStorage.getItem(cacheKey); } catch { return false; } })();
+    if (hasCache) return; // already warm
+    const run = () => { void supabase.functions.invoke("ms365-teams-list", { body: {} }).catch(() => {}); };
+    const ric: any = (globalThis as any).requestIdleCallback;
+    if (typeof ric === "function") ric(run, { timeout: 2000 }); else setTimeout(run, 300);
+  }, [profile?.ms365_access_token]);
+
+
   return (
     <div className="h-full flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
       <div

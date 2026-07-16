@@ -222,15 +222,45 @@ export default function PpActiveCallScreen({
         {/* Keypad view */}
         {view === "keypad" && (
           <div className="flex-1 flex flex-col items-center justify-center px-8">
-            <div className="text-lg text-white/80 mb-4 min-h-[24px]">{dtmfBuf || "—"}</div>
+            {isHeld && (
+              <div
+                className="mb-3 text-[11px] px-3 py-1.5 rounded-full"
+                style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.4)", color: "#FCD34D" }}
+              >
+                {t("call.dtmfHeld") || "Reprenez l'appel pour envoyer des tonalités"}
+              </div>
+            )}
+            <div
+              className="text-lg mb-1 min-h-[24px] font-mono tracking-widest transition-colors"
+              style={{ color: lastDtmf ? "#2E9BDC" : "rgba(255,255,255,0.8)" }}
+            >
+              {dtmfBuf || "—"}
+            </div>
+            <div className="text-[10px] uppercase tracking-widest mb-3" style={{ color: "rgba(255,255,255,0.4)" }}>
+              {lastDtmf ? `${t("call.dtmfSent") || "Envoyé"} · ${lastDtmf}` : (t("call.dtmfHint") || "Touchez une touche pour envoyer")}
+            </div>
             <div className="grid grid-cols-3 gap-4" style={{ maxWidth: 300 }}>
-              {KEYS.map((k) => (
-                <button key={k} onClick={() => pressDtmf(k)}
-                  className="w-20 h-20 rounded-full text-3xl font-semibold active:scale-95 transition mx-auto"
-                  style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)" }}>
-                  {k}
-                </button>
-              ))}
+              {KEYS.map((k) => {
+                const isFlash = lastDtmf === k;
+                const disabled = snap.callState !== "active";
+                return (
+                  <button
+                    key={k}
+                    onClick={() => pressDtmf(k)}
+                    disabled={disabled}
+                    aria-label={`DTMF ${k}`}
+                    className="w-20 h-20 rounded-full text-3xl font-semibold active:scale-95 transition mx-auto disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      background: isFlash ? "rgba(46,155,220,0.35)" : "rgba(255,255,255,0.08)",
+                      border: `1px solid ${isFlash ? "rgba(46,155,220,0.8)" : "rgba(255,255,255,0.15)"}`,
+                      boxShadow: isFlash ? "0 0 24px rgba(46,155,220,0.55)" : undefined,
+                      transform: isFlash ? "scale(0.94)" : undefined,
+                    }}
+                  >
+                    {k}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

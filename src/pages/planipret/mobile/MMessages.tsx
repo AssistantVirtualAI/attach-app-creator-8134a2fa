@@ -854,7 +854,7 @@ function TeamChat({ profile }: { profile: any }) {
 // ============================================================
 // EMAILS TAB (M365)
 // ============================================================
-function EmailsList({ profile }: { profile: any }) {
+export function EmailsList({ profile }: { profile: any }) {
   const { t, lang } = useMplanipretLang();
   const PAGE_SIZE = 25;
   const [emails, setEmails] = useState<any[] | null>(null);

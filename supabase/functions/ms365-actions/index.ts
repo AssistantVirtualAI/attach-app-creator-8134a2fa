@@ -81,7 +81,60 @@ Deno.serve(async (req) => {
       case "send_email": {
         const to = Array.isArray(payload.to) ? payload.to : [payload.to].filter(Boolean);
         if (!to.length || !payload.subject || !payload.body) return j({ success: false, error: "to, subject, body requis" }, 400);
-        const r = await graph(admin, profile, `/me/sendMail`, { method: "POST", body: JSON.stringify({ message: { subject: payload.subject, body: { contentType: "HTML", content: String(payload.body).replace(/\n/g, "<br/>" ) }, toRecipients: to.map((e: string) => ({ emailAddress: { address: e } })) }, saveToSentItems: true }) });
+        const cc = Array.isArray(payload.cc) ? payload.cc : [];
+        const bcc = Array.isArray(payload.bcc) ? payload.bcc : [];
+        const attachments = Array.isArray(payload.attachments) ? payload.attachments.map((a: any) => ({
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name: String(a.name ?? "file"),
+          contentType: String(a.contentType ?? "application/octet-stream"),
+          contentBytes: String(a.contentBytes ?? ""),
+        })) : [];
+        const message: any = {
+          subject: payload.subject,
+          body: { contentType: "HTML", content: String(payload.body).replace(/\n/g, "<br/>") },
+          toRecipients: to.map((e: string) => ({ emailAddress: { address: e } })),
+          ccRecipients: cc.map((e: string) => ({ emailAddress: { address: e } })),
+          bccRecipients: bcc.map((e: string) => ({ emailAddress: { address: e } })),
+        };
+        if (attachments.length) message.attachments = attachments;
+        const r = await graph(admin, profile, `/me/sendMail`, { method: "POST", body: JSON.stringify({ message, saveToSentItems: true }) });
+        const txt = await r.text().catch(() => "");
+        return j({ success: r.ok, error: r.ok ? null : txt, code: r.status }, r.ok ? 200 : 500);
+      }
+      case "reply_email":
+      case "reply_all_email": {
+        const id = String(payload.message_id ?? "");
+        if (!id) return j({ success: false, error: "message_id requis" }, 400);
+        const path = action === "reply_all_email" ? "replyAll" : "reply";
+        const attachments = Array.isArray(payload.attachments) ? payload.attachments.map((a: any) => ({
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name: String(a.name ?? "file"),
+          contentType: String(a.contentType ?? "application/octet-stream"),
+          contentBytes: String(a.contentBytes ?? ""),
+        })) : [];
+        // If attachments provided, use createReply/createReplyAll → PATCH → send flow (Graph limitation).
+        if (attachments.length) {
+          const cr = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/create${path === "replyAll" ? "ReplyAll" : "Reply"}`, {
+            method: "POST",
+            body: JSON.stringify({ message: { body: { contentType: "HTML", content: String(payload.body ?? "").replace(/\n/g, "<br/>") } } }),
+          });
+          const draft = await cr.json().catch(() => ({}));
+          if (!cr.ok || !draft?.id) return j({ success: false, error: draft?.error?.message ?? "createReply failed", code: cr.status }, 500);
+          const pr = await graph(admin, profile, `/me/messages/${encodeURIComponent(draft.id)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ attachments }),
+          });
+          if (!pr.ok) return j({ success: false, error: await pr.text().catch(() => ""), code: pr.status }, 500);
+          const sr = await graph(admin, profile, `/me/messages/${encodeURIComponent(draft.id)}/send`, { method: "POST" });
+          return j({ success: sr.ok, error: sr.ok ? null : await sr.text().catch(() => ""), code: sr.status }, sr.ok ? 200 : 500);
+        }
+        const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/${path}`, {
+          method: "POST",
+          body: JSON.stringify({
+            message: { body: { contentType: "HTML", content: String(payload.body ?? "").replace(/\n/g, "<br/>") } },
+            comment: payload.comment ?? "",
+          }),
+        });
         const txt = await r.text().catch(() => "");
         return j({ success: r.ok, error: r.ok ? null : txt, code: r.status }, r.ok ? 200 : 500);
       }

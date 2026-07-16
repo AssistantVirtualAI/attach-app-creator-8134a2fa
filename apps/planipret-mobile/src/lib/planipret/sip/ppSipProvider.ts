@@ -136,6 +136,7 @@ class PpSipProvider {
         .map((u) => String(u ?? "").trim())
         .filter((u) => /^wss?:\/\//i.test(u)))) as string[];
       if (!urls.length) throw new Error("No valid SIP WSS URL");
+      this.log("info", "ua.start", `ext=${cleanCfg.sipUsername}@${cleanCfg.sipDomain} wss=${urls.join(",")}`);
       const sockets = urls.map((u) => new (JsSIP as any).WebSocketInterface(u));
       const ua = new (JsSIP as any).UA({
         sockets,
@@ -154,18 +155,26 @@ class PpSipProvider {
         connection_recovery_min_interval: 2,
         connection_recovery_max_interval: 30,
         user_agent: "Planipret Softphone 1.0",
+        // Do NOT spoof "TCP" in the Via header. The actual transport is WSS;
+        // forcing TCP makes NetSapiens/FusionPBX try to reply over TCP/5060
+        // instead of the WSS tunnel and the REGISTER response never arrives
+        // (stack stays stuck at `connecting`/`idle`). `hack_wss_in_transport`
+        // asks JsSIP to keep `transport=wss` in Via/Contact URIs.
+        hack_via_tcp: false,
+        hack_wss_in_transport: true,
+        hack_ip_in_contact: true,
       });
 
-      ua.on("connecting", () => this.update({ status: "connecting" }));
-      ua.on("connected", () => this.update({ status: "connected" }));
+      ua.on("connecting", () => { this.log("info", "ws.connecting"); this.update({ status: "connecting" }); });
+      ua.on("connected", () => { this.log("info", "ws.connected"); this.update({ status: "connected" }); });
       ua.on("disconnected", (e: any) => {
-        this.log("warn", "ws disconnected", e);
+        this.log("warn", "ws.disconnected", { code: e?.code, reason: e?.reason });
         this.update({ status: "disconnected", errorCause: e?.reason || "ws_disconnected" });
         // JsSIP retries the socket via connection_recovery_*; no manual work needed.
       });
-      ua.on("registered", () => this.update({ status: "registered", errorCause: undefined, lastRegistrationAt: Date.now() }));
+      ua.on("registered", () => { this.log("info", "register.ok"); this.update({ status: "registered", errorCause: undefined, lastRegistrationAt: Date.now() }); });
       ua.on("unregistered", () => {
-        this.log("warn", "unregistered - forcing re-register");
+        this.log("warn", "register.unregistered - forcing re-register");
         this.update({ status: "connected", errorCause: "re_registering" });
         // NetSapiens sometimes returns 401/403 mid-session on stale nonce;
         // trigger an immediate re-REGISTER instead of leaving the UA idle.
@@ -173,8 +182,9 @@ class PpSipProvider {
       });
       ua.on("registrationFailed", (e: any) => {
         const cause = e?.cause || e?.response?.reason_phrase || "registration_failed";
-        this.log("error", `registration failed: ${cause}`);
-        this.update({ status: "error", errorCause: cause });
+        const code = e?.response?.status_code;
+        this.log("error", `register.failed code=${code ?? "?"} cause=${cause}`);
+        this.update({ status: "error", errorCause: `${code ?? ""} ${cause}`.trim() });
         // Retry once after a short backoff — most NS failures here are transient
         // (429, 503, nonce reuse) and recover on a second attempt.
         setTimeout(() => { try { this.ua?.register(); } catch {} }, 8000);

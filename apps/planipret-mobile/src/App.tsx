@@ -138,6 +138,7 @@ export default function App() {
                       <Route path="ms365-diagnostics" element={<MMs365Diagnostics />} />
                       <Route path="style-diagnostics" element={<MStyleDiagnostics />} />
                       <Route path="diagnostics" element={<MDiagnostics />} />
+                      <Route path="sip-debug" element={<MSipDebug />} />
                     </Route>
                     <Route path="*" element={<Navigate to="/mplanipret" replace />} />
                   </Routes>

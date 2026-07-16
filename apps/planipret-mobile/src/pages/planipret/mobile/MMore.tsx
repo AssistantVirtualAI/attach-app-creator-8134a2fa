@@ -293,7 +293,6 @@ export default function MMore() {
         {ms365Connected && (
           <div style={{ padding: 8 }}>
             <Ms365ScopesCard profile={profile} onReconnect={connectMs365} />
-            <CalendarSyncCard profile={profile} />
           </div>
         )}
       </Section>

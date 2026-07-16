@@ -251,6 +251,14 @@ export default function MMore() {
           right={<span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>{profile?.ns_extension ?? profile?.extension ?? "—"}</span>} chevron />
         <Row icon={<Voicemail className="w-4 h-4" />} label={t("more.voicemail")}
           onClick={() => navigate("/mplanipret/calls?tab=voicemails")} chevron />
+        <Row
+          icon={<Radio className="w-4 h-4" style={{ color: sipStatusColor[sipSnap.status] }} />}
+          label="État SIP"
+          sub={sipSnap.errorCause ? `${sipStatusLabel} — ${sipSnap.errorCause}` : sipStatusLabel}
+          onClick={() => navigate("/mplanipret/sip-debug")}
+          right={<span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: sipStatusColor[sipSnap.status], color: "#fff" }}>{sipSnap.status.toUpperCase()}</span>}
+          chevron
+        />
       </Section>
 
       <Section title={t("more.sections.availability")}>

@@ -39,6 +39,28 @@ export interface PpSipSnapshot {
 
 type Listener = (s: PpSipSnapshot) => void;
 
+let sipParserGuardInstalled = false;
+
+function isKnownJsSipParserCrash(value: unknown): boolean {
+  const text = String(value instanceof Error ? value.message : value ?? "");
+  return /multi_header\.length|multi_header/i.test(text);
+}
+
+function installSipParserGuard() {
+  if (sipParserGuardInstalled || typeof window === "undefined") return;
+  sipParserGuardInstalled = true;
+  window.addEventListener("error", (event) => {
+    if (!isKnownJsSipParserCrash(event.message) && !isKnownJsSipParserCrash((event as any).error)) return;
+    console.warn("[pp-sip] ignored malformed SIP parser frame", event.message);
+    event.preventDefault();
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    if (!isKnownJsSipParserCrash(event.reason)) return;
+    console.warn("[pp-sip] ignored malformed SIP parser rejection", event.reason);
+    event.preventDefault();
+  });
+}
+
 class PpSipProvider {
   private ua: any = null;
   private session: any = null;
@@ -80,6 +102,7 @@ class PpSipProvider {
   }
 
   async init(cfg: PpSipConfig) {
+    installSipParserGuard();
     const wssUrl = String(cfg.wssUrl ?? "").trim();
     if (!cfg.extension || !cfg.sipDomain || !wssUrl || wssUrl === "undefined" || !/^wss?:\/\//i.test(wssUrl) || !cfg.password) {
       this.update({ status: "error", errorCause: "invalid_config" });

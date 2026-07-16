@@ -604,6 +604,7 @@ export default function PAUsers() {
                 <th className="p-3">Agent IA</th>
                 <th className="p-3">DND</th>
                 <th className="p-3">Appels mois</th>
+                <th className="p-3">Maestro ID</th>
                 <th className="p-3">Dernière activité</th>
                 <th className="p-3">Actions</th>
               </tr>
@@ -620,7 +621,7 @@ export default function PAUsers() {
                   </tr>
                 ))
               ) : paged.length === 0 ? (
-                <tr><td colSpan={11} className="p-8 text-center" style={{ color: "var(--pp-text-faint)" }}>Aucun courtier</td></tr>
+                <tr><td colSpan={12} className="p-8 text-center" style={{ color: "var(--pp-text-faint)" }}>Aucun courtier</td></tr>
               ) : paged.map((u) => (
                 <tr key={u.user_id || u.email || u.extension} className="hover:bg-white/[0.02] transition"
                   style={{
@@ -675,6 +676,9 @@ export default function PAUsers() {
                     )}
                   </td>
                   <td className="p-3 tabular-nums" style={{ color: "var(--pp-text-primary)" }}>{callsByUser[u.user_id] ?? callsByUser[`ext:${u.extension}`] ?? 0}</td>
+                  <td className="p-3">
+                    <MaestroIdCell user={u} onSaved={load} />
+                  </td>
                   <td className="p-3" style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>{u.updated_at ? new Date(u.updated_at).toLocaleString("fr-CA", { dateStyle: "short", timeStyle: "short" }) : "—"}</td>
                   <td className="p-3">
                     <DropdownMenu>

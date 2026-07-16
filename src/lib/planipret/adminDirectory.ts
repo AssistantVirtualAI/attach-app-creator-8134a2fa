@@ -16,6 +16,7 @@ export type PlanipretBrokerRow = {
   ns_only?: boolean;
   status?: string | null;
   maestro_connected?: boolean | null;
+  maestro_broker_id?: string | null;
 };
 
 const extOf = (row: Partial<PlanipretBrokerRow>) => String(row.extension ?? row.ns_extension ?? "").trim();

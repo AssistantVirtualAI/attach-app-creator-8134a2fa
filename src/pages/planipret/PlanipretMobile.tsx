@@ -138,16 +138,12 @@ function Dialer({ open, onClose, initial, openMessages, softphone, maestroConfig
   // Seed synchronously from persistent cache so the directory shows INSTANTLY
   // instead of a spinner. Fresh data is fetched in the background.
   const [contacts, setContacts] = useState<DialerContact[]>(() => {
-    try {
-      // Lazy-import cache reader without top-level side effects if module not ready.
-      const mod = require("@/lib/ppContactsCache") as typeof import("@/lib/ppContactsCache");
-      const seed: DialerContact[] = [];
-      for (const [action, source] of [["directory", "directory"], ["list", "personal"], ["shared", "shared"], ["maestro", "maestro"]] as const) {
-        const rows = mod.peekPpContacts(action);
-        if (rows?.length) seed.push(...rows.map((c: any) => ({ ...c, source })));
-      }
-      return seed;
-    } catch { return []; }
+    const seed: DialerContact[] = [];
+    for (const [action, source] of [["directory", "directory"], ["list", "personal"], ["shared", "shared"], ["maestro", "maestro"]] as const) {
+      const rows = peekPpContacts(action);
+      if (rows?.length) seed.push(...rows.map((c: any) => ({ ...c, source })));
+    }
+    return seed;
   });
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [refreshingContacts, setRefreshingContacts] = useState(false);

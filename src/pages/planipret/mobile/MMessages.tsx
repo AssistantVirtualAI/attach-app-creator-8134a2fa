@@ -1053,6 +1053,7 @@ export function EmailsList({ profile }: { profile: any }) {
           onClose={() => setActive(null)}
           onCompose={(init) => { setActive(null); setComposeInit(init); setComposeOpen(true); }}
           onChanged={() => load()}
+          onOptimisticRemove={(id) => setEmails((cur) => (cur ? cur.filter((e) => e.id !== id) : cur))}
         />
       )}
       {composeOpen && (

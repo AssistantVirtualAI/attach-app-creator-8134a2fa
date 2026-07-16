@@ -46,6 +46,7 @@ export default function MoreScreen({
   if (sub === 'aiaudit')     return <SubPage onBack={() => setSub(null)} title={tr.more.aiAudit}><Suspense fallback={<ScreenSkeleton />}><AIAuditScreen /></Suspense></SubPage>;
   if (sub === 'queues')      return <SubPage onBack={() => setSub(null)} title={tr.more.queues}><Suspense fallback={<ScreenSkeleton />}><QueuesScreen /></Suspense></SubPage>;
   if (sub === 'features')    return <SubPage onBack={() => setSub(null)} title={tr.more.callingFeatures}><Suspense fallback={<ScreenSkeleton />}><FeaturesScreen sp={sp} /></Suspense></SubPage>;
+  if (sub === 'sipdebug')    return <SubPage onBack={() => setSub(null)} title="SIP Debug"><Suspense fallback={<ScreenSkeleton />}><SipDebugScreen sp={sp} /></Suspense></SubPage>;
 
 
   return (
@@ -81,6 +82,12 @@ export default function MoreScreen({
         <SettingsRow label={tr.more.privacy} icon="🛡" value={tr.more.privacyHint} onPress={() => setSub('privacy')} />
         <SettingsRow label={tr.more.dataSafety} icon="🗂" value={tr.more.dataSafetyHint} onPress={() => setSub('datasafety')} />
         <SettingsRow label={tr.more.aiAudit} icon="✨" value={tr.more.aiAuditHint} onPress={() => setSub('aiaudit')} />
+        <SettingsRow
+          label="SIP Debug"
+          icon="🛰"
+          value={sp?.sipStatus ? `● ${sp.sipStatus}` : '—'}
+          onPress={() => setSub('sipdebug')}
+        />
         <SettingsRow label={tr.more.terms} icon="📄" onPress={() => openExternal('https://avastatistic.ca/terms')} />
         <SettingsRow label={tr.more.support} icon="❔" value="support@avastatistic.ca" onPress={() => setSub('support')} />
       </Card>

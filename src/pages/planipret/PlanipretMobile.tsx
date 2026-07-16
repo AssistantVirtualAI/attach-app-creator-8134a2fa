@@ -688,10 +688,12 @@ export default function PlanipretMobile() {
     const ext = profile?.ns_extension || profile?.extension || "";
     void bootstrapPushIfNative(ext);
     void hasSeenPrimer().then((seen) => { if (!seen) setShowPrimer(true); });
-    // Warm the directory/personal/shared caches in parallel so Directory,
-    // Teams and the dialer render from memory instead of blocking on network.
-    prefetchPpContacts(["list", "shared", "directory"]);
-  }, [profile?.user_id, profile?.ns_extension, profile?.extension]);
+    // Warm the directory/personal/shared/Maestro caches in parallel so the
+    // dialer's Search tab and Contacts render from memory instantly.
+    const actions: Array<"list" | "shared" | "directory" | "maestro"> = ["list", "shared", "directory"];
+    if (profile?.maestro_broker_id) actions.push("maestro");
+    prefetchPpContacts(actions);
+  }, [profile?.user_id, profile?.ns_extension, profile?.extension, profile?.maestro_broker_id]);
 
 
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1425", color: "#2E9BDC", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;

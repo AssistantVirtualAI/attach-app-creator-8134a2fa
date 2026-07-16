@@ -69,6 +69,30 @@ async function msAction(ctx: Ctx, action: string, payload: any) {
   return await r.json().catch(() => ({}));
 }
 
+async function callPlanipretFunction(ctx: Ctx, name: string, body: any, extraHeaders: Record<string, string> = {}) {
+  const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      "Content-Type": "application/json",
+      ...extraHeaders,
+    },
+    body: JSON.stringify({ ...(body ?? {}), _user_id: ctx.userId }),
+  });
+  const text = await res.text();
+  let data: any = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  return { httpOk: res.ok, status: res.status, data, text };
+}
+
+function firstText(...values: unknown[]) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
 async function resolveContact(ctx: Ctx, name: string, want: "phone" | "email"): Promise<{ value: string; name: string } | null> {
   if (!name) return null;
   // 1) local contacts
@@ -121,20 +145,35 @@ async function callClaude(system: string, userText: string): Promise<string | nu
 const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   // ===== TELEPHONY =====
   async make_call(ctx, p) {
-    let { to_number, contact_name } = p ?? {};
+    let to_number = firstText(p?.to_number, p?.to, p?.destination, p?.number, p?.phone_number, p?.phone);
+    let { contact_name } = p ?? {};
     if (!to_number && contact_name) {
       const hit = await resolveContact(ctx, contact_name, "phone");
       if (!hit) return { success: false, error: "contact_not_found", message: `Aucun numéro trouvé pour ${contact_name}` };
       to_number = hit.value; contact_name = hit.name;
     }
     if (!to_number) return { success: false, error: "to_number_required" };
-    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ns-calls`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "start", destination: to_number, _user_id: ctx.userId }),
+    const r = await callPlanipretFunction(ctx, "pp-ns-calls", {
+      action: "start",
+      to_number,
+      destination: to_number,
+      caller_id_name: p?.caller_id_name ?? ctx.profile?.full_name ?? "Courtier Planiprêt",
+      client_type: p?.client_type ?? "mobile",
     });
-    const j = await r.json().catch(() => ({}));
-    return { success: r.ok, message: `Appel lancé vers ${contact_name ?? to_number}`, raw: j };
+    const j = r.data;
+    const ok = r.httpOk && j?.success === true;
+    if (!ok) {
+      const reason = j?.error ?? j?.message ?? j?.body ?? `Erreur téléphone (${r.status})`;
+      return { success: false, error: reason, message: `Appel NON lancé vers ${contact_name ?? to_number} : ${reason}`, raw: j };
+    }
+    return {
+      success: true,
+      call_id: j?.call_id,
+      destination: j?.destination ?? to_number,
+      device_registered: j?.device_registered,
+      message: j?.message ?? `Appel lancé vers ${contact_name ?? to_number}`,
+      raw: j,
+    };
   },
 
   async get_active_calls(ctx) {
@@ -188,19 +227,37 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async send_sms(ctx, p) {
-    let to = p?.to; let name = p?.contact_name;
+    let to = firstText(p?.to, p?.to_number, p?.destination, p?.number, p?.phone_number, p?.phone);
+    let name = p?.contact_name;
     if (!to && name) {
       const hit = await resolveContact(ctx, name, "phone");
       if (!hit) return { success: false, error: "contact_not_found", message: `Aucun numéro trouvé pour ${name}` };
       to = hit.value; name = hit.name;
     }
-    if (!to || !p?.message) return { success: false, error: "to_and_message_required" };
-    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ns-sms`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ to, message: p.message, type: "sms", _user_id: ctx.userId }),
+    const message = firstText(p?.message, p?.body, p?.text, p?.content);
+    if (!to || !message) return { success: false, error: "to_and_message_required", message: "Il manque le numéro ou le contenu du SMS." };
+    const r = await callPlanipretFunction(ctx, "pp-ns-sms", {
+      action: "send",
+      to,
+      message,
+      type: p?.type ?? "sms",
+      thread_id: p?.thread_id,
+      from: p?.from,
     });
-    return { success: r.ok, message: `SMS envoyé à ${name ?? to}` };
+    const j = r.data;
+    const ok = r.httpOk && (j?.ok === true || j?.success === true);
+    if (!ok) {
+      const reason = j?.error ?? j?.body ?? j?.message ?? `Erreur SMS (${r.status})`;
+      return { success: false, error: reason, message: `SMS NON envoyé à ${name ?? to} : ${reason}`, raw: j };
+    }
+    return {
+      success: true,
+      message: `SMS envoyé à ${name ?? j?.to ?? to}`,
+      to: j?.to ?? to,
+      from: j?.from,
+      thread_id: j?.thread_id,
+      raw: j,
+    };
   },
 
   async get_sms_conversations(ctx, p) {
@@ -867,15 +924,18 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   // ===== STATS =====
   async get_daily_briefing(ctx) {
     try {
-      const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ai-daily-brief`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ user_id: ctx.userId }),
+      const r = await callPlanipretFunction(ctx, "pp-ava-brief", { period: "day", force: true }, {
+        "x-ava-service": "1",
+        "x-broker-user-id": ctx.userId,
       });
-      return await r.json().catch(() => ({ success: false }));
+      const b = r.data;
+      if (!r.httpOk || b?.error) return { success: false, error: b?.error ?? `brief_failed_${r.status}`, raw: b };
+      const briefing = [
+        b?.headline,
+        ...(Array.isArray(b?.priorities) && b.priorities.length ? ["Priorités: " + b.priorities.join("; ")] : []),
+        ...(Array.isArray(b?.risks) && b.risks.length ? ["Points d'attention: " + b.risks.join("; ")] : []),
+      ].filter(Boolean).join("\n");
+      return { success: true, briefing, summary: b?.stats, raw: b };
     } catch (e) { return { success: false, error: String(e) }; }
   },
 

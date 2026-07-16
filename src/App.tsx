@@ -38,6 +38,7 @@ const MStats = lazyWithRetry(() => import("./pages/planipret/mobile/MStats"));
 const MAvaChat = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaChat"));
 const MAvaNotifications = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaNotifications"));
 const MExtensionSync = lazyWithRetry(() => import("./pages/planipret/mobile/MExtensionSync"));
+const MSipDebug = lazyWithRetry(() => import("./pages/planipret/mobile/MSipDebug"));
 const PlanipretAudit = lazyWithRetry(() => import("./pages/planipret/PlanipretAudit"));
 const Ms365Callback = lazyWithRetry(() => import("./pages/planipret/Ms365Callback"));
 const Ms365Diagnostics = lazyWithRetry(() => import("./pages/planipret/Ms365Diagnostics"));

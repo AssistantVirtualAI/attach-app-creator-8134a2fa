@@ -154,10 +154,9 @@ describe("EmailsList (mobile inbox)", () => {
     render(<EmailsList profile={PROFILE} />);
     await waitFor(() => expect(screen.getByText("Subject 0")).toBeInTheDocument());
 
-    // Open an email that reports an attachment.
-    const emailWithAttachment = { ...PAGE_1[0], hasAttachments: true };
-    // Replace the first item so the click path hits `hasAttachments: true`.
-    fireEvent.click(screen.getByText(emailWithAttachment.subject));
+    // Subject 0 is seeded with hasAttachments: true — opening it triggers
+    // the list_attachments fetch and renders the download button.
+    fireEvent.click(screen.getByText("Subject 0"));
 
     const dlBtn = await screen.findByLabelText(/télécharger report\.pdf/i);
     fireEvent.click(dlBtn);

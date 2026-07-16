@@ -163,7 +163,7 @@ export default function SettingsScreen({
 
 
 
-  const s = sp?.snap?.status;
+  const s = sp?.snap?.status || sp?.sipStatus;
   const sipState: 'registered' | 'connecting' | 'retrying' | 'offline' =
     s === 'registered' ? 'registered' :
     s === 'retrying'   ? 'retrying' :
@@ -336,11 +336,12 @@ export default function SettingsScreen({
       <Card padded={false}>
         <SettingsRow
           label={lang === 'fr' ? 'Statut' : 'Status'}
-          icon={sp?.sipStatus === 'registered' ? '🟢' : sp?.sipStatus === 'error' ? '🔴' : (sp?.sipStatus === 'connecting' || sp?.sipStatus === 'retrying') ? '🟠' : '⚪'}
-          value={sp?.sipStatus || sp?.snap?.status || (lang === 'fr' ? 'inactif' : 'idle')}
+          icon={s === 'registered' ? '🟢' : s === 'error' ? '🔴' : (s === 'connecting' || s === 'retrying') ? '🟠' : '⚪'}
+          value={s || (lang === 'fr' ? 'inactif' : 'idle')}
         />
+        <SettingsRow label={lang === 'fr' ? 'Provider' : 'Provider'} icon="⇄" value={`${sp?.sipProvider || 'jssip-wss'} · ${sp?.platform || 'unknown'}`} />
         <SettingsRow label="WSS" icon="↔" value={sp?.sipConfig?.wssUrl || '—'} />
-        <SettingsRow label={lang === 'fr' ? 'Dernière erreur' : 'Last error'} icon="!" value={sp?.snap?.error || t('common.none')} />
+        <SettingsRow label={lang === 'fr' ? 'Dernière erreur' : 'Last error'} icon="!" value={sp?.snap?.error || sp?.lastPersistedError?.error || t('common.none')} />
         <SettingsRow label={lang === 'fr' ? "Relancer l'enregistrement" : 'Retry Registration'} icon="↻" onPress={() => sp?.reconnect?.()} />
         <SettingsRow label={lang === 'fr' ? "Vider l'état SIP" : 'Clear SIP status'} icon="✕" onPress={() => sp?.clearSipState?.()} />
         <SettingsRow label={lang === 'fr' ? 'Copier le journal SIP' : 'Copy SIP log'} icon="⧉" onPress={async () => {

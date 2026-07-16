@@ -185,7 +185,7 @@ function AuthenticatedShell({
   useEffect(() => { void navLog('AuthenticatedShell mount', { userId: creds.userId, extension: creds.extension, hasSip: !!creds.sipPassword, tab }); return () => { void navLog('AuthenticatedShell unmount'); }; }, []);
   useEffect(() => { void navLog('tab change', { tab }); }, [tab]);
   useDeviceNotifications(creds);
-  const [freshCredentialToken, setFreshCredentialToken] = useState('');
+  const [freshCredentialToken, setFreshCredentialToken] = useState('boot');
   const [authExpired, setAuthExpired] = useState(false);
   const passwordHealRef = useRef('');
   const hydratedTokenRef = useRef('');
@@ -232,7 +232,9 @@ function AuthenticatedShell({
   const sipPassword = creds.sipPassword;
   const WSS_PRIMARY = 'wss://pbxnode.lemtel.tel:7443';
   const WSS_FALLBACK = 'wss://node.lemtelcloud.net:7443';
-  const WORKING_WSS = [WSS_PRIMARY, WSS_FALLBACK];
+  const credentialWss = [creds.wssUrl, ...(creds.wssUrls || [])]
+    .filter((url): url is string => typeof url === 'string' && url.startsWith('wss://'));
+  const WORKING_WSS = Array.from(new Set([...credentialWss, WSS_PRIMARY, WSS_FALLBACK]));
   const sipDomain = creds.sipDomain || 'lemtel.lemtel.tel';
   const credentialsReady = !!(creds.extension && sipPassword);
 
@@ -248,11 +250,12 @@ function AuthenticatedShell({
         wssUrl: WORKING_WSS[0],
         wssUrls: WORKING_WSS,
         authUsername: creds.authUsername || creds.extension,
+        refreshNonce: freshCredentialToken,
       }
     : null;
 
   console.log('[SIP] sipConfig:', sipConfig
-    ? `ext=${sipConfig.extension} domain=${sipConfig.domain} wss=${sipConfig.wssUrl}`
+    ? `ext=${sipConfig.extension} domain=${sipConfig.domain} wss=${sipConfig.wssUrl} provider=${Capacitor.getPlatform() === 'ios' ? 'native-pjsip' : 'jssip-wss'}`
     : 'NULL - missing: ' + [
         !creds.extension && 'extension',
         !sipPassword && 'password',
@@ -292,6 +295,10 @@ function AuthenticatedShell({
         audioRestartAttempts: softphone.audioRestartAttempts,
       },
       sipConfig,
+      sipStatus: softphone.sipStatus,
+      sipError: softphone.sipError,
+      sipProvider: Capacitor.getPlatform() === 'ios' ? 'native-pjsip' : 'jssip-wss',
+      platform: Capacitor.getPlatform(),
       call: softphone.call,
       addCall: softphone.addCall || softphone.call,
       hangup: softphone.hangup,
@@ -398,8 +405,8 @@ function AuthenticatedShell({
       hydrateSoftphoneCredentials('mobile').then((next) => {
         if (next) setCreds(next);
         else if (!creds.organizationId) ensureStoredOrganizationId().catch(() => {});
-        setFreshCredentialToken(creds.accessToken || '');
-      }).catch(() => { setFreshCredentialToken(creds.accessToken || ''); });
+        setFreshCredentialToken(`${Date.now()}`);
+      }).catch(() => { setFreshCredentialToken(`${Date.now()}`); });
     }
   }, [creds]);
 

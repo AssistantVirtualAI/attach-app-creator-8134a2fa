@@ -33,6 +33,8 @@ export interface SIPConfig {
   server?: string;
   port?: number;
   transport?: string;
+  /** Forces a clean registration cycle after credentials are refreshed. */
+  refreshNonce?: string | number;
 }
 
 export class JsSIPUnavailableError extends Error {
@@ -274,7 +276,7 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     authorization_user: config.authUsername || config.extension,
     realm: config.domain,
     display_name: config.displayName || config.extension,
-    contact_uri: `sip:${config.extension}@${config.domain};transport=ws`,
+    contact_uri: `sip:${config.extension}@${config.domain};transport=${isAndroid ? 'wss' : 'ws'}`,
     register: true,
     session_timers: false,
     // 120s = standard mobile (RingCentral/8x8) — force le PBX à rafraîchir
@@ -290,8 +292,18 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     // Via header makes FusionPBX try to reply over TCP/5060 instead of the
     // WSS tunnel, so the REGISTER response never comes back and the UA stays
     // stuck at `idle`. Only rewrite the Contact IP for NAT traversal.
+    uaConfig.hack_via_tcp = false;
     uaConfig.hack_ip_in_contact = true;
     uaConfig.hack_wss_in_transport = true;
+    // eslint-disable-next-line no-console
+    console.info('[SIP][android] JsSIP REGISTER config', {
+      provider: 'jssip-wss',
+      transport: 'WSS',
+      hack_via_tcp: false,
+      hack_wss_in_transport: true,
+      contact_uri: uaConfig.contact_uri,
+      sockets: wssList,
+    });
   }
   return new JsSIP.UA(uaConfig);
 }

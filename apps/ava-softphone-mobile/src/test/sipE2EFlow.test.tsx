@@ -1,10 +1,10 @@
 /**
- * End-to-end-style flow test for the mobile JsSIP softphone using SIP/TLS.
+ * End-to-end-style flow test for the mobile JsSIP softphone using WSS.
  *
  * Verifies:
- *   1. The JsSIP UA registers against the configured SIP/TLS endpoint.
+ *   1. The JsSIP UA registers against the configured WSS endpoint.
  *   2. `sp.call()` places an outbound INVITE *directly via JsSIP* — i.e. it
- *      goes through the TLS transport and never asks the backend to perform a
+ *      goes through the WSS transport and never asks the backend to perform a
  *      FusionPBX `originate-click-to-call`.
  *   3. Dialling never calls the backend `mobile-calls-start` fallback.
  */
@@ -26,7 +26,7 @@ function installFakeJsSIP() {
     __sockets: sockets,
   };
   (window as any).JsSIP = {
-    Socket: vi.fn().mockImplementation((url: string) => { sockets.push(url); return { url }; }),
+    WebSocketInterface: vi.fn().mockImplementation((url: string) => { sockets.push(url); return { url }; }),
     UA: vi.fn().mockImplementation(() => ua),
   };
   return ua;
@@ -36,7 +36,7 @@ const cfg = {
   extension: '300',
   password: 'VirtualAI2026!',
   domain: 'lemtel.lemtel.tel',
-  wssUrl: 'sips://pbxnode.lemtel.tel:5061',
+  wssUrl: 'wss://pbxnode.lemtel.tel:7443',
   displayName: 'Mobile 300',
 };
 
@@ -44,7 +44,7 @@ beforeEach(() => { delete (window as any).JsSIP; });
 afterEach(() => { delete (window as any).JsSIP; });
 
 describe('mobile softphone end-to-end flow', () => {
-  it('registers on the configured SIP/TLS endpoint and places the call via JsSIP (no PBX originate)', async () => {
+  it('registers on the configured WSS endpoint and places the call via JsSIP (no PBX originate)', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ ok: true, mode: 'tls' }), { status: 200 }),
     );
@@ -53,8 +53,8 @@ describe('mobile softphone end-to-end flow', () => {
     const { result } = renderHook(() => useSoftphone(cfg));
 
     await waitFor(() => expect(ua.start).toHaveBeenCalled());
-    // Primary SIP/TLS endpoint is wired in as the first socket.
-    expect(ua.__sockets[0]).toBe('sips:pbxnode.lemtel.tel:5061;transport=tls');
+    // Primary WSS endpoint is wired in as the first socket.
+    expect(ua.__sockets[0]).toBe('wss://pbxnode.lemtel.tel:7443');
 
     // PBX accepts REGISTER → status goes to 'registered'.
     act(() => ua.emit('registered'));

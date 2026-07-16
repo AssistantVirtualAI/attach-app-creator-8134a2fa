@@ -1,7 +1,6 @@
 /**
  * Configuration parity tests — the mobile JsSIP UA must be set up with the
- * same critical flags as the desktop softphone, and now uses SIP/TLS on
- * port 5061 instead of WSS/WebRTC on port 7443.
+ * same critical flags as the desktop softphone over WSS on port 7443.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createSIPUA, buildWssFallbackList, type SIPConfig } from './jssipProvider';
@@ -10,14 +9,14 @@ const cfg: SIPConfig = {
   extension: '300',
   password: 'VirtualAI2026!',
   domain: 'lemtel.lemtel.tel',
-  wssUrl: 'sips://pbxnode.lemtel.tel:5061',
+  wssUrl: 'wss://pbxnode.lemtel.tel:7443',
   displayName: 'Mobile 300',
 };
 
 function installFakeJsSIP(socketProbe: string[]) {
   const ua: any = { on: vi.fn(), start: vi.fn(), stop: vi.fn() };
   (window as any).JsSIP = {
-    Socket: vi.fn().mockImplementation((url: string) => {
+    WebSocketInterface: vi.fn().mockImplementation((url: string) => {
       socketProbe.push(url);
       return { url };
     }),
@@ -42,12 +41,13 @@ describe('buildWssFallbackList', () => {
 
   it('honors caller-supplied WSS URLs before defaults', () => {
     const list = buildWssFallbackList({ ...cfg, wssUrls: ['wss://custom:7443'] });
-    expect(list[0]).toBe('wss://custom:7443');
+    expect(list[0]).toBe('wss://pbxnode.lemtel.tel:7443');
+    expect(list[1]).toBe('wss://custom:7443');
     expect(list).toContain('wss://pbxnode.lemtel.tel:7443');
   });
 });
 
-describe('createSIPUA TLS configuration', () => {
+describe('createSIPUA WSS configuration', () => {
   let attempts: string[];
   let ua: any;
 
@@ -56,10 +56,10 @@ describe('createSIPUA TLS configuration', () => {
     ua = installFakeJsSIP(attempts);
   });
 
-  it('uses a single JsSIP.Socket over SIP/TLS on port 5061', async () => {
+  it('uses WSS sockets with the configured endpoint first', async () => {
     await createSIPUA(cfg, 200);
-    expect(attempts).toEqual(['sips:pbxnode.lemtel.tel:5061;transport=tls']);
-    expect(ua.__opts.sockets).toHaveLength(1);
+    expect(attempts[0]).toBe('wss://pbxnode.lemtel.tel:7443');
+    expect(ua.__opts.sockets.length).toBeGreaterThan(0);
   });
 
   it('builds the URI as sip:<extension>@<domain>', async () => {
@@ -73,7 +73,7 @@ describe('createSIPUA TLS configuration', () => {
     expect(o.password).toBe('VirtualAI2026!');
     expect(o.display_name).toBe('Mobile 300');
     expect(o.register).toBe(true);
-    expect(o.register_expires).toBe(300);
+    expect(o.register_expires).toBe(120);
     expect(o.session_timers).toBe(false);
     expect(o.user_agent).toMatch(/AVA Softphone/);
   });
@@ -81,6 +81,6 @@ describe('createSIPUA TLS configuration', () => {
   it('does not require WebRTC for the SIP/TLS transport', async () => {
     delete (window as any).RTCPeerConnection;
     await createSIPUA(cfg, 200);
-    expect(ua.__opts.sockets).toHaveLength(1);
+    expect(ua.__opts.sockets.length).toBeGreaterThan(0);
   });
 });

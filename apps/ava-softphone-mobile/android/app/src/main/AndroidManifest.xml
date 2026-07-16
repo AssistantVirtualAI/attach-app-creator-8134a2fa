@@ -73,19 +73,6 @@
         </provider>
 
         <!-- SERVICE SIP EN FOREGROUND — requis Android 14+ -->
-        <service
-            android:name="com.lemtel.softphone.SipForegroundService"
-            android:exported="false"
-            android:foregroundServiceType="microphone|phoneCall" />
-
-        <service
-            android:name="com.lemtel.softphone.SipConnectionService"
-            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.telecom.ConnectionService" />
-            </intent-filter>
-        </service>
     </application>
 
 </manifest>

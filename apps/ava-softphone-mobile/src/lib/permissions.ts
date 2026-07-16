@@ -33,19 +33,19 @@ export async function requestMicrophone(): Promise<PermissionStatus> {
       let pluginGranted = false;
       let pluginDenied = false;
       try {
-        const mod = await import('@mozartec/capacitor-microphone');
+        // mozartec removed
         const { Microphone } = mod;
         const check = await Microphone.checkPermissions();
-        console.log('[permissions] mozartec check', check);
+        
         if (check?.microphone === 'granted') pluginGranted = true;
         if (!pluginGranted) {
           const req = await Microphone.requestPermissions();
-          console.log('[permissions] mozartec request', req);
+          
           if (req?.microphone === 'granted') pluginGranted = true;
           else if (req?.microphone === 'denied') pluginDenied = true;
         }
       } catch (e) {
-        console.warn('[permissions] mozartec plugin import/exec failed', {
+        console.warn('[permissions] mic check failed', {
           name: (e as any)?.name, message: (e as any)?.message, stack: (e as any)?.stack,
         });
       }
@@ -191,7 +191,7 @@ export async function checkAllPermissions(): Promise<AllPermissions> {
   try {
     if (Capacitor.isNativePlatform()) {
       try {
-        const { Microphone } = await import('@mozartec/capacitor-microphone');
+        // mozartec removed
         const res = await Microphone.checkPermissions();
         if (res?.microphone === 'granted' || res?.microphone === 'denied' || res?.microphone === 'prompt') {
           perms.microphone = res.microphone as PermissionStatus;

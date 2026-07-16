@@ -19,10 +19,8 @@ import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
-import org.pjsip.pjsua2.*
 
 /**
- * Android PJSIP native bridge — remplace le stub JsSIP WebView.
  *
  * Utilise PJSIP 2.16 compilé avec ENABLE_16KB_PAGE_SIZE=1 (arm64-v8a).
  * Miroir de l'interface iOS CapacitorPjsip pour que nativeSipProvider.ts
@@ -51,17 +49,13 @@ class CapacitorPjsip : Plugin() {
     companion object {
         init {
             try {
-                System.loadLibrary("pjsua2")
-                android.util.Log.i("CapacitorPjsip", "libpjsua2.so loaded (PJSIP native)")
             } catch (e: UnsatisfiedLinkError) {
-                android.util.Log.e("CapacitorPjsip", "libpjsua2.so NOT found: ${e.message}")
             }
         }
     }
 
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        android.util.Log.i("CapacitorPjsip", "CapacitorPjsip PJSIP native loaded")
     }
 
     override fun handleOnDestroy() {

@@ -189,6 +189,21 @@ function AuthenticatedShell({
   const [authExpired, setAuthExpired] = useState(false);
   const passwordHealRef = useRef('');
   const hydratedTokenRef = useRef('');
+  const [sipReady, setSipReady] = useState(false);
+
+  // Hydrate SIP credentials BEFORE starting JsSIP
+  useEffect(() => {
+    if (!creds?.accessToken) return;
+    if (hydratedTokenRef.current === creds.accessToken) {
+      setSipReady(true);
+      return;
+    }
+    hydrateSoftphoneCredentials('mobile').then((next) => {
+      if (next) setCreds(next);
+      hydratedTokenRef.current = creds.accessToken || '';
+      setSipReady(true);
+    }).catch(() => setSipReady(true));
+  }, [creds?.accessToken]);
 
   // Restore Supabase session from stored creds so the mobile SDK can
   // auto-refresh tokens (and so realtime/edge calls always have a fresh JWT).
@@ -236,7 +251,7 @@ function AuthenticatedShell({
     .filter((url): url is string => typeof url === 'string' && url.startsWith('wss://'));
   const WORKING_WSS = Array.from(new Set([...credentialWss, WSS_PRIMARY, WSS_FALLBACK]));
   const sipDomain = creds.sipDomain || 'lemtel.lemtel.tel';
-  const credentialsReady = !!(creds.extension && sipPassword);
+  const credentialsReady = sipReady && !!(creds.extension && sipPassword);
 
   const sipConfig = credentialsReady && creds.extension && sipPassword
     ? {

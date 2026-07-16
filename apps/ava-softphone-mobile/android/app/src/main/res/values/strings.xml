@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">AVA Softphone</string>
-    <string name="title_activity_main">AVA Softphone</string>
+    <string name="app_name">Lemtel Softphone</string>
+    <string name="title_activity_main">Lemtel Softphone</string>
     <string name="package_name">com.lemtel.softphone</string>
     <string name="custom_url_scheme">com.lemtel.softphone</string>
 </resources>

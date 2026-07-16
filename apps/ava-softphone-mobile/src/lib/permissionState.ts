@@ -52,7 +52,7 @@ export async function getPermState(key: PermKey): Promise<PermState> {
 
   try {
     if (key === 'microphone') {
-      const { Microphone } = await import('@mozartec/capacitor-microphone');
+      // mozartec removed
       const r = await Microphone.checkPermissions();
       if (r?.microphone === 'granted') return 'granted';
       if (r?.microphone === 'denied') return (await getAsked('microphone')) ? 'blocked' : 'denied';

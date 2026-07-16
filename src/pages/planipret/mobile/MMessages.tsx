@@ -1197,8 +1197,17 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
     return true;
   };
 
-  const onDelete = async () => { if (await act("delete_email", {}, "Supprimé")) { onChanged(); onClose(); } };
-  const onArchive = async () => { if (await act("archive_email", {}, "Archivé")) { onChanged(); onClose(); } };
+  const onDelete = async () => {
+    // Optimistic: remove from list & close immediately so the UI reflects the action.
+    if (email?.id) onOptimisticRemove?.(email.id);
+    onClose();
+    if (await act("delete_email", {}, "Supprimé")) { onChanged(); } else { onChanged(); }
+  };
+  const onArchive = async () => {
+    if (email?.id) onOptimisticRemove?.(email.id);
+    onClose();
+    if (await act("archive_email", {}, "Archivé")) { onChanged(); } else { onChanged(); }
+  };
   const onToggleFlag = async () => {
     if (await act("flag_email", { unflag: flagged }, flagged ? "Drapeau retiré" : "Drapeau ajouté")) {
       setFlagged(!flagged); onChanged();

@@ -1026,6 +1026,8 @@ function EmailsList({ profile }: { profile: any }) {
               );
             })}
           </ul>
+          {/* Sentinel: auto-triggers loadMore when scrolled near bottom */}
+          {hasMore && <div ref={sentinelRef} aria-hidden className="h-1 w-full" />}
           {hasMore && (
             <button
               onClick={loadMore}

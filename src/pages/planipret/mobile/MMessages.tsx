@@ -856,21 +856,45 @@ function TeamChat({ profile }: { profile: any }) {
 // ============================================================
 function EmailsList({ profile }: { profile: any }) {
   const { t, lang } = useMplanipretLang();
+  const PAGE_SIZE = 25;
   const [emails, setEmails] = useState<any[] | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "no_m365" | "error">("loading");
   const [active, setActive] = useState<any | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeInit, setComposeInit] = useState<{ to?: string; subject?: string; body?: string }>({});
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const load = async () => {
     if (!profile?.ms365_access_token) { setState("no_m365"); return; }
     setState((s) => (s === "ready" ? s : "loading"));
     const { data, error } = await supabase.functions.invoke("ms365-actions", {
-      body: { action: "read_emails", payload: { top: 25 } },
+      body: { action: "read_emails", payload: { top: PAGE_SIZE, skip: 0 } },
     });
     if (error || !(data as any)?.success) { setState("error"); return; }
-    setEmails(((data as any).emails ?? (data as any).messages ?? []));
+    const list = ((data as any).emails ?? (data as any).messages ?? []) as any[];
+    setEmails(list);
+    setHasMore(Boolean((data as any).hasMore) && list.length === PAGE_SIZE);
     setState("ready");
+  };
+
+  const loadMore = async () => {
+    if (loadingMore || !emails) return;
+    setLoadingMore(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ms365-actions", {
+        body: { action: "read_emails", payload: { top: PAGE_SIZE, skip: emails.length } },
+      });
+      if (error || !(data as any)?.success) { toast.error(t("messages.emailsLoadFailed")); return; }
+      const more = ((data as any).emails ?? []) as any[];
+      // Dedupe by id
+      const seen = new Set(emails.map((e) => e.id));
+      const merged = [...emails, ...more.filter((e) => !seen.has(e.id))];
+      setEmails(merged);
+      setHasMore(Boolean((data as any).hasMore) && more.length === PAGE_SIZE);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   useEffect(() => {
@@ -950,37 +974,60 @@ function EmailsList({ profile }: { profile: any }) {
       {state === "ready" && (emails?.length === 0 ? (
         <EmptyState Icon={Mail} title={t("messages.emptyInbox")} sub={t("messages.noRecentEmail")} />
       ) : (
-        <ul className="space-y-1.5">
-          {emails!.map((e: any, i: number) => {
-            const from = e.from?.emailAddress?.name ?? e.from?.emailAddress?.address ?? t("messages.sender");
-            const subject = e.subject ?? t("messages.noSubject");
-            const preview = e.bodyPreview ?? "";
-            const received = e.receivedDateTime ?? e.created_at;
-            const unread = e.isRead === false;
-            return (
-              <li key={e.id ?? i}>
-                <button
-                  onClick={() => setActive(e)}
-                  className="w-full text-left rounded-2xl p-3 active:opacity-80"
-                  style={{
-                    background: "var(--pp-bg-surface)",
-                    border: "1px solid var(--pp-bg-border-2)",
-                    borderLeft: unread ? "3px solid var(--pp-brand-accent)" : "1px solid var(--pp-bg-border-2)",
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="font-semibold text-sm truncate" style={{ color: "var(--pp-text-primary)" }}>{from}</p>
-                    <span className="text-[10px] shrink-0" style={{ color: "var(--pp-text-faint)" }}>
-                      {received ? fmtTime(received, lang, t) : ""}
-                    </span>
-                  </div>
-                  <p className="text-xs truncate mb-1" style={{ color: "var(--pp-text-secondary)" }}>{subject}</p>
-                  <p className="text-[11px] line-clamp-2" style={{ color: "var(--pp-text-muted)" }}>{preview}</p>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <ul className="space-y-1.5">
+            {emails!.map((e: any, i: number) => {
+              const from = e.from?.emailAddress?.name ?? e.from?.emailAddress?.address ?? t("messages.sender");
+              const subject = e.subject ?? t("messages.noSubject");
+              const preview = e.bodyPreview ?? "";
+              const received = e.receivedDateTime ?? e.created_at;
+              const unread = e.isRead === false;
+              const flagged = e.flag?.flagStatus === "flagged";
+              return (
+                <li key={e.id ?? i}>
+                  <button
+                    onClick={() => setActive(e)}
+                    className="w-full text-left rounded-2xl p-3 active:opacity-80"
+                    style={{
+                      background: "var(--pp-bg-surface)",
+                      border: "1px solid var(--pp-bg-border-2)",
+                      borderLeft: unread ? "3px solid var(--pp-brand-accent)" : "1px solid var(--pp-bg-border-2)",
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-semibold text-sm truncate flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
+                        {from}
+                        {e.hasAttachments && <Paperclip className="w-3 h-3" style={{ color: "var(--pp-text-muted)" }} />}
+                        {flagged && <Flag className="w-3 h-3" style={{ color: "#f59e0b", fill: "#f59e0b" }} />}
+                      </p>
+                      <span className="text-[10px] shrink-0" style={{ color: "var(--pp-text-faint)" }}>
+                        {received ? fmtTime(received, lang, t) : ""}
+                      </span>
+                    </div>
+                    <p className="text-xs truncate mb-1" style={{ color: "var(--pp-text-secondary)" }}>{subject}</p>
+                    <p className="text-[11px] line-clamp-2" style={{ color: "var(--pp-text-muted)" }}>{preview}</p>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {hasMore && (
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="mt-3 w-full py-2 rounded-full text-xs font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
+              style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+            >
+              {loadingMore ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+              {loadingMore ? t("common.loading") ?? "Chargement…" : "Charger plus"}
+            </button>
+          )}
+          {!hasMore && emails!.length >= PAGE_SIZE && (
+            <p className="text-center text-[11px] mt-3" style={{ color: "var(--pp-text-faint)" }}>
+              — Fin de la liste —
+            </p>
+          )}
+        </>
       ))}
 
       {active && (

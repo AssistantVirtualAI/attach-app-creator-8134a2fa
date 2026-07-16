@@ -176,6 +176,29 @@ Deno.serve(async (req) => {
         const id = String(payload.message_id ?? "");
         const to = Array.isArray(payload.to) ? payload.to : [payload.to].filter(Boolean);
         if (!id || !to.length) return j({ success: false, error: "message_id + to requis" }, 400);
+        const attachments = Array.isArray(payload.attachments) ? payload.attachments.map((a: any) => ({
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name: String(a.name ?? "file"),
+          contentType: String(a.contentType ?? "application/octet-stream"),
+          contentBytes: String(a.contentBytes ?? ""),
+        })) : [];
+        if (attachments.length) {
+          const cr = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/createForward`, {
+            method: "POST",
+            body: JSON.stringify({
+              toRecipients: to.map((e: string) => ({ emailAddress: { address: e } })),
+              message: { body: { contentType: "HTML", content: String(payload.comment ?? "").replace(/\n/g, "<br/>") } },
+            }),
+          });
+          const draft = await cr.json().catch(() => ({}));
+          if (!cr.ok || !draft?.id) return j({ success: false, error: draft?.error?.message ?? "createForward failed", code: cr.status }, 500);
+          const pr = await graph(admin, profile, `/me/messages/${encodeURIComponent(draft.id)}`, {
+            method: "PATCH", body: JSON.stringify({ attachments }),
+          });
+          if (!pr.ok) return j({ success: false, error: await pr.text().catch(() => ""), code: pr.status }, 500);
+          const sr = await graph(admin, profile, `/me/messages/${encodeURIComponent(draft.id)}/send`, { method: "POST" });
+          return j({ success: sr.ok, error: sr.ok ? null : await sr.text().catch(() => ""), code: sr.status }, sr.ok ? 200 : 500);
+        }
         const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/forward`, {
           method: "POST",
           body: JSON.stringify({

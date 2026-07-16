@@ -285,10 +285,13 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     user_agent: "AVA Softphone 1.1",
   };
   if (isAndroid) {
-    // FusionPBX-friendly quirks: force TCP transport in Via and patch Contact
-    // IP through NAT so the PBX can route responses back over the WSS tunnel.
-    uaConfig.hack_via_tcp = true;
+    // Android runs JsSIP over WSS inside the WebView. Do NOT set
+    // `hack_via_tcp` — the actual transport is WSS, and spoofing "TCP" in the
+    // Via header makes FusionPBX try to reply over TCP/5060 instead of the
+    // WSS tunnel, so the REGISTER response never comes back and the UA stays
+    // stuck at `idle`. Only rewrite the Contact IP for NAT traversal.
     uaConfig.hack_ip_in_contact = true;
+    uaConfig.hack_wss_in_transport = true;
   }
   return new JsSIP.UA(uaConfig);
 }

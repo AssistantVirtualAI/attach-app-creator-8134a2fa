@@ -54,6 +54,7 @@ export default function PpActiveCallScreen({
   const [elapsed, setElapsed] = useState(0);
   const [view, setView] = useState<"main" | "keypad" | "transfer">("main");
   const [dtmfBuf, setDtmfBuf] = useState("");
+  const [lastDtmf, setLastDtmf] = useState<string | null>(null);
   const [transferQuery, setTransferQuery] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);

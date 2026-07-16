@@ -822,7 +822,7 @@ export default function PlanipretMobile() {
         {/* Top brand header — AVA (left) · Planiprêt (center) · Settings (right) */}
         <header
           className="relative flex items-center px-4 pp-mobile-header"
-          style={{ marginTop: "calc(env(safe-area-inset-top, 0px) * 0.35)", paddingTop: 2, paddingBottom: 4 }}
+          style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 6px)", paddingBottom: 6 }}
         >
 
 
@@ -851,8 +851,32 @@ export default function PlanipretMobile() {
             <SettingsIcon className="w-4 h-4" />
           </button>
 
+          {/* Notifications bell — aggregate SMS + voicemail + AVA notifs */}
+          <button
+            type="button"
+            onClick={() => navigate("/mplanipret/notifications")}
+            aria-label={t("nav.notifications") || "Notifications"}
+            className="ml-2 relative flex items-center justify-center active:scale-95 transition"
+            style={{
+              width: 32, height: 32, borderRadius: 10,
+              background: "var(--pp-bg-elevated)",
+              border: "1px solid var(--pp-bg-border-2)",
+              color: totalUnread > 0 ? "var(--pp-brand-accent)" : "var(--pp-text-secondary)",
+            }}
+          >
+            <Bell className="w-4 h-4" />
+            {totalUnread > 0 && (
+              <span
+                className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
+                style={{ background: "var(--pp-danger, #E84C4C)" }}
+              >
+                {totalUnread > 9 ? "9+" : totalUnread}
+              </span>
+            )}
+          </button>
+
           {/* Planiprêt centered logo */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none" style={{ top: "calc(env(safe-area-inset-top, 0px) + 8px)" }}>
             <PlanipretBadge />
             <span style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 14, color: "var(--pp-text-primary)", letterSpacing: "-0.01em" }}>Planiprêt</span>
           </div>

@@ -17,7 +17,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { connectMs365 } from "@/lib/ms365Connect";
 import { getPpContacts } from "@/lib/ppContactsCache";
-import Ms365TestNowButton from "@/components/planipret/Ms365TestNowButton";
+
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "roster";
 
@@ -896,7 +896,6 @@ function EmailsList({ profile }: { profile: any }) {
           <Plus className="w-3.5 h-3.5" /> {t("messages.emailCompose")}
         </button>
         <div className="flex items-center gap-2">
-          <Ms365TestNowButton feature="mail" compact />
           <button
             onClick={load}
             className="text-xs flex items-center gap-1 px-2 py-1"
@@ -1616,7 +1615,7 @@ function Teams365Panel({ profile }: { profile: any }) {
                 );
               })}
             </div>
-            <Ms365TestNowButton feature="teams" compact />
+            
           </div>
 
           {/* Active discussions tab */}

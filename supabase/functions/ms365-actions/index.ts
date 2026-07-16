@@ -63,7 +63,8 @@ Deno.serve(async (req) => {
         const top = Math.min(Number(payload.top ?? 25), 50);
         const skip = Math.max(0, Number(payload.skip ?? 0));
         const filter = payload.folder === "unread" ? "&$filter=isRead%20eq%20false" : "";
-        const r = await graph(admin, profile, `/me/messages?$top=${top}&$skip=${skip}&$orderby=receivedDateTime%20desc&$count=true&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,hasAttachments,importance,flag${filter}`);
+        // Scope to Inbox so deleted/archived messages don't reappear in the list.
+        const r = await graph(admin, profile, `/me/mailFolders/inbox/messages?$top=${top}&$skip=${skip}&$orderby=receivedDateTime%20desc&$count=true&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,hasAttachments,importance,flag${filter}`);
         const d = await r.json();
         const emails = d.value ?? [];
         return j({ success: r.ok, emails, hasMore: emails.length === top, nextSkip: skip + emails.length, total: d["@odata.count"] ?? null, error: d?.error?.message, details: d?.error, code: r.status }, 200);

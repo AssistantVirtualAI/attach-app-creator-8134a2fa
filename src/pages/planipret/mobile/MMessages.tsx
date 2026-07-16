@@ -1461,10 +1461,16 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
   const title = mode === "reply" ? "Répondre" : mode === "reply_all" ? "Répondre à tous" : mode === "forward" ? "Transférer" : t("messages.newEmail");
 
   return (
-    <div className="absolute inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end" onClick={onClose}>
       <div
-        className="w-full rounded-t-3xl flex flex-col"
-        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", height: "94%" }}
+        className="w-full rounded-t-3xl flex flex-col shadow-2xl"
+        style={{
+          background: "var(--pp-bg-base)",
+          border: "1px solid var(--pp-bg-border-2)",
+          height: "calc(100vh - env(safe-area-inset-top) - 24px)",
+          maxHeight: "calc(100dvh - 24px)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>

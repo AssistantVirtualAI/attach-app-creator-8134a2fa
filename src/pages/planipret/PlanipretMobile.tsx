@@ -34,7 +34,7 @@ import { hasSeenPrimer } from "@/lib/native/permissions/orchestrator";
 import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
-import { prefetchPpContacts } from "@/lib/ppContactsCache";
+import { prefetchPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 
 
 const ACCENT = "#2E9BDC";
@@ -110,7 +110,8 @@ type DialerContact = {
   extension?: string;
   email?: string;
   company?: string;
-  source?: "personal" | "shared" | "directory" | "native";
+  source?: "personal" | "shared" | "directory" | "native" | "maestro";
+  maestro_client_id?: string;
 };
 
 function contactDisplayName(c: DialerContact): string {
@@ -127,15 +128,25 @@ function contactPrimaryPhone(c: DialerContact): string | undefined {
   return c.cell_phone || c.phone || c.work_phone || c.home_phone || c.extension;
 }
 
-function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boolean; onClose: () => void; initial?: string; openMessages: (n?: string) => void; softphone: ReturnType<typeof useMplanipretSoftphone> }) {
+function Dialer({ open, onClose, initial, openMessages, softphone, maestroConfigured }: { open: boolean; onClose: () => void; initial?: string; openMessages: (n?: string) => void; softphone: ReturnType<typeof useMplanipretSoftphone>; maestroConfigured: boolean }) {
   const { t } = useMplanipretLang();
   const [mode, setMode] = useState<"keypad" | "search">("keypad");
   const [number, setNumber] = useState("");
   const [calling, setCalling] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
   const [query, setQuery] = useState("");
-  const [contacts, setContacts] = useState<DialerContact[]>([]);
+  // Seed synchronously from persistent cache so the directory shows INSTANTLY
+  // instead of a spinner. Fresh data is fetched in the background.
+  const [contacts, setContacts] = useState<DialerContact[]>(() => {
+    const seed: DialerContact[] = [];
+    for (const [action, source] of [["directory", "directory"], ["list", "personal"], ["shared", "shared"], ["maestro", "maestro"]] as const) {
+      const rows = peekPpContacts(action);
+      if (rows?.length) seed.push(...rows.map((c: any) => ({ ...c, source })));
+    }
+    return seed;
+  });
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [refreshingContacts, setRefreshingContacts] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
   const [contactsLoadKey, setContactsLoadKey] = useState(0);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -167,9 +178,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     onClose();
   };
 
-
-
-  // Load contacts (phone + personal + shared + directory) once when opening Search mode.
+  // Load contacts (phone + personal + shared + directory + maestro) once when opening Search mode.
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -182,38 +191,51 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     }
   };
 
-  const loadNsContacts = async (action: "list" | "shared" | "directory") => {
+  const loadNsContacts = async (action: "list" | "shared" | "directory" | "maestro") => {
     const { getPpContacts } = await import("@/lib/ppContactsCache");
     return getPpContacts(action, { limit: 500 });
   };
 
   useEffect(() => {
-    if (!open || mode !== "search" || contacts.length > 0 || loadingContacts) return;
+    if (!open || mode !== "search") return;
     let cancelled = false;
-    setLoadingContacts(true);
+    const hasSeed = contacts.length > 0;
+    if (hasSeed) setRefreshingContacts(true); else setLoadingContacts(true);
     setContactsError(null);
-    const appendBatch = (rows: any[], source: DialerContact["source"]) => {
-      if (cancelled || !rows?.length) return;
-      setContacts((cur) => [...cur, ...rows.map((c) => ({ ...c, source }))]);
-      setLoadingContacts(false); // render as soon as any batch is in
+    // Replace contacts of a given source with fresh rows (avoids duplicates on refresh).
+    const replaceBatch = (rows: any[], source: DialerContact["source"]) => {
+      if (cancelled) return;
+      setContacts((cur) => {
+        const kept = cur.filter((c) => c.source !== source);
+        return [...kept, ...rows.map((c) => ({ ...c, source }))];
+      });
+      setLoadingContacts(false);
     };
     const errors: string[] = [];
     const jobs: Array<Promise<void>> = [
-      withTimeout(listDeviceContacts(), 6000, "device").then((v) => appendBatch(v, "native")).catch((e) => { errors.push(`device: ${e?.message ?? e}`); }),
-      withTimeout(loadNsContacts("list"), 12000, "personal").then((v) => appendBatch(v, "personal")).catch((e) => { errors.push(`personal: ${e?.message ?? e}`); }),
-      withTimeout(loadNsContacts("shared"), 12000, "shared").then((v) => appendBatch(v, "shared")).catch((e) => { errors.push(`shared: ${e?.message ?? e}`); }),
-      withTimeout(loadNsContacts("directory"), 12000, "directory").then((v) => appendBatch(v, "directory")).catch((e) => { errors.push(`directory: ${e?.message ?? e}`); }),
+      withTimeout(listDeviceContacts(), 6000, "device").then((v) => replaceBatch(v, "native")).catch((e) => { errors.push(`device: ${e?.message ?? e}`); }),
+      withTimeout(loadNsContacts("list"), 12000, "personal").then((v) => replaceBatch(v, "personal")).catch((e) => { errors.push(`personal: ${e?.message ?? e}`); }),
+      withTimeout(loadNsContacts("shared"), 12000, "shared").then((v) => replaceBatch(v, "shared")).catch((e) => { errors.push(`shared: ${e?.message ?? e}`); }),
+      withTimeout(loadNsContacts("directory"), 12000, "directory").then((v) => replaceBatch(v, "directory")).catch((e) => { errors.push(`directory: ${e?.message ?? e}`); }),
     ];
+    if (maestroConfigured) {
+      jobs.push(
+        withTimeout(loadNsContacts("maestro"), 12000, "maestro").then((v) => replaceBatch(v, "maestro")).catch((e) => { errors.push(`maestro: ${e?.message ?? e}`); }),
+      );
+    }
     Promise.allSettled(jobs).then(() => {
       if (cancelled) return;
       setLoadingContacts(false);
+      setRefreshingContacts(false);
       setContacts((cur) => {
         if (cur.length === 0 && errors.length) setContactsError(errors[0]);
         return cur;
       });
     });
     return () => { cancelled = true; };
-  }, [open, mode, contacts.length, loadingContacts, contactsLoadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode, contactsLoadKey, maestroConfigured]);
+
 
 
   const tokens = tokenize(query);
@@ -348,8 +370,11 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                 </div>
                 <div className="flex-1 overflow-y-auto mt-3 -mx-2 px-2 pb-4">
                   {loadingContacts && contacts.length === 0 ? (
-                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}><Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />{t("dialer.searching")}</div>
-                  ) : contactsError ? (
+                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>
+                      <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
+                      {t("dialer.loadingDirectory") || "Chargement du répertoire…"}
+                    </div>
+                  ) : contactsError && contacts.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>
                       <div className="mb-2">{contactsError}</div>
                       <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Réessayer</button>
@@ -359,10 +384,18 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                   ) : (
                     <>
                       {!tokens.length && (
-                        <div className="px-1 pb-2 text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--pp-text-muted)" }}>
-                          {t("contacts.directorySection") || t("contacts.directory")}
+                        <div className="px-1 pb-2 flex items-center justify-between">
+                          <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--pp-text-muted)" }}>
+                            {t("contacts.directorySection") || t("contacts.directory")} · {contacts.length}
+                          </div>
+                          {refreshingContacts && (
+                            <div className="flex items-center gap-1 text-[10px]" style={{ color: "var(--pp-text-muted)" }}>
+                              <Loader2 className="w-3 h-3 animate-spin" /> Mise à jour…
+                            </div>
+                          )}
                         </div>
                       )}
+
                     <ul className="flex flex-col gap-1.5">
                       {filtered.map((c, i) => {
                         const dest = contactPrimaryPhone(c);
@@ -386,6 +419,8 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
                               <div className="text-xs truncate" style={{ color: "var(--pp-text-muted)" }}>
                                 {c.extension ? `${t("contacts.extension") || "Ext."} ${c.extension}` : dest || c.email || ""}
                                 {c.source === "directory" && ` · ${t("dialer.internal")}`}
+                                {c.source === "maestro" && ` · Maestro`}
+                                {c.source === "native" && ` · Téléphone`}
                               </div>
                             </div>
                             <button
@@ -666,10 +701,12 @@ export default function PlanipretMobile() {
     const ext = profile?.ns_extension || profile?.extension || "";
     void bootstrapPushIfNative(ext);
     void hasSeenPrimer().then((seen) => { if (!seen) setShowPrimer(true); });
-    // Warm the directory/personal/shared caches in parallel so Directory,
-    // Teams and the dialer render from memory instead of blocking on network.
-    prefetchPpContacts(["list", "shared", "directory"]);
-  }, [profile?.user_id, profile?.ns_extension, profile?.extension]);
+    // Warm the directory/personal/shared/Maestro caches in parallel so the
+    // dialer's Search tab and Contacts render from memory instantly.
+    const actions: Array<"list" | "shared" | "directory" | "maestro"> = ["list", "shared", "directory"];
+    if (profile?.maestro_broker_id) actions.push("maestro");
+    prefetchPpContacts(actions);
+  }, [profile?.user_id, profile?.ns_extension, profile?.extension, profile?.maestro_broker_id]);
 
 
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1425", color: "#2E9BDC", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;
@@ -885,7 +922,7 @@ export default function PlanipretMobile() {
 
 
 
-        <Dialer open={dialerOpen} onClose={() => setDialerOpen(false)} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); navigate(`/mplanipret/messages${n ? `?to=${encodeURIComponent(n)}` : ""}`); }} softphone={softphone} />
+        <Dialer open={dialerOpen} onClose={() => setDialerOpen(false)} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); navigate(`/mplanipret/messages${n ? `?to=${encodeURIComponent(n)}` : ""}`); }} softphone={softphone} maestroConfigured={Boolean(profile?.maestro_broker_id)} />
         <PpActiveCallScreen softphone={softphone} />
         <InboundCallOverlay call={inbound} onClose={() => setInbound(null)} />
         {avaOpen && profile?.user_id && (

@@ -49,7 +49,7 @@ function makeEmail(id: number, extra: Partial<any> = {}) {
 }
 
 const PAGE_SIZE = 25;
-const PAGE_1 = Array.from({ length: PAGE_SIZE }, (_, i) => makeEmail(i));
+const PAGE_1 = Array.from({ length: PAGE_SIZE }, (_, i) => makeEmail(i, i === 0 ? { hasAttachments: true } : {}));
 const PAGE_2 = Array.from({ length: 3 }, (_, i) => makeEmail(100 + i));
 
 // Deterministic base64 for a small "PDF" payload (well under 3 MB).

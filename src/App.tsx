@@ -499,6 +499,7 @@ const App = () => (
                   <Route path="ava" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaChat /></Suspense>} />
                   <Route path="notifications" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaNotifications /></Suspense>} />
                   <Route path="extension-sync" element={<Suspense fallback={<MobilePageSkeleton />}><MExtensionSync /></Suspense>} />
+                  <Route path="sip-debug" element={<Suspense fallback={<MobilePageSkeleton />}><MSipDebug /></Suspense>} />
                 </Route>
                 <Route path="/planipret/dashboard" element={<Navigate to="/planipret/admin/overview" replace />} />
                 <Route path="/planipret/integrations" element={<Navigate to="/planipret/admin/integrations" replace />} />

@@ -128,15 +128,29 @@ function contactPrimaryPhone(c: DialerContact): string | undefined {
   return c.cell_phone || c.phone || c.work_phone || c.home_phone || c.extension;
 }
 
-function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boolean; onClose: () => void; initial?: string; openMessages: (n?: string) => void; softphone: ReturnType<typeof useMplanipretSoftphone> }) {
+function Dialer({ open, onClose, initial, openMessages, softphone, maestroConfigured }: { open: boolean; onClose: () => void; initial?: string; openMessages: (n?: string) => void; softphone: ReturnType<typeof useMplanipretSoftphone>; maestroConfigured: boolean }) {
   const { t } = useMplanipretLang();
   const [mode, setMode] = useState<"keypad" | "search">("keypad");
   const [number, setNumber] = useState("");
   const [calling, setCalling] = useState(false);
   const [micDenied, setMicDenied] = useState(false);
   const [query, setQuery] = useState("");
-  const [contacts, setContacts] = useState<DialerContact[]>([]);
+  // Seed synchronously from persistent cache so the directory shows INSTANTLY
+  // instead of a spinner. Fresh data is fetched in the background.
+  const [contacts, setContacts] = useState<DialerContact[]>(() => {
+    try {
+      // Lazy-import cache reader without top-level side effects if module not ready.
+      const mod = require("@/lib/ppContactsCache") as typeof import("@/lib/ppContactsCache");
+      const seed: DialerContact[] = [];
+      for (const [action, source] of [["directory", "directory"], ["list", "personal"], ["shared", "shared"], ["maestro", "maestro"]] as const) {
+        const rows = mod.peekPpContacts(action);
+        if (rows?.length) seed.push(...rows.map((c: any) => ({ ...c, source })));
+      }
+      return seed;
+    } catch { return []; }
+  });
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [refreshingContacts, setRefreshingContacts] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
   const [contactsLoadKey, setContactsLoadKey] = useState(0);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -168,9 +182,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     onClose();
   };
 
-
-
-  // Load contacts (phone + personal + shared + directory) once when opening Search mode.
+  // Load contacts (phone + personal + shared + directory + maestro) once when opening Search mode.
   const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -183,38 +195,51 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     }
   };
 
-  const loadNsContacts = async (action: "list" | "shared" | "directory") => {
+  const loadNsContacts = async (action: "list" | "shared" | "directory" | "maestro") => {
     const { getPpContacts } = await import("@/lib/ppContactsCache");
     return getPpContacts(action, { limit: 500 });
   };
 
   useEffect(() => {
-    if (!open || mode !== "search" || contacts.length > 0 || loadingContacts) return;
+    if (!open || mode !== "search") return;
     let cancelled = false;
-    setLoadingContacts(true);
+    const hasSeed = contacts.length > 0;
+    if (hasSeed) setRefreshingContacts(true); else setLoadingContacts(true);
     setContactsError(null);
-    const appendBatch = (rows: any[], source: DialerContact["source"]) => {
-      if (cancelled || !rows?.length) return;
-      setContacts((cur) => [...cur, ...rows.map((c) => ({ ...c, source }))]);
-      setLoadingContacts(false); // render as soon as any batch is in
+    // Replace contacts of a given source with fresh rows (avoids duplicates on refresh).
+    const replaceBatch = (rows: any[], source: DialerContact["source"]) => {
+      if (cancelled) return;
+      setContacts((cur) => {
+        const kept = cur.filter((c) => c.source !== source);
+        return [...kept, ...rows.map((c) => ({ ...c, source }))];
+      });
+      setLoadingContacts(false);
     };
     const errors: string[] = [];
     const jobs: Array<Promise<void>> = [
-      withTimeout(listDeviceContacts(), 6000, "device").then((v) => appendBatch(v, "native")).catch((e) => { errors.push(`device: ${e?.message ?? e}`); }),
-      withTimeout(loadNsContacts("list"), 12000, "personal").then((v) => appendBatch(v, "personal")).catch((e) => { errors.push(`personal: ${e?.message ?? e}`); }),
-      withTimeout(loadNsContacts("shared"), 12000, "shared").then((v) => appendBatch(v, "shared")).catch((e) => { errors.push(`shared: ${e?.message ?? e}`); }),
-      withTimeout(loadNsContacts("directory"), 12000, "directory").then((v) => appendBatch(v, "directory")).catch((e) => { errors.push(`directory: ${e?.message ?? e}`); }),
+      withTimeout(listDeviceContacts(), 6000, "device").then((v) => replaceBatch(v, "native")).catch((e) => { errors.push(`device: ${e?.message ?? e}`); }),
+      withTimeout(loadNsContacts("list"), 12000, "personal").then((v) => replaceBatch(v, "personal")).catch((e) => { errors.push(`personal: ${e?.message ?? e}`); }),
+      withTimeout(loadNsContacts("shared"), 12000, "shared").then((v) => replaceBatch(v, "shared")).catch((e) => { errors.push(`shared: ${e?.message ?? e}`); }),
+      withTimeout(loadNsContacts("directory"), 12000, "directory").then((v) => replaceBatch(v, "directory")).catch((e) => { errors.push(`directory: ${e?.message ?? e}`); }),
     ];
+    if (maestroConfigured) {
+      jobs.push(
+        withTimeout(loadNsContacts("maestro"), 12000, "maestro").then((v) => replaceBatch(v, "maestro")).catch((e) => { errors.push(`maestro: ${e?.message ?? e}`); }),
+      );
+    }
     Promise.allSettled(jobs).then(() => {
       if (cancelled) return;
       setLoadingContacts(false);
+      setRefreshingContacts(false);
       setContacts((cur) => {
         if (cur.length === 0 && errors.length) setContactsError(errors[0]);
         return cur;
       });
     });
     return () => { cancelled = true; };
-  }, [open, mode, contacts.length, loadingContacts, contactsLoadKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode, contactsLoadKey, maestroConfigured]);
+
 
 
   const tokens = tokenize(query);

@@ -370,8 +370,11 @@ function Dialer({ open, onClose, initial, openMessages, softphone, maestroConfig
                 </div>
                 <div className="flex-1 overflow-y-auto mt-3 -mx-2 px-2 pb-4">
                   {loadingContacts && contacts.length === 0 ? (
-                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}><Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />{t("dialer.searching")}</div>
-                  ) : contactsError ? (
+                    <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>
+                      <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
+                      {t("dialer.loadingDirectory") || "Chargement du répertoire…"}
+                    </div>
+                  ) : contactsError && contacts.length === 0 ? (
                     <div className="text-center text-sm py-8" style={{ color: "var(--pp-text-muted)" }}>
                       <div className="mb-2">{contactsError}</div>
                       <button onClick={() => { setContacts([]); setContactsError(null); setContactsLoadKey((n) => n + 1); }} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>Réessayer</button>
@@ -381,10 +384,18 @@ function Dialer({ open, onClose, initial, openMessages, softphone, maestroConfig
                   ) : (
                     <>
                       {!tokens.length && (
-                        <div className="px-1 pb-2 text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--pp-text-muted)" }}>
-                          {t("contacts.directorySection") || t("contacts.directory")}
+                        <div className="px-1 pb-2 flex items-center justify-between">
+                          <div className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: "var(--pp-text-muted)" }}>
+                            {t("contacts.directorySection") || t("contacts.directory")} · {contacts.length}
+                          </div>
+                          {refreshingContacts && (
+                            <div className="flex items-center gap-1 text-[10px]" style={{ color: "var(--pp-text-muted)" }}>
+                              <Loader2 className="w-3 h-3 animate-spin" /> Mise à jour…
+                            </div>
+                          )}
                         </div>
                       )}
+
                     <ul className="flex flex-col gap-1.5">
                       {filtered.map((c, i) => {
                         const dest = contactPrimaryPhone(c);

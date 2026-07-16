@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
         await supabase
           .from("planipret_phone_messages")
           .insert({
-            user_id: ctx.profileId,
+            user_id: ctx.userId,
             direction: "outbound",
             to_number: destination,
             from_number: fromNumber,

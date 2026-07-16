@@ -1073,6 +1073,9 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged }: {
   const [analysis, setAnalysis] = useState<any | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [flagged, setFlagged] = useState<boolean>(email.flag?.flagStatus === "flagged");
+  const [attachments, setAttachments] = useState<Array<{ id: string; name: string; contentType: string; size: number }>>([]);
+  const [downloadingAtt, setDownloadingAtt] = useState<string | null>(null);
+
 
   const merged = detail ?? email;
   const from = merged.from?.emailAddress?.name ?? merged.from?.emailAddress?.address ?? t("messages.sender");
@@ -1294,14 +1297,22 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
   const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024; // 3 MB per file
+
   const pickFiles = async (files: FileList | null) => {
     if (!files?.length) return;
-    const encoded = await Promise.all(Array.from(files).map(async (f) => ({ ...(await fileToBase64(f)), size: f.size })));
-    // Cap total size at ~3MB per attachment to stay under Graph inline limit (4MB).
-    const filtered = encoded.filter((a) => a.size < 3_500_000);
-    if (filtered.length < encoded.length) toast.error("Certains fichiers > 3 Mo ont été ignorés");
-    setAttachments((cur) => [...cur, ...filtered]);
+    const arr = Array.from(files);
+    const tooBig = arr.filter((f) => f.size > MAX_ATTACHMENT_BYTES);
+    const ok = arr.filter((f) => f.size <= MAX_ATTACHMENT_BYTES);
+    if (tooBig.length) {
+      const names = tooBig.map((f) => `${f.name} (${(f.size / 1024 / 1024).toFixed(1)} Mo)`).join(", ");
+      toast.error(`Fichier > 3 Mo ignoré: ${names}`);
+    }
+    if (!ok.length) return;
+    const encoded = await Promise.all(ok.map(async (f) => ({ ...(await fileToBase64(f)), size: f.size })));
+    setAttachments((cur) => [...cur, ...encoded]);
   };
+
 
   const removeAttachment = (idx: number) => setAttachments((cur) => cur.filter((_, i) => i !== idx));
 

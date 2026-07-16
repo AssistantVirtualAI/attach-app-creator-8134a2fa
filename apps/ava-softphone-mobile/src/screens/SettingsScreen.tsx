@@ -334,7 +334,11 @@ export default function SettingsScreen({
       {/* SIP debug — collapsible */}
       <SectionTitle eyebrow="SIP" title={t('settings.diagnostics')} />
       <Card padded={false}>
-        <SettingsRow label={lang === 'fr' ? 'Statut' : 'Status'} icon="●" value={sp?.snap?.status || (lang === 'fr' ? 'inactif' : 'idle')} />
+        <SettingsRow
+          label={lang === 'fr' ? 'Statut' : 'Status'}
+          icon={sp?.sipStatus === 'registered' ? '🟢' : sp?.sipStatus === 'error' ? '🔴' : (sp?.sipStatus === 'connecting' || sp?.sipStatus === 'retrying') ? '🟠' : '⚪'}
+          value={sp?.sipStatus || sp?.snap?.status || (lang === 'fr' ? 'inactif' : 'idle')}
+        />
         <SettingsRow label="WSS" icon="↔" value={sp?.sipConfig?.wssUrl || '—'} />
         <SettingsRow label={lang === 'fr' ? 'Dernière erreur' : 'Last error'} icon="!" value={sp?.snap?.error || t('common.none')} />
         <SettingsRow label={lang === 'fr' ? "Relancer l'enregistrement" : 'Retry Registration'} icon="↻" onPress={() => sp?.reconnect?.()} />

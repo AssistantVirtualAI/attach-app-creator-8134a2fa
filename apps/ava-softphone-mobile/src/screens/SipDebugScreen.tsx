@@ -62,9 +62,13 @@ export default function SipDebugScreen({ sp }: { sp: any }) {
   const { lang } = useT();
   const tx = (fr: string, en: string) => (lang === 'fr' ? fr : en);
 
-  const status: SIPStatus = (sp?.sipStatus as SIPStatus) || 'idle';
-  const lastError: string | null = sp?.sipError || sp?.lastPersistedError?.message || null;
+  const status: SIPStatus = (sp?.snap?.status as SIPStatus) || (sp?.sipStatus as SIPStatus) || 'idle';
+  const lastError: string | null = sp?.snap?.error || sp?.sipError || sp?.lastPersistedError?.error || null;
   const wss: string | undefined = sp?.sipConfig?.wssUrl;
+  const provider: string = sp?.sipProvider || 'jssip-wss';
+  const platform: string = sp?.platform || 'unknown';
+  const extension: string | undefined = sp?.sipConfig?.extension;
+  const domain: string | undefined = sp?.sipConfig?.domain;
   const rawLog: SipLogEntry[] = sp?.sipLog || [];
 
   const events = useMemo(
@@ -99,7 +103,10 @@ export default function SipDebugScreen({ sp }: { sp: any }) {
               SIP · {status}
             </div>
             <div style={{ fontSize: font.xs, color: colors.mutedSilver, marginTop: 2, fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {wss || '—'}
+              {provider} · {platform} · {extension || '—'}@{domain || '—'}
+            </div>
+            <div style={{ fontSize: font.xs, color: colors.mutedSilver, marginTop: 2, fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {wss || tx('Credentials SIP incomplets', 'SIP credentials incomplete')}
             </div>
           </div>
         </div>

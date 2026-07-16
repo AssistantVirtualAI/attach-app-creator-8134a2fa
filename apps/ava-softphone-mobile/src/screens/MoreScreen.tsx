@@ -85,7 +85,7 @@ export default function MoreScreen({
         <SettingsRow
           label="SIP Debug"
           icon="🛰"
-          value={sp?.sipStatus ? `● ${sp.sipStatus}` : '—'}
+          value={sp?.snap?.status ? `● ${sp.snap.status}` : '—'}
           onPress={() => setSub('sipdebug')}
         />
         <SettingsRow label={tr.more.terms} icon="📄" onPress={() => openExternal('https://avastatistic.ca/terms')} />

@@ -19,11 +19,12 @@ import SupportScreen from './SupportScreen';
 const AIAuditScreen = lazy(() => import('./AIAuditScreen'));
 const QueuesScreen  = lazy(() => import('./QueuesScreen'));
 const FeaturesScreen = lazy(() => import('./FeaturesScreen'));
+const SipDebugScreen = lazy(() => import('./SipDebugScreen'));
 import ScreenSkeleton from '../components/ScreenSkeleton';
 import { useTr, useT } from '../lib/i18n';
 
 
-type Sub = null | 'voicemail' | 'messages' | 'contacts' | 'settings' | 'delete' | 'privacy' | 'datasafety' | 'permissions' | 'support' | 'aiaudit' | 'queues' | 'features';
+type Sub = null | 'voicemail' | 'messages' | 'contacts' | 'settings' | 'delete' | 'privacy' | 'datasafety' | 'permissions' | 'support' | 'aiaudit' | 'queues' | 'features' | 'sipdebug';
 
 export default function MoreScreen({
   creds, sp, onSignOut, haptic, 

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
-import { CalendarSyncCard } from "@/components/planipret/CalendarSyncCard";
+
 import { Ms365ScopesCard } from "@/components/planipret/Ms365ScopesCard";
 import { SiriShortcutsCard } from "@/components/planipret/SiriShortcutsCard";
 import { safeEdgeFunction } from "@/lib/safeEdgeFunction";
@@ -280,7 +280,6 @@ export default function MMore() {
         {ms365Connected && (
           <div style={{ padding: 8 }}>
             <Ms365ScopesCard profile={profile} onReconnect={connectMs365} />
-            <CalendarSyncCard profile={profile} />
           </div>
         )}
       </Section>

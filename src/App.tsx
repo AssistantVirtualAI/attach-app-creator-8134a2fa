@@ -67,7 +67,7 @@ const PADiagnostics = lazyWithRetry(() => import("./pages/planipret/admin/PADiag
 const PAMaestroSync = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroSync"));
 const PlanipretPrivacy = lazyWithRetry(() => import("./pages/planipret/PlanipretPrivacy"));
 const PlanipretIntegrationsLazy = lazyWithRetry(() => import("./pages/planipret/PlanipretIntegrations"));
-import { AdminPageSkeleton } from "./components/planipret/Skeletons";
+import { AdminPageSkeleton, MobilePageSkeleton } from "./components/planipret/Skeletons";
 
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
 const VoiceAnalytics = lazyWithRetry(() => import("./pages/VoiceAnalytics"));
@@ -464,19 +464,19 @@ const App = () => (
                 <Route path="/lemtel/setup/:token" element={<SoftphoneSetup />} />
                 <Route path="/lemtel/redeem/:token" element={<SoftphoneSetup />} />
                 <Route path={ROUTES.MPLANIPRET} element={<MplanipretGuard><PlanipretMobile /></MplanipretGuard>}>
-                  <Route index element={<MHome />} />
-                  <Route path="home" element={<MHome />} />
-                  <Route path="calls" element={<MCalls />} />
-                  <Route path="messages" element={<MMessages />} />
-                  <Route path="voicemail" element={<MVoicemail />} />
-                  <Route path="contacts" element={<MContacts />} />
-                  <Route path="more" element={<MMore />} />
-                  <Route path="pipeline" element={<MPipeline />} />
-                  <Route path="search" element={<MSearch />} />
-                  <Route path="stats" element={<MStats />} />
-                  <Route path="ava" element={<MAvaChat />} />
-                  <Route path="notifications" element={<MAvaNotifications />} />
-                  <Route path="extension-sync" element={<MExtensionSync />} />
+                  <Route index element={<Suspense fallback={<MobilePageSkeleton />}><MHome /></Suspense>} />
+                  <Route path="home" element={<Suspense fallback={<MobilePageSkeleton />}><MHome /></Suspense>} />
+                  <Route path="calls" element={<Suspense fallback={<MobilePageSkeleton />}><MCalls /></Suspense>} />
+                  <Route path="messages" element={<Suspense fallback={<MobilePageSkeleton />}><MMessages /></Suspense>} />
+                  <Route path="voicemail" element={<Suspense fallback={<MobilePageSkeleton />}><MVoicemail /></Suspense>} />
+                  <Route path="contacts" element={<Suspense fallback={<MobilePageSkeleton />}><MContacts /></Suspense>} />
+                  <Route path="more" element={<Suspense fallback={<MobilePageSkeleton />}><MMore /></Suspense>} />
+                  <Route path="pipeline" element={<Suspense fallback={<MobilePageSkeleton />}><MPipeline /></Suspense>} />
+                  <Route path="search" element={<Suspense fallback={<MobilePageSkeleton />}><MSearch /></Suspense>} />
+                  <Route path="stats" element={<Suspense fallback={<MobilePageSkeleton />}><MStats /></Suspense>} />
+                  <Route path="ava" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaChat /></Suspense>} />
+                  <Route path="notifications" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaNotifications /></Suspense>} />
+                  <Route path="extension-sync" element={<Suspense fallback={<MobilePageSkeleton />}><MExtensionSync /></Suspense>} />
                 </Route>
                 <Route path="/planipret/dashboard" element={<Navigate to="/planipret/admin/overview" replace />} />
                 <Route path="/planipret/integrations" element={<Navigate to="/planipret/admin/integrations" replace />} />

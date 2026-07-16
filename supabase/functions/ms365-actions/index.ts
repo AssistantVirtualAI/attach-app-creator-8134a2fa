@@ -61,10 +61,34 @@ Deno.serve(async (req) => {
       }
       case "read_emails": {
         const top = Math.min(Number(payload.top ?? 25), 50);
+        const skip = Math.max(0, Number(payload.skip ?? 0));
         const filter = payload.folder === "unread" ? "&$filter=isRead%20eq%20false" : "";
-        const r = await graph(admin, profile, `/me/messages?$top=${top}&$orderby=receivedDateTime%20desc&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,hasAttachments,importance${filter}`);
+        const r = await graph(admin, profile, `/me/messages?$top=${top}&$skip=${skip}&$orderby=receivedDateTime%20desc&$count=true&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,hasAttachments,importance,flag${filter}`);
         const d = await r.json();
-        return j({ success: r.ok, emails: d.value ?? [], error: d?.error?.message, details: d?.error, code: r.status }, 200);
+        const emails = d.value ?? [];
+        return j({ success: r.ok, emails, hasMore: emails.length === top, nextSkip: skip + emails.length, total: d["@odata.count"] ?? null, error: d?.error?.message, details: d?.error, code: r.status }, 200);
+      }
+      case "list_attachments": {
+        const id = String(payload.message_id ?? "");
+        if (!id) return j({ success: false, error: "message_id requis" }, 400);
+        const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/attachments?$select=id,name,contentType,size,isInline`);
+        const d = await r.json().catch(() => ({}));
+        return j({ success: r.ok, attachments: d.value ?? [], error: d?.error?.message, code: r.status }, r.ok ? 200 : 500);
+      }
+      case "get_attachment": {
+        const id = String(payload.message_id ?? "");
+        const attId = String(payload.attachment_id ?? "");
+        if (!id || !attId) return j({ success: false, error: "message_id + attachment_id requis" }, 400);
+        const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attId)}`);
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) return j({ success: false, error: d?.error?.message ?? "get_attachment failed", code: r.status }, 500);
+        return j({
+          success: true,
+          attachment: {
+            id: d.id, name: d.name, contentType: d.contentType, size: d.size,
+            contentBytes: d.contentBytes ?? null,
+          },
+        });
       }
       case "list_folders": {
         const r = await graph(admin, profile, `/me/mailFolders?$top=50&$select=id,displayName,totalItemCount,unreadItemCount`);

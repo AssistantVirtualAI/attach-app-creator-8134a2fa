@@ -856,21 +856,45 @@ function TeamChat({ profile }: { profile: any }) {
 // ============================================================
 function EmailsList({ profile }: { profile: any }) {
   const { t, lang } = useMplanipretLang();
+  const PAGE_SIZE = 25;
   const [emails, setEmails] = useState<any[] | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "no_m365" | "error">("loading");
   const [active, setActive] = useState<any | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeInit, setComposeInit] = useState<{ to?: string; subject?: string; body?: string }>({});
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const load = async () => {
     if (!profile?.ms365_access_token) { setState("no_m365"); return; }
     setState((s) => (s === "ready" ? s : "loading"));
     const { data, error } = await supabase.functions.invoke("ms365-actions", {
-      body: { action: "read_emails", payload: { top: 25 } },
+      body: { action: "read_emails", payload: { top: PAGE_SIZE, skip: 0 } },
     });
     if (error || !(data as any)?.success) { setState("error"); return; }
-    setEmails(((data as any).emails ?? (data as any).messages ?? []));
+    const list = ((data as any).emails ?? (data as any).messages ?? []) as any[];
+    setEmails(list);
+    setHasMore(Boolean((data as any).hasMore) && list.length === PAGE_SIZE);
     setState("ready");
+  };
+
+  const loadMore = async () => {
+    if (loadingMore || !emails) return;
+    setLoadingMore(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ms365-actions", {
+        body: { action: "read_emails", payload: { top: PAGE_SIZE, skip: emails.length } },
+      });
+      if (error || !(data as any)?.success) { toast.error(t("messages.emailsLoadFailed")); return; }
+      const more = ((data as any).emails ?? []) as any[];
+      // Dedupe by id
+      const seen = new Set(emails.map((e) => e.id));
+      const merged = [...emails, ...more.filter((e) => !seen.has(e.id))];
+      setEmails(merged);
+      setHasMore(Boolean((data as any).hasMore) && more.length === PAGE_SIZE);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   useEffect(() => {
@@ -950,37 +974,60 @@ function EmailsList({ profile }: { profile: any }) {
       {state === "ready" && (emails?.length === 0 ? (
         <EmptyState Icon={Mail} title={t("messages.emptyInbox")} sub={t("messages.noRecentEmail")} />
       ) : (
-        <ul className="space-y-1.5">
-          {emails!.map((e: any, i: number) => {
-            const from = e.from?.emailAddress?.name ?? e.from?.emailAddress?.address ?? t("messages.sender");
-            const subject = e.subject ?? t("messages.noSubject");
-            const preview = e.bodyPreview ?? "";
-            const received = e.receivedDateTime ?? e.created_at;
-            const unread = e.isRead === false;
-            return (
-              <li key={e.id ?? i}>
-                <button
-                  onClick={() => setActive(e)}
-                  className="w-full text-left rounded-2xl p-3 active:opacity-80"
-                  style={{
-                    background: "var(--pp-bg-surface)",
-                    border: "1px solid var(--pp-bg-border-2)",
-                    borderLeft: unread ? "3px solid var(--pp-brand-accent)" : "1px solid var(--pp-bg-border-2)",
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="font-semibold text-sm truncate" style={{ color: "var(--pp-text-primary)" }}>{from}</p>
-                    <span className="text-[10px] shrink-0" style={{ color: "var(--pp-text-faint)" }}>
-                      {received ? fmtTime(received, lang, t) : ""}
-                    </span>
-                  </div>
-                  <p className="text-xs truncate mb-1" style={{ color: "var(--pp-text-secondary)" }}>{subject}</p>
-                  <p className="text-[11px] line-clamp-2" style={{ color: "var(--pp-text-muted)" }}>{preview}</p>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <ul className="space-y-1.5">
+            {emails!.map((e: any, i: number) => {
+              const from = e.from?.emailAddress?.name ?? e.from?.emailAddress?.address ?? t("messages.sender");
+              const subject = e.subject ?? t("messages.noSubject");
+              const preview = e.bodyPreview ?? "";
+              const received = e.receivedDateTime ?? e.created_at;
+              const unread = e.isRead === false;
+              const flagged = e.flag?.flagStatus === "flagged";
+              return (
+                <li key={e.id ?? i}>
+                  <button
+                    onClick={() => setActive(e)}
+                    className="w-full text-left rounded-2xl p-3 active:opacity-80"
+                    style={{
+                      background: "var(--pp-bg-surface)",
+                      border: "1px solid var(--pp-bg-border-2)",
+                      borderLeft: unread ? "3px solid var(--pp-brand-accent)" : "1px solid var(--pp-bg-border-2)",
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-semibold text-sm truncate flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
+                        {from}
+                        {e.hasAttachments && <Paperclip className="w-3 h-3" style={{ color: "var(--pp-text-muted)" }} />}
+                        {flagged && <Flag className="w-3 h-3" style={{ color: "#f59e0b", fill: "#f59e0b" }} />}
+                      </p>
+                      <span className="text-[10px] shrink-0" style={{ color: "var(--pp-text-faint)" }}>
+                        {received ? fmtTime(received, lang, t) : ""}
+                      </span>
+                    </div>
+                    <p className="text-xs truncate mb-1" style={{ color: "var(--pp-text-secondary)" }}>{subject}</p>
+                    <p className="text-[11px] line-clamp-2" style={{ color: "var(--pp-text-muted)" }}>{preview}</p>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {hasMore && (
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="mt-3 w-full py-2 rounded-full text-xs font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
+              style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+            >
+              {loadingMore ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+              {loadingMore ? t("common.loading") ?? "Chargement…" : "Charger plus"}
+            </button>
+          )}
+          {!hasMore && emails!.length >= PAGE_SIZE && (
+            <p className="text-center text-[11px] mt-3" style={{ color: "var(--pp-text-faint)" }}>
+              — Fin de la liste —
+            </p>
+          )}
+        </>
       ))}
 
       {active && (
@@ -1026,6 +1073,9 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged }: {
   const [analysis, setAnalysis] = useState<any | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [flagged, setFlagged] = useState<boolean>(email.flag?.flagStatus === "flagged");
+  const [attachments, setAttachments] = useState<Array<{ id: string; name: string; contentType: string; size: number }>>([]);
+  const [downloadingAtt, setDownloadingAtt] = useState<string | null>(null);
+
 
   const merged = detail ?? email;
   const from = merged.from?.emailAddress?.name ?? merged.from?.emailAddress?.address ?? t("messages.sender");
@@ -1049,13 +1099,55 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged }: {
         setFlagged((data as any).email?.flag?.flagStatus === "flagged");
       }
       if (!cancelled) setLoadingDetail(false);
-      // Mark as read on open (fire-and-forget).
+      // Mark as read on open (fire-and-forget). Also mutate the incoming
+      // preview object so the parent list reflects the new state without a
+      // refetch.
       supabase.functions.invoke("ms365-actions", {
         body: { action: "mark_read_email", payload: { message_id: email.id, isRead: true } },
+      }).then(({ error }) => {
+        if (!error) {
+          try { (email as any).isRead = true; onChanged(); } catch {}
+        }
       }).catch(() => {});
+      // Load attachments list when the message has any.
+      if (email?.hasAttachments || (detail as any)?.hasAttachments) {
+        const { data: attData } = await supabase.functions.invoke("ms365-actions", {
+          body: { action: "list_attachments", payload: { message_id: email.id } },
+        });
+        if (!cancelled && (attData as any)?.success) {
+          setAttachments(((attData as any).attachments ?? []).filter((a: any) => !a.isInline));
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, [email?.id]);
+
+  const downloadAttachment = async (att: { id: string; name: string; contentType: string }) => {
+    setDownloadingAtt(att.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("ms365-actions", {
+        body: { action: "get_attachment", payload: { message_id: email.id, attachment_id: att.id } },
+      });
+      if (error || !(data as any)?.success) throw new Error((data as any)?.error ?? error?.message ?? "Échec");
+      const bytes = (data as any).attachment?.contentBytes;
+      if (!bytes) throw new Error("Contenu vide");
+      // Decode base64 → Blob → download
+      const bin = atob(bytes);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const blob = new Blob([arr], { type: att.contentType || "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = att.name || "attachment";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Téléchargement impossible");
+    } finally {
+      setDownloadingAtt(null);
+    }
+  };
+
 
   const analyzeWithAva = async () => {
     if (!email.id) { toast.error("Message ID manquant"); return; }
@@ -1185,7 +1277,40 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged }: {
               <div className="whitespace-pre-wrap">{bodyHtml || merged.bodyPreview || t("messages.previewUnavailable")}</div>
             )}
           </div>
+
+          {attachments.length > 0 && (
+            <div className="rounded-xl p-3"
+                 style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
+              <p className="text-[11px] uppercase tracking-wider mb-2" style={{ color: "var(--pp-text-muted)" }}>
+                Pièces jointes ({attachments.length})
+              </p>
+              <ul className="space-y-1.5">
+                {attachments.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <Paperclip className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--pp-text-muted)" }} />
+                      <span className="text-xs truncate" style={{ color: "var(--pp-text-secondary)" }}>{a.name}</span>
+                      <span className="text-[10px] shrink-0" style={{ color: "var(--pp-text-faint)" }}>
+                        {(a.size / 1024).toFixed(0)} Ko
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => downloadAttachment(a)}
+                      disabled={downloadingAtt === a.id}
+                      className="px-2 py-1 rounded-full text-[11px] font-semibold disabled:opacity-60 flex items-center gap-1"
+                      style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-brand-accent)" }}
+                      aria-label={`Télécharger ${a.name}`}
+                    >
+                      {downloadingAtt === a.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowLeft className="w-3 h-3 rotate-[-90deg]" />}
+                      Télécharger
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
+
 
         <div className="px-3 py-2 grid grid-cols-3 gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
           <ToolbarBtn onClick={openReply} icon={<Reply className="w-4 h-4" />} label="Répondre" />
@@ -1247,14 +1372,22 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
   const [sending, setSending] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024; // 3 MB per file
+
   const pickFiles = async (files: FileList | null) => {
     if (!files?.length) return;
-    const encoded = await Promise.all(Array.from(files).map(async (f) => ({ ...(await fileToBase64(f)), size: f.size })));
-    // Cap total size at ~3MB per attachment to stay under Graph inline limit (4MB).
-    const filtered = encoded.filter((a) => a.size < 3_500_000);
-    if (filtered.length < encoded.length) toast.error("Certains fichiers > 3 Mo ont été ignorés");
-    setAttachments((cur) => [...cur, ...filtered]);
+    const arr = Array.from(files);
+    const tooBig = arr.filter((f) => f.size > MAX_ATTACHMENT_BYTES);
+    const ok = arr.filter((f) => f.size <= MAX_ATTACHMENT_BYTES);
+    if (tooBig.length) {
+      const names = tooBig.map((f) => `${f.name} (${(f.size / 1024 / 1024).toFixed(1)} Mo)`).join(", ");
+      toast.error(`Fichier > 3 Mo ignoré: ${names}`);
+    }
+    if (!ok.length) return;
+    const encoded = await Promise.all(ok.map(async (f) => ({ ...(await fileToBase64(f)), size: f.size })));
+    setAttachments((cur) => [...cur, ...encoded]);
   };
+
 
   const removeAttachment = (idx: number) => setAttachments((cur) => cur.filter((_, i) => i !== idx));
 

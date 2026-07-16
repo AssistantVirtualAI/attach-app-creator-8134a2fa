@@ -864,6 +864,7 @@ function EmailsList({ profile }: { profile: any }) {
   const [composeInit, setComposeInit] = useState<{ to?: string; subject?: string; body?: string }>({});
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const load = async () => {
     if (!profile?.ms365_access_token) { setState("no_m365"); return; }

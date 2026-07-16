@@ -457,6 +457,7 @@ export default function MHome() {
         loading={msCalendarLoading}
         error={msCalendarError}
         lang={lang}
+        onRefresh={loadStats}
       />
 
 

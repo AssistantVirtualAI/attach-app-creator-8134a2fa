@@ -602,21 +602,68 @@ export default function PlanipretMobile() {
 
   useEffect(() => {
     if (!profile?.user_id) return;
+    const sb: any = supabase;
     const refreshCounts = async () => {
-      const [{ count: mc }, { count: vc }] = await Promise.all([
+      const [{ count: mc }, { count: vc }, { count: nc }] = await Promise.all([
         supabase.from("planipret_phone_messages").select("id", { count: "exact", head: true }).eq("user_id", profile.user_id).eq("direction", "inbound").is("read_at", null),
         supabase.from("planipret_voicemails").select("id", { count: "exact", head: true }).eq("user_id", profile.user_id).eq("folder", "inbox").eq("is_read", false),
+        sb.from("planipret_ava_notifications").select("id", { count: "exact", head: true }).eq("user_id", profile.user_id).is("read_at", null),
       ]);
-      setUnreadMsg(mc ?? 0); setUnreadVm(vc ?? 0);
+      setUnreadMsg(mc ?? 0); setUnreadVm(vc ?? 0); setUnreadNotif(nc ?? 0);
     };
     refreshCounts();
+
+    // In-app toast alerts for new inbound events (message, voicemail, missed call).
+    // Deep-links straight to the relevant tab so the user can act immediately.
+    const onNewSms = (payload: any) => {
+      const row = payload.new || {};
+      if (row.direction !== "inbound") return;
+      const from = row.from_number || row.contact_number || row.sender || "";
+      toast(t("toasts.newSms") || "Nouveau SMS", {
+        description: `${from}${row.body ? " — " + String(row.body).slice(0, 60) : ""}`,
+        duration: 6000,
+        action: { label: t("common.view") || "Voir", onClick: () => navigate("/mplanipret/messages") },
+      });
+    };
+    const onNewVm = (payload: any) => {
+      const row = payload.new || {};
+      if (row.folder && row.folder !== "inbox") return;
+      const from = row.from_number || row.caller || "";
+      toast(t("toasts.newVoicemail") || "Nouvelle boîte vocale", {
+        description: from,
+        duration: 7000,
+        action: { label: t("common.listen") || "Écouter", onClick: () => navigate("/mplanipret/calls?tab=voicemail") },
+      });
+    };
+    const onNewMissed = (payload: any) => {
+      const row = payload.new || {};
+      const status = String(row.status || "").toLowerCase();
+      if (row.direction !== "inbound" || !(status.includes("miss") || status === "no-answer" || status === "abandoned")) return;
+      const from = row.from_name || row.from_number || "";
+      toast(t("toasts.missedCall") || "Appel manqué", {
+        description: from,
+        duration: 6000,
+        action: { label: t("common.view") || "Voir", onClick: () => navigate("/mplanipret/calls") },
+      });
+    };
+    const onNewNotif = (payload: any) => {
+      const row = payload.new || {};
+      toast(row.title || "Notification", {
+        description: row.body ? String(row.body).slice(0, 80) : undefined,
+        duration: 6000,
+        action: { label: t("common.view") || "Voir", onClick: () => navigate("/mplanipret/notifications") },
+      });
+    };
+
     const ch = supabase
       .channel("mplanipret-badges")
-      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_messages", filter: `user_id=eq.${profile.user_id}` }, refreshCounts)
-      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_voicemails", filter: `user_id=eq.${profile.user_id}` }, refreshCounts)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_messages", filter: `user_id=eq.${profile.user_id}` }, (p: any) => { if (p.eventType === "INSERT") onNewSms(p); refreshCounts(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_voicemails", filter: `user_id=eq.${profile.user_id}` }, (p: any) => { if (p.eventType === "INSERT") onNewVm(p); refreshCounts(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "planipret_phone_calls", filter: `user_id=eq.${profile.user_id}` }, onNewMissed)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_ava_notifications", filter: `user_id=eq.${profile.user_id}` }, (p: any) => { if (p.eventType === "INSERT") onNewNotif(p); refreshCounts(); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [profile?.user_id, location.pathname]);
+  }, [profile?.user_id, location.pathname, navigate, t]);
 
   const loadProfile = async () => {
     const { data: { session } } = await supabase.auth.getSession();

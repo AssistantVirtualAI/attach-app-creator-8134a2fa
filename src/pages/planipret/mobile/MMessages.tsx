@@ -864,6 +864,7 @@ function EmailsList({ profile }: { profile: any }) {
   const [composeInit, setComposeInit] = useState<{ to?: string; subject?: string; body?: string }>({});
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const load = async () => {
     if (!profile?.ms365_access_token) { setState("no_m365"); return; }
@@ -905,6 +906,20 @@ function EmailsList({ profile }: { profile: any }) {
     document.addEventListener("visibilitychange", onVis);
     return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
   }, [profile?.ms365_access_token]);
+
+  // Auto-prefetch next page when the sentinel scrolls into view (200px margin).
+  useEffect(() => {
+    if (!hasMore || loadingMore || !emails || emails.length === 0) return;
+    const el = sentinelRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => { if (entries.some((e) => e.isIntersecting)) loadMore(); },
+      { rootMargin: "200px 0px", threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, loadingMore, emails?.length]);
 
   return (
     <div className="h-full overflow-y-auto p-3">
@@ -1011,6 +1026,8 @@ function EmailsList({ profile }: { profile: any }) {
               );
             })}
           </ul>
+          {/* Sentinel: auto-triggers loadMore when scrolled near bottom */}
+          {hasMore && <div ref={sentinelRef} aria-hidden className="h-1 w-full" />}
           {hasMore && (
             <button
               onClick={loadMore}

@@ -34,7 +34,7 @@ import { hasSeenPrimer } from "@/lib/native/permissions/orchestrator";
 import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
-import { prefetchPpContacts } from "@/lib/ppContactsCache";
+import { prefetchPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 
 
 const ACCENT = "#2E9BDC";

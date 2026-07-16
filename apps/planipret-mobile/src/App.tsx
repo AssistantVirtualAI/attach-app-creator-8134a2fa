@@ -40,6 +40,7 @@ const Ms365Callback = lazyWithRetry(() => import('@/pages/planipret/Ms365Callbac
 const MMs365Diagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MMs365Diagnostics'), 'MMs365Diagnostics');
 const MStyleDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MStyleDiagnostics'), 'MStyleDiagnostics');
 const MDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MDiagnostics'), 'MDiagnostics');
+const MSipDebug = lazyWithRetry(() => import('@/pages/planipret/mobile/MSipDebug'), 'MSipDebug');
 
 
 
@@ -137,6 +138,7 @@ export default function App() {
                       <Route path="ms365-diagnostics" element={<MMs365Diagnostics />} />
                       <Route path="style-diagnostics" element={<MStyleDiagnostics />} />
                       <Route path="diagnostics" element={<MDiagnostics />} />
+                      <Route path="sip-debug" element={<MSipDebug />} />
                     </Route>
                     <Route path="*" element={<Navigate to="/mplanipret" replace />} />
                   </Routes>

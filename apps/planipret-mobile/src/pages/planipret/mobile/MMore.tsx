@@ -18,6 +18,8 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { openMs365Authorize } from "@/lib/ms365OAuth";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
+import { ppSipProvider, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
+import { Radio } from "lucide-react";
 
 const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
@@ -87,6 +89,19 @@ export default function MMore() {
   const { sipConnected, reregister } = useMplanipretSoftphone();
   const nsConnected = !!(profile?.ns_extension ?? profile?.extension) && sipConnected;
   const ms365Connected = !!profile?.ms365_access_token;
+
+  const [sipSnap, setSipSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
+  useEffect(() => ppSipProvider.subscribe(setSipSnap), []);
+  const sipStatusColor: Record<string, string> = {
+    idle: "#94A3B8", connecting: "#F59E0B", connected: "#3B82F6",
+    registered: "#10B981", disconnected: "#94A3B8", error: "#EF4444",
+  };
+  const sipStatusLabel = sipSnap.status === "registered" ? "Enregistré"
+    : sipSnap.status === "connecting" ? "Connexion…"
+    : sipSnap.status === "connected" ? "Connecté (non enregistré)"
+    : sipSnap.status === "error" ? "Erreur"
+    : sipSnap.status === "disconnected" ? "Déconnecté"
+    : "Inactif";
 
   const reconnectNs = async () => {
     setReconnecting(true);
@@ -236,6 +251,14 @@ export default function MMore() {
           right={<span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>{profile?.ns_extension ?? profile?.extension ?? "—"}</span>} chevron />
         <Row icon={<Voicemail className="w-4 h-4" />} label={t("more.voicemail")}
           onClick={() => navigate("/mplanipret/calls?tab=voicemails")} chevron />
+        <Row
+          icon={<Radio className="w-4 h-4" style={{ color: sipStatusColor[sipSnap.status] }} />}
+          label="État SIP"
+          sub={sipSnap.errorCause ? `${sipStatusLabel} — ${sipSnap.errorCause}` : sipStatusLabel}
+          onClick={() => navigate("/mplanipret/sip-debug")}
+          right={<span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: sipStatusColor[sipSnap.status], color: "#fff" }}>{sipSnap.status.toUpperCase()}</span>}
+          chevron
+        />
       </Section>
 
       <Section title={t("more.sections.availability")}>

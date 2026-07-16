@@ -465,6 +465,20 @@ export default function MHome() {
         lang={lang}
       />
 
+      {/* ===== SIP DEBUG SHORTCUT ===== */}
+      <button
+        type="button"
+        onClick={() => navigate("/mplanipret/sip-debug")}
+        className="w-full flex items-center gap-2 px-3 py-2 rounded-xl active:scale-[0.99] transition"
+        style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+      >
+        <span className="w-2 h-2 rounded-full" style={{ background: "#10B981" }} />
+        <span className="text-[12px] font-semibold flex-1 text-left">SIP Debug — état & derniers événements</span>
+        <span className="text-[10px] opacity-70">Ouvrir →</span>
+      </button>
+
+
+
 
 
       {/* ===== TASKS / REMINDERS ===== */}

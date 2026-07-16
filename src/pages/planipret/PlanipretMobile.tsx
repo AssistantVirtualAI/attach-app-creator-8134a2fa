@@ -110,7 +110,8 @@ type DialerContact = {
   extension?: string;
   email?: string;
   company?: string;
-  source?: "personal" | "shared" | "directory" | "native";
+  source?: "personal" | "shared" | "directory" | "native" | "maestro";
+  maestro_client_id?: string;
 };
 
 function contactDisplayName(c: DialerContact): string {

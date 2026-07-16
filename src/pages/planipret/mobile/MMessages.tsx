@@ -1077,11 +1077,12 @@ type ComposeInit = {
   body?: string;
 };
 
-function EmailDetailSheet({ email, onClose, onCompose, onChanged }: {
+function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRemove }: {
   email: any;
   onClose: () => void;
   onCompose: (init: ComposeInit) => void;
   onChanged: () => void;
+  onOptimisticRemove?: (id: string) => void;
 }) {
   const { t } = useMplanipretLang();
   const [detail, setDetail] = useState<any | null>(null);

@@ -1,5 +1,5 @@
 /**
- * SIP/TLS failure surfacing (no WebRTC required).
+ * WSS SIP failure surfacing (no WebRTC required for registration).
  */
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
@@ -16,7 +16,7 @@ beforeEach(() => {
     isConnected: vi.fn().mockReturnValue(false),
   };
   (window as any).JsSIP = {
-    Socket: vi.fn().mockImplementation(() => ({ url: 'sips://pbxnode.lemtel.tel:5061' })),
+    WebSocketInterface: vi.fn().mockImplementation(() => ({ url: 'wss://pbxnode.lemtel.tel:7443' })),
     UA: vi.fn().mockImplementation(() => fakeUA),
   };
 });
@@ -29,10 +29,10 @@ const cfg = {
   extension: '300',
   password: 'pw',
   domain: 'lemtel.lemtel.tel',
-  wssUrl: 'sips://pbxnode.lemtel.tel:5061',
+  wssUrl: 'wss://pbxnode.lemtel.tel:7443',
 };
 
-describe('SIP/TLS transport', () => {
+describe('WSS transport', () => {
   it('does not block the softphone when WebRTC is unavailable', () => {
     const originalRTC = (window as any).RTCPeerConnection;
     delete (window as any).RTCPeerConnection;

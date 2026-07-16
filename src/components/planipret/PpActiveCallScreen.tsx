@@ -65,10 +65,25 @@ export default function PpActiveCallScreen({
   const active = snap.callState === "ringing-out" || snap.callState === "ringing-in"
     || snap.callState === "active" || snap.callState === "held";
 
-  // Reset transient state each new call
+  // Reset transient state only when the call ends. Never reset on transitions
+  // between active sub-states (ringing-out → active, active → held, etc.) so
+  // the DTMF keypad stays visible right after the callee picks up.
   useEffect(() => {
     if (!active) { setView("main"); setDtmfBuf(""); setTransferQuery(""); setElapsed(0); }
   }, [active]);
+
+  // Auto-open the DTMF keypad the moment the call is answered so brokers can
+  // navigate IVRs without an extra tap.
+  const openedKeypadRef = useRef(false);
+  useEffect(() => {
+    if (snap.callState === "active" && !openedKeypadRef.current) {
+      openedKeypadRef.current = true;
+      setView("keypad");
+    }
+    if (!active) openedKeypadRef.current = false;
+  }, [snap.callState, active]);
+
+
 
   // Duration timer for connected calls
   useEffect(() => {

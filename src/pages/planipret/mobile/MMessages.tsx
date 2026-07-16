@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   Plus, X, ArrowLeft, Phone, Send, Paperclip, MessageSquare, Zap,
   Users, Mail, Sparkles, Loader2, RefreshCw, Reply, Circle, CheckCircle2, AlertTriangle, RotateCw,
-  UsersRound, Contact, Search, BookUser,
+  UsersRound, Contact, Search, BookUser, Flag, Archive, Trash2, Forward,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import SmsTemplatesSheet from "@/components/planipret/SmsTemplatesSheet";
@@ -17,7 +17,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { connectMs365 } from "@/lib/ms365Connect";
 import { getPpContacts } from "@/lib/ppContactsCache";
-import Ms365TestNowButton from "@/components/planipret/Ms365TestNowButton";
+
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "roster";
 
@@ -896,7 +896,6 @@ function EmailsList({ profile }: { profile: any }) {
           <Plus className="w-3.5 h-3.5" /> {t("messages.emailCompose")}
         </button>
         <div className="flex items-center gap-2">
-          <Ms365TestNowButton feature="mail" compact />
           <button
             onClick={load}
             className="text-xs flex items-center gap-1 px-2 py-1"
@@ -988,7 +987,8 @@ function EmailsList({ profile }: { profile: any }) {
         <EmailDetailSheet
           email={active}
           onClose={() => setActive(null)}
-          onReply={(init) => { setActive(null); setComposeInit(init); setComposeOpen(true); }}
+          onCompose={(init) => { setActive(null); setComposeInit(init); setComposeOpen(true); }}
+          onChanged={() => load()}
         />
       )}
       {composeOpen && (
@@ -1002,15 +1002,60 @@ function EmailsList({ profile }: { profile: any }) {
   );
 }
 
-function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: () => void; onReply: (init: { to?: string; subject?: string; body?: string }) => void }) {
+type ComposeInit = {
+  mode?: "new" | "reply" | "reply_all" | "forward";
+  message_id?: string;
+  to?: string;
+  cc?: string;
+  bcc?: string;
+  subject?: string;
+  body?: string;
+};
+
+function EmailDetailSheet({ email, onClose, onCompose, onChanged }: {
+  email: any;
+  onClose: () => void;
+  onCompose: (init: ComposeInit) => void;
+  onChanged: () => void;
+}) {
   const { t } = useMplanipretLang();
-  const from = email.from?.emailAddress?.name ?? email.from?.emailAddress?.address ?? t("messages.sender");
-  const fromAddr = email.from?.emailAddress?.address ?? "";
-  const subject = email.subject ?? t("messages.noSubject");
-  const preview = email.bodyPreview ?? "";
+  const [detail, setDetail] = useState<any | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [sumOpen, setSumOpen] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [flagged, setFlagged] = useState<boolean>(email.flag?.flagStatus === "flagged");
+
+  const merged = detail ?? email;
+  const from = merged.from?.emailAddress?.name ?? merged.from?.emailAddress?.address ?? t("messages.sender");
+  const fromAddr = merged.from?.emailAddress?.address ?? "";
+  const subject = merged.subject ?? t("messages.noSubject");
+  const toList = Array.isArray(merged.toRecipients) ? merged.toRecipients : [];
+  const ccList = Array.isArray(merged.ccRecipients) ? merged.ccRecipients : [];
+  const bodyHtml: string = merged?.body?.content ?? "";
+  const bodyType: string = merged?.body?.contentType ?? "text";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!email?.id) return;
+      setLoadingDetail(true);
+      const { data } = await supabase.functions.invoke("ms365-actions", {
+        body: { action: "read_email_detail", payload: { message_id: email.id } },
+      });
+      if (!cancelled && (data as any)?.success) {
+        setDetail((data as any).email);
+        setFlagged((data as any).email?.flag?.flagStatus === "flagged");
+      }
+      if (!cancelled) setLoadingDetail(false);
+      // Mark as read on open (fire-and-forget).
+      supabase.functions.invoke("ms365-actions", {
+        body: { action: "mark_read_email", payload: { message_id: email.id, isRead: true } },
+      }).catch(() => {});
+    })();
+    return () => { cancelled = true; };
+  }, [email?.id]);
 
   const analyzeWithAva = async () => {
     if (!email.id) { toast.error("Message ID manquant"); return; }
@@ -1019,24 +1064,61 @@ function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: ()
       const { data, error } = await supabase.functions.invoke("ava-email-analyzer", {
         body: { ms_message_id: email.id },
       });
-      if (error || !(data as any)?.success) {
-        throw new Error((data as any)?.error ?? error?.message ?? "Échec de l'analyse");
-      }
+      if (error || !(data as any)?.success) throw new Error((data as any)?.error ?? error?.message ?? "Échec");
       setAnalysis((data as any).analysis);
       if ((data as any).cached) toast.info("Analyse récupérée du cache");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Erreur AVA");
-    } finally {
-      setAnalyzing(false);
-    }
+    } catch (e: any) { toast.error(e?.message ?? "Erreur AVA"); }
+    finally { setAnalyzing(false); }
   };
 
+  const act = async (action: string, extra: Record<string, unknown> = {}, successMsg?: string) => {
+    if (!email.id) return;
+    setBusy(action);
+    const { data, error } = await supabase.functions.invoke("ms365-actions", {
+      body: { action, payload: { message_id: email.id, ...extra } },
+    });
+    setBusy(null);
+    if (error || !(data as any)?.success) {
+      toast.error((data as any)?.error ?? error?.message ?? "Échec");
+      return false;
+    }
+    if (successMsg) toast.success(successMsg);
+    return true;
+  };
+
+  const onDelete = async () => { if (await act("delete_email", {}, "Supprimé")) { onChanged(); onClose(); } };
+  const onArchive = async () => { if (await act("archive_email", {}, "Archivé")) { onChanged(); onClose(); } };
+  const onToggleFlag = async () => {
+    if (await act("flag_email", { unflag: flagged }, flagged ? "Drapeau retiré" : "Drapeau ajouté")) {
+      setFlagged(!flagged); onChanged();
+    }
+  };
+  const onMarkUnread = async () => { if (await act("mark_read_email", { isRead: false }, "Marqué non lu")) { onChanged(); onClose(); } };
+
+  const buildQuote = () => {
+    const plain = merged.bodyPreview ?? "";
+    return `\n\n---\nDe: ${from} <${fromAddr}>\nEnvoyé: ${merged.receivedDateTime ?? ""}\nObjet: ${subject}\n\n${plain}`;
+  };
+
+  const openReply = () => onCompose({
+    mode: "reply", message_id: email.id, to: fromAddr,
+    subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`, body: buildQuote(),
+  });
+  const openReplyAll = () => onCompose({
+    mode: "reply_all", message_id: email.id, to: fromAddr,
+    cc: ccList.map((r: any) => r?.emailAddress?.address).filter(Boolean).join(", "),
+    subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`, body: buildQuote(),
+  });
+  const openForward = () => onCompose({
+    mode: "forward", message_id: email.id,
+    subject: subject.startsWith("Fwd:") ? subject : `Fwd: ${subject}`, body: buildQuote(),
+  });
 
   return (
     <div className="absolute inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end" onClick={onClose}>
       <div
         className="w-full rounded-t-3xl flex flex-col"
-        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", height: "92%" }}
+        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", height: "94%" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
@@ -1044,67 +1126,71 @@ function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: ()
             <ArrowLeft className="w-5 h-5" />
           </button>
           <p className="text-xs uppercase tracking-wider" style={{ color: "var(--pp-text-muted)" }}>Email</p>
-          <div className="w-7" />
+          <div className="flex items-center gap-1">
+            <IconAction onClick={onToggleFlag} title={flagged ? "Retirer drapeau" : "Marquer"} busy={busy === "flag_email"}>
+              <Flag className="w-4 h-4" style={{ color: flagged ? "#f59e0b" : "var(--pp-text-secondary)", fill: flagged ? "#f59e0b" : "none" }} />
+            </IconAction>
+            <IconAction onClick={onArchive} title="Archiver" busy={busy === "archive_email"}>
+              <Archive className="w-4 h-4" />
+            </IconAction>
+            <IconAction onClick={onMarkUnread} title="Marquer non lu" busy={busy === "mark_read_email"}>
+              <Circle className="w-4 h-4" />
+            </IconAction>
+            <IconAction onClick={onDelete} title="Supprimer" busy={busy === "delete_email"}>
+              <Trash2 className="w-4 h-4" style={{ color: "#ef4444" }} />
+            </IconAction>
+          </div>
         </div>
+
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           <div>
             <p className="text-base font-semibold" style={{ color: "var(--pp-text-primary)" }}>{subject}</p>
             <p className="text-xs mt-1" style={{ color: "var(--pp-text-muted)" }}>
               {t("messages.from")} <span style={{ color: "var(--pp-text-secondary)" }}>{from}</span> {fromAddr && `<${fromAddr}>`}
             </p>
+            {toList.length > 0 && (
+              <p className="text-xs mt-0.5" style={{ color: "var(--pp-text-muted)" }}>
+                À: {toList.map((r: any) => r?.emailAddress?.address).filter(Boolean).join(", ")}
+              </p>
+            )}
+            {ccList.length > 0 && (
+              <p className="text-xs mt-0.5" style={{ color: "var(--pp-text-muted)" }}>
+                Cc: {ccList.map((r: any) => r?.emailAddress?.address).filter(Boolean).join(", ")}
+              </p>
+            )}
           </div>
 
           <button
             onClick={analyzeWithAva}
             disabled={analyzing}
             className="w-full px-3 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
-            style={{
-              background: "linear-gradient(135deg, #2D1A5A, #9B7FE8)",
-              border: "1px solid rgba(155,127,232,0.35)",
-              color: "white",
-            }}
+            style={{ background: "linear-gradient(135deg, #2D1A5A, #9B7FE8)", border: "1px solid rgba(155,127,232,0.35)", color: "white" }}
           >
             {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             {analyzing ? "AVA analyse…" : "🤖 Analyser avec AVA"}
           </button>
 
-          <button
-            onClick={() => setSumOpen(true)}
-            className="w-full px-3 py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-2"
-            style={{
-              background: "rgba(155,127,232,0.12)",
-              border: "1px solid rgba(155,127,232,0.30)",
-              color: "var(--pp-agent)",
-            }}
-          >
-            <Sparkles className="w-3.5 h-3.5" /> {t("messages.summarizeWithAva")}
-          </button>
-
-          {analysis && (
-            <AvaProposedActionsCard analysis={analysis} onDismiss={() => setAnalysis(null)} />
-          )}
+          {analysis && (<AvaProposedActionsCard analysis={analysis} onDismiss={() => setAnalysis(null)} />)}
 
           <div
-            className="rounded-xl p-3 text-sm whitespace-pre-wrap"
+            className="rounded-xl p-3 text-sm"
             style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
           >
-            {preview || t("messages.previewUnavailable")}
+            {loadingDetail && !detail ? (
+              <div className="text-center py-6"><Loader2 className="w-4 h-4 animate-spin mx-auto" /></div>
+            ) : bodyType === "html" && bodyHtml ? (
+              <div className="pp-email-body" style={{ maxWidth: "100%", overflowWrap: "anywhere" }}
+                   dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+            ) : (
+              <div className="whitespace-pre-wrap">{bodyHtml || merged.bodyPreview || t("messages.previewUnavailable")}</div>
+            )}
           </div>
         </div>
 
-        <div className="px-4 py-3 flex gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
-
-          <button
-            onClick={() => onReply({
-              to: fromAddr,
-              subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`,
-              body: `\n\n---\nDe: ${from}\n${preview}`,
-            })}
-            className="flex-1 py-2.5 rounded-full text-white font-semibold text-sm flex items-center justify-center gap-2"
-            style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}
-          >
-            <Reply className="w-4 h-4" /> {t("messages.reply")}
-          </button>
+        <div className="px-3 py-2 grid grid-cols-3 gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
+          <ToolbarBtn onClick={openReply} icon={<Reply className="w-4 h-4" />} label="Répondre" />
+          <ToolbarBtn onClick={openReplyAll} icon={<UsersRound className="w-4 h-4" />} label="Rép. tous" />
+          <ToolbarBtn onClick={openForward} icon={<Forward className="w-4 h-4" />} label="Transférer" />
         </div>
       </div>
 
@@ -1112,59 +1198,122 @@ function EmailDetailSheet({ email, onClose, onReply }: { email: any; onClose: ()
         open={sumOpen}
         source="email"
         title={subject}
-        content={`De: ${from} <${fromAddr}>\nObjet: ${subject}\n\n${preview}`}
+        content={`De: ${from} <${fromAddr}>\nObjet: ${subject}\n\n${merged.bodyPreview ?? ""}`}
         onClose={() => setSumOpen(false)}
-        onInsert={(text) => {
-          setSumOpen(false);
-          onReply({
-            to: fromAddr,
-            subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`,
-            body: `${text}\n\n---\nDe: ${from}\n${preview}`,
-          });
-        }}
+        onInsert={(text) => { setSumOpen(false); onCompose({ mode: "reply", message_id: email.id, to: fromAddr, subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`, body: `${text}${buildQuote()}` }); }}
       />
     </div>
   );
 }
 
+function IconAction({ children, onClick, title, busy }: { children: React.ReactNode; onClick: () => void; title: string; busy?: boolean }) {
+  return (
+    <button onClick={onClick} disabled={busy} title={title} aria-label={title}
+      className="p-1.5 rounded-full disabled:opacity-40 active:scale-95 transition"
+      style={{ color: "var(--pp-text-secondary)" }}>
+      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : children}
+    </button>
+  );
+}
 
-function EmailComposeSheet({ init, onClose, onSent }: { init: { to?: string; subject?: string; body?: string }; onClose: () => void; onSent: () => void }) {
+function ToolbarBtn({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      className="py-2 rounded-full text-white font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition"
+      style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
+      {icon} {label}
+    </button>
+  );
+}
+
+async function fileToBase64(file: File): Promise<{ name: string; contentType: string; contentBytes: string }> {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+  return { name: file.name, contentType: file.type || "application/octet-stream", contentBytes: btoa(bin) };
+}
+
+function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClose: () => void; onSent: () => void }) {
   const { t } = useMplanipretLang();
+  const mode = init.mode ?? "new";
   const [to, setTo] = useState(init.to ?? "");
+  const [cc, setCc] = useState(init.cc ?? "");
+  const [bcc, setBcc] = useState(init.bcc ?? "");
+  const [showCc, setShowCc] = useState(Boolean(init.cc || init.bcc));
   const [subject, setSubject] = useState(init.subject ?? "");
   const [body, setBody] = useState(init.body ?? "");
+  const [attachments, setAttachments] = useState<Array<{ name: string; contentType: string; contentBytes: string; size: number }>>([]);
   const [sending, setSending] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const pickFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const encoded = await Promise.all(Array.from(files).map(async (f) => ({ ...(await fileToBase64(f)), size: f.size })));
+    // Cap total size at ~3MB per attachment to stay under Graph inline limit (4MB).
+    const filtered = encoded.filter((a) => a.size < 3_500_000);
+    if (filtered.length < encoded.length) toast.error("Certains fichiers > 3 Mo ont été ignorés");
+    setAttachments((cur) => [...cur, ...filtered]);
+  };
+
+  const removeAttachment = (idx: number) => setAttachments((cur) => cur.filter((_, i) => i !== idx));
 
   const send = async () => {
-    if (!to.trim()) { toast.error(t("messages.recipientRequired")); return; }
+    const isReply = mode === "reply" || mode === "reply_all";
+    const isForward = mode === "forward";
+    if (!isReply && !to.trim()) { toast.error(t("messages.recipientRequired")); return; }
+    if (isForward && !to.trim()) { toast.error(t("messages.recipientRequired")); return; }
     setSending(true);
-    const { data, error } = await supabase.functions.invoke("ms365-actions", {
-      body: { action: "send_email", payload: { to: to.split(",").map((s) => s.trim()).filter(Boolean), subject, body: body.replace(/\n/g, "<br/>") } },
-    });
-    setSending(false);
-    if (error || !(data as any)?.success) {
-      toast.error(t("messages.emailSendFailed"));
-      return;
+    let action = "send_email";
+    let payload: any = {};
+    const attachmentsPayload = attachments.map(({ name, contentType, contentBytes }) => ({ name, contentType, contentBytes }));
+    if (mode === "reply") {
+      action = "reply_email";
+      payload = { message_id: init.message_id, body, attachments: attachmentsPayload };
+    } else if (mode === "reply_all") {
+      action = "reply_all_email";
+      payload = { message_id: init.message_id, body, attachments: attachmentsPayload };
+    } else if (mode === "forward") {
+      action = "forward_email";
+      payload = {
+        message_id: init.message_id,
+        to: to.split(",").map((s) => s.trim()).filter(Boolean),
+        comment: body,
+        attachments: attachmentsPayload,
+      };
+    } else {
+      payload = {
+        to: to.split(",").map((s) => s.trim()).filter(Boolean),
+        cc: cc.split(",").map((s) => s.trim()).filter(Boolean),
+        bcc: bcc.split(",").map((s) => s.trim()).filter(Boolean),
+        subject, body,
+        attachments: attachmentsPayload,
+      };
     }
+    const { data, error } = await supabase.functions.invoke("ms365-actions", { body: { action, payload } });
+    setSending(false);
+    if (error || !(data as any)?.success) { toast.error(t("messages.emailSendFailed")); return; }
     toast.success(t("messages.emailSent"));
     onSent();
   };
+
+  const title = mode === "reply" ? "Répondre" : mode === "reply_all" ? "Répondre à tous" : mode === "forward" ? "Transférer" : t("messages.newEmail");
 
   return (
     <div className="absolute inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end" onClick={onClose}>
       <div
         className="w-full rounded-t-3xl flex flex-col"
-        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", height: "92%" }}
+        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", height: "94%" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
           <button onClick={onClose} className="p-1.5 rounded-full" style={{ color: "var(--pp-text-secondary)" }}>
             <X className="w-5 h-5" />
           </button>
-          <p className="text-xs uppercase tracking-wider" style={{ color: "var(--pp-text-muted)" }}>{t("messages.newEmail")}</p>
+          <p className="text-xs uppercase tracking-wider" style={{ color: "var(--pp-text-muted)" }}>{title}</p>
           <button
             onClick={send}
-            disabled={sending || !to.trim()}
+            disabled={sending}
             className="px-3 py-1 rounded-full text-white text-xs font-semibold flex items-center gap-1 disabled:opacity-50"
             style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}
           >
@@ -1173,27 +1322,74 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: { to?: string; sub
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-          <input
-            value={to} onChange={(e) => setTo(e.target.value)} placeholder={t("messages.toPlaceholder")}
-            className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
-          />
-          <input
-            value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t("messages.subject")}
-            className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
-          />
+          {(mode === "new" || mode === "forward") && (
+            <>
+              <div className="flex items-center gap-2">
+                <input
+                  value={to} onChange={(e) => setTo(e.target.value)} placeholder={t("messages.toPlaceholder")}
+                  className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
+                  style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+                />
+                {mode === "new" && (
+                  <button onClick={() => setShowCc((s) => !s)} className="text-[11px] px-2 py-1 rounded-lg"
+                    style={{ color: "var(--pp-brand-accent)", background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+                    Cc/Cci
+                  </button>
+                )}
+              </div>
+              {mode === "new" && showCc && (
+                <>
+                  <input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="Cc"
+                    className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                    style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
+                  <input value={bcc} onChange={(e) => setBcc(e.target.value)} placeholder="Cci"
+                    className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                    style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
+                </>
+              )}
+              <input
+                value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t("messages.subject")}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+              />
+            </>
+          )}
           <textarea
             value={body} onChange={(e) => setBody(e.target.value)} placeholder={t("messages.yourMessage")}
             rows={14}
             className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
             style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
           />
+
+          {attachments.length > 0 && (
+            <ul className="space-y-1">
+              {attachments.map((a, i) => (
+                <li key={i} className="flex items-center justify-between text-xs px-3 py-2 rounded-lg"
+                    style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+                  <span className="truncate flex items-center gap-2"><Paperclip className="w-3 h-3" /> {a.name} <span style={{ color: "var(--pp-text-muted)" }}>({Math.round(a.size / 1024)} Ko)</span></span>
+                  <button onClick={() => removeAttachment(i)} style={{ color: "var(--pp-text-muted)" }} aria-label="Retirer">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="px-4 py-2 flex items-center gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
+          <input ref={fileRef} type="file" multiple hidden onChange={(e) => { pickFiles(e.target.files); e.target.value = ""; }} />
+          <button onClick={() => fileRef.current?.click()}
+            className="px-3 py-2 rounded-full text-xs flex items-center gap-1.5"
+            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+            <Paperclip className="w-3.5 h-3.5" /> Joindre
+          </button>
+          <span className="text-[10px]" style={{ color: "var(--pp-text-muted)" }}>Max 3 Mo par fichier</span>
         </div>
       </div>
     </div>
   );
 }
+
 
 // ============================================================
 // SHARED PRIMITIVES
@@ -1616,7 +1812,7 @@ function Teams365Panel({ profile }: { profile: any }) {
                 );
               })}
             </div>
-            <Ms365TestNowButton feature="teams" compact />
+            
           </div>
 
           {/* Active discussions tab */}

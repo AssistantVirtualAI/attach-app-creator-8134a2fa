@@ -41,6 +41,7 @@ const registry: Record<string, Factory> = {
   "/mplanipret/ava": () => import("@/pages/planipret/mobile/MAvaChat"),
   "/mplanipret/notifications": () => import("@/pages/planipret/mobile/MAvaNotifications"),
   "/mplanipret/extension-sync": () => import("@/pages/planipret/mobile/MExtensionSync"),
+  "/mplanipret/ms365-diagnostics": () => import("@/pages/planipret/mobile/MMs365Diagnostics"),
 };
 
 const started = new Set<string>();
@@ -71,3 +72,27 @@ export function scheduleIdlePrefetch(paths: string[]): void {
   if (typeof ric === "function") ric(run, { timeout: 4000 });
   else setTimeout(run, 1500);
 }
+
+/** All mobile Planiprêt routes — used to warm every chunk on app boot. */
+export const ALL_MPLANIPRET_PATHS = [
+  "/mplanipret/home",
+  "/mplanipret/calls",
+  "/mplanipret/messages",
+  "/mplanipret/voicemail",
+  "/mplanipret/contacts",
+  "/mplanipret/more",
+  "/mplanipret/pipeline",
+  "/mplanipret/search",
+  "/mplanipret/stats",
+  "/mplanipret/ava",
+  "/mplanipret/notifications",
+  "/mplanipret/extension-sync",
+  "/mplanipret/ms365-diagnostics",
+];
+
+/** Aggressive: prefetch every mobile chunk immediately on mount. */
+export function prefetchAllMplanipret(): void {
+  // Kick off right away (microtask) so chunks download in parallel with initial paint.
+  Promise.resolve().then(() => ALL_MPLANIPRET_PATHS.forEach(prefetchRoute));
+}
+

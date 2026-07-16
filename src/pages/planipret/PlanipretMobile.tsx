@@ -13,7 +13,7 @@ import PrivacyConsentGate from "@/components/planipret/PrivacyConsentGate";
 import UniversalSearchBar from "@/components/planipret/UniversalSearchBar";
 import { OnboardingTutorial } from "@/components/planipret/OnboardingTutorial";
 import MobileScreenSkeleton from "@/components/planipret/mobile/MobileScreenSkeleton";
-import { prefetchRoute, scheduleIdlePrefetch } from "@/lib/routePrefetch";
+import { prefetchRoute, scheduleIdlePrefetch, prefetchAllMplanipret } from "@/lib/routePrefetch";
 
 import { useAvaNavigation } from "@/hooks/useAvaNavigation";
 const AvaVoiceAgent = lazy(() => import("@/components/planipret/mobile/AvaVoiceAgent"));
@@ -485,17 +485,11 @@ export default function PlanipretMobile() {
   useRealtimeManager(profile?.user_id, { onInboundRinging, onAiInsight });
   useAvaNavigation(profile?.user_id);
 
-  // Warm up sibling tab chunks during idle time so tab switches feel instant.
-  useEffect(() => {
-    scheduleIdlePrefetch([
-      "/mplanipret/home",
-      "/mplanipret/calls",
-      "/mplanipret/ava",
-      "/mplanipret/messages",
-      "/mplanipret/contacts",
-      "/mplanipret/more",
-    ]);
-  }, []);
+  // Aggressive: prefetch every mobile chunk immediately on mount so tab
+  // switches feel instant — especially Microsoft integration screens which
+  // are heavy and used often.
+  useEffect(() => { prefetchAllMplanipret(); }, []);
+
 
   // Detect active outbound/in-progress call → FAB pulses red & hangs up on tap
   useEffect(() => {

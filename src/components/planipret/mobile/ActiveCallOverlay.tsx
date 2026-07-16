@@ -34,7 +34,9 @@ export default function ActiveCallOverlay({ callId, onClosed }: { callId: string
   const [muted, setMuted] = useState(false);
   const [held, setHeld] = useState(false);
   const [speaker, setSpeaker] = useState(false);
-  const [keypadOpen, setKeypadOpen] = useState(false);
+  // Default keypad open so DTMF stays visible once the call is answered
+  // (users need to reach IVRs right after pickup).
+  const [keypadOpen, setKeypadOpen] = useState(true);
   const [dtmfBuffer, setDtmfBuffer] = useState("");
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferMode, setTransferMode] = useState<"transfer" | "forward">("transfer");

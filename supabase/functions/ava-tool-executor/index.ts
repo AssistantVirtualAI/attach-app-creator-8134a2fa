@@ -195,12 +195,17 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       to = hit.value; name = hit.name;
     }
     if (!to || !p?.message) return { success: false, error: "to_and_message_required" };
-    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ns-sms`, {
+    // Fix: utiliser pp-ns-sms (action=send) qui résout le DID "from-number" assigné
+    // au courtier. ns-sms n'envoyait pas de from-number → NS-API rejetait silencieusement.
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-ns-sms`, {
       method: "POST",
       headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ to, message: p.message, type: "sms", _user_id: ctx.userId }),
+      body: JSON.stringify({ action: "send", to, message: p.message, type: "sms", _user_id: ctx.userId }),
     });
-    return { success: r.ok, message: `SMS envoyé à ${name ?? to}` };
+    const rj = await r.json().catch(() => ({}));
+    return (rj?.ok || r.ok)
+      ? { success: true, message: `SMS envoyé à ${name ?? to}`, from: rj?.from }
+      : { success: false, error: rj?.error ?? "Échec SMS" };
   },
 
   async get_sms_conversations(ctx, p) {

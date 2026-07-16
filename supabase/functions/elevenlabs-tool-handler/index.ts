@@ -38,8 +38,18 @@ Deno.serve(async (req) => {
         break;
       }
       case "send_sms": {
-        const r = await callFn("ns-sms", authHeader, { to: parameters.to, message: parameters.message, type: "sms" });
-        result = r?.success ? { success: true, message: "SMS envoyé" } : { success: false, error: r?.error ?? "Échec SMS" };
+        // Fix: utiliser pp-ns-sms (action=send) qui résout le DID "from-number" assigné
+        // au courtier. L'ancienne fonction ns-sms n'envoyait pas de from-number →
+        // NS-API rejetait la requête silencieusement (réponse 200 sans envoi réel).
+        const r = await callFn("pp-ns-sms", authHeader, {
+          action: "send",
+          to: parameters.to,
+          message: parameters.message,
+          type: "sms",
+        });
+        result = (r?.ok || r?.success)
+          ? { success: true, message: `SMS envoyé à ${parameters.to}`, from: r?.from }
+          : { success: false, error: r?.error ?? "Échec SMS", details: r };
         break;
       }
       case "send_email": {

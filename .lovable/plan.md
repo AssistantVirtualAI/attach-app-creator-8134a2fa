@@ -1,59 +1,60 @@
-## Objectif
+## Pourquoi Android reste en idle alors qu’iOS fonctionne
 
-Après chaque analyse IA d'un appel Planiprêt, envoyer automatiquement le **summary** et l'**analyse complète** vers l'API Télécom Maestro, associés à l'appel du bon agent (broker). Aujourd'hui `ai-analyze-call` remplit `planipret_phone_calls.ai_summary` / `ai_analysis_json` et insère dans `planipret_ai_insights`, mais rien n'est miroré vers Maestro.
+Le code actuel n’utilise pas le même chemin SIP selon la plateforme:
 
-## Approche
+- iOS utilise le SIP natif PJSIP et peut s’enregistrer correctement.
+- Android est censé utiliser JsSIP via WSS dans la WebView.
+- L’écran SIP Debug Android lit actuellement le mauvais champ (`sp.sipStatus` au lieu de `sp.snap.status`), donc il peut afficher `idle` même si le hook a un autre état.
+- Android force aussi des endpoints WSS hardcodés au lieu de prioriser l’URL WSS retournée par les credentials backend.
+- Il y a une contradiction dans le projet: Android contient maintenant un plugin natif PJSIP, mais le JS le désactive pour Android et démarre JsSIP. Il faut verrouiller une seule stratégie Android.
 
-Réutiliser l'infra existante (`maestroTelecomMirror` — retry + backoff + `planipret_maestro_sync_log`) pour envoyer un `PUT /users/{maestro_broker_id}/calls/{maestro_call_id}` avec les champs d'analyse, dès que `ai-analyze-call` termine avec succès.
+## Plan de correction
 
-Aucun changement front. Zéro impact sur NS-API (fire-and-forget silencieux).
+### 1. Corriger l’état affiché dans l’app
+- Corriger `SipDebugScreen` pour lire `sp.snap.status`.
+- Corriger la ligne `SIP Debug` dans `MoreScreen` pour lire `sp.snap.status`.
+- Corriger l’affichage de la dernière erreur pour utiliser `lastPersistedError.error`.
+- Ajouter un affichage clair: provider utilisé, plateforme, WSS actif, extension, domaine, dernière raison d’échec.
 
-## Étapes
+### 2. Verrouiller Android sur une seule stratégie SIP
+- Garder Android sur JsSIP/WSS, puisque la demande concerne le Via header WSS.
+- Limiter PJSIP natif à iOS seulement dans le dispatcher JS.
+- Empêcher tout appel Android accidentel au plugin natif PJSIP depuis les flows SIP.
 
-1. **Helper `mirrorCallAnalysisToMaestro`** dans `supabase/functions/_shared/maestro-telecom.ts` :
-   - Prend `admin`, `userId`, `ppCall` (row `planipret_phone_calls`), `analysis`, `insights` (summary court/long, coaching, topics, next_steps, sentiment, lead_score/temperature, key_info).
-   - Récupère `maestro_broker_id` (via `getMaestroBrokerId`) et `maestro_call_id` sur la row.
-   - **Skip silencieux** si l'un des deux est absent (log warn, pas d'erreur).
-   - Envoie deux appels miroir :
-     - `PUT /users/{broker}/calls/{maestro_call_id}` avec un payload structuré :
-       ```
-       {
-         ai_summary, ai_summary_short, ai_analysis, ai_coaching,
-         ai_next_actions, ai_topics, sentiment,
-         lead_score, lead_temperature, lead_reason,
-         transcript_language, model, analyzed_at
-       }
-       ```
-     - `POST /users/{broker}/call/{maestro_call_id}/notes` (fallback si l'API refuse les champs custom sur PUT) avec le résumé lisible — activé via un flag interne, désactivé par défaut pour ne pas dupliquer.
-   - Actions log : `call.analysis.summary`, `call.analysis.details`.
+### 3. Corriger la config REGISTER Android
+- Confirmer explicitement `hack_via_tcp = false` sur Android.
+- Garder `hack_wss_in_transport = true`.
+- Ajuster le `contact_uri` Android pour ne plus annoncer `transport=ws` si le transport réel est WSS.
+- Ajouter un garde/log qui confirme au démarrage: `Android JsSIP provider`, `transport=WSS`, `hack_via_tcp=false`.
 
-2. **Hook dans `supabase/functions/ai-analyze-call/index.ts`** :
-   - Après le `INSERT` dans `planipret_ai_insights` (ligne 391), appeler `mirrorCallAnalysisToMaestro(admin, ppCall.user_id, ppCall, analysis, { summary, coaching, leadA, ... })`.
-   - Reste fire-and-forget, jamais dans le `try/catch` critique.
+### 4. Utiliser les vrais endpoints WSS des credentials
+- Prioriser `creds.wssUrl` et `creds.wssUrls` retournés par le backend.
+- Garder `wss://pbxnode.lemtel.tel:7443` et `wss://node.lemtelcloud.net:7443` seulement comme fallbacks.
+- Logger quel endpoint est tenté et quel endpoint réussit.
 
-3. **Nouvelle action admin `resync-analysis`** dans `pp-maestro-admin` :
-   - Body `{ action: "resync-analysis", call_id?, since_hours?=72, limit?=100 }`.
-   - Sélectionne les rows `planipret_phone_calls` avec `ai_analysis_json IS NOT NULL AND maestro_call_id IS NOT NULL` (filtrées par `call_id` ou `analyzed_at >= since`) et rejoue `mirrorCallAnalysisToMaestro`.
-   - Utile pour rattraper les analyses historiques.
+### 5. Éliminer le faux idle causé par credentials/hydration
+- Si `extension` ou `sipPassword` manque, afficher/logguer `config.missing` au lieu de rester silencieusement en idle.
+- Après hydration des credentials, forcer un reconnect SIP propre.
+- Ajouter un état visible “credentials loading / missing SIP password” dans le debug screen.
 
-4. **Page admin `PAMaestroSync`** :
-   - Ajouter un bouton "Resynchroniser analyses (72h)" à côté de "Actualiser" qui invoque `resync-analysis`.
-   - Ajouter dans la vue "Répartition par action" les nouvelles clés `call.analysis.summary` / `.details` (aucune modif nécessaire, le tableau est déjà générique).
+### 6. Renforcer reconnexion Android
+- Sur `appStateChange`, `visibilitychange`, `online`, et changement Wi-Fi/LTE: relancer REGISTER uniquement si l’état n’est pas `registered`.
+- Éviter les doubles reconnects concurrents.
+- Garder le watchdog REGISTER: si aucun `registered`/`registrationFailed` n’arrive, passer en `error` avec raison claire, jamais rester en idle.
 
-5. **Diagnostics mobile (`MDiagnostics`)** :
-   - Ajouter une sous-ligne "Dernier miroir d'analyse IA" alimentée par le dernier enregistrement `planipret_maestro_sync_log` avec `action LIKE 'call.analysis.%'` (via extension de `pp-maestro-admin status`).
+### 7. Ajouter tests ciblés Android
+- Test Android: `createSIPUA` ne met jamais `hack_via_tcp`.
+- Test Android: WSS credentials backend sont prioritaires sur les fallbacks hardcodés.
+- Test UI: SIP Debug affiche `sp.snap.status`.
+- Test hook: quand `sipConfig` passe de `null` à valide après hydration, l’enregistrement démarre.
 
-## Détails techniques
+### 8. Validation finale sur appareil Android
+- Ouvrir SIP Debug.
+- Vérifier la séquence attendue:
 
-- Aucune migration SQL — tout se joue en edge functions ; `planipret_maestro_sync_log` existe déjà et absorbera les nouvelles actions.
-- `maestro_call_id` est renseigné par le miroir `call.started/ended` déjà en place ; si absent (appel antérieur à l'intégration), le mirror log l'entrée avec `error: "no_maestro_call_id"` en `success=false` pour rester visible côté admin.
-- Payload envoyé en camelCase-lite (snake_case) conforme aux autres actions Maestro Télécom du projet.
-- Timeouts par défaut du helper (8s, 3 tentatives) suffisants pour un PUT léger.
+```text
+idle/config-loading → connecting → ws.connected → register.ok → registered
+```
 
-## Fichiers touchés
-
-- `supabase/functions/_shared/maestro-telecom.ts` — ajout `mirrorCallAnalysisToMaestro`
-- `supabase/functions/ai-analyze-call/index.ts` — appel du helper après persistance
-- `supabase/functions/pp-maestro-admin/index.ts` — action `resync-analysis`
-- `src/pages/planipret/admin/PAMaestroSync.tsx` — bouton "Resynchroniser analyses"
-- `apps/planipret-mobile/src/pages/planipret/mobile/MDiagnostics.tsx` — ligne "Dernier miroir analyse IA"
+- Si échec, l’écran doit montrer une raison précise: WSS unreachable, auth failed, timeout, SSL, DNS, etc.
+- Comparer côté PBX que le REGISTER Android arrive bien via WSS/7443 et non TCP/5060.

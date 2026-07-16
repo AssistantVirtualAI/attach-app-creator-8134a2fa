@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
         maestro_telecom_linked_at: new Date().toISOString(),
       } : {}),
     }).eq("user_id", userId);
-    return new Response(JSON.stringify({ success: true, account: { email: msEmail, name: me?.displayName ?? null }, scopes: d.scope ?? requestedScope, auth_mode: token.usedClientSecret ? "confidential" : "public", retried_public: token.retriedPublic, maestro_link: maestroLink }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true, ms_access_token: d.access_token, account: { email: msEmail, name: me?.displayName ?? null }, scopes: d.scope ?? requestedScope, auth_mode: token.usedClientSecret ? "confidential" : "public", retried_public: token.retriedPublic, maestro_link: maestroLink }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (e: any) {
     console.error("[ms365-oauth-exchange] unhandled", e?.message, e?.stack);
     return new Response(JSON.stringify({ success: false, error: e?.message ?? "Erreur" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });

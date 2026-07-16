@@ -54,6 +54,21 @@ Deno.serve(async (req) => {
 
   try {
     switch (action) {
+      case "sip": {
+        // Confirm the Maestro broker id resolves on the Maestro Telecom side
+        // and expose the SIP username (best-effort — endpoint shape can vary).
+        const r = await maestroTelecomFetch<any>(cfg, `/users/${meId}`);
+        const d: any = r.data ?? {};
+        const sip_username =
+          d?.sip_username ?? d?.sip?.username ?? d?.extension ?? d?.user?.sip_username ?? null;
+        return jsonResponse({
+          ok: r.ok,
+          status: r.status,
+          sip_username,
+          maestro_broker_id: ctx.maestroBrokerId,
+          data: r.data,
+        });
+      }
       case "lookup-by-phone": {
         if (!body.phone) return jsonResponse({ error: "phone required" }, 400);
         const r = await maestroTelecomFetch(cfg, `/users/${meId}/lookup-by-phone`, {

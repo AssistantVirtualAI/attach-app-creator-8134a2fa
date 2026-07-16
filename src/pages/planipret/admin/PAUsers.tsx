@@ -604,6 +604,7 @@ export default function PAUsers() {
                 <th className="p-3">Agent IA</th>
                 <th className="p-3">DND</th>
                 <th className="p-3">Appels mois</th>
+                <th className="p-3">Maestro ID</th>
                 <th className="p-3">Dernière activité</th>
                 <th className="p-3">Actions</th>
               </tr>
@@ -620,7 +621,7 @@ export default function PAUsers() {
                   </tr>
                 ))
               ) : paged.length === 0 ? (
-                <tr><td colSpan={11} className="p-8 text-center" style={{ color: "var(--pp-text-faint)" }}>Aucun courtier</td></tr>
+                <tr><td colSpan={12} className="p-8 text-center" style={{ color: "var(--pp-text-faint)" }}>Aucun courtier</td></tr>
               ) : paged.map((u) => (
                 <tr key={u.user_id || u.email || u.extension} className="hover:bg-white/[0.02] transition"
                   style={{
@@ -675,6 +676,9 @@ export default function PAUsers() {
                     )}
                   </td>
                   <td className="p-3 tabular-nums" style={{ color: "var(--pp-text-primary)" }}>{callsByUser[u.user_id] ?? callsByUser[`ext:${u.extension}`] ?? 0}</td>
+                  <td className="p-3">
+                    <MaestroIdCell user={u} onSaved={load} />
+                  </td>
                   <td className="p-3" style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>{u.updated_at ? new Date(u.updated_at).toLocaleString("fr-CA", { dateStyle: "short", timeStyle: "short" }) : "—"}</td>
                   <td className="p-3">
                     <DropdownMenu>
@@ -815,6 +819,90 @@ function Toggle({ on, loading, disabled, onChange }: { on: boolean; loading?: bo
     </button>
   );
 }
+
+function MaestroIdCell({ user, onSaved }: { user: Profile; onSaved: () => void }) {
+  const initial = String((user as any).maestro_broker_id ?? "");
+  const [value, setValue] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  useEffect(() => { setValue(initial); }, [initial]);
+  const linked = !!initial;
+
+  const save = async () => {
+    const v = value.trim();
+    if (v === initial) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("planipret_profiles")
+        .update({ maestro_broker_id: v || null })
+        .eq("user_id", user.user_id);
+      if (error) throw error;
+      toast.success(v ? `Maestro ID lié: ${v}` : "Maestro ID retiré");
+      onSaved();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec de sauvegarde");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const test = async () => {
+    if (!initial) { toast.error("Aucun Maestro ID à tester"); return; }
+    setTesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-maestro-telecom", {
+        body: { action: "sip" },
+      });
+      if (error) throw error;
+      const d = data as any;
+      if (d?.ok) {
+        toast.success(`Maestro OK — SIP: ${d.sip_username ?? "?"} (id ${d.maestro_broker_id})`);
+      } else {
+        toast.error(`Maestro: ${d?.error ?? `HTTP ${d?.status ?? "?"}`}`);
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Échec test Maestro");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        placeholder="—"
+        disabled={saving}
+        className="w-20 px-1.5 py-1 rounded tabular-nums"
+        style={{ fontSize: 11, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+      />
+      <span
+        className="px-1.5 py-0.5 rounded"
+        style={{
+          fontSize: 9, fontWeight: 600,
+          background: linked ? `${SUCCESS}18` : "var(--pp-bg-elevated)",
+          color: linked ? SUCCESS : "var(--pp-text-faint)",
+          border: `1px solid ${linked ? `${SUCCESS}33` : "var(--pp-bg-border-2)"}`,
+        }}>
+        {linked ? "Lié ✓" : "Non lié"}
+      </span>
+      <button
+        onClick={test}
+        disabled={testing || !linked}
+        className="px-1.5 py-0.5 rounded hover:bg-white/[0.05] transition disabled:opacity-40"
+        style={{ fontSize: 10, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
+        title="Tester la résolution SIP Maestro"
+      >
+        {testing ? "…" : "Tester"}
+      </button>
+    </div>
+  );
+}
+
 
 function genPassword() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%";

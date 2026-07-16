@@ -26,7 +26,7 @@ function installFakeJsSIP() {
     __sockets: sockets,
   };
   (window as any).JsSIP = {
-    Socket: vi.fn().mockImplementation((url: string) => { sockets.push(url); return { url }; }),
+    WebSocketInterface: vi.fn().mockImplementation((url: string) => { sockets.push(url); return { url }; }),
     UA: vi.fn().mockImplementation(() => ua),
   };
   return ua;

@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useRef, useState, useCallback, lazy, Suspense } f
 import { useNavigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
-import { Home, Phone, MessageSquare, Users, Bot, Phone as PhoneIcon, X, Delete, Plus, Lock, PhoneOff, Settings as SettingsIcon, Search as SearchIcon, MessageCircle, Loader2 } from "lucide-react";
+import { Home, Phone, MessageSquare, Users, Bot, Phone as PhoneIcon, X, Delete, Plus, Lock, PhoneOff, Settings as SettingsIcon, Search as SearchIcon, MessageCircle, Loader2, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { usePullToRefresh, PullIndicator } from "@/hooks/usePullToRefresh";
 import { useRealtimeManager } from "@/hooks/useRealtimeManager";

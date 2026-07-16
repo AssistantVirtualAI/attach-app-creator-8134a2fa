@@ -137,7 +137,16 @@ export default function PpActiveCallScreen({
     }).slice(0, 60);
   }, [contacts, transferQuery]);
 
-  const pressDtmf = useCallback((k: string) => { setDtmfBuf((b) => (b + k).slice(-16)); sendDTMF(k); }, [sendDTMF]);
+  const pressDtmf = useCallback((k: string) => {
+    if (snap.callState !== "active") return;
+    setDtmfBuf((b) => (b + k).slice(-16));
+    setLastDtmf(k);
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      try { (navigator as any).vibrate?.(15); } catch { /* noop */ }
+    }
+    sendDTMF(k);
+    window.setTimeout(() => setLastDtmf((cur) => (cur === k ? null : cur)), 450);
+  }, [sendDTMF, snap.callState]);
   const doTransfer = useCallback((target: string) => {
     const to = target.trim(); if (!to) return;
     transfer(to);

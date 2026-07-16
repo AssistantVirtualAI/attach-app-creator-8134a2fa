@@ -18,6 +18,8 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { openMs365Authorize } from "@/lib/ms365OAuth";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
+import { ppSipProvider, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
+import { Radio } from "lucide-react";
 
 const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";

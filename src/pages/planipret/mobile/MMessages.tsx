@@ -1099,13 +1099,55 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged }: {
         setFlagged((data as any).email?.flag?.flagStatus === "flagged");
       }
       if (!cancelled) setLoadingDetail(false);
-      // Mark as read on open (fire-and-forget).
+      // Mark as read on open (fire-and-forget). Also mutate the incoming
+      // preview object so the parent list reflects the new state without a
+      // refetch.
       supabase.functions.invoke("ms365-actions", {
         body: { action: "mark_read_email", payload: { message_id: email.id, isRead: true } },
+      }).then(({ error }) => {
+        if (!error) {
+          try { (email as any).isRead = true; onChanged(); } catch {}
+        }
       }).catch(() => {});
+      // Load attachments list when the message has any.
+      if (email?.hasAttachments || (detail as any)?.hasAttachments) {
+        const { data: attData } = await supabase.functions.invoke("ms365-actions", {
+          body: { action: "list_attachments", payload: { message_id: email.id } },
+        });
+        if (!cancelled && (attData as any)?.success) {
+          setAttachments(((attData as any).attachments ?? []).filter((a: any) => !a.isInline));
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, [email?.id]);
+
+  const downloadAttachment = async (att: { id: string; name: string; contentType: string }) => {
+    setDownloadingAtt(att.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("ms365-actions", {
+        body: { action: "get_attachment", payload: { message_id: email.id, attachment_id: att.id } },
+      });
+      if (error || !(data as any)?.success) throw new Error((data as any)?.error ?? error?.message ?? "Échec");
+      const bytes = (data as any).attachment?.contentBytes;
+      if (!bytes) throw new Error("Contenu vide");
+      // Decode base64 → Blob → download
+      const bin = atob(bytes);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const blob = new Blob([arr], { type: att.contentType || "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = att.name || "attachment";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Téléchargement impossible");
+    } finally {
+      setDownloadingAtt(null);
+    }
+  };
+
 
   const analyzeWithAva = async () => {
     if (!email.id) { toast.error("Message ID manquant"); return; }

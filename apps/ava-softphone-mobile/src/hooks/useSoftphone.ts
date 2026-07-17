@@ -806,14 +806,13 @@ export function useSoftphoneJsSip(
   const answer = () =>
     sessionRef.current?.answer({
       mediaConstraints: HD_AUDIO_CONSTRAINTS,
+      sessionDescriptionHandlerModifiers: [sdpModifier],
       pcConfig: {
         iceServers: [
-          // STUN public — connexion directe (host/srflx) en priorité
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          // TURN en dernier recours si NAT symétrique
+          // Google STUN removed — UDP 19302 blocked on many mobile networks.
+          // TURN Metered on TCP 443 — confirmed reachable on cellular.
           {
-            urls: 'turn:global.relay.metered.ca:443',
+            urls: 'turn:global.relay.metered.ca:443?transport=tcp',
             username: 'e499486ca9b7d5a03a01e915',
             credential: 'uMFpNAFBoFFUHOdF',
           },

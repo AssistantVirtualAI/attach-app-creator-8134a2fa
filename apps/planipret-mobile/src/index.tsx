@@ -10,6 +10,30 @@ import { Capacitor } from '@capacitor/core';
 import App from './App';
 import './styles.css';
 
+// Global anti-zoom guards for iOS/Android WebView (no pinch, no double-tap zoom).
+if (typeof document !== 'undefined') {
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  document.addEventListener('gesturechange', (e) => e.preventDefault());
+  document.addEventListener('gestureend', (e) => e.preventDefault());
+  let lastTouchEnd = 0;
+  document.addEventListener(
+    'touchend',
+    (e) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) e.preventDefault();
+      lastTouchEnd = now;
+    },
+    { passive: false },
+  );
+  document.addEventListener('dblclick', (e) => {
+    const t = e.target as HTMLElement | null;
+    if (!t) return;
+    const tag = t.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || t.isContentEditable) return;
+    e.preventDefault();
+  });
+}
+
 async function bootstrap() {
   try {
     if (Capacitor.isNativePlatform()) {

@@ -1,60 +1,110 @@
-## Pourquoi Android reste en idle alors qu’iOS fonctionne
+# QA Plan — Planiprêt Mobile : anti-zoom & safe-area headers
 
-Le code actuel n’utilise pas le même chemin SIP selon la plateforme:
+Objectif : garantir que sur iOS et Android, **aucune interaction ne provoque de zoom (in/out)** et que **chaque page respecte les safe-areas** (notch iOS, status bar Android) sans que le header ne passe sous la barre système.
 
-- iOS utilise le SIP natif PJSIP et peut s’enregistrer correctement.
-- Android est censé utiliser JsSIP via WSS dans la WebView.
-- L’écran SIP Debug Android lit actuellement le mauvais champ (`sp.sipStatus` au lieu de `sp.snap.status`), donc il peut afficher `idle` même si le hook a un autre état.
-- Android force aussi des endpoints WSS hardcodés au lieu de prioriser l’URL WSS retournée par les credentials backend.
-- Il y a une contradiction dans le projet: Android contient maintenant un plugin natif PJSIP, mais le JS le désactive pour Android et démarre JsSIP. Il faut verrouiller une seule stratégie Android.
+---
 
-## Plan de correction
+## 1. Vérifications globales (fondations)
 
-### 1. Corriger l’état affiché dans l’app
-- Corriger `SipDebugScreen` pour lire `sp.snap.status`.
-- Corriger la ligne `SIP Debug` dans `MoreScreen` pour lire `sp.snap.status`.
-- Corriger l’affichage de la dernière erreur pour utiliser `lastPersistedError.error`.
-- Ajouter un affichage clair: provider utilisé, plateforme, WSS actif, extension, domaine, dernière raison d’échec.
+Avant de tester page par page, valider les fondations partagées :
 
-### 2. Verrouiller Android sur une seule stratégie SIP
-- Garder Android sur JsSIP/WSS, puisque la demande concerne le Via header WSS.
-- Limiter PJSIP natif à iOS seulement dans le dispatcher JS.
-- Empêcher tout appel Android accidentel au plugin natif PJSIP depuis les flows SIP.
+### 1.1 Anti-zoom
+- `index.html` → `<meta viewport>` doit contenir : `width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content` ✅ (déjà présent).
+- CSS global : `input, textarea, select { font-size: 16px !important; }` ✅ (déjà présent, empêche le zoom iOS au focus).
+- `html/body` : `overflow: hidden`, `touch-action: manipulation`, `overscroll-behavior: none` ✅.
+- Ajouter un **listener global** dans `src/index.tsx` qui bloque `gesturestart` (iOS pinch) et `dblclick` sur les zones non-texte, pour éliminer le zoom résiduel WebView.
 
-### 3. Corriger la config REGISTER Android
-- Confirmer explicitement `hack_via_tcp = false` sur Android.
-- Garder `hack_wss_in_transport = true`.
-- Ajuster le `contact_uri` Android pour ne plus annoncer `transport=ws` si le transport réel est WSS.
-- Ajouter un garde/log qui confirme au démarrage: `Android JsSIP provider`, `transport=WSS`, `hack_via_tcp=false`.
+### 1.2 Safe-area
+- Le hook `useSafeAreaInsets()` existe déjà.
+- Créer/valider un composant `<MobileScreen>` wrapper qui applique automatiquement :
+  - `paddingTop: max(env(safe-area-inset-top), 12px)` sur le header
+  - `paddingBottom: env(safe-area-inset-bottom)` sur la bottom-nav
+  - `paddingLeft/Right: env(safe-area-inset-left/right)` (mode paysage)
+- Chaque page doit être encapsulée dans ce wrapper (ou son header doit lire les insets directement).
 
-### 4. Utiliser les vrais endpoints WSS des credentials
-- Prioriser `creds.wssUrl` et `creds.wssUrls` retournés par le backend.
-- Garder `wss://pbxnode.lemtel.tel:7443` et `wss://node.lemtelcloud.net:7443` seulement comme fallbacks.
-- Logger quel endpoint est tenté et quel endpoint réussit.
+---
 
-### 5. Éliminer le faux idle causé par credentials/hydration
-- Si `extension` ou `sipPassword` manque, afficher/logguer `config.missing` au lieu de rester silencieusement en idle.
-- Après hydration des credentials, forcer un reconnect SIP propre.
-- Ajouter un état visible “credentials loading / missing SIP password” dans le debug screen.
+## 2. Checklist par page
 
-### 6. Renforcer reconnexion Android
-- Sur `appStateChange`, `visibilitychange`, `online`, et changement Wi-Fi/LTE: relancer REGISTER uniquement si l’état n’est pas `registered`.
-- Éviter les doubles reconnects concurrents.
-- Garder le watchdog REGISTER: si aucun `registered`/`registrationFailed` n’arrive, passer en `error` avec raison claire, jamais rester en idle.
+Pour **chaque page ci-dessous**, exécuter les 6 tests :
 
-### 7. Ajouter tests ciblés Android
-- Test Android: `createSIPUA` ne met jamais `hack_via_tcp`.
-- Test Android: WSS credentials backend sont prioritaires sur les fallbacks hardcodés.
-- Test UI: SIP Debug affiche `sp.snap.status`.
-- Test hook: quand `sipConfig` passe de `null` à valide après hydration, l’enregistrement démarre.
+| # | Test | Critère de passage |
+|---|------|--------------------|
+| T1 | Ouvrir la page sur iPhone (notch) | Header entièrement visible sous l'encoche, jamais dessous |
+| T2 | Ouvrir sur Android (status bar) | Header commence après la status bar, pas de recouvrement |
+| T3 | Double-tap sur zone vide | Aucun zoom |
+| T4 | Pinch-to-zoom | Aucun zoom |
+| T5 | Focus sur chaque `<input>` | Pas de zoom iOS (font ≥ 16px) |
+| T6 | Rotation portrait/paysage rapide | Header et bottom-nav restent dans les safe-areas |
 
-### 8. Validation finale sur appareil Android
-- Ouvrir SIP Debug.
-- Vérifier la séquence attendue:
+### Pages à couvrir (`src/pages/planipret/mobile/`)
 
-```text
-idle/config-loading → connecting → ws.connected → register.ok → registered
+1. **MHome.tsx** — accueil KPI
+2. **MCalls.tsx** — journal d'appels + dial pad (inputs numériques critiques)
+3. **MMessages.tsx** — SMS/chat (champ de saisie critique)
+4. **MVoicemail.tsx** — messagerie vocale (lecteur audio)
+5. **MContacts.tsx** — liste + recherche (search input)
+6. **MPipeline.tsx** — pipeline courtier (scroll horizontal cartes)
+7. **MSearch.tsx** — barre de recherche globale
+8. **MStats.tsx** — graphiques (tester pinch sur charts)
+9. **MMore.tsx** — menu paramètres (liens vers sous-pages)
+10. **MAvaChat.tsx** — chat AVA (textarea multi-lignes)
+11. **MAvaNotifications.tsx** — liste notifs
+12. **MKpiAudit.tsx** — audit KPI
+13. **MExtensionSync.tsx**
+14. **MDiagnostics.tsx** / **MSipDebug.tsx** / **MMs365Diagnostics.tsx** / **MStyleDiagnostics.tsx**
+15. Sheets/modales : `MobileProfileSheet`, `VoiceSettingsSheet`, `MobileHeaderControls` (pastilles langue/thème)
+
+---
+
+## 3. Livrables
+
+1. **Composant `MobileScreen`** wrapper unique appliquant safe-areas + anti-zoom listeners.
+2. **Refactor headers** de chaque page pour utiliser le wrapper (0 header codé en dur avec `top: 0`).
+3. **Page de QA in-app** `/mplanipret/qa/layout` listant les 15 pages avec :
+   - Bouton "Ouvrir"
+   - Overlay debug affichant les valeurs `env(safe-area-inset-*)` en temps réel
+   - Checklist cochable (T1-T6) sauvegardée en `localStorage`
+4. **Test Playwright** (`tests/mplanipret-layout.spec.ts`) simulant iPhone 15 Pro et Pixel 8 :
+   - Vérifie qu'aucun `<input>` n'a `font-size < 16px`
+   - Vérifie que `document.documentElement.scrollWidth === innerWidth` (pas de débordement horizontal)
+   - Vérifie que le header a `padding-top >= safe-area-inset-top`
+
+---
+
+## 4. Détails techniques
+
+**Anti-zoom listener** (à ajouter dans `src/index.tsx`) :
+```ts
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+let lastTouch = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - lastTouch <= 300) e.preventDefault();
+  lastTouch = now;
+}, { passive: false });
 ```
 
-- Si échec, l’écran doit montrer une raison précise: WSS unreachable, auth failed, timeout, SSL, DNS, etc.
-- Comparer côté PBX que le REGISTER Android arrive bien via WSS/7443 et non TCP/5060.
+**MobileScreen wrapper** :
+```tsx
+export function MobileScreen({ header, children, bottomNav }) {
+  const s = useSafeAreaInsets();
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ paddingTop: Math.max(s.top, 12), paddingLeft: s.left, paddingRight: s.right }}>
+        {header}
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', paddingLeft: s.left, paddingRight: s.right }}>
+        {children}
+      </div>
+      {bottomNav && (
+        <div style={{ paddingBottom: s.bottom, paddingLeft: s.left, paddingRight: s.right }}>
+          {bottomNav}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+**Contrainte respectée** : aucune modification des routes `/mplanipret`, de `MplanipretGuard`, de `App.tsx` ou d'`OrganizationContext` (mémoire projet).

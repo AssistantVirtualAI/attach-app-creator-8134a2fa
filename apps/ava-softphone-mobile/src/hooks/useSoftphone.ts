@@ -332,6 +332,11 @@ export function useSoftphoneJsSip(
             session.on('peerconnection', (e: any) => {
               const pc: RTCPeerConnection | undefined = e?.peerconnection;
               if (pc) {
+                // Wire remote audio track → <audio> element (otherwise the
+                // remote party is inaudible even though the call is up).
+                try { attachRemoteStream(pc); } catch (err: any) {
+                  log('audio.attach-failed', err?.message || '', 'warn');
+                }
                 instrumentPeerConnection(pc, (event, detail, level = 'info') => {
                   log(event, detail, level);
                 });

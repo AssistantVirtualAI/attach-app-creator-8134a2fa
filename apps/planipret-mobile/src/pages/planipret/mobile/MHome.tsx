@@ -361,9 +361,20 @@ export default function MHome() {
             </button>
           ))}
         </div>
-        <span className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
-          {totalComms} comms
-        </span>
+        <div className="flex items-center gap-2">
+          {refreshing && (
+            <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--pp-text-muted)" }}>
+              <RefreshCw className="w-3 h-3 animate-spin" /> {t("home.refreshing") ?? "Actualisation…"}
+            </span>
+          )}
+          <button
+            onClick={() => navigate("/mplanipret/kpi-audit")}
+            className="text-[10px] underline decoration-dotted"
+            style={{ color: "var(--pp-text-muted)" }}
+          >
+            {totalComms} comms
+          </button>
+        </div>
       </div>
 
       {/* ===== DND BANNER ===== */}

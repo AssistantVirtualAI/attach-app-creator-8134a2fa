@@ -788,7 +788,7 @@ export function useSoftphoneJsSip(
   };
 
 
-  const call = (number: string) => {
+  const call = (number: string): Promise<boolean> | boolean => {
     if (sipStatus !== 'registered') return false;
     callAttemptRef.current = 1;
     return placeCallInternal(number, false);

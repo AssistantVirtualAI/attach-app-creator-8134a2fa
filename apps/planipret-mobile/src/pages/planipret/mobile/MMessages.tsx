@@ -1678,13 +1678,46 @@ function Teams365Panel({ profile }: { profile: any }) {
     { k: "teams", label: "Équipes", badge: 0 },
   ];
 
+  const anyLoading = loading || refreshing || auxLoading;
+  const cacheAgeSec = (() => { const c = loadTeamsCache(); return c ? Math.round((Date.now() - c.cachedAt) / 1000) : null; })();
+
   return (
-    <div className="h-full overflow-y-auto px-4 py-3 space-y-3">
+    <div className="h-full overflow-y-auto px-4 py-3 space-y-3 relative">
+      {/* Thin top progress bar during initial load / refresh / warm-up */}
+      {anyLoading && (
+        <div
+          aria-hidden
+          className="absolute left-0 right-0 top-0 h-[2px] overflow-hidden pointer-events-none"
+          style={{ background: "rgba(46,155,220,0.10)" }}
+        >
+          <div
+            className="h-full"
+            style={{
+              width: "40%",
+              background: "linear-gradient(90deg, transparent, var(--pp-brand-accent), transparent)",
+              animation: "pp-progress-slide 1.1s linear infinite",
+            }}
+          />
+        </div>
+      )}
+      <style>{`@keyframes pp-progress-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }`}</style>
+
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>Microsoft Teams</h2>
-        <button onClick={load} className="text-xs px-2 py-1 rounded-full flex items-center gap-1"
+        <div className="flex items-center gap-2 min-w-0">
+          <h2 className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>Microsoft Teams</h2>
+          {anyLoading ? (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(46,155,220,0.10)", color: "var(--pp-brand-accent)" }}>
+              {loading && !chats.length ? "Chargement…" : refreshing ? "Actualisation…" : "Préchauffage…"}
+            </span>
+          ) : cacheAgeSec !== null && cacheAgeSec < 3600 ? (
+            <span className="text-[10px]" style={{ color: "var(--pp-text-muted)" }}>
+              màj il y a {cacheAgeSec < 60 ? `${cacheAgeSec}s` : `${Math.floor(cacheAgeSec / 60)}min`}
+            </span>
+          ) : null}
+        </div>
+        <button onClick={() => load({ force: true })} disabled={anyLoading} className="text-xs px-2 py-1 rounded-full flex items-center gap-1 disabled:opacity-60"
           style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
-          <RefreshCw className={`w-3 h-3 ${loading || refreshing ? "animate-spin" : ""}`} /> Recharger
+          <RefreshCw className={`w-3 h-3 ${anyLoading ? "animate-spin" : ""}`} /> Recharger
         </button>
       </div>
 

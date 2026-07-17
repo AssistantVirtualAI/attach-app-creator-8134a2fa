@@ -43,6 +43,7 @@ export async function attachNativeAutoReconnect(reconnect: () => void): Promise<
       lastType = cur.connectionType ?? null;
     } catch {}
     const sub = await Network.addListener('networkStatusChange', (s) => {
+      if (!s.connected) return;
       const nextType = s.connectionType ?? null;
       const typeChanged = nextType !== lastType;
       console.log('[NativeSIP] networkStatusChange', {
@@ -58,7 +59,7 @@ export async function attachNativeAutoReconnect(reconnect: () => void): Promise<
         handoverEnabled = v === null ? true : (v === 'on' || v === '1' || v === 'true');
       } catch {}
       if (!handoverEnabled) return;
-      if (s.connected) scheduleReconnect(typeChanged ? 1200 : 3000, 'networkStatusChange');
+      scheduleReconnect(Capacitor.getPlatform() === 'android' ? 5000 : (typeChanged ? 1200 : 3000), 'networkStatusChange');
     });
     cleanups.push(() => { sub.remove().catch(() => {}); });
   } catch {}

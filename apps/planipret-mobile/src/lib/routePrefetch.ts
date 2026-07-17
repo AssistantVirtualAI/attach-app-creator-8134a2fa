@@ -17,6 +17,8 @@ const registry: Record<string, Factory> = {
   "/mplanipret/extension-sync":() => import("@/pages/planipret/mobile/MExtensionSync"),
   "/mplanipret/ms365-diagnostics":() => import("@/pages/planipret/mobile/MMs365Diagnostics"),
   "/mplanipret/style-diagnostics":() => import("@/pages/planipret/mobile/MStyleDiagnostics"),
+  "/mplanipret/diagnostics":() => import("@/pages/planipret/mobile/MDiagnostics"),
+  "/mplanipret/sip-debug":() => import("@/pages/planipret/mobile/MSipDebug"),
 };
 
 const started = new Set<string>();
@@ -44,6 +46,10 @@ export function scheduleIdlePrefetch(paths: string[]): void {
   else setTimeout(run, 1200);
 }
 
+function prefetchRoutesStaggered(paths: string[], gapMs: number): void {
+  paths.forEach((path, index) => window.setTimeout(() => prefetchRoute(path), index * gapMs));
+}
+
 /** All bottom-tab / accessible mobile routes — used to warm every chunk. */
 export const ALL_MOBILE_TAB_PATHS = [
   "/mplanipret/home",
@@ -57,8 +63,22 @@ export const ALL_MOBILE_TAB_PATHS = [
   "/mplanipret/ava",
   "/mplanipret/notifications",
   "/mplanipret/search",
+  "/mplanipret/extension-sync",
+  "/mplanipret/ms365-diagnostics",
+  "/mplanipret/style-diagnostics",
+  "/mplanipret/diagnostics",
+  "/mplanipret/sip-debug",
+];
+
+const CRITICAL_MOBILE_TAB_PATHS = [
+  "/mplanipret/home",
+  "/mplanipret/calls",
+  "/mplanipret/messages",
+  "/mplanipret/ava",
+  "/mplanipret/contacts",
 ];
 
 export function prefetchAllMobileTabs(): void {
-  scheduleIdlePrefetch(ALL_MOBILE_TAB_PATHS);
+  prefetchRoutesStaggered(CRITICAL_MOBILE_TAB_PATHS, 80);
+  scheduleIdlePrefetch(ALL_MOBILE_TAB_PATHS.filter((p) => !CRITICAL_MOBILE_TAB_PATHS.includes(p)));
 }

@@ -37,6 +37,7 @@ import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts } from "@/lib/ppContactsCache";
+import { prefetchTeams365Data } from "@/lib/teams365Cache";
 
 
 const ACCENT = "#2E9BDC";
@@ -804,7 +805,9 @@ export default function PlanipretMobile() {
     // Warm the directory/personal/shared caches in parallel so Directory,
     // Teams and the dialer render from memory instead of blocking on network.
     prefetchPpContacts(["list", "shared", "directory"]);
-  }, [profile?.user_id, profile?.ns_extension, profile?.extension]);
+    if (profile?.ms365_access_token) prefetchTeams365Data();
+    prefetchAllMobileTabs();
+  }, [profile?.user_id, profile?.ns_extension, profile?.extension, profile?.ms365_access_token]);
 
 
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1425", color: "#2E9BDC", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;

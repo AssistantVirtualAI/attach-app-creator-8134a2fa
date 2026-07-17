@@ -748,7 +748,7 @@ export function useSoftphoneJsSip(
       const callOpts: any = {
         mediaConstraints: HD_AUDIO_CONSTRAINTS,
         sessionDescriptionHandlerModifiers: forcePcmu
-          ? [buildSdpModifier({ forcePcmu: true })]
+          ? [buildSdpModifier({ forcePcmu: true } as any)]
           : [sdpModifier],
         rtcOfferConstraints: {
           offerToReceiveAudio: true,

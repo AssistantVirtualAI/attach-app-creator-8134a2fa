@@ -747,6 +747,9 @@ export function useSoftphoneJsSip(
     try {
       const callOpts: any = {
         mediaConstraints: HD_AUDIO_CONSTRAINTS,
+        sessionDescriptionHandlerModifiers: forcePcmu
+          ? [buildSdpModifier({ forcePcmu: true })]
+          : [sdpModifier],
         rtcOfferConstraints: {
           offerToReceiveAudio: true,
           offerToReceiveVideo: false,
@@ -754,10 +757,10 @@ export function useSoftphoneJsSip(
         },
         pcConfig: {
           iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
+            // Google STUN removed — UDP 19302 blocked on many mobile networks.
+            // TURN Metered on TCP 443 — confirmed reachable on cellular.
             {
-              urls: 'turn:global.relay.metered.ca:443',
+              urls: 'turn:global.relay.metered.ca:443?transport=tcp',
               username: 'e499486ca9b7d5a03a01e915',
               credential: 'uMFpNAFBoFFUHOdF',
             },

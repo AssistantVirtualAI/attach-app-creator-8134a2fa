@@ -575,6 +575,16 @@ export default function PlanipretMobile() {
     scheduleIdlePrefetch(ALL_MOBILE_TAB_PATHS);
   }, []);
 
+  // On route change: cancel any not-yet-started background prefetches so
+  // low-priority work never fights the chunk the user just opened. Then
+  // re-schedule sibling prefetches once the current route is settled.
+  useEffect(() => {
+    cancelPendingPrefetches(location.pathname);
+    prefetchRoute(location.pathname);
+    const t = window.setTimeout(() => scheduleIdlePrefetch(ALL_MOBILE_TAB_PATHS), 400);
+    return () => window.clearTimeout(t);
+  }, [location.pathname]);
+
   // When the app returns to the foreground (Capacitor resume or tab visibility),
   // revalidate active queries and re-warm the sibling tab chunks so the next
   // interaction after a background pause feels instant instead of stale.

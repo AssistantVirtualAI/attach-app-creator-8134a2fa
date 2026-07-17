@@ -73,8 +73,10 @@ describe('createSIPUA WSS configuration', () => {
     expect(o.password).toBe('VirtualAI2026!');
     expect(o.display_name).toBe('Mobile 300');
     expect(o.register).toBe(true);
-    expect(o.register_expires).toBe(120);
+    expect(o.register_expires).toBe(300);
     expect(o.session_timers).toBe(false);
+    expect(o.ws_ping_pong).toBe(true);
+    expect(o.ws_ping_pong_interval).toBe(20);
     expect(o.user_agent).toMatch(/AVA Softphone/);
   });
 

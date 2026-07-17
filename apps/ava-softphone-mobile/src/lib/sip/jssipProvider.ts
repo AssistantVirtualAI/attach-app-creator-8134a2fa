@@ -241,14 +241,13 @@ export function classifySipFailure(input: {
 
 /** Build the list of WSS URLs to try, primary first. Port 7443 is the TLS/WSS profile with DTLS-SRTP. */
 export function buildWssFallbackList(config: SIPConfig): string[] {
-  const FALLBACK_WSS = [
-    'wss://pbxnode.lemtel.tel:7443',
-    'wss://node.lemtelcloud.net:7443',
-  ];
+  const WSS_PRIMARY = 'wss://pbxnode.lemtel.tel:7443';
+  const WSS_FALLBACK = 'wss://node.lemtelcloud.net:7443';
   return Array.from(new Set([
+    WSS_PRIMARY,
+    WSS_FALLBACK,
     config.wssUrl,
     ...(config.wssUrls || []),
-    ...FALLBACK_WSS,
   ].filter((url): url is string => typeof url === 'string' && url.startsWith('wss://'))));
 }
 

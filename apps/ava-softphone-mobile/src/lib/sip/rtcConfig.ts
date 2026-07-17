@@ -57,7 +57,7 @@ export const ICE_SERVERS: RTCIceServer[] = buildIceServers({
 
 export const PC_CONFIG: RTCConfiguration = {
   iceServers: ICE_SERVERS,
-  iceTransportPolicy: 'relay',
+  iceTransportPolicy: 'all',
   bundlePolicy: 'balanced',
 };
 
@@ -290,7 +290,7 @@ async function tryRelayCandidate(servers: RTCIceServer[], timeoutMs: number): Pr
   if (typeof RTCPeerConnection === 'undefined') return true;
   return new Promise<boolean>((resolve) => {
     let done = false;
-    const pc = new RTCPeerConnection({ iceServers: servers, iceTransportPolicy: 'relay' });
+    const pc = new RTCPeerConnection({ iceServers: servers, iceTransportPolicy: 'all' });
     const finish = (v: boolean) => {
       if (done) return;
       done = true;
@@ -339,7 +339,7 @@ export function ensureActivePcConfig(): Promise<RTCConfiguration> {
       const res = await probeTurnEndpoints();
       const servers = res.provider === 'metered' ? ICE_SERVERS : FALLBACK_ICE_SERVERS;
       _activeProvider = res.provider;
-      _activePcConfig = { iceServers: servers, iceTransportPolicy: 'relay', bundlePolicy: 'balanced' };
+      _activePcConfig = { iceServers: servers, iceTransportPolicy: 'all', bundlePolicy: 'balanced' };
       emitDiag({ kind: 'pc-config', provider: res.provider });
     } catch {
       _activeProvider = 'metered';
@@ -425,7 +425,7 @@ export function instrumentPeerConnectionWithDiag(pc: RTCPeerConnection, log: Ice
     emitDiag({ kind: 'ice-fallback', from: 'all', to: 'relay', reason });
     log('ice.fallback', reason, 'warn');
     try {
-      pc.setConfiguration({ ...getActivePcConfig(), iceTransportPolicy: 'relay' });
+      pc.setConfiguration({ ...getActivePcConfig(), iceTransportPolicy: 'all' });
       (pc as any).restartIce?.();
     } catch (err: any) {
       emitDiag({ kind: 'webrtc-error', message: String(err?.message ?? err), where: 'restartIce' });

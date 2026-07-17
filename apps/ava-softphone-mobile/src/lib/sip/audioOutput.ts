@@ -55,7 +55,14 @@ export function attachRemoteStream(pc: RTCPeerConnection) {
     if (!stream) return;
     if (audioEl.srcObject !== stream) {
       audioEl.srcObject = stream;
-      audioEl.play().catch((e) => console.warn('[audioOutput] play failed', e));
+      audioEl.muted = false;
+      audioEl.volume = 1.0;
+      audioEl.play().catch((e) => {
+        console.warn('[audioOutput] play failed, retrying...', e);
+        setTimeout(() => {
+          audioEl?.play().catch((e2) => console.warn('[audioOutput] play retry failed', e2));
+        }, 500);
+      });
     }
   };
 }

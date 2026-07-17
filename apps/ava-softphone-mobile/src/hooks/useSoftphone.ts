@@ -23,7 +23,7 @@ export interface UseSoftphoneReturn {
   isMuted: boolean;
   isOnHold: boolean;
   activeCallNumber: string;
-  call: (number: string) => boolean | void;
+  call: (number: string) => boolean | void | Promise<boolean>;
   hangup: () => void;
   answer: () => void;
   mute: () => void;
@@ -402,6 +402,11 @@ export function useSoftphoneJsSip(
               setCallState('active');
               log('session.confirmed', remoteNumber);
               console.log('[SIP][info] session.confirmed — call connected');
+              // Force Android into MODE_IN_COMMUNICATION via earpiece route so
+              // remote audio is audible (WebView otherwise plays via media stream).
+              import('../lib/sip/audioOutput').then(({ setRoute }) => {
+                setRoute('earpiece').catch(() => {});
+              });
               timerRef.current = setInterval(() => setCallTimer((t) => t + 1), 1000);
               // Read the codec actually negotiated by the PBX.
               readNegotiatedCodec(session.connection);
@@ -748,7 +753,7 @@ export function useSoftphoneJsSip(
       const callOpts: any = {
         mediaConstraints: HD_AUDIO_CONSTRAINTS,
         sessionDescriptionHandlerModifiers: forcePcmu
-          ? [buildSdpModifier({ forcePcmu: true })]
+          ? [buildSdpModifier({ forcePcmu: true } as any)]
           : [sdpModifier],
         rtcOfferConstraints: {
           offerToReceiveAudio: true,
@@ -776,6 +781,14 @@ export function useSoftphoneJsSip(
       };
       if (forcePcmu) log('call.fallback', 'secure PCMU-only SDP rewrite armed');
       sipDebug('placeCallInternal pcConfig', PC_CONFIG);
+      // Android: switch audio mode to MODE_IN_COMMUNICATION before INVITE so
+      // the earpiece / speaker routing is armed when the remote track arrives.
+      if (Capacitor.getPlatform() === 'android') {
+        try {
+          const { CapacitorPjsip } = await import('../lib/sip/nativeSipProvider');
+          await (CapacitorPjsip as any).startCall?.();
+        } catch {}
+      }
       uaRef.current.call(`sip:${number}@${config.domain}`, callOpts);
       return true;
     } catch (err: any) {
@@ -788,7 +801,7 @@ export function useSoftphoneJsSip(
   };
 
 
-  const call = (number: string) => {
+  const call = (number: string): Promise<boolean> | boolean => {
     if (sipStatus !== 'registered') return false;
     callAttemptRef.current = 1;
     return placeCallInternal(number, false);

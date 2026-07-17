@@ -114,9 +114,10 @@ export const useAuth = () => {
       });
       return { error: null };
     } catch (error: any) {
+      logAuthError("signUp", error, { email });
       toast({
         title: "Erreur d'inscription",
-        description: error.message,
+        description: friendlyAuthError(error),
         variant: "destructive",
       });
       return { error };
@@ -138,9 +139,10 @@ export const useAuth = () => {
       });
       return { error: null };
     } catch (error: any) {
+      logAuthError("signIn", error, { email });
       toast({
         title: "Erreur de connexion",
-        description: error.message,
+        description: friendlyAuthError(error),
         variant: "destructive",
       });
       return { error };
@@ -159,9 +161,10 @@ export const useAuth = () => {
       if (error) throw error;
       return { error: null };
     } catch (error: any) {
+      logAuthError("signInWithGoogle", error);
       toast({
         title: "Erreur de connexion Google",
-        description: error.message,
+        description: friendlyAuthError(error),
         variant: "destructive",
       });
       return { error };
@@ -197,12 +200,13 @@ export const useAuth = () => {
       return { error: null };
     } catch (error: any) {
       const msg = String(error?.message || "");
-      const notEnabled = /provider is not enabled|Unsupported provider/i.test(msg);
+      const notEnabled = /provider is not enabled|Unsupported provider|validation_failed/i.test(msg);
+      logAuthError("signInWithMicrosoft", error, { notEnabled });
       toast({
         title: notEnabled ? "Microsoft SSO indisponible" : "Erreur de connexion Microsoft",
         description: notEnabled
-          ? "La connexion Microsoft n'est pas activée sur ce compte. Utilisez Google ou email/mot de passe. Vos intégrations Microsoft 365 (Teams, Outlook) restent disponibles une fois connecté."
-          : msg,
+          ? "La connexion Microsoft n'est pas activée. Utilisez Google ou email/mot de passe. Vos intégrations Microsoft 365 restent disponibles une fois connecté."
+          : friendlyAuthError(error),
         variant: "destructive",
       });
       return { error };
@@ -222,9 +226,10 @@ export const useAuth = () => {
       if (error) throw error;
       return { error: null };
     } catch (error: any) {
+      logAuthError("signInWithApple", error);
       toast({
         title: "Erreur de connexion Apple",
-        description: error.message,
+        description: friendlyAuthError(error),
         variant: "destructive",
       });
       return { error };

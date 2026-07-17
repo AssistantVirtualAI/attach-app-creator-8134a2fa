@@ -402,6 +402,11 @@ export function useSoftphoneJsSip(
               setCallState('active');
               log('session.confirmed', remoteNumber);
               console.log('[SIP][info] session.confirmed — call connected');
+              // Force Android into MODE_IN_COMMUNICATION via earpiece route so
+              // remote audio is audible (WebView otherwise plays via media stream).
+              import('../lib/sip/audioOutput').then(({ setRoute }) => {
+                setRoute('earpiece').catch(() => {});
+              });
               timerRef.current = setInterval(() => setCallTimer((t) => t + 1), 1000);
               // Read the codec actually negotiated by the PBX.
               readNegotiatedCodec(session.connection);

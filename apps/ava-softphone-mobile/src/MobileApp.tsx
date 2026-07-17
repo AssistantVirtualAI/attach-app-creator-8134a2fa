@@ -249,7 +249,7 @@ function AuthenticatedShell({
   const WSS_FALLBACK = 'wss://node.lemtelcloud.net:7443';
   const credentialWss = [creds.wssUrl, ...(creds.wssUrls || [])]
     .filter((url): url is string => typeof url === 'string' && url.startsWith('wss://'));
-  const WORKING_WSS = Array.from(new Set([...credentialWss, WSS_PRIMARY, WSS_FALLBACK]));
+  const WORKING_WSS = Array.from(new Set([WSS_PRIMARY, WSS_FALLBACK, ...credentialWss]));
   const sipDomain = creds.sipDomain || 'lemtel.lemtel.tel';
   const credentialsReady = sipReady && !!(creds.extension && sipPassword);
 

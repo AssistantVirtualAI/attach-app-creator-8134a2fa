@@ -241,14 +241,13 @@ export function classifySipFailure(input: {
 
 /** Build the list of WSS URLs to try, primary first. Port 7443 is the TLS/WSS profile with DTLS-SRTP. */
 export function buildWssFallbackList(config: SIPConfig): string[] {
-  const FALLBACK_WSS = [
-    'wss://pbxnode.lemtel.tel:7443',
-    'wss://node.lemtelcloud.net:7443',
-  ];
+  const WSS_PRIMARY = 'wss://pbxnode.lemtel.tel:7443';
+  const WSS_FALLBACK = 'wss://node.lemtelcloud.net:7443';
   return Array.from(new Set([
+    WSS_PRIMARY,
+    WSS_FALLBACK,
     config.wssUrl,
     ...(config.wssUrls || []),
-    ...FALLBACK_WSS,
   ].filter((url): url is string => typeof url === 'string' && url.startsWith('wss://'))));
 }
 
@@ -284,6 +283,10 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     register_expires: 300,
     connection_recovery_min_interval: 10,
     connection_recovery_max_interval: 60,
+    // Keep the WSS tunnel alive on Android carriers/proxies that close quiet
+    // WebSockets with an empty close code/reason after a few seconds.
+    ws_ping_pong: true,
+    ws_ping_pong_interval: 20,
     user_agent: "AVA Softphone 1.1",
   };
   if (isAndroid) {

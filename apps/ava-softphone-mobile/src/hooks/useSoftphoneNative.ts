@@ -476,7 +476,7 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
   useEffect(() => {
     let cleanup: (() => void) | null = null;
     attachNativeAutoReconnect(() => {
-      if (sipStatus !== 'registered') reconnect();
+      if (sipStatus !== 'registered' && sipStatus !== 'connecting') reconnect();
     }).then((c) => { cleanup = c; });
     return () => { if (cleanup) cleanup(); };
   }, [reconnect, sipStatus]);

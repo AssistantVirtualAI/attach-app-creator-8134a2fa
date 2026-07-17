@@ -633,7 +633,7 @@ export function useSoftphoneJsSip(
 
     const trigger = (source: string) => {
       if (cancelled) return;
-      if (sipStatusRef.current === 'registered') return;
+      if (sipStatusRef.current === 'registered' || sipStatusRef.current === 'connecting') return;
       log('reconnect.auto', `source=${source} status=${sipStatusRef.current}`, 'warn');
       try { reconnectRef.current(); } catch (e: any) {
         log('reconnect.auto.failed', e?.message || '', 'error');

@@ -257,6 +257,7 @@ export default function MHome() {
       return;
     }
     setBrief(data);
+    saveMHomeCache(profile?.user_id, period, { brief: data });
   };
 
   useEffect(() => { loadStats(); loadBrief(false); /* eslint-disable-next-line */ }, [profile?.user_id, period]);

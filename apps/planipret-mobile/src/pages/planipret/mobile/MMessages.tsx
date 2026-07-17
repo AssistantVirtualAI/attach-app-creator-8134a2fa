@@ -1644,7 +1644,7 @@ function Teams365Panel({ profile }: { profile: any }) {
     if (error || p?.error) { toast.error(p?.error || error?.message || "Impossible de créer le chat"); return; }
     openThread({ kind: "chat", id: p.chat_id, title });
     setGroupMode(false); setSelectedIds(new Set()); setGroupTopic("");
-    load();
+    load({ force: true });
   };
 
   const openThread = (t: NonNullable<typeof active>) => {

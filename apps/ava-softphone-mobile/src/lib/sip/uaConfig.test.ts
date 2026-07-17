@@ -42,7 +42,8 @@ describe('buildWssFallbackList', () => {
   it('honors caller-supplied WSS URLs before defaults', () => {
     const list = buildWssFallbackList({ ...cfg, wssUrls: ['wss://custom:7443'] });
     expect(list[0]).toBe('wss://pbxnode.lemtel.tel:7443');
-    expect(list[1]).toBe('wss://custom:7443');
+    expect(list[1]).toBe('wss://node.lemtelcloud.net:7443');
+    expect(list[2]).toBe('wss://custom:7443');
     expect(list).toContain('wss://pbxnode.lemtel.tel:7443');
   });
 });

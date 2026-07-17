@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { createSIPUA, JsSIPUnavailableError, SIPConfig, classifySipFailure, rewriteSdpForFusionPBX } from '../lib/sip/jssipProvider';
+import { createSIPUA, JsSIPUnavailableError, SIPConfig, classifySipFailure, rewriteSdpForFusionPBX, sdpModifier, buildSdpModifier } from '../lib/sip/jssipProvider';
+import { attachRemoteStream } from '../lib/sip/audioOutput';
 import {
   appendSipLog, clearSipLog as clearPersistedLog, clearPersistedStatus, loadPersistedError, loadPersistedStatus,
   loadSipLog, MAX_AUTO_RETRIES, PersistedSipError, probeWss, RETRY_BACKOFF_MS, savePersistedError, savePersistedStatus,

@@ -17,7 +17,7 @@ import { OnboardingTutorial } from "@/components/planipret/OnboardingTutorial";
 import { useAvaNavigation } from "@/hooks/useAvaNavigation";
 const AvaVoiceAgent = lazy(() => import("@/components/planipret/mobile/AvaVoiceAgent"));
 import MobileScreenSkeleton from "@/components/planipret/mobile/MobileScreenSkeleton";
-import { prefetchRoute, scheduleIdlePrefetch, ALL_MOBILE_TAB_PATHS, prefetchAllMobileTabs } from "@/lib/routePrefetch";
+import { prefetchRoute, scheduleIdlePrefetch, ALL_MOBILE_TAB_PATHS, prefetchAllMobileTabs, cancelPendingPrefetches } from "@/lib/routePrefetch";
 import { useQueryClient } from "@tanstack/react-query";
 import AvaChatSheet from "@/components/planipret/mobile/AvaChatSheet";
 import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
@@ -574,6 +574,16 @@ export default function PlanipretMobile() {
   useEffect(() => {
     scheduleIdlePrefetch(ALL_MOBILE_TAB_PATHS);
   }, []);
+
+  // On route change: cancel any not-yet-started background prefetches so
+  // low-priority work never fights the chunk the user just opened. Then
+  // re-schedule sibling prefetches once the current route is settled.
+  useEffect(() => {
+    cancelPendingPrefetches(location.pathname);
+    prefetchRoute(location.pathname);
+    const t = window.setTimeout(() => scheduleIdlePrefetch(ALL_MOBILE_TAB_PATHS), 400);
+    return () => window.clearTimeout(t);
+  }, [location.pathname]);
 
   // When the app returns to the foreground (Capacitor resume or tab visibility),
   // revalidate active queries and re-warm the sibling tab chunks so the next

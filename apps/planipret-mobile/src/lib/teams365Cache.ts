@@ -12,6 +12,13 @@ export type Teams365Cache = {
 
 export const TEAMS_CACHE_KEY = "planipret.teams365.cache.v2";
 const LEGACY_TEAMS_CACHE_KEY = "planipret.teams365.cache.v1";
+
+// TTL: cached data is served instantly on load; if older than TTL_MS we
+// still render it but trigger a background revalidation. Beyond HARD_TTL_MS
+// we consider it stale enough to hide until fresh data arrives.
+export const TEAMS_TTL_MS = 60_000;        // 1 min: soft freshness
+export const TEAMS_HARD_TTL_MS = 15 * 60_000; // 15 min: hard expiry
+
 const inflight = new Map<Teams365Mode, Promise<any>>();
 
 function normalizeCache(value: any): Teams365Cache | null {
@@ -32,6 +39,21 @@ export function loadTeamsCache(): Teams365Cache | null {
   } catch {
     return null;
   }
+}
+
+export function teamsCacheAgeMs(): number | null {
+  const c = loadTeamsCache();
+  return c ? Date.now() - c.cachedAt : null;
+}
+
+export function isTeamsCacheFresh(ttlMs: number = TEAMS_TTL_MS): boolean {
+  const age = teamsCacheAgeMs();
+  return age !== null && age <= ttlMs;
+}
+
+export function isTeamsCacheExpired(hardTtlMs: number = TEAMS_HARD_TTL_MS): boolean {
+  const age = teamsCacheAgeMs();
+  return age === null || age > hardTtlMs;
 }
 
 export function saveTeamsCachePatch(patch: Partial<Omit<Teams365Cache, "cachedAt">>): Teams365Cache {
@@ -68,6 +90,12 @@ export async function fetchTeams365(mode: Teams365Mode): Promise<any> {
     .finally(() => inflight.delete(mode));
   inflight.set(mode, p);
   return p;
+}
+
+/** Revalidate only if the cache is older than the soft TTL. */
+export async function revalidateTeams365IfStale(mode: Teams365Mode = "summary", ttlMs: number = TEAMS_TTL_MS): Promise<any | null> {
+  if (isTeamsCacheFresh(ttlMs)) return null;
+  return fetchTeams365(mode).catch(() => null);
 }
 
 export function prefetchTeams365Data(): void {

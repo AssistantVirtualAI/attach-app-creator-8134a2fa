@@ -1527,6 +1527,7 @@ function Teams365Panel({ profile }: { profile: any }) {
   const cached = loadTeamsCache();
   const [loading, setLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
+  const [auxLoading, setAuxLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [diag, setDiag] = useState<any>(cached?.diagnostics ?? {});
   const [chats, setChats] = useState<any[]>(cached?.chats ?? []);
@@ -1573,6 +1574,7 @@ function Teams365Panel({ profile }: { profile: any }) {
   };
 
   const loadAuxiliary = async () => {
+    setAuxLoading(true);
     const [teamsPayload, peoplePayload] = await Promise.allSettled([
       fetchTeams365("teams"),
       fetchTeams365("people"),
@@ -1585,6 +1587,7 @@ function Teams365Panel({ profile }: { profile: any }) {
       setPeople(cache.people);
       setDiag(cache.diagnostics);
     }
+    setAuxLoading(false);
   };
 
   const load = async () => {
@@ -1801,7 +1804,7 @@ function Teams365Panel({ profile }: { profile: any }) {
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un coéquipier…"
                 className="w-full text-xs px-3 py-2 rounded-lg outline-none"
                 style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }} />
-              {loading && !people.length ? (
+              {(loading || auxLoading) && !people.length ? (
                 <TeamsListSkeleton compact />
               ) : filteredPeople.length === 0 ? (
                 <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucun coéquipier trouvé.</div>
@@ -1857,7 +1860,9 @@ function Teams365Panel({ profile }: { profile: any }) {
                 <span>Équipes & canaux ({teams.length})</span>
                 {diag.teams_error && <span style={{ color: "#dc2626" }}>Err: {String(diag.teams_error).slice(0, 40)}</span>}
               </div>
-              {teams.length === 0 ? (
+              {auxLoading && teams.length === 0 ? (
+                <TeamsListSkeleton compact />
+              ) : teams.length === 0 ? (
                 <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucune équipe.</div>
               ) : (
                 <div className="space-y-2">

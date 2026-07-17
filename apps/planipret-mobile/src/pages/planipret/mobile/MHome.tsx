@@ -282,12 +282,18 @@ export default function MHome() {
     setBriefErr(null);
     const { data, error } = await supabase.functions.invoke("pp-ava-brief", { body: { period, force } });
     setBriefLoading(false);
+    const now = Date.now();
     if (error || (data as any)?.error) {
-      setBriefErr((data as any)?.error || error?.message || "brief unavailable");
+      const msg = (data as any)?.error || error?.message || "brief unavailable";
+      setBriefErr(msg);
+      saveMHomeCache(profile?.user_id, period, { sources: { ava_brief: { status: "error", lastAt: now, message: msg } } });
       return;
     }
     setBrief(data);
-    saveMHomeCache(profile?.user_id, period, { brief: data });
+    saveMHomeCache(profile?.user_id, period, {
+      brief: data,
+      sources: { ava_brief: { status: "ok", lastAt: now, message: null } },
+    });
   };
 
   useEffect(() => { loadStats(); loadBrief(false); /* eslint-disable-next-line */ }, [profile?.user_id, period]);

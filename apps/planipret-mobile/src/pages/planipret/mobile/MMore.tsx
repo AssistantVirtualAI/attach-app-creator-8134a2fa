@@ -404,6 +404,7 @@ export default function MMore() {
             ].join(" · ");
             ((data as any)?.coherent ? toast.success : toast.warning)(`${t("more.diagnostic")}: ${flags}`);
           }} chevron />
+        <Row icon={<SettingsIcon className="w-4 h-4" />} label="Audit des KPI Home" sub="Vérifier les sources et la dernière sync" onClick={() => navigate("/mplanipret/kpi-audit")} chevron />
         <Row icon={<Info className="w-4 h-4" />} label={t("more.appVersion")} right={<span style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>v1.0.0 (build 1)</span>} />
       </Section>
 

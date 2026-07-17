@@ -73,16 +73,17 @@ export default function MHome() {
   });
   useEffect(() => { try { localStorage.setItem("pp.mobile.period.v2", period); } catch {} }, [period]);
 
-  const [stats, setStats] = useState({ calls: 0, missed: 0, sms: 0, voicemails: 0, meetings: 0, hotLeads: 0, tasks: 0, outbound: 0 });
-  const [recent, setRecent] = useState<any[]>([]);
-  const [hotLeads, setHotLeads] = useState<any[]>([]);
-  const [dueReminders, setDueReminders] = useState<any[]>([]);
-  const [meetings, setMeetings] = useState<any[]>([]);
-  const [msMeetings, setMsMeetings] = useState<any[]>([]);
+  const cached = useMemo(() => loadMHomeCache(profile?.user_id, period), [profile?.user_id, period]);
+  const [stats, setStats] = useState(() => cached?.stats ?? { calls: 0, missed: 0, sms: 0, voicemails: 0, meetings: 0, hotLeads: 0, tasks: 0, outbound: 0 });
+  const [recent, setRecent] = useState<any[]>(() => cached?.recent ?? []);
+  const [hotLeads, setHotLeads] = useState<any[]>(() => cached?.hotLeads ?? []);
+  const [dueReminders, setDueReminders] = useState<any[]>(() => cached?.dueReminders ?? []);
+  const [meetings, setMeetings] = useState<any[]>(() => cached?.meetings ?? []);
+  const [msMeetings, setMsMeetings] = useState<any[]>(() => cached?.msMeetings ?? []);
   const [msCalendarLoading, setMsCalendarLoading] = useState(false);
   const [msCalendarError, setMsCalendarError] = useState<string | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [brief, setBrief] = useState<any | null>(null);
+  const [statsLoading, setStatsLoading] = useState(!cached);
+  const [brief, setBrief] = useState<any | null>(() => cached?.brief ?? null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefErr, setBriefErr] = useState<string | null>(null);
 

@@ -796,7 +796,7 @@ export function useSoftphoneJsSip(
   };
   const answer = () =>
     sessionRef.current?.answer({
-      mediaConstraints: { audio: true, video: false },
+      mediaConstraints: HD_AUDIO_CONSTRAINTS,
       pcConfig: {
         iceServers: [
           // STUN public — connexion directe (host/srflx) en priorité

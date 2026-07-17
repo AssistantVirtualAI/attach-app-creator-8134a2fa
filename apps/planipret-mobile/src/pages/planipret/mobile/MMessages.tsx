@@ -17,7 +17,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { connectMs365 } from "@/lib/ms365Connect";
 import { getPpContacts } from "@/lib/ppContactsCache";
-import { fetchTeams365, loadTeamsCache, prefetchTeams365Data, saveTeamsCachePatch } from "@/lib/teams365Cache";
+import { fetchTeams365, loadTeamsCache, prefetchTeams365Data, saveTeamsCachePatch, isTeamsCacheFresh, isTeamsCacheExpired, revalidateTeams365IfStale, TEAMS_TTL_MS } from "@/lib/teams365Cache";
 
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "roster";

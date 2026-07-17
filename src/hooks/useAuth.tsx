@@ -3,6 +3,36 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+// Structured client-side auth logging so failures can be diagnosed from the console.
+function logAuthError(op: string, error: any, extra?: Record<string, any>) {
+  try {
+    const details = {
+      op,
+      message: error?.message ?? String(error),
+      name: error?.name,
+      status: error?.status ?? error?.statusCode,
+      code: error?.code ?? error?.error_code,
+      details: error?.details ?? error?.error_description,
+      ...extra,
+    };
+    // eslint-disable-next-line no-console
+    console.error(`[auth:${op}]`, details, error);
+  } catch { /* noop */ }
+}
+
+function friendlyAuthError(error: any): string {
+  const msg = String(error?.message || "");
+  const code = String(error?.code || error?.error_code || "");
+  if (/invalid.login.credentials/i.test(msg) || code === "invalid_credentials") return "Email ou mot de passe invalide.";
+  if (/email.not.confirmed/i.test(msg) || code === "email_not_confirmed") return "Email non confirmé. Vérifiez votre boîte de réception.";
+  if (/user.already.registered/i.test(msg) || code === "user_already_exists") return "Ce compte existe déjà. Connectez-vous.";
+  if (/rate.limit|over_email_send_rate_limit|too many/i.test(msg)) return "Trop de tentatives. Réessayez dans quelques minutes.";
+  if (/network|failed to fetch/i.test(msg)) return "Problème réseau. Vérifiez votre connexion et réessayez.";
+  if (/provider is not enabled|validation_failed/i.test(msg)) return "Ce fournisseur SSO n'est pas activé.";
+  return msg || "Une erreur inattendue est survenue.";
+}
+
+
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);

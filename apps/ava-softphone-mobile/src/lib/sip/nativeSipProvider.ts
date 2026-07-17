@@ -116,6 +116,29 @@ export const CapacitorSipNative: CapacitorSipPlugin =
     : makeNoopPlugin();
 export const CapacitorPjsip = CapacitorSipNative;
 
+// Android-only: separately register the real CapacitorPjsip bridge so we can
+// invoke the SIP foreground service (WakeLock + WifiLock) without unlocking
+// the full native SIP path on Android.
+interface AndroidSipServiceBridge {
+  startSipService?: () => Promise<{ ok: boolean }>;
+  stopSipService?: () => Promise<{ ok: boolean }>;
+}
+const AndroidSipServicePlugin: AndroidSipServiceBridge =
+  __platform === 'android'
+    ? (registerPlugin<AndroidSipServiceBridge>('CapacitorPjsip') as AndroidSipServiceBridge)
+    : {};
+
+export async function startAndroidSipService(): Promise<void> {
+  if (__platform !== 'android') return;
+  try { await AndroidSipServicePlugin.startSipService?.(); }
+  catch (e) { console.warn('[sip] startSipService failed', e); }
+}
+export async function stopAndroidSipService(): Promise<void> {
+  if (__platform !== 'android') return;
+  try { await AndroidSipServicePlugin.stopSipService?.(); }
+  catch (e) { console.warn('[sip] stopSipService failed', e); }
+}
+
 /**
  * Subscribe to a native SIP event. Returns a cleanup function.
  * Maps legacy event names (registered / registrationFailed) onto the unified

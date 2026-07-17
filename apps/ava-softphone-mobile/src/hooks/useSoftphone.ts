@@ -266,6 +266,9 @@ export function useSoftphoneJsSip(
             setSipStatus('registered');
             setSipErrorState('');
             log('register.ok', `ext=${config.extension}@${config.domain}`);
+            // Android: start foreground service to hold WakeLock + WifiLock
+            // so the WebSocket survives screen-off / background throttling.
+            startAndroidSipService();
           });
           // Silent re-register on expiry / soft unregister — keeps the
           // active RTP session alive while we refresh the binding.
@@ -830,7 +833,7 @@ export function useSoftphoneJsSip(
 // the JsSIP UA must never be instantiated (it would steal the mic and
 // trigger WebRTC restarts that fight the native socket).
 // ---------------------------------------------------------------------------
-import { NATIVE_SIP_ENABLED } from '../lib/sip/nativeSipProvider';
+import { NATIVE_SIP_ENABLED, startAndroidSipService, stopAndroidSipService } from '../lib/sip/nativeSipProvider';
 import { useSoftphoneNative } from './useSoftphoneNative';
 import { notifySipDispatcherLoaded } from '../lib/sip/bootSipGuard';
 

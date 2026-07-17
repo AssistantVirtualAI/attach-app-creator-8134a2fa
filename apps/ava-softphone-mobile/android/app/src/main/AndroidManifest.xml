@@ -72,7 +72,12 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!-- SERVICE SIP EN FOREGROUND — requis Android 14+ -->
+        <!-- SERVICE SIP EN FOREGROUND — requis Android 14+ pour maintenir WakeLock + WifiLock -->
+        <service
+            android:name=".SipConnectionService"
+            android:foregroundServiceType="microphone|phoneCall"
+            android:exported="false"
+            android:stopWithTask="false" />
     </application>
 
 </manifest>

@@ -23,7 +23,7 @@ export interface UseSoftphoneReturn {
   isMuted: boolean;
   isOnHold: boolean;
   activeCallNumber: string;
-  call: (number: string) => boolean | void;
+  call: (number: string) => boolean | void | Promise<boolean>;
   hangup: () => void;
   answer: () => void;
   mute: () => void;

@@ -422,14 +422,16 @@ const AuthPage = () => {
         </div>
       </motion.div>
 
-      {/* Right side - Animated Features */}
+      {/* Right side - Animated Features (lazy) */}
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.8 }}
         className="hidden lg:block w-[55%] bg-gradient-to-br from-primary/90 via-secondary/90 to-accent/90 relative overflow-hidden"
       >
-        <AnimatedFeatures />
+        <Suspense fallback={<div className="w-full h-full" />}>
+          <AnimatedFeatures />
+        </Suspense>
       </motion.div>
 
       {/* Forgot Password Dialog */}

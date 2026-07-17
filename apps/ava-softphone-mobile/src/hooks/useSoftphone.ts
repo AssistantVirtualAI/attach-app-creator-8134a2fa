@@ -11,6 +11,7 @@ import { AudioProfile, loadAudioProfile, saveAudioProfile, PROFILE_OPUS } from '
 import { CallQuality, EMPTY_QUALITY, SamplerState, sampleCallQuality, chooseAdaptiveBitrate } from '../lib/sip/callQuality';
 import { showMobileToast } from '../lib/mobileToast';
 import { PC_CONFIG, instrumentPeerConnection, watchCallEstablishment, isSipDebugEnabled, sipDebug } from '../lib/sip/rtcConfig';
+import { fetchIceServers, FALLBACK_ICE_SERVERS } from '../lib/sip/iceServers';
 
 export type SIPStatus = 'idle' | 'connecting' | 'registered' | 'retrying' | 'error';
 export type CallState = 'idle' | 'ringing' | 'active' | 'ended';
@@ -750,6 +751,8 @@ export function useSoftphoneJsSip(
     }
 
     try {
+      const iceServers = await fetchIceServers().catch(() => FALLBACK_ICE_SERVERS);
+      log('ice.servers', `count=${iceServers.length}`);
       const callOpts: any = {
         mediaConstraints: HD_AUDIO_CONSTRAINTS,
         sessionDescriptionHandlerModifiers: forcePcmu
@@ -761,20 +764,7 @@ export function useSoftphoneJsSip(
           voiceActivityDetection: false,
         },
         pcConfig: {
-          iceServers: [
-            // Google STUN removed — UDP 19302 blocked on many mobile networks.
-            // TURN Metered on TCP 443 — confirmed reachable on cellular.
-            {
-              urls: 'turn:global.relay.metered.ca:443?transport=tcp',
-              username: 'e499486ca9b7d5a03a01e915',
-              credential: 'uMFpNAFBoFFUHOdF',
-            },
-            {
-              urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-              username: 'e499486ca9b7d5a03a01e915',
-              credential: 'uMFpNAFBoFFUHOdF',
-            },
-          ],
+          iceServers,
           iceTransportPolicy: 'all',
           bundlePolicy: 'balanced',
         },
@@ -816,29 +806,18 @@ export function useSoftphoneJsSip(
     // Après un raccroché manuel, vérifier l'UA (re-REGISTER si besoin).
     ensureRegisteredThenRestore('hangup');
   };
-  const answer = () =>
+  const answer = async () => {
+    const iceServers = await fetchIceServers().catch(() => FALLBACK_ICE_SERVERS);
     sessionRef.current?.answer({
       mediaConstraints: HD_AUDIO_CONSTRAINTS,
       sessionDescriptionHandlerModifiers: [sdpModifier],
       pcConfig: {
-        iceServers: [
-          // Google STUN removed — UDP 19302 blocked on many mobile networks.
-          // TURN Metered on TCP 443 — confirmed reachable on cellular.
-          {
-            urls: 'turn:global.relay.metered.ca:443?transport=tcp',
-            username: 'e499486ca9b7d5a03a01e915',
-            credential: 'uMFpNAFBoFFUHOdF',
-          },
-          {
-            urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-            username: 'e499486ca9b7d5a03a01e915',
-            credential: 'uMFpNAFBoFFUHOdF',
-          },
-        ],
+        iceServers,
         iceTransportPolicy: 'all',
         bundlePolicy: 'balanced',
       },
     });
+  };
   const mute = () => { sessionRef.current?.mute({ audio: true }); setIsMuted(true); };
   const unmute = () => { sessionRef.current?.unmute({ audio: true }); setIsMuted(false); };
   const hold = () => { sessionRef.current?.hold(); setIsOnHold(true); };

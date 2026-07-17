@@ -51,9 +51,19 @@ Deno.serve(async (req) => {
       }
       case "list_contacts": {
         const q = payload.query ?? "";
-        const r = await fetch(`${cfg.url}/contacts?search=${encodeURIComponent(q)}`, { headers: h });
-        const d = await r.json().catch(() => ({}));
-        return j({ success: r.ok, contacts: d.contacts ?? d ?? [] }, r.ok ? 200 : 500);
+        try {
+          const r = await fetch(`${cfg.url}/contacts?search=${encodeURIComponent(q)}`, { headers: h });
+          const d = await r.json().catch(() => ({}));
+          const raw = Array.isArray(d) ? d : (Array.isArray(d?.contacts) ? d.contacts : []);
+          if (!r.ok) {
+            console.warn("maestro list_contacts non-ok", r.status, d);
+            return j({ success: false, contacts: [], fallback: true, status: r.status });
+          }
+          return j({ success: true, contacts: raw });
+        } catch (err: any) {
+          console.error("maestro list_contacts error", err?.message);
+          return j({ success: false, contacts: [], fallback: true, error: err?.message });
+        }
       }
       case "list_tasks": {
         const r = await fetch(`${cfg.url}/tasks?assigned_to=${encodeURIComponent(payload.broker_email ?? "")}`, { headers: h });

@@ -71,6 +71,12 @@ class CapacitorPjsip : Plugin() {
     }
 
     @PluginMethod fun makeCall(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true); put("status", "calling") }) }
+    @PluginMethod
+    fun startCall(call: PluginCall) {
+        audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
+        audioManager?.isSpeakerphoneOn = false
+        call.resolve(JSObject().apply { put("ok", true) })
+    }
     @PluginMethod fun hangup(call: PluginCall) { audioManager?.mode = AudioManager.MODE_NORMAL; call.resolve(JSObject().apply { put("ok", true) }) }
     @PluginMethod fun answer(call: PluginCall) { audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION; call.resolve(JSObject().apply { put("ok", true) }) }
     @PluginMethod fun setMute(call: PluginCall) { val m = call.getBoolean("muted", false) ?: false; audioManager?.isMicrophoneMute = m; call.resolve(JSObject().apply { put("ok", true); put("muted", m) }) }

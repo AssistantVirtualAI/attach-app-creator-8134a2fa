@@ -16,6 +16,7 @@ import PermissionBanners from "@/components/planipret/mobile/PermissionBanners";
 import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { loadMHomeCache, saveMHomeCache } from "@/lib/mhomeCache";
 
 
 type Period = "day" | "week" | "month" | "shift";

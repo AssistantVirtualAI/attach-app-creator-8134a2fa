@@ -1658,7 +1658,7 @@ function Teams365Panel({ profile }: { profile: any }) {
     a === "Away" || a === "BeRightBack" ? "#f59e0b" :
     "#6b7280";
 
-  if (active) return <TeamsThreadView target={active} onClose={() => { setActive(null); load(); }} />;
+  if (active) return <TeamsThreadView target={active} onClose={() => { setActive(null); load({ force: true }); }} />;
 
   const filteredPeople = people.filter((p) => {
     const q = search.trim().toLowerCase();

@@ -447,43 +447,47 @@ const AuthPage = () => {
         </Suspense>
       </motion.div>
 
-      {/* Forgot Password Dialog */}
-      <Dialog open={showForgotDialog} onOpenChange={setShowForgotDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('auth.forgotDialog.title')}</DialogTitle>
-            <DialogDescription>
-              {t('auth.forgotDialog.description')}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleForgotPassword} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="forgotEmail">{t('auth.labels.email')}</Label>
-              <Input
-                id="forgotEmail"
-                type="email"
-                placeholder={t('auth.placeholders.email')}
-                value={forgotEmail}
-                onChange={(e) => setForgotEmail(e.target.value)}
-                required
-                className="bg-card"
-              />
-            </div>
-            <div className="flex gap-3 justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowForgotDialog(false)}
-              >
-                {t('auth.buttons.cancel')}
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? t('auth.buttons.sending') : t('auth.buttons.sendLink')}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Forgot Password Dialog — lazy so it doesn't ship in the initial auth bundle */}
+      {showForgotDialog && (
+        <Suspense fallback={null}>
+          <Dialog open={showForgotDialog} onOpenChange={setShowForgotDialog}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>{t('auth.forgotDialog.title')}</DialogTitle>
+                <DialogDescription>
+                  {t('auth.forgotDialog.description')}
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="forgotEmail">{t('auth.labels.email')}</Label>
+                  <Input
+                    id="forgotEmail"
+                    type="email"
+                    placeholder={t('auth.placeholders.email')}
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    required
+                    className="bg-card"
+                  />
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowForgotDialog(false)}
+                  >
+                    {t('auth.buttons.cancel')}
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? t('auth.buttons.sending') : t('auth.buttons.sendLink')}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </Suspense>
+      )}
     </div>
   );
 };

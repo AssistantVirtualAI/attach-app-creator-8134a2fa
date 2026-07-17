@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { createSIPUA, JsSIPUnavailableError, SIPConfig, classifySipFailure, rewriteSdpForFusionPBX } from '../lib/sip/jssipProvider';
 import {
   appendSipLog, clearSipLog as clearPersistedLog, clearPersistedStatus, loadPersistedError, loadPersistedStatus,
@@ -711,16 +712,35 @@ export function useSoftphoneJsSip(
   };
 
   /** Place a call. `forcePcmu=true` uses a secure WebRTC PCMU-only SDP modifier — used as a 488 fallback. */
-  const placeCallInternal = (number: string, forcePcmu = false): boolean => {
+  const placeCallInternal = async (number: string, forcePcmu = false): Promise<boolean> => {
     if (!uaRef.current || !config) return false;
     setActiveCallNumber(number);
     setCallState('ringing');
     setOfferedCodecs([]);
     setNegotiatedCodec(null);
     lastCallNumberRef.current = number;
+
+    // Android WebView requires an explicit getUserMedia grant BEFORE JsSIP
+    // attempts its own capture. Without it, uaRef.call() silently fails and
+    // the call never rings out. iOS handles this via CallKit / WKWebView so
+    // we skip the pre-flight there.
+    if (Capacitor.getPlatform() === 'android') {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
+        log('mic.permission', 'granted (android pre-call)');
+      } catch (e: any) {
+        console.error('[SIP] microphone permission denied', e);
+        setSipError('Microphone permission denied — please allow microphone access');
+        setCallState('idle');
+        setActiveCallNumber('');
+        return false;
+      }
+    }
+
     try {
       const callOpts: any = {
-        mediaConstraints: { audio: true, video: false },
+        mediaConstraints: HD_AUDIO_CONSTRAINTS,
         rtcOfferConstraints: {
           offerToReceiveAudio: true,
           offerToReceiveVideo: false,
@@ -728,10 +748,8 @@ export function useSoftphoneJsSip(
         },
         pcConfig: {
           iceServers: [
-            // STUN public — connexion directe (host/srflx) en priorité
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            // TURN en dernier recours (relay) si NAT symétrique
             {
               urls: 'turn:global.relay.metered.ca:443',
               username: 'e499486ca9b7d5a03a01e915',
@@ -743,8 +761,6 @@ export function useSoftphoneJsSip(
               credential: 'uMFpNAFBoFFUHOdF',
             },
           ],
-          // 'all' = essaie host → srflx → relay (comportement standard WebRTC)
-          // 'relay' forçait tout via TURN → timeout ACK 15s
           iceTransportPolicy: 'all',
           bundlePolicy: 'balanced',
         },
@@ -761,6 +777,7 @@ export function useSoftphoneJsSip(
       return false;
     }
   };
+
 
   const call = (number: string) => {
     if (sipStatus !== 'registered') return false;
@@ -779,7 +796,7 @@ export function useSoftphoneJsSip(
   };
   const answer = () =>
     sessionRef.current?.answer({
-      mediaConstraints: { audio: true, video: false },
+      mediaConstraints: HD_AUDIO_CONSTRAINTS,
       pcConfig: {
         iceServers: [
           // STUN public — connexion directe (host/srflx) en priorité

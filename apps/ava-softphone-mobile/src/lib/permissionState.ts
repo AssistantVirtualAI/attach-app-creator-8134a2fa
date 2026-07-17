@@ -52,10 +52,7 @@ export async function getPermState(key: PermKey): Promise<PermState> {
 
   try {
     if (key === 'microphone') {
-      // mozartec removed
-      const r = await Microphone.checkPermissions();
-      if (r?.microphone === 'granted') return 'granted';
-      if (r?.microphone === 'denied') return (await getAsked('microphone')) ? 'blocked' : 'denied';
+      // mozartec removed — rely on getUserMedia probe
       return 'unknown';
     }
     if (key === 'contacts') {

@@ -30,25 +30,9 @@ export async function requestMicrophone(): Promise<PermissionStatus> {
           if (res?.granted) return 'granted';
         } catch (e) { console.warn('[permissions] PJSIP mic failed', e); }
       }
-      let pluginGranted = false;
-      let pluginDenied = false;
-      try {
-        // mozartec removed
-        const { Microphone } = mod;
-        const check = await Microphone.checkPermissions();
-        
-        if (check?.microphone === 'granted') pluginGranted = true;
-        if (!pluginGranted) {
-          const req = await Microphone.requestPermissions();
-          
-          if (req?.microphone === 'granted') pluginGranted = true;
-          else if (req?.microphone === 'denied') pluginDenied = true;
-        }
-      } catch (e) {
-        console.warn('[permissions] mic check failed', {
-          name: (e as any)?.name, message: (e as any)?.message, stack: (e as any)?.stack,
-        });
-      }
+      const pluginGranted = false;
+      const pluginDenied = false;
+      // mozartec removed — no capacitor microphone plugin fallback; use getUserMedia below.
       if (pluginGranted) return 'granted';
       try {
         if (navigator.mediaDevices?.getUserMedia) {

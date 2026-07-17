@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Activity, Mail, Lock, User, ArrowLeft, Chrome, Globe, Home } from 'lucide-react';
@@ -15,7 +15,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { AnimatedFeatures } from '@/components/auth/AnimatedFeatures';
+// Right-side decorative panel is lazy-loaded so it never blocks first paint of the form.
+const AnimatedFeatures = lazy(() => import('@/components/auth/AnimatedFeatures').then((m) => ({ default: m.AnimatedFeatures })));
 import { useTranslation } from '@/hooks/useTranslation';
 import { useLanguage } from '@/context/LanguageContext';
 
@@ -421,14 +422,16 @@ const AuthPage = () => {
         </div>
       </motion.div>
 
-      {/* Right side - Animated Features */}
+      {/* Right side - Animated Features (lazy) */}
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.8 }}
         className="hidden lg:block w-[55%] bg-gradient-to-br from-primary/90 via-secondary/90 to-accent/90 relative overflow-hidden"
       >
-        <AnimatedFeatures />
+        <Suspense fallback={<div className="w-full h-full" />}>
+          <AnimatedFeatures />
+        </Suspense>
       </motion.div>
 
       {/* Forgot Password Dialog */}

@@ -16,7 +16,7 @@ import PermissionBanners from "@/components/planipret/mobile/PermissionBanners";
 import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import { loadMHomeCache, saveMHomeCache } from "@/lib/mhomeCache";
+import { loadMHomeCache, saveMHomeCache, type SourceStatusMap } from "@/lib/mhomeCache";
 
 
 type Period = "day" | "week" | "month" | "shift";
@@ -82,7 +82,10 @@ export default function MHome() {
   const [msMeetings, setMsMeetings] = useState<any[]>(() => cached?.msMeetings ?? []);
   const [msCalendarLoading, setMsCalendarLoading] = useState(false);
   const [msCalendarError, setMsCalendarError] = useState<string | null>(null);
+  // statsLoading = cold render only. Background refreshes never toggle it,
+  // so the cached view stays on-screen while KPIs refresh silently.
   const [statsLoading, setStatsLoading] = useState(!cached);
+  const [refreshing, setRefreshing] = useState(false);
   const [brief, setBrief] = useState<any | null>(() => cached?.brief ?? null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefErr, setBriefErr] = useState<string | null>(null);
@@ -103,7 +106,11 @@ export default function MHome() {
 
   const loadStats = async () => {
     if (!profile) return;
-    setStatsLoading(true);
+    // Only show the cold skeleton when we have nothing cached. Otherwise
+    // hydrate from cache and refresh silently in the background.
+    const hasCached = !!loadMHomeCache(profile?.user_id, period);
+    if (!hasCached) setStatsLoading(true);
+    setRefreshing(true);
     try {
     const { sinceIso, untilIso } = periodRange(period);
     const nowIso = new Date().toISOString();
@@ -235,14 +242,37 @@ export default function MHome() {
     setHotLeads(nextHot);
     setDueReminders(nextRem);
     setMeetings(nextMeetings);
+
+    // Per-source last-sync statuses feed the KPI Audit page.
+    const now = Date.now();
+    const mark = (ok: boolean, msg?: string | null) => ({ status: ok ? "ok" as const : "error" as const, lastAt: now, message: msg ?? null });
+    const sources: SourceStatusMap = {
+      ns_cdr:         { status: (nsCallsLive as any)?.error ? "error" : (liveCalls.length ? "ok" : "empty"), lastAt: now, message: (nsCallsLive as any)?.error?.message ?? null },
+      ns_sms:         { status: (nsSmsLive as any)?.error ? "error" : (liveSmsThreads.length ? "ok" : "empty"), lastAt: now, message: (nsSmsLive as any)?.error?.message ?? null },
+      ns_voicemail:   { status: (nsVmLive as any)?.error ? "error" : (liveVmItems.length ? "ok" : "empty"), lastAt: now, message: (nsVmLive as any)?.error?.message ?? null },
+      sb_calls:       mark(true),
+      sb_missed:      mark(true),
+      sb_sms_unread:  mark(true),
+      sb_voicemails:  mark(true),
+      sb_hot_leads:   mark(true),
+      sb_tasks:       mark(true),
+      sb_outbound:    mark(true),
+      sb_appointments:mark(true),
+      ms365_calendar: profile?.ms365_access_token
+        ? { status: msCalendarError ? "error" : (microsoftEvents.length ? "ok" : "empty"), lastAt: now, message: msCalendarError }
+        : { status: "unknown", lastAt: null, message: "MS365 non connecté" },
+    };
+
     saveMHomeCache(profile?.user_id, period, {
       stats: nextStats, recent: nextRecent, hotLeads: nextHot,
       dueReminders: nextRem, meetings: nextMeetings, msMeetings: microsoftEvents,
+      sources,
     });
     } catch (e) {
       console.error("[MHome] loadStats failed", e);
     } finally {
       setStatsLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -252,12 +282,18 @@ export default function MHome() {
     setBriefErr(null);
     const { data, error } = await supabase.functions.invoke("pp-ava-brief", { body: { period, force } });
     setBriefLoading(false);
+    const now = Date.now();
     if (error || (data as any)?.error) {
-      setBriefErr((data as any)?.error || error?.message || "brief unavailable");
+      const msg = (data as any)?.error || error?.message || "brief unavailable";
+      setBriefErr(msg);
+      saveMHomeCache(profile?.user_id, period, { sources: { ava_brief: { status: "error", lastAt: now, message: msg } } });
       return;
     }
     setBrief(data);
-    saveMHomeCache(profile?.user_id, period, { brief: data });
+    saveMHomeCache(profile?.user_id, period, {
+      brief: data,
+      sources: { ava_brief: { status: "ok", lastAt: now, message: null } },
+    });
   };
 
   useEffect(() => { loadStats(); loadBrief(false); /* eslint-disable-next-line */ }, [profile?.user_id, period]);
@@ -325,9 +361,20 @@ export default function MHome() {
             </button>
           ))}
         </div>
-        <span className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
-          {totalComms} comms
-        </span>
+        <div className="flex items-center gap-2">
+          {refreshing && (
+            <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--pp-text-muted)" }}>
+              <RefreshCw className="w-3 h-3 animate-spin" /> {t("home.refreshing") ?? "Actualisation…"}
+            </span>
+          )}
+          <button
+            onClick={() => navigate("/mplanipret/kpi-audit")}
+            className="text-[10px] underline decoration-dotted"
+            style={{ color: "var(--pp-text-muted)" }}
+          >
+            {totalComms} comms
+          </button>
+        </div>
       </div>
 
       {/* ===== DND BANNER ===== */}

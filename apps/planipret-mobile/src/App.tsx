@@ -41,6 +41,7 @@ const MMs365Diagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/M
 const MStyleDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MStyleDiagnostics'), 'MStyleDiagnostics');
 const MDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MDiagnostics'), 'MDiagnostics');
 const MSipDebug = lazyWithRetry(() => import('@/pages/planipret/mobile/MSipDebug'), 'MSipDebug');
+const MKpiAudit = lazyWithRetry(() => import('@/pages/planipret/mobile/MKpiAudit'), 'MKpiAudit');
 
 
 
@@ -139,6 +140,7 @@ export default function App() {
                       <Route path="style-diagnostics" element={<MStyleDiagnostics />} />
                       <Route path="diagnostics" element={<MDiagnostics />} />
                       <Route path="sip-debug" element={<MSipDebug />} />
+                      <Route path="kpi-audit" element={<MKpiAudit />} />
                     </Route>
                     <Route path="*" element={<Navigate to="/mplanipret" replace />} />
                   </Routes>

@@ -500,7 +500,7 @@ function AuthenticatedShell({
       color: colors.textIce,
       position: 'relative',
     }}>
-      <audio ref={(el) => { (audioRef as any).current = el; import('./lib/sip/audioOutput').then((m) => m.registerRemoteAudioElement(el)); }} autoPlay playsInline />
+      <audio ref={(el) => { (audioRef as any).current = el; import('./lib/sip/audioOutput').then((m) => m.registerRemoteAudioElement(el)); }} autoPlay playsInline muted={false} />
 
       {/* Top header — centered logo + hamburger + title + actions */}
       <TopHeader

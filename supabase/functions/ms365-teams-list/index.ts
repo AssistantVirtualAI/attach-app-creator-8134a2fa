@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       }
     } catch (e: any) { diagnostics.chats_error = e?.message; }
 
-    if (mode === "summary") return j({ connected: true, chats, teams: [], people: [], diagnostics });
+    if (mode === "summary") return j({ connected: true, chats, diagnostics });
 
     // Teams + channels
     const teams: any[] = [];

@@ -1601,8 +1601,8 @@ function Teams365Panel({ profile }: { profile: any }) {
       return;
     }
     setLoading(false);
-    if (payload.connected === false || payload.error === "ms365_not_connected") { setErr("ms365_not_connected"); return; }
-    if (payload.error) { setErr(payload.error); return; }
+    if (payload.connected === false || payload.error === "ms365_not_connected") { setRefreshing(false); setErr("ms365_not_connected"); return; }
+    if (payload.error) { setRefreshing(false); setErr(payload.error); return; }
     applyPayload(payload);
     saveTeamsCachePatch({
       chats: Array.isArray(payload.chats) ? payload.chats : undefined,

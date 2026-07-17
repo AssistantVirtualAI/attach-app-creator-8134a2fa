@@ -170,8 +170,6 @@ export const useAuth = () => {
 
   const signInWithMicrosoft = async () => {
     try {
-      // Request the same Graph scopes the app needs so the SSO session also
-      // links Mail / Calendar / Teams automatically via ms365-store-session.
       const scopes = [
         "openid",
         "profile",
@@ -198,9 +196,13 @@ export const useAuth = () => {
       if (error) throw error;
       return { error: null };
     } catch (error: any) {
+      const msg = String(error?.message || "");
+      const notEnabled = /provider is not enabled|Unsupported provider/i.test(msg);
       toast({
-        title: "Erreur de connexion Microsoft",
-        description: error.message,
+        title: notEnabled ? "Microsoft SSO indisponible" : "Erreur de connexion Microsoft",
+        description: notEnabled
+          ? "La connexion Microsoft n'est pas activée sur ce compte. Utilisez Google ou email/mot de passe. Vos intégrations Microsoft 365 (Teams, Outlook) restent disponibles une fois connecté."
+          : msg,
         variant: "destructive",
       });
       return { error };

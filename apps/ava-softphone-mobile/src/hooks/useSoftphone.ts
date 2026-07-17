@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { createSIPUA, JsSIPUnavailableError, SIPConfig, classifySipFailure, rewriteSdpForFusionPBX } from '../lib/sip/jssipProvider';
+import { createSIPUA, JsSIPUnavailableError, SIPConfig, classifySipFailure, rewriteSdpForFusionPBX, sdpModifier, buildSdpModifier } from '../lib/sip/jssipProvider';
+import { attachRemoteStream } from '../lib/sip/audioOutput';
 import {
   appendSipLog, clearSipLog as clearPersistedLog, clearPersistedStatus, loadPersistedError, loadPersistedStatus,
   loadSipLog, MAX_AUTO_RETRIES, PersistedSipError, probeWss, RETRY_BACKOFF_MS, savePersistedError, savePersistedStatus,
@@ -331,6 +332,11 @@ export function useSoftphoneJsSip(
             session.on('peerconnection', (e: any) => {
               const pc: RTCPeerConnection | undefined = e?.peerconnection;
               if (pc) {
+                // Wire remote audio track → <audio> element (otherwise the
+                // remote party is inaudible even though the call is up).
+                try { attachRemoteStream(pc); } catch (err: any) {
+                  log('audio.attach-failed', err?.message || '', 'warn');
+                }
                 instrumentPeerConnection(pc, (event, detail, level = 'info') => {
                   log(event, detail, level);
                 });
@@ -741,6 +747,9 @@ export function useSoftphoneJsSip(
     try {
       const callOpts: any = {
         mediaConstraints: HD_AUDIO_CONSTRAINTS,
+        sessionDescriptionHandlerModifiers: forcePcmu
+          ? [buildSdpModifier({ forcePcmu: true })]
+          : [sdpModifier],
         rtcOfferConstraints: {
           offerToReceiveAudio: true,
           offerToReceiveVideo: false,
@@ -748,10 +757,10 @@ export function useSoftphoneJsSip(
         },
         pcConfig: {
           iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
+            // Google STUN removed — UDP 19302 blocked on many mobile networks.
+            // TURN Metered on TCP 443 — confirmed reachable on cellular.
             {
-              urls: 'turn:global.relay.metered.ca:443',
+              urls: 'turn:global.relay.metered.ca:443?transport=tcp',
               username: 'e499486ca9b7d5a03a01e915',
               credential: 'uMFpNAFBoFFUHOdF',
             },
@@ -797,14 +806,13 @@ export function useSoftphoneJsSip(
   const answer = () =>
     sessionRef.current?.answer({
       mediaConstraints: HD_AUDIO_CONSTRAINTS,
+      sessionDescriptionHandlerModifiers: [sdpModifier],
       pcConfig: {
         iceServers: [
-          // STUN public — connexion directe (host/srflx) en priorité
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          // TURN en dernier recours si NAT symétrique
+          // Google STUN removed — UDP 19302 blocked on many mobile networks.
+          // TURN Metered on TCP 443 — confirmed reachable on cellular.
           {
-            urls: 'turn:global.relay.metered.ca:443',
+            urls: 'turn:global.relay.metered.ca:443?transport=tcp',
             username: 'e499486ca9b7d5a03a01e915',
             credential: 'uMFpNAFBoFFUHOdF',
           },

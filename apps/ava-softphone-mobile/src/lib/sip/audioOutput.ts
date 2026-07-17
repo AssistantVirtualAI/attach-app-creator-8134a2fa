@@ -41,6 +41,25 @@ export function registerRemoteAudioElement(el: HTMLAudioElement | null) {
   void probeBluetooth();
 }
 
+/**
+ * Wire the remote WebRTC stream from the RTCPeerConnection into the
+ * registered <audio> element. Without this the remote party is not audible.
+ */
+export function attachRemoteStream(pc: RTCPeerConnection) {
+  pc.ontrack = (event) => {
+    if (!audioEl) {
+      console.warn('[audioOutput] ontrack fired but no audio element registered');
+      return;
+    }
+    const [stream] = event.streams;
+    if (!stream) return;
+    if (audioEl.srcObject !== stream) {
+      audioEl.srcObject = stream;
+      audioEl.play().catch((e) => console.warn('[audioOutput] play failed', e));
+    }
+  };
+}
+
 // Legacy compatibility -------------------------------------------------------
 export function isSpeakerOn() { return route === 'speaker'; }
 export function onSpeakerChange(cb: (on: boolean) => void) {

@@ -174,13 +174,7 @@ export async function checkAllPermissions(): Promise<AllPermissions> {
   // Microphone — try Permissions API, then enumerateDevices heuristic.
   try {
     if (Capacitor.isNativePlatform()) {
-      try {
-        // mozartec removed
-        const res = await Microphone.checkPermissions();
-        if (res?.microphone === 'granted' || res?.microphone === 'denied' || res?.microphone === 'prompt') {
-          perms.microphone = res.microphone as PermissionStatus;
-        }
-      } catch { /* plugin missing */ }
+      // mozartec removed — no plugin check available on native; leave as 'prompt'.
     } else {
       const anyPerm: any = (navigator as any).permissions;
       if (anyPerm?.query) {

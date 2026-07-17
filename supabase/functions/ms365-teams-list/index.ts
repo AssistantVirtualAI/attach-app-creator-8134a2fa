@@ -27,6 +27,8 @@ async function graph(admin: any, profile: any, path: string, init: RequestInit =
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
+    const body = await req.json().catch(() => ({}));
+    const mode = ["summary", "teams", "people", "full"].includes(body?.mode) ? body.mode : "full";
     const authHeader = req.headers.get("Authorization") ?? "";
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: authHeader } } });
@@ -45,7 +47,7 @@ Deno.serve(async (req) => {
 
     // Chats récents — tolerate errors
     let chats: any[] = [];
-    try {
+    if (mode === "summary" || mode === "full") try {
       const chatsRes = await graph(admin, profile, "/me/chats?$top=25&$expand=members&$orderby=lastMessagePreview/createdDateTime desc");
       const chatsBody = await chatsRes.json().catch(() => ({}));
       if (!chatsRes.ok) {
@@ -63,45 +65,59 @@ Deno.serve(async (req) => {
       }
     } catch (e: any) { diagnostics.chats_error = e?.message; }
 
+    if (mode === "summary") return j({ connected: true, chats, diagnostics });
+
     // Teams + channels
     const teams: any[] = [];
-    try {
+    if (mode === "teams" || mode === "full") try {
       const teamsRes = await graph(admin, profile, "/me/joinedTeams?$select=id,displayName,description");
       const teamsBody = await teamsRes.json().catch(() => ({}));
       if (!teamsRes.ok) {
         diagnostics.teams_error = teamsBody?.error?.message ?? `HTTP ${teamsRes.status}`;
       } else {
-        for (const t of (teamsBody.value ?? []).slice(0, 15)) {
-          const chRes = await graph(admin, profile, `/teams/${t.id}/channels?$select=id,displayName`);
-          const chBody = await chRes.json().catch(() => ({}));
-          teams.push({
-            id: t.id,
-            displayName: t.displayName,
-            description: t.description ?? null,
-            channels: (chBody.value ?? []).map((c: any) => ({ id: c.id, displayName: c.displayName })),
-          });
-        }
+        const teamRows = (teamsBody.value ?? []).slice(0, 15);
+        const channelRows = await Promise.all(teamRows.map(async (t: any) => {
+          try {
+            const chRes = await graph(admin, profile, `/teams/${t.id}/channels?$select=id,displayName`);
+            const chBody = await chRes.json().catch(() => ({}));
+            return {
+              id: t.id,
+              displayName: t.displayName,
+              description: t.description ?? null,
+              channels: (chBody.value ?? []).map((c: any) => ({ id: c.id, displayName: c.displayName })),
+            };
+          } catch {
+            return { id: t.id, displayName: t.displayName, description: t.description ?? null, channels: [] };
+          }
+        }));
+        teams.push(...channelRows);
       }
     } catch (e: any) { diagnostics.teams_error = e?.message; }
+
+    if (mode === "teams") return j({ connected: true, teams, diagnostics });
 
     // Tenant users (people to chat with directly) + presence
     // Paginate through ALL tenant users and keep only enabled accounts with at least one Microsoft license.
     const people: any[] = [];
-    try {
+    if (mode === "people" || mode === "full") try {
       const collected: any[] = [];
+      const peopleLimit = Math.min(Math.max(Number(body?.peopleLimit ?? 500), 50), 999);
       let nextPath: string | null =
-        "/users?$top=999&$select=id,displayName,mail,userPrincipalName,jobTitle,accountEnabled,assignedLicenses,userType";
+        `/users?$top=${peopleLimit}&$select=id,displayName,mail,userPrincipalName,jobTitle,accountEnabled,assignedLicenses,userType`;
       let pages = 0;
-      while (nextPath && pages < 15) {
+      while (nextPath && pages < 4 && collected.length < peopleLimit) {
         const uRes = await graph(admin, profile, nextPath);
         const uBody = await uRes.json().catch(() => ({}));
         if (!uRes.ok) {
           diagnostics.people_error = uBody?.error?.message ?? `HTTP ${uRes.status}`;
           break;
         }
-        for (const u of (uBody.value ?? [])) collected.push(u);
+        for (const u of (uBody.value ?? [])) {
+          collected.push(u);
+          if (collected.length >= peopleLimit) break;
+        }
         const next = uBody["@odata.nextLink"] as string | undefined;
-        nextPath = next ? next.replace(GRAPH, "") : null;
+        nextPath = collected.length < peopleLimit && next ? next.replace(GRAPH, "") : null;
         pages++;
       }
       diagnostics.people_fetched = collected.length;
@@ -126,7 +142,7 @@ Deno.serve(async (req) => {
         .sort((a: any, b: any) => (a.name ?? "").localeCompare(b.name ?? "", "fr", { sensitivity: "base" }));
 
       const chunk = <T,>(arr: T[], n: number) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
-      for (const grp of chunk(list, 20)) {
+      await Promise.all(chunk(list, 20).map(async (grp) => {
         try {
           const pr = await graph(admin, profile, "/communications/getPresencesByUserId", {
             method: "POST",
@@ -144,9 +160,11 @@ Deno.serve(async (req) => {
             diagnostics.presence_error = pb?.error?.message ?? `HTTP ${pr.status}`;
           }
         } catch (e: any) { if (!diagnostics.presence_error) diagnostics.presence_error = e?.message; }
-      }
+      }));
       people.push(...list);
     } catch (e: any) { diagnostics.people_error = e?.message; }
+
+    if (mode === "people") return j({ connected: true, people, diagnostics });
 
     return j({ connected: true, chats, teams, people, diagnostics });
   } catch (e: any) {

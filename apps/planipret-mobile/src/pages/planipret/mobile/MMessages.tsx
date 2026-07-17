@@ -17,6 +17,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { connectMs365 } from "@/lib/ms365Connect";
 import { getPpContacts } from "@/lib/ppContactsCache";
+import { fetchTeams365, loadTeamsCache, prefetchTeams365Data, saveTeamsCachePatch } from "@/lib/teams365Cache";
 
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "roster";
@@ -1521,19 +1522,12 @@ function isChatUnread(chat: any, reads: Record<string, string>): boolean {
   return new Date(chat.lastUpdated).getTime() > new Date(last).getTime();
 }
 
-const TEAMS_CACHE_KEY = "planipret.teams365.cache.v1";
-function loadTeamsCache(): any | null {
-  try { const raw = sessionStorage.getItem(TEAMS_CACHE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
-}
-function saveTeamsCache(payload: any) {
-  try { sessionStorage.setItem(TEAMS_CACHE_KEY, JSON.stringify({ ...payload, cachedAt: Date.now() })); } catch { /* */ }
-}
-
 function Teams365Panel({ profile }: { profile: any }) {
   const [innerTab, setInnerTab] = useState<Teams365SubTab>("active");
   const cached = loadTeamsCache();
   const [loading, setLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
+  const [auxLoading, setAuxLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [diag, setDiag] = useState<any>(cached?.diagnostics ?? {});
   const [chats, setChats] = useState<any[]>(cached?.chats ?? []);
@@ -1555,41 +1549,75 @@ function Teams365Panel({ profile }: { profile: any }) {
 
   const connected = !!profile?.ms365_access_token;
 
+  const applyPayload = (payload: any) => {
+    if (Array.isArray(payload.chats)) {
+      const nextChats = payload.chats;
+      const currentReads = loadTeamsReads();
+      const nowUnread = new Set<string>(nextChats.filter((c: any) => isChatUnread(c, currentReads)).map((c: any) => c.id));
+      const newly: any[] = [];
+      for (const c of nextChats) {
+        if (nowUnread.has(c.id) && !prevUnreadIds.current.has(c.id)) newly.push(c);
+      }
+      if (prevUnreadIds.current.size > 0 && newly.length > 0) {
+        const first = newly[0];
+        toast.message(`Nouveau message · ${first.topic}`, {
+          description: first.previewFrom ? `${first.previewFrom}: ${(first.preview || "").replace(/<[^>]*>/g, "").slice(0, 80)}` : undefined,
+        });
+      }
+      prevUnreadIds.current = nowUnread;
+      setChats(nextChats);
+      setReads(currentReads);
+    }
+    if (Array.isArray(payload.teams)) setTeams(payload.teams);
+    if (Array.isArray(payload.people)) setPeople(payload.people);
+    if (payload.diagnostics) setDiag((d: any) => ({ ...d, ...payload.diagnostics }));
+  };
+
+  const loadAuxiliary = async () => {
+    setAuxLoading(true);
+    const [teamsPayload, peoplePayload] = await Promise.allSettled([
+      fetchTeams365("teams"),
+      fetchTeams365("people"),
+    ]);
+    if (teamsPayload.status === "fulfilled") applyPayload(teamsPayload.value);
+    if (peoplePayload.status === "fulfilled") applyPayload(peoplePayload.value);
+    const cache = loadTeamsCache();
+    if (cache) {
+      setTeams(cache.teams);
+      setPeople(cache.people);
+      setDiag(cache.diagnostics);
+    }
+    setAuxLoading(false);
+  };
+
   const load = async () => {
     if (!connected) { setLoading(false); setRefreshing(false); setErr("ms365_not_connected"); return; }
     const hasData = chats.length > 0 || people.length > 0 || teams.length > 0;
     if (hasData) setRefreshing(true); else setLoading(true);
     setErr(null);
-    const { data, error } = await supabase.functions.invoke("ms365-teams-list", { body: {} });
-    setLoading(false); setRefreshing(false);
-    const payload = (data as any) ?? {};
-    if (error && !payload.chats) { setErr(error.message || "Erreur"); return; }
-    if (payload.connected === false || payload.error === "ms365_not_connected") { setErr("ms365_not_connected"); return; }
-    if (payload.error) { setErr(payload.error); return; }
-    const nextChats = payload.chats || [];
-    const currentReads = loadTeamsReads();
-    const nowUnread = new Set<string>(nextChats.filter((c: any) => isChatUnread(c, currentReads)).map((c: any) => c.id));
-    const newly: any[] = [];
-    for (const c of nextChats) {
-      if (nowUnread.has(c.id) && !prevUnreadIds.current.has(c.id)) newly.push(c);
+    let payload: any = {};
+    try {
+      payload = await fetchTeams365("summary");
+    } catch (e: any) {
+      if (!hasData) setErr(e?.message || "Erreur");
+      setLoading(false); setRefreshing(false);
+      return;
     }
-    if (prevUnreadIds.current.size > 0 && newly.length > 0) {
-      const first = newly[0];
-      toast.message(`Nouveau message · ${first.topic}`, {
-        description: first.previewFrom ? `${first.previewFrom}: ${(first.preview || "").replace(/<[^>]*>/g, "").slice(0, 80)}` : undefined,
-      });
-    }
-    prevUnreadIds.current = nowUnread;
-    setChats(nextChats);
-    setTeams(payload.teams || []);
-    setPeople(payload.people || []);
-    setDiag(payload.diagnostics || {});
-    setReads(currentReads);
-    saveTeamsCache({ chats: nextChats, teams: payload.teams || [], people: payload.people || [], diagnostics: payload.diagnostics || {} });
+    setLoading(false);
+    if (payload.connected === false || payload.error === "ms365_not_connected") { setRefreshing(false); setErr("ms365_not_connected"); return; }
+    if (payload.error) { setRefreshing(false); setErr(payload.error); return; }
+    applyPayload(payload);
+    saveTeamsCachePatch({
+      chats: Array.isArray(payload.chats) ? payload.chats : undefined,
+      diagnostics: payload.diagnostics ?? {},
+    });
+    setRefreshing(false);
+    void loadAuxiliary();
   };
   useEffect(() => {
     load(); /* eslint-disable-next-line */
     if (!connected) return;
+    prefetchTeams365Data();
     const id = window.setInterval(() => { load(); }, 30_000);
     return () => window.clearInterval(id);
   }, [connected]);
@@ -1644,7 +1672,7 @@ function Teams365Panel({ profile }: { profile: any }) {
         <h2 className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>Microsoft Teams</h2>
         <button onClick={load} className="text-xs px-2 py-1 rounded-full flex items-center gap-1"
           style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
-          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Recharger
+          <RefreshCw className={`w-3 h-3 ${loading || refreshing ? "animate-spin" : ""}`} /> Recharger
         </button>
       </div>
 
@@ -1701,7 +1729,7 @@ function Teams365Panel({ profile }: { profile: any }) {
                 className="w-full text-xs px-3 py-2 rounded-lg outline-none"
                 style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }} />
               {loading && !chats.length ? (
-                <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Chargement…</div>
+                <TeamsListSkeleton />
               ) : filteredChats.length === 0 ? (
                 <div className="rounded-xl p-6 text-center" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
                   <MessageSquare className="w-8 h-8 mx-auto mb-2" style={{ color: "var(--pp-text-muted)" }} />
@@ -1776,8 +1804,8 @@ function Teams365Panel({ profile }: { profile: any }) {
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un coéquipier…"
                 className="w-full text-xs px-3 py-2 rounded-lg outline-none"
                 style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-bg-border-2)" }} />
-              {loading && !people.length ? (
-                <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Chargement…</div>
+              {(loading || auxLoading) && !people.length ? (
+                <TeamsListSkeleton compact />
               ) : filteredPeople.length === 0 ? (
                 <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucun coéquipier trouvé.</div>
               ) : (
@@ -1832,7 +1860,9 @@ function Teams365Panel({ profile }: { profile: any }) {
                 <span>Équipes & canaux ({teams.length})</span>
                 {diag.teams_error && <span style={{ color: "#dc2626" }}>Err: {String(diag.teams_error).slice(0, 40)}</span>}
               </div>
-              {teams.length === 0 ? (
+              {auxLoading && teams.length === 0 ? (
+                <TeamsListSkeleton compact />
+              ) : teams.length === 0 ? (
                 <div className="text-xs" style={{ color: "var(--pp-text-muted)" }}>Aucune équipe.</div>
               ) : (
                 <div className="space-y-2">
@@ -1857,6 +1887,23 @@ function Teams365Panel({ profile }: { profile: any }) {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function TeamsListSkeleton({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className="space-y-1" aria-label="Chargement Teams">
+      {[0, 1, 2, 3].slice(0, compact ? 3 : 4).map((i) => (
+        <div key={i} className="w-full px-3 py-2.5 rounded-lg flex items-center gap-3 animate-pulse"
+          style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
+          <div className="w-10 h-10 rounded-full shrink-0" style={{ background: "var(--pp-bg-surface)" }} />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 rounded-full w-2/3" style={{ background: "var(--pp-bg-surface)" }} />
+            <div className="h-2.5 rounded-full w-5/6" style={{ background: "var(--pp-bg-surface)" }} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

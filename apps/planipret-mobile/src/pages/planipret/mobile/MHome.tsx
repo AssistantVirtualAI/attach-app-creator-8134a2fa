@@ -242,14 +242,37 @@ export default function MHome() {
     setHotLeads(nextHot);
     setDueReminders(nextRem);
     setMeetings(nextMeetings);
+
+    // Per-source last-sync statuses feed the KPI Audit page.
+    const now = Date.now();
+    const mark = (ok: boolean, msg?: string | null) => ({ status: ok ? "ok" as const : "error" as const, lastAt: now, message: msg ?? null });
+    const sources: SourceStatusMap = {
+      ns_cdr:         { status: (nsCallsLive as any)?.error ? "error" : (liveCalls.length ? "ok" : "empty"), lastAt: now, message: (nsCallsLive as any)?.error?.message ?? null },
+      ns_sms:         { status: (nsSmsLive as any)?.error ? "error" : (liveSmsThreads.length ? "ok" : "empty"), lastAt: now, message: (nsSmsLive as any)?.error?.message ?? null },
+      ns_voicemail:   { status: (nsVmLive as any)?.error ? "error" : (liveVmItems.length ? "ok" : "empty"), lastAt: now, message: (nsVmLive as any)?.error?.message ?? null },
+      sb_calls:       mark(true),
+      sb_missed:      mark(true),
+      sb_sms_unread:  mark(true),
+      sb_voicemails:  mark(true),
+      sb_hot_leads:   mark(true),
+      sb_tasks:       mark(true),
+      sb_outbound:    mark(true),
+      sb_appointments:mark(true),
+      ms365_calendar: profile?.ms365_access_token
+        ? { status: msCalendarError ? "error" : (microsoftEvents.length ? "ok" : "empty"), lastAt: now, message: msCalendarError }
+        : { status: "unknown", lastAt: null, message: "MS365 non connecté" },
+    };
+
     saveMHomeCache(profile?.user_id, period, {
       stats: nextStats, recent: nextRecent, hotLeads: nextHot,
       dueReminders: nextRem, meetings: nextMeetings, msMeetings: microsoftEvents,
+      sources,
     });
     } catch (e) {
       console.error("[MHome] loadStats failed", e);
     } finally {
       setStatsLoading(false);
+      setRefreshing(false);
     }
   };
 

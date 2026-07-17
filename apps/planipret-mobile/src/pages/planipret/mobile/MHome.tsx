@@ -16,7 +16,7 @@ import PermissionBanners from "@/components/planipret/mobile/PermissionBanners";
 import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import { loadMHomeCache, saveMHomeCache } from "@/lib/mhomeCache";
+import { loadMHomeCache, saveMHomeCache, type SourceStatusMap } from "@/lib/mhomeCache";
 
 
 type Period = "day" | "week" | "month" | "shift";
@@ -82,7 +82,10 @@ export default function MHome() {
   const [msMeetings, setMsMeetings] = useState<any[]>(() => cached?.msMeetings ?? []);
   const [msCalendarLoading, setMsCalendarLoading] = useState(false);
   const [msCalendarError, setMsCalendarError] = useState<string | null>(null);
+  // statsLoading = cold render only. Background refreshes never toggle it,
+  // so the cached view stays on-screen while KPIs refresh silently.
   const [statsLoading, setStatsLoading] = useState(!cached);
+  const [refreshing, setRefreshing] = useState(false);
   const [brief, setBrief] = useState<any | null>(() => cached?.brief ?? null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefErr, setBriefErr] = useState<string | null>(null);
@@ -103,7 +106,11 @@ export default function MHome() {
 
   const loadStats = async () => {
     if (!profile) return;
-    setStatsLoading(true);
+    // Only show the cold skeleton when we have nothing cached. Otherwise
+    // hydrate from cache and refresh silently in the background.
+    const hasCached = !!loadMHomeCache(profile?.user_id, period);
+    if (!hasCached) setStatsLoading(true);
+    setRefreshing(true);
     try {
     const { sinceIso, untilIso } = periodRange(period);
     const nowIso = new Date().toISOString();

@@ -1590,9 +1590,14 @@ function Teams365Panel({ profile }: { profile: any }) {
     setAuxLoading(false);
   };
 
-  const load = async () => {
+  const load = async (opts: { force?: boolean } = {}) => {
     if (!connected) { setLoading(false); setRefreshing(false); setErr("ms365_not_connected"); return; }
     const hasData = chats.length > 0 || people.length > 0 || teams.length > 0;
+    // TTL: if cache is still fresh and we already have data, skip the network hit.
+    if (!opts.force && hasData && isTeamsCacheFresh()) {
+      setLoading(false); setRefreshing(false);
+      return;
+    }
     if (hasData) setRefreshing(true); else setLoading(true);
     setErr(null);
     let payload: any = {};
@@ -1615,11 +1620,18 @@ function Teams365Panel({ profile }: { profile: any }) {
     void loadAuxiliary();
   };
   useEffect(() => {
-    load(); /* eslint-disable-next-line */
+    // Instant: cache is already hydrated in initial state; only fetch when stale.
+    load();
     if (!connected) return;
-    prefetchTeams365Data();
-    const id = window.setInterval(() => { load(); }, 30_000);
-    return () => window.clearInterval(id);
+    // Warm auxiliary (teams/people) in background if the cache is expired.
+    if (isTeamsCacheExpired()) prefetchTeams365Data();
+    // Periodic revalidation only fires when the soft TTL has elapsed.
+    const id = window.setInterval(() => { void revalidateTeams365IfStale("summary").then((p) => { if (p) applyPayload(p); }); }, TEAMS_TTL_MS);
+    // Refresh on tab focus so the user always sees recent chats when returning.
+    const onFocus = () => { void revalidateTeams365IfStale("summary").then((p) => { if (p) applyPayload(p); }); };
+    window.addEventListener("focus", onFocus);
+    return () => { window.clearInterval(id); window.removeEventListener("focus", onFocus); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected]);
 
   const startChatWith = async (userIds: string[], title: string, topicText?: string) => {

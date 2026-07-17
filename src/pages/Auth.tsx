@@ -8,17 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-// Right-side decorative panel is lazy-loaded so it never blocks first paint of the form.
+// Heavy pieces are lazy-loaded so the critical login bundle stays small.
 const AnimatedFeatures = lazy(() => import('@/components/auth/AnimatedFeatures').then((m) => ({ default: m.AnimatedFeatures })));
+const Dialog = lazy(() => import('@/components/ui/dialog').then((m) => ({ default: m.Dialog })));
+const DialogContent = lazy(() => import('@/components/ui/dialog').then((m) => ({ default: m.DialogContent })));
+const DialogHeader = lazy(() => import('@/components/ui/dialog').then((m) => ({ default: m.DialogHeader })));
+const DialogTitle = lazy(() => import('@/components/ui/dialog').then((m) => ({ default: m.DialogTitle })));
+const DialogDescription = lazy(() => import('@/components/ui/dialog').then((m) => ({ default: m.DialogDescription })));
 import { useTranslation } from '@/hooks/useTranslation';
 import { useLanguage } from '@/context/LanguageContext';
+import { checkProviderEnabled, type ProviderStatus } from '@/lib/authProviders';
 
 type AuthMode = 'login' | 'signup' | 'forgot' | 'reset';
 
@@ -33,6 +32,16 @@ const AuthPage = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [showForgotDialog, setShowForgotDialog] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
+  const [msStatus, setMsStatus] = useState<ProviderStatus>("unknown");
+  const [googleStatus, setGoogleStatus] = useState<ProviderStatus>("unknown");
+
+  // Probe OAuth providers so we only render buttons that will actually work.
+  useEffect(() => {
+    let cancelled = false;
+    checkProviderEnabled("azure").then((s) => { if (!cancelled) setMsStatus(s); });
+    checkProviderEnabled("google").then((s) => { if (!cancelled) setGoogleStatus(s); });
+    return () => { cancelled = true; };
+  }, []);
   
   const { signIn, signUp, signInWithGoogle, signInWithMicrosoft, signInWithApple, resetPassword, updatePassword, user } = useAuth();
   const navigate = useNavigate();

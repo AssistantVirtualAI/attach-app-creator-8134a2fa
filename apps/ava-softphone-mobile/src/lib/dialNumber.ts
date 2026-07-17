@@ -8,7 +8,7 @@ import { showMobileToast } from './mobileToast';
 import { txStatic } from './i18n';
 
 export type SoftphoneLike = {
-  call?: (n: string) => boolean | void;
+  call?: (n: string) => boolean | void | Promise<boolean>;
   reconnect?: () => void;
   snap?: { status?: string };
 };

@@ -781,6 +781,14 @@ export function useSoftphoneJsSip(
       };
       if (forcePcmu) log('call.fallback', 'secure PCMU-only SDP rewrite armed');
       sipDebug('placeCallInternal pcConfig', PC_CONFIG);
+      // Android: switch audio mode to MODE_IN_COMMUNICATION before INVITE so
+      // the earpiece / speaker routing is armed when the remote track arrives.
+      if (Capacitor.getPlatform() === 'android') {
+        try {
+          const { CapacitorPjsip } = await import('../lib/sip/nativeSipProvider');
+          await (CapacitorPjsip as any).startCall?.();
+        } catch {}
+      }
       uaRef.current.call(`sip:${number}@${config.domain}`, callOpts);
       return true;
     } catch (err: any) {

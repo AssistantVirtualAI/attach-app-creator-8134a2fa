@@ -1,4 +1,6 @@
 // Prefetch lazy screen chunks on tap/hover/idle so tab switches feel instant.
+// Pending idle/staggered prefetches can be cancelled when the user navigates,
+// so background work never competes with the route the user actually opened.
 type Factory = () => Promise<any>;
 
 const registry: Record<string, Factory> = {
@@ -24,14 +26,24 @@ const registry: Record<string, Factory> = {
 const started = new Set<string>();
 const done = new Set<string>();
 
-export function prefetchRoute(path: string): void {
-  if (!path || done.has(path) || started.has(path)) return;
-  const factory =
+// Pending scheduled prefetches (not yet started). Cancelled on route change.
+type Pending = { cancel: () => void };
+const pending = new Map<string, Pending>();
+
+function resolveFactory(path: string): Factory | undefined {
+  return (
     registry[path] ||
     Object.entries(registry)
       .filter(([k]) => path === k || path.startsWith(k + "/"))
-      .sort((a, b) => b[0].length - a[0].length)[0]?.[1];
+      .sort((a, b) => b[0].length - a[0].length)[0]?.[1]
+  );
+}
+
+export function prefetchRoute(path: string): void {
+  if (!path || done.has(path) || started.has(path)) return;
+  const factory = resolveFactory(path);
   if (!factory) return;
+  pending.delete(path);
   started.add(path);
   Promise.resolve()
     .then(factory)
@@ -39,15 +51,74 @@ export function prefetchRoute(path: string): void {
     .catch(() => started.delete(path));
 }
 
+// Schedule prefetch with a *cancellable* low-priority slot.
+// Uses scheduler.postTask({ priority: "background" }) when available so it
+// yields to user-driven work; falls back to requestIdleCallback / setTimeout.
+function schedulePrefetch(path: string, delayMs: number): void {
+  if (!path || done.has(path) || started.has(path) || pending.has(path)) return;
+  if (!resolveFactory(path)) return;
+
+  let cancelled = false;
+  let timerId: number | null = null;
+  let ric: number | null = null;
+  const scheduler: any = (globalThis as any).scheduler;
+  let taskCtrl: AbortController | null = null;
+
+  const run = () => {
+    pending.delete(path);
+    if (cancelled) return;
+    prefetchRoute(path);
+  };
+
+  const kickLowPriority = () => {
+    if (cancelled) return;
+    if (scheduler && typeof scheduler.postTask === "function") {
+      taskCtrl = new AbortController();
+      scheduler
+        .postTask(run, { priority: "background", signal: taskCtrl.signal })
+        .catch(() => {});
+    } else if (typeof (globalThis as any).requestIdleCallback === "function") {
+      ric = (globalThis as any).requestIdleCallback(run, { timeout: 4000 });
+    } else {
+      timerId = window.setTimeout(run, 0);
+    }
+  };
+
+  const initial = window.setTimeout(kickLowPriority, delayMs);
+  pending.set(path, {
+    cancel: () => {
+      cancelled = true;
+      window.clearTimeout(initial);
+      if (timerId != null) window.clearTimeout(timerId);
+      if (ric != null && typeof (globalThis as any).cancelIdleCallback === "function") {
+        (globalThis as any).cancelIdleCallback(ric);
+      }
+      if (taskCtrl) try { taskCtrl.abort(); } catch {}
+      pending.delete(path);
+    },
+  });
+}
+
 export function scheduleIdlePrefetch(paths: string[]): void {
-  const run = () => paths.forEach(prefetchRoute);
-  const ric: any = (globalThis as any).requestIdleCallback;
-  if (typeof ric === "function") ric(run, { timeout: 4000 });
-  else setTimeout(run, 1200);
+  paths.forEach((p) => schedulePrefetch(p, 0));
 }
 
 function prefetchRoutesStaggered(paths: string[], gapMs: number): void {
-  paths.forEach((path, index) => window.setTimeout(() => prefetchRoute(path), index * gapMs));
+  paths.forEach((path, index) => schedulePrefetch(path, index * gapMs));
+}
+
+/**
+ * Cancel every prefetch that hasn't started yet.
+ * Call this on route change so background chunks stop competing with the
+ * chunk the user is actually opening. Prefetches already in-flight complete
+ * normally (browser can't abort a running dynamic import).
+ * `exceptPath`, when provided, keeps that route's pending prefetch scheduled.
+ */
+export function cancelPendingPrefetches(exceptPath?: string): void {
+  for (const [path, entry] of Array.from(pending.entries())) {
+    if (exceptPath && path === exceptPath) continue;
+    entry.cancel();
+  }
 }
 
 /** All bottom-tab / accessible mobile routes — used to warm every chunk. */

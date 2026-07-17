@@ -91,6 +91,26 @@ class CapacitorPjsip : Plugin() {
     @PluginMethod fun setLiveTranscriptionEnabled(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
 
     @PluginMethod
+    fun startSipService(call: PluginCall) {
+        try {
+            SipConnectionService.start(context)
+            call.resolve(JSObject().apply { put("ok", true) })
+        } catch (e: Exception) {
+            call.reject(e.message ?: "startSipService failed")
+        }
+    }
+
+    @PluginMethod
+    fun stopSipService(call: PluginCall) {
+        try {
+            SipConnectionService.stop(context)
+            call.resolve(JSObject().apply { put("ok", true) })
+        } catch (e: Exception) {
+            call.reject(e.message ?: "stopSipService failed")
+        }
+    }
+
+    @PluginMethod
     fun setAudioRoute(call: PluginCall) {
         when (call.getString("route", "earpiece")) {
             "speaker" -> { audioManager?.isSpeakerphoneOn = true }

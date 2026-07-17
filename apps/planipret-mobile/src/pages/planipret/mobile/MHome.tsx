@@ -16,6 +16,7 @@ import PermissionBanners from "@/components/planipret/mobile/PermissionBanners";
 import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { loadMHomeCache, saveMHomeCache } from "@/lib/mhomeCache";
 
 
 type Period = "day" | "week" | "month" | "shift";
@@ -72,16 +73,17 @@ export default function MHome() {
   });
   useEffect(() => { try { localStorage.setItem("pp.mobile.period.v2", period); } catch {} }, [period]);
 
-  const [stats, setStats] = useState({ calls: 0, missed: 0, sms: 0, voicemails: 0, meetings: 0, hotLeads: 0, tasks: 0, outbound: 0 });
-  const [recent, setRecent] = useState<any[]>([]);
-  const [hotLeads, setHotLeads] = useState<any[]>([]);
-  const [dueReminders, setDueReminders] = useState<any[]>([]);
-  const [meetings, setMeetings] = useState<any[]>([]);
-  const [msMeetings, setMsMeetings] = useState<any[]>([]);
+  const cached = useMemo(() => loadMHomeCache(profile?.user_id, period), [profile?.user_id, period]);
+  const [stats, setStats] = useState(() => cached?.stats ?? { calls: 0, missed: 0, sms: 0, voicemails: 0, meetings: 0, hotLeads: 0, tasks: 0, outbound: 0 });
+  const [recent, setRecent] = useState<any[]>(() => cached?.recent ?? []);
+  const [hotLeads, setHotLeads] = useState<any[]>(() => cached?.hotLeads ?? []);
+  const [dueReminders, setDueReminders] = useState<any[]>(() => cached?.dueReminders ?? []);
+  const [meetings, setMeetings] = useState<any[]>(() => cached?.meetings ?? []);
+  const [msMeetings, setMsMeetings] = useState<any[]>(() => cached?.msMeetings ?? []);
   const [msCalendarLoading, setMsCalendarLoading] = useState(false);
   const [msCalendarError, setMsCalendarError] = useState<string | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [brief, setBrief] = useState<any | null>(null);
+  const [statsLoading, setStatsLoading] = useState(!cached);
+  const [brief, setBrief] = useState<any | null>(() => cached?.brief ?? null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefErr, setBriefErr] = useState<string | null>(null);
 
@@ -182,37 +184,39 @@ export default function MHome() {
     const liveVmItems = Array.isArray((nsVmLive.data as any)?.items) ? (nsVmLive.data as any).items : [];
     const liveVmUnread = liveVmItems.filter((v: any) => !(v.is_read ?? v.read ?? false)).length;
 
-    let microsoftEvents: any[] = [];
+    // Kick off Microsoft calendar fetch in PARALLEL with the main data load
+    // (previously it awaited after Promise.all, adding ~1-3s to Home render).
+    let msPromise: Promise<any[]> = Promise.resolve([]);
     setMsCalendarError(null);
     if (profile?.ms365_access_token) {
       setMsCalendarLoading(true);
-      try {
-        const calStart = new Date(); calStart.setDate(1); calStart.setHours(0,0,0,0);
-        const calEnd = new Date(calStart); calEnd.setMonth(calEnd.getMonth() + 2);
-        const { data: msData, error: msError } = await supabase.functions.invoke("ms365-actions", {
+      const calStart = new Date(); calStart.setDate(1); calStart.setHours(0,0,0,0);
+      const calEnd = new Date(calStart); calEnd.setMonth(calEnd.getMonth() + 2);
+      msPromise = supabase.functions
+        .invoke("ms365-actions", {
           body: { action: "list_calendar_events", payload: { start: calStart.toISOString(), end: calEnd.toISOString(), top: 200 } },
-        });
-        if (msError || (msData as any)?.success === false) {
-          const errMsg = (msData as any)?.error ?? msError?.message ?? "Calendrier Microsoft indisponible";
-          setMsCalendarError(errMsg);
-          if (/token|expir|unauthor|401|invalid_grant/i.test(errMsg)) {
-            const { startMs365Reconnect } = await import("@/lib/ms365E2E");
-            startMs365Reconnect("Erreur d'authentification sur le calendrier");
+        })
+        .then(({ data: msData, error: msError }) => {
+          if (msError || (msData as any)?.success === false) {
+            const errMsg = (msData as any)?.error ?? msError?.message ?? "Calendrier Microsoft indisponible";
+            setMsCalendarError(errMsg);
+            if (/token|expir|unauthor|401|invalid_grant/i.test(errMsg)) {
+              import("@/lib/ms365E2E").then((m) => m.startMs365Reconnect("Erreur d'authentification sur le calendrier")).catch(() => {});
+            }
+            return [];
           }
-        } else {
-          microsoftEvents = (msData as any)?.events ?? [];
-        }
-      } catch (e: any) {
-        setMsCalendarError(e?.message ?? "Calendrier Microsoft indisponible");
-      } finally {
-        setMsCalendarLoading(false);
-      }
+          return (msData as any)?.events ?? [];
+        })
+        .catch((e) => { setMsCalendarError(e?.message ?? "Calendrier Microsoft indisponible"); return []; })
+        .finally(() => setMsCalendarLoading(false));
     } else {
       setMsMeetings([]);
     }
+
+    const microsoftEvents = await msPromise;
     setMsMeetings(microsoftEvents);
 
-    setStats({
+    const nextStats = {
       calls: liveCallsInPeriod.length || callsRes.count || 0,
       missed: liveCallsInPeriod.length ? liveCallsInPeriod.filter((c: any) => nsCallDirection(c) === "missed").length : (missedRes.count ?? 0),
       sms: liveSmsThreads.length ? liveSmsThreads.reduce((sum: number, th: any) => sum + nsSmsUnread(th), 0) : (smsRes.count ?? 0),
@@ -221,11 +225,20 @@ export default function MHome() {
       hotLeads: hotCountRes.count ?? 0,
       tasks: tasksCountRes.count ?? 0,
       outbound: outboundRes.count ?? 0,
+    };
+    const nextRecent = liveRecent.length ? liveRecent : (recentRes.data ?? []);
+    const nextHot = hotRes.data ?? [];
+    const nextRem = remRes.data ?? [];
+    const nextMeetings = meetingsRes.data ?? [];
+    setStats(nextStats);
+    setRecent(nextRecent);
+    setHotLeads(nextHot);
+    setDueReminders(nextRem);
+    setMeetings(nextMeetings);
+    saveMHomeCache(profile?.user_id, period, {
+      stats: nextStats, recent: nextRecent, hotLeads: nextHot,
+      dueReminders: nextRem, meetings: nextMeetings, msMeetings: microsoftEvents,
     });
-    setRecent(liveRecent.length ? liveRecent : (recentRes.data ?? []));
-    setHotLeads(hotRes.data ?? []);
-    setDueReminders(remRes.data ?? []);
-    setMeetings(meetingsRes.data ?? []);
     } catch (e) {
       console.error("[MHome] loadStats failed", e);
     } finally {
@@ -244,6 +257,7 @@ export default function MHome() {
       return;
     }
     setBrief(data);
+    saveMHomeCache(profile?.user_id, period, { brief: data });
   };
 
   useEffect(() => { loadStats(); loadBrief(false); /* eslint-disable-next-line */ }, [profile?.user_id, period]);

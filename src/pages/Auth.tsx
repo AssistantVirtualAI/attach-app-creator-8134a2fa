@@ -8,17 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-// Right-side decorative panel is lazy-loaded so it never blocks first paint of the form.
+// Heavy pieces are lazy-loaded so the critical login bundle stays small.
 const AnimatedFeatures = lazy(() => import('@/components/auth/AnimatedFeatures').then((m) => ({ default: m.AnimatedFeatures })));
+const Dialog = lazy(() => import('@/components/ui/dialog').then((m) => ({ default: m.Dialog })));
+const DialogContent = lazy(() => import('@/components/ui/dialog').then((m) => ({ default: m.DialogContent })));
+const DialogHeader = lazy(() => import('@/components/ui/dialog').then((m) => ({ default: m.DialogHeader })));
+const DialogTitle = lazy(() => import('@/components/ui/dialog').then((m) => ({ default: m.DialogTitle })));
+const DialogDescription = lazy(() => import('@/components/ui/dialog').then((m) => ({ default: m.DialogDescription })));
 import { useTranslation } from '@/hooks/useTranslation';
 import { useLanguage } from '@/context/LanguageContext';
+import { checkProviderEnabled, type ProviderStatus } from '@/lib/authProviders';
 
 type AuthMode = 'login' | 'signup' | 'forgot' | 'reset';
 
@@ -33,6 +32,16 @@ const AuthPage = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [showForgotDialog, setShowForgotDialog] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
+  const [msStatus, setMsStatus] = useState<ProviderStatus>("unknown");
+  const [googleStatus, setGoogleStatus] = useState<ProviderStatus>("unknown");
+
+  // Probe OAuth providers so we only render buttons that will actually work.
+  useEffect(() => {
+    let cancelled = false;
+    checkProviderEnabled("azure").then((s) => { if (!cancelled) setMsStatus(s); });
+    checkProviderEnabled("google").then((s) => { if (!cancelled) setGoogleStatus(s); });
+    return () => { cancelled = true; };
+  }, []);
   
   const { signIn, signUp, signInWithGoogle, signInWithMicrosoft, signInWithApple, resetPassword, updatePassword, user } = useAuth();
   const navigate = useNavigate();
@@ -206,32 +215,36 @@ const AuthPage = () => {
             {/* Google OAuth Button */}
             {(mode === 'login' || mode === 'signup') && (
               <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-12 gap-3 bg-card hover:bg-muted border-border"
-                  onClick={handleGoogleLogin}
-                  disabled={loading}
-                >
-                  <Chrome className="w-5 h-5" />
-                  {t('auth.buttons.continueWithGoogle')}
-                </Button>
+                {googleStatus !== "disabled" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-12 gap-3 bg-card hover:bg-muted border-border"
+                    onClick={handleGoogleLogin}
+                    disabled={loading}
+                  >
+                    <Chrome className="w-5 h-5" />
+                    {t('auth.buttons.continueWithGoogle')}
+                  </Button>
+                )}
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-12 gap-3 bg-card hover:bg-muted border-border"
-                  onClick={handleMicrosoftLogin}
-                  disabled={loading}
-                >
-                  <svg width="20" height="20" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
-                    <rect x="12" y="1" width="10" height="10" fill="#7FBA00"/>
-                    <rect x="1" y="12" width="10" height="10" fill="#00A4EF"/>
-                    <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
-                  </svg>
-                  {t('auth.buttons.continueWithMicrosoft') || 'Continuer avec Microsoft 365 (SSO)'}
-                </Button>
+                {msStatus === "enabled" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-12 gap-3 bg-card hover:bg-muted border-border"
+                    onClick={handleMicrosoftLogin}
+                    disabled={loading}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                      <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
+                      <rect x="12" y="1" width="10" height="10" fill="#7FBA00"/>
+                      <rect x="1" y="12" width="10" height="10" fill="#00A4EF"/>
+                      <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
+                    </svg>
+                    {t('auth.buttons.continueWithMicrosoft') || 'Continuer avec Microsoft 365 (SSO)'}
+                  </Button>
+                )}
 
                 <Button
                   type="button"
@@ -434,43 +447,47 @@ const AuthPage = () => {
         </Suspense>
       </motion.div>
 
-      {/* Forgot Password Dialog */}
-      <Dialog open={showForgotDialog} onOpenChange={setShowForgotDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('auth.forgotDialog.title')}</DialogTitle>
-            <DialogDescription>
-              {t('auth.forgotDialog.description')}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleForgotPassword} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="forgotEmail">{t('auth.labels.email')}</Label>
-              <Input
-                id="forgotEmail"
-                type="email"
-                placeholder={t('auth.placeholders.email')}
-                value={forgotEmail}
-                onChange={(e) => setForgotEmail(e.target.value)}
-                required
-                className="bg-card"
-              />
-            </div>
-            <div className="flex gap-3 justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowForgotDialog(false)}
-              >
-                {t('auth.buttons.cancel')}
-              </Button>
-              <Button type="submit" disabled={loading}>
-                {loading ? t('auth.buttons.sending') : t('auth.buttons.sendLink')}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Forgot Password Dialog — lazy so it doesn't ship in the initial auth bundle */}
+      {showForgotDialog && (
+        <Suspense fallback={null}>
+          <Dialog open={showForgotDialog} onOpenChange={setShowForgotDialog}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>{t('auth.forgotDialog.title')}</DialogTitle>
+                <DialogDescription>
+                  {t('auth.forgotDialog.description')}
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="forgotEmail">{t('auth.labels.email')}</Label>
+                  <Input
+                    id="forgotEmail"
+                    type="email"
+                    placeholder={t('auth.placeholders.email')}
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    required
+                    className="bg-card"
+                  />
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowForgotDialog(false)}
+                  >
+                    {t('auth.buttons.cancel')}
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? t('auth.buttons.sending') : t('auth.buttons.sendLink')}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </Suspense>
+      )}
     </div>
   );
 };

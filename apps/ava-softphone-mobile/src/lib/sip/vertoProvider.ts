@@ -1,17 +1,10 @@
-// FreeSWITCH Verto client wrapper.
+// FreeSWITCH Verto client — native WebSocket + JSON-RPC implementation.
 //
-// Loads jQuery + jquery.verto (the canonical Verto client that ships with
-// FreeSWITCH) at first use, then exposes a small typed surface for the
-// Android softphone hook. Verto handles media server-side, so no TURN is
-// required — this fixes calls on carriers (e.g. Bell Canada) that block
-// TURN DNS resolution.
-//
-// This module intentionally has no dependency on JsSIP, PJSIP, or the
-// existing SIPConfig plumbing beyond the fields it needs.
-
-const JQUERY_SRC = 'https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js';
-const JSONRPC_SRC = 'https://pbxnode.lemtel.tel:8082/js/src/jquery.jsonrpcclient.js';
-const VERTO_SRC = 'https://pbxnode.lemtel.tel:8082/js/src/jquery.verto.js';
+// No jQuery, no external CDN — talks raw JSON-RPC to FreeSWITCH on
+// wss://<host>:<port>. Media is negotiated via a standard RTCPeerConnection
+// (offer/answer over verto.invite / verto.answer). Because FreeSWITCH
+// bridges the media itself, no TURN server is required — this bypasses
+// carrier TURN DNS blocks (e.g. Bell Canada).
 
 export interface VertoConfig {
   host: string;
@@ -22,11 +15,9 @@ export interface VertoConfig {
   caller_id_number: string;
   /** Optional DOM id of the <audio> element used for remote audio. */
   audioTag?: string;
+  /** SIP domain part for the login. Defaults to `host`. */
+  domain?: string;
 }
-
-export type VertoDialogState =
-  | 'trying' | 'ringing' | 'early' | 'active'
-  | 'hangup' | 'destroy' | 'held' | 'requesting' | 'recovering';
 
 export interface VertoDialog {
   callID: string;
@@ -36,7 +27,7 @@ export interface VertoDialog {
   hold: () => void;
   unhold: () => void;
   toggleHold: () => void;
-  rtc?: any;
+  rtc?: RTCPeerConnection;
 }
 
 export type VertoEvent =
@@ -52,46 +43,18 @@ export type VertoEvent =
 
 type Listener = (e: VertoEvent) => void;
 
-let scriptsLoading: Promise<void> | null = null;
-
-function injectScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[data-verto-src="${src}"]`)) {
-      resolve();
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = src;
-    s.async = false;
-    s.defer = false;
-    s.dataset.vertoSrc = src;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(s);
+function uuid(): string {
+  // RFC4122-ish; good enough for callID / sessid.
+  if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) {
+    return (crypto as any).randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
   });
 }
 
-async function ensureVertoLibs(): Promise<void> {
-  if (typeof window === 'undefined') throw new Error('Verto requires a browser environment');
-  if ((window as any).$?.verto) return;
-  if (!scriptsLoading) {
-    scriptsLoading = (async () => {
-      await injectScript(JQUERY_SRC);
-      // jsonrpcclient must load before verto
-      await injectScript(JSONRPC_SRC);
-      await injectScript(VERTO_SRC);
-      if (!(window as any).$?.verto) {
-        throw new Error('jQuery.verto did not attach — check network / CORS on pbxnode.lemtel.tel:8082');
-      }
-    })().catch((e) => {
-      scriptsLoading = null;
-      throw e;
-    });
-  }
-  return scriptsLoading;
-}
-
-/** Ensures a hidden <audio id="…"> element exists for Verto to render remote media into. */
 function ensureAudioTag(id: string): HTMLAudioElement {
   let el = document.getElementById(id) as HTMLAudioElement | null;
   if (el) return el;
@@ -106,171 +69,413 @@ function ensureAudioTag(id: string): HTMLAudioElement {
   return el;
 }
 
+interface DialogRecord {
+  callID: string;
+  direction: 'inbound' | 'outbound';
+  pc: RTCPeerConnection;
+  wrapped: VertoDialog;
+  destination?: string;
+  callerIdName?: string;
+  callerIdNumber?: string;
+  remoteStream?: MediaStream;
+  answered?: boolean;
+}
+
 class VertoClient {
-  private verto: any = null;
+  private ws: WebSocket | null = null;
+  private sessid = uuid();
+  private nextId = 1;
+  private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void }>();
   private listeners = new Set<Listener>();
-  private dialogs = new Map<string, VertoDialog>();
+  private dialogs = new Map<string, DialogRecord>();
   private connected = false;
-  private lastConfig: VertoConfig | null = null;
+  private loggedIn = false;
+  private cfg: VertoConfig | null = null;
+  private audioTagId = 'verto-remote-audio';
 
   on(fn: Listener): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
   }
-
   private emit(e: VertoEvent) {
-    this.listeners.forEach((fn) => {
-      try { fn(e); } catch (err) { console.warn('[verto] listener threw', err); }
-    });
+    this.listeners.forEach((fn) => { try { fn(e); } catch (err) { console.warn('[verto] listener threw', err); } });
   }
-
-  isConnected() { return this.connected; }
+  isConnected() { return this.loggedIn; }
 
   async connect(cfg: VertoConfig): Promise<void> {
-    await ensureVertoLibs();
-    this.lastConfig = cfg;
-    const jQuery = (window as any).$;
-    const audioTagId = cfg.audioTag || 'verto-remote-audio';
-    ensureAudioTag(audioTagId);
-
+    if (typeof window === 'undefined') throw new Error('Verto requires a browser environment');
+    this.cfg = cfg;
+    this.audioTagId = cfg.audioTag || 'verto-remote-audio';
+    ensureAudioTag(this.audioTagId);
     this.emit({ type: 'connecting' });
 
+    const url = `wss://${cfg.host}:${cfg.port}`;
     return new Promise<void>((resolve, reject) => {
       let settled = false;
       const done = (ok: boolean, err?: string) => {
         if (settled) return;
         settled = true;
-        if (ok) resolve();
-        else reject(new Error(err || 'Verto connect failed'));
+        if (ok) resolve(); else reject(new Error(err || 'Verto connect failed'));
       };
 
+      let ws: WebSocket;
       try {
-        this.verto = new jQuery.verto({
-          login: `${cfg.login}@${cfg.host}`,
-          passwd: cfg.password,
-          socketUrl: `wss://${cfg.host}:${cfg.port}`,
-          tag: audioTagId,
-          ringFile: '',
-          videoParams: {},
-          iceServers: false, // Verto proxies media through FreeSWITCH — no TURN needed
-          sessid: null,
-        }, {
-          onWSLogin: (_v: any, success: boolean) => {
-            if (success) {
-              this.connected = true;
-              this.emit({ type: 'registered' });
-              done(true);
-            } else {
-              this.connected = false;
-              this.emit({ type: 'error', error: 'Login refused (bad credentials?)' });
-              done(false, 'Login refused');
-            }
-          },
-          onWSClose: (_v: any, success: boolean) => {
-            this.connected = false;
-            this.emit({ type: 'disconnected', reason: success ? 'closed' : 'lost' });
-            done(false, 'WebSocket closed before login');
-          },
-          onDialogState: (d: any) => this.handleDialogState(d),
-          onMessage: () => { /* noop */ },
-        });
+        ws = new WebSocket(url);
       } catch (e: any) {
-        done(false, e?.message || 'Verto init threw');
+        done(false, e?.message || 'WebSocket construction failed');
+        return;
       }
+      this.ws = ws;
+
+      ws.onopen = async () => {
+        this.connected = true;
+        try {
+          const domain = cfg.domain || cfg.host;
+          const login = cfg.login.includes('@') ? cfg.login : `${cfg.login}@${domain}`;
+          const res = await this.rpc('login', {
+            login,
+            passwd: cfg.password,
+            sessid: this.sessid,
+            userVariables: {},
+          });
+          if (res?.message && String(res.message).toLowerCase().includes('logged in')) {
+            this.loggedIn = true;
+            this.emit({ type: 'registered' });
+            done(true);
+          } else {
+            this.emit({ type: 'error', error: 'Login refused' });
+            done(false, 'Login refused');
+          }
+        } catch (e: any) {
+          this.emit({ type: 'error', error: e?.message || 'Login RPC failed' });
+          done(false, e?.message);
+        }
+      };
+
+      ws.onerror = () => {
+        this.emit({ type: 'error', error: 'WebSocket error' });
+        done(false, 'WebSocket error');
+      };
+
+      ws.onclose = (ev) => {
+        const wasLoggedIn = this.loggedIn;
+        this.connected = false;
+        this.loggedIn = false;
+        this.emit({ type: 'disconnected', reason: `code=${ev.code}` });
+        if (!wasLoggedIn) done(false, `WebSocket closed (code=${ev.code})`);
+      };
+
+      ws.onmessage = (ev) => this.handleMessage(ev.data);
     });
   }
 
-  private handleDialogState(d: any) {
-    const dialog = this.wrap(d);
-    const state: VertoDialogState = d?.state?.name;
-    switch (state) {
-      case 'requesting':
-      case 'trying':
-      case 'early':
-      case 'ringing':
-        if (d.direction?.name === 'inbound' && !this.dialogs.has(dialog.callID)) {
-          this.dialogs.set(dialog.callID, dialog);
-          this.emit({
-            type: 'incoming',
-            dialog,
-            from: d?.params?.caller_id_number || '',
-            fromName: d?.params?.caller_id_name,
-          });
-        } else {
-          this.emit({ type: 'progress', dialog });
-        }
-        break;
-      case 'active': {
-        this.emit({ type: 'answered', dialog });
-        try {
-          const pc = d?.rtc?.getPeer?.() as RTCPeerConnection | undefined;
-          const stream = pc?.getReceivers?.()
-            ?.map((r) => r.track)
-            .filter(Boolean);
-          if (stream && stream.length) {
-            const ms = new MediaStream(stream as MediaStreamTrack[]);
-            this.emit({ type: 'media', dialog, stream: ms });
-          }
-        } catch { /* ignore */ }
-        break;
+  private send(obj: any) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket not open');
+    this.ws.send(JSON.stringify(obj));
+  }
+
+  private rpc(method: string, params: any): Promise<any> {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      try {
+        this.send({ jsonrpc: '2.0', id, method, params });
+      } catch (e) {
+        this.pending.delete(id);
+        reject(e);
+        return;
       }
-      case 'hangup':
-      case 'destroy':
-        this.dialogs.delete(dialog.callID);
-        this.emit({ type: 'hangup', dialog, cause: d?.cause });
-        break;
-      case 'held':
-        this.emit({ type: 'progress', dialog });
-        break;
-      default:
-        break;
+      // Safety timeout
+      setTimeout(() => {
+        if (this.pending.has(id)) {
+          this.pending.delete(id);
+          reject(new Error(`${method} timed out`));
+        }
+      }, 20000);
+    });
+  }
+
+  private handleMessage(raw: any) {
+    let msg: any;
+    try { msg = JSON.parse(String(raw)); } catch { return; }
+    // Response to an outbound RPC
+    if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
+      const p = this.pending.get(msg.id)!;
+      this.pending.delete(msg.id);
+      if (msg.error) p.reject(new Error(msg.error?.message || 'RPC error'));
+      else p.resolve(msg.result);
+      return;
+    }
+    // Server-initiated notification
+    if (msg.method) {
+      this.handleServerMethod(msg.method, msg.params, msg.id);
     }
   }
 
-  private wrap(d: any): VertoDialog {
-    const callID: string = d.callID;
-    const existing = this.dialogs.get(callID);
-    if (existing) return existing;
-    const wrapped: VertoDialog = {
-      callID,
-      hangup: () => d.hangup(),
-      answer: (opts?: any) => d.answer(opts || { useMic: true, useCamera: false, useVideo: false }),
-      dtmf: (digit: string) => d.dtmf(digit),
-      hold: () => d.hold(),
-      unhold: () => d.unhold(),
-      toggleHold: () => d.toggleHold(),
-      rtc: d.rtc,
+  private async handleServerMethod(method: string, params: any, msgId?: number) {
+    // ACK server calls that expect a response
+    const ack = () => {
+      if (msgId !== undefined) {
+        try { this.send({ jsonrpc: '2.0', id: msgId, result: { method } }); } catch { /* ignore */ }
+      }
     };
-    this.dialogs.set(callID, wrapped);
+
+    const callID: string | undefined = params?.callID;
+    switch (method) {
+      case 'verto.invite': {
+        ack();
+        if (!callID) return;
+        await this.handleInboundInvite(callID, params);
+        return;
+      }
+      case 'verto.answer': {
+        ack();
+        const rec = callID ? this.dialogs.get(callID) : undefined;
+        if (rec && params?.sdp) {
+          try {
+            await rec.pc.setRemoteDescription({ type: 'answer', sdp: params.sdp });
+            rec.answered = true;
+            this.emit({ type: 'answered', dialog: rec.wrapped });
+          } catch (e) {
+            console.warn('[verto] setRemoteDescription(answer) failed', e);
+          }
+        }
+        return;
+      }
+      case 'verto.media': {
+        ack();
+        const rec = callID ? this.dialogs.get(callID) : undefined;
+        if (rec && params?.sdp && !rec.answered) {
+          try {
+            await rec.pc.setRemoteDescription({ type: 'answer', sdp: params.sdp });
+            rec.answered = true;
+          } catch { /* ignore — early media */ }
+        }
+        if (rec) this.emit({ type: 'progress', dialog: rec.wrapped });
+        return;
+      }
+      case 'verto.bye': {
+        ack();
+        const rec = callID ? this.dialogs.get(callID) : undefined;
+        if (rec) {
+          try { rec.pc.close(); } catch { /* ignore */ }
+          this.dialogs.delete(rec.callID);
+          this.emit({ type: 'hangup', dialog: rec.wrapped, cause: params?.cause });
+        }
+        return;
+      }
+      case 'verto.display':
+      case 'verto.info':
+      case 'verto.event':
+      case 'verto.clientReady':
+      case 'verto.punt':
+      default:
+        ack();
+        return;
+    }
+  }
+
+  private async handleInboundInvite(callID: string, params: any) {
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    const remoteStream = new MediaStream();
+    pc.ontrack = (ev) => {
+      ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
+      const rec = this.dialogs.get(callID);
+      if (rec) this.emit({ type: 'media', dialog: rec.wrapped, stream: remoteStream });
+    };
+
+    let local: MediaStream | null = null;
+    try {
+      local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      local.getTracks().forEach((t) => pc.addTrack(t, local!));
+    } catch (e) {
+      console.warn('[verto] mic denied on inbound', e);
+    }
+
+    const rec: DialogRecord = {
+      callID, direction: 'inbound', pc,
+      wrapped: this.wrap(callID),
+      remoteStream,
+    };
+    this.dialogs.set(callID, rec);
+
+    try {
+      await pc.setRemoteDescription({ type: 'offer', sdp: params.sdp });
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await this.waitForIce(pc);
+      // Wrap dialog only once callID is known
+      const wrapped = this.wrap(callID);
+      rec.wrapped = wrapped;
+      this.emit({
+        type: 'incoming', dialog: wrapped,
+        from: params?.caller_id_number || '', fromName: params?.caller_id_name,
+      });
+      // Note: answer is deferred until user calls .answer()
+      (wrapped as any).__pendingAnswer = pc.localDescription?.sdp;
+      (wrapped as any).__params = params;
+    } catch (e) {
+      console.warn('[verto] inbound negotiation failed', e);
+    }
+  }
+
+  private waitForIce(pc: RTCPeerConnection, timeoutMs = 2500): Promise<void> {
+    return new Promise((resolve) => {
+      if (pc.iceGatheringState === 'complete') { resolve(); return; }
+      const t = setTimeout(() => { pc.removeEventListener('icegatheringstatechange', check); resolve(); }, timeoutMs);
+      const check = () => {
+        if (pc.iceGatheringState === 'complete') {
+          clearTimeout(t);
+          pc.removeEventListener('icegatheringstatechange', check);
+          resolve();
+        }
+      };
+      pc.addEventListener('icegatheringstatechange', check);
+    });
+  }
+
+  private wrap(callID: string): VertoDialog {
+    const existing = this.dialogs.get(callID)?.wrapped;
+    if (existing) return existing;
+    const w: VertoDialog = {
+      callID,
+      hangup: () => this.hangup(callID),
+      answer: () => this.answerInbound(callID),
+      dtmf: (digit: string) => this.dtmf(callID, digit),
+      hold: () => this.hold(callID, true),
+      unhold: () => this.hold(callID, false),
+      toggleHold: () => {
+        const rec = this.dialogs.get(callID);
+        if (!rec) return;
+        this.hold(callID, true); // best-effort toggle
+      },
+      rtc: undefined,
+    };
+    return w;
+  }
+
+  async call(destination: string, callerIdName: string, callerIdNumber: string): Promise<VertoDialog | null> {
+    if (!this.loggedIn || !this.cfg) throw new Error('Verto not registered');
+    const callID = uuid();
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    const remoteStream = new MediaStream();
+    pc.ontrack = (ev) => {
+      ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
+      const rec = this.dialogs.get(callID);
+      if (rec) this.emit({ type: 'media', dialog: rec.wrapped, stream: remoteStream });
+    };
+
+    const local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    local.getTracks().forEach((t) => pc.addTrack(t, local));
+
+    const wrapped = this.wrap(callID);
+    wrapped.rtc = pc;
+    const rec: DialogRecord = {
+      callID, direction: 'outbound', pc, wrapped,
+      destination, callerIdName, callerIdNumber, remoteStream,
+    };
+    this.dialogs.set(callID, rec);
+
+    const offer = await pc.createOffer({ offerToReceiveAudio: true });
+    await pc.setLocalDescription(offer);
+    await this.waitForIce(pc);
+
+    const dialogParams = {
+      callID,
+      caller_id_name: callerIdName,
+      caller_id_number: callerIdNumber,
+      destination_number: destination,
+      remote_caller_id_name: 'Outbound Call',
+      remote_caller_id_number: destination,
+      useVideo: false, useStereo: false,
+      tag: this.audioTagId,
+      login: this.cfg.login.includes('@') ? this.cfg.login : `${this.cfg.login}@${this.cfg.domain || this.cfg.host}`,
+    };
+
+    try {
+      await this.rpc('verto.invite', { sdp: pc.localDescription?.sdp, dialogParams });
+    } catch (e: any) {
+      try { pc.close(); } catch { /* ignore */ }
+      this.dialogs.delete(callID);
+      this.emit({ type: 'hangup', dialog: wrapped, cause: e?.message });
+      return null;
+    }
+
+    this.emit({ type: 'progress', dialog: wrapped });
     return wrapped;
   }
 
-  call(destination: string, callerIdName: string, callerIdNumber: string): VertoDialog | null {
-    if (!this.verto) throw new Error('Verto not initialized');
-    const d = this.verto.newCall({
-      destination_number: destination,
-      caller_id_name: callerIdName,
-      caller_id_number: callerIdNumber,
-      useVideo: false,
-      useCamera: false,
-      useMic: true,
-      dedEnc: false,
-    });
-    return d ? this.wrap(d) : null;
+  private async answerInbound(callID: string) {
+    const rec = this.dialogs.get(callID);
+    if (!rec || rec.direction !== 'inbound') return;
+    const sdp = (rec.wrapped as any).__pendingAnswer;
+    if (!sdp) return;
+    const dialogParams = {
+      callID,
+      caller_id_name: this.cfg?.caller_id_name || '',
+      caller_id_number: this.cfg?.caller_id_number || '',
+      useVideo: false, useStereo: false,
+      tag: this.audioTagId,
+    };
+    try {
+      await this.rpc('verto.answer', { sdp, dialogParams });
+      rec.answered = true;
+      this.emit({ type: 'answered', dialog: rec.wrapped });
+    } catch (e) {
+      console.warn('[verto] answer RPC failed', e);
+    }
+  }
+
+  private async hangup(callID: string) {
+    const rec = this.dialogs.get(callID);
+    if (!rec) return;
+    const dialogParams = {
+      callID,
+      caller_id_name: rec.callerIdName || this.cfg?.caller_id_name || '',
+      caller_id_number: rec.callerIdNumber || this.cfg?.caller_id_number || '',
+      destination_number: rec.destination,
+    };
+    try {
+      await this.rpc('verto.bye', { cause: 'NORMAL_CLEARING', dialogParams });
+    } catch { /* ignore */ }
+    try { rec.pc.close(); } catch { /* ignore */ }
+    this.dialogs.delete(callID);
+    this.emit({ type: 'hangup', dialog: rec.wrapped, cause: 'NORMAL_CLEARING' });
+  }
+
+  private async dtmf(callID: string, digit: string) {
+    const rec = this.dialogs.get(callID);
+    if (!rec) return;
+    try {
+      await this.rpc('verto.info', {
+        dtmf: digit,
+        dialogParams: { callID, destination_number: rec.destination },
+      });
+    } catch { /* ignore */ }
+  }
+
+  private async hold(callID: string, on: boolean) {
+    const rec = this.dialogs.get(callID);
+    if (!rec) return;
+    try {
+      await this.rpc('verto.modify', {
+        action: on ? 'hold' : 'unhold',
+        dialogParams: { callID },
+      });
+    } catch { /* ignore */ }
   }
 
   hangupAll() {
-    if (!this.verto) return;
-    for (const d of this.dialogs.values()) {
-      try { d.hangup(); } catch { /* ignore */ }
+    for (const rec of Array.from(this.dialogs.values())) {
+      this.hangup(rec.callID).catch(() => { /* ignore */ });
     }
-    this.dialogs.clear();
   }
 
   disconnect() {
-    try { this.verto?.logout?.(); } catch { /* ignore */ }
-    this.verto = null;
+    try { this.ws?.close(); } catch { /* ignore */ }
+    this.ws = null;
     this.connected = false;
+    this.loggedIn = false;
     this.dialogs.clear();
   }
 }
@@ -282,14 +487,14 @@ export function getVertoClient(): VertoClient {
   return singleton;
 }
 
-/** Convenience: initialize + register. Resolves on onWSLogin. */
+/** Convenience: initialize + register. Resolves after successful login. */
 export async function initVerto(cfg: VertoConfig): Promise<VertoClient> {
   const c = getVertoClient();
   await c.connect(cfg);
   return c;
 }
 
-export function vertoCall(destination: string, callerName: string, callerNumber?: string): VertoDialog | null {
+export async function vertoCall(destination: string, callerName: string, callerNumber?: string): Promise<VertoDialog | null> {
   return getVertoClient().call(destination, callerName, callerNumber || callerName);
 }
 

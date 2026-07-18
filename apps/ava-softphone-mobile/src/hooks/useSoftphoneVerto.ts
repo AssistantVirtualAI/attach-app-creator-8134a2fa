@@ -80,6 +80,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
           port: VERTO_PORT,
           login: config.extension,
           password: config.password,
+          domain: config.domain,
           caller_id_name: config.displayName || config.extension,
           caller_id_number: config.extension,
         });
@@ -222,6 +223,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       port: VERTO_PORT,
       login: configRef.current.extension,
       password: configRef.current.password,
+      domain: configRef.current.domain,
       caller_id_name: configRef.current.displayName || configRef.current.extension,
       caller_id_number: configRef.current.extension,
     }).then(() => setStatus('registered')).catch((e) => setStatus('error', e?.message));

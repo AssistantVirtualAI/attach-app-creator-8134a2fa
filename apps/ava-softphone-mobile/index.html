@@ -9,7 +9,10 @@
     <title>AVA Softphone · Powered by AVA AI</title>
     <link rel="icon" type="image/png" href="/ava-logo.png" />
     <link rel="apple-touch-icon" href="/ava-logo.png" />
-    <script src="https://cdn.jsdelivr.net/npm/jssip@3.10.0/dist/jssip.min.js"></script>
+    <!-- JsSIP is bundled via npm (jssip package in package.json) — no CDN script needed.
+         The CDN tag was removed to prevent a network request that can fail or
+         time-out inside Capacitor Android WebView (offline / restricted network),
+         causing waitForJsSIP() to time out and SIP registration to never start. -->
   </head>
   <body>
     <div id="root"></div>

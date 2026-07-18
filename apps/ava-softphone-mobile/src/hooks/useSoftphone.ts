@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { createSIPUA, JsSIPUnavailableError, SIPConfig, classifySipFailure, rewriteSdpForFusionPBX, sdpModifier, buildSdpModifier } from '../lib/sip/jssipProvider';
 import { attachRemoteStream } from '../lib/sip/audioOutput';
+import { getAudioConstraints } from '../lib/audioPrefs';
 import {
   appendSipLog, clearSipLog as clearPersistedLog, clearPersistedStatus, loadPersistedError, loadPersistedStatus,
   loadSipLog, MAX_AUTO_RETRIES, PersistedSipError, probeWss, RETRY_BACKOFF_MS, savePersistedError, savePersistedStatus,
@@ -668,10 +669,10 @@ export function useSoftphoneJsSip(
   // HD audio capture constraints — driven by the user's Settings preferences
   // (noise cancellation on/off + mode). Built lazily on each call so toggling
   // in Settings takes effect on the next getUserMedia().
+  // NOTE: require() is NOT available in Capacitor Android WebView (ESM only).
+  // Using a static ESM import instead to avoid ReferenceError on Android.
   const HD_AUDIO_CONSTRAINTS: MediaStreamConstraints = (() => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { getAudioConstraints } = require('../lib/audioPrefs');
       return getAudioConstraints();
     } catch {
       return {

@@ -278,8 +278,6 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     contact_uri: `sip:${config.extension}@${config.domain};transport=${isAndroid ? 'wss' : 'ws'}`,
     register: true,
     session_timers: false,
-    // 120s = standard mobile (RingCentral/8x8) — force le PBX à rafraîchir
-    // la session plus souvent, évitant les déconnexions en arrière-plan
     register_expires: 300,
     connection_recovery_min_interval: 10,
     connection_recovery_max_interval: 60,
@@ -290,20 +288,23 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     user_agent: "AVA Softphone 1.1",
   };
   if (isAndroid) {
-    // Android runs JsSIP over WSS inside the WebView. Do NOT set
-    // `hack_via_tcp` — the actual transport is WSS, and spoofing "TCP" in the
-    // Via header makes FusionPBX try to reply over TCP/5060 instead of the
-    // WSS tunnel, so the REGISTER response never comes back and the UA stays
-    // stuck at `idle`. Only rewrite the Contact IP for NAT traversal.
+    // Android runs JsSIP over WSS inside the WebView. Do NOT set hack_via_tcp.
+    // hack_ip_in_contact: rewrites Contact IP for NAT traversal.
+    // hack_wss_in_transport: preserves WSS transport in Via so FusionPBX
+    //   routes responses back over the WSS tunnel (not TCP/5060).
+    // use_preloaded_route: FreeSwitch/FusionPBX WebSocket profile requires
+    //   the Route header pre-loaded for in-dialog requests (BYE, re-INVITE).
     uaConfig.hack_via_tcp = false;
     uaConfig.hack_ip_in_contact = true;
     uaConfig.hack_wss_in_transport = true;
+    uaConfig.use_preloaded_route = true;
     // eslint-disable-next-line no-console
     console.info('[SIP][android] JsSIP REGISTER config', {
       provider: 'jssip-wss',
       transport: 'WSS',
       hack_via_tcp: false,
       hack_wss_in_transport: true,
+      use_preloaded_route: true,
       contact_uri: uaConfig.contact_uri,
       sockets: wssList,
     });

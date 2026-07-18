@@ -267,7 +267,10 @@ class VertoClient {
         const rec = callID ? this.dialogs.get(callID) : undefined;
         if (rec && params?.sdp) {
           try {
-            await rec.pc.setRemoteDescription({ type: 'answer', sdp: params.sdp });
+            // Filter RED from the remote answer SDP — FreeSWITCH may include RED
+            // in its answer which causes min_bitrate_bps=-1 on Android WebView.
+            const cleanAnswer = filterSdp(params.sdp);
+            await rec.pc.setRemoteDescription({ type: 'answer', sdp: cleanAnswer });
             rec.answered = true;
             this.emit({ type: 'answered', dialog: rec.wrapped });
           } catch (e) {
@@ -281,7 +284,8 @@ class VertoClient {
         const rec = callID ? this.dialogs.get(callID) : undefined;
         if (rec && params?.sdp && !rec.answered) {
           try {
-            await rec.pc.setRemoteDescription({ type: 'answer', sdp: params.sdp });
+            const cleanMedia = filterSdp(params.sdp);
+            await rec.pc.setRemoteDescription({ type: 'answer', sdp: cleanMedia });
             rec.answered = true;
           } catch { /* ignore — early media */ }
         }

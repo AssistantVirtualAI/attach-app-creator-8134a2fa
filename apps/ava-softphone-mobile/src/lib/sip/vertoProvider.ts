@@ -44,6 +44,64 @@ export type VertoEvent =
 type Listener = (e: VertoEvent) => void;
 
 /**
+ * Ensure PCMU (payload 0) and PCMA (payload 8) are present in the SDP offer.
+ * On Android emulator/WebView with AudioContext silent track, the browser may
+ * omit G.711 codecs from the offer. FreeSWITCH rejects such offers with
+ * INCOMPATIBLE_DESTINATION (causeCode 88) when bridging to PSTN trunks.
+ */
+function ensurePcmuInSdp(sdp: string): string {
+  const lines = sdp.split('\r\n');
+  // Find the m=audio line
+  const mAudioIdx = lines.findIndex((l) => l.startsWith('m=audio '));
+  if (mAudioIdx === -1) return sdp;
+
+  const mLine = lines[mAudioIdx];
+  // Check if PCMU (0) and PCMA (8) are already in the m= line
+  const parts = mLine.split(' ');
+  // parts: ['m=audio', port, proto, pt1, pt2, ...]
+  const payloads = parts.slice(3);
+  const hasPcmu = payloads.includes('0');
+  const hasPcma = payloads.includes('8');
+  const hasTelEvent = payloads.includes('101') || payloads.includes('126');
+
+  const toAdd: string[] = [];
+  if (!hasPcmu) toAdd.push('0');
+  if (!hasPcma) toAdd.push('8');
+  if (!hasTelEvent) toAdd.push('101');
+
+  if (toAdd.length === 0) return sdp; // already complete
+
+  // Add payload types to m= line
+  lines[mAudioIdx] = [...parts, ...toAdd].join(' ');
+
+  // Find insertion point: after the last a=rtpmap line in the audio section
+  let insertAfter = mAudioIdx;
+  for (let i = mAudioIdx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith('m=')) break; // next media section
+    if (lines[i].startsWith('a=rtpmap:') || lines[i].startsWith('a=fmtp:')) {
+      insertAfter = i;
+    }
+  }
+
+  const newLines: string[] = [];
+  if (!hasPcmu) {
+    newLines.push('a=rtpmap:0 PCMU/8000');
+    newLines.push('a=rtcp-fb:0 transport-cc');
+  }
+  if (!hasPcma) {
+    newLines.push('a=rtpmap:8 PCMA/8000');
+    newLines.push('a=rtcp-fb:8 transport-cc');
+  }
+  if (!hasTelEvent) {
+    newLines.push('a=rtpmap:101 telephone-event/8000');
+    newLines.push('a=fmtp:101 0-16');
+  }
+
+  lines.splice(insertAfter + 1, 0, ...newLines);
+  return lines.join('\r\n');
+}
+
+/**
  * Remove RED codec and fix invalid bitrate lines from SDP.
  * FreeSWITCH sometimes includes RED (redundant audio) which WebRTC
  * on Android rejects with min_bitrate_bps=-1 / max_bitrate_bps=-1.
@@ -452,8 +510,16 @@ class VertoClient {
     // Filter RED codec from the local SDP before sending to FreeSWITCH.
     // RED causes WebRTC audio_send_stream bitrate=-1 on Android WebView.
     const rawSdp = pc.localDescription?.sdp || '';
-    const cleanSdp = filterSdp(rawSdp);
-    console.log('[verto][DIAG] OFFER SDP (first 600 chars):', cleanSdp.substring(0, 600));
+    let cleanSdp = filterSdp(rawSdp);
+
+    // INCOMPATIBLE_DESTINATION fix: ensure PCMU (payload 0) and PCMA (payload 8)
+    // are present in the SDP offer. On Android emulator with AudioContext silent
+    // track, the RTCPeerConnection may omit PCMU/PCMA — FreeSWITCH then rejects
+    // the call with causeCode 88 (INCOMPATIBLE_DESTINATION) because it requires
+    // at least one G.711 codec for PSTN bridging.
+    cleanSdp = ensurePcmuInSdp(cleanSdp);
+
+    console.log('[verto][DIAG] FULL OFFER SDP:', cleanSdp);
     console.log('[verto][DIAG] Sending verto.invite to:', destination, 'callID:', callID);
 
     const dialogParams = {
@@ -468,6 +534,7 @@ class VertoClient {
       login: this.cfg.login.includes('@') ? this.cfg.login : `${this.cfg.login}@${this.cfg.domain || this.cfg.host}`,
     };
 
+    console.log('[verto][DIAG] dialogParams:', JSON.stringify(dialogParams));
     try {
       await this.rpc('verto.invite', { sdp: cleanSdp, dialogParams });
     } catch (e: any) {

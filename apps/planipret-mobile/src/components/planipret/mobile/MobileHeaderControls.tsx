@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { Bell, Globe, Moon, Sun } from "lucide-react";
+import { Bell, Globe, Moon, Sun, Settings as SettingsIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import { supabase } from "@/integrations/supabase/client";
-import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
 import MobileProfileSheet from "./MobileProfileSheet";
 
 const STATUS_COLOR: Record<string, string> = {

@@ -852,20 +852,28 @@ export function useSoftphoneJsSip(
 // ---------------------------------------------------------------------------
 import { NATIVE_SIP_ENABLED, startAndroidSipService, stopAndroidSipService } from '../lib/sip/nativeSipProvider';
 import { useSoftphoneNative } from './useSoftphoneNative';
+import { useSoftphoneVerto } from './useSoftphoneVerto';
 import { notifySipDispatcherLoaded } from '../lib/sip/bootSipGuard';
 
 export function useSoftphone(
   config: SIPConfig | null,
   opts: { jsSipTimeoutMs?: number } = {},
 ): UseSoftphoneReturn {
-  // Notify the boot guard that the dispatcher hook has mounted.
-  // This replaces the fragile console-sniffing approach and eliminates all
-  // timing races (module evaluation runs before the guard patches console).
   notifySipDispatcherLoaded();
+  const platform = Capacitor.getPlatform();
   if (NATIVE_SIP_ENABLED) {
+    // iOS → native PJSIP
     // eslint-disable-next-line react-hooks/rules-of-hooks
     return useSoftphoneNative(config);
   }
+  if (platform === 'android') {
+    // Android → FreeSWITCH Verto (port 8082). No TURN needed — media flows
+    // through FreeSWITCH server-side, bypassing Bell Canada's TURN DNS block.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    return useSoftphoneVerto(config);
+  }
+  // Web / dev → JsSIP over WSS.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   return useSoftphoneJsSip(config, opts);
 }
+

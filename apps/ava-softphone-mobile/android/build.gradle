@@ -19,6 +19,13 @@ allprojects {
         mavenCentral()
         maven { url "https://jitpack.io" }
     }
+    // Force a newer Material version to avoid AGP 8.2.1 transforms-3 cache
+    // corruption with material-1.10.0 (missing aar-metadata.properties).
+    configurations.all {
+        resolutionStrategy {
+            force 'com.google.android.material:material:1.12.0'
+        }
+    }
 }
 
 subprojects {

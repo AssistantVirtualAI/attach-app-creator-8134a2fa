@@ -1,110 +1,98 @@
-# QA Plan — Planiprêt Mobile : anti-zoom & safe-area headers
+# Switch Android to FreeSWITCH Verto (port 8082)
 
-Objectif : garantir que sur iOS et Android, **aucune interaction ne provoque de zoom (in/out)** et que **chaque page respecte les safe-areas** (notch iOS, status bar Android) sans que le header ne passe sous la barre système.
+## Goal
+On Android, replace JsSIP/WSS + TURN with FreeSWITCH Verto over WSS on `pbxnode.lemtel.tel:8082`. iOS keeps using the native PJSIP plugin. No changes to iOS native code.
 
----
+## Why
+- Verto uses FreeSWITCH's server-side media bridge, so no TURN is needed. This bypasses the Bell Canada TURN DNS block that currently causes `ice=new` timeouts on Android.
+- Port 8082 WSS is already open on `pbxnode.lemtel.tel`.
 
-## 1. Vérifications globales (fondations)
+## Scope
+Only `apps/ava-softphone-mobile`. No changes to:
+- `CapacitorSip.swift`, `CallKitManager.swift`, `Main.storyboard`, `project.pbxproj`
+- iOS runtime path
+- Planiprêt mobile app
 
-Avant de tester page par page, valider les fondations partagées :
+## Implementation
 
-### 1.1 Anti-zoom
-- `index.html` → `<meta viewport>` doit contenir : `width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content` ✅ (déjà présent).
-- CSS global : `input, textarea, select { font-size: 16px !important; }` ✅ (déjà présent, empêche le zoom iOS au focus).
-- `html/body` : `overflow: hidden`, `touch-action: manipulation`, `overscroll-behavior: none` ✅.
-- Ajouter un **listener global** dans `src/index.tsx` qui bloque `gesturestart` (iOS pinch) et `dblclick` sur les zones non-texte, pour éliminer le zoom résiduel WebView.
+### 1. Load the Verto client
+The `jQuery.verto` client (bundled with FreeSWITCH at `/verto/js/verto.js`) is the canonical Verto library. `@fusionpbx/verto` on npm does not exist. Two options:
 
-### 1.2 Safe-area
-- Le hook `useSafeAreaInsets()` existe déjà.
-- Créer/valider un composant `<MobileScreen>` wrapper qui applique automatiquement :
-  - `paddingTop: max(env(safe-area-inset-top), 12px)` sur le header
-  - `paddingBottom: env(safe-area-inset-bottom)` sur la bottom-nav
-  - `paddingLeft/Right: env(safe-area-inset-left/right)` (mode paysage)
-- Chaque page doit être encapsulée dans ce wrapper (ou son header doit lire les insets directement).
+- **A. Script tag in `apps/ava-softphone-mobile/index.html`** loading jQuery from jsDelivr and `verto.js` from the PBX. Simple, matches the snippet you gave.
+- **B. Vendor `jquery` + a local copy of `verto.js`/`jquery.jsonrpcclient.js`** into `src/vendor/verto/` and import them from `vertoProvider.ts`. Cleaner for offline/Capacitor, avoids runtime network dependency on the PBX for the JS file itself.
 
----
+Recommended: **B** for a Capacitor native app (the WebView shouldn't need to fetch JS from the PBX at boot). I'll vendor the files.
 
-## 2. Checklist par page
+### 2. New provider: `src/lib/sip/vertoProvider.ts`
+Wraps `jQuery.verto` with:
+- `initVerto(config)` — connect + register, resolves on `onWSLogin`, rejects on `onWSClose` before login.
+- `vertoCall(number, callerName)` — outbound call, returns dialog handle.
+- `vertoHangup(dialogId?)` — hang up a specific dialog or all.
+- `vertoAnswer(dialogId)`, `vertoSendDTMF(dialogId, digit)`, `vertoMute/Unmute(dialogId)`, `vertoHold/Unhold(dialogId)`.
+- Emits events (`registered`, `unregistered`, `incoming`, `progress`, `answered`, `hangup`, `mediaError`) so the React hook can subscribe.
+- `iceServers: false` (Verto handles media server-side).
 
-Pour **chaque page ci-dessous**, exécuter les 6 tests :
+### 3. New hook: `src/hooks/useSoftphoneVerto.ts`
+Implements the same `UseSoftphoneReturn` surface currently exposed by `useSoftphoneJsSip`/`useSoftphoneNative`:
+`status, registered, calls, activeCallId, call, hangup, answer, mute, unmute, hold, unhold, sendDTMF, setStatus, reconnect, lastPersistedError, sipLog, clearSipLog, clearSipState, retryAttempt, nextRetryAt, retryLimitReached, quality, audioProfile, setAudioProfile, offeredCodecs, negotiatedCodec`.
 
-| # | Test | Critère de passage |
-|---|------|--------------------|
-| T1 | Ouvrir la page sur iPhone (notch) | Header entièrement visible sous l'encoche, jamais dessous |
-| T2 | Ouvrir sur Android (status bar) | Header commence après la status bar, pas de recouvrement |
-| T3 | Double-tap sur zone vide | Aucun zoom |
-| T4 | Pinch-to-zoom | Aucun zoom |
-| T5 | Focus sur chaque `<input>` | Pas de zoom iOS (font ≥ 16px) |
-| T6 | Rotation portrait/paysage rapide | Header et bottom-nav restent dans les safe-areas |
+Fields that don't map to Verto (offered/negotiated codec details, ICE quality stats) get sensible defaults; call quality is derived from the underlying `RTCPeerConnection` Verto exposes via `dialog.rtc.getPeer()`.
 
-### Pages à couvrir (`src/pages/planipret/mobile/`)
+### 4. Dispatcher: `src/hooks/useSoftphone.ts`
+Update the public `useSoftphone` to a 3-way dispatch:
 
-1. **MHome.tsx** — accueil KPI
-2. **MCalls.tsx** — journal d'appels + dial pad (inputs numériques critiques)
-3. **MMessages.tsx** — SMS/chat (champ de saisie critique)
-4. **MVoicemail.tsx** — messagerie vocale (lecteur audio)
-5. **MContacts.tsx** — liste + recherche (search input)
-6. **MPipeline.tsx** — pipeline courtier (scroll horizontal cartes)
-7. **MSearch.tsx** — barre de recherche globale
-8. **MStats.tsx** — graphiques (tester pinch sur charts)
-9. **MMore.tsx** — menu paramètres (liens vers sous-pages)
-10. **MAvaChat.tsx** — chat AVA (textarea multi-lignes)
-11. **MAvaNotifications.tsx** — liste notifs
-12. **MKpiAudit.tsx** — audit KPI
-13. **MExtensionSync.tsx**
-14. **MDiagnostics.tsx** / **MSipDebug.tsx** / **MMs365Diagnostics.tsx** / **MStyleDiagnostics.tsx**
-15. Sheets/modales : `MobileProfileSheet`, `VoiceSettingsSheet`, `MobileHeaderControls` (pastilles langue/thème)
-
----
-
-## 3. Livrables
-
-1. **Composant `MobileScreen`** wrapper unique appliquant safe-areas + anti-zoom listeners.
-2. **Refactor headers** de chaque page pour utiliser le wrapper (0 header codé en dur avec `top: 0`).
-3. **Page de QA in-app** `/mplanipret/qa/layout` listant les 15 pages avec :
-   - Bouton "Ouvrir"
-   - Overlay debug affichant les valeurs `env(safe-area-inset-*)` en temps réel
-   - Checklist cochable (T1-T6) sauvegardée en `localStorage`
-4. **Test Playwright** (`tests/mplanipret-layout.spec.ts`) simulant iPhone 15 Pro et Pixel 8 :
-   - Vérifie qu'aucun `<input>` n'a `font-size < 16px`
-   - Vérifie que `document.documentElement.scrollWidth === innerWidth` (pas de débordement horizontal)
-   - Vérifie que le header a `padding-top >= safe-area-inset-top`
-
----
-
-## 4. Détails techniques
-
-**Anti-zoom listener** (à ajouter dans `src/index.tsx`) :
-```ts
-document.addEventListener('gesturestart', (e) => e.preventDefault());
-let lastTouch = 0;
-document.addEventListener('touchend', (e) => {
-  const now = Date.now();
-  if (now - lastTouch <= 300) e.preventDefault();
-  lastTouch = now;
-}, { passive: false });
+```text
+Capacitor.getPlatform() === 'ios' + NATIVE_SIP_ENABLED → useSoftphoneNative (PJSIP)
+Capacitor.getPlatform() === 'android'                  → useSoftphoneVerto
+otherwise (web / dev)                                  → useSoftphoneJsSip
 ```
 
-**MobileScreen wrapper** :
-```tsx
-export function MobileScreen({ header, children, bottomNav }) {
-  const s = useSafeAreaInsets();
-  return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ paddingTop: Math.max(s.top, 12), paddingLeft: s.left, paddingRight: s.right }}>
-        {header}
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', paddingLeft: s.left, paddingRight: s.right }}>
-        {children}
-      </div>
-      {bottomNav && (
-        <div style={{ paddingBottom: s.bottom, paddingLeft: s.left, paddingRight: s.right }}>
-          {bottomNav}
-        </div>
-      )}
-    </div>
-  );
-}
+Android no longer touches JsSIP or the ICE/TURN path.
+
+### 5. Config plumbing (`src/MobileApp.tsx`)
+Add Android-specific SIP endpoint config:
+
+```text
+VERTO_HOST = 'pbxnode.lemtel.tel'
+VERTO_PORT = 8082
 ```
 
-**Contrainte respectée** : aucune modification des routes `/mplanipret`, de `MplanipretGuard`, de `App.tsx` ou d'`OrganizationContext` (mémoire projet).
+Pass `{ host, port, login: extension, password: sipPassword, caller_id_name, caller_id_number }` from `creds` into `useSoftphone` on Android. Keep the existing `SIPConfig` path for iOS/web unchanged.
+
+### 6. TURN fetch skip on Android
+In `src/lib/sip/iceServers.ts` / `rtcConfig.ts`, short-circuit `getIceServers()` on Android so the app no longer calls `get-turn-credentials`. Removes the DNS-blocked path entirely.
+
+### 7. SIP debug panel
+`SipDebugPanel.tsx` currently reads JsSIP events. Add Verto events to the same ring buffer so the debug screen still shows `connecting → registered → call → hangup` transitions on Android.
+
+### 8. Tests
+- Add `apps/ava-softphone-mobile/src/lib/sip/vertoProvider.test.ts` covering: connect success, connect failure, outbound call state transitions, DTMF, hangup.
+- Update `useSoftphone`-level tests to cover the Android → Verto dispatch branch.
+
+### 9. Native permissions
+No AndroidManifest changes required — mic permission is already declared. `WakeLock`/`WifiLock` foreground service (`SipConnectionService.kt`) is kept: Verto still runs a long-lived WebSocket that needs to survive doze.
+
+## Files touched
+- `apps/ava-softphone-mobile/src/lib/sip/vertoProvider.ts` (new)
+- `apps/ava-softphone-mobile/src/hooks/useSoftphoneVerto.ts` (new)
+- `apps/ava-softphone-mobile/src/hooks/useSoftphone.ts`
+- `apps/ava-softphone-mobile/src/MobileApp.tsx`
+- `apps/ava-softphone-mobile/src/lib/sip/iceServers.ts`
+- `apps/ava-softphone-mobile/src/lib/sip/rtcConfig.ts`
+- `apps/ava-softphone-mobile/src/components/SipDebugPanel.tsx`
+- `apps/ava-softphone-mobile/src/vendor/verto/{jquery.min.js, jquery.jsonrpcclient.js, verto.js}` (new, vendored)
+- `apps/ava-softphone-mobile/src/lib/sip/vertoProvider.test.ts` (new)
+
+## After merge
+User runs on their machine:
+```text
+cd apps/ava-softphone-mobile
+npm run build
+npx cap sync android
+npx cap run android
+```
+
+## Open questions
+1. **Vendor or CDN for `verto.js`?** I recommend vendoring so the Capacitor app has no boot-time dependency on the PBX for its own JS. Confirm OK.
+2. **Password source.** Verto needs the raw SIP password. Confirm `creds.sipPassword` (or whichever field currently feeds JsSIP `password`) is the right one to reuse — no separate Verto password expected.
+3. **Inbound calls.** Should Android continue to accept push-initiated inbound calls via the existing FCM/push path, with Verto answering when the socket is live? (Assumption: yes, same flow, Verto just replaces the media layer.)

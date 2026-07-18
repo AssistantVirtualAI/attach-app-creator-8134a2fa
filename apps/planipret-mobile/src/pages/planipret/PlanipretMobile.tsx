@@ -888,33 +888,23 @@ export default function PlanipretMobile() {
         >
 
 
-          {/* AVA icon — left */}
-          <div className="flex items-center gap-1.5">
+          {/* Left group: AVA + Planiprêt logos side by side */}
+          <div className="flex items-center gap-2">
             <AvaBadge />
             <span className="flex items-center gap-1.5">
               <span className="pp-live-dot" />
               <span style={{ fontSize: 9, color: "var(--pp-success)", fontWeight: 700, letterSpacing: "0.05em" }}>REST</span>
             </span>
+            <span aria-label="Planiprêt" style={{
+              width: 28, height: 28, borderRadius: 8, overflow: "hidden",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              background: "#fff", border: "1px solid var(--pp-bg-border-2)",
+            }}>
+              <img src={planipretLogoAsset.url} alt="Planiprêt" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            </span>
           </div>
 
-          {/* Settings button — between AVA (left) and Planiprêt (center) */}
-          <button
-            type="button"
-            onClick={() => navigate("/mplanipret/more")}
-            aria-label="Paramètres"
-            className="ml-3 flex items-center justify-center active:scale-95 transition"
-            style={{
-              width: 32, height: 32, borderRadius: 10,
-              background: "var(--pp-bg-elevated)",
-              border: "1px solid var(--pp-bg-border-2)",
-              color: "var(--pp-text-secondary)",
-            }}
-          >
-            <SettingsIcon className="w-4 h-4" />
-          </button>
-
-
-          {/* Lang + theme + profile — right */}
+          {/* Right group: bell + settings + lang + theme + profile */}
           <MobileHeaderControls profile={profile} reloadProfile={loadProfile} />
 
         </header>

@@ -155,16 +155,22 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     if (!cfg?.extension) return false;
     try {
       // Pre-flight mic grant (Android WebView requires an explicit gesture-linked grant).
-      navigator.mediaDevices?.getUserMedia?.({ audio: true }).then((s) => {
+      navigator.mediaDevices?.getUserMedia?.({ audio: true }).then(async (s) => {
         localStreamRef.current = s;
-        const d = getVertoClient().call(number, cfg.displayName || cfg.extension, cfg.extension);
-        if (d) {
-          activeDialogRef.current = d;
-          setActiveCallNumber(number);
-          setCallState('ringing');
-          log('verto.call.out', { to: number, callID: d.callID });
-        } else {
-          setSipError('Verto refused to place the call');
+        try {
+          const d = await getVertoClient().call(number, cfg.displayName || cfg.extension, cfg.extension);
+          if (d) {
+            activeDialogRef.current = d;
+            setActiveCallNumber(number);
+            setCallState('ringing');
+            log('verto.call.out', { to: number, callID: d.callID });
+          } else {
+            setSipError('Verto refused to place the call');
+          }
+        } catch (err: any) {
+          const msg = err?.message || 'Call failed';
+          log('verto.call.error', { message: msg });
+          setSipError(msg);
         }
       }).catch((err) => {
         const msg = err?.message || 'Microphone permission denied';

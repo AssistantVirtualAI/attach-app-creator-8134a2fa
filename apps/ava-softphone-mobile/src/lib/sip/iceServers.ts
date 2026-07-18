@@ -9,20 +9,43 @@ const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo';
 
 export const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
   {
-    urls: 'turn:global.relay.metered.ca:443?transport=tcp',
-    username: 'e499486ca9b7d5a03a01e915',
-    credential: 'uMFpNAFBoFFUHOdF',
+    urls: 'turn:172.105.5.32:80',
+    username: '3be600b667e7e7552e76d2a2',
+    credential: 'iSsrmGAndAETBKQO',
   },
   {
-    urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-    username: 'e499486ca9b7d5a03a01e915',
-    credential: 'uMFpNAFBoFFUHOdF',
+    urls: 'turn:172.105.5.32:80?transport=tcp',
+    username: '3be600b667e7e7552e76d2a2',
+    credential: 'iSsrmGAndAETBKQO',
+  },
+  {
+    urls: 'turn:172.105.5.32:443',
+    username: '3be600b667e7e7552e76d2a2',
+    credential: 'iSsrmGAndAETBKQO',
+  },
+  {
+    urls: 'turns:172.105.5.32:443?transport=tcp',
+    username: '3be600b667e7e7552e76d2a2',
+    credential: 'iSsrmGAndAETBKQO',
   },
 ];
 
 let cache: { at: number; servers: RTCIceServer[] } | null = null;
 const TTL_MS = 5 * 60 * 1000; // 5 min
+
+// Metered TURN IP — bypasses DNS issues on Bell/cellular networks
+const METERED_IP = '172.105.5.32';
+
+function resolveHostToIp(servers: RTCIceServer[]): RTCIceServer[] {
+  return servers.map((s) => ({
+    ...s,
+    urls: typeof s.urls === 'string'
+      ? s.urls.replace('global.relay.metered.ca', METERED_IP)
+      : (s.urls as string[]).map((u) => u.replace('global.relay.metered.ca', METERED_IP)),
+  }));
+}
 
 export async function fetchIceServers(): Promise<RTCIceServer[]> {
   // Android now uses FreeSWITCH Verto (media proxied server-side), so no
@@ -45,8 +68,10 @@ export async function fetchIceServers(): Promise<RTCIceServer[]> {
     if (res.ok) {
       const servers = (await res.json()) as RTCIceServer[];
       if (Array.isArray(servers) && servers.length) {
-        cache = { at: Date.now(), servers };
-        return servers;
+        // Replace hostnames with direct IP to bypass Bell DNS issues
+        const resolved = resolveHostToIp(servers);
+        cache = { at: Date.now(), servers: resolved };
+        return resolved;
       }
     }
   } catch (e) {

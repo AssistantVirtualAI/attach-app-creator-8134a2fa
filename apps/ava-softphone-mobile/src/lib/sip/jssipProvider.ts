@@ -286,7 +286,7 @@ export async function createSIPUA(config: SIPConfig, timeoutMs = 8000) {
     // Keep the WSS tunnel alive on Android carriers/proxies that close quiet
     // WebSockets with an empty close code/reason after a few seconds.
     ws_ping_pong: true,
-    ws_ping_pong_interval: 20,
+    ws_ping_pong_interval: 10,
     user_agent: "AVA Softphone 1.1",
   };
   if (isAndroid) {

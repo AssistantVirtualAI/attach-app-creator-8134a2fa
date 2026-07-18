@@ -519,7 +519,12 @@ class VertoClient {
     // at least one G.711 codec for PSTN bridging.
     cleanSdp = ensurePcmuInSdp(cleanSdp);
 
-    console.log('[verto][DIAG] FULL OFFER SDP:', cleanSdp);
+    // Log codec summary (full SDP is too long for logcat)
+    const sdpLines = cleanSdp.split('\r\n');
+    const mAudioLine = sdpLines.find((l) => l.startsWith('m=audio')) || 'NOT FOUND';
+    const rtpmapLines = sdpLines.filter((l) => l.startsWith('a=rtpmap:')).join(' | ');
+    console.log('[verto][DIAG] m=audio line:', mAudioLine);
+    console.log('[verto][DIAG] codecs offered:', rtpmapLines);
     console.log('[verto][DIAG] Sending verto.invite to:', destination, 'callID:', callID);
 
     const dialogParams = {

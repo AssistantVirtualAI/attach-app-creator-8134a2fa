@@ -265,16 +265,21 @@ class VertoClient {
       case 'verto.answer': {
         ack();
         const rec = callID ? this.dialogs.get(callID) : undefined;
+        console.log('[verto][DIAG] verto.answer received, callID:', callID, 'rec found:', !!rec, 'sdp length:', params?.sdp?.length);
+        if (params?.sdp) {
+          console.log('[verto][DIAG] RAW ANSWER SDP (first 800 chars):', params.sdp.substring(0, 800));
+        }
         if (rec && params?.sdp) {
           try {
-            // Filter RED from the remote answer SDP — FreeSWITCH may include RED
-            // in its answer which causes min_bitrate_bps=-1 on Android WebView.
             const cleanAnswer = filterSdp(params.sdp);
+            console.log('[verto][DIAG] CLEAN ANSWER SDP (first 800 chars):', cleanAnswer.substring(0, 800));
+            console.log('[verto][DIAG] pc.signalingState before setRemoteDescription:', rec.pc.signalingState);
             await rec.pc.setRemoteDescription({ type: 'answer', sdp: cleanAnswer });
+            console.log('[verto][DIAG] setRemoteDescription(answer) SUCCESS, iceConnectionState:', rec.pc.iceConnectionState);
             rec.answered = true;
             this.emit({ type: 'answered', dialog: rec.wrapped });
           } catch (e) {
-            console.warn('[verto] setRemoteDescription(answer) failed', e);
+            console.error('[verto][DIAG] setRemoteDescription(answer) FAILED:', e);
           }
         }
         return;
@@ -282,12 +287,15 @@ class VertoClient {
       case 'verto.media': {
         ack();
         const rec = callID ? this.dialogs.get(callID) : undefined;
+        console.log('[verto][DIAG] verto.media received, callID:', callID, 'rec found:', !!rec);
         if (rec && params?.sdp && !rec.answered) {
           try {
             const cleanMedia = filterSdp(params.sdp);
+            console.log('[verto][DIAG] MEDIA SDP (first 400 chars):', cleanMedia.substring(0, 400));
             await rec.pc.setRemoteDescription({ type: 'answer', sdp: cleanMedia });
+            console.log('[verto][DIAG] verto.media setRemoteDescription SUCCESS');
             rec.answered = true;
-          } catch { /* ignore — early media */ }
+          } catch (e) { console.warn('[verto][DIAG] verto.media setRemoteDescription FAILED:', e); }
         }
         if (rec) this.emit({ type: 'progress', dialog: rec.wrapped });
         return;
@@ -295,7 +303,9 @@ class VertoClient {
       case 'verto.bye': {
         ack();
         const rec = callID ? this.dialogs.get(callID) : undefined;
+        console.error('[verto][DIAG] verto.bye received! callID:', callID, 'cause:', params?.cause, 'causeCode:', params?.causeCode, 'full params:', JSON.stringify(params));
         if (rec) {
+          console.log('[verto][DIAG] ICE state at hangup:', rec.pc.iceConnectionState, 'signaling:', rec.pc.signalingState);
           try { rec.pc.close(); } catch { /* ignore */ }
           this.dialogs.delete(rec.callID);
           this.emit({ type: 'hangup', dialog: rec.wrapped, cause: params?.cause });
@@ -402,6 +412,15 @@ class VertoClient {
       const rec = this.dialogs.get(callID);
       if (rec) this.emit({ type: 'media', dialog: rec.wrapped, stream: remoteStream });
     };
+    pc.oniceconnectionstatechange = () => {
+      console.log('[verto][DIAG] ICE connection state:', pc.iceConnectionState, 'signaling:', pc.signalingState);
+    };
+    pc.onicegatheringstatechange = () => {
+      console.log('[verto][DIAG] ICE gathering state:', pc.iceGatheringState);
+    };
+    pc.onsignalingstatechange = () => {
+      console.log('[verto][DIAG] Signaling state:', pc.signalingState);
+    };
 
     // Attempt to acquire the microphone. On emulators or when permission
     // is denied, fall back to a silent audio track so the call still
@@ -434,6 +453,8 @@ class VertoClient {
     // RED causes WebRTC audio_send_stream bitrate=-1 on Android WebView.
     const rawSdp = pc.localDescription?.sdp || '';
     const cleanSdp = filterSdp(rawSdp);
+    console.log('[verto][DIAG] OFFER SDP (first 600 chars):', cleanSdp.substring(0, 600));
+    console.log('[verto][DIAG] Sending verto.invite to:', destination, 'callID:', callID);
 
     const dialogParams = {
       callID,

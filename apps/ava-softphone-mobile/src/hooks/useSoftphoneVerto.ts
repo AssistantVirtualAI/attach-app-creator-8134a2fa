@@ -18,6 +18,7 @@ import { EMPTY_QUALITY, CallQuality } from '../lib/sip/callQuality';
 import { AudioProfile, loadAudioProfile, saveAudioProfile, PROFILE_OPUS } from '../lib/sip/audioProfile';
 import { attachRemoteStream } from '../lib/sip/audioOutput';
 import { initVerto, getVertoClient, VertoDialog, VertoEvent } from '../lib/sip/vertoProvider';
+import { normalizePhone } from '../lib/phoneNormalize';
 
 const VERTO_HOST = 'pbxnode.lemtel.tel';
 const VERTO_PORT = 8082;
@@ -158,11 +159,19 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const call = useCallback((number: string): boolean => {
     const cfg = configRef.current;
     if (!cfg?.extension) return false;
+    // Normalize the destination to E.164 format (+1XXXXXXXXXX for NANP).
+    // FreeSWITCH Verto requires E.164 to route outbound PSTN calls correctly.
+    // Without normalization, a 10-digit number like "5142163359" is sent as-is
+    // and FreeSWITCH returns INCOMPATIBLE_DESTINATION (causeCode 88).
+    // iOS uses the native PJSIP plugin which normalizes internally; Android
+    // WebView/Verto must do it here.
+    const normalized = normalizePhone(number) || number;
+    console.log('[verto][DIAG] call() normalizing:', number, '->', normalized);
     // vertoProvider.call() handles getUserMedia internally with a silent-track
     // fallback for emulators. A pre-flight getUserMedia here would cause a
     // double mic acquisition which corrupts the WebRTC audio send stream
     // (min_bitrate_bps=-1 / max_bitrate_bps=-1) and causes immediate hang-up.
-    getVertoClient().call(number, cfg.displayName || cfg.extension, cfg.extension)
+    getVertoClient().call(normalized, cfg.displayName || cfg.extension, cfg.extension)
       .then((d) => {
         if (d) {
           activeDialogRef.current = d;

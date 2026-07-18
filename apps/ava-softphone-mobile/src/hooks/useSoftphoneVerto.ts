@@ -63,12 +63,14 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   // ── Connect / register lifecycle ────────────────────────────────────────
   useEffect(() => {
     if (!config?.extension || !config?.password) {
+      console.log('[Verto] no config — staying idle');
       setStatus('idle');
       return;
     }
 
     let cancelled = false;
     setStatus('connecting');
+    console.log('[Verto] connecting to', VERTO_HOST + ':' + VERTO_PORT, 'ext=', config.extension);
     log('verto.connecting', { host: VERTO_HOST, port: VERTO_PORT, ext: config.extension });
 
     (async () => {
@@ -82,12 +84,14 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
           caller_id_number: config.extension,
         });
         if (cancelled) return;
+        console.log('[Verto] registered ✅ ext=', config.extension);
         log('verto.registered');
         setStatus('registered');
         setRetryAttempt(0);
       } catch (e: any) {
         if (cancelled) return;
         const msg = e?.message || 'Verto connection failed';
+        console.error('[Verto] connection error:', msg);
         log('verto.error', { message: msg });
         setStatus('error', msg);
       }

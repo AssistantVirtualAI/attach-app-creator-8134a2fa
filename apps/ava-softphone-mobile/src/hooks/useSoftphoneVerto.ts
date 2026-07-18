@@ -158,35 +158,27 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const call = useCallback((number: string): boolean => {
     const cfg = configRef.current;
     if (!cfg?.extension) return false;
-    try {
-      // Pre-flight mic grant (Android WebView requires an explicit gesture-linked grant).
-      navigator.mediaDevices?.getUserMedia?.({ audio: true }).then(async (s) => {
-        localStreamRef.current = s;
-        try {
-          const d = await getVertoClient().call(number, cfg.displayName || cfg.extension, cfg.extension);
-          if (d) {
-            activeDialogRef.current = d;
-            setActiveCallNumber(number);
-            setCallState('ringing');
-            log('verto.call.out', { to: number, callID: d.callID });
-          } else {
-            setSipError('Verto refused to place the call');
-          }
-        } catch (err: any) {
-          const msg = err?.message || 'Call failed';
-          log('verto.call.error', { message: msg });
-          setSipError(msg);
+    // vertoProvider.call() handles getUserMedia internally with a silent-track
+    // fallback for emulators. A pre-flight getUserMedia here would cause a
+    // double mic acquisition which corrupts the WebRTC audio send stream
+    // (min_bitrate_bps=-1 / max_bitrate_bps=-1) and causes immediate hang-up.
+    getVertoClient().call(number, cfg.displayName || cfg.extension, cfg.extension)
+      .then((d) => {
+        if (d) {
+          activeDialogRef.current = d;
+          setActiveCallNumber(number);
+          setCallState('ringing');
+          log('verto.call.out', { to: number, callID: d.callID });
+        } else {
+          setSipError('Verto refused to place the call');
         }
-      }).catch((err) => {
-        const msg = err?.message || 'Microphone permission denied';
-        log('verto.mic.denied', { message: msg });
+      })
+      .catch((err: any) => {
+        const msg = err?.message || 'Call failed';
+        log('verto.call.error', { message: msg });
         setSipError(msg);
       });
-      return true;
-    } catch (e: any) {
-      setSipError(e?.message || 'Call failed');
-      return false;
-    }
+    return true;
   }, [log]);
 
   const hangup = useCallback(() => {

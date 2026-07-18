@@ -269,8 +269,9 @@ function AuthenticatedShell({
       }
     : null;
 
+  const _sipProvider = Capacitor.getPlatform() === 'ios' ? 'native-pjsip' : Capacitor.getPlatform() === 'android' ? 'verto-8082' : 'jssip-wss';
   console.log('[SIP] sipConfig:', sipConfig
-    ? `ext=${sipConfig.extension} domain=${sipConfig.domain} wss=${sipConfig.wssUrl} provider=${Capacitor.getPlatform() === 'ios' ? 'native-pjsip' : 'jssip-wss'}`
+    ? `ext=${sipConfig.extension} domain=${sipConfig.domain} wss=${sipConfig.wssUrl} provider=${_sipProvider}`
     : 'NULL - missing: ' + [
         !creds.extension && 'extension',
         !sipPassword && 'password',

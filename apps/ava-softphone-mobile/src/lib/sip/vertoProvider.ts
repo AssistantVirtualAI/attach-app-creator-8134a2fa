@@ -526,6 +526,8 @@ class VertoClient {
     console.log('[verto][DIAG] m=audio line:', mAudioLine);
     console.log('[verto][DIAG] codecs offered:', rtpmapLines);
     console.log('[verto][DIAG] Sending verto.invite to:', destination, 'callID:', callID);
+    // Store full SDP in localStorage for retrieval
+    try { localStorage.setItem('verto.last.offer.sdp', cleanSdp); } catch { /* ignore */ }
 
     const dialogParams = {
       callID,

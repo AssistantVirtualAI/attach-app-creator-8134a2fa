@@ -25,6 +25,15 @@ let cache: { at: number; servers: RTCIceServer[] } | null = null;
 const TTL_MS = 5 * 60 * 1000; // 5 min
 
 export async function fetchIceServers(): Promise<RTCIceServer[]> {
+  // Android now uses FreeSWITCH Verto (media proxied server-side), so no
+  // TURN/STUN lookup is required. Bell Canada blocks TURN DNS resolution,
+  // which used to fail the whole call with ice=new timeouts — this skip
+  // removes that failure path entirely.
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    if (Capacitor.getPlatform() === 'android') return [];
+  } catch { /* not in a Capacitor context — fall through */ }
+
   if (cache && Date.now() - cache.at < TTL_MS) return cache.servers;
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/get-turn-credentials`, {

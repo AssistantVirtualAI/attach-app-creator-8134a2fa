@@ -49,10 +49,14 @@ export default function DialerScreen({ sp, haptic, preferClickToCall: _preferCli
       : `🔴 SIP indisponible${sipError ? ` (${sipError})` : ''}`;
   const startCall = async () => {
     if (!num || dialing || !isRegistered) return;
-    // Hard guard: OS-level microphone state must be granted before we let
-    // the SIP stack activate AVAudioSession / AudioTrack. Anything else and
-    // we surface the neutral BlockedScreen with an Open Settings shortcut.
-    if (micStatus !== 'granted') {
+    // On Android + Verto, calling getUserMedia here (via requestMicrophonePermission)
+    // opens a mic stream that conflicts with vertoProvider's own getUserMedia call,
+    // causing min_bitrate_bps=-1 and immediate call hang-up.
+    // vertoProvider.call() handles mic acquisition internally with a silent-track
+    // fallback — no pre-flight needed on Android.
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+      // Skip mic pre-check on Android — Verto handles it.
+    } else if (micStatus !== 'granted') {
       if (micStatus === 'unknown' || micStatus === 'denied') {
         const next = await requestMicrophonePermission();
         if (next !== 'granted') { setShowMicBlocked(true); return; }

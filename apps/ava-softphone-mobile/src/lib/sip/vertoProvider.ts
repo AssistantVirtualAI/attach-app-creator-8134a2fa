@@ -43,6 +43,40 @@ export type VertoEvent =
 
 type Listener = (e: VertoEvent) => void;
 
+/**
+ * Remove RED codec and fix invalid bitrate lines from SDP.
+ * FreeSWITCH sometimes includes RED (redundant audio) which WebRTC
+ * on Android rejects with min_bitrate_bps=-1 / max_bitrate_bps=-1.
+ * We strip RED payload lines and any dangling a=rtpmap/a=fmtp for it.
+ */
+function filterSdp(sdp: string): string {
+  const lines = sdp.split('\r\n');
+  // Find RED payload type numbers (e.g. "a=rtpmap:112 red/...")
+  const redPayloads = new Set<string>();
+  for (const line of lines) {
+    const m = line.match(/^a=rtpmap:(\d+)\s+red\//i);
+    if (m) redPayloads.add(m[1]);
+  }
+  if (redPayloads.size === 0) return sdp; // nothing to do
+
+  const filtered: string[] = [];
+  for (const line of lines) {
+    // Remove RED from m= payload list
+    if (line.startsWith('m=audio')) {
+      const parts = line.split(' ');
+      const header = parts.slice(0, 3);
+      const payloads = parts.slice(3).filter((p) => !redPayloads.has(p));
+      filtered.push([...header, ...payloads].join(' '));
+      continue;
+    }
+    // Remove a=rtpmap, a=fmtp, a=rtcp-fb for RED payloads
+    const ptMatch = line.match(/^a=(?:rtpmap|fmtp|rtcp-fb):(\d+)/);
+    if (ptMatch && redPayloads.has(ptMatch[1])) continue;
+    filtered.push(line);
+  }
+  return filtered.join('\r\n');
+}
+
 function uuid(): string {
   // RFC4122-ish; good enough for callID / sessid.
   if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) {
@@ -357,7 +391,7 @@ class VertoClient {
   async call(destination: string, callerIdName: string, callerIdNumber: string): Promise<VertoDialog | null> {
     if (!this.loggedIn || !this.cfg) throw new Error('Verto not registered');
     const callID = uuid();
-    const pc = new RTCPeerConnection({ iceServers: [] });
+    const pc = new RTCPeerConnection({ iceServers: [], sdpSemantics: 'unified-plan' } as any);
     const remoteStream = new MediaStream();
     pc.ontrack = (ev) => {
       ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
@@ -365,7 +399,19 @@ class VertoClient {
       if (rec) this.emit({ type: 'media', dialog: rec.wrapped, stream: remoteStream });
     };
 
-    const local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    // Attempt to acquire the microphone. On emulators or when permission
+    // is denied, fall back to a silent audio track so the call still
+    // proceeds and the remote party can be heard.
+    let local: MediaStream;
+    try {
+      local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch (micErr) {
+      console.warn('[verto] mic unavailable, using silent track:', micErr);
+      // Create a silent audio track via AudioContext
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const dest = ctx.createMediaStreamDestination();
+      local = dest.stream;
+    }
     local.getTracks().forEach((t) => pc.addTrack(t, local));
 
     const wrapped = this.wrap(callID);
@@ -380,6 +426,11 @@ class VertoClient {
     await pc.setLocalDescription(offer);
     await this.waitForIce(pc);
 
+    // Filter RED codec from the local SDP before sending to FreeSWITCH.
+    // RED causes WebRTC audio_send_stream bitrate=-1 on Android WebView.
+    const rawSdp = pc.localDescription?.sdp || '';
+    const cleanSdp = filterSdp(rawSdp);
+
     const dialogParams = {
       callID,
       caller_id_name: callerIdName,
@@ -393,7 +444,7 @@ class VertoClient {
     };
 
     try {
-      await this.rpc('verto.invite', { sdp: pc.localDescription?.sdp, dialogParams });
+      await this.rpc('verto.invite', { sdp: cleanSdp, dialogParams });
     } catch (e: any) {
       try { pc.close(); } catch { /* ignore */ }
       this.dialogs.delete(callID);

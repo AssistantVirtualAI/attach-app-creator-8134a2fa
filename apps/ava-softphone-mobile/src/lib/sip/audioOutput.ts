@@ -42,10 +42,33 @@ export function registerRemoteAudioElement(el: HTMLAudioElement | null) {
 }
 
 /**
- * Wire the remote WebRTC stream from the RTCPeerConnection into the
- * registered <audio> element. Without this the remote party is not audible.
+ * Wire the remote WebRTC stream into the registered <audio> element.
+ * Accepts either a RTCPeerConnection (JsSIP path — hooks ontrack) or a
+ * MediaStream directly (Verto path — stream already resolved by the time
+ * the 'media' event fires). Without this the remote party is not audible.
  */
-export function attachRemoteStream(pc: RTCPeerConnection) {
+export function attachRemoteStream(input: RTCPeerConnection | MediaStream) {
+  if (input instanceof MediaStream) {
+    // Verto path: stream is already available, wire it directly.
+    if (!audioEl) {
+      console.warn('[audioOutput] attachRemoteStream(stream): no audio element registered');
+      return;
+    }
+    if (audioEl.srcObject !== input) {
+      audioEl.srcObject = input;
+      audioEl.muted = false;
+      audioEl.volume = 1.0;
+      audioEl.play().catch((e) => {
+        console.warn('[audioOutput] play(stream) failed, retrying...', e);
+        setTimeout(() => {
+          audioEl?.play().catch((e2) => console.warn('[audioOutput] play retry failed', e2));
+        }, 500);
+      });
+    }
+    return;
+  }
+  // JsSIP path: RTCPeerConnection — hook ontrack for when tracks arrive.
+  const pc = input;
   pc.ontrack = (event) => {
     if (!audioEl) {
       console.warn('[audioOutput] ontrack fired but no audio element registered');

@@ -853,8 +853,8 @@ export function useSoftphoneJsSip(
 // ---------------------------------------------------------------------------
 import { NATIVE_SIP_ENABLED, startAndroidSipService, stopAndroidSipService } from '../lib/sip/nativeSipProvider';
 import { useSoftphoneNative } from './useSoftphoneNative';
+import { useSoftphoneVerto } from './useSoftphoneVerto';
 import { notifySipDispatcherLoaded } from '../lib/sip/bootSipGuard';
-
 export function useSoftphone(
   config: SIPConfig | null,
   opts: { jsSipTimeoutMs?: number } = {},
@@ -867,8 +867,11 @@ export function useSoftphone(
     return useSoftphoneNative(config);
   }
   if (platform === 'android') {
-    // through FreeSWITCH server-side, bypassing Bell Canada's TURN DNS block.
+    // Android → FreeSWITCH Verto (port 8082 WSS JSON-RPC).
+    // Bypasses Bell Canada's TURN DNS block and avoids the WebView
+    // WebRTC limitations that prevent JsSIP 2-way audio on Android.
     // eslint-disable-next-line react-hooks/rules-of-hooks
+    return useSoftphoneVerto(config);
   }
   // Web / dev → JsSIP over WSS.
   // eslint-disable-next-line react-hooks/rules-of-hooks

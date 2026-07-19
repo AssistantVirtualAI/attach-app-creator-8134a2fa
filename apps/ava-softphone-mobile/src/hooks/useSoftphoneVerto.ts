@@ -35,7 +35,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const [lastPersistedError, setLastPersistedError] = useState<PersistedSipError | null>(() => loadPersistedError());
   const [sipLog, setSipLog] = useState<SipLogEntry[]>(() => loadSipLog());
   const [retryAttempt, setRetryAttempt] = useState(0);
-  const [audioProfile, setAudioProfileState] = useState<AudioProfile>(() => loadAudioProfile() || PROFILE_OPUS);
+  const [audioProfile, setAudioProfileState] = useState<AudioProfile>(() => loadAudioProfile() || 'auto');
 
   const activeDialogRef = useRef<VertoDialog | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -44,8 +44,14 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   configRef.current = config;
 
   const log = useCallback((event: string, details?: any) => {
-    const entry = appendSipLog({ event, at: Date.now(), details });
-    setSipLog((prev) => [...prev, entry].slice(-200));
+    const entry: SipLogEntry = {
+      event,
+      time: Date.now(),
+      level: 'info',
+      detail: details ? JSON.stringify(details) : undefined,
+    };
+    const next = appendSipLog(entry);
+    setSipLog(next);
   }, []);
 
   const setStatus = useCallback((next: SIPStatus, err?: string) => {
@@ -53,7 +59,13 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     savePersistedStatus(next);
     if (err !== undefined) setSipError(err);
     if (next === 'error' && err) {
-      const persisted: PersistedSipError = { message: err, at: Date.now() };
+      const cfg = configRef.current;
+      const persisted: PersistedSipError = {
+        error: err,
+        extension: cfg?.extension || '',
+        domain: cfg?.domain || '',
+        time: Date.now(),
+      };
       savePersistedError(persisted);
       setLastPersistedError(persisted);
     }

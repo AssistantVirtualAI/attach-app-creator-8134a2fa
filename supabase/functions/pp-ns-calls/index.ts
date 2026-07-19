@@ -115,6 +115,10 @@ Deno.serve(async (req) => {
         "call-orig-user": callOrigUser,
         "call-term-user": dest,
         "auto-answer-enabled": "no",
+        // Force NS to fully ring the originator (broker's phone) and wait for
+        // pickup BEFORE dialing the destination. Without this NS may dial the
+        // destination first, so the customer hears ringing before the broker.
+        "synchronous": "yes",
       };
 
       console.log(`[pp-ns-calls] REST start requested_client=${requestedClientType} forced_client=${clientType} device=${deviceName} orig=${callOrigUser} term=${dest} ext=${ctx.extension}`);

@@ -15,7 +15,7 @@ import {
   loadSipLog, savePersistedError, savePersistedStatus, SipLogEntry, PersistedSipError,
 } from '../lib/sip/sipPersistence';
 import { EMPTY_QUALITY, CallQuality } from '../lib/sip/callQuality';
-import { AudioProfile, loadAudioProfile, saveAudioProfile, PROFILE_OPUS } from '../lib/sip/audioProfile';
+import { AudioProfile, loadAudioProfile, saveAudioProfile } from '../lib/sip/audioProfile';
 import { attachRemoteStream } from '../lib/sip/audioOutput';
 import { initVerto, getVertoClient, VertoDialog, VertoEvent } from '../lib/sip/vertoProvider';
 import { normalizePhone } from '../lib/phoneNormalize';

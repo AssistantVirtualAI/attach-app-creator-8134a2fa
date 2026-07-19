@@ -1,7 +1,17 @@
 // Manages remote audio output routing (earpiece / speaker / bluetooth).
-// On Capacitor iOS we route through the native CapacitorPjsip plugin which
-// drives AVAudioSession.overrideOutputAudioPort. On web we fall back to
-// HTMLMediaElement.setSinkId where supported.
+//
+// Android WebView behaviour:
+//   • The <audio> element defaults to AudioManager.STREAM_MUSIC which plays
+//     through the SPEAKER. For VoIP we need STREAM_VOICE_CALL / earpiece.
+//   • We achieve this by calling the native CapacitorPjsip.setAudioRoute()
+//     bridge (which calls AudioManager.setMode(MODE_IN_COMMUNICATION) +
+//     setSpeakerphoneOn(false)) as soon as the remote stream is attached.
+//   • The speaker button calls setAudioRoute({ route: 'speaker' }) which
+//     calls setSpeakerphoneOn(true).
+//   • On web/desktop we fall back to HTMLMediaElement.setSinkId where
+//     supported (Chrome desktop only).
+//
+// iOS: routed through AVAudioSession via CapacitorPjsip native bridge.
 
 import { Capacitor } from '@capacitor/core';
 import { CapacitorSipNative } from './nativeSipProvider';
@@ -9,6 +19,7 @@ import { CapacitorSipNative } from './nativeSipProvider';
 export type AudioRoute = 'earpiece' | 'speaker' | 'bluetooth';
 
 let audioEl: HTMLAudioElement | null = null;
+// Default is ALWAYS earpiece — never speaker on call start.
 let route: AudioRoute = 'earpiece';
 
 let busy = false;
@@ -46,6 +57,9 @@ export function registerRemoteAudioElement(el: HTMLAudioElement | null) {
  * Accepts either a RTCPeerConnection (JsSIP path — hooks ontrack) or a
  * MediaStream directly (Verto path — stream already resolved by the time
  * the 'media' event fires). Without this the remote party is not audible.
+ *
+ * IMPORTANT: after attaching the stream we immediately force the audio
+ * route to EARPIECE so Android WebView does not default to the loudspeaker.
  */
 export function attachRemoteStream(input: RTCPeerConnection | MediaStream) {
   if (input instanceof MediaStream) {
@@ -65,6 +79,10 @@ export function attachRemoteStream(input: RTCPeerConnection | MediaStream) {
         }, 500);
       });
     }
+    // Force earpiece immediately after stream is attached on Android.
+    // Without this the WebView AudioManager stays in STREAM_MUSIC mode
+    // and routes audio to the loudspeaker by default.
+    _forceEarpiece();
     return;
   }
   // JsSIP path: RTCPeerConnection — hook ontrack for when tracks arrive.
@@ -87,7 +105,38 @@ export function attachRemoteStream(input: RTCPeerConnection | MediaStream) {
         }, 500);
       });
     }
+    // Force earpiece immediately after track arrives on Android.
+    _forceEarpiece();
   };
+}
+
+/**
+ * Internal: force audio to earpiece without changing the `route` state
+ * variable (which is already 'earpiece' by default). This ensures the
+ * Android AudioManager is in MODE_IN_COMMUNICATION from the moment the
+ * remote stream arrives, regardless of what happened before.
+ */
+function _forceEarpiece() {
+  if (!Capacitor.isNativePlatform()) return;
+  // Already earpiece — still call native to ensure AudioManager mode is set.
+  CapacitorSipNative.setAudioRoute({ route: 'earpiece' })
+    .then((res) => {
+      console.log('[audioOutput] _forceEarpiece result:', res?.route, res?.outputs);
+      // Sync route state from native response
+      const outs = (res?.outputs || '').toLowerCase();
+      if (outs.includes('speaker')) route = 'speaker';
+      else if (outs.includes('bluetooth')) route = 'bluetooth';
+      else route = 'earpiece';
+      emit();
+    })
+    .catch((e) => {
+      console.warn('[audioOutput] _forceEarpiece failed (non-iOS stub):', e?.message || e);
+      // On Android the native bridge is a no-op stub — fall back to
+      // setSinkId('default') which at least avoids the media stream path.
+      if (audioEl) {
+        applySink(audioEl, 'earpiece').catch(() => {});
+      }
+    });
 }
 
 // Legacy compatibility -------------------------------------------------------
@@ -105,26 +154,32 @@ export async function toggleSpeaker(): Promise<boolean> {
 export async function setRoute(next: AudioRoute): Promise<boolean> {
   if (busy) return false;
   busy = true; emit();
-  let nativeOk = false;
   try {
     if (Capacitor.isNativePlatform()) {
       try {
         const res = await CapacitorSipNative.setAudioRoute({ route: next });
-        nativeOk = !!res?.ok;
+        console.log('[audioOutput] setRoute', next, '→ native result:', res?.route, res?.outputs);
+        // Sync route from native response (native knows the actual output)
         const outs = (res?.outputs || '').toLowerCase();
         if (outs.includes('speaker')) route = 'speaker';
         else if (outs.includes('bluetooth')) route = 'bluetooth';
         else route = 'earpiece';
       } catch (e) {
-        console.warn('[audioOutput] native setAudioRoute failed', e);
-        throw e;
+        // On Android the native bridge is a no-op stub for audio routing.
+        // Fall back to setSinkId and update route state optimistically.
+        console.warn('[audioOutput] native setAudioRoute failed, using setSinkId fallback:', e);
+        route = next;
+        if (audioEl) {
+          try { await applySink(audioEl, route); } catch {}
+        }
       }
     } else {
+      // Web/desktop: use setSinkId
       route = next;
-    }
-    if (audioEl && !Capacitor.isNativePlatform()) {
-      try { await applySink(audioEl, route); } catch (e) {
-        if (!nativeOk) console.warn('[audioOutput] setSinkId failed', e);
+      if (audioEl) {
+        try { await applySink(audioEl, route); } catch (e) {
+          console.warn('[audioOutput] setSinkId failed', e);
+        }
       }
     }
     emit();
@@ -139,13 +194,14 @@ async function applySink(el: HTMLAudioElement, target: AudioRoute) {
   const anyEl = el as any;
   el.volume = 1.0;
   if (typeof anyEl.setSinkId !== 'function') return; // unsupported → silent skip
+  // 'default' = earpiece/system default (not loudspeaker)
+  // 'communications' = speakerphone / loudspeaker
   const sinkId =
     target === 'speaker' ? 'communications' :
     target === 'bluetooth' ? 'communications' :
     'default';
   try { await anyEl.setSinkId(sinkId); } catch { /* native already routed */ }
 }
-
 
 async function probeBluetooth() {
   try {

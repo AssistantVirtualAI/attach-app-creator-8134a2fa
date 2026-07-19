@@ -297,7 +297,7 @@ function AuthenticatedShell({
         status: softphone.sipStatus,
         error: softphone.sipError,
         callState: richCallState,
-        startedAt: softphone.callState === 'active' ? Date.now() - softphone.callTimer * 1000 : null,
+        startedAt: softphone.callState === 'active' ? Date.now() - (softphone.callTimer || 0) * 1000 : null,
         remoteParty: softphone.activeCallNumber,
         remoteUri: softphone.activeCallNumber,
         muted: softphone.isMuted,

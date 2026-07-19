@@ -19,6 +19,7 @@ import { AudioProfile, loadAudioProfile, saveAudioProfile, PROFILE_OPUS } from '
 import { attachRemoteStream } from '../lib/sip/audioOutput';
 import { initVerto, getVertoClient, VertoDialog, VertoEvent } from '../lib/sip/vertoProvider';
 import { normalizePhone } from '../lib/phoneNormalize';
+import { attachNativeAutoReconnect } from '../lib/sip/nativeAutoReconnect';
 
 const VERTO_HOST = 'pbxnode.lemtel.tel';
 const VERTO_PORT = 8082;
@@ -229,6 +230,22 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       caller_id_number: configRef.current.extension,
     }).then(() => setStatus('registered')).catch((e) => setStatus('error', e?.message));
   }, [log, setStatus]);
+
+  // ── WiFi ↔ LTE handover: re-register Verto when network changes ────────────
+  // nativeAutoReconnect listens to @capacitor/network networkStatusChange and
+  // App appStateChange events. When the network changes (e.g. WiFi → LTE),
+  // it calls reconnect() after a debounce so the Verto WebSocket is re-opened
+  // on the new interface. This prevents silent call drops on network handover.
+  const reconnectRef = useRef(reconnect);
+  reconnectRef.current = reconnect;
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    attachNativeAutoReconnect(() => {
+      console.log('[Verto] network/app-state change → reconnecting');
+      reconnectRef.current();
+    }).then((fn) => { cleanup = fn; }).catch(() => {});
+    return () => { cleanup?.(); };
+  }, []); // run once on mount
 
   const clearSipLog = useCallback(() => { clearPersistedLog(); setSipLog([]); }, []);
   const clearSipState = useCallback(() => {

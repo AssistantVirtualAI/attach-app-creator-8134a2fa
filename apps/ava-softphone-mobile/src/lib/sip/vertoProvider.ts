@@ -2,9 +2,14 @@
 //
 // No jQuery, no external CDN — talks raw JSON-RPC to FreeSWITCH on
 // wss://<host>:<port>. Media is negotiated via a standard RTCPeerConnection
-// (offer/answer over verto.invite / verto.answer). Because FreeSWITCH
-// bridges the media itself, no TURN server is required — this bypasses
-// carrier TURN DNS blocks (e.g. Bell Canada).
+// (offer/answer over verto.invite / verto.answer).
+//
+// ICE / NAT traversal strategy:
+// We use multiple public STUN servers so the device can discover its
+// reflexive (srflx) public IP regardless of whether it is on WiFi, LTE,
+// or behind any type of NAT (full-cone, symmetric, carrier-grade, etc.).
+// Without at least one srflx candidate, FreeSWITCH cannot reach the
+// device and terminates the call with INCOMPATIBLE_DESTINATION (88).
 
 export interface VertoConfig {
   host: string;
@@ -42,6 +47,25 @@ export type VertoEvent =
   | { type: 'media'; dialog: VertoDialog; stream: MediaStream };
 
 type Listener = (e: VertoEvent) => void;
+
+/**
+ * ICE server list used for every RTCPeerConnection.
+ * Multiple STUN servers from different providers ensure at least one
+ * is reachable on any network (WiFi, LTE, corporate, carrier-grade NAT).
+ * Google STUN servers are globally available and free; Cloudflare and
+ * Twilio STUN servers provide redundancy.
+ */
+const ICE_SERVERS: RTCIceServer[] = [
+  // Google — primary, globally available
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  // Cloudflare — low-latency anycast
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  // Twilio — reliable fallback
+  { urls: 'stun:global.stun.twilio.com:3478' },
+];
 
 /**
  * Ensure PCMU (payload 0) and PCMA (payload 8) are present in the SDP offer.
@@ -345,7 +369,7 @@ class VertoClient {
       case 'verto.media': {
         ack();
         const rec = callID ? this.dialogs.get(callID) : undefined;
-        console.log('[verto][DIAG] verto.media received, callID:', callID, 'rec found:', !!rec);
+        console.log('[verto][DIAG] verto.media received, callID:', callID, 'rec found:', !!rec, 'already answered:', rec?.answered);
         if (rec && params?.sdp && !rec.answered) {
           try {
             const cleanMedia = filterSdp(params.sdp);
@@ -353,9 +377,23 @@ class VertoClient {
             await rec.pc.setRemoteDescription({ type: 'answer', sdp: cleanMedia });
             console.log('[verto][DIAG] verto.media setRemoteDescription SUCCESS');
             rec.answered = true;
-          } catch (e) { console.warn('[verto][DIAG] verto.media setRemoteDescription FAILED:', e); }
+            // For outbound calls, verto.media carries the early-media SDP.
+            // FreeSWITCH may send verto.media (183 Session Progress) but never
+            // send verto.answer for PSTN calls that go straight to active.
+            // Emit 'answered' here so the UI transitions from Dialing → In Call.
+            if (rec.direction === 'outbound') {
+              console.log('[verto][DIAG] verto.media outbound → emitting answered');
+              this.emit({ type: 'answered', dialog: rec.wrapped });
+            } else {
+              this.emit({ type: 'progress', dialog: rec.wrapped });
+            }
+          } catch (e) {
+            console.warn('[verto][DIAG] verto.media setRemoteDescription FAILED:', e);
+            if (rec) this.emit({ type: 'progress', dialog: rec.wrapped });
+          }
+        } else if (rec) {
+          this.emit({ type: 'progress', dialog: rec.wrapped });
         }
-        if (rec) this.emit({ type: 'progress', dialog: rec.wrapped });
         return;
       }
       case 'verto.bye': {
@@ -382,7 +420,7 @@ class VertoClient {
   }
 
   private async handleInboundInvite(callID: string, params: any) {
-    const pc = new RTCPeerConnection({ iceServers: [] });
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 10 });
     const remoteStream = new MediaStream();
     pc.ontrack = (ev) => {
       ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
@@ -392,7 +430,18 @@ class VertoClient {
 
     let local: MediaStream | null = null;
     try {
-      local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // Full VoIP audio constraints: echo cancellation, noise suppression,
+      // auto gain control — works on all Android WebView ≥ Chromium 70.
+      local = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 16000,
+        },
+        video: false,
+      });
       local.getTracks().forEach((t) => pc.addTrack(t, local!));
     } catch (e) {
       console.warn('[verto] mic denied on inbound', e);
@@ -425,7 +474,8 @@ class VertoClient {
     }
   }
 
-  private waitForIce(pc: RTCPeerConnection, timeoutMs = 2500): Promise<void> {
+  private waitForIce(pc: RTCPeerConnection, timeoutMs = 5000): Promise<void> {
+    // 5 s timeout gives STUN servers enough time to respond on LTE/slow networks.
     return new Promise((resolve) => {
       if (pc.iceGatheringState === 'complete') { resolve(); return; }
       const t = setTimeout(() => { pc.removeEventListener('icegatheringstatechange', check); resolve(); }, timeoutMs);
@@ -463,7 +513,7 @@ class VertoClient {
   async call(destination: string, callerIdName: string, callerIdNumber: string): Promise<VertoDialog | null> {
     if (!this.loggedIn || !this.cfg) throw new Error('Verto not registered');
     const callID = uuid();
-    const pc = new RTCPeerConnection({ iceServers: [], sdpSemantics: 'unified-plan' } as any);
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 10, sdpSemantics: 'unified-plan' } as any);
     const remoteStream = new MediaStream();
     pc.ontrack = (ev) => {
       ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
@@ -485,7 +535,18 @@ class VertoClient {
     // proceeds and the remote party can be heard.
     let local: MediaStream;
     try {
-      local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // Full VoIP audio constraints: echo cancellation, noise suppression,
+      // auto gain control — works on all Android WebView ≥ Chromium 70.
+      local = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 16000,
+        },
+        video: false,
+      });
     } catch (micErr) {
       console.warn('[verto] mic unavailable, using silent track:', micErr);
       // Create a silent audio track via AudioContext

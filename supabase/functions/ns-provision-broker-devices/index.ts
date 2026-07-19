@@ -113,9 +113,24 @@ Deno.serve(async (req) => {
       const hasDev = (needle: string) => arr.some((d: any) => (d?.device ?? d?.aor ?? "").toString().toLowerCase().includes(needle));
 
       const create = async (id: string, model: string, needle: string) => {
-        if (hasDev(needle)) return { existed: true, id };
+        if (hasDev(needle)) {
+          // Device exists — patch it to ensure WSS transport and empty user-agent filter.
+          await fetch(`${base}/${encodeURIComponent(id)}`, {
+            method: "PUT", headers: nsHeaders,
+            body: JSON.stringify({
+              "device-sip-registration-password": sipPassword,
+              "transport": "WSS",
+              "device-srtp-enabled": "opportunistic",
+              "device-sip-allowed-user-agent": "",
+              "device-provisioning-registration-core-server": "core1.cluster1.ucstack.io",
+            }),
+          }).catch(() => {});
+          return { existed: true, id };
+        }
         const isMobile = needle === "_mobile";
         // core-server is MANDATORY — without it JsSIP/PJSIP cannot register.
+        // Both mobile and web use WSS transport so JsSIP (WebRTC) can connect.
+        // Empty device-sip-allowed-user-agent accepts any softphone (JsSIP, SIP.js, etc.).
         const r = await fetch(base, {
           method: "POST", headers: nsHeaders,
           body: JSON.stringify({
@@ -126,9 +141,9 @@ Deno.serve(async (req) => {
             "core-server": "core1.cluster1.ucstack.io",
             "device-provisioning-registration-core-server": "core1.cluster1.ucstack.io",
             "server-nat": isMobile ? "yes" : "no",
-            "transport": isMobile ? "TCP" : "WSS",
-            "device-srtp-enabled": isMobile ? "no" : "opportunistic",
-            "device-sip-allowed-user-agent": isMobile ? undefined : "SIP.js",
+            "transport": "WSS",
+            "device-srtp-enabled": "opportunistic",
+            "device-sip-allowed-user-agent": "",
             "device-push-enabled": isMobile ? "yes" : "no",
           }),
         });

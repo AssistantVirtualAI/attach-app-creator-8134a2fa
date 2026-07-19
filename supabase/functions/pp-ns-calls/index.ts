@@ -109,7 +109,6 @@ Deno.serve(async (req) => {
 
       const clientCallId = crypto.randomUUID();
       const nsBody = {
-        "synchronous": "yes",
         "call-id": clientCallId,
         "destination": dest,
         "origination": callOrigUser,

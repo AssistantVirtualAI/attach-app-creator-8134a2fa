@@ -196,7 +196,9 @@ Deno.serve(async (req) => {
   const sipUri = device["device-sip-registration-uri"] ?? `sip:${resolvedId}@${domain}`;
   const sipState = device["device-sip-registration-state"] ?? device["registration-state"] ?? null;
 
-  // Provide and enforce SIP credentials so SIP.js (web + mobile) can register the device.
+  // Provide and enforce SIP credentials so JsSIP (web + iOS + Android) can register the device.
+  // device-sip-allowed-user-agent must match the User-Agent sent by JsSIP: "JsSIP/x.x.x".
+  // Leaving it empty or using a wildcard lets any softphone register.
   const sipPassword = await derivePassword(String(profile.user_id));
   let repairStatus: any = null;
   repairStatus = await nsPut(
@@ -205,7 +207,7 @@ Deno.serve(async (req) => {
       "device-sip-registration-password": sipPassword,
       "device-provisioning-registration-core-server": coreServer,
       "device-srtp-enabled": "opportunistic",
-      "device-sip-allowed-user-agent": "SIP.js",
+      "device-sip-allowed-user-agent": "",
     },
   );
 

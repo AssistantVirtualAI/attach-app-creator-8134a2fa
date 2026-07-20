@@ -1,72 +1,54 @@
-# Portail admin Planiprêt — bilingue complet FR ⇄ EN
 
-## Situation actuelle (vérifiée)
+## Goal
 
-- Le layout `PlanipretAdminLayout.tsx` utilise déjà `useMplanipretLang().t(...)` avec le namespace `adminPortal.*` du dictionnaire `src/lib/i18n/mplanipret.ts` (FR + EN déjà présents).
-- Sur les **21 pages admin**, seules **8 importent** le hook de traduction (`PAAuditChecklist`, `PAAva`, `PAAvaAgent`, `PAAvaLogs`, `PACalls`, `PALeads`, `PAOverview`, `PAReports`) — et même celles-ci contiennent encore beaucoup de texte codé en dur.
-- **13 pages n'ont aucune traduction** : `PAAuditLog`, `PACompliance`, `PADebug`, `PADiagnostics`, `PAMaestroStatus`, `PAMaestroSync`, `PAMessages`, `PAMobileDevices`, `PARecordings`, `PASipDiagnostic`, `PATemplates`, `PAUsers`, `PAVoicemails`.
-- Résultat : cliquer sur EN change le layout (sidebar, titre) mais laisse la majorité du contenu en français.
+Every Planiprêt broker must be able to connect their own Maestro account from the mobile app (no admin portal required), and AVA (chatbot + voice agent) must call Maestro using that per-broker OAuth token instead of a shared API key.
 
-## Objectif
+## 1. Mobile — "Connect Maestro" in Settings
 
-Toute chaîne visible dans `/planipret/admin/**` doit basculer proprement quand l'utilisateur change de langue via `PlanipretLangSwitch`.
+Files: `apps/planipret-mobile/src/pages/planipret/mobile/MMore.tsx`, new `apps/planipret-mobile/src/components/planipret/mobile/MaestroConnectCard.tsx`, `src/App.tsx` deep-link handler (already exists).
 
-## Approche
+- Add a **Maestro** section in `MMore` (Settings/Plus screen) showing the same 3 states as the admin page:
+  - `disconnected` → button **"Connecter Maestro / Connect Maestro"**
+  - `pending` → spinner + "Ouverture de Maestro…"
+  - `connected` → green check, broker email/id, **Reconnecter** + **Déconnecter** buttons
+  - `error` → red banner with detailed message + **Réessayer**
+- Card calls the existing edge functions — no new backend:
+  - `maestro-oauth-status` (GET) to read state
+  - `maestro-oauth-start` with `{ platform: "mobile", redirect_uri: "planipret://auth/maestro/callback" }` → returns `authorize_url`
+  - Open URL via `@capacitor/browser` `Browser.open({ url })` (in-app browser, not system) so the redirect back into `planipret://` reliably wakes the app.
+- The existing `appUrlOpen` listener in `App.tsx` already routes `planipret://auth/maestro/callback` to the in-app `/auth/maestro/callback` page → `maestro-oauth-callback` exchanges the code with PKCE (client_id=3). No changes required there.
+- Add a **Disconnect** action: new edge function `maestro-oauth-disconnect` that clears `maestro_access_token / refresh_token / expires_at / maestro_oauth_client` on `planipret_profiles` for `auth.uid()`.
+- i18n: add keys under `mplanipret.settings.maestro.*` in `apps/planipret-mobile/src/lib/i18n/mplanipret.ts` (FR + EN).
 
-Étendre le dictionnaire existant plutôt que d'en créer un nouveau — un seul système, cohérent avec le layout.
+## 2. AVA chatbot + voice agent — use per-broker Maestro OAuth token
 
-### 1. Étendre `src/lib/i18n/mplanipret.ts`
+Files: `supabase/functions/ava-tool-executor/index.ts`, `supabase/functions/_shared/maestro-oauth.ts` (already exists with `getUserMaestroAccessToken`), and any Maestro-calling edge function used by the ElevenLabs voice agent (`maestro-task`, `maestro-appointment`, `maestro-ai-analysis`, `maestro-telecom`).
 
-Ajouter sous `adminPortal` (FR et EN en parallèle) un sous-namespace par page :
+- Replace the current `maestroFetch` helper in `ava-tool-executor` (which reads legacy `maestro_broker_token` / falls back to `MAESTRO_API_KEY`) with a call to `getUserMaestroAccessToken(admin, ctx.profile.user_id)` from `_shared/maestro-oauth.ts`. Auto-refresh already handled there.
+- Same substitution inside `maestro-task`, `maestro-appointment`, `maestro-ai-analysis` so the voice-agent tool calls hit Maestro as the authenticated broker.
+- Verify `maestro-telecom` (already migrated to `getUserMaestroAccessToken`) — no change.
+- When the token is missing, return a structured tool error `{ error: "maestro_not_connected", action: "prompt_user_to_connect" }` so AVA replies in-conversation with: *"Connectez d'abord votre compte Maestro dans Réglages → Maestro."* Add that phrasing to the AVA system prompt / tool-error mapping.
+- Voice agent (ElevenLabs): the agent already calls the same edge functions via `ava-tool-executor` → picks up the change automatically. No ElevenLabs config change required.
 
-```text
-adminPortal.pages.{overview|users|calls|messages|recordings|voicemails|
-  leads|templates|reports|compliance|auditLog|auditChecklist|
-  maestroSync|maestroStatus|mobileDevices|diagnostics|sipDiagnostic|
-  debug|ava|avaAgent|avaLogs}
-```
+## 3. Admin page — reuse the shared card
 
-Chaque bloc contient : `title`, `subtitle`, entêtes de tableau, boutons, labels de filtres, états vides, toasts, libellés de statut, messages d'erreur/succès.
+Refactor `PAMaestroStatus` / the section inside `PAMaestroSync` to import the same `MaestroConnectCard` (web variant using `window.location`), so admin + mobile stay in sync.
 
-Ajouter aussi un namespace transverse `adminPortal.common` : `refresh`, `save`, `cancel`, `delete`, `edit`, `search`, `loading`, `noData`, `yes`, `no`, `all`, `actions`, `export`, `filters`, statuts (`connected`, `pending`, `error`, `disconnected`), unités de temps (`min`, `hSuffix`, `daysAgo`), etc.
+## 4. QA
 
-### 2. Convertir les 21 pages admin
+- Broker logs into mobile → Settings → Connecter Maestro → in-app browser → Maestro login → returns via `planipret://` → status becomes `connected`.
+- Ask AVA chat "Combien de RDV cette semaine ?" → tool call succeeds using the broker's token.
+- ElevenLabs voice agent triggers `maestro-task` create → succeeds with the broker's token.
+- Disconnect button clears tokens and AVA falls back to the "please connect Maestro" message.
 
-Pour chaque page :
-1. Importer `useMplanipretLang` et récupérer `t`.
-2. Remplacer chaque littéral FR par `t("adminPortal.pages.<page>.<clé>")` ou `t("adminPortal.common.<clé>")`.
-3. Traiter aussi : `alert()`, `confirm()`, `toast(...)`, placeholders, `aria-label`, `title` HTML, options de `<select>`, textes d'erreur `catch`.
-4. Format des dates : passer par `Intl.DateTimeFormat(lang === "fr" ? "fr-CA" : "en-CA", ...)` là où l'on affiche des dates humaines.
-5. Pluriels simples via une petite helper `plural(t, n, "adminPortal.common.callSingular", "adminPortal.common.callPlural")`.
+## Out of scope
 
-### 3. Composants partagés utilisés dans l'admin
+- No changes to Maestro OAuth server config (already registered by Scott, secrets already set).
+- No changes to the existing web callback route or PKCE logic.
+- No new tables.
 
-Passer en revue et traduire les composants montés dans ces pages :
-- `NotificationsBell`, `CommandPalette`, `SessionTimeoutModal`, `PpActiveCallScreen`, `WorkspaceHeaderExtras` (seulement ce qui apparaît dans le scope admin).
-- Widgets internes des pages (ex. cartes KPI, modales edit user dans `PAUsers`, composeur dans `PAMessages`).
+## Technical notes
 
-### 4. Garde-fous
-
-- Le fallback de `t()` retourne la clé si absente — j'ajoute un log dev-only pour repérer les clés manquantes pendant la conversion.
-- Vérifier que `useMplanipretLang` et `useLanguage` restent bien synchronisés (déjà le cas : `setLang` écrit dans les deux `localStorage` et appelle `setGlobalLanguage`).
-
-### 5. Validation
-
-Après conversion, parcourir chaque page en FR puis en EN via le switch de langue et vérifier :
-- Titres, sous-titres, sidebar, entêtes de colonnes, boutons, badges, tooltips.
-- Modales et menus déroulants (ex. `Actions` de `PAUsers`).
-- Messages toast/alert/confirm.
-- États vides et messages de chargement.
-
-## Détails techniques
-
-- Aucun changement de contrat : `useMplanipretLang()` existant, dictionnaire déjà chargé, switch de langue déjà branché.
-- Zéro migration DB, zéro nouvelle dépendance.
-- Volume : ~15 000 lignes de pages admin à balayer ; ajout estimé de ~600–900 clés dans `mplanipret.ts` (FR + EN).
-- Livrable en une seule passe (pas de PR partielle) pour éviter un mélange visible FR/EN.
-
-## Hors périmètre
-
-- Portail broker (`/planipret/**` non-admin) et app mobile — déjà couverts par leurs propres passes i18n.
-- Contenu généré côté serveur (emails, notifications push) — non demandé ici.
-- Retraduction du wording FR existant : je garde le texte actuel et ne fais que produire l'équivalent EN.
+- Use `@capacitor/browser` (already a Capacitor dep — verify in `apps/planipret-mobile/package.json`; if missing, add it in the build phase).
+- Custom scheme `planipret://` already declared in `native-config/android-AndroidManifest.snippet.xml` and `ios-Info.plist.snippet.xml`.
+- `planipret_profiles` already has the OAuth columns (`maestro_access_token`, `maestro_refresh_token`, `maestro_token_expires_at`, `maestro_oauth_client`) — migration applied earlier.

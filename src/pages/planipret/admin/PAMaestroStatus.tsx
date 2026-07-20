@@ -56,17 +56,23 @@ export default function PAMaestroStatus() {
   const retry = async () => {
     if (!data) return;
     setRetrying(true);
-    // Clear last error so status refresh reflects a fresh attempt.
     try {
       await supabase.from("planipret_integration_secrets" as any)
         .delete().eq("provider", "maestro_oauth_error");
     } catch { /* ignore */ }
-    if (data.authorize_url) {
-      window.location.href = data.authorize_url;
-      return;
+    try {
+      const { data: start, error: fnErr } = await supabase.functions.invoke("maestro-oauth-start", {
+        body: { origin: window.location.origin },
+      });
+      if (fnErr) throw fnErr;
+      const url = (start as any)?.authorize_url;
+      if (url) { window.location.href = url; return; }
+      throw new Error((start as any)?.error ?? "no_authorize_url");
+    } catch (e: any) {
+      setError(e?.message ?? "Impossible de démarrer la connexion Maestro");
+    } finally {
+      setRetrying(false);
     }
-    setRetrying(false);
-    window.location.href = "/planipret/admin/integrations";
   };
 
   return (

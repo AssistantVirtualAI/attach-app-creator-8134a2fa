@@ -242,7 +242,7 @@ const recipientFromRow = (c: any, source: SmsRecipient["source"], index: number)
 const recipientHay = (r: SmsRecipient) => `${r.name} ${r.phone} ${r.email ?? ""} ${r.extension ?? ""} ${r.department ?? ""}`.toLowerCase();
 const looksLikePhone = (value: string) => /^[+]?[-() .\d]{3,}$/.test(value.trim());
 
-function SmsList({ profile, openDialer, registerRefresh }: any) {
+function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   const { t } = useMplanipretLang();
   const [searchParams] = useSearchParams();
   const myExt = profile?.extension ?? "";

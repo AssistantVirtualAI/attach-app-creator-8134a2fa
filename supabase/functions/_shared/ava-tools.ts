@@ -218,6 +218,31 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       feature: { type: "string", description: "calls, recordings, transcripts, ai_coaching, maestro, ms365, voicemail_greeting, sms, team_chat, contacts, stats, voice_agent, pipeline" },
     }, ["feature"]),
     mk("get_integration_status", "Statut de toutes les intégrations: NS-API, Maestro, M365, ElevenLabs."),
+
+    // Push-back to Maestro
+    mk("push_call_summary", "Pousse un résumé IA + coaching + notes d'un appel dans le dossier communication Maestro. Demande confirmation.", {
+      call_id: { type: "string", description: "ID de l'appel" },
+      summary: { type: "string", description: "Résumé de l'appel" },
+      coaching: { type: "string", description: "Feedback coaching (optionnel)" },
+      notes: { type: "string", description: "Notes additionnelles (optionnel)" },
+      sentiment: { type: "string", description: "positive, neutral, negative (optionnel)" },
+      next_steps: { type: "string", description: "Prochaines étapes (optionnel)" },
+    }, ["call_id"]),
+    mk("push_client_note", "Ajoute une note libre au timeline de communications d'un client Maestro.", {
+      client_id: { type: "string", description: "ID du client Maestro" },
+      note: { type: "string", description: "Contenu de la note" },
+      type: { type: "string", description: "Type de note (défaut: general)" },
+    }, ["client_id", "note"]),
+    mk("push_communication_log", "Enregistre une entrée de communication (appel/SMS/courriel) dans Maestro.", {
+      client_id: { type: "string", description: "ID du client Maestro" },
+      channel: { type: "string", description: "call, sms, email ou note" },
+      direction: { type: "string", description: "inbound ou outbound" },
+      summary: { type: "string", description: "Résumé (optionnel)" },
+      coaching: { type: "string", description: "Coaching (optionnel)" },
+      notes: { type: "string", description: "Notes (optionnel)" },
+      duration_seconds: { type: "number", description: "Durée en secondes (optionnel)" },
+      occurred_at: { type: "string", description: "ISO 8601 (optionnel, défaut: maintenant)" },
+    }, ["client_id"]),
   ];
 }
 
@@ -228,4 +253,5 @@ export const EXPECTED_TOOL_NAMES = [
   "read_emails","send_email","search_contact","propose_email_reply","summarize_inbox","update_calendar_event","delete_calendar_event","get_calendar_today","get_calendar_week",
   "get_upcoming_meetings","search_ms365_contacts","find_contact",
   "navigate_to","get_daily_briefing","get_my_stats","generate_voicemail_greeting","explain_feature","get_integration_status",
+  "push_call_summary","push_client_note","push_communication_log",
 ];

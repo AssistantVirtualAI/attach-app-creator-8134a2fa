@@ -117,19 +117,14 @@ export default function PAMaestroStatus() {
               <Row label="Dernière connexion" value={data.last_connected_at ? new Date(data.last_connected_at).toLocaleString() : "—"} />
               <Row label="Codes en attente" value={String(data.pending_count)} />
               {data.expires_in != null && <Row label="Expiration token" value={`${data.expires_in}s`} />}
+              {data.maestro_broker_id && <Row label="Maestro broker id" value={<code className="text-xs">{data.maestro_broker_id}</code>} />}
+              {data.maestro_email && <Row label="Maestro email" value={data.maestro_email} />}
 
               <div className="pt-4 flex flex-wrap gap-2">
-                <Button onClick={retry} disabled={retrying || (data.status === "not_configured" && !data.authorize_url)}>
+                <Button onClick={retry} disabled={retrying || !data.configured}>
                   <RefreshCw className={`h-4 w-4 mr-2 ${retrying ? "animate-spin" : ""}`} />
-                  {data.status === "connected" ? "Reconnecter" : "Réessayer la connexion"}
+                  {data.status === "connected" ? "Reconnecter" : "Se connecter à Maestro"}
                 </Button>
-                {data.authorize_url && (
-                  <Button variant="outline" asChild>
-                    <a href={data.authorize_url} target="_blank" rel="noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-2" /> Ouvrir dans un nouvel onglet
-                    </a>
-                  </Button>
-                )}
               </div>
 
               {data.status === "not_configured" && (

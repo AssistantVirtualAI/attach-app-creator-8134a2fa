@@ -274,8 +274,19 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
   useEffect(() => { registerRefresh(load); return () => registerRefresh(null); /* eslint-disable-next-line */ }, [profile?.user_id]);
   useEffect(() => {
     const to = searchParams.get("to")?.trim();
-    if (to) openSmsThread({ id: "", number: to }, false);
-  }, [searchParams]);
+    if (!to || loading) return;
+    const digits = (s: string) => String(s || "").replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "");
+    const target = digits(to);
+    const match = threads.find((th) => {
+      const p = digits(threadPeer(th));
+      return p && target && (p === target || p.endsWith(target) || target.endsWith(p));
+    });
+    if (match) {
+      openSmsThread({ id: threadId(match), number: threadPeer(match) }, false);
+    } else {
+      openSmsThread({ id: "", number: to }, false);
+    }
+  }, [searchParams, loading, threads]);
 
   if (activeThread) {
     return (

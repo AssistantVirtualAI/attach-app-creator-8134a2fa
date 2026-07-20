@@ -28,16 +28,11 @@ Deno.serve(async (req) => {
     const env = getMaestroOAuthEnv();
     if (!isMaestroOAuthConfigured(env)) return j({ error: "not_configured" }, 200);
 
-    const state = crypto.randomUUID();
-    await admin.from("planipret_maestro_oauth_states").insert({
-      state, user_id: u.user.id, redirect_uri: redirectUri,
-    });
-
     const platform = body?.platform ?? "web"; // "web" | "mobile"
     const isMobile = platform === "mobile";
     const clientId = isMobile ? env.mobileClientId : env.clientId;
 
-    // PKCE pour le client mobile (client_id=3)
+    // PKCE pour le client mobile (client_id=3) — généré avant l'insert
     let codeVerifier: string | null = null;
     let codeChallenge: string | null = null;
     if (isMobile) {
@@ -48,9 +43,16 @@ Deno.serve(async (req) => {
       const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(codeVerifier));
       codeChallenge = btoa(String.fromCharCode(...new Uint8Array(hashBuf)))
         .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-      // Stocker le code_verifier avec le state pour le callback
-      await admin.from("planipret_maestro_oauth_states").update({ code_verifier: codeVerifier }).eq("state", state);
     }
+
+    // Un seul insert — code_verifier inclus directement si mobile
+    const state = crypto.randomUUID();
+    await admin.from("planipret_maestro_oauth_states").insert({
+      state,
+      user_id: u.user.id,
+      redirect_uri: redirectUri,
+      ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
+    });
 
     const url = new URL(env.authUrl);
     url.searchParams.set("response_type", "code");

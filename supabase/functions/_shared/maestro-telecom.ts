@@ -333,7 +333,7 @@ export function mirrorCallAnalysisToMaestro(
           await admin.from("planipret_maestro_sync_log").insert({
             user_id: userId,
             action: `call.analysis.skipped.${reason}`,
-            maestro_endpoint: `PUT /users/{broker}/calls/${maestroCallId ?? "?"}`,
+            maestro_endpoint: `PUT /calls/${maestroCallId ?? "?"}`,
             request_body: { pp_call_id: ppCall?.id },
             response_body: { skipped: reason },
             response_status: 0,
@@ -350,18 +350,38 @@ export function mirrorCallAnalysisToMaestro(
         return;
       }
 
-      const path = `/users/${encodeURIComponent(brokerId)}/calls/${encodeURIComponent(maestroCallId)}`;
+      // Scott (Maestro) confirmed: ai_summary and notes use PUT /calls/{call_id}
+      // (no /users/{broker}/ prefix). Send ai_summary and notes as separate calls.
+      const path = `/calls/${encodeURIComponent(maestroCallId)}`;
       console.log(`[maestro-telecom.analysis] → PUT ${path} pp_call=${ppCall?.id}`);
-      const r = await maestroTelecomFetch(cfg, path, { method: "PUT", body: payload });
-      console.log(`[maestro-telecom.analysis] ← ok=${r.ok} status=${r.status} attempts=${r.attempts} ms=${r.ms}`);
+
+      // 1. Push ai_summary
+      const summaryPayload = { ai_summary: extra?.ai_summary ?? null };
+      const r = await maestroTelecomFetch(cfg, path, { method: "PUT", body: summaryPayload });
+      console.log(`[maestro-telecom.analysis] ai_summary ← ok=${r.ok} status=${r.status} ms=${r.ms}`);
       await logSync(admin, {
         user_id: userId,
-        action: "call.analysis.summary",
+        action: "call.analysis.ai_summary",
         endpoint: path,
         method: "PUT",
-        request_body: payload,
+        request_body: summaryPayload,
         result: r,
       });
+
+      // 2. Push coaching notes (if any)
+      if (extra?.coaching_message) {
+        const notesPayload = { notes: extra.coaching_message };
+        const r2 = await maestroTelecomFetch(cfg, path, { method: "PUT", body: notesPayload });
+        console.log(`[maestro-telecom.analysis] notes ← ok=${r2.ok} status=${r2.status} ms=${r2.ms}`);
+        await logSync(admin, {
+          user_id: userId,
+          action: "call.analysis.notes",
+          endpoint: path,
+          method: "PUT",
+          request_body: notesPayload,
+          result: r2,
+        });
+      }
     } catch (e) {
       console.warn("[maestro-telecom.analysis] unexpected", (e as Error)?.message ?? e);
     }

@@ -33,6 +33,15 @@
     </dict>
 </array>
 
+<!--
+  iOS Universal Links
+  Also add the "Associated Domains" capability in Xcode (Signing & Capabilities)
+  with the entry: applinks:avastatistic.ca
+  Requires public/.well-known/apple-app-site-association served as
+  application/json (no extension) at https://avastatistic.ca/.well-known/apple-app-site-association
+  with the correct TEAMID.com.planipret.mobile appID.
+-->
+
 <!-- Identifiant Bundle -->
 <key>CFBundleIdentifier</key>
 <string>com.planipret.mobile</string>

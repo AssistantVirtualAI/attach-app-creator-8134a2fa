@@ -81,7 +81,7 @@ export default function PALeads() {
       .limit(5000);
     if (filter !== "all") q = q.eq("lead_temperature", filter);
     const { data: all } = await q;
-    const header = [t("adminPortal.leads.colDate"), t("adminPortal.leads.colBroker"), t("adminPortal.leads.colContact"), "Number", t("adminPortal.calls.direction"), t("adminPortal.leads.colScore"), t("adminPortal.leads.colTemp"), t("adminPortal.leads.colReason")];
+    const header = [t("adminPortal.leads.colDate"), t("adminPortal.leads.colBroker"), t("adminPortal.leads.colContact"), t("adminPortal.leads.colNumber"), t("adminPortal.calls.direction"), t("adminPortal.leads.colScore"), t("adminPortal.leads.colTemp"), t("adminPortal.leads.colReason")];
     const lines = [header.join(",")];
     (all ?? []).forEach((r: any) => {
       const contact = r.from_name ?? r.to_name ?? "";

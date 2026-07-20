@@ -11,11 +11,201 @@ import { getAiCorrectedTranscript, getAiTranscriptSegments, getDisplayTranscript
 import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import AvaCallRecordingsPanel from "@/components/planipret/admin/ava/AvaCallRecordingsPanel";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 const ACCENT = "#2E9BDC";
 const AGENT = "#9B7FE8";
 
+const DICT = {
+  fr: {
+    tabPbx: "Enregistrements PBX",
+    tabAva: "Agent AVA (IA)",
+    processAll: "⚡ Traiter tous les enregistrements",
+    queuingAll: "Mise en file de tous les enregistrements…",
+    noneQueued: "Aucun appel en attente de traitement",
+    queued: (n: number) => `${n} appels en cours de traitement en arrière-plan. La liste se met à jour au fur et à mesure.`,
+    backfillFailed: (e: string) => `Backfill échoué: ${e}`,
+    backfillLabel: "Backfill enregistrements",
+    searchPlaceholder: "Rechercher numéro ou extension…",
+    allBrokers: "Tous courtiers",
+    transcriptAll: "Transcription : tous",
+    transcriptYes: "Avec transcription",
+    transcriptNo: "Sans transcription",
+    reset: (n: number) => `✕ Réinitialiser (${n})`,
+    thBroker: "Courtier",
+    thExt: "Ext.",
+    thFrom: "De",
+    thTo: "Vers",
+    thDuration: "Durée",
+    thDate: "Date",
+    thTranscript: "Transcription",
+    thSummary: "Résumé & thèmes",
+    available: "● Disponible",
+    pending: "⏳ En attente",
+    action: (n: number) => `✓ ${n} action${n > 1 ? "s" : ""}`,
+    emptyTitle: "Aucun enregistrement trouvé",
+    emptyHintFiltered: "Essayez d'élargir vos critères de recherche.",
+    emptyHintDefault: "Aucun enregistrement n'est encore synchronisé. La synchronisation NS-API est automatique · vérifiez que les enregistrements sont activés dans la config NetSapiens.",
+    resetFilters: "Réinitialiser les filtres",
+    goToIntegrations: "Aller aux intégrations →",
+    pageUnit: "enregistrements",
+    detailTitle: "Enregistrement",
+    broker: "Courtier",
+    extDirStatus: (ext: string, dir: string, status: string) => `Ext: ${ext} · Direction: ${dir} · Statut: ${status}`,
+    fromTo: (from: string, to: string) => `De: ${from} → Vers: ${to}`,
+    dateDuration: (date: string, dur: string) => `Date: ${date} · Durée: ${dur}`,
+    nsCallid: (id: string) => `NS callid: ${id}`,
+    statusSynced: "Synchronisé",
+    statusAnalyzed: "Analysé",
+    statusTranscribed: "Transcrit",
+    statusPending: "En attente",
+    analyzedAt: (ts: string) => `analyzed_at: ${ts}`,
+    src: (s: string) => `src: ${s}`,
+    audioStreamed: "● Audio streamé depuis NS-API",
+    audioMeta: "Audio meta:",
+    loadingAudio: "Chargement de l'audio depuis NS-API…",
+    voicemailNotice: "📵 Appel non enregistré (VMail ou appel manqué)",
+    audioLabel: "Audio",
+    download: "Télécharger",
+    recordingNotFound: "Enregistrement introuvable sur NS-API.",
+    retry: "Réessayer",
+    aiCorrectedTranscript: "Transcription corrigée par l'IA",
+    analyzedBadge: "● Analysé",
+    speaker: "Speaker",
+    rawNsVersion: "Version brute NetSapiens",
+    coachingAnalysis: "Analyse coaching AVA",
+    coachQueued: "En attente",
+    coachRunning: "En cours",
+    coachError: "Erreur",
+    coachDone: "Terminé",
+    coachQueuedMsg: "En file — préparation du contexte…",
+    coachRunningMsg: (s: number) => `AVA analyse et corrige la transcription… (${s}s)`,
+    coachErrorMsg: "Analyse échouée — vous pouvez réessayer.",
+    retryAnalysis: "Réessayer l'analyse",
+    transcription: "Transcription",
+    transcriptPendingMsg: (n: number) => `Transcription pas encore prête côté système téléphonique — tentative auto en cours (essai ${n})…`,
+    transcriptLoading: "Chargement de la transcription depuis NS-API…",
+    transcriptLoadError: "❌ Impossible de charger la transcription",
+    transcriptUnavailable: "⚠️ Transcription non trouvée — Diagnostic",
+    aiCoaching: "Coaching IA",
+    score: "Score :",
+    strengths: "Points forts :",
+    improvements: "À améliorer :",
+    nextSteps: "Prochaines étapes :",
+    aiSummary: "Résumé IA",
+    topics: "Thèmes abordés",
+    actionsToDo: "Actions à faire",
+    brokerLabel: "Courtier",
+    clientLabel: "Client",
+    syncLaunched: (n: number) => `Synchro lancée: ${n} ext · appels/enregistrements en arrière-plan`,
+    syncFailed: (e: string) => `Synchro échouée: ${e}`,
+    recordingLoaded: "Enregistrement chargé",
+    fetchFailed: (e: string) => `Récupération échouée: ${e}`,
+    coachingFailed: (e: string) => `Coaching échoué: ${e}`,
+    coachingGenerated: (s: string) => `Coaching généré (score ${s}/100)`,
+    missingCallId: "Identifiant d'appel manquant — resynchroniser le CDR",
+    processingRecording: (s: string, kb: string) => `Enregistrement en traitement (status: ${s}, taille: ${kb} kB)`,
+    noRecordingAvailable: "Aucun enregistrement disponible pour cet appel.",
+    idsTested: (ids: string) => `IDs testés: ${ids}`,
+    noRecordingNsApi: "Aucun enregistrement disponible côté NS-API",
+  },
+  en: {
+    tabPbx: "PBX recordings",
+    tabAva: "AVA Agent (AI)",
+    processAll: "⚡ Process all recordings",
+    queuingAll: "Queuing all recordings…",
+    noneQueued: "No calls awaiting processing",
+    queued: (n: number) => `${n} calls being processed in the background. The list will update as they complete.`,
+    backfillFailed: (e: string) => `Backfill failed: ${e}`,
+    backfillLabel: "Recording backfill",
+    searchPlaceholder: "Search number or extension…",
+    allBrokers: "All brokers",
+    transcriptAll: "Transcript: all",
+    transcriptYes: "With transcript",
+    transcriptNo: "Without transcript",
+    reset: (n: number) => `✕ Reset (${n})`,
+    thBroker: "Broker",
+    thExt: "Ext.",
+    thFrom: "From",
+    thTo: "To",
+    thDuration: "Duration",
+    thDate: "Date",
+    thTranscript: "Transcript",
+    thSummary: "Summary & topics",
+    available: "● Available",
+    pending: "⏳ Pending",
+    action: (n: number) => `✓ ${n} action${n > 1 ? "s" : ""}`,
+    emptyTitle: "No recording found",
+    emptyHintFiltered: "Try widening your search criteria.",
+    emptyHintDefault: "No recording has been synced yet. NS-API sync is automatic · check that recordings are enabled in the NetSapiens config.",
+    resetFilters: "Reset filters",
+    goToIntegrations: "Go to integrations →",
+    pageUnit: "recordings",
+    detailTitle: "Recording",
+    broker: "Broker",
+    extDirStatus: (ext: string, dir: string, status: string) => `Ext: ${ext} · Direction: ${dir} · Status: ${status}`,
+    fromTo: (from: string, to: string) => `From: ${from} → To: ${to}`,
+    dateDuration: (date: string, dur: string) => `Date: ${date} · Duration: ${dur}`,
+    nsCallid: (id: string) => `NS callid: ${id}`,
+    statusSynced: "Synced",
+    statusAnalyzed: "Analyzed",
+    statusTranscribed: "Transcribed",
+    statusPending: "Pending",
+    analyzedAt: (ts: string) => `analyzed_at: ${ts}`,
+    src: (s: string) => `src: ${s}`,
+    audioStreamed: "● Audio streamed from NS-API",
+    audioMeta: "Audio meta:",
+    loadingAudio: "Loading audio from NS-API…",
+    voicemailNotice: "📵 Call not recorded (VMail or missed call)",
+    audioLabel: "Audio",
+    download: "Download",
+    recordingNotFound: "Recording not found on NS-API.",
+    retry: "Retry",
+    aiCorrectedTranscript: "AI-corrected transcript",
+    analyzedBadge: "● Analyzed",
+    speaker: "Speaker",
+    rawNsVersion: "Raw NetSapiens version",
+    coachingAnalysis: "AVA coaching analysis",
+    coachQueued: "Queued",
+    coachRunning: "Running",
+    coachError: "Error",
+    coachDone: "Done",
+    coachQueuedMsg: "Queued — preparing context…",
+    coachRunningMsg: (s: number) => `AVA is analyzing and correcting the transcript… (${s}s)`,
+    coachErrorMsg: "Analysis failed — you can try again.",
+    retryAnalysis: "Retry analysis",
+    transcription: "Transcript",
+    transcriptPendingMsg: (n: number) => `Transcript not ready yet on the phone system — automatic retry in progress (attempt ${n})…`,
+    transcriptLoading: "Loading transcript from NS-API…",
+    transcriptLoadError: "❌ Unable to load transcript",
+    transcriptUnavailable: "⚠️ Transcript not found — Diagnostic",
+    aiCoaching: "AI coaching",
+    score: "Score:",
+    strengths: "Strengths:",
+    improvements: "To improve:",
+    nextSteps: "Next steps:",
+    aiSummary: "AI summary",
+    topics: "Topics discussed",
+    actionsToDo: "Action items",
+    brokerLabel: "Broker",
+    clientLabel: "Client",
+    syncLaunched: (n: number) => `Sync started: ${n} ext · calls/recordings in background`,
+    syncFailed: (e: string) => `Sync failed: ${e}`,
+    recordingLoaded: "Recording loaded",
+    fetchFailed: (e: string) => `Fetch failed: ${e}`,
+    coachingFailed: (e: string) => `Coaching failed: ${e}`,
+    coachingGenerated: (s: string) => `Coaching generated (score ${s}/100)`,
+    missingCallId: "Missing call ID — resync the CDR",
+    processingRecording: (s: string, kb: string) => `Recording processing (status: ${s}, size: ${kb} kB)`,
+    noRecordingAvailable: "No recording available for this call.",
+    idsTested: (ids: string) => `IDs tested: ${ids}`,
+    noRecordingNsApi: "No recording available from NS-API",
+  },
+};
+
 export default function PARecordings() {
+  const { lang } = useMplanipretLang();
+  const t = DICT[lang];
   const [params, setParams] = useSearchParams();
   const page = Math.max(1, parseInt(params.get("page") ?? "1", 10) || 1);
   const pageSizeRaw = parseInt(params.get("pageSize") ?? params.get("ps") ?? "25", 10);
@@ -131,10 +321,10 @@ export default function PARecordings() {
       const { data, error } = await supabase.functions.invoke("pp-admin-ns-sync", { body: {} });
       if (error) throw error;
       const d = data as any;
-      toast.success(`Synchro lancée: ${d.extensions ?? d.users_total ?? 0} ext · appels/enregistrements en arrière-plan`);
+      toast.success(t.syncLaunched(d.extensions ?? d.users_total ?? 0));
       await load(1, pageSize);
     } catch (e: any) {
-      toast.error(`Synchro échouée: ${e.message ?? e}`);
+      toast.error(t.syncFailed(e.message ?? e));
     } finally {
       setSyncing(false);
     }
@@ -201,25 +391,25 @@ export default function PARecordings() {
           source_path: resp.headers.get("X-NS-Source-Path"),
         };
         setDetail((cur: any) => ({ ...(cur && cur.id === row.id ? cur : row), recording_url: objUrl, __recording_meta: recordingMeta }));
-        toast.success("Enregistrement chargé");
+        toast.success(t.recordingLoaded);
       } else {
         const j = await resp.json().catch(() => ({}));
         let msg: string;
         switch (j?.error) {
           case "MISSING_CALLID":
-            msg = "Identifiant d'appel manquant — resynchroniser le CDR";
+            msg = t.missingCallId;
             break;
           case "NO_FILE_ACCESS_URL":
-            msg = `Enregistrement en traitement (status: ${j.recording_status ?? "?"}, taille: ${j.file_size_kb ?? 0} kB)`;
+            msg = t.processingRecording(j.recording_status ?? "?", String(j.file_size_kb ?? 0));
             break;
           case "RECORDING_NOT_FOUND":
             msg = [
-              j?.message ?? "Aucun enregistrement disponible pour cet appel.",
-              Array.isArray(j?.attempted_ids) && j.attempted_ids.length ? `IDs testés: ${j.attempted_ids.slice(0, 3).join(", ")}` : null,
+              j?.message ?? t.noRecordingAvailable,
+              Array.isArray(j?.attempted_ids) && j.attempted_ids.length ? t.idsTested(j.attempted_ids.slice(0, 3).join(", ")) : null,
             ].filter(Boolean).join(" ");
             break;
           default:
-            msg = [j?.message ?? j?.error ?? "Aucun enregistrement disponible côté NS-API",
+            msg = [j?.message ?? j?.error ?? t.noRecordingNsApi,
               Array.isArray(j?.possible_causes) ? j.possible_causes[0] : null].filter(Boolean).join(" — ");
         }
         setRecordingError(msg);
@@ -227,7 +417,7 @@ export default function PARecordings() {
         console.warn("[ns-get-recording] failure", j);
       }
     } catch (e: any) {
-      toast.error(`Récupération échouée: ${e.message ?? e}`);
+      toast.error(t.fetchFailed(e.message ?? e));
     } finally {
       setResolving(null);
     }
@@ -276,11 +466,11 @@ export default function PARecordings() {
       }
       if (error) {
         setCoachStatus((s) => ({ ...s, [callId]: "error" }));
-        toast.error(`Coaching échoué: ${error.message ?? error}`);
+        toast.error(t.coachingFailed(error.message ?? error));
         return;
       }
       if (d?.success) {
-        toast.success(`Coaching généré (score ${d.score ?? "—"}/100)`);
+        toast.success(t.coachingGenerated(d.score ?? "—"));
         setDetail((c: any) => c && c.id === callId ? {
           ...c,
           ai_summary: d.summary,
@@ -293,7 +483,7 @@ export default function PARecordings() {
       }
     } catch (e: any) {
       const msg = String(e?.message ?? e);
-      if (!msg.includes("TRANSCRIPT_MISSING")) toast.error(`Coaching échoué: ${msg}`);
+      if (!msg.includes("TRANSCRIPT_MISSING")) toast.error(t.coachingFailed(msg));
       setCoachStatus((s) => ({ ...s, [callId]: "error" }));
     } finally {
       setCoaching(null);
@@ -333,10 +523,10 @@ export default function PARecordings() {
     const attempts = Number(detail.transcript_attempts ?? 0);
     // Backoff: 15s, 30s, 60s, 120s (max 4 min entre tentatives)
     const delay = Math.min(15_000 * Math.pow(2, Math.min(attempts, 3)), 240_000);
-    const t = setTimeout(() => {
+    const t2 = setTimeout(() => {
       if (transcribing !== detail.id) transcribe(detail.id);
     }, delay);
-    return () => clearTimeout(t);
+    return () => clearTimeout(t2);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail?.id, detail?.transcript_pending, detail?.transcript_attempts, transcribing]);
 
@@ -357,8 +547,8 @@ export default function PARecordings() {
   // sees a proper loading state instead of a stale error.
   useEffect(() => {
     if (!detail?.id) return;
-    const to = String(detail.to_number ?? "").toLowerCase();
-    const isVoicemail = to.includes("vmail") || to.includes("voicemail") || to.includes("vm@");
+    const to2 = String(detail.to_number ?? "").toLowerCase();
+    const isVoicemail = to2.includes("vmail") || to2.includes("voicemail") || to2.includes("vm@");
     if (isVoicemail) return;
     if (detail.recording_url && String(detail.recording_url).startsWith("blob:")) return;
     if (detail.recording_url && String(detail.recording_url).startsWith("http")) return;
@@ -397,12 +587,14 @@ export default function PARecordings() {
   const tab = (params.get("tab") ?? "pbx") as "pbx" | "ava";
   const setTab = (v: "pbx" | "ava") => updateParams({ tab: v === "pbx" ? null : v });
 
+  const localeStr = lang === "en" ? "en-CA" : "fr-CA";
+
   return (
     <div className="space-y-4">
       <div className="flex gap-1 border-b" style={{ borderColor: "var(--pp-bg-border-2)" }}>
         {([
-          ["pbx", "Enregistrements PBX"],
-          ["ava", "Agent AVA (IA)"],
+          ["pbx", t.tabPbx],
+          ["ava", t.tabAva],
         ] as const).map(([k, label]) => (
           <button
             key={k}
@@ -431,43 +623,38 @@ export default function PARecordings() {
           type="button"
           onClick={async () => {
             try {
-              toast.message("Mise en file de tous les enregistrements…");
+              toast.message(t.queuingAll);
               const { data, error } = await supabase.functions.invoke("pp-admin-backfill-calls", { body: { limit: 1000, concurrency: 5 } });
               if (error) throw error;
               const d = data as any;
-              const queued = d?.queued ?? 0;
-              if (queued === 0) toast.success("Aucun appel en attente de traitement");
-              else toast.success(`${queued} appels en cours de traitement en arrière-plan. La liste se met à jour au fur et à mesure.`);
-              setDebug((x) => [{ ts: new Date().toISOString(), label: "Backfill enregistrements", data: d } as any, ...x]);
+              const queuedN = d?.queued ?? 0;
+              if (queuedN === 0) toast.success(t.noneQueued);
+              else toast.success(t.queued(queuedN));
+              setDebug((x) => [{ ts: new Date().toISOString(), label: t.backfillLabel, data: d } as any, ...x]);
               setTimeout(() => load(page, pageSize), 5_000);
               setTimeout(() => load(page, pageSize), 20_000);
               setTimeout(() => load(page, pageSize), 60_000);
             } catch (e: any) {
-              toast.error(`Backfill échoué: ${e?.message ?? e}`);
+              toast.error(t.backfillFailed(e?.message ?? e));
             }
           }}
           className="px-3 py-2 rounded-lg text-sm text-white"
           style={{ background: ACCENT }}
         >
-          ⚡ Traiter tous les enregistrements
+          {t.processAll}
         </button>
       </div>
-
-
-
-
-
 
       <div className="pp-card p-4 flex items-center gap-2 flex-wrap">
         <input
           value={search}
           onChange={(e) => setFilterValue("search", e.target.value)}
-          placeholder="Rechercher numéro ou extension…"
+          placeholder={t.searchPlaceholder}
           className="px-3 py-2 rounded-lg text-sm w-64"
           style={inputStyle as any}
         />
         <select value={broker} onChange={(e) => setFilterValue("broker", e.target.value)} className="px-3 py-2 rounded-lg text-sm" style={inputStyle as any}>
-          <option value="">Tous courtiers</option>
+          <option value="">{t.allBrokers}</option>
           {brokers.map((b: any, i: number) => {
             const value = b.ns_only ? `ext:${b.extension}` : `user:${b.user_id}`;
             return (
@@ -480,13 +667,13 @@ export default function PARecordings() {
         <input type="date" value={from} onChange={(e) => setFilterValue("from", e.target.value)} className="px-3 py-2 rounded-lg text-sm" style={inputStyle as any} />
         <input type="date" value={to} onChange={(e) => setFilterValue("to", e.target.value)} className="px-3 py-2 rounded-lg text-sm" style={inputStyle as any} />
         <select value={withTranscript} onChange={(e) => setFilterValue("transcript", e.target.value)} className="px-3 py-2 rounded-lg text-sm" style={inputStyle as any}>
-          <option value="">Transcription : tous</option>
-          <option value="yes">Avec transcription</option>
-          <option value="no">Sans transcription</option>
+          <option value="">{t.transcriptAll}</option>
+          <option value="yes">{t.transcriptYes}</option>
+          <option value="no">{t.transcriptNo}</option>
         </select>
         {hasFilters && (
           <button onClick={resetFilters} className="px-2 py-1.5 text-xs underline" style={{ color: "var(--pp-text-muted)" }}>
-            ✕ Réinitialiser ({activeFilterCount})
+            {t.reset(activeFilterCount)}
           </button>
         )}
       </div>
@@ -497,7 +684,7 @@ export default function PARecordings() {
         <table className="w-full text-sm">
           <thead style={{ background: "var(--pp-bg-elevated)" }}>
             <tr style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--pp-text-faint)" }} className="text-left">
-              <th className="p-3">Courtier</th><th>Ext.</th><th>De</th><th>Vers</th><th>Durée</th><th>Date</th><th>Transcription</th><th>Résumé & thèmes</th><th></th>
+              <th className="p-3">{t.thBroker}</th><th>{t.thExt}</th><th>{t.thFrom}</th><th>{t.thTo}</th><th>{t.thDuration}</th><th>{t.thDate}</th><th>{t.thTranscript}</th><th>{t.thSummary}</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -513,15 +700,13 @@ export default function PARecordings() {
               <tr><td colSpan={9}>
                 <TableEmptyState
                   icon="📬"
-                  title="Aucun enregistrement trouvé"
-                  hint={hasFilters
-                    ? "Essayez d'élargir vos critères de recherche."
-                    : "Aucun enregistrement n'est encore synchronisé. La synchronisation NS-API est automatique · vérifiez que les enregistrements sont activés dans la config NetSapiens."}
+                  title={t.emptyTitle}
+                  hint={hasFilters ? t.emptyHintFiltered : t.emptyHintDefault}
                   action={hasFilters ? (
-                    <button onClick={resetFilters} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: ACCENT }}>Réinitialiser les filtres</button>
+                    <button onClick={resetFilters} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: ACCENT }}>{t.resetFilters}</button>
                   ) : (
                     <Link to="/planipret/admin/integrations" className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
-                      Aller aux intégrations →
+                      {t.goToIntegrations}
                     </Link>
                   )}
                 />
@@ -535,12 +720,12 @@ export default function PARecordings() {
                 <td style={{ color: "var(--pp-text-secondary)" }}>{c.from_number ?? "—"}</td>
                 <td style={{ color: "var(--pp-text-secondary)" }}>{c.to_number ?? "—"}</td>
                 <td style={{ color: "var(--pp-text-muted)" }}>{c.duration_seconds ? `${Math.floor(c.duration_seconds / 60)}m${c.duration_seconds % 60}s` : "—"}</td>
-                <td style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>{c.started_at ? new Date(c.started_at).toLocaleString("fr-CA", { dateStyle: "short", timeStyle: "short" }) : ""}</td>
+                <td style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>{c.started_at ? new Date(c.started_at).toLocaleString(localeStr, { dateStyle: "short", timeStyle: "short" }) : ""}</td>
                 <td>
                   {c.transcript || (Array.isArray(c.transcript_segments) && c.transcript_segments.length) ? (
-                    <span style={{ fontSize: 10, color: "var(--pp-success)" }}>● Disponible</span>
+                    <span style={{ fontSize: 10, color: "var(--pp-success)" }}>{t.available}</span>
                   ) : c.transcript_pending ? (
-                    <span style={{ fontSize: 10, color: "#f59e0b" }}>⏳ En attente</span>
+                    <span style={{ fontSize: 10, color: "#f59e0b" }}>{t.pending}</span>
                   ) : (
                     <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>—</span>
                   )}
@@ -553,14 +738,14 @@ export default function PARecordings() {
                       </div>
                       {Array.isArray(c.ai_topics) && c.ai_topics.length > 0 && (
                         <div className="flex flex-wrap gap-1">
-                          {c.ai_topics.slice(0, 3).map((t: string, i: number) => (
-                            <span key={i} className="px-1.5 py-0.5 rounded-full text-[9px]" style={{ background: "rgba(155,127,232,0.14)", color: AGENT, border: `1px solid ${AGENT}55` }}>{t}</span>
+                          {c.ai_topics.slice(0, 3).map((tp: string, i: number) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded-full text-[9px]" style={{ background: "rgba(155,127,232,0.14)", color: AGENT, border: `1px solid ${AGENT}55` }}>{tp}</span>
                           ))}
                           {c.ai_topics.length > 3 && <span style={{ fontSize: 9, color: "var(--pp-text-faint)" }}>+{c.ai_topics.length - 3}</span>}
                         </div>
                       )}
                       {Array.isArray(c.ai_action_items) && c.ai_action_items.length > 0 && (
-                        <div style={{ fontSize: 9, color: ACCENT }}>✓ {c.ai_action_items.length} action{c.ai_action_items.length > 1 ? "s" : ""}</div>
+                        <div style={{ fontSize: 9, color: ACCENT }}>{t.action(c.ai_action_items.length)}</div>
                       )}
                     </div>
                   ) : (
@@ -579,7 +764,7 @@ export default function PARecordings() {
           loading={loading}
           onPageChange={setPage}
           onPageSizeChange={setPageSize}
-          unit="enregistrements"
+          unit={t.pageUnit}
         />
       </div>
 
@@ -589,40 +774,40 @@ export default function PARecordings() {
             style={{ background: "var(--pp-bg-surface)", borderLeft: "1px solid var(--pp-bg-border-2)" }}
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 style={{ fontWeight: 600, color: "var(--pp-text-primary)" }}>Enregistrement</h3>
+              <h3 style={{ fontWeight: 600, color: "var(--pp-text-primary)" }}>{t.detailTitle}</h3>
               <button onClick={() => { setRecordingError(null); setTranscriptionError(null); setTranscriptionUnavailable(false); setDetail(null); }}><X className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} /></button>
             </div>
             <div className="space-y-3 text-sm" style={{ color: "var(--pp-text-secondary)" }}>
-              <div>Courtier: <span style={{ color: "var(--pp-text-primary)" }}>{brokerName(detail)}</span></div>
-              <div>Ext: {detail.extension ?? "—"} · Direction: {detail.direction ?? "—"} · Statut: {detail.status ?? "—"}</div>
-              <div>De: {detail.from_number ?? "—"} → Vers: {detail.to_number ?? "—"}</div>
-              <div>Date: {detail.started_at ? new Date(detail.started_at).toLocaleString("fr-CA") : "—"} · Durée: {detail.duration_seconds ? `${Math.floor(detail.duration_seconds / 60)}m${detail.duration_seconds % 60}s` : "—"}</div>
-              <div style={{ fontSize: 10, color: "var(--pp-text-faint)", fontFamily: "monospace" }}>NS callid: {detail.ns_callid ?? detail.ns_orig_callid ?? "—"}</div>
+              <div>{t.broker}: <span style={{ color: "var(--pp-text-primary)" }}>{brokerName(detail)}</span></div>
+              <div>{t.extDirStatus(detail.extension ?? "—", detail.direction ?? "—", detail.status ?? "—")}</div>
+              <div>{t.fromTo(detail.from_number ?? "—", detail.to_number ?? "—")}</div>
+              <div>{t.dateDuration(detail.started_at ? new Date(detail.started_at).toLocaleString(localeStr) : "—", detail.duration_seconds ? `${Math.floor(detail.duration_seconds / 60)}m${detail.duration_seconds % 60}s` : "—")}</div>
+              <div style={{ fontSize: 10, color: "var(--pp-text-faint)", fontFamily: "monospace" }}>{t.nsCallid(detail.ns_callid ?? detail.ns_orig_callid ?? "—")}</div>
               {(() => {
                 const status = detail.maestro_synced ? "synced" : detail.analyzed_at ? "analyzed" : detail.transcript ? "transcribed" : "pending";
-                const label = status === "synced" ? "Synchronisé" : status === "analyzed" ? "Analysé" : status === "transcribed" ? "Transcrit" : "En attente";
+                const label = status === "synced" ? t.statusSynced : status === "analyzed" ? t.statusAnalyzed : status === "transcribed" ? t.statusTranscribed : t.statusPending;
                 const color = status === "synced" ? "#10b981" : status === "analyzed" ? "#2E9BDC" : status === "transcribed" ? "#9B7FE8" : "#f59e0b";
-                const ts = detail.analyzed_at ? new Date(detail.analyzed_at).toLocaleString("fr-CA") : null;
+                const ts = detail.analyzed_at ? new Date(detail.analyzed_at).toLocaleString(localeStr) : null;
                 return (
                   <div className="flex flex-wrap items-center gap-2" style={{ fontSize: 10 }}>
                     <span style={{ padding: "2px 8px", borderRadius: 999, background: `${color}22`, color, border: `1px solid ${color}55`, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>● {label}</span>
-                    {ts && <span style={{ color: "var(--pp-text-muted)" }}>analyzed_at: {ts}</span>}
-                    <span style={{ color: "var(--pp-text-faint)", fontFamily: "monospace" }}>src: {detail.transcript_source ?? (detail.transcript ? "ns-api" : "—")}</span>
+                    {ts && <span style={{ color: "var(--pp-text-muted)" }}>{t.analyzedAt(ts)}</span>}
+                    <span style={{ color: "var(--pp-text-faint)", fontFamily: "monospace" }}>{t.src(detail.transcript_source ?? (detail.transcript ? "ns-api" : "—"))}</span>
                   </div>
                 );
               })()}
               {String(detail.recording_url ?? "").startsWith("blob:") && resolving !== detail.id && (
-                <div style={{ fontSize: 10, color: "var(--pp-success)" }}>● Audio streamé depuis NS-API</div>
+                <div style={{ fontSize: 10, color: "var(--pp-success)" }}>{t.audioStreamed}</div>
               )}
               {detail.__recording_meta && String(detail.recording_url ?? "").startsWith("blob:") && (
                 <div style={{ fontSize: 10, color: "var(--pp-text-faint)", fontFamily: "monospace" }}>
-                  Audio meta: {detail.__recording_meta.duration_sec ? `${detail.__recording_meta.duration_sec}s` : `${detail.duration_seconds ?? "?"}s`}
+                  {t.audioMeta} {detail.__recording_meta.duration_sec ? `${detail.__recording_meta.duration_sec}s` : `${detail.duration_seconds ?? "?"}s`}
                   {detail.__recording_meta.file_size_kb ? ` · ${detail.__recording_meta.file_size_kb} kB` : ""}
                   {detail.__recording_meta.callid ? ` · ${detail.__recording_meta.callid}` : ""}
                 </div>
               )}
               {resolving === detail.id && (
-                <div style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Chargement de l'audio depuis NS-API…</div>
+                <div style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>{t.loadingAudio}</div>
               )}
               {(() => {
                 const toLc = String(detail.to_number ?? "").toLowerCase();
@@ -630,14 +815,14 @@ export default function PARecordings() {
                 if (isVoicemail) {
                   return (
                     <div className="p-3 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
-                      📵 Appel non enregistré (VMail ou appel manqué)
+                      {t.voicemailNotice}
                     </div>
                   );
                 }
                 if (resolving === detail.id) {
                   return (
                     <div>
-                      <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Audio</p>
+                      <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.audioLabel}</p>
                       <div className="h-10 w-full animate-pulse rounded" style={{ background: "var(--pp-bg-elevated)" }} />
                     </div>
                   );
@@ -645,7 +830,7 @@ export default function PARecordings() {
                 if (detail.recording_url && String(detail.recording_url).startsWith("blob:")) {
                   return (
                     <div>
-                      <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Audio</p>
+                      <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.audioLabel}</p>
                       <audio key={detail.recording_url} src={detail.recording_url} controls className="w-full" />
                     </div>
                   );
@@ -653,7 +838,7 @@ export default function PARecordings() {
                 if (detail.recording_url && String(detail.recording_url).startsWith("http")) {
                   return (
                     <div>
-                      <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Audio</p>
+                      <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.audioLabel}</p>
                       <audio
                         key={detail.recording_url}
                         src={detail.recording_url}
@@ -667,7 +852,7 @@ export default function PARecordings() {
                         }}
                       />
                       <a href={detail.recording_url} download className="inline-flex items-center gap-1 text-xs mt-2" style={{ color: ACCENT }}>
-                        <Download className="w-3 h-3" /> Télécharger
+                        <Download className="w-3 h-3" /> {t.download}
                       </a>
                     </div>
                   );
@@ -676,14 +861,14 @@ export default function PARecordings() {
 
                 return (
                   <div className="p-3 rounded-lg text-xs space-y-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
-                    <div>{recordingError ?? "Enregistrement introuvable sur NS-API."}</div>
+                    <div>{recordingError ?? t.recordingNotFound}</div>
                     <button
                       type="button"
                       onClick={() => resolveRecording(detail, true)}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium"
                       style={{ background: ACCENT, color: "white" }}
                     >
-                      <RefreshCw className="w-3 h-3" /> Réessayer
+                      <RefreshCw className="w-3 h-3" /> {t.retry}
                     </button>
                   </div>
                 );
@@ -692,9 +877,9 @@ export default function PARecordings() {
               {hasDetailTranscript ? (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <p style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Transcription corrigée par l'IA</p>
+                    <p style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>{t.aiCorrectedTranscript}</p>
                     {detail.ai_coaching && (
-                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: "rgba(16,185,129,0.14)", color: "#10b981", border: "1px solid #10b98155", fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>● Analysé</span>
+                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: "rgba(16,185,129,0.14)", color: "#10b981", border: "1px solid #10b98155", fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>{t.analyzedBadge}</span>
                     )}
                   </div>
                   {detailSegments.length > 0 ? (
@@ -707,7 +892,7 @@ export default function PARecordings() {
                         return (
                           <div key={i} className="p-2.5 rounded-lg" style={{ background: bg, border: `1px solid ${border}`, fontSize: 12 }}>
                             <div className="flex items-center justify-between mb-1">
-                              <span style={{ fontWeight: 700, color: nameColor, fontSize: 11 }}>{s.speaker ?? "Speaker"}</span>
+                              <span style={{ fontWeight: 700, color: nameColor, fontSize: 11 }}>{s.speaker ?? t.speaker}</span>
                               {s.timestamp && <span style={{ fontSize: 10, color: "var(--pp-text-faint)", fontFamily: "monospace" }}>{s.timestamp}</span>}
                             </div>
                             <div style={{ color: "var(--pp-text-primary)" }} className="whitespace-pre-wrap">{s.text}</div>
@@ -725,7 +910,7 @@ export default function PARecordings() {
                   )}
                   {getAiCorrectedTranscript(detail) && detail.transcript && getAiCorrectedTranscript(detail) !== detail.transcript && (
                     <details className="mt-2">
-                      <summary style={{ fontSize: 11, color: "var(--pp-text-muted)", cursor: "pointer", padding: "6px 0" }}>Version brute NetSapiens</summary>
+                      <summary style={{ fontSize: 11, color: "var(--pp-text-muted)", cursor: "pointer", padding: "6px 0" }}>{t.rawNsVersion}</summary>
                       <div className="p-3 rounded-lg mt-1" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
                         <div className="whitespace-pre-wrap">{detail.transcript}</div>
                       </div>
@@ -736,7 +921,7 @@ export default function PARecordings() {
 
                 (() => {
                   const st = coachStatus[detail.id] ?? "queued";
-                  const label = st === "queued" ? "En attente" : st === "running" ? "En cours" : st === "error" ? "Erreur" : "Terminé";
+                  const label = st === "queued" ? t.coachQueued : st === "running" ? t.coachRunning : st === "error" ? t.coachError : t.coachDone;
                   const color = st === "queued" ? "#f59e0b" : st === "running" ? "#2E9BDC" : st === "error" ? "#ef4444" : "#10b981";
                   const started = coachStartedAt[detail.id];
                   const elapsed = started ? Math.max(0, Math.floor((Date.now() - started) / 1000)) + Math.min(coachElapsed, 0) : 0;
@@ -745,16 +930,16 @@ export default function PARecordings() {
                   return (
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <p style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Analyse coaching AVA</p>
+                        <p style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>{t.coachingAnalysis}</p>
                         <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: `${color}22`, color, border: `1px solid ${color}55`, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>● {label}</span>
                       </div>
                       <div className="p-3 rounded-lg space-y-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
                         <div className="flex items-center gap-2 text-xs" style={{ color: "var(--pp-text-secondary)" }}>
                           {st !== "error" && <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: color, borderTopColor: "transparent" }} />}
                           <span>
-                            {st === "queued" && "En file — préparation du contexte…"}
-                            {st === "running" && `AVA analyse et corrige la transcription… (${elapsed}s)`}
-                            {st === "error" && "Analyse échouée — vous pouvez réessayer."}
+                            {st === "queued" && t.coachQueuedMsg}
+                            {st === "running" && t.coachRunningMsg(elapsed)}
+                            {st === "error" && t.coachErrorMsg}
                           </span>
                         </div>
                         <div style={{ height: 4, borderRadius: 999, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
@@ -762,7 +947,7 @@ export default function PARecordings() {
                         </div>
                         {st === "error" && (
                           <button onClick={() => runCoaching(detail.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs" style={{ background: ACCENT }}>
-                            <RefreshCw className="w-3 h-3" /> Réessayer l'analyse
+                            <RefreshCw className="w-3 h-3" /> {t.retryAnalysis}
                           </button>
                         )}
                       </div>
@@ -771,31 +956,31 @@ export default function PARecordings() {
                 })()
               ) : transcribing === detail.id || detail.transcript_pending ? (
                 <div>
-                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Transcription</p>
+                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.transcription}</p>
                   <div className="flex items-center gap-2 p-3 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
                     <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: "var(--pp-text-muted)", borderTopColor: "transparent" }} />
                     {detail.transcript_pending
-                      ? `Transcription pas encore prête côté système téléphonique — tentative auto en cours (essai ${detail.transcript_attempts ?? 1})…`
-                      : "Chargement de la transcription depuis NS-API…"}
+                      ? t.transcriptPendingMsg(detail.transcript_attempts ?? 1)
+                      : t.transcriptLoading}
                   </div>
                 </div>
               ) : transcriptionError ? (
                 <div className="space-y-2">
                   <div className="p-3 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-danger, #E84C4C)" }}>
-                    ❌ Impossible de charger la transcription
+                    {t.transcriptLoadError}
                   </div>
                   <button
                     onClick={() => transcribe(detail.id)}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-white text-sm"
                     style={{ background: ACCENT }}
                   >
-                    <RefreshCw className="w-3.5 h-3.5" /> Réessayer
+                    <RefreshCw className="w-3.5 h-3.5" /> {t.retry}
                   </button>
                 </div>
               ) : transcriptionUnavailable ? (
                 <div>
                   <div className="p-3 rounded-lg text-xs text-center mb-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
-                    ⚠️ Transcription non trouvée — Diagnostic
+                    {t.transcriptUnavailable}
                   </div>
                   <div style={{ background: "#040B16", border: "1px solid #0E2A45", borderRadius: 10, padding: 10, fontSize: 10, fontFamily: "monospace", color: "#8FA8C0", maxHeight: 320, overflowY: "auto" }}>
                     <div style={{ color: "#2E9BDC" }}>NS callid: {transcriptionDebug?.ns_callid ?? "null"}</div>
@@ -828,19 +1013,19 @@ export default function PARecordings() {
               ) : null}
               {detail.ai_coaching && (
                 <div>
-                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Coaching IA</p>
+                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.aiCoaching}</p>
                   <div className="p-3 rounded-lg space-y-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
                     {typeof detail.ai_coaching === "object" && (
                       <>
-                        {detail.lead_score != null && <div>Score : <b>{detail.lead_score}/100</b></div>}
+                        {detail.lead_score != null && <div>{t.score} <b>{detail.lead_score}/100</b></div>}
                         {(detail.ai_coaching as any).strengths?.length ? (
-                          <div><b>Points forts :</b><ul className="list-disc pl-4">{(detail.ai_coaching as any).strengths.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul></div>
+                          <div><b>{t.strengths}</b><ul className="list-disc pl-4">{(detail.ai_coaching as any).strengths.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul></div>
                         ) : null}
                         {(detail.ai_coaching as any).improvements?.length ? (
-                          <div><b>À améliorer :</b><ul className="list-disc pl-4">{(detail.ai_coaching as any).improvements.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul></div>
+                          <div><b>{t.improvements}</b><ul className="list-disc pl-4">{(detail.ai_coaching as any).improvements.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul></div>
                         ) : null}
                         {(detail.ai_coaching as any).next_steps?.length ? (
-                          <div><b>Prochaines étapes :</b><ul className="list-disc pl-4">{(detail.ai_coaching as any).next_steps.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul></div>
+                          <div><b>{t.nextSteps}</b><ul className="list-disc pl-4">{(detail.ai_coaching as any).next_steps.map((s: string, i: number) => <li key={i}>{s}</li>)}</ul></div>
                         ) : null}
                       </>
                     )}
@@ -849,7 +1034,7 @@ export default function PARecordings() {
               )}
               {detail.ai_summary && (
                 <div>
-                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Résumé IA</p>
+                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.aiSummary}</p>
                   <div className="p-3 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
                     {detail.ai_summary}
                   </div>
@@ -857,24 +1042,24 @@ export default function PARecordings() {
               )}
               {Array.isArray(detail.ai_topics) && detail.ai_topics.length > 0 && (
                 <div>
-                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Thèmes abordés</p>
+                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.topics}</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {detail.ai_topics.map((t: string, i: number) => (
-                      <span key={i} className="px-2 py-1 rounded-full text-[11px]" style={{ background: "rgba(155,127,232,0.14)", color: AGENT, border: `1px solid ${AGENT}55` }}>{t}</span>
+                    {detail.ai_topics.map((tp: string, i: number) => (
+                      <span key={i} className="px-2 py-1 rounded-full text-[11px]" style={{ background: "rgba(155,127,232,0.14)", color: AGENT, border: `1px solid ${AGENT}55` }}>{tp}</span>
                     ))}
                   </div>
                 </div>
               )}
               {Array.isArray(detail.ai_action_items) && detail.ai_action_items.length > 0 && (
                 <div>
-                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>Actions à faire</p>
+                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.actionsToDo}</p>
                   <div className="p-3 rounded-lg space-y-2" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 12 }}>
                     {detail.ai_action_items.map((a: any, i: number) => {
                       const isBroker = String(a.owner ?? "").toLowerCase() === "courtier";
                       const color = isBroker ? ACCENT : AGENT;
                       return (
                         <div key={i} className="flex items-start gap-2">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}>{isBroker ? "Courtier" : "Client"}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" style={{ background: `${color}22`, color, border: `1px solid ${color}55` }}>{isBroker ? t.brokerLabel : t.clientLabel}</span>
                           <div className="flex-1">
                             <div style={{ color: "var(--pp-text-primary)" }}>{a.description}</div>
                             {a.due && <div style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>⏱ {a.due}</div>}

@@ -104,7 +104,7 @@ export default function PAAva() {
       body: { days: 30, includeGraph: true, insights: true },
     });
     if (error || !(data as any)?.ok) {
-      setApiError(error?.message ?? (data as any)?.error ?? "Analytics indisponible");
+      setApiError(error?.message ?? (data as any)?.error ?? t("adminPortal.ava.errorAnalyticsUnavailable"));
       setRows([]);
       setDailySeries([]);
       setToolMix([]);
@@ -146,8 +146,8 @@ export default function PAAva() {
     setTuning(true);
     const { data, error } = await supabase.functions.invoke("ava-prompt-tuner", { body: {} });
     setTuning(false);
-    if (error || !(data as any)?.success) { toast.error("Échec du réentraînement"); return; }
-    toast.success(`AVA réentraînée sur ${(data as any).count} courtier(s)`);
+    if (error || !(data as any)?.success) { toast.error(t("adminPortal.ava.toastRetuneFailed")); return; }
+    toast.success(t("adminPortal.ava.toastRetuneSuccess").replace("{count}", String((data as any).count)));
     load();
   };
   const analyzeAll = async (retryBrokerIds?: string[]) => {
@@ -174,10 +174,10 @@ export default function PAAva() {
         at: finishedAt,
       });
       setLastSyncAt(finishedAt);
-      toast.success(`${d.total_analyses} email(s) · ${d.analyzed_brokers}/${d.brokers_scanned} courtier(s) · mode ${d.mode}`, { id: tid });
+      toast.success(t("adminPortal.ava.toastAnalyzeSuccess").replace("{total}", String(d.total_analyses)).replace("{analyzed}", String(d.analyzed_brokers)).replace("{scanned}", String(d.brokers_scanned)).replace("{mode}", String(d.mode)), { id: tid });
       await load();
     } catch (e: any) {
-      toast.error(`Analyse échouée: ${e.message ?? e}`, { id: tid });
+      toast.error(t("adminPortal.ava.toastAnalyzeFailed").replace("{error}", String(e.message ?? e)), { id: tid });
       const now = new Date().toISOString();
       setAnalyzeReport({ mode: "error", analyzed_brokers: 0, total_analyses: 0, brokers_scanned: 0, per_broker: [], errors: [{ error: e.message ?? String(e) }], failed_broker_ids: [], at: now });
     } finally {
@@ -220,10 +220,10 @@ export default function PAAva() {
   const satisfaction = fbTotal > 0 ? Math.round(((fbStats.up) / fbTotal) * 100) : 0;
 
   const feedbackDonut = useMemo(() => [
-    { name: "👍 Positif", value: fbStats.up, color: SUCCESS },
-    { name: "👎 Négatif", value: fbStats.down, color: DANGER },
-    { name: "✏️ Modifié", value: fbStats.modified, color: WARNING },
-    { name: "↷ Ignoré", value: fbStats.skipped, color: "#6B7280" },
+    { name: t("adminPortal.ava.feedbackPositive"), value: fbStats.up, color: SUCCESS },
+    { name: t("adminPortal.ava.feedbackNegative"), value: fbStats.down, color: DANGER },
+    { name: t("adminPortal.ava.feedbackModifiedLbl"), value: fbStats.modified, color: WARNING },
+    { name: t("adminPortal.ava.feedbackSkipped"), value: fbStats.skipped, color: "#6B7280" },
   ].filter((s) => s.value > 0), [fbStats]);
 
   const brokerLeaderboard = useMemo(() => {
@@ -480,8 +480,8 @@ export default function PAAva() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="pp-card lg:col-span-2" style={{ padding: 20 }}>
           <div className="flex items-center justify-between gap-3 mb-3">
-            <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)" }}>Microsoft 365 · emails et réunions réels</h3>
-            {microsoft?.truncated && <span style={{ fontSize: 10, color: WARNING }}>Top {microsoft.scanned_brokers} courtiers scannés</span>}
+            <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)" }}>{t("adminPortal.ava.sections.msTitle")}</h3>
+            {microsoft?.truncated && <span style={{ fontSize: 10, color: WARNING }}>{t("adminPortal.ava.sections.truncatedTop").replace("{n}", String(microsoft.scanned_brokers))}</span>}
           </div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={dailySeries}>
@@ -490,16 +490,16 @@ export default function PAAva() {
               <YAxis tick={{ fontSize: 10, fill: "#4A7FA5" }} />
               <Tooltip content={<TooltipDark />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="ms_emails_received" name="Emails reçus" fill={ACCENT} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="ms_emails_sent" name="Emails envoyés" fill={SUCCESS} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="ms_meetings" name="Réunions" fill={AGENT} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="ms_emails_received" name={t("adminPortal.ava.sections.legendReceived")} fill={ACCENT} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="ms_emails_sent" name={t("adminPortal.ava.sections.legendSent")} fill={SUCCESS} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="ms_meetings" name={t("adminPortal.ava.sections.legendMeetings")} fill={AGENT} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
         <div className="pp-card" style={{ padding: 20 }}>
-          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Insights AVA</h3>
+          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>{t("adminPortal.ava.sections.insights")}</h3>
           {insights.length === 0 ? (
-            <p style={{ fontSize: 12, color: "var(--pp-text-faint)", padding: "50px 0", textAlign: "center" }}>Chargement des insights…</p>
+            <p style={{ fontSize: 12, color: "var(--pp-text-faint)", padding: "50px 0", textAlign: "center" }}>{t("adminPortal.ava.sections.loadingInsights")}</p>
           ) : (
             <ul className="space-y-2">
               {insights.map((item, i) => (
@@ -516,21 +516,21 @@ export default function PAAva() {
       {microsoft && ((microsoft.upcomingMeetings?.length ?? 0) > 0 || (microsoft.topSenders?.length ?? 0) > 0 || (microsoft.graphErrors?.length ?? 0) > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="pp-card lg:col-span-2" style={{ padding: 20 }}>
-            <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Prochaines réunions Teams</h3>
+            <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>{t("adminPortal.ava.sections.upcomingMeetings")}</h3>
             {microsoft.upcomingMeetings.length === 0 ? (
-              <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>Aucune réunion à venir trouvée.</p>
+              <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>{t("adminPortal.ava.sections.noMeetings")}</p>
             ) : (
               <div className="space-y-2">
                 {microsoft.upcomingMeetings.slice(0, 8).map((meeting, i) => (
                   <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
                     <Calendar className="w-4 h-4 shrink-0" style={{ color: AGENT }} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate" style={{ fontSize: 12, fontWeight: 600, color: "var(--pp-text-primary)" }}>{meeting.subject || "Réunion"}</div>
-                      <div style={{ fontSize: 10, color: "var(--pp-text-muted)" }}>{meeting.broker} · {meeting.start ? new Date(meeting.start).toLocaleString("fr-CA", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""} · {meeting.attendees} participant(s)</div>
+                      <div className="truncate" style={{ fontSize: 12, fontWeight: 600, color: "var(--pp-text-primary)" }}>{meeting.subject || t("adminPortal.ava.sections.meeting")}</div>
+                      <div style={{ fontSize: 10, color: "var(--pp-text-muted)" }}>{meeting.broker} · {meeting.start ? new Date(meeting.start).toLocaleString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""} · {meeting.attendees} {t("adminPortal.ava.sections.participants")}</div>
                     </div>
                     {meeting.is_online && meeting.join_url && (
                       <a href={meeting.join_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-md" style={{ fontSize: 10, fontWeight: 700, color: AGENT, background: `${AGENT}1A` }}>
-                        <Video className="w-3 h-3" /> Rejoindre <ExternalLink className="w-3 h-3" />
+                        <Video className="w-3 h-3" /> {t("adminPortal.ava.sections.join")} <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
                   </div>
@@ -539,9 +539,9 @@ export default function PAAva() {
             )}
           </div>
           <div className="pp-card" style={{ padding: 20 }}>
-            <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Top expéditeurs</h3>
+            <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>{t("adminPortal.ava.sections.topSenders")}</h3>
             {microsoft.topSenders.length === 0 ? (
-              <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>Aucun email reçu sur la période.</p>
+              <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>{t("adminPortal.ava.sections.noSenders")}</p>
             ) : (
               <div className="space-y-2">
                 {microsoft.topSenders.map((sender) => (
@@ -554,8 +554,8 @@ export default function PAAva() {
             )}
             {microsoft.graphErrors.length > 0 && (
               <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: WARNING, marginBottom: 6 }}>Connexions limitées</div>
-                <div style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{microsoft.graphErrors.length} courtier(s) doivent reconnecter Microsoft.</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: WARNING, marginBottom: 6 }}>{t("adminPortal.ava.sections.limitedConnections")}</div>
+                <div style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{t("adminPortal.ava.sections.reconnectHint").replace("{n}", String(microsoft.graphErrors.length))}</div>
               </div>
             )}
           </div>
@@ -565,7 +565,7 @@ export default function PAAva() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="pp-card lg:col-span-2" style={{ padding: 20 }}>
-          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Analyses par jour · 30 j</h3>
+          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>{t("adminPortal.ava.sections.dailyAnalyses")}</h3>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={dailySeries}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -573,16 +573,16 @@ export default function PAAva() {
               <YAxis tick={{ fontSize: 10, fill: "#4A7FA5" }} />
               <Tooltip content={<TooltipDark />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="analyses" name="Analyses" stroke={ACCENT} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="leads" name="Leads" stroke={SUCCESS} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="urgent" name="Urgent" stroke={WARNING} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="analyses" name={t("adminPortal.ava.sections.legendAnalyses")} stroke={ACCENT} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="leads" name={t("adminPortal.ava.sections.legendLeads")} stroke={SUCCESS} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="urgent" name={t("adminPortal.ava.sections.legendUrgent")} stroke={WARNING} strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
         <div className="pp-card" style={{ padding: 20 }}>
-          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Satisfaction courtier</h3>
+          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>{t("adminPortal.ava.sections.satisfaction")}</h3>
           {feedbackDonut.length === 0 ? (
-            <p style={{ fontSize: 12, color: "var(--pp-text-faint)", padding: "60px 0", textAlign: "center" }}>Pas encore de feedback</p>
+            <p style={{ fontSize: 12, color: "var(--pp-text-faint)", padding: "60px 0", textAlign: "center" }}>{t("adminPortal.ava.sections.noFeedback")}</p>
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>
@@ -600,9 +600,9 @@ export default function PAAva() {
       {/* Broker leaderboard + tool mix */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="pp-card lg:col-span-2" style={{ padding: 20 }}>
-          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Top courtiers · analyses vs actions</h3>
+          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>{t("adminPortal.ava.sections.topBrokers")}</h3>
           {brokerLeaderboard.length === 0 ? (
-            <p style={{ fontSize: 12, color: "var(--pp-text-faint)", padding: "40px 0", textAlign: "center" }}>Aucune donnée AVA pour le moment.</p>
+            <p style={{ fontSize: 12, color: "var(--pp-text-faint)", padding: "40px 0", textAlign: "center" }}>{t("adminPortal.ava.sections.noBrokers")}</p>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={brokerLeaderboard} layout="vertical" margin={{ left: 10 }}>
@@ -611,19 +611,19 @@ export default function PAAva() {
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#8FA8C0" }} width={140} />
                 <Tooltip content={<TooltipDark />} cursor={{ fill: "rgba(46,155,220,0.06)" }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="analyses" name="Analyses" fill={ACCENT} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="emails" name="Emails reçus" fill={AGENT} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="meetings" name="Réunions" fill={WARNING} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="ok" name="Actions ✓" fill={SUCCESS} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="err" name="Erreurs" fill={DANGER} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="analyses" name={t("adminPortal.ava.sections.legendAnalyses")} fill={ACCENT} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="emails" name={t("adminPortal.ava.sections.legendEmails")} fill={AGENT} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="meetings" name={t("adminPortal.ava.sections.legendMeetings")} fill={WARNING} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="ok" name={t("adminPortal.ava.sections.legendOk")} fill={SUCCESS} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="err" name={t("adminPortal.ava.sections.legendErrors")} fill={DANGER} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </div>
         <div className="pp-card" style={{ padding: 20 }}>
-          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Outils AVA appelés</h3>
+          <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>{t("adminPortal.ava.sections.toolMix")}</h3>
           {toolMix.length === 0 ? (
-            <p style={{ fontSize: 12, color: "var(--pp-text-faint)", padding: "60px 0", textAlign: "center" }}>Aucun appel d'outil récent</p>
+            <p style={{ fontSize: 12, color: "var(--pp-text-faint)", padding: "60px 0", textAlign: "center" }}>{t("adminPortal.ava.sections.noTools")}</p>
           ) : (
             <div className="space-y-2">
               {toolMix.map((t) => {
@@ -648,11 +648,11 @@ export default function PAAva() {
 
       {/* Recent actions */}
       <div className="pp-card" style={{ padding: 20 }}>
-        <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>Actions AVA récentes</h3>
+        <h3 style={{ fontWeight: 600, fontSize: 14, color: "var(--pp-text-primary)", marginBottom: 12 }}>{t("adminPortal.ava.sections.recentActions")}</h3>
         {loading ? (
-          <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>Chargement…</p>
+          <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>{t("adminPortal.ava.sections.loading")}</p>
         ) : recentActions.length === 0 ? (
-          <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>Aucune action AVA récente.</p>
+          <p style={{ fontSize: 12, color: "var(--pp-text-faint)" }}>{t("adminPortal.ava.sections.noActions")}</p>
         ) : (
           <div className="space-y-1">
             {recentActions.map((a) => {
@@ -666,7 +666,7 @@ export default function PAAva() {
                   </span>
                   <span style={{ fontSize: 10, color: "var(--pp-text-muted)" }}>{a.broker_name || profiles[a.broker_user_id] || profiles[a.user_id] || a.broker_user_id?.slice(0, 8) || a.user_id?.slice(0, 8)}</span>
                   <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }} className="tabular-nums">
-                    {(a.executed_at || a.created_at) ? new Date(a.executed_at || a.created_at).toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" }) : ""}
+                    {(a.executed_at || a.created_at) ? new Date(a.executed_at || a.created_at).toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : ""}
                   </span>
                 </div>
               );

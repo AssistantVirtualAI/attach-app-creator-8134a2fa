@@ -1,98 +1,72 @@
-# Switch Android to FreeSWITCH Verto (port 8082)
+# Portail admin Planiprêt — bilingue complet FR ⇄ EN
 
-## Goal
-On Android, replace JsSIP/WSS + TURN with FreeSWITCH Verto over WSS on `pbxnode.lemtel.tel:8082`. iOS keeps using the native PJSIP plugin. No changes to iOS native code.
+## Situation actuelle (vérifiée)
 
-## Why
-- Verto uses FreeSWITCH's server-side media bridge, so no TURN is needed. This bypasses the Bell Canada TURN DNS block that currently causes `ice=new` timeouts on Android.
-- Port 8082 WSS is already open on `pbxnode.lemtel.tel`.
+- Le layout `PlanipretAdminLayout.tsx` utilise déjà `useMplanipretLang().t(...)` avec le namespace `adminPortal.*` du dictionnaire `src/lib/i18n/mplanipret.ts` (FR + EN déjà présents).
+- Sur les **21 pages admin**, seules **8 importent** le hook de traduction (`PAAuditChecklist`, `PAAva`, `PAAvaAgent`, `PAAvaLogs`, `PACalls`, `PALeads`, `PAOverview`, `PAReports`) — et même celles-ci contiennent encore beaucoup de texte codé en dur.
+- **13 pages n'ont aucune traduction** : `PAAuditLog`, `PACompliance`, `PADebug`, `PADiagnostics`, `PAMaestroStatus`, `PAMaestroSync`, `PAMessages`, `PAMobileDevices`, `PARecordings`, `PASipDiagnostic`, `PATemplates`, `PAUsers`, `PAVoicemails`.
+- Résultat : cliquer sur EN change le layout (sidebar, titre) mais laisse la majorité du contenu en français.
 
-## Scope
-Only `apps/ava-softphone-mobile`. No changes to:
-- `CapacitorSip.swift`, `CallKitManager.swift`, `Main.storyboard`, `project.pbxproj`
-- iOS runtime path
-- Planiprêt mobile app
+## Objectif
 
-## Implementation
+Toute chaîne visible dans `/planipret/admin/**` doit basculer proprement quand l'utilisateur change de langue via `PlanipretLangSwitch`.
 
-### 1. Load the Verto client
-The `jQuery.verto` client (bundled with FreeSWITCH at `/verto/js/verto.js`) is the canonical Verto library. `@fusionpbx/verto` on npm does not exist. Two options:
+## Approche
 
-- **A. Script tag in `apps/ava-softphone-mobile/index.html`** loading jQuery from jsDelivr and `verto.js` from the PBX. Simple, matches the snippet you gave.
-- **B. Vendor `jquery` + a local copy of `verto.js`/`jquery.jsonrpcclient.js`** into `src/vendor/verto/` and import them from `vertoProvider.ts`. Cleaner for offline/Capacitor, avoids runtime network dependency on the PBX for the JS file itself.
+Étendre le dictionnaire existant plutôt que d'en créer un nouveau — un seul système, cohérent avec le layout.
 
-Recommended: **B** for a Capacitor native app (the WebView shouldn't need to fetch JS from the PBX at boot). I'll vendor the files.
+### 1. Étendre `src/lib/i18n/mplanipret.ts`
 
-### 2. New provider: `src/lib/sip/vertoProvider.ts`
-Wraps `jQuery.verto` with:
-- `initVerto(config)` — connect + register, resolves on `onWSLogin`, rejects on `onWSClose` before login.
-- `vertoCall(number, callerName)` — outbound call, returns dialog handle.
-- `vertoHangup(dialogId?)` — hang up a specific dialog or all.
-- `vertoAnswer(dialogId)`, `vertoSendDTMF(dialogId, digit)`, `vertoMute/Unmute(dialogId)`, `vertoHold/Unhold(dialogId)`.
-- Emits events (`registered`, `unregistered`, `incoming`, `progress`, `answered`, `hangup`, `mediaError`) so the React hook can subscribe.
-- `iceServers: false` (Verto handles media server-side).
-
-### 3. New hook: `src/hooks/useSoftphoneVerto.ts`
-Implements the same `UseSoftphoneReturn` surface currently exposed by `useSoftphoneJsSip`/`useSoftphoneNative`:
-`status, registered, calls, activeCallId, call, hangup, answer, mute, unmute, hold, unhold, sendDTMF, setStatus, reconnect, lastPersistedError, sipLog, clearSipLog, clearSipState, retryAttempt, nextRetryAt, retryLimitReached, quality, audioProfile, setAudioProfile, offeredCodecs, negotiatedCodec`.
-
-Fields that don't map to Verto (offered/negotiated codec details, ICE quality stats) get sensible defaults; call quality is derived from the underlying `RTCPeerConnection` Verto exposes via `dialog.rtc.getPeer()`.
-
-### 4. Dispatcher: `src/hooks/useSoftphone.ts`
-Update the public `useSoftphone` to a 3-way dispatch:
+Ajouter sous `adminPortal` (FR et EN en parallèle) un sous-namespace par page :
 
 ```text
-Capacitor.getPlatform() === 'ios' + NATIVE_SIP_ENABLED → useSoftphoneNative (PJSIP)
-Capacitor.getPlatform() === 'android'                  → useSoftphoneVerto
-otherwise (web / dev)                                  → useSoftphoneJsSip
+adminPortal.pages.{overview|users|calls|messages|recordings|voicemails|
+  leads|templates|reports|compliance|auditLog|auditChecklist|
+  maestroSync|maestroStatus|mobileDevices|diagnostics|sipDiagnostic|
+  debug|ava|avaAgent|avaLogs}
 ```
 
-Android no longer touches JsSIP or the ICE/TURN path.
+Chaque bloc contient : `title`, `subtitle`, entêtes de tableau, boutons, labels de filtres, états vides, toasts, libellés de statut, messages d'erreur/succès.
 
-### 5. Config plumbing (`src/MobileApp.tsx`)
-Add Android-specific SIP endpoint config:
+Ajouter aussi un namespace transverse `adminPortal.common` : `refresh`, `save`, `cancel`, `delete`, `edit`, `search`, `loading`, `noData`, `yes`, `no`, `all`, `actions`, `export`, `filters`, statuts (`connected`, `pending`, `error`, `disconnected`), unités de temps (`min`, `hSuffix`, `daysAgo`), etc.
 
-```text
-VERTO_HOST = 'pbxnode.lemtel.tel'
-VERTO_PORT = 8082
-```
+### 2. Convertir les 21 pages admin
 
-Pass `{ host, port, login: extension, password: sipPassword, caller_id_name, caller_id_number }` from `creds` into `useSoftphone` on Android. Keep the existing `SIPConfig` path for iOS/web unchanged.
+Pour chaque page :
+1. Importer `useMplanipretLang` et récupérer `t`.
+2. Remplacer chaque littéral FR par `t("adminPortal.pages.<page>.<clé>")` ou `t("adminPortal.common.<clé>")`.
+3. Traiter aussi : `alert()`, `confirm()`, `toast(...)`, placeholders, `aria-label`, `title` HTML, options de `<select>`, textes d'erreur `catch`.
+4. Format des dates : passer par `Intl.DateTimeFormat(lang === "fr" ? "fr-CA" : "en-CA", ...)` là où l'on affiche des dates humaines.
+5. Pluriels simples via une petite helper `plural(t, n, "adminPortal.common.callSingular", "adminPortal.common.callPlural")`.
 
-### 6. TURN fetch skip on Android
-In `src/lib/sip/iceServers.ts` / `rtcConfig.ts`, short-circuit `getIceServers()` on Android so the app no longer calls `get-turn-credentials`. Removes the DNS-blocked path entirely.
+### 3. Composants partagés utilisés dans l'admin
 
-### 7. SIP debug panel
-`SipDebugPanel.tsx` currently reads JsSIP events. Add Verto events to the same ring buffer so the debug screen still shows `connecting → registered → call → hangup` transitions on Android.
+Passer en revue et traduire les composants montés dans ces pages :
+- `NotificationsBell`, `CommandPalette`, `SessionTimeoutModal`, `PpActiveCallScreen`, `WorkspaceHeaderExtras` (seulement ce qui apparaît dans le scope admin).
+- Widgets internes des pages (ex. cartes KPI, modales edit user dans `PAUsers`, composeur dans `PAMessages`).
 
-### 8. Tests
-- Add `apps/ava-softphone-mobile/src/lib/sip/vertoProvider.test.ts` covering: connect success, connect failure, outbound call state transitions, DTMF, hangup.
-- Update `useSoftphone`-level tests to cover the Android → Verto dispatch branch.
+### 4. Garde-fous
 
-### 9. Native permissions
-No AndroidManifest changes required — mic permission is already declared. `WakeLock`/`WifiLock` foreground service (`SipConnectionService.kt`) is kept: Verto still runs a long-lived WebSocket that needs to survive doze.
+- Le fallback de `t()` retourne la clé si absente — j'ajoute un log dev-only pour repérer les clés manquantes pendant la conversion.
+- Vérifier que `useMplanipretLang` et `useLanguage` restent bien synchronisés (déjà le cas : `setLang` écrit dans les deux `localStorage` et appelle `setGlobalLanguage`).
 
-## Files touched
-- `apps/ava-softphone-mobile/src/lib/sip/vertoProvider.ts` (new)
-- `apps/ava-softphone-mobile/src/hooks/useSoftphoneVerto.ts` (new)
-- `apps/ava-softphone-mobile/src/hooks/useSoftphone.ts`
-- `apps/ava-softphone-mobile/src/MobileApp.tsx`
-- `apps/ava-softphone-mobile/src/lib/sip/iceServers.ts`
-- `apps/ava-softphone-mobile/src/lib/sip/rtcConfig.ts`
-- `apps/ava-softphone-mobile/src/components/SipDebugPanel.tsx`
-- `apps/ava-softphone-mobile/src/vendor/verto/{jquery.min.js, jquery.jsonrpcclient.js, verto.js}` (new, vendored)
-- `apps/ava-softphone-mobile/src/lib/sip/vertoProvider.test.ts` (new)
+### 5. Validation
 
-## After merge
-User runs on their machine:
-```text
-cd apps/ava-softphone-mobile
-npm run build
-npx cap sync android
-npx cap run android
-```
+Après conversion, parcourir chaque page en FR puis en EN via le switch de langue et vérifier :
+- Titres, sous-titres, sidebar, entêtes de colonnes, boutons, badges, tooltips.
+- Modales et menus déroulants (ex. `Actions` de `PAUsers`).
+- Messages toast/alert/confirm.
+- États vides et messages de chargement.
 
-## Open questions
-1. **Vendor or CDN for `verto.js`?** I recommend vendoring so the Capacitor app has no boot-time dependency on the PBX for its own JS. Confirm OK.
-2. **Password source.** Verto needs the raw SIP password. Confirm `creds.sipPassword` (or whichever field currently feeds JsSIP `password`) is the right one to reuse — no separate Verto password expected.
-3. **Inbound calls.** Should Android continue to accept push-initiated inbound calls via the existing FCM/push path, with Verto answering when the socket is live? (Assumption: yes, same flow, Verto just replaces the media layer.)
+## Détails techniques
+
+- Aucun changement de contrat : `useMplanipretLang()` existant, dictionnaire déjà chargé, switch de langue déjà branché.
+- Zéro migration DB, zéro nouvelle dépendance.
+- Volume : ~15 000 lignes de pages admin à balayer ; ajout estimé de ~600–900 clés dans `mplanipret.ts` (FR + EN).
+- Livrable en une seule passe (pas de PR partielle) pour éviter un mélange visible FR/EN.
+
+## Hors périmètre
+
+- Portail broker (`/planipret/**` non-admin) et app mobile — déjà couverts par leurs propres passes i18n.
+- Contenu généré côté serveur (emails, notifications push) — non demandé ici.
+- Retraduction du wording FR existant : je garde le texte actuel et ne fais que produire l'équivalent EN.

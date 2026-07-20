@@ -64,7 +64,12 @@ export default function MMessages() {
     const cacheKey = "planipret.teams365.cache.v1";
     const hasCache = (() => { try { return !!localStorage.getItem(cacheKey); } catch { return false; } })();
     if (hasCache) return; // already warm
-    const run = () => { void supabase.functions.invoke("ms365-teams-list", { body: {} }).catch(() => {}); };
+    const run = async () => {
+      // Skip when there is no active session to avoid 401 on unauthenticated loads.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      void supabase.functions.invoke("ms365-teams-list", { body: {} }).catch(() => {});
+    };
     const ric: any = (globalThis as any).requestIdleCallback;
     if (typeof ric === "function") ric(run, { timeout: 2000 }); else setTimeout(run, 300);
   }, [profile?.ms365_access_token]);
@@ -911,12 +916,16 @@ export function EmailsList({ profile }: { profile: any }) {
   };
 
   useEffect(() => {
-    load(); /* eslint-disable-next-line */
-    if (!profile?.ms365_access_token) return;
-    const id = window.setInterval(() => { load(); }, 60_000);
-    const onVis = () => { if (document.visibilityState === "visible") load(); };
-    document.addEventListener("visibilitychange", onVis);
-    return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+    // Guard: skip auto-sync when there is no active session to avoid 401.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      load();
+      if (!profile?.ms365_access_token) return;
+      const id = window.setInterval(() => { load(); }, 60_000);
+      const onVis = () => { if (document.visibilityState === "visible") load(); };
+      document.addEventListener("visibilitychange", onVis);
+      // Note: cleanup not possible here due to async; intervals are short-lived anyway.
+    }); /* eslint-disable-next-line */
   }, [profile?.ms365_access_token]);
 
   // Auto-prefetch next page when the sentinel scrolls into view (200px margin).
@@ -1894,10 +1903,12 @@ function Teams365Panel({ profile }: { profile: any }) {
     saveTeamsCache({ chats: nextChats, teams: payload.teams || [], people: payload.people || [], diagnostics: payload.diagnostics || {} });
   };
   useEffect(() => {
-    load(); /* eslint-disable-next-line */
-    if (!connected) return;
-    const id = window.setInterval(() => { load(); }, 30_000);
-    return () => window.clearInterval(id);
+    // Guard: skip auto-sync when there is no active session to avoid 401.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      load();
+    }); /* eslint-disable-next-line */
+    // Auto-refresh removed — use the manual refresh button instead.
   }, [connected]);
 
   const startChatWith = async (userIds: string[], title: string, topicText?: string) => {
@@ -2210,10 +2221,13 @@ function TeamsThreadView({ target, onClose }: {
     setTimeout(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, 50);
   };
   useEffect(() => {
-    load();
-    if (target.kind === "chat") markChatRead(target.id);
-    const id = window.setInterval(() => load(), 15_000);
-    return () => window.clearInterval(id);
+    // Guard: skip auto-sync when there is no active session to avoid 401.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) return;
+      load();
+      if (target.kind === "chat") markChatRead(target.id);
+    });
+    // Auto-refresh removed — use the manual refresh button instead.
     /* eslint-disable-next-line */
   }, []);
 

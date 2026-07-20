@@ -923,6 +923,76 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     return { success: true, ...info };
   },
 
+  // ===== PUSH BACK TO MAESTRO (summaries / coaching / notes) =====
+  // Pushes an AI-generated call summary + coaching + notes to the Maestro
+  // communication record so it shows in the broker's Maestro communications
+  // page. Also mirrors locally into planipret_phone_calls.
+  async push_call_summary(ctx, p) {
+    if (!p?.call_id) return { success: false, error: "call_id_required" };
+    const payload: Record<string, unknown> = {
+      ...(p.summary ? { summary: p.summary } : {}),
+      ...(p.coaching ? { coaching: p.coaching } : {}),
+      ...(p.notes ? { notes: p.notes } : {}),
+      ...(p.sentiment ? { sentiment: p.sentiment } : {}),
+      ...(p.next_steps ? { next_steps: p.next_steps } : {}),
+      source: "ava",
+      pushed_at: new Date().toISOString(),
+    };
+    try {
+      const result = await maestroFetch(ctx, `/api/v1/calls/${encodeURIComponent(p.call_id)}/summary`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      // Mirror locally so the app reflects it immediately
+      await ctx.admin.from("planipret_phone_calls").update({
+        ai_summary: p.summary ?? null,
+        ai_coaching: p.coaching ?? null,
+        ai_notes: p.notes ?? null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", p.call_id).eq("user_id", ctx.userId).then(() => null).catch(() => null);
+      return { success: true, message: "Résumé poussé dans Maestro", result };
+    } catch (e) { return { success: false, error: String(e) }; }
+  },
+
+  // Adds a free-form note to a client's Maestro communications timeline.
+  async push_client_note(ctx, p) {
+    if (!p?.client_id || !p?.note) return { success: false, error: "client_id_and_note_required" };
+    try {
+      const result = await maestroFetch(ctx, `/api/v1/clients/${encodeURIComponent(p.client_id)}/notes`, {
+        method: "POST",
+        body: JSON.stringify({
+          note: p.note,
+          type: p.type ?? "general",
+          source: "ava",
+          broker_id: ctx.profile?.maestro_broker_id,
+        }),
+      });
+      return { success: true, message: "Note ajoutée dans Maestro", result };
+    } catch (e) { return { success: false, error: String(e) }; }
+  },
+
+  // Logs a communication entry (call/sms/email summary) into Maestro directly.
+  async push_communication_log(ctx, p) {
+    if (!p?.client_id) return { success: false, error: "client_id_required" };
+    try {
+      const result = await maestroFetch(ctx, `/api/v1/clients/${encodeURIComponent(p.client_id)}/communications`, {
+        method: "POST",
+        body: JSON.stringify({
+          channel: p.channel ?? "call", // call | sms | email | note
+          direction: p.direction ?? "outbound",
+          summary: p.summary,
+          coaching: p.coaching,
+          notes: p.notes,
+          duration_seconds: p.duration_seconds,
+          occurred_at: p.occurred_at ?? new Date().toISOString(),
+          source: "ava",
+          broker_id: ctx.profile?.maestro_broker_id,
+        }),
+      });
+      return { success: true, message: "Communication loggée dans Maestro", result };
+    } catch (e) { return { success: false, error: String(e) }; }
+  },
+
   async get_integration_status(ctx) {
     const { data: prof } = await ctx.admin.from("planipret_profiles")
       .select("ns_jwt, maestro_connected, ms365_access_token")

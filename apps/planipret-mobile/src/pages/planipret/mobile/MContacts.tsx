@@ -752,11 +752,15 @@ function ContactDetailSheet({
 
   const openSms = () => {
     if (!smsTarget) { toast.error("Aucun numéro disponible"); return; }
-    setSmsOpen(true);
+    const qs = new URLSearchParams({ tab: "sms", to: smsTarget, name });
+    onClose();
+    navigate(`/mplanipret/messages?${qs.toString()}`);
   };
   const openEmail = () => {
     if (!email) { toast.error("Aucun email disponible"); return; }
-    setEmailOpen(true);
+    const qs = new URLSearchParams({ tab: "emails", to: email, name });
+    onClose();
+    navigate(`/mplanipret/messages?${qs.toString()}`);
   };
   const openAppt = () => {
     if (!maestroId) { toast.error("Client Maestro requis pour un RDV"); return; }

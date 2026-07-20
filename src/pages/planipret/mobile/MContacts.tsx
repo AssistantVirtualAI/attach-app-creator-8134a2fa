@@ -558,6 +558,7 @@ function ContactDetailSheet({
   contact, onClose, onCall,
 }: { contact: any; onClose: () => void; onCall: (phone: string) => void }) {
   const { t, lang } = useMplanipretLang();
+  const navigate = useNavigate();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [creatingTask, setCreatingTask] = useState(false);
@@ -566,6 +567,15 @@ function ContactDetailSheet({
   const name = `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim() || contact.phone || "Contact";
   const phone: string | undefined = contact.phone;
   const maestroId: string | undefined = contact.maestro_client_id || contact.external_id || contact.id;
+
+  const openSms = (n: string) => {
+    onClose();
+    navigate(`/mplanipret/messages?tab=sms&to=${encodeURIComponent(n)}`);
+  };
+  const openEmail = (email: string) => {
+    onClose();
+    navigate(`/mplanipret/messages?tab=emails&to=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`);
+  };
 
   useEffect(() => {
     let cancel = false;
@@ -629,8 +639,8 @@ function ContactDetailSheet({
         {/* Quick actions */}
         <div className="grid grid-cols-5 gap-2 mb-4">
           <QuickAction icon={<Phone className="w-4 h-4" />} label={t("common.call")} onClick={() => phone && onCall(phone)} disabled={!phone} />
-          <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={() => phone && onCall(phone)} disabled={!phone} />
-          <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={() => contact.email && window.open(`mailto:${contact.email}`)} disabled={!contact.email} />
+          <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={() => phone && openSms(phone)} disabled={!phone} />
+          <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={() => contact.email && openEmail(contact.email)} disabled={!contact.email} />
           <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={createTask} disabled={creatingTask} />
           <QuickAction icon={<Calendar className="w-4 h-4" />} label="RDV" onClick={() => toast.info("Bientôt disponible")} />
         </div>

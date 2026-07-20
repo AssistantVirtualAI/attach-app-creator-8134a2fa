@@ -56,7 +56,14 @@ const fmtTime = (iso: string, lang: "fr" | "en" = "fr", t?: (key: string) => str
 export default function MMessages() {
   const { t } = useMplanipretLang();
   const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();
-  const [sub, setSub] = useState<SubTab>("sms");
+  const [searchParams] = useSearchParams();
+  const initialTab = ((): SubTab => {
+    const q = searchParams.get("tab");
+    return (q === "sms" || q === "team" || q === "teams365" || q === "emails" || q === "roster") ? q : "sms";
+  })();
+  const [sub, setSub] = useState<SubTab>(initialTab);
+  const qTo = searchParams.get("to") ?? "";
+  const qName = searchParams.get("name") ?? "";
 
   // Warm the Teams cache on mount so switching to the Teams tab is instant.
   useEffect(() => {
@@ -121,10 +128,10 @@ export default function MMessages() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {sub === "sms" && <SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} />}
+        {sub === "sms" && <SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} initialTo={qTo} />}
         {sub === "team" && <TeamChat profile={profile} />}
         {sub === "teams365" && <Teams365Panel profile={profile} />}
-        {sub === "emails" && <EmailsList profile={profile} />}
+        {sub === "emails" && <EmailsList profile={profile} initialTo={qTo} initialName={qName} />}
       </div>
     </div>
   );
@@ -235,7 +242,7 @@ const recipientFromRow = (c: any, source: SmsRecipient["source"], index: number)
 const recipientHay = (r: SmsRecipient) => `${r.name} ${r.phone} ${r.email ?? ""} ${r.extension ?? ""} ${r.department ?? ""}`.toLowerCase();
 const looksLikePhone = (value: string) => /^[+]?[-() .\d]{3,}$/.test(value.trim());
 
-function SmsList({ profile, openDialer, registerRefresh }: any) {
+function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   const { t } = useMplanipretLang();
   const [searchParams] = useSearchParams();
   const myExt = profile?.extension ?? "";
@@ -715,6 +722,7 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
             <Paperclip className="w-5 h-5" />
           </button>
         }
+        aiAction={<AiImproveMenu text={text} mode="sms" onResult={setText} />}
       />
       <SmsTemplatesSheet open={tplOpen} onClose={() => setTplOpen(false)} userId={userId} onPick={(body) => setText((t) => t ? `${t} ${body}` : body)} />
       <AvaSummarizeSheet
@@ -871,7 +879,7 @@ function TeamChat({ profile }: { profile: any }) {
 // ============================================================
 // EMAILS TAB (M365)
 // ============================================================
-export function EmailsList({ profile }: { profile: any }) {
+export function EmailsList({ profile, initialTo, initialName }: { profile: any; initialTo?: string; initialName?: string }) {
   const { t, lang } = useMplanipretLang();
   const PAGE_SIZE = 25;
   const [emails, setEmails] = useState<any[] | null>(null);
@@ -879,6 +887,15 @@ export function EmailsList({ profile }: { profile: any }) {
   const [active, setActive] = useState<any | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeInit, setComposeInit] = useState<{ to?: string; subject?: string; body?: string }>({});
+
+  useEffect(() => {
+    if (initialTo && initialTo.trim()) {
+      setComposeInit({ to: initialTo, subject: "", body: "" });
+      setComposeOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTo]);
+
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -1577,6 +1594,7 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
             style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
             <Paperclip className="w-3.5 h-3.5" /> Joindre
           </button>
+          <AiImproveMenu text={body} mode="email" onResult={setBody} />
           <span className="text-[10px]" style={{ color: "var(--pp-text-muted)" }}>Max 3 Mo par fichier</span>
         </div>
       </div>
@@ -1589,10 +1607,10 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
 // SHARED PRIMITIVES
 // ============================================================
 function Composer({
-  text, setText, onSend, sending, placeholder, leftAction, extra, accent = "brand", inputRef, autoFocus = false,
+  text, setText, onSend, sending, placeholder, leftAction, extra, aiAction, accent = "brand", inputRef, autoFocus = false,
 }: {
   text: string; setText: (v: string) => void; onSend: () => void; sending: boolean;
-  placeholder?: string; leftAction?: React.ReactNode; extra?: React.ReactNode;
+  placeholder?: string; leftAction?: React.ReactNode; extra?: React.ReactNode; aiAction?: React.ReactNode;
   accent?: "brand" | "agent"; inputRef?: React.RefObject<HTMLInputElement>; autoFocus?: boolean;
 }) {
   const { t } = useMplanipretLang();
@@ -1607,6 +1625,7 @@ function Composer({
     >
       {extra}
       {leftAction}
+      {aiAction}
       <input
         data-sms-composer-input="true"
         ref={inputRef}
@@ -1630,6 +1649,80 @@ function Composer({
       >
         {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
       </button>
+    </div>
+  );
+}
+
+
+// ============================================================
+// AI IMPROVE MENU (Claude) — améliore SMS / courriel
+// ============================================================
+function AiImproveMenu({ text, mode, onResult }: { text: string; mode: "sms" | "email"; onResult: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<null | string>(null);
+  const disabled = !text.trim() || !!busy;
+
+  const run = async (action: "fix" | "improve" | "formal" | "shorter") => {
+    setBusy(action);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-text-improve", {
+        body: { text, mode, action },
+      });
+      if (error) throw error;
+      if (!(data as any)?.success) throw new Error((data as any)?.error ?? "AI error");
+      const result = String((data as any).result ?? "").trim();
+      if (result) onResult(result);
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "IA indisponible");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const options: { key: "fix" | "improve" | "formal" | "shorter"; label: string; icon: string }[] = [
+    { key: "fix", label: "Corriger les fautes", icon: "✓" },
+    { key: "improve", label: "Améliorer le texte", icon: "✨" },
+    { key: "formal", label: "Rendre plus formel", icon: "👔" },
+    { key: "shorter", label: "Raccourcir", icon: "✂️" },
+  ];
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen((o) => !o)}
+        disabled={disabled}
+        className="w-9 h-9 rounded-full flex items-center justify-center text-white disabled:opacity-40 shrink-0"
+        style={{ background: "linear-gradient(135deg, #7C3AED, #A855F7)", boxShadow: "0 2px 12px rgba(124,58,237,0.4)" }}
+        aria-label="Améliorer avec l'IA"
+        title="Améliorer avec l'IA"
+      >
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} />
+          <div
+            className="absolute bottom-11 left-0 z-[91] min-w-[200px] rounded-2xl overflow-hidden shadow-2xl"
+            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}
+          >
+            {options.map((o) => (
+              <button
+                key={o.key}
+                type="button"
+                onClick={() => run(o.key)}
+                disabled={!!busy}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left hover:opacity-80 disabled:opacity-50"
+                style={{ color: "var(--pp-text-primary)", borderBottom: "1px solid var(--pp-bg-border)" }}
+              >
+                <span className="w-5 text-center">{busy === o.key ? <Loader2 className="w-3.5 h-3.5 animate-spin inline" /> : o.icon}</span>
+                <span>{o.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

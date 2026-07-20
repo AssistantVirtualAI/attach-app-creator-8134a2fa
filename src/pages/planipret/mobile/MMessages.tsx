@@ -128,10 +128,10 @@ export default function MMessages() {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {sub === "sms" && <SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} />}
+        {sub === "sms" && <SmsList profile={profile} openDialer={openDialer} registerRefresh={registerRefresh} initialTo={qTo} />}
         {sub === "team" && <TeamChat profile={profile} />}
         {sub === "teams365" && <Teams365Panel profile={profile} />}
-        {sub === "emails" && <EmailsList profile={profile} />}
+        {sub === "emails" && <EmailsList profile={profile} initialTo={qTo} initialName={qName} />}
       </div>
     </div>
   );

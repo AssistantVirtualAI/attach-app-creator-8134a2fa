@@ -53,6 +53,8 @@ function pickSmsNumber(row: any): string | null {
 
 async function getAssignedSmsNumbers(supabase: any, ctx: any): Promise<any[]> {
   const numbers: any[] = [];
+
+  // Source 1 : NS-API smsnumbers endpoint
   try {
     const res = await nsFetch(`/domains/${encodeURIComponent(ctx.nsDomain)}/users/${encodeURIComponent(ctx.extension)}/smsnumbers`, { method: "GET" });
     if (res.ok) {
@@ -62,23 +64,69 @@ async function getAssignedSmsNumbers(supabase: any, ctx: any): Promise<any[]> {
         const e164 = pickSmsNumber(n);
         if (e164) numbers.push({ ...(typeof n === "object" ? n : {}), number: e164, "from-number": e164, source: "ns_api" });
       }
+    } else {
+      const txt = await res.text().catch(() => "");
+      console.warn(`[pp-ns-sms] smsnumbers NS-API ${res.status}:`, txt.slice(0, 200));
     }
-  } catch { /* DB fallback below */ }
+  } catch (e) {
+    console.warn("[pp-ns-sms] smsnumbers NS-API error:", e);
+  }
 
+  // Source 2 : planipret_did_assignments — extension + domain
   if (!numbers.length) {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("planipret_did_assignments")
         .select("phone_number_e164,phone_number_digits,extension,domain,callerid_name")
         .eq("extension", String(ctx.extension))
         .eq("domain", String(ctx.nsDomain))
         .limit(5);
+      if (error) console.warn("[pp-ns-sms] did_assignments (domain) error:", error.message);
       for (const n of data ?? []) {
         const e164 = pickSmsNumber(n);
         if (e164) numbers.push({ ...n, number: e164, "from-number": e164, source: "did_assignment" });
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.warn("[pp-ns-sms] did_assignments (domain) error:", e);
+    }
   }
+
+  // Source 3 : planipret_did_assignments — extension seul (sans filtre domain)
+  if (!numbers.length) {
+    try {
+      const { data, error } = await supabase
+        .from("planipret_did_assignments")
+        .select("phone_number_e164,phone_number_digits,extension,domain,callerid_name")
+        .eq("extension", String(ctx.extension))
+        .limit(5);
+      if (error) console.warn("[pp-ns-sms] did_assignments (no domain) error:", error.message);
+      for (const n of data ?? []) {
+        const e164 = pickSmsNumber(n);
+        if (e164) numbers.push({ ...n, number: e164, "from-number": e164, source: "did_assignment_no_domain" });
+      }
+    } catch (e) {
+      console.warn("[pp-ns-sms] did_assignments (no domain) error:", e);
+    }
+  }
+
+  // Source 4 : planipret_profiles — colonne phone_number ou sms_number
+  if (!numbers.length) {
+    try {
+      const { data, error } = await supabase
+        .from("planipret_profiles")
+        .select("phone_number,sms_number")
+        .eq("id", ctx.profileId)
+        .maybeSingle();
+      if (error) console.warn("[pp-ns-sms] profiles fallback error:", error.message);
+      const raw = (data as any)?.sms_number ?? (data as any)?.phone_number ?? null;
+      const e164 = normalizeE164(raw);
+      if (e164) numbers.push({ number: e164, "from-number": e164, source: "profile" });
+    } catch (e) {
+      console.warn("[pp-ns-sms] profiles fallback error:", e);
+    }
+  }
+
+  console.log(`[pp-ns-sms] getAssignedSmsNumbers ext=${ctx.extension} domain=${ctx.nsDomain} found=${numbers.length} sources=${numbers.map((n: any) => n.source).join(",")}`);
 
   const seen = new Set<string>();
   return numbers.filter((n) => {

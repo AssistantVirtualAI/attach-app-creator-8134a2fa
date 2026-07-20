@@ -252,6 +252,12 @@ export default function PAMaestroSync() {
         </div>
       </div>
 
+      {/* Embedded OAuth broker connection flow (was /planipret/admin/maestro-status) */}
+      <div className="pp-card mb-5" style={{ padding: 0, overflow: "hidden" }}>
+        <PAMaestroStatus />
+      </div>
+
+
       {err && (
         <div className="pp-card mb-5" style={{ padding: 12, borderColor: `${DANGER}55`, background: `${DANGER}0D` }}>
           <div className="flex items-center gap-2" style={{ color: DANGER, fontSize: 13 }}>

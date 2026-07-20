@@ -406,9 +406,16 @@ function NativeDeepLinkBridge() {
           pathWithHost === '/auth/microsoft/callback' ||
           pathWithHost === '/auth/ms365/callback';
 
+        const isMaestroCallback =
+          url.pathname === '/auth/maestro/callback' ||
+          pathWithHost === '/auth/maestro/callback' ||
+          url.protocol === 'planipret:';
+
         if (isMs365Callback) {
           localStorage.setItem('pp_ms365_callback_url', rawUrl);
           navigate(`/auth/microsoft/callback${url.search}`, { replace: true });
+        } else if (isMaestroCallback) {
+          navigate(`/auth/maestro/callback${url.search}`, { replace: true });
         }
       } catch {
         // Ignore non-URL events.

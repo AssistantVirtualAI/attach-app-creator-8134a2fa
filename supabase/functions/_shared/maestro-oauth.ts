@@ -11,23 +11,26 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 export interface MaestroOAuthEnv {
   authUrl: string;
   tokenUrl: string;
-  clientId: string;
-  clientSecret: string;
+  clientId: string;        // Web client_id=2
+  clientSecret: string;   // Web only
   scope: string;
+  mobileClientId: string; // Mobile PKCE client_id=3
 }
 
 export function getMaestroOAuthEnv(): MaestroOAuthEnv {
   return {
-    authUrl: Deno.env.get("MAESTRO_OAUTH_AUTHORIZE_URL") ?? "",
-    tokenUrl: Deno.env.get("MAESTRO_OAUTH_TOKEN_URL") ?? "",
-    clientId: Deno.env.get("MAESTRO_OAUTH_CLIENT_ID") ?? "",
-    clientSecret: Deno.env.get("MAESTRO_OAUTH_CLIENT_SECRET") ?? "",
-    scope: Deno.env.get("MAESTRO_OAUTH_SCOPE") ?? "",
+    authUrl:        Deno.env.get("MAESTRO_OAUTH_AUTHORIZE_URL")       ?? "",
+    tokenUrl:       Deno.env.get("MAESTRO_OAUTH_TOKEN_URL")           ?? "",
+    clientId:       Deno.env.get("MAESTRO_OAUTH_CLIENT_ID")           ?? "2",
+    clientSecret:   Deno.env.get("MAESTRO_OAUTH_CLIENT_SECRET")       ?? "",
+    scope:          Deno.env.get("MAESTRO_OAUTH_SCOPE")               ?? "api",
+    mobileClientId: Deno.env.get("MAESTRO_OAUTH_MOBILE_CLIENT_ID")   ?? "3",
   };
 }
 
 export function isMaestroOAuthConfigured(env: MaestroOAuthEnv) {
-  return !!(env.authUrl && env.tokenUrl && env.clientId && env.clientSecret);
+  // clientSecret only required for web flow; mobile PKCE has no secret
+  return !!(env.authUrl && env.tokenUrl && env.clientId);
 }
 
 export interface MaestroTokenSet {
@@ -39,7 +42,8 @@ export interface MaestroTokenSet {
   [k: string]: unknown;
 }
 
-async function exchange(
+// Web: includes client_secret
+async function exchangeWeb(
   env: MaestroOAuthEnv,
   params: Record<string, string>,
 ): Promise<{ ok: boolean; status: number; data: MaestroTokenSet | null; error?: string }> {
@@ -61,22 +65,51 @@ async function exchange(
   return { ok: true, status: r.status, data: data as MaestroTokenSet };
 }
 
+// Mobile PKCE: no client_secret, uses mobileClientId
+async function exchangeMobile(
+  env: MaestroOAuthEnv,
+  params: Record<string, string>,
+): Promise<{ ok: boolean; status: number; data: MaestroTokenSet | null; error?: string }> {
+  const body = new URLSearchParams({ client_id: env.mobileClientId, ...params });
+  const r = await fetch(env.tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: body.toString(),
+  });
+  let data: any = null;
+  try { data = await r.json(); } catch { /* ignore */ }
+  if (!r.ok) return { ok: false, status: r.status, data: null, error: data?.error_description ?? data?.error ?? `HTTP ${r.status}` };
+  return { ok: true, status: r.status, data: data as MaestroTokenSet };
+}
+
 export async function exchangeAuthorizationCode(
   env: MaestroOAuthEnv,
   code: string,
   redirectUri: string,
+  codeVerifier?: string | null,
 ) {
-  return exchange(env, { grant_type: "authorization_code", code, redirect_uri: redirectUri });
+  if (codeVerifier) {
+    // Mobile PKCE
+    return exchangeMobile(env, { grant_type: "authorization_code", code, code_verifier: codeVerifier, redirect_uri: redirectUri });
+  }
+  // Web standard
+  return exchangeWeb(env, { grant_type: "authorization_code", code, redirect_uri: redirectUri });
 }
 
-export async function refreshAccessToken(env: MaestroOAuthEnv, refreshToken: string) {
-  return exchange(env, { grant_type: "refresh_token", refresh_token: refreshToken });
+export async function refreshAccessToken(
+  env: MaestroOAuthEnv,
+  refreshToken: string,
+  isMobile = false,
+) {
+  if (isMobile) return exchangeMobile(env, { grant_type: "refresh_token", refresh_token: refreshToken });
+  return exchangeWeb(env, { grant_type: "refresh_token", refresh_token: refreshToken });
 }
 
 export async function persistTokenSet(
   admin: SupabaseClient,
   userId: string,
   tokens: MaestroTokenSet,
+  isMobile = false,
 ) {
   const expiresAt = tokens.expires_in
     ? new Date(Date.now() + (tokens.expires_in as number) * 1000).toISOString()
@@ -86,6 +119,7 @@ export async function persistTokenSet(
     maestro_token_expires_at: expiresAt,
     maestro_connected: true,
     maestro_last_sync_at: new Date().toISOString(),
+    maestro_oauth_client: isMobile ? "mobile" : "web",
   };
   if (tokens.refresh_token) patch.maestro_refresh_token = tokens.refresh_token;
   if (tokens.scope) patch.maestro_scope = tokens.scope;
@@ -98,7 +132,7 @@ export async function getUserMaestroAccessToken(
 ): Promise<string | null> {
   const { data: prof } = await admin
     .from("planipret_profiles")
-    .select("maestro_broker_token, maestro_refresh_token, maestro_token_expires_at")
+    .select("maestro_broker_token, maestro_refresh_token, maestro_token_expires_at, maestro_oauth_client")
     .eq("user_id", userId)
     .maybeSingle();
   if (!prof?.maestro_broker_token) return null;
@@ -111,12 +145,13 @@ export async function getUserMaestroAccessToken(
   const env = getMaestroOAuthEnv();
   if (!isMaestroOAuthConfigured(env)) return prof.maestro_broker_token as string;
 
-  const refreshed = await refreshAccessToken(env, prof.maestro_refresh_token as string);
+  const isMobile = (prof as any).maestro_oauth_client === "mobile";
+  const refreshed = await refreshAccessToken(env, prof.maestro_refresh_token as string, isMobile);
   if (!refreshed.ok || !refreshed.data) {
     console.warn("[maestro-oauth] refresh failed", refreshed.status, refreshed.error);
     return prof.maestro_broker_token as string;
   }
-  await persistTokenSet(admin, userId, refreshed.data);
+  await persistTokenSet(admin, userId, refreshed.data, isMobile);
   return refreshed.data.access_token;
 }
 

@@ -31,15 +31,17 @@ Deno.serve(async (req) => {
     // Resolve the user this OAuth flow belongs to via the state we stored in start.
     let userId: string | null = null;
     let storedRedirect: string | null = null;
+    let storedCodeVerifier: string | null = null;
     if (state) {
       const { data: st } = await admin
         .from("planipret_maestro_oauth_states")
-        .select("user_id, redirect_uri")
+        .select("user_id, redirect_uri, code_verifier")
         .eq("state", state)
         .maybeSingle();
       if (st) {
         userId = (st as any).user_id ?? null;
         storedRedirect = (st as any).redirect_uri ?? null;
+        storedCodeVerifier = (st as any).code_verifier ?? null;
       }
     }
 
@@ -57,7 +59,9 @@ Deno.serve(async (req) => {
     }
 
     const effectiveRedirect = redirect_uri ?? storedRedirect ?? "";
-    const exch = await exchangeAuthorizationCode(env, code, effectiveRedirect);
+    // Utiliser le code_verifier stocké si présent (flux PKCE mobile client_id=3)
+    const codeVerifier = body?.code_verifier ?? storedCodeVerifier ?? null;
+    const exch = await exchangeAuthorizationCode(env, code, effectiveRedirect, codeVerifier);
     if (!exch.ok || !exch.data) {
       await admin.from("planipret_integration_secrets").upsert({
         provider: "maestro_oauth_error", key_name: "last",
@@ -72,7 +76,8 @@ Deno.serve(async (req) => {
     // If we know the user, persist per-broker. Otherwise keep the global fallback
     // in planipret_integration_secrets so nothing is lost.
     if (userId) {
-      await persistTokenSet(admin, userId, exch.data);
+      const isMobile = !!storedCodeVerifier;
+      await persistTokenSet(admin, userId, exch.data, isMobile);
 
       // Best-effort: hydrate maestro_broker_id + maestro_email from /users/me
       const me = await fetchMaestroUserProfile(env, exch.data.access_token);

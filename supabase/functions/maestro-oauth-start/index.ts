@@ -33,14 +33,37 @@ Deno.serve(async (req) => {
       state, user_id: u.user.id, redirect_uri: redirectUri,
     });
 
+    const platform = body?.platform ?? "web"; // "web" | "mobile"
+    const isMobile = platform === "mobile";
+    const clientId = isMobile ? env.mobileClientId : env.clientId;
+
+    // PKCE pour le client mobile (client_id=3)
+    let codeVerifier: string | null = null;
+    let codeChallenge: string | null = null;
+    if (isMobile) {
+      const arr = new Uint8Array(32);
+      crypto.getRandomValues(arr);
+      codeVerifier = btoa(String.fromCharCode(...arr))
+        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+      const hashBuf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(codeVerifier));
+      codeChallenge = btoa(String.fromCharCode(...new Uint8Array(hashBuf)))
+        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+      // Stocker le code_verifier avec le state pour le callback
+      await admin.from("planipret_maestro_oauth_states").update({ code_verifier: codeVerifier }).eq("state", state);
+    }
+
     const url = new URL(env.authUrl);
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("client_id", env.clientId);
+    url.searchParams.set("client_id", clientId);
     url.searchParams.set("redirect_uri", redirectUri);
     if (env.scope) url.searchParams.set("scope", env.scope);
     url.searchParams.set("state", state);
+    if (isMobile && codeChallenge) {
+      url.searchParams.set("code_challenge", codeChallenge);
+      url.searchParams.set("code_challenge_method", "S256");
+    }
 
-    return j({ ok: true, authorize_url: url.toString(), state, redirect_uri: redirectUri });
+    return j({ ok: true, authorize_url: url.toString(), state, redirect_uri: redirectUri, platform });
   } catch (e) {
     console.error("[maestro-oauth-start]", e);
     return j({ error: (e as Error).message }, 500);

@@ -66,14 +66,17 @@ function backoffMs(attempt: number): number {
 export async function maestroTelecomFetch<T = any>(
   cfg: MaestroTelecomConfig,
   path: string,
-  opts: { method?: string; body?: unknown; timeoutMs?: number; maxAttempts?: number } = {},
+  opts: { method?: string; body?: unknown; timeoutMs?: number; maxAttempts?: number; token?: string; machine?: boolean } = {},
 ): Promise<MaestroTelecomResult<T>> {
-  if (!isMaestroTelecomConfigured(cfg)) {
+  const bearer = opts.token || cfg.key;
+  if (!cfg.url || !bearer) {
     console.warn("[maestro-telecom] not configured — skip", opts.method ?? "GET", path);
     return { ok: false, status: 0, data: null, attempts: 0, error: "not_configured" };
   }
   const method = opts.method ?? "GET";
-  const url = `${cfg.url}${path.startsWith("/") ? path : `/${path}`}${path.includes("?") ? "&" : "?"}machine=1`;
+  const useMachine = opts.machine !== false && !opts.token; // per-user tokens do NOT append machine=1
+  const suffix = useMachine ? `${path.includes("?") ? "&" : "?"}machine=1` : "";
+  const url = `${cfg.url}${path.startsWith("/") ? path : `/${path}`}${suffix}`;
   const maxAttempts = Math.max(1, opts.maxAttempts ?? 3);
   const t0 = Date.now();
   let lastErr: string | undefined;
@@ -88,7 +91,7 @@ export async function maestroTelecomFetch<T = any>(
       const res = await fetch(url, {
         method,
         headers: {
-          "Authorization": `Bearer ${cfg.key}`,
+          "Authorization": `Bearer ${bearer}`,
           "Content-Type": "application/json",
           "Accept": "application/json",
         },

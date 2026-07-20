@@ -9,6 +9,7 @@ import {
   isMaestroTelecomConfigured,
   maestroTelecomFetch,
 } from "../_shared/maestro-telecom.ts";
+import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -58,10 +59,15 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Prefer the broker's per-user OAuth token when available (auto-refresh),
+    // fall back to the machine key from the shared config.
+    const userToken = await getUserMaestroAccessToken(admin, u.user.id);
+
     const endpoint = `${url.pathname}${url.search}`;
     const r = await maestroTelecomFetch(cfg, endpoint, {
       method,
       body: method !== "GET" ? reqBody : undefined,
+      token: userToken ?? undefined,
     });
 
     if (!r.ok) {

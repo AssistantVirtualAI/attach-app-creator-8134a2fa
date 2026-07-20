@@ -12,7 +12,8 @@ type StatusResp = {
   expires_in: number | null;
   pending_count: number;
   redirect_uri: string;
-  authorize_url: string | null;
+  maestro_broker_id?: string | null;
+  maestro_email?: string | null;
   last_error: { message: string; at: string | null; http_status?: number } | null;
 };
 
@@ -55,17 +56,23 @@ export default function PAMaestroStatus() {
   const retry = async () => {
     if (!data) return;
     setRetrying(true);
-    // Clear last error so status refresh reflects a fresh attempt.
     try {
       await supabase.from("planipret_integration_secrets" as any)
         .delete().eq("provider", "maestro_oauth_error");
     } catch { /* ignore */ }
-    if (data.authorize_url) {
-      window.location.href = data.authorize_url;
-      return;
+    try {
+      const { data: start, error: fnErr } = await supabase.functions.invoke("maestro-oauth-start", {
+        body: { origin: window.location.origin },
+      });
+      if (fnErr) throw fnErr;
+      const url = (start as any)?.authorize_url;
+      if (url) { window.location.href = url; return; }
+      throw new Error((start as any)?.error ?? "no_authorize_url");
+    } catch (e: any) {
+      setError(e?.message ?? "Impossible de démarrer la connexion Maestro");
+    } finally {
+      setRetrying(false);
     }
-    setRetrying(false);
-    window.location.href = "/planipret/admin/integrations";
   };
 
   return (
@@ -110,19 +117,14 @@ export default function PAMaestroStatus() {
               <Row label="Dernière connexion" value={data.last_connected_at ? new Date(data.last_connected_at).toLocaleString() : "—"} />
               <Row label="Codes en attente" value={String(data.pending_count)} />
               {data.expires_in != null && <Row label="Expiration token" value={`${data.expires_in}s`} />}
+              {data.maestro_broker_id && <Row label="Maestro broker id" value={<code className="text-xs">{data.maestro_broker_id}</code>} />}
+              {data.maestro_email && <Row label="Maestro email" value={data.maestro_email} />}
 
               <div className="pt-4 flex flex-wrap gap-2">
-                <Button onClick={retry} disabled={retrying || (data.status === "not_configured" && !data.authorize_url)}>
+                <Button onClick={retry} disabled={retrying || !data.configured}>
                   <RefreshCw className={`h-4 w-4 mr-2 ${retrying ? "animate-spin" : ""}`} />
-                  {data.status === "connected" ? "Reconnecter" : "Réessayer la connexion"}
+                  {data.status === "connected" ? "Reconnecter" : "Se connecter à Maestro"}
                 </Button>
-                {data.authorize_url && (
-                  <Button variant="outline" asChild>
-                    <a href={data.authorize_url} target="_blank" rel="noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-2" /> Ouvrir dans un nouvel onglet
-                    </a>
-                  </Button>
-                )}
               </div>
 
               {data.status === "not_configured" && (

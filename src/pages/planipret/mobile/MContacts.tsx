@@ -639,8 +639,8 @@ function ContactDetailSheet({
         {/* Quick actions */}
         <div className="grid grid-cols-5 gap-2 mb-4">
           <QuickAction icon={<Phone className="w-4 h-4" />} label={t("common.call")} onClick={() => phone && onCall(phone)} disabled={!phone} />
-          <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={() => phone && onCall(phone)} disabled={!phone} />
-          <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={() => contact.email && window.open(`mailto:${contact.email}`)} disabled={!contact.email} />
+          <QuickAction icon={<MessageSquare className="w-4 h-4" />} label="SMS" onClick={() => phone && openSms(phone)} disabled={!phone} />
+          <QuickAction icon={<Mail className="w-4 h-4" />} label="Email" onClick={() => contact.email && openEmail(contact.email)} disabled={!contact.email} />
           <QuickAction icon={creatingTask ? <Loader2 className="w-4 h-4 animate-spin" /> : <ListChecks className="w-4 h-4" />} label="Tâche" onClick={createTask} disabled={creatingTask} />
           <QuickAction icon={<Calendar className="w-4 h-4" />} label="RDV" onClick={() => toast.info("Bientôt disponible")} />
         </div>

@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { RefreshCw, CheckCircle2, XCircle, AlertTriangle, Activity, Server, Radio, Cable } from "lucide-react";
+import PAMaestroStatus from "./PAMaestroStatus";
 
 const ACCENT = "#2E9BDC";
 const SUCCESS = "#00D4AA";

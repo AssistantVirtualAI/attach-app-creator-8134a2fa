@@ -56,7 +56,14 @@ const fmtTime = (iso: string, lang: "fr" | "en" = "fr", t?: (key: string) => str
 export default function MMessages() {
   const { t } = useMplanipretLang();
   const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();
-  const [sub, setSub] = useState<SubTab>("sms");
+  const [searchParams] = useSearchParams();
+  const initialTab = ((): SubTab => {
+    const q = searchParams.get("tab");
+    return (q === "sms" || q === "team" || q === "teams365" || q === "emails" || q === "roster") ? q : "sms";
+  })();
+  const [sub, setSub] = useState<SubTab>(initialTab);
+  const qTo = searchParams.get("to") ?? "";
+  const qName = searchParams.get("name") ?? "";
 
   // Warm the Teams cache on mount so switching to the Teams tab is instant.
   useEffect(() => {

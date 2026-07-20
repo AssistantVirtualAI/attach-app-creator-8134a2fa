@@ -57,7 +57,13 @@ const fmtTime = (iso: string, lang: "fr" | "en" = "fr", t?: (key: string) => str
 export default function MMessages() {
   const { t } = useMplanipretLang();
   const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();
-  const [sub, setSub] = useState<SubTab>("sms");
+  const [searchParams] = useSearchParams();
+  const initialTab = (searchParams.get("tab") as SubTab) || "sms";
+  const [sub, setSub] = useState<SubTab>(initialTab);
+  useEffect(() => {
+    const tb = searchParams.get("tab") as SubTab | null;
+    if (tb && ["sms", "team", "teams365", "emails"].includes(tb)) setSub(tb);
+  }, [searchParams]);
 
   return (
     <div className="h-full flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
@@ -857,11 +863,20 @@ function TeamChat({ profile }: { profile: any }) {
 // ============================================================
 function EmailsList({ profile }: { profile: any }) {
   const { t, lang } = useMplanipretLang();
+  const [searchParams] = useSearchParams();
   const [emails, setEmails] = useState<any[] | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "no_m365" | "error">("loading");
   const [active, setActive] = useState<any | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeInit, setComposeInit] = useState<{ to?: string; subject?: string; body?: string }>({});
+
+  useEffect(() => {
+    const to = searchParams.get("to")?.trim();
+    if (to && searchParams.get("tab") === "emails") {
+      setComposeInit({ to });
+      setComposeOpen(true);
+    }
+  }, [searchParams]);
 
   const load = async () => {
     if (!profile?.ms365_access_token) { setState("no_m365"); return; }

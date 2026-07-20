@@ -1279,6 +1279,7 @@ const App = () => (
               </Routes>
               {/* MascotProvider removed — MyAIChatLauncher is the single AVA assistant */}
             </Suspense>
+            </PlanipretAdminScopeGuard>
           </OrganizationProvider>
           </BrowserRouter>
         </TooltipProvider>

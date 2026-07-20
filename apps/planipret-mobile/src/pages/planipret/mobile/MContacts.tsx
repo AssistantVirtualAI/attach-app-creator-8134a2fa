@@ -920,6 +920,79 @@ function ContactField({ label, value, onCall }: { label: string; value: string; 
   );
 }
 
+function AiContactImproveButton({ text, onResult, mode, disabled }: { text: string; onResult: (r: string) => void; mode: "sms" | "email"; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    if (open) document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const run = async (action: "fix" | "improve" | "formal" | "shorter") => {
+    if (!text.trim()) return;
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-text-improve", {
+        body: { text, mode, action },
+      });
+      if (error) throw error;
+      if ((data as any)?.success === false) throw new Error((data as any)?.error || "IA indisponible");
+      const result = (data as any)?.result;
+      if (typeof result === "string") onResult(result.trim());
+      else throw new Error("Réponse IA invalide");
+    } catch (e: any) {
+      toast.error("Erreur IA", { description: e?.message });
+    } finally {
+      setBusy(false);
+      setOpen(false);
+    }
+  };
+
+  const items = [
+    { icon: "✓", label: "Corriger les fautes", action: "fix" as const },
+    { icon: "✨", label: "Améliorer le texte", action: "improve" as const },
+    { icon: "👔", label: "Rendre plus formel", action: "formal" as const },
+    { icon: "✂️", label: "Raccourcir", action: "shorter" as const },
+  ];
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled || busy || !text.trim()}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white disabled:opacity-40 active:scale-95 transition"
+        style={{ background: "linear-gradient(135deg,#7C3AED,#A855F7)" }}
+      >
+        {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+        <span>IA</span>
+      </button>
+      {open && (
+        <div className="absolute top-8 right-0 z-[300] w-48 rounded-xl p-1.5 shadow-xl"
+          style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+          {items.map((it) => (
+            <button
+              key={it.action}
+              onClick={() => run(it.action)}
+              className="w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center gap-2 transition"
+              style={{ color: "var(--pp-text-primary)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--pp-bg-surface)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <span className="shrink-0">{it.icon}</span>
+              <span>{it.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactName: string; onClose: () => void }) {
   const [recipient, setRecipient] = useState(to);
   const [body, setBody] = useState("");

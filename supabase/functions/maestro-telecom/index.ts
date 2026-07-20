@@ -9,6 +9,7 @@ import {
   isMaestroTelecomConfigured,
   maestroTelecomFetch,
 } from "../_shared/maestro-telecom.ts";
+import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });

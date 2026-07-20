@@ -57,7 +57,13 @@ const fmtTime = (iso: string, lang: "fr" | "en" = "fr", t?: (key: string) => str
 export default function MMessages() {
   const { t } = useMplanipretLang();
   const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();
-  const [sub, setSub] = useState<SubTab>("sms");
+  const [searchParams] = useSearchParams();
+  const initialTab = (searchParams.get("tab") as SubTab) || "sms";
+  const [sub, setSub] = useState<SubTab>(initialTab);
+  useEffect(() => {
+    const tb = searchParams.get("tab") as SubTab | null;
+    if (tb && ["sms", "team", "teams365", "emails"].includes(tb)) setSub(tb);
+  }, [searchParams]);
 
   return (
     <div className="h-full flex flex-col" style={{ background: "var(--pp-bg-base)" }}>

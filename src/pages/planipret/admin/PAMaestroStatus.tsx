@@ -12,7 +12,8 @@ type StatusResp = {
   expires_in: number | null;
   pending_count: number;
   redirect_uri: string;
-  authorize_url: string | null;
+  maestro_broker_id?: string | null;
+  maestro_email?: string | null;
   last_error: { message: string; at: string | null; http_status?: number } | null;
 };
 

@@ -8735,6 +8735,27 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_maestro_oauth_states: {
+        Row: {
+          created_at: string
+          redirect_uri: string | null
+          state: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          redirect_uri?: string | null
+          state: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          redirect_uri?: string | null
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_maestro_sync_log: {
         Row: {
           action: string | null
@@ -9348,7 +9369,10 @@ export type Database = {
           maestro_broker_id: string | null
           maestro_broker_token: string | null
           maestro_connected: boolean
+          maestro_email: string | null
           maestro_last_sync_at: string | null
+          maestro_refresh_token: string | null
+          maestro_scope: string | null
           maestro_telecom_email: string | null
           maestro_telecom_linked_at: string | null
           maestro_telecom_user_id: string | null
@@ -9446,7 +9470,10 @@ export type Database = {
           maestro_broker_id?: string | null
           maestro_broker_token?: string | null
           maestro_connected?: boolean
+          maestro_email?: string | null
           maestro_last_sync_at?: string | null
+          maestro_refresh_token?: string | null
+          maestro_scope?: string | null
           maestro_telecom_email?: string | null
           maestro_telecom_linked_at?: string | null
           maestro_telecom_user_id?: string | null
@@ -9544,7 +9571,10 @@ export type Database = {
           maestro_broker_id?: string | null
           maestro_broker_token?: string | null
           maestro_connected?: boolean
+          maestro_email?: string | null
           maestro_last_sync_at?: string | null
+          maestro_refresh_token?: string | null
+          maestro_scope?: string | null
           maestro_telecom_email?: string | null
           maestro_telecom_linked_at?: string | null
           maestro_telecom_user_id?: string | null

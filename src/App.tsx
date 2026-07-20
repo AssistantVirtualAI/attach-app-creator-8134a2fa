@@ -22,6 +22,7 @@ const PlanipretMobile = lazyWithRetry(() => import("./pages/planipret/PlanipretM
 const StorePreflightPreview = lazyWithRetry(() => import("./pages/planipret/StorePreflightPreview"));
 import { AppSeparationGuard } from "./components/auth/AppSeparationGuard";
 import { MplanipretGuard } from "./components/auth/MplanipretGuard";
+import { PlanipretAdminScopeGuard } from "./components/auth/PlanipretAdminScopeGuard";
 import RouteDebugOverlay from "./components/debug/RouteDebugOverlay";
 import { ROUTES, loginWithRedirect } from "./lib/routes";
 // Mobile screens — lazy-loaded so the initial /mplanipret shell paints fast.
@@ -454,6 +455,7 @@ const App = () => (
 
             <OrganizationProvider>
               <RouteDebugOverlay />
+              <PlanipretAdminScopeGuard>
               <Suspense fallback={<AdminPageSkeleton />}>
               <Routes>
                 {/* Landing page on root */}
@@ -1277,6 +1279,7 @@ const App = () => (
               </Routes>
               {/* MascotProvider removed — MyAIChatLauncher is the single AVA assistant */}
             </Suspense>
+            </PlanipretAdminScopeGuard>
           </OrganizationProvider>
           </BrowserRouter>
         </TooltipProvider>

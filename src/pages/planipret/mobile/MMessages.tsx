@@ -878,7 +878,7 @@ function TeamChat({ profile }: { profile: any }) {
 // ============================================================
 // EMAILS TAB (M365)
 // ============================================================
-export function EmailsList({ profile }: { profile: any }) {
+export function EmailsList({ profile, initialTo, initialName }: { profile: any; initialTo?: string; initialName?: string }) {
   const { t, lang } = useMplanipretLang();
   const PAGE_SIZE = 25;
   const [emails, setEmails] = useState<any[] | null>(null);
@@ -886,6 +886,15 @@ export function EmailsList({ profile }: { profile: any }) {
   const [active, setActive] = useState<any | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeInit, setComposeInit] = useState<{ to?: string; subject?: string; body?: string }>({});
+
+  useEffect(() => {
+    if (initialTo && initialTo.trim()) {
+      setComposeInit({ to: initialTo, subject: "", body: initialName ? `\n\n— ${initialName}` : "" });
+      setComposeOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTo]);
+
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);

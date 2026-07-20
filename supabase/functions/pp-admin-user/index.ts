@@ -490,6 +490,23 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true });
     }
 
+    if (action === "set_password") {
+      const { email, user_id, password: newPassword } = payload ?? {};
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+        return jsonResponse({ success: false, error: "Le mot de passe doit contenir au moins 8 caractères." }, 200);
+      }
+      let targetUserId = user_id as string | undefined;
+      if (!targetUserId && email) {
+        const { data: prof } = await admin.from("planipret_profiles").select("user_id").eq("email", email).maybeSingle();
+        targetUserId = prof?.user_id ?? undefined;
+      }
+      if (!targetUserId) return jsonResponse({ success: false, error: "Utilisateur introuvable." }, 200);
+      const { error } = await admin.auth.admin.updateUserById(targetUserId, { password: newPassword });
+      if (error) return jsonResponse({ success: false, error: error.message }, 200);
+      await logAudit(admin, req, { admin_id: profile.id, action: "PASSWORD_SET_DIRECT", metadata: { email, user_id: targetUserId } });
+      return jsonResponse({ success: true });
+    }
+
     if (action === "promote_broker" || action === "demote_admin") {
       const { user_id } = payload ?? {};
       if (!user_id) return jsonResponse({ success: false, error: "user_id requis" }, 400);

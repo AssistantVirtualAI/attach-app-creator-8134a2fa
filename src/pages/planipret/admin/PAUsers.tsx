@@ -991,10 +991,26 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
     }
   };
 
+  const [newPwd, setNewPwd] = useState("");
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [pwdBusy, setPwdBusy] = useState(false);
+
   const resetPwd = async () => {
     const { data } = await supabase.functions.invoke("pp-admin-user", { body: { action: "reset_password", payload: { email } } });
     if ((data as any)?.success) toast.success("Email de réinitialisation envoyé");
     else toast.error("Échec de l'envoi");
+  };
+
+  const setPwdDirect = async () => {
+    if (!newPwd || newPwd.length < 8) { toast.error("Min. 8 caractères"); return; }
+    setPwdBusy(true);
+    const { data, error } = await supabase.functions.invoke("pp-admin-user", {
+      body: { action: "set_password", payload: { user_id: user?.user_id, email, password: newPwd } },
+    });
+    setPwdBusy(false);
+    if (error || !(data as any)?.success) { toast.error((data as any)?.error ?? "Échec"); return; }
+    setNewPwd("");
+    toast.success("Mot de passe mis à jour ✅");
   };
 
   return (
@@ -1063,7 +1079,25 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
                 </div>
               </Field>
             ) : (
-              <button onClick={resetPwd} className="text-sm px-3 py-2 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>🔑 Réinitialiser le mot de passe</button>
+              <div className="space-y-2">
+                <Field label="Définir un nouveau mot de passe">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input type={showNewPwd ? "text" : "password"} value={newPwd} onChange={(e) => setNewPwd(e.target.value)} placeholder="Min. 8 caractères" className="pp-input pr-9" />
+                      <button type="button" onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-2 top-1/2 -translate-y-1/2" style={{ color: "var(--pp-text-muted)" }}>
+                        {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <button type="button" onClick={() => setNewPwd(genPassword())} className="px-3 py-2 rounded-lg text-xs flex items-center gap-1" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+                      <RefreshCw className="w-3 h-3" /> Générer
+                    </button>
+                    <button type="button" onClick={setPwdDirect} disabled={pwdBusy || !newPwd} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: "var(--pp-primary)", color: "white", opacity: pwdBusy || !newPwd ? 0.5 : 1 }}>
+                      {pwdBusy ? "…" : "Définir"}
+                    </button>
+                  </div>
+                </Field>
+                <button type="button" onClick={resetPwd} className="text-xs px-3 py-2 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>✉️ Envoyer un email de réinitialisation à la place</button>
+              </div>
             )}
           </Section>
 

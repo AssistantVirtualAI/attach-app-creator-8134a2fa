@@ -687,6 +687,7 @@ function ContactDetailSheet({
   contact, onClose, onCall,
 }: { contact: any; onClose: () => void; onCall: (phone: string) => void }) {
   const { t, lang } = useMplanipretLang();
+  const navigate = useNavigate();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [creatingTask, setCreatingTask] = useState(false);

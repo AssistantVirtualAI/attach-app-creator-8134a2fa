@@ -10,6 +10,7 @@ import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
 
 import { Ms365ScopesCard } from "@/components/planipret/Ms365ScopesCard";
+import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
 import { SiriShortcutsCard } from "@/components/planipret/SiriShortcutsCard";
 import { safeEdgeFunction } from "@/lib/safeEdgeFunction";
 import MNetworkSection from "@/components/planipret/mobile/MNetworkSection";
@@ -318,6 +319,7 @@ export default function MMore() {
             <Ms365ScopesCard profile={profile} onReconnect={connectMs365} />
           </div>
         )}
+        <MaestroConnectCard />
       </Section>
 
       <div className="pp-card" style={{ padding: 4 }}>

@@ -1605,10 +1605,10 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
 // SHARED PRIMITIVES
 // ============================================================
 function Composer({
-  text, setText, onSend, sending, placeholder, leftAction, extra, accent = "brand", inputRef, autoFocus = false,
+  text, setText, onSend, sending, placeholder, leftAction, extra, aiAction, accent = "brand", inputRef, autoFocus = false,
 }: {
   text: string; setText: (v: string) => void; onSend: () => void; sending: boolean;
-  placeholder?: string; leftAction?: React.ReactNode; extra?: React.ReactNode;
+  placeholder?: string; leftAction?: React.ReactNode; extra?: React.ReactNode; aiAction?: React.ReactNode;
   accent?: "brand" | "agent"; inputRef?: React.RefObject<HTMLInputElement>; autoFocus?: boolean;
 }) {
   const { t } = useMplanipretLang();
@@ -1623,6 +1623,7 @@ function Composer({
     >
       {extra}
       {leftAction}
+      {aiAction}
       <input
         data-sms-composer-input="true"
         ref={inputRef}

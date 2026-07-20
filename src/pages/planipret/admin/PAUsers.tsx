@@ -1079,7 +1079,25 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
                 </div>
               </Field>
             ) : (
-              <button onClick={resetPwd} className="text-sm px-3 py-2 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>🔑 Réinitialiser le mot de passe</button>
+              <div className="space-y-2">
+                <Field label="Définir un nouveau mot de passe">
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input type={showNewPwd ? "text" : "password"} value={newPwd} onChange={(e) => setNewPwd(e.target.value)} placeholder="Min. 8 caractères" className="pp-input pr-9" />
+                      <button type="button" onClick={() => setShowNewPwd(!showNewPwd)} className="absolute right-2 top-1/2 -translate-y-1/2" style={{ color: "var(--pp-text-muted)" }}>
+                        {showNewPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <button type="button" onClick={() => setNewPwd(genPassword())} className="px-3 py-2 rounded-lg text-xs flex items-center gap-1" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+                      <RefreshCw className="w-3 h-3" /> Générer
+                    </button>
+                    <button type="button" onClick={setPwdDirect} disabled={pwdBusy || !newPwd} className="px-3 py-2 rounded-lg text-xs font-medium" style={{ background: "var(--pp-primary)", color: "white", opacity: pwdBusy || !newPwd ? 0.5 : 1 }}>
+                      {pwdBusy ? "…" : "Définir"}
+                    </button>
+                  </div>
+                </Field>
+                <button type="button" onClick={resetPwd} className="text-xs px-3 py-2 rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>✉️ Envoyer un email de réinitialisation à la place</button>
+              </div>
             )}
           </Section>
 

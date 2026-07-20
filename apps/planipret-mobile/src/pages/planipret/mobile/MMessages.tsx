@@ -863,11 +863,20 @@ function TeamChat({ profile }: { profile: any }) {
 // ============================================================
 function EmailsList({ profile }: { profile: any }) {
   const { t, lang } = useMplanipretLang();
+  const [searchParams] = useSearchParams();
   const [emails, setEmails] = useState<any[] | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "no_m365" | "error">("loading");
   const [active, setActive] = useState<any | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeInit, setComposeInit] = useState<{ to?: string; subject?: string; body?: string }>({});
+
+  useEffect(() => {
+    const to = searchParams.get("to")?.trim();
+    if (to && searchParams.get("tab") === "emails") {
+      setComposeInit({ to });
+      setComposeOpen(true);
+    }
+  }, [searchParams]);
 
   const load = async () => {
     if (!profile?.ms365_access_token) { setState("no_m365"); return; }

@@ -24,13 +24,29 @@
     android:roundIcon="@mipmap/ic_launcher_planipret_round"
     android:theme="@style/AppTheme.Planipret">
 
-    <!-- Deep link handler : planipret:// -->
     <activity android:name=".MainActivity">
-        <intent-filter android:autoVerify="true">
+        <!-- Custom scheme deep link : planipret:// -->
+        <intent-filter>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="planipret" />
+        </intent-filter>
+
+        <!--
+          Android App Links (https)
+          Requires public/.well-known/assetlinks.json served at
+          https://avastatistic.ca/.well-known/assetlinks.json
+          with the app's SHA256 signing certificate fingerprint.
+          autoVerify=true triggers Google to verify assetlinks.json on install.
+        -->
+        <intent-filter android:autoVerify="true">
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https"
+                  android:host="avastatistic.ca"
+                  android:pathPrefix="/auth/maestro/callback" />
         </intent-filter>
     </activity>
 

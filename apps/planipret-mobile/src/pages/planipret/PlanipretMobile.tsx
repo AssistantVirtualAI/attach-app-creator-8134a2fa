@@ -492,10 +492,11 @@ function FabDialer({
     };
   }, []);
 
-  // Hide on chat surfaces where the send button sits in the same corner.
+  // Hide on chat surfaces (messages / ava) — the send button sits in the same corner
+  // and the user does not want the call FAB visible there at all, even during a call.
   const isChatSurface = /\/mplanipret\/(messages|ava)(\/|$)/.test(pathname);
-  // Active call FAB (hang-up) must always remain reachable.
-  if (!activeCallId && (isChatSurface || inputFocused)) return null;
+  if (isChatSurface) return null;
+  if (!activeCallId && inputFocused) return null;
 
   return (
     <button

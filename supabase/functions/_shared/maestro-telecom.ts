@@ -99,7 +99,16 @@ export async function maestroTelecomFetch<T = any>(
         signal: controller.signal,
       });
       let data: any = null;
-      try { data = await res.json(); } catch { data = null; }
+      const contentType = res.headers.get("content-type") ?? "";
+      const isHtml = contentType.includes("text/html") || contentType.includes("text/plain");
+      if (isHtml) {
+        // Maestro returned an HTML error page — strip tags and sanitize
+        const raw = await res.text().catch(() => "");
+        const stripped = raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+        data = { html_error: stripped || `HTTP ${res.status}` };
+      } else {
+        try { data = await res.json(); } catch { data = null; }
+      }
       const ms = Date.now() - attemptStart;
       lastStatus = res.status;
       lastData = data;
@@ -109,7 +118,9 @@ export async function maestroTelecomFetch<T = any>(
         return { ok: true, status: res.status, data, ms: Date.now() - t0, attempts: attempt + 1 };
       }
 
-      const errSnippet = typeof data === "object" ? JSON.stringify(data).slice(0, 200) : String(data ?? "").slice(0, 200);
+      const errSnippet = data?.html_error
+        ? data.html_error
+        : typeof data === "object" ? JSON.stringify(data).slice(0, 200) : String(data ?? "").slice(0, 200);
       lastErr = `HTTP ${res.status} ${errSnippet}`;
       console.warn(`[maestro-telecom] ${method} ${path} → ${res.status} in ${ms}ms (attempt ${attempt + 1}/${maxAttempts}) ${errSnippet}`);
 

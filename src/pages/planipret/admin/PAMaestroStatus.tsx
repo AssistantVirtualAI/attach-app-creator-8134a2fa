@@ -61,8 +61,13 @@ export default function PAMaestroStatus() {
         .delete().eq("provider", "maestro_oauth_error");
     } catch { /* ignore */ }
     try {
+      // Maestro n'a enregistré QUE https://avastatistic.ca/auth/maestro/callback.
+      // On force ce redirect_uri même depuis les previews Lovable.
       const { data: start, error: fnErr } = await supabase.functions.invoke("maestro-oauth-start", {
-        body: { origin: window.location.origin },
+        body: {
+          origin: "https://avastatistic.ca",
+          redirect_uri: "https://avastatistic.ca/auth/maestro/callback",
+        },
       });
       if (fnErr) throw fnErr;
       const url = (start as any)?.authorize_url;

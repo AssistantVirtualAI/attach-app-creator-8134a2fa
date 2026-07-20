@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { RefreshCw, CheckCircle2, XCircle, AlertTriangle, Activity, Server, Radio, Cable } from "lucide-react";
+import PAMaestroStatus from "./PAMaestroStatus";
 
 const ACCENT = "#2E9BDC";
 const SUCCESS = "#00D4AA";
@@ -250,6 +251,12 @@ export default function PAMaestroSync() {
           </button>
         </div>
       </div>
+
+      {/* Embedded OAuth broker connection flow (was /planipret/admin/maestro-status) */}
+      <div className="pp-card mb-5" style={{ padding: 0, overflow: "hidden" }}>
+        <PAMaestroStatus />
+      </div>
+
 
       {err && (
         <div className="pp-card mb-5" style={{ padding: 12, borderColor: `${DANGER}55`, background: `${DANGER}0D` }}>

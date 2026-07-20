@@ -59,10 +59,15 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Prefer the broker's per-user OAuth token when available (auto-refresh),
+    // fall back to the machine key from the shared config.
+    const userToken = await getUserMaestroAccessToken(admin, u.user.id);
+
     const endpoint = `${url.pathname}${url.search}`;
     const r = await maestroTelecomFetch(cfg, endpoint, {
       method,
       body: method !== "GET" ? reqBody : undefined,
+      token: userToken ?? undefined,
     });
 
     if (!r.ok) {

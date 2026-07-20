@@ -2,6 +2,7 @@
 // Every tool the agent triggers passes through here. Logs each call into
 // planipret_ava_conversations.
 import { authBroker, corsHeaders, jsonResponse, nsBrokerFetch } from "../_shared/ns-broker.ts";
+import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
 
 const DOMAIN = "planipret.ca";
 
@@ -28,12 +29,13 @@ async function logTool(ctx: Ctx, sessionId: string, toolName: string, params: an
 async function maestroFetch(ctx: Ctx, path: string, init?: RequestInit) {
   const base = (Deno.env.get("MAESTRO_API_URL") ?? "").replace(/\/$/, "");
   if (!base) throw new Error("maestro_not_configured");
-  const { data: profileWithToken } = await ctx.admin
-    .from("planipret_profiles")
-    .select("maestro_broker_token, maestro_broker_id")
-    .eq("id", ctx.profile.id)
-    .maybeSingle();
-  const token = profileWithToken?.maestro_broker_token ?? Deno.env.get("MAESTRO_API_KEY") ?? "";
+  // Per-broker OAuth token (auto-refreshed). Falls back to legacy shared key
+  // only if the broker has never connected AND a machine key is configured.
+  let token: string | null = null;
+  try {
+    token = await getUserMaestroAccessToken(ctx.admin, ctx.userId);
+  } catch (_) { /* fall through to legacy */ }
+  if (!token) token = Deno.env.get("MAESTRO_API_KEY") ?? null;
   if (!token) throw new Error("maestro_not_connected");
   const r = await fetch(`${base}${path}`, {
     ...init,

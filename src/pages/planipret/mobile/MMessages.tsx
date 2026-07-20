@@ -722,6 +722,7 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
             <Paperclip className="w-5 h-5" />
           </button>
         }
+        aiAction={<AiImproveMenu text={text} mode="sms" onResult={setText} />}
       />
       <SmsTemplatesSheet open={tplOpen} onClose={() => setTplOpen(false)} userId={userId} onPick={(body) => setText((t) => t ? `${t} ${body}` : body)} />
       <AvaSummarizeSheet

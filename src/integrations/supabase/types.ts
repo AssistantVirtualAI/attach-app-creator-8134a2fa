@@ -8737,18 +8737,21 @@ export type Database = {
       }
       planipret_maestro_oauth_states: {
         Row: {
+          code_verifier: string | null
           created_at: string
           redirect_uri: string | null
           state: string
           user_id: string
         }
         Insert: {
+          code_verifier?: string | null
           created_at?: string
           redirect_uri?: string | null
           state: string
           user_id: string
         }
         Update: {
+          code_verifier?: string | null
           created_at?: string
           redirect_uri?: string | null
           state?: string
@@ -9371,6 +9374,7 @@ export type Database = {
           maestro_connected: boolean
           maestro_email: string | null
           maestro_last_sync_at: string | null
+          maestro_oauth_client: string | null
           maestro_refresh_token: string | null
           maestro_scope: string | null
           maestro_telecom_email: string | null
@@ -9472,6 +9476,7 @@ export type Database = {
           maestro_connected?: boolean
           maestro_email?: string | null
           maestro_last_sync_at?: string | null
+          maestro_oauth_client?: string | null
           maestro_refresh_token?: string | null
           maestro_scope?: string | null
           maestro_telecom_email?: string | null
@@ -9573,6 +9578,7 @@ export type Database = {
           maestro_connected?: boolean
           maestro_email?: string | null
           maestro_last_sync_at?: string | null
+          maestro_oauth_client?: string | null
           maestro_refresh_token?: string | null
           maestro_scope?: string | null
           maestro_telecom_email?: string | null

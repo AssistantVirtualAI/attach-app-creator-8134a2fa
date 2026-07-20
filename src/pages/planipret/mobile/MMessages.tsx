@@ -1651,6 +1651,80 @@ function Composer({
   );
 }
 
+
+// ============================================================
+// AI IMPROVE MENU (Claude) — améliore SMS / courriel
+// ============================================================
+function AiImproveMenu({ text, mode, onResult }: { text: string; mode: "sms" | "email"; onResult: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<null | string>(null);
+  const disabled = !text.trim() || !!busy;
+
+  const run = async (action: "fix" | "improve" | "formal" | "shorter") => {
+    setBusy(action);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-text-improve", {
+        body: { text, mode, action },
+      });
+      if (error) throw error;
+      if (!(data as any)?.success) throw new Error((data as any)?.error ?? "AI error");
+      const result = String((data as any).result ?? "").trim();
+      if (result) onResult(result);
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "IA indisponible");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const options: { key: "fix" | "improve" | "formal" | "shorter"; label: string; icon: string }[] = [
+    { key: "fix", label: "Corriger les fautes", icon: "✓" },
+    { key: "improve", label: "Améliorer le texte", icon: "✨" },
+    { key: "formal", label: "Rendre plus formel", icon: "👔" },
+    { key: "shorter", label: "Raccourcir", icon: "✂️" },
+  ];
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen((o) => !o)}
+        disabled={disabled}
+        className="w-9 h-9 rounded-full flex items-center justify-center text-white disabled:opacity-40 shrink-0"
+        style={{ background: "linear-gradient(135deg, #7C3AED, #A855F7)", boxShadow: "0 2px 12px rgba(124,58,237,0.4)" }}
+        aria-label="Améliorer avec l'IA"
+        title="Améliorer avec l'IA"
+      >
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} />
+          <div
+            className="absolute bottom-11 left-0 z-[91] min-w-[200px] rounded-2xl overflow-hidden shadow-2xl"
+            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}
+          >
+            {options.map((o) => (
+              <button
+                key={o.key}
+                type="button"
+                onClick={() => run(o.key)}
+                disabled={!!busy}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left hover:opacity-80 disabled:opacity-50"
+                style={{ color: "var(--pp-text-primary)", borderBottom: "1px solid var(--pp-bg-border)" }}
+              >
+                <span className="w-5 text-center">{busy === o.key ? <Loader2 className="w-3.5 h-3.5 animate-spin inline" /> : o.icon}</span>
+                <span>{o.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function EmptyState({ Icon, title, sub }: { Icon: any; title: string; sub: string }) {
   return (
     <div className="p-10 text-center">

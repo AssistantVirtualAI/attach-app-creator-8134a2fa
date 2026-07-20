@@ -558,6 +558,7 @@ function ContactDetailSheet({
   contact, onClose, onCall,
 }: { contact: any; onClose: () => void; onCall: (phone: string) => void }) {
   const { t, lang } = useMplanipretLang();
+  const navigate = useNavigate();
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [creatingTask, setCreatingTask] = useState(false);
@@ -566,6 +567,15 @@ function ContactDetailSheet({
   const name = `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim() || contact.phone || "Contact";
   const phone: string | undefined = contact.phone;
   const maestroId: string | undefined = contact.maestro_client_id || contact.external_id || contact.id;
+
+  const openSms = (n: string) => {
+    onClose();
+    navigate(`/mplanipret/messages?tab=sms&to=${encodeURIComponent(n)}`);
+  };
+  const openEmail = (email: string) => {
+    onClose();
+    navigate(`/mplanipret/messages?tab=emails&to=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}`);
+  };
 
   useEffect(() => {
     let cancel = false;

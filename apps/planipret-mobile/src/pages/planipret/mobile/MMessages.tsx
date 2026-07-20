@@ -227,7 +227,7 @@ const looksLikePhone = (value: string) => /^[+]?[-() .\d]{3,}$/.test(value.trim(
 
 function SmsList({ profile, openDialer, registerRefresh }: any) {
   const { t } = useMplanipretLang();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const myExt = profile?.extension ?? "";
   const [threads, setThreads] = useState<NsThread[]>([]);
   const [loading, setLoading] = useState(true);
@@ -296,7 +296,16 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
           number={activeThread.number}
           myExt={myExt}
           userId={profile.user_id}
-          onBack={() => { setActiveThread(null); load(); }}
+          onBack={() => {
+            setActiveThread(null);
+            // Nettoyer les paramètres URL pour éviter que le useEffect réouvre le thread
+            const clean = new URLSearchParams(searchParams);
+            clean.delete("to");
+            clean.delete("name");
+            clean.delete("tab");
+            setSearchParams(clean, { replace: true });
+            load();
+          }}
           onCall={(n) => openDialer(n)}
         />
       </div>

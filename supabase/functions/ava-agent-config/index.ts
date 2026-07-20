@@ -23,7 +23,7 @@ const TOOL_NAMES = [
   "get_calendar_today", "get_calendar_week", "get_upcoming_meetings",
   "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
   // M365 Contacts & Teams
-  "find_contact", "list_teams_chats", "create_teams_chat", "send_teams_message",
+  "find_contact", "search_ms365_contacts", "list_teams_chats", "create_teams_chat", "send_teams_message",
   // navigation
   "navigate_to", "show_client_in_app", "open_call_detail",
   // stats

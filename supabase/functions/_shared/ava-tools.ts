@@ -194,6 +194,15 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
     }, ["event_id"]),
     mk("get_calendar_today", "Rendez-vous du calendrier M365 aujourd'hui."),
     mk("get_calendar_week", "Rendez-vous des 7 prochains jours."),
+    mk("get_upcoming_meetings", "Prochains rendez-vous M365 (Teams ou Outlook) dans les X prochaines heures.", {
+      hours: { type: "number", description: "Horizon en heures (défaut: 24)" },
+    }),
+    mk("search_ms365_contacts", "Cherche un contact dans l'annuaire Microsoft 365 (People/Contacts). Utilise pour trouver un email, un numéro de téléphone ou vérifier si quelqu'un existe.", {
+      query: { type: "string", description: "Nom, prénom ou email à rechercher" },
+    }, ["query"]),
+    mk("find_contact", "Cherche un contact dans les contacts Planiprêt ET l'annuaire M365. Retourne nom, email, téléphone.", {
+      query: { type: "string", description: "Nom ou email à chercher" },
+    }, ["query"]),
 
     // Navigation & stats
     mk("navigate_to", "Navigue vers une page de l'app Planiprêt.", {
@@ -217,5 +226,6 @@ export const EXPECTED_TOOL_NAMES = [
   "analyze_call","get_hot_leads","get_coaching_summary",
   "search_client","get_client_profile","get_client_history","create_task","create_appointment","get_pending_tasks","get_upcoming_appointments","create_client",
   "read_emails","send_email","search_contact","propose_email_reply","summarize_inbox","update_calendar_event","delete_calendar_event","get_calendar_today","get_calendar_week",
+  "get_upcoming_meetings","search_ms365_contacts","find_contact",
   "navigate_to","get_daily_briefing","get_my_stats","generate_voicemail_greeting","explain_feature","get_integration_status",
 ];

@@ -17,6 +17,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { connectMs365 } from "@/lib/ms365Connect";
 import { getPpContacts } from "@/lib/ppContactsCache";
+import * as maestroTelecom from "@/lib/planipret/maestroTelecom";
 import { fetchTeams365, loadTeamsCache, prefetchTeams365Data, saveTeamsCachePatch, isTeamsCacheFresh, isTeamsCacheExpired, revalidateTeams365IfStale, TEAMS_TTL_MS } from "@/lib/teams365Cache";
 
 
@@ -254,15 +255,40 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
-        body: { action: "threads" },
-      });
-      if (err) throw err;
-      const list: NsThread[] = (data as any)?.threads ?? [];
+      // --- Maestro Telecom (source primaire) ---
+      let list: NsThread[] = [];
+      let usedMaestro = false;
+      try {
+        const inbox = await maestroTelecom.getInbox();
+        // Normaliser le format Maestro → NsThread
+        const raw: any[] = Array.isArray(inbox) ? inbox : (inbox as any)?.data ?? (inbox as any)?.conversations ?? (inbox as any)?.threads ?? [];
+        if (raw.length > 0 || Array.isArray(inbox)) {
+          list = raw.map((item: any) => ({
+            id: item.id ?? item.conversation_id ?? item.thread_id ?? "",
+            messagesession_id: item.id ?? item.conversation_id ?? item.thread_id ?? "",
+            destination: item.phone_number ?? item.remote_party ?? item.contact_number ?? item.to ?? item.from ?? "",
+            remote_party: item.phone_number ?? item.remote_party ?? item.contact_number ?? item.to ?? item.from ?? "",
+            last_message: item.last_message ?? item.last_message_text ?? item.preview ?? item.body ?? "",
+            unread: item.unread_count ?? item.unread ?? 0,
+            last_message_at: item.updated_at ?? item.last_message_at ?? item.timestamp ?? new Date().toISOString(),
+          }));
+          usedMaestro = true;
+        }
+      } catch (maestroErr: any) {
+        console.warn("[maestro] inbox fallback to NS-API:", maestroErr?.message);
+      }
+      // --- NS-API (fallback si Maestro échoue ou retourne vide) ---
+      if (!usedMaestro) {
+        const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
+          body: { action: "threads" },
+        });
+        if (err) throw err;
+        list = (data as any)?.threads ?? [];
+      }
       list.sort((a, b) => +new Date(threadTime(b)) - +new Date(threadTime(a)));
       setThreads(list);
     } catch (e: any) {
-      console.error("[pp-ns-sms] threads", e);
+      console.error("[sms] load threads", e);
       setError(e?.message ?? t("messages.sendFailed"));
       toast.error(e?.message ?? t("messages.sendFailed"));
     } finally {
@@ -582,15 +608,41 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const loadMessages = async () => {
-    if (!currentThreadId) { setLoading(false); return; }
+    if (!number) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
-      const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
-        body: { action: "messages", thread_id: currentThreadId },
-      });
-      if (err) throw err;
-      const list: NsMessage[] = (data as any)?.messages ?? [];
+      // --- Maestro Telecom (source primaire) ---
+      let list: NsMessage[] = [];
+      let usedMaestro = false;
+      try {
+        const resp = await maestroTelecom.getMessagesWith(number);
+        const raw: any[] = Array.isArray(resp) ? resp : (resp as any)?.data ?? (resp as any)?.messages ?? [];
+        if (raw.length > 0 || Array.isArray(resp)) {
+          list = raw.map((m: any) => ({
+            id: m.id ?? m.message_id ?? "",
+            direction: m.direction ?? (m.is_outbound ? "outbound" : "inbound"),
+            from: m.from ?? m.from_number ?? m.source ?? "",
+            to: m.to ?? m.to_number ?? m.destination ?? "",
+            message: m.message ?? m.body ?? m.text ?? "",
+            body: m.message ?? m.body ?? m.text ?? "",
+            timestamp: m.created_at ?? m.sent_at ?? m.timestamp ?? new Date().toISOString(),
+            created_at: m.created_at ?? m.sent_at ?? m.timestamp ?? new Date().toISOString(),
+            read_at: m.read_at ?? null,
+          }));
+          usedMaestro = true;
+        }
+      } catch (maestroErr: any) {
+        console.warn("[maestro] getMessagesWith fallback to NS-API:", maestroErr?.message);
+      }
+      // --- NS-API (fallback) ---
+      if (!usedMaestro && currentThreadId) {
+        const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
+          body: { action: "messages", thread_id: currentThreadId },
+        });
+        if (err) throw err;
+        list = (data as any)?.messages ?? [];
+      }
       list.sort((a, b) => +new Date(msgTime(a)) - +new Date(msgTime(b)));
       setMessages(list);
     } catch (e: any) {
@@ -625,21 +677,30 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
     setMessages((prev) => [...prev, optimistic]);
     setText("");
     try {
-      const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
-        body: { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) },
-      });
-      if (err) throw err;
-      if ((data as any)?.ok === false || (data as any)?.error) {
-        const detail = (data as any)?.body || (data as any)?.error || t("messages.sendFailed");
-        throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      // --- Maestro Telecom (envoi primaire) ---
+      let sentViaMaestro = false;
+      try {
+        await maestroTelecom.sendMessage({ to_user_number: number, message: body });
+        sentViaMaestro = true;
+      } catch (maestroErr: any) {
+        console.warn("[maestro] sendMessage fallback to NS-API:", maestroErr?.message);
       }
-      const result = (data as any)?.result ?? {};
-      const newThreadId = result?.messagesession_id ?? result?.["messagesession-id"] ?? result?.session_id ?? result?.id;
-      if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);
-      // Maestro mirror is handled server-side inside pp-ns-sms.
-      // Refresh from server to reconcile optimistic message
-      setTimeout(() => loadMessages(), 600);
-
+      // --- NS-API (fallback si Maestro échoue) ---
+      if (!sentViaMaestro) {
+        const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
+          body: { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) },
+        });
+        if (err) throw err;
+        if ((data as any)?.ok === false || (data as any)?.error) {
+          const detail = (data as any)?.body || (data as any)?.error || t("messages.sendFailed");
+          throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+        }
+        const result = (data as any)?.result ?? {};
+        const newThreadId = result?.messagesession_id ?? result?.["messagesession-id"] ?? result?.session_id ?? result?.id;
+        if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);
+      }
+      // Rafraîchir depuis le serveur pour réconcilier le message optimiste
+      setTimeout(() => loadMessages(), 800);
     } catch (e: any) {
       toast.error(e?.message ?? t("messages.sendFailed"));
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));

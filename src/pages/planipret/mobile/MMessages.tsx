@@ -1594,6 +1594,7 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
             style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
             <Paperclip className="w-3.5 h-3.5" /> Joindre
           </button>
+          <AiImproveMenu text={body} mode="email" onResult={setBody} />
           <span className="text-[10px]" style={{ color: "var(--pp-text-muted)" }}>Max 3 Mo par fichier</span>
         </div>
       </div>

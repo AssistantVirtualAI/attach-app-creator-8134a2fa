@@ -244,19 +244,32 @@ export default function PAMaestroSync() {
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
+    const invokeAll = () => Promise.all([
+      supabase.functions.invoke("pp-maestro-admin", { body: { action: "status" } }),
+      supabase.functions.invoke("pp-maestro-admin", {
+        body: {
+          action: "sync-log", limit: 200, since_hours: 72,
+          only_failures: onlyFailures,
+          action_like: actionFilter?.like,
+          action_eq: actionFilter?.eq,
+        },
+      }),
+      supabase.functions.invoke("pp-maestro-admin", { body: { action: "mirror-status" } }),
+    ]);
+    const is401 = (e: any) =>
+      e?.context?.status === 401 || /\b401\b|unauthorized/i.test(e?.message || "");
     try {
-      const [s, l, m] = await Promise.all([
-        supabase.functions.invoke("pp-maestro-admin", { body: { action: "status" } }),
-        supabase.functions.invoke("pp-maestro-admin", {
-          body: {
-            action: "sync-log", limit: 200, since_hours: 72,
-            only_failures: onlyFailures,
-            action_like: actionFilter?.like,
-            action_eq: actionFilter?.eq,
-          },
-        }),
-        supabase.functions.invoke("pp-maestro-admin", { body: { action: "mirror-status" } }),
-      ]);
+      let [s, l, m] = await invokeAll();
+      // Stale/revoked session: try one refresh + retry, else sign out.
+      if (is401(s.error) || is401(l.error) || is401(m.error)) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (!refreshed?.session) {
+          await supabase.auth.signOut().catch(() => {});
+          window.location.href = "/auth?redirect=/planipret/admin/maestro-sync";
+          return;
+        }
+        [s, l, m] = await invokeAll();
+      }
       if (s.error) throw new Error(s.error.message);
       if (l.error) throw new Error(l.error.message);
       setStatus(s.data as Status);

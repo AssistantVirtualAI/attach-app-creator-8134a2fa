@@ -63,10 +63,20 @@ Deno.serve(async (req) => {
     const tokenJson = await tokenRes.json().catch(() => ({}));
     if (!tokenRes.ok) {
       console.error("[maestro-oauth-callback] token exchange failed", tokenRes.status, tokenJson);
-      return new Response(JSON.stringify({ success: false, error: tokenJson?.error_description ?? tokenJson?.error ?? `HTTP ${tokenRes.status}` }), {
+      const errMsg = tokenJson?.error_description ?? tokenJson?.error ?? `HTTP ${tokenRes.status}`;
+      await admin.from("planipret_integration_secrets").upsert({
+        provider: "maestro_oauth_error",
+        key_name: "last",
+        value: JSON.stringify({ error: errMsg, http_status: tokenRes.status, at: new Date().toISOString(), raw: tokenJson }),
+      }, { onConflict: "provider,key_name" });
+      return new Response(JSON.stringify({ success: false, error: errMsg }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Clear any previous error
+    await admin.from("planipret_integration_secrets").delete()
+      .eq("provider", "maestro_oauth_error");
 
     // Store the tokens
     await admin.from("planipret_integration_secrets").upsert({
@@ -85,3 +95,4 @@ Deno.serve(async (req) => {
     });
   }
 });
+

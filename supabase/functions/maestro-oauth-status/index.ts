@@ -31,9 +31,24 @@ Deno.serve(async (req) => {
     .order("updated_at", { ascending: false })
     .limit(5);
 
-  let status: "connected" | "pending" | "not_configured" | "disconnected" = "disconnected";
+  const { data: errRows } = await admin
+    .from("planipret_integration_secrets")
+    .select("value, updated_at")
+    .eq("provider", "maestro_oauth_error")
+    .order("updated_at", { ascending: false })
+    .limit(1);
+
+  let status: "connected" | "pending" | "not_configured" | "disconnected" | "error" = "disconnected";
   let lastConnectedAt: string | null = null;
   let expiresIn: number | null = null;
+  let lastError: { message: string; at: string | null; http_status?: number } | null = null;
+
+  if (errRows && errRows.length > 0) {
+    try {
+      const parsed = JSON.parse((errRows[0] as any).value ?? "{}");
+      lastError = { message: parsed?.error ?? "Erreur inconnue", at: (errRows[0] as any).updated_at, http_status: parsed?.http_status };
+    } catch { lastError = { message: "Erreur inconnue", at: (errRows[0] as any).updated_at }; }
+  }
 
   if (connected && connected.length > 0) {
     status = "connected";
@@ -42,6 +57,8 @@ Deno.serve(async (req) => {
       const parsed = JSON.parse((connected[0] as any).value ?? "{}");
       expiresIn = parsed?.expires_in ?? null;
     } catch { /* ignore */ }
+  } else if (lastError) {
+    status = "error";
   } else if (pending && pending.length > 0) {
     status = "pending";
   } else if (!configured) {
@@ -70,5 +87,7 @@ Deno.serve(async (req) => {
     pending_count: pending?.length ?? 0,
     redirect_uri: redirectUri,
     authorize_url: authorizeUrl,
+    last_error: lastError,
   }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
+

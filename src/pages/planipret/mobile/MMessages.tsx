@@ -889,7 +889,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
 
   useEffect(() => {
     if (initialTo && initialTo.trim()) {
-      setComposeInit({ to: initialTo, subject: "", body: initialName ? `\n\n— ${initialName}` : "" });
+      setComposeInit({ to: initialTo, subject: "", body: "" });
       setComposeOpen(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

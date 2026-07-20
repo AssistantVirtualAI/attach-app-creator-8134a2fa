@@ -1233,67 +1233,210 @@ function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
 function EmailComposeSheet({ init, onClose, onSent }: { init: { to?: string; subject?: string; body?: string }; onClose: () => void; onSent: () => void }) {
   const { t } = useMplanipretLang();
   const [to, setTo] = useState(init.to ?? "");
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
+  const [showCc, setShowCc] = useState(false);
   const [subject, setSubject] = useState(init.subject ?? "");
   const [body, setBody] = useState(init.body ?? "");
   const [sending, setSending] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const aiRef = useRef<HTMLDivElement | null>(null);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (aiRef.current && !aiRef.current.contains(e.target as Node)) setAiOpen(false);
+    };
+    if (aiOpen) document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [aiOpen]);
 
   const send = async () => {
     if (!to.trim()) { toast.error(t("messages.recipientRequired")); return; }
     setSending(true);
+    const parseList = (s: string) => s.split(",").map((v) => v.trim()).filter(Boolean);
     const { data, error } = await supabase.functions.invoke("ms365-actions", {
-      body: { action: "send_email", payload: { to: to.split(",").map((s) => s.trim()).filter(Boolean), subject, body: body.replace(/\n/g, "<br/>") } },
+      body: { action: "send_email", payload: {
+        to: parseList(to),
+        cc: cc.trim() ? parseList(cc) : undefined,
+        bcc: bcc.trim() ? parseList(bcc) : undefined,
+        subject,
+        body: body.replace(/\n/g, "<br/>"),
+      } },
     });
     setSending(false);
-    if (error || !(data as any)?.success) {
-      toast.error(t("messages.emailSendFailed"));
-      return;
-    }
+    if (error || !(data as any)?.success) { toast.error(t("messages.emailSendFailed")); return; }
     toast.success(t("messages.emailSent"));
     onSent();
   };
 
+  const runAi = async (action: "fix" | "improve" | "formal" | "shorter") => {
+    if (!body.trim()) return;
+    setAiBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-text-improve", {
+        body: { text: body, mode: "email", action },
+      });
+      if (error) throw error;
+      if ((data as any)?.success === false) throw new Error((data as any)?.error || "IA indisponible");
+      const result = (data as any)?.result;
+      if (typeof result === "string") setBody(result.trim());
+      else throw new Error("Réponse IA invalide");
+    } catch (e: any) {
+      toast.error("Erreur IA", { description: e?.message });
+    } finally {
+      setAiBusy(false);
+      setAiOpen(false);
+    }
+  };
+
+  const aiItems = [
+    { icon: "✓", label: "Corriger les fautes", action: "fix" as const },
+    { icon: "✨", label: "Améliorer le texte", action: "improve" as const },
+    { icon: "👔", label: "Rendre plus formel", action: "formal" as const },
+    { icon: "✂️", label: "Raccourcir", action: "shorter" as const },
+  ];
+
+  const fieldLabelStyle: React.CSSProperties = {
+    color: "var(--pp-text-muted)", fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
+    width: 44, textTransform: "uppercase",
+  };
+  const inlineInput: React.CSSProperties = {
+    flex: 1, background: "transparent", border: "none", outline: "none",
+    color: "var(--pp-text-primary)", fontSize: 14, padding: "10px 0",
+  };
+  const rowStyle: React.CSSProperties = {
+    display: "flex", alignItems: "center", gap: 8, padding: "0 16px",
+    borderBottom: "1px solid var(--pp-bg-border)",
+  };
+
   return (
-    <div className="absolute inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end" onClick={onClose}>
+    <div className="absolute inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-end" onClick={onClose}>
       <div
-        className="w-full rounded-t-3xl flex flex-col"
-        style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", height: "92%" }}
+        className="w-full flex flex-col overflow-hidden"
+        style={{ background: "#faf9f8", height: "100%", color: "#201f1e" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
-          <button onClick={onClose} className="p-1.5 rounded-full" style={{ color: "var(--pp-text-secondary)" }}>
+        {/* Outlook-style top bar */}
+        <div className="flex items-center justify-between px-3 py-2"
+          style={{ background: "#0078d4", color: "#fff" }}>
+          <button onClick={onClose} className="p-2 rounded-full active:opacity-70" aria-label="close">
             <X className="w-5 h-5" />
           </button>
-          <p className="text-xs uppercase tracking-wider" style={{ color: "var(--pp-text-muted)" }}>{t("messages.newEmail")}</p>
+          <p className="text-[15px] font-semibold">{t("messages.newEmail") ?? "Nouveau message"}</p>
           <button
             onClick={send}
             disabled={sending || !to.trim()}
-            className="px-3 py-1 rounded-full text-white text-xs font-semibold flex items-center gap-1 disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}
+            className="px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+            style={{ background: "#fff", color: "#0078d4" }}
           >
-            {sending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+            {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
             {t("common.send")}
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-          <input
-            value={to} onChange={(e) => setTo(e.target.value)} placeholder={t("messages.toPlaceholder")}
-            className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
-          />
-          <input
-            value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t("messages.subject")}
-            className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
-          />
+
+        {/* Recipient rows */}
+        <div style={{ background: "#fff" }}>
+          <div style={rowStyle}>
+            <span style={fieldLabelStyle}>À</span>
+            <input value={to} onChange={(e) => setTo(e.target.value)}
+              placeholder="destinataire@exemple.com" style={inlineInput} />
+            {!showCc && (
+              <button onClick={() => setShowCc(true)} className="text-xs font-semibold px-2 py-1"
+                style={{ color: "#0078d4" }}>Cc/Cci</button>
+            )}
+          </div>
+          {showCc && (
+            <>
+              <div style={rowStyle}>
+                <span style={fieldLabelStyle}>Cc</span>
+                <input value={cc} onChange={(e) => setCc(e.target.value)} style={inlineInput} />
+              </div>
+              <div style={rowStyle}>
+                <span style={fieldLabelStyle}>Cci</span>
+                <input value={bcc} onChange={(e) => setBcc(e.target.value)} style={inlineInput} />
+              </div>
+            </>
+          )}
+          <div style={rowStyle}>
+            <span style={fieldLabelStyle}>Objet</span>
+            <input value={subject} onChange={(e) => setSubject(e.target.value)}
+              placeholder={t("messages.subject")} style={{ ...inlineInput, fontWeight: 600 }} />
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto" style={{ background: "#fff" }}>
           <textarea
-            value={body} onChange={(e) => setBody(e.target.value)} placeholder={t("messages.yourMessage")}
-            rows={14}
-            className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
-            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+            ref={bodyRef}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Écrivez votre message…"
+            className="w-full h-full resize-none outline-none"
+            style={{
+              minHeight: 260, padding: "16px", border: "none",
+              fontSize: 14, lineHeight: 1.55, color: "#201f1e", background: "transparent",
+              fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            }}
           />
+        </div>
+
+        {/* Outlook-style bottom toolbar */}
+        <div className="flex items-center gap-1 px-2 py-2"
+          style={{ background: "#f3f2f1", borderTop: "1px solid #edebe9" }}>
+          <ToolbarBtn label="B" title="Gras" bold onClick={() => {}} />
+          <ToolbarBtn label="I" title="Italique" italic onClick={() => {}} />
+          <ToolbarBtn label="U" title="Souligné" underline onClick={() => {}} />
+          <div style={{ width: 1, height: 20, background: "#e1dfdd", margin: "0 4px" }} />
+          <button className="p-2 rounded active:bg-black/5" title="Pièce jointe">
+            <Paperclip className="w-4 h-4" style={{ color: "#605e5c" }} />
+          </button>
+          <div className="flex-1" />
+          <div ref={aiRef} className="relative">
+            <button
+              onClick={() => setAiOpen((v) => !v)}
+              disabled={aiBusy || !body.trim()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white disabled:opacity-40 active:scale-95"
+              style={{ background: "linear-gradient(135deg,#7C3AED,#A855F7)" }}
+            >
+              {aiBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              IA
+            </button>
+            {aiOpen && (
+              <div className="absolute bottom-10 right-0 z-[300] w-52 rounded-xl p-1.5 shadow-2xl"
+                style={{ background: "#fff", border: "1px solid #e1dfdd" }}>
+                {aiItems.map((it) => (
+                  <button key={it.action} onClick={() => runAi(it.action)}
+                    className="w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center gap-2 hover:bg-black/5"
+                    style={{ color: "#201f1e" }}>
+                    <span className="shrink-0">{it.icon}</span>
+                    <span>{it.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function ToolbarBtn({ label, title, bold, italic, underline, onClick }: {
+  label: string; title: string; bold?: boolean; italic?: boolean; underline?: boolean; onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick} title={title}
+      className="w-8 h-8 rounded flex items-center justify-center active:bg-black/5"
+      style={{
+        color: "#201f1e",
+        fontWeight: bold ? 700 : 500,
+        fontStyle: italic ? "italic" : "normal",
+        textDecoration: underline ? "underline" : "none",
+        fontSize: 14,
+      }}
+    >{label}</button>
   );
 }
 

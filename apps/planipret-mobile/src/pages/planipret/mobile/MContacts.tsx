@@ -1145,7 +1145,10 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
         />
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Message</label>
+        <div className="flex items-center justify-between mt-1 mb-1">
+          <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Message</label>
+          <AiContactImproveButton text={body} mode="sms" onResult={(r) => setBody(r)} disabled={sending || sent} />
+        </div>
         <textarea
           ref={taRef}
           value={body}

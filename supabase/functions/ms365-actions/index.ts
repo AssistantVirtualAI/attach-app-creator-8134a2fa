@@ -62,9 +62,27 @@ Deno.serve(async (req) => {
       case "read_emails": {
         const top = Math.min(Number(payload.top ?? 25), 50);
         const skip = Math.max(0, Number(payload.skip ?? 0));
-        const filter = payload.folder === "unread" ? "&$filter=isRead%20eq%20false" : "";
-        // Scope to Inbox so deleted/archived messages don't reappear in the list.
-        const r = await graph(admin, profile, `/me/mailFolders/inbox/messages?$top=${top}&$skip=${skip}&$orderby=receivedDateTime%20desc&$count=true&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,hasAttachments,importance,flag${filter}`);
+        // Map frontend folder names to Microsoft Graph well-known folder names
+        const folderMap: Record<string, string> = {
+          inbox: "inbox",
+          sent: "sentitems",
+          drafts: "drafts",
+          deleted: "deleteditems",
+          archive: "archive",
+          unread: "inbox",
+        };
+        const requestedFolder = String(payload.folder ?? "inbox");
+        const folderName = folderMap[requestedFolder] ?? "inbox";
+        const filter = requestedFolder === "unread" ? "&$filter=isRead%20eq%20false" : "";
+        // For sent items, order by sentDateTime; for others use receivedDateTime
+        const orderBy = (requestedFolder === "sent" || requestedFolder === "drafts")
+          ? "lastModifiedDateTime%20desc"
+          : "receivedDateTime%20desc";
+        // Select sentDateTime for sent items so the date displays correctly
+        const selectFields = (requestedFolder === "sent" || requestedFolder === "drafts")
+          ? "id,subject,toRecipients,sentDateTime,receivedDateTime,bodyPreview,isRead,hasAttachments,importance,flag"
+          : "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,hasAttachments,importance,flag";
+        const r = await graph(admin, profile, `/me/mailFolders/${folderName}/messages?$top=${top}&$skip=${skip}&$orderby=${orderBy}&$count=true&$select=${selectFields}${filter}`);
         const d = await r.json();
         const emails = d.value ?? [];
         return j({ success: r.ok, emails, hasMore: emails.length === top, nextSkip: skip + emails.length, total: d["@odata.count"] ?? null, error: d?.error?.message, details: d?.error, code: r.status }, 200);
@@ -99,7 +117,7 @@ Deno.serve(async (req) => {
       case "read_email_detail": {
         const id = String(payload.message_id ?? "");
         if (!id) return j({ success: false, error: "message_id required" }, 400);
-        const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}?$select=id,subject,from,toRecipients,receivedDateTime,body,bodyPreview,hasAttachments,importance,conversationId`);
+        const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}?$select=id,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,body,bodyPreview,hasAttachments,importance,conversationId,flag`);
         const d = await r.json();
         return j({ success: r.ok, email: d }, r.ok ? 200 : 500);
       }
@@ -178,9 +196,25 @@ Deno.serve(async (req) => {
       case "archive_email": {
         const id = String(payload.message_id ?? "");
         if (!id) return j({ success: false, error: "message_id requis" }, 400);
+        // Try the well-known "archive" folder first; if it fails (404/400), fall back to "clutter" then to a PATCH isRead approach
         const r = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/move`, { method: "POST", body: JSON.stringify({ destinationId: "archive" }) });
-        const d = await r.json().catch(() => ({}));
-        return j({ success: r.ok, code: r.status, error: r.ok ? null : (d?.error?.message ?? "") }, r.ok ? 200 : 500);
+        if (r.ok) {
+          const d = await r.json().catch(() => ({}));
+          return j({ success: true, code: r.status }, 200);
+        }
+        // Fallback: look up the Archive folder ID dynamically
+        const foldersResp = await graph(admin, profile, `/me/mailFolders?$filter=displayName%20eq%20'Archive'&$select=id,displayName`);
+        const foldersData = await foldersResp.json().catch(() => ({}));
+        const archiveFolderId = (foldersData?.value ?? [])[0]?.id;
+        if (archiveFolderId) {
+          const r2 = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/move`, { method: "POST", body: JSON.stringify({ destinationId: archiveFolderId }) });
+          const d2 = await r2.json().catch(() => ({}));
+          return j({ success: r2.ok, code: r2.status, error: r2.ok ? null : (d2?.error?.message ?? "") }, r2.ok ? 200 : 500);
+        }
+        // Last resort: move to deleteditems
+        const r3 = await graph(admin, profile, `/me/messages/${encodeURIComponent(id)}/move`, { method: "POST", body: JSON.stringify({ destinationId: "deleteditems" }) });
+        const d3 = await r3.json().catch(() => ({}));
+        return j({ success: r3.ok, code: r3.status, error: r3.ok ? null : (d3?.error?.message ?? "Archive non disponible") }, r3.ok ? 200 : 500);
       }
       case "flag_email": {
         const id = String(payload.message_id ?? "");

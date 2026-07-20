@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["REPLACE_WITH_APPLE_TEAM_ID.com.planipret.mobile"],
+        "components": [
+          { "/": "/auth/maestro/callback", "comment": "Maestro OAuth callback deep link" },
+          { "/": "/auth/maestro/callback?*", "comment": "Maestro OAuth callback with query params" }
+        ]
+      }
+    ]
+  }
+}

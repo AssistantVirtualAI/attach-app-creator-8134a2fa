@@ -991,10 +991,26 @@ function UserModal({ mode, user, allNumbers, onClose, onSaved }: { mode: "add" |
     }
   };
 
+  const [newPwd, setNewPwd] = useState("");
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [pwdBusy, setPwdBusy] = useState(false);
+
   const resetPwd = async () => {
     const { data } = await supabase.functions.invoke("pp-admin-user", { body: { action: "reset_password", payload: { email } } });
     if ((data as any)?.success) toast.success("Email de réinitialisation envoyé");
     else toast.error("Échec de l'envoi");
+  };
+
+  const setPwdDirect = async () => {
+    if (!newPwd || newPwd.length < 8) { toast.error("Min. 8 caractères"); return; }
+    setPwdBusy(true);
+    const { data, error } = await supabase.functions.invoke("pp-admin-user", {
+      body: { action: "set_password", payload: { user_id: user?.user_id, email, password: newPwd } },
+    });
+    setPwdBusy(false);
+    if (error || !(data as any)?.success) { toast.error((data as any)?.error ?? "Échec"); return; }
+    setNewPwd("");
+    toast.success("Mot de passe mis à jour ✅");
   };
 
   return (

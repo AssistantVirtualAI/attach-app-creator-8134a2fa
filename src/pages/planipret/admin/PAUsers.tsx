@@ -684,29 +684,52 @@ export default function PAUsers() {
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-white/[0.05] transition"
-                          style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:brightness-110 transition shadow-sm"
+                          style={{ background: "linear-gradient(180deg, var(--pp-bg-elevated), var(--pp-bg-surface))", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
                         >
-                          Actions <ChevronDown className="w-3 h-3" />
+                          Actions <ChevronDown className="w-3 h-3 opacity-70" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56">
-                        <DropdownMenuLabel className="text-xs">{u.full_name}</DropdownMenuLabel>
+                      <DropdownMenuContent
+                        align="end"
+                        side="bottom"
+                        sideOffset={8}
+                        collisionPadding={16}
+                        avoidCollisions
+                        className="w-64 max-w-[calc(100vw-24px)] max-h-[70vh] overflow-y-auto rounded-xl shadow-2xl border border-white/10 p-1.5"
+                      >
+                        <DropdownMenuLabel className="text-[11px] uppercase tracking-wider opacity-60 px-2 py-1.5">{u.full_name}</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {!u.ns_only && (
-                          <DropdownMenuItem onClick={() => setEditUser(u)}>
+                          <DropdownMenuItem className="rounded-lg cursor-pointer" onClick={() => setEditUser(u)}>
                             <Edit3 className="w-3.5 h-3.5 mr-2" /> Modifier le courtier
                           </DropdownMenuItem>
                         )}
                         {!u.ns_only && (
                           <DropdownMenuItem
+                            className="rounded-lg cursor-pointer"
+                            onClick={async () => {
+                              const pwd = window.prompt(`Nouveau mot de passe pour ${u.full_name} (min. 8 caractères) :`);
+                              if (!pwd) return;
+                              if (pwd.length < 8) { toast.error("Min. 8 caractères"); return; }
+                              const { data, error } = await supabase.functions.invoke("pp-admin-user", { body: { action: "set_password", payload: { user_id: u.user_id, email: u.email, password: pwd } } });
+                              if (error || !(data as any)?.success) toast.error((data as any)?.error ?? "Échec");
+                              else toast.success("Mot de passe mis à jour ✅");
+                            }}
+                          >
+                            <KeyRound className="w-3.5 h-3.5 mr-2" /> Définir un mot de passe
+                          </DropdownMenuItem>
+                        )}
+                        {!u.ns_only && (
+                          <DropdownMenuItem
+                            className="rounded-lg cursor-pointer"
                             onClick={async () => {
                               const { data } = await supabase.functions.invoke("pp-admin-user", { body: { action: "reset_password", payload: { email: u.email } } });
                               if ((data as any)?.success) toast.success("Email de réinitialisation envoyé");
                               else toast.error("Échec de l'envoi");
                             }}
                           >
-                            <KeyRound className="w-3.5 h-3.5 mr-2" /> Réinitialiser le mot de passe
+                            <KeyRound className="w-3.5 h-3.5 mr-2 opacity-60" /> Envoyer email de réinitialisation
                           </DropdownMenuItem>
                         )}
                         {!u.ns_only && <DropdownMenuSeparator />}

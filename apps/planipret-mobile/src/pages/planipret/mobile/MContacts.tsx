@@ -1070,7 +1070,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
   const disabled = sending || sent || preflight === "loading" || noNumber || !recipient.trim() || !body.trim();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
         className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-4"
         style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
@@ -1222,7 +1222,7 @@ function EmailComposerSheet({ to, contactName, onClose }: { to: string; contactN
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
         className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-4"
         style={{ background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
@@ -1253,14 +1253,18 @@ function EmailComposerSheet({ to, contactName, onClose }: { to: string; contactN
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
         />
 
-        <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Message</label>
+        <div className="flex items-center justify-between mt-1 mb-1">
+          <label className="text-[10px] font-semibold uppercase" style={{ color: "var(--pp-text-muted)" }}>Message</label>
+          <AiContactImproveButton text={body} mode="email" onResult={(r) => setBody(r)} disabled={sending || connecting} />
+        </div>
         <textarea
           ref={taRef}
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={6}
           placeholder="Écrire votre message…"
-          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none"
+          disabled={sending || connecting}
+          className="w-full mt-1 mb-3 px-3 py-2 rounded-lg outline-none resize-none disabled:opacity-60"
           style={{ fontSize: 16, background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
         />
 

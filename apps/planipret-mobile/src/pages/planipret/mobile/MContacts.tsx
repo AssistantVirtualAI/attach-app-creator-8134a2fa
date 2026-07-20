@@ -583,6 +583,35 @@ export default function MContacts() {
                   aria-label={starred ? (t("contacts.removeFavorite") || "Retirer") : (t("contacts.addFavorite") || "Ajouter")}>
                   <Star className="w-3.5 h-3.5" fill={starred ? "#f59e0b" : "none"} />
                 </button>
+                {/* SMS → navigue vers Messages onglet SMS */}
+                {phone && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const qs = new URLSearchParams({ tab: "sms", to: phone, name: displayName || "" });
+                      navigate(`/mplanipret/messages?${qs.toString()}`);
+                    }}
+                    className="flex items-center justify-center active:scale-95 transition"
+                    style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", color: "#22c55e" }}
+                    aria-label="SMS">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {/* Email → navigue vers Messages onglet Courriel */}
+                {c.email && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const qs = new URLSearchParams({ tab: "emails", to: c.email, name: displayName || "" });
+                      navigate(`/mplanipret/messages?${qs.toString()}`);
+                    }}
+                    className="flex items-center justify-center active:scale-95 transition"
+                    style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)", color: "#8b5cf6" }}
+                    aria-label="Courriel">
+                    <Mail className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {/* Appel */}
                 <button onClick={(e) => { e.stopPropagation(); phone && openDialer(phone); }}
                   className="flex items-center justify-center active:scale-95 transition"
                   style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.3)", color: "var(--pp-brand-accent)" }}

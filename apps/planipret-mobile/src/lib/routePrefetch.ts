@@ -1,49 +1,61 @@
-// Prefetch lazy screen chunks on tap/hover/idle so tab switches feel instant.
-// Pending idle/staggered prefetches can be cancelled when the user navigates,
-// so background work never competes with the route the user actually opened.
+// Prefetch lazy route chunks on hover/focus/idle so navigation feels instant.
+// The factories mirror the lazy() imports in App.tsx. Adding a new lazy route
+// here is optional — hovering a <PrefetchLink> to that path just becomes a no-op.
+
 type Factory = () => Promise<any>;
 
 const registry: Record<string, Factory> = {
-  "/mplanipret":              () => import("@/pages/planipret/mobile/MHome"),
-  "/mplanipret/home":         () => import("@/pages/planipret/mobile/MHome"),
-  "/mplanipret/calls":        () => import("@/pages/planipret/mobile/MCalls"),
-  "/mplanipret/messages":     () => import("@/pages/planipret/mobile/MMessages"),
-  "/mplanipret/voicemail":    () => import("@/pages/planipret/mobile/MVoicemail"),
-  "/mplanipret/contacts":     () => import("@/pages/planipret/mobile/MContacts"),
-  "/mplanipret/more":         () => import("@/pages/planipret/mobile/MMore"),
-  "/mplanipret/pipeline":     () => import("@/pages/planipret/mobile/MPipeline"),
-  "/mplanipret/search":       () => import("@/pages/planipret/mobile/MSearch"),
-  "/mplanipret/stats":        () => import("@/pages/planipret/mobile/MStats"),
-  "/mplanipret/ava":          () => import("@/pages/planipret/mobile/MAvaChat"),
-  "/mplanipret/notifications":() => import("@/pages/planipret/mobile/MAvaNotifications"),
-  "/mplanipret/extension-sync":() => import("@/pages/planipret/mobile/MExtensionSync"),
-  "/mplanipret/ms365-diagnostics":() => import("@/pages/planipret/mobile/MMs365Diagnostics"),
-  "/mplanipret/style-diagnostics":() => import("@/pages/planipret/mobile/MStyleDiagnostics"),
-  "/mplanipret/diagnostics":() => import("@/pages/planipret/mobile/MDiagnostics"),
-  "/mplanipret/sip-debug":() => import("@/pages/planipret/mobile/MSipDebug"),
+  // Planipret admin
+  "/planipret/admin": () => import("@/pages/planipret/admin/PlanipretAdminLayout"),
+  "/planipret/admin/overview": () => import("@/pages/planipret/admin/PAOverview"),
+  "/planipret/admin/users": () => import("@/pages/planipret/admin/PAUsers"),
+  "/planipret/admin/calls": () => import("@/pages/planipret/admin/PACalls"),
+  "/planipret/admin/messages": () => import("@/pages/planipret/admin/PAMessages"),
+  "/planipret/admin/recordings": () => import("@/pages/planipret/admin/PARecordings"),
+  "/planipret/admin/reports": () => import("@/pages/planipret/admin/PAReports"),
+  "/planipret/admin/leads": () => import("@/pages/planipret/admin/PALeads"),
+  "/planipret/admin/templates": () => import("@/pages/planipret/admin/PATemplates"),
+  "/planipret/admin/integrations": () => import("@/pages/planipret/PlanipretIntegrations"),
+  "/planipret/admin/debug": () => import("@/pages/planipret/admin/PADebug"),
+  "/planipret/admin/ava": () => import("@/pages/planipret/admin/PAAva"),
+  "/planipret/admin/ava-agent": () => import("@/pages/planipret/admin/PAAvaAgent"),
+  "/planipret/admin/ava-logs": () => import("@/pages/planipret/admin/PAAvaLogs"),
+  "/planipret/admin/audit": () => import("@/pages/planipret/admin/PAAuditLog"),
+  "/planipret/admin/audit-checklist": () => import("@/pages/planipret/admin/PAAuditChecklist"),
+  "/planipret/admin/compliance": () => import("@/pages/planipret/admin/PACompliance"),
+  "/planipret/admin/mobile-devices": () => import("@/pages/planipret/admin/PAMobileDevices"),
+  "/planipret/admin/sip-diagnostic": () => import("@/pages/planipret/admin/PASipDiagnostic"),
+  "/planipret/admin/diagnostics": () => import("@/pages/planipret/admin/PADiagnostics"),
+
+  // Planipret mobile screens
+  "/mplanipret": () => import("@/pages/planipret/mobile/MHome"),
+  "/mplanipret/home": () => import("@/pages/planipret/mobile/MHome"),
+  "/mplanipret/calls": () => import("@/pages/planipret/mobile/MCalls"),
+  "/mplanipret/messages": () => import("@/pages/planipret/mobile/MMessages"),
+  "/mplanipret/voicemail": () => import("@/pages/planipret/mobile/MVoicemail"),
+  "/mplanipret/contacts": () => import("@/pages/planipret/mobile/MContacts"),
+  "/mplanipret/more": () => import("@/pages/planipret/mobile/MMore"),
+  "/mplanipret/pipeline": () => import("@/pages/planipret/mobile/MPipeline"),
+  "/mplanipret/search": () => import("@/pages/planipret/mobile/MSearch"),
+  "/mplanipret/stats": () => import("@/pages/planipret/mobile/MStats"),
+  "/mplanipret/ava": () => import("@/pages/planipret/mobile/MAvaChat"),
+  "/mplanipret/notifications": () => import("@/pages/planipret/mobile/MAvaNotifications"),
+  "/mplanipret/extension-sync": () => import("@/pages/planipret/mobile/MExtensionSync"),
+  "/mplanipret/ms365-diagnostics": () => import("@/pages/planipret/mobile/MMs365Diagnostics"),
 };
 
 const started = new Set<string>();
 const done = new Set<string>();
 
-// Pending scheduled prefetches (not yet started). Cancelled on route change.
-type Pending = { cancel: () => void };
-const pending = new Map<string, Pending>();
-
-function resolveFactory(path: string): Factory | undefined {
-  return (
+export function prefetchRoute(path: string): void {
+  if (!path || done.has(path) || started.has(path)) return;
+  // Match by exact path, or by best prefix match.
+  const factory =
     registry[path] ||
     Object.entries(registry)
       .filter(([k]) => path === k || path.startsWith(k + "/"))
-      .sort((a, b) => b[0].length - a[0].length)[0]?.[1]
-  );
-}
-
-export function prefetchRoute(path: string): void {
-  if (!path || done.has(path) || started.has(path)) return;
-  const factory = resolveFactory(path);
+      .sort((a, b) => b[0].length - a[0].length)[0]?.[1];
   if (!factory) return;
-  pending.delete(path);
   started.add(path);
   Promise.resolve()
     .then(factory)
@@ -51,78 +63,18 @@ export function prefetchRoute(path: string): void {
     .catch(() => started.delete(path));
 }
 
-// Schedule prefetch with a *cancellable* low-priority slot.
-// Uses scheduler.postTask({ priority: "background" }) when available so it
-// yields to user-driven work; falls back to requestIdleCallback / setTimeout.
-function schedulePrefetch(path: string, delayMs: number): void {
-  if (!path || done.has(path) || started.has(path) || pending.has(path)) return;
-  if (!resolveFactory(path)) return;
-
-  let cancelled = false;
-  let timerId: number | null = null;
-  let ric: number | null = null;
-  const scheduler: any = (globalThis as any).scheduler;
-  let taskCtrl: AbortController | null = null;
-
-  const run = () => {
-    pending.delete(path);
-    if (cancelled) return;
-    prefetchRoute(path);
-  };
-
-  const kickLowPriority = () => {
-    if (cancelled) return;
-    if (scheduler && typeof scheduler.postTask === "function") {
-      taskCtrl = new AbortController();
-      scheduler
-        .postTask(run, { priority: "background", signal: taskCtrl.signal })
-        .catch(() => {});
-    } else if (typeof (globalThis as any).requestIdleCallback === "function") {
-      ric = (globalThis as any).requestIdleCallback(run, { timeout: 4000 });
-    } else {
-      timerId = window.setTimeout(run, 0);
-    }
-  };
-
-  const initial = window.setTimeout(kickLowPriority, delayMs);
-  pending.set(path, {
-    cancel: () => {
-      cancelled = true;
-      window.clearTimeout(initial);
-      if (timerId != null) window.clearTimeout(timerId);
-      if (ric != null && typeof (globalThis as any).cancelIdleCallback === "function") {
-        (globalThis as any).cancelIdleCallback(ric);
-      }
-      if (taskCtrl) try { taskCtrl.abort(); } catch {}
-      pending.delete(path);
-    },
-  });
-}
-
-export function scheduleIdlePrefetch(paths: string[]): void {
-  paths.forEach((p) => schedulePrefetch(p, 0));
-}
-
-function prefetchRoutesStaggered(paths: string[], gapMs: number): void {
-  paths.forEach((path, index) => schedulePrefetch(path, index * gapMs));
-}
-
 /**
- * Cancel every prefetch that hasn't started yet.
- * Call this on route change so background chunks stop competing with the
- * chunk the user is actually opening. Prefetches already in-flight complete
- * normally (browser can't abort a running dynamic import).
- * `exceptPath`, when provided, keeps that route's pending prefetch scheduled.
+ * Fire-and-forget: prefetch common next-hops during idle time after boot.
  */
-export function cancelPendingPrefetches(exceptPath?: string): void {
-  for (const [path, entry] of Array.from(pending.entries())) {
-    if (exceptPath && path === exceptPath) continue;
-    entry.cancel();
-  }
+export function scheduleIdlePrefetch(paths: string[]): void {
+  const run = () => paths.forEach(prefetchRoute);
+  const ric: any = (window as any).requestIdleCallback;
+  if (typeof ric === "function") ric(run, { timeout: 4000 });
+  else setTimeout(run, 1500);
 }
 
-/** All bottom-tab / accessible mobile routes — used to warm every chunk. */
-export const ALL_MOBILE_TAB_PATHS = [
+/** All mobile Planiprêt routes — used to warm every chunk on app boot. */
+export const ALL_MPLANIPRET_PATHS = [
   "/mplanipret/home",
   "/mplanipret/calls",
   "/mplanipret/messages",
@@ -130,26 +82,32 @@ export const ALL_MOBILE_TAB_PATHS = [
   "/mplanipret/contacts",
   "/mplanipret/more",
   "/mplanipret/pipeline",
+  "/mplanipret/search",
   "/mplanipret/stats",
   "/mplanipret/ava",
   "/mplanipret/notifications",
-  "/mplanipret/search",
   "/mplanipret/extension-sync",
   "/mplanipret/ms365-diagnostics",
-  "/mplanipret/style-diagnostics",
-  "/mplanipret/diagnostics",
-  "/mplanipret/sip-debug",
 ];
 
-const CRITICAL_MOBILE_TAB_PATHS = [
-  "/mplanipret/home",
-  "/mplanipret/calls",
-  "/mplanipret/messages",
-  "/mplanipret/ava",
-  "/mplanipret/contacts",
-];
+/** Aggressive: prefetch every mobile chunk immediately on mount. */
+export function prefetchAllMplanipret(): void {
+  // Kick off right away (microtask) so chunks download in parallel with initial paint.
+  Promise.resolve().then(() => ALL_MPLANIPRET_PATHS.forEach(prefetchRoute));
+}
 
+// ── Aliases pour PlanipretMobile.tsx ─────────────────────────────────────────
+
+/** Alias of ALL_MPLANIPRET_PATHS — kept for backward compatibility. */
+export const ALL_MOBILE_TAB_PATHS = ALL_MPLANIPRET_PATHS;
+
+/** Alias of prefetchAllMplanipret — kept for backward compatibility. */
 export function prefetchAllMobileTabs(): void {
-  prefetchRoutesStaggered(CRITICAL_MOBILE_TAB_PATHS, 80);
-  scheduleIdlePrefetch(ALL_MOBILE_TAB_PATHS.filter((p) => !CRITICAL_MOBILE_TAB_PATHS.includes(p)));
+  prefetchAllMplanipret();
+}
+
+/** Cancel any in-flight prefetch requests (no-op — prefetches are fire-and-forget). */
+export function cancelPendingPrefetches(): void {
+  // Nothing to cancel — prefetches are microtask-based and non-cancellable.
+  // This function exists to satisfy import contracts.
 }

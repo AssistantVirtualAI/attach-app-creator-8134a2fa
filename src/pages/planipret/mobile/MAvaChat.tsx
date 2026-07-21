@@ -9,6 +9,7 @@ import AvaVoiceAgent from "@/components/planipret/mobile/AvaVoiceAgent";
 import AvaOrb from "@/components/planipret/mobile/AvaOrb";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
+import { useAvaContext } from "@/hooks/useAvaContext";
 
 type AvaSuggestion = { id: string; label: string; kind: string; payload?: Record<string, any> };
 type Msg = { id: string; role: "user" | "assistant"; message: string; created_at: string; suggestions?: AvaSuggestion[] };
@@ -38,6 +39,7 @@ export default function MAvaChat() {
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const avaContext = useAvaContext();
 
   const switchMode = (m: "chat" | "voice") => { setMode(m); localStorage.setItem("ava_mode", m); };
 
@@ -97,7 +99,7 @@ export default function MAvaChat() {
     try {
       const history = messages.slice(-8).map((m) => ({ role: m.role, content: m.message }));
       const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
-        body: { mode: "chat", user_message: text, session_id: sessionId, history },
+        body: { mode: "chat", user_message: text, session_id: sessionId, history, context: avaContext },
       });
       if (error) throw error;
       const d = data as any;
@@ -124,7 +126,7 @@ export default function MAvaChat() {
     setRunningSuggestion(suggestion.id);
     try {
       const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
-        body: { mode: "chat", confirm_action: suggestion, approved: true, session_id: sessionId },
+        body: { mode: "chat", confirm_action: suggestion, approved: true, session_id: sessionId, context: avaContext },
       });
       if (error) throw error;
       const replyText = String((data as any)?.reply ?? "Action terminée.");

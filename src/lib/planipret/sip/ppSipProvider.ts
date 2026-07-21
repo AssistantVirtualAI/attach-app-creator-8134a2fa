@@ -74,6 +74,8 @@ class PpSipProvider {
   private session: any = null;
   private cfg: PpSipConfig | null = null;
   private listeners = new Set<Listener>();
+  private eventListeners = new Set<EventsListener>();
+  private events: PpSipEvent[] = [];
   private snap: PpSipSnapshot = {
     status: "idle",
     callState: "idle",

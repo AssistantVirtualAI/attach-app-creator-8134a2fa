@@ -1571,14 +1571,14 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: { to?: string; sub
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col" style={{ background: "#faf9f8", color: "#201f1e", paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+    <div className="fixed inset-0 z-[9999] flex flex-col" style={{ background: "#0078d4", color: "#201f1e" }}>
       <div
         className="w-full flex flex-col overflow-hidden h-full"
-        style={{ background: "#faf9f8" }}
+        style={{ background: "#faf9f8", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
-        {/* Outlook-style top bar */}
+        {/* Outlook-style top bar (extends into iOS safe area) */}
         <div className="flex items-center justify-between px-3 py-2"
-          style={{ background: "#0078d4", color: "#fff" }}>
+          style={{ background: "#0078d4", color: "#fff", paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)" }}>
           <button onClick={onClose} className="p-2 rounded-full active:opacity-70" aria-label="close">
             <X className="w-5 h-5" />
           </button>

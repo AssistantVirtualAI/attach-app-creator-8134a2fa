@@ -397,6 +397,15 @@ export default function MAvaChat() {
       </div>
       </div>
 
+      {pendingConfirm && (
+        <div className="sticky bottom-0 left-0 right-0 z-20 px-3 py-2 flex flex-col gap-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 92%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
+          <div className="text-sm" style={{ color: "var(--pp-text-primary)" }}>Confirmer : {pendingConfirm.label}</div>
+          <div className="flex gap-2">
+            <Button variant="ghost" className="flex-1" onClick={() => setPendingConfirm(null)}>Annuler</Button>
+            <Button className="flex-1" onClick={() => { const s = pendingConfirm; setPendingConfirm(null); runSuggestion(s, { skipConfirm: true }); }}>Confirmer</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

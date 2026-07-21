@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { flushSync, createPortal } from "react-dom";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -960,7 +960,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
   }, [hasMore, loadingMore, emails?.length]);
 
   return (
-    <div className="h-full overflow-y-auto p-3">
+    <div className="relative flex flex-col overflow-y-auto p-3" style={{ height: "calc(100dvh - 242px)", minHeight: 400 }}>
       <div className="flex items-center justify-between mb-2">
         <button
           onClick={() => { setComposeInit({}); setComposeOpen(true); }}
@@ -1085,21 +1085,23 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
         </>
       ))}
 
-      {active && (
+      {active && createPortal(
         <EmailDetailSheet
           email={active}
           onClose={() => setActive(null)}
           onCompose={(init) => { setActive(null); setComposeInit(init); setComposeOpen(true); }}
           onChanged={() => load()}
           onOptimisticRemove={(id) => setEmails((cur) => (cur ? cur.filter((e) => e.id !== id) : cur))}
-        />
+        />,
+        document.body
       )}
-      {composeOpen && (
+      {composeOpen && createPortal(
         <EmailComposeSheet
           init={composeInit}
           onClose={() => setComposeOpen(false)}
           onSent={() => { setComposeOpen(false); load(); }}
-        />
+        />,
+        document.body
       )}
     </div>
   );
@@ -1273,7 +1275,7 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
   });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999] flex items-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
       <div
         className="w-full rounded-t-3xl flex flex-col shadow-2xl"
         style={{
@@ -1505,7 +1507,7 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
   const title = mode === "reply" ? "Répondre" : mode === "reply_all" ? "Répondre à tous" : mode === "forward" ? "Transférer" : t("messages.newEmail");
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999] flex flex-col" style={{ paddingTop: "env(safe-area-inset-top,0px)", paddingBottom: "env(safe-area-inset-bottom,0px)", background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
       <div
         className="w-full rounded-t-3xl flex flex-col shadow-2xl"
         style={{

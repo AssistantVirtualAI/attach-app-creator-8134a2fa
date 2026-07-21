@@ -14,98 +14,10 @@ function isIgnorableNativeStartupError(raw: unknown): boolean {
   const obj = raw as Record<string, unknown>;
   const message = String(obj.message ?? obj.errorMessage ?? '').trim();
   const code = String(obj.code ?? '').trim();
-  const keys = new Set([...Object.keys(obj), ...Object.getOwnPropertyNames(obj)]);
-  return (
-    (!message && keys.size <= 3 && [...keys].every((k) => ['stack', 'name', 'message', 'errorMessage'].includes(k))) ||
-    (code === 'UNIMPLEMENTED' && /not implemented/i.test(message))
-  );
+  return code === 'UNIMPLEMENTED' && /not implemented/i.test(message);
 }
 
 if (typeof window !== 'undefined') {
-  const isNativeShell = () => {
-    try { return Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:'; }
-    catch { return window.location.protocol === 'capacitor:'; }
-  };
-
-  // iOS WKWebView can throw an empty native Error while React installs its
-  // delegated event listeners during createRoot(). If that bubbles, startup
-  // stops inside vendor-react before the first screen renders. Ignore only the
-  // known empty/UNIMPLEMENTED native artifacts and let real app errors through.
-  try {
-    const proto = (globalThis as any).EventTarget?.prototype as {
-      addEventListener?: EventTarget['addEventListener'];
-      removeEventListener?: EventTarget['removeEventListener'];
-      __ppSafeAddEventListener?: boolean;
-    } | undefined;
-    if (proto?.addEventListener && !proto.__ppSafeAddEventListener) {
-      const originalAdd = proto.addEventListener;
-      const originalRemove = proto.removeEventListener;
-      const fnWrappers = new WeakMap<EventListener, EventListener>();
-      const objWrappers = new WeakMap<EventListenerObject, EventListenerObject>();
-      const wrapListener = (listener: EventListenerOrEventListenerObject | null): EventListenerOrEventListenerObject | null => {
-        if (!listener || !isNativeShell()) return listener;
-        if (typeof listener === 'function') {
-          const existing = fnWrappers.get(listener as EventListener);
-          if (existing) return existing;
-          const wrapped: EventListener = function (this: EventTarget, event: Event) {
-            try {
-              return (listener as EventListener).call(this, event);
-            } catch (error) {
-              if (isIgnorableNativeStartupError(error)) {
-                console.warn('[PP] swallowed native listener artifact', event.type);
-                return undefined;
-              }
-              throw error;
-            }
-          };
-          fnWrappers.set(listener as EventListener, wrapped);
-          return wrapped;
-        }
-        if (typeof (listener as EventListenerObject).handleEvent === 'function') {
-          const existing = objWrappers.get(listener as EventListenerObject);
-          if (existing) return existing;
-          const wrapped: EventListenerObject = {
-            handleEvent(event: Event) {
-              try {
-                return (listener as EventListenerObject).handleEvent(event);
-              } catch (error) {
-                if (isIgnorableNativeStartupError(error)) {
-                  console.warn('[PP] swallowed native handleEvent artifact', event.type);
-                  return undefined;
-                }
-                throw error;
-              }
-            },
-          };
-          objWrappers.set(listener as EventListenerObject, wrapped);
-          return wrapped;
-        }
-        return listener;
-      };
-      const unwrapListener = (listener: EventListenerOrEventListenerObject | null): EventListenerOrEventListenerObject | null => {
-        if (!listener) return listener;
-        return (
-          (typeof listener === 'function' ? fnWrappers.get(listener as EventListener) : objWrappers.get(listener as EventListenerObject)) ??
-          listener
-        );
-      };
-      proto.addEventListener = function patchedAddEventListener(type, listener, options) {
-        try {
-          return originalAdd.call(this, type, wrapListener(listener), options);
-        } catch (error) {
-          if (isNativeShell() && isIgnorableNativeStartupError(error)) return undefined;
-          throw error;
-        }
-      } as typeof proto.addEventListener;
-      if (originalRemove) {
-        proto.removeEventListener = function patchedRemoveEventListener(type, listener, options) {
-          return originalRemove.call(this, type, unwrapListener(listener), options);
-        } as typeof proto.removeEventListener;
-      }
-      proto.__ppSafeAddEventListener = true;
-    }
-  } catch {}
-
   window.addEventListener('error', (event) => {
     if (!isIgnorableNativeStartupError((event as ErrorEvent).error)) return;
     event.preventDefault();
@@ -160,7 +72,7 @@ async function bootstrap() {
     // path for Capacitor only and keep createRoot for web/dev preview.
     if (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:') {
       legacyRender(appTree, container);
-      window.setTimeout(() => { (window as any).__PP_REACT_BOOTED__ = true; }, 0);
+      window.setTimeout(() => { (window as any).__PP_REACT_MOUNT_CALLED__ = true; }, 0);
       return;
     }
 
@@ -174,7 +86,7 @@ async function bootstrap() {
       },
     });
     root.render(appTree);
-    window.setTimeout(() => { (window as any).__PP_REACT_BOOTED__ = true; }, 0);
+    window.setTimeout(() => { (window as any).__PP_REACT_MOUNT_CALLED__ = true; }, 0);
   } catch (e) {
     console.error('[PP] Render failed:', e);
     const el = document.getElementById('root');

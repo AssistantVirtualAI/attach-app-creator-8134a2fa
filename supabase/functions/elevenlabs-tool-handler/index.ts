@@ -9,7 +9,7 @@ async function callFn(name: string, authHeader: string, body: any) {
     body: JSON.stringify(body ?? {}),
   });
   const text = await res.text();
-  try { return JSON.parse(text); } catch { return { success: res.ok, raw: text }; }
+  try { return { ...JSON.parse(text), _http_ok: res.ok, _status: res.status }; } catch { return { success: res.ok, _http_ok: res.ok, _status: res.status, raw: text }; }
 }
 
 Deno.serve(async (req) => {
@@ -27,29 +27,26 @@ Deno.serve(async (req) => {
 
     switch (tool_name) {
       case "make_call": {
-        const r = await callFn("ns-calls", authHeader, {
+        const to = parameters.to_number ?? parameters.to ?? parameters.destination ?? parameters.number;
+        const r = await callFn("pp-ns-calls", authHeader, {
           action: "start",
-          destination: parameters.to_number,
+          to_number: to,
+          destination: to,
           caller_id_name: profile.full_name,
+          client_type: parameters.client_type ?? "mobile",
         });
-        result = r?.success
-          ? { success: true, message: `Appel lancé vers ${parameters.contact_name ?? parameters.to_number}` }
-          : { success: false, error: r?.error ?? "Échec de l'appel" };
+        result = r?.success === true
+          ? { success: true, call_id: r.call_id, message: r?.message ?? `Appel lancé vers ${parameters.contact_name ?? to}` }
+          : { success: false, error: r?.error ?? r?.message ?? "Échec de l'appel", message: r?.message };
         break;
       }
       case "send_sms": {
-        // Fix: utiliser pp-ns-sms (action=send) qui résout le DID "from-number" assigné
-        // au courtier. L'ancienne fonction ns-sms n'envoyait pas de from-number →
-        // NS-API rejetait la requête silencieusement (réponse 200 sans envoi réel).
-        const r = await callFn("pp-ns-sms", authHeader, {
-          action: "send",
-          to: parameters.to,
-          message: parameters.message,
-          type: "sms",
-        });
-        result = (r?.ok || r?.success)
-          ? { success: true, message: `SMS envoyé à ${parameters.to}`, from: r?.from }
-          : { success: false, error: r?.error ?? "Échec SMS", details: r };
+        const to = parameters.to ?? parameters.to_number ?? parameters.destination ?? parameters.number;
+        const message = parameters.message ?? parameters.body ?? parameters.text ?? parameters.content;
+        const r = await callFn("pp-ns-sms", authHeader, { action: "send", to, message, type: parameters.type ?? "sms" });
+        result = (r?.ok === true || r?.success === true)
+          ? { success: true, to: r.to ?? to, from: r.from, thread_id: r.thread_id, message: "SMS envoyé" }
+          : { success: false, error: r?.error ?? r?.body ?? "Échec SMS", message: r?.message };
         break;
       }
       case "send_email": {

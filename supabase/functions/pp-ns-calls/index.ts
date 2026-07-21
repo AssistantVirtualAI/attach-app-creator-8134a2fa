@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
 
         try {
           await guard.supabase.from("planipret_phone_calls").insert({
-            user_id: ctx.profileId,
+            user_id: ctx.userId,
             ns_call_id: nsCallId,
             ns_callid: nsCallId,
             ns_domain: ctx.nsDomain,

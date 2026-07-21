@@ -4,8 +4,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { StatusBar, Style } from '@capacitor/status-bar';
-import { SplashScreen } from '@capacitor/splash-screen';
 import { Capacitor } from '@capacitor/core';
 import App from './App';
 import './styles.css';
@@ -23,6 +21,34 @@ function isIgnorableNativeStartupError(raw: unknown): boolean {
 }
 
 if (typeof window !== 'undefined') {
+  const isNativeShell = () => {
+    try { return Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:'; }
+    catch { return window.location.protocol === 'capacitor:'; }
+  };
+
+  // iOS WKWebView can throw an empty native Error while React installs its
+  // delegated event listeners during createRoot(). If that bubbles, startup
+  // stops inside vendor-react before the first screen renders. Ignore only the
+  // known empty/UNIMPLEMENTED native artifacts and let real app errors through.
+  try {
+    const proto = (globalThis as any).EventTarget?.prototype as {
+      addEventListener?: EventTarget['addEventListener'];
+      __ppSafeAddEventListener?: boolean;
+    } | undefined;
+    if (proto?.addEventListener && !proto.__ppSafeAddEventListener) {
+      const originalAdd = proto.addEventListener;
+      proto.addEventListener = function patchedAddEventListener(type, listener, options) {
+        try {
+          return originalAdd.call(this, type, listener, options);
+        } catch (error) {
+          if (isNativeShell() && isIgnorableNativeStartupError(error)) return undefined;
+          throw error;
+        }
+      } as typeof proto.addEventListener;
+      proto.__ppSafeAddEventListener = true;
+    }
+  } catch {}
+
   window.addEventListener('error', (event) => {
     if (!isIgnorableNativeStartupError((event as ErrorEvent).error)) return;
     event.preventDefault();
@@ -61,26 +87,25 @@ if (typeof document !== 'undefined') {
 
 async function bootstrap() {
   try {
-    if (Capacitor.isNativePlatform()) {
-      try { await StatusBar.setStyle({ style: Style.Dark }); } catch (e) { console.log('[PP] StatusBar.setStyle:', e); }
-      try { await SplashScreen.hide(); } catch (e) { console.log('[PP] SplashScreen.hide:', e); }
-    }
-  } catch (e) {
-    console.error('[PP] Native init failed:', e);
-  }
-  try {
     const container = document.getElementById('root');
     if (!container) throw new Error('Root element not found');
-    (window as any).__PP_REACT_BOOTED__ = true;
-    if (container.textContent?.trim() === 'Chargement...') container.innerHTML = '';
+    (window as any).__PP_REACT_BOOT_ATTEMPTED__ = true;
+    if (container.textContent?.trim() === 'Démarrage...') container.innerHTML = '';
     // React.StrictMode intentionally double-mounts components in development,
     // which triggers error boundaries with empty errors on Capacitor iOS.
     // We disable it unconditionally in this native build.
-    createRoot(container).render(
+    const root = createRoot(container, {
+      onRecoverableError(error) {
+        if (isIgnorableNativeStartupError(error)) return;
+        console.error('[PP] React recoverable error:', error);
+      },
+    });
+    root.render(
       <BrowserRouter>
         <App />
       </BrowserRouter>,
     );
+    window.setTimeout(() => { (window as any).__PP_REACT_BOOTED__ = true; }, 0);
   } catch (e) {
     console.error('[PP] Render failed:', e);
     const el = document.getElementById('root');
@@ -95,7 +120,6 @@ setTimeout(() => {
   try {
     const el = document.getElementById('root');
     if (el) el.style.display = 'block';
-    if (Capacitor.isNativePlatform()) SplashScreen.hide().catch(() => {});
   } catch {}
 }, 3000);
 

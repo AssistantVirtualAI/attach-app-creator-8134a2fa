@@ -39,6 +39,22 @@
           return (!message && onlyGeneratedFields) || (code === 'UNIMPLEMENTED' && /not implemented/i.test(message));
         }
         window.__PP_REACT_BOOTED__ = false;
+        window.__PP_REACT_BOOT_ATTEMPTED__ = false;
+        try {
+          var originalAdd = EventTarget && EventTarget.prototype && EventTarget.prototype.addEventListener;
+          if (originalAdd && !EventTarget.prototype.__ppSafeAddEventListener) {
+            EventTarget.prototype.addEventListener = function (type, listener, options) {
+              try {
+                return originalAdd.call(this, type, listener, options);
+              } catch (err) {
+                var isNative = location.protocol === 'capacitor:' || !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+                if (isNative && isIgnorableNativeStartupError(err)) return;
+                throw err;
+              }
+            };
+            EventTarget.prototype.__ppSafeAddEventListener = true;
+          }
+        } catch (_) {}
         window.addEventListener('error', function (event) {
           if (!isIgnorableNativeStartupError(event.error)) return;
           event.preventDefault();

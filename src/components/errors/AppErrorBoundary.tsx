@@ -68,11 +68,14 @@ function isEmptyNativeArtifact(raw: unknown): boolean {
     ...Object.keys(obj),
     ...Object.getOwnPropertyNames(obj),
   ]);
-  for (const key of ['message', 'code', 'details', 'hint', 'error']) {
+  const hasOnlyGeneratedErrorFields = [...keys].every((key) =>
+    ['stack', 'name', 'message', 'errorMessage'].includes(key)
+  );
+  for (const key of ['message', 'errorMessage', 'code', 'details', 'hint', 'error']) {
     const value = obj[key] ?? Object.getOwnPropertyDescriptor(obj, key)?.value;
     if (value != null && String(value).trim()) return false;
   }
-  return keys.size === 0;
+  return keys.size === 0 || hasOnlyGeneratedErrorFields;
 }
 
 export class AppErrorBoundary extends Component<Props, State> {
@@ -82,8 +85,8 @@ export class AppErrorBoundary extends Component<Props, State> {
     errorInfo: null,
   };
 
-  public static getDerivedStateFromError(raw: unknown): Partial<State> {
-    if (isEmptyNativeArtifact(raw)) return {};
+  public static getDerivedStateFromError(raw: unknown): Partial<State> | null {
+    if (isEmptyNativeArtifact(raw)) return null;
     return { hasError: true, error: normaliseError(raw) };
   }
 

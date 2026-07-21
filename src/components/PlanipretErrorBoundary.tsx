@@ -12,17 +12,20 @@ function isEmptyNativeArtifact(raw: unknown): boolean {
 
   const obj = raw as Record<string, unknown>;
   const keys = new Set([...Object.keys(obj), ...Object.getOwnPropertyNames(obj)]);
-  for (const key of ['message', 'code', 'details', 'hint', 'error']) {
+  const hasOnlyGeneratedErrorFields = [...keys].every((key) =>
+    ['stack', 'name', 'message', 'errorMessage'].includes(key)
+  );
+  for (const key of ['message', 'errorMessage', 'code', 'details', 'hint', 'error']) {
     const value = obj[key] ?? Object.getOwnPropertyDescriptor(obj, key)?.value;
     if (value != null && String(value).trim()) return false;
   }
-  return keys.size === 0;
+  return keys.size === 0 || hasOnlyGeneratedErrorFields;
 }
 
 export class PlanipretErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
   state: State = { error: null };
   static getDerivedStateFromError(error: Error) {
-    if (isEmptyNativeArtifact(error)) return {};
+    if (isEmptyNativeArtifact(error)) return null;
     return { error };
   }
   componentDidCatch(error: Error, info: any) {

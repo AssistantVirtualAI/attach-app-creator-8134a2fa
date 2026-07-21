@@ -2,23 +2,31 @@ import React from "react";
 
 type State = { error: Error | null };
 
+function isEmptyNativeArtifact(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object') return !raw;
+
+  // Capacitor iOS sometimes reports an internal React/router artifact as
+  // `Error {}` with only a generated stack. No message means no actionable
+  // render failure, so keep the mobile app mounted.
+  if (raw instanceof Error && !String(raw.message ?? '').trim()) return true;
+
+  const obj = raw as Record<string, unknown>;
+  const keys = new Set([...Object.keys(obj), ...Object.getOwnPropertyNames(obj)]);
+  for (const key of ['message', 'code', 'details', 'hint', 'error']) {
+    const value = obj[key] ?? Object.getOwnPropertyDescriptor(obj, key)?.value;
+    if (value != null && String(value).trim()) return false;
+  }
+  return keys.size === 0 || (keys.size === 1 && keys.has('stack'));
+}
+
 export class PlanipretErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
   state: State = { error: null };
   static getDerivedStateFromError(error: Error) {
-    // Ignore empty/falsy errors — React StrictMode double-mount artefacts or
-    // non-fatal internal events surface here on iOS Capacitor as `{}` with no
-    // message. They must not trigger the crash screen.
-    if (!error) return {};
-    if (typeof error === 'object' && Object.keys(error).length === 0) return {};
-    const msg = (error as Error)?.message ?? '';
-    if (!msg) return {};
+    if (isEmptyNativeArtifact(error)) return {};
     return { error };
   }
   componentDidCatch(error: Error, info: any) {
-    if (!error) return;
-    if (typeof error === 'object' && Object.keys(error).length === 0) return;
-    const msg = (error as Error)?.message ?? '';
-    if (!msg) return;
+    if (isEmptyNativeArtifact(error)) return;
     console.error("[PlanipretErrorBoundary]", error, info);
   }
   render() {

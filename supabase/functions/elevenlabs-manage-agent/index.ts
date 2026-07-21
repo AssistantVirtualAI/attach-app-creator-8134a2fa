@@ -427,6 +427,23 @@ Deno.serve(async (req) => {
         return json({ success: true, tools: tools.map((t) => ({ name: t.name, description: t.description })) });
       }
 
+      case "list_tools": {
+        // Returns tools currently registered on the ElevenLabs workspace, so
+        // the admin audit page can compare them against the expected registry.
+        const listRes = await elFetch(apiKey, "/convai/tools");
+        if (!listRes.ok) {
+          return json({ success: false, error: listRes.error, status: listRes.status });
+        }
+        const { data: syncedRow } = await admin
+          .from("planipret_elevenlabs_config")
+          .select("value").eq("key", "tools_synced_at").maybeSingle();
+        return json({
+          success: true,
+          tools: listRes.data?.tools ?? [],
+          synced_at: syncedRow?.value ?? null,
+        });
+      }
+
       case "get_config": {
         const { data } = await admin.from("planipret_elevenlabs_config").select("key, value, updated_at");
         return json({ success: true, config: data ?? [] });

@@ -784,7 +784,8 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const ALLOWED = new Set([
       "/mplanipret/home", "/mplanipret/calls", "/mplanipret/messages",
       "/mplanipret/contacts", "/mplanipret/voicemail", "/mplanipret/more",
-      "/mplanipret/stats",
+      "/mplanipret/stats", "/mplanipret/pipeline", "/mplanipret/search",
+      "/mplanipret/notifications", "/mplanipret/extension-sync",
     ]);
     const base = (p.route ?? "").split("?")[0];
     if (!ALLOWED.has(base)) return { success: false, error: "route_not_allowed" };

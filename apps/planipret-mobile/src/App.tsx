@@ -37,6 +37,7 @@ const MAvaChat = lazyWithRetry(() => import('@/pages/planipret/mobile/MAvaChat')
 const MAvaNotifications = lazyWithRetry(() => import('@/pages/planipret/mobile/MAvaNotifications'), 'MAvaNotifications');
 const MExtensionSync = lazyWithRetry(() => import('@/pages/planipret/mobile/MExtensionSync'), 'MExtensionSync');
 const Ms365Callback = lazyWithRetry(() => import('@/pages/planipret/Ms365Callback'), 'Ms365Callback');
+const MaestroCallback = lazyWithRetry(() => import('@/pages/planipret/MaestroCallback'), 'MaestroCallback');
 const MMs365Diagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MMs365Diagnostics'), 'MMs365Diagnostics');
 const MStyleDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MStyleDiagnostics'), 'MStyleDiagnostics');
 const MDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MDiagnostics'), 'MDiagnostics');
@@ -76,6 +77,14 @@ function NativeDeepLinkBridge() {
         if (isMs365Callback) {
           localStorage.setItem('pp_ms365_callback_url', rawUrl);
           navigate(`/auth/microsoft/callback${url.search}`, { replace: true });
+        }
+
+        const isMaestroCallback =
+          url.pathname === '/auth/maestro/callback' ||
+          pathWithHost === '/auth/maestro/callback';
+        if (isMaestroCallback) {
+          localStorage.setItem('pp_maestro_callback_url', rawUrl);
+          navigate(`/auth/maestro/callback${url.search}`, { replace: true });
         }
       } catch {
         // Ignore non-URL events.
@@ -120,6 +129,7 @@ export default function App() {
                     <Route path="/login" element={<Navigate to="/mplanipret" replace />} />
                     <Route path="/auth/ms365/callback" element={<Ms365Callback />} />
                     <Route path="/auth/microsoft/callback" element={<Ms365Callback />} />
+                    <Route path="/auth/maestro/callback" element={<MaestroCallback />} />
                     <Route
                       path="/mplanipret"
                       element={<MplanipretGuard><PlanipretMobile /></MplanipretGuard>}

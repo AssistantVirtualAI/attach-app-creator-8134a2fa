@@ -30,7 +30,6 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       style: 'light',
-      backgroundColor: '#1A4A8A',   // Bleu Planiprêt
     },
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],

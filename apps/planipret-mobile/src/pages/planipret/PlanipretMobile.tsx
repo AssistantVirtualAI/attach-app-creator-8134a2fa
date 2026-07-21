@@ -43,7 +43,7 @@ import { prefetchTeams365Data } from "@/lib/teams365Cache";
 const ACCENT = "#2E9BDC";
 const PROFILE_BOOT_TIMEOUT_MS = 4500;
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => reject(new Error(`${label}_timeout`)), ms);
     promise.then(

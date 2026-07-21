@@ -28,11 +28,14 @@ import {
 function normalizeE164(raw: unknown): string | null {
   const s = String(raw ?? "").trim();
   if (!s) return null;
-  if (s.startsWith("+")) return "+" + s.slice(1).replace(/\D/g, "");
+  // Strip all non-digit characters (including leading +)
   const digits = s.replace(/\D/g, "");
   if (!digits) return null;
+  // 10-digit North American number → always prefix with +1
   if (digits.length === 10) return `+1${digits}`;
+  // 11-digit starting with 1 → standard NANP E.164
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  // Anything else: prepend + as-is
   return `+${digits}`;
 }
 

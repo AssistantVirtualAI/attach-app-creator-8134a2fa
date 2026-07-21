@@ -5,12 +5,17 @@ import "./index.css";
 import "@fontsource/urbanist/600.css";
 import "@fontsource/epilogue/400.css";
 import App from "./App.tsx";
+import { Capacitor } from "@capacitor/core";
 
 // Render React immediately for the fastest first paint.
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+  Capacitor.isNativePlatform() ? (
     <App />
-  </React.StrictMode>
+  ) : (
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  )
 );
 
 // Defer everything non-critical until the browser is idle so the initial

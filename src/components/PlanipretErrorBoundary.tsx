@@ -2,10 +2,27 @@ import React from "react";
 
 type State = { error: Error | null };
 
+function isEmptyNativeArtifact(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object') return !raw;
+  const obj = raw as Record<string, unknown>;
+  const keys = new Set([...Object.keys(obj), ...Object.getOwnPropertyNames(obj)]);
+  for (const key of ['message', 'stack', 'name', 'code', 'details', 'hint', 'error']) {
+    const value = obj[key] ?? Object.getOwnPropertyDescriptor(obj, key)?.value;
+    if (value != null && String(value).trim()) return false;
+  }
+  return keys.size === 0;
+}
+
 export class PlanipretErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
   state: State = { error: null };
-  static getDerivedStateFromError(error: Error) { return { error }; }
-  componentDidCatch(error: Error, info: any) { console.error("[PlanipretErrorBoundary]", error, info); }
+  static getDerivedStateFromError(error: Error) {
+    if (isEmptyNativeArtifact(error)) return {};
+    return { error };
+  }
+  componentDidCatch(error: Error, info: any) {
+    if (isEmptyNativeArtifact(error)) return;
+    console.error("[PlanipretErrorBoundary]", error, info);
+  }
   render() {
     if (!this.state.error) return this.props.children;
     return (

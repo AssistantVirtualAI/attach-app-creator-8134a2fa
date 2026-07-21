@@ -15,13 +15,11 @@ import { MplanipretGuard } from '@/components/auth/MplanipretGuard';
 import { PlanipretErrorBoundary } from '@/components/PlanipretErrorBoundary';
 import { LazyRouteBoundary } from '@/components/LazyRouteBoundary';
 import { lazyWithRetry } from '@/lib/lazyWithRetry';
-import { prefetchAllMobileTabs } from '@/lib/routePrefetch';
+import { scheduleIdlePrefetch, CORE_MOBILE_TAB_PATHS } from '@/lib/routePrefetch';
 
-// Kick off tab-chunk warm-up as soon as the app module loads, so switching
-// tabs the first time is instant instead of showing a loading skeleton.
-if (typeof window !== 'undefined') {
-  prefetchAllMobileTabs();
-}
+// Do not start route prefetching while React is still mounting on iOS WKWebView.
+// It can race lazy route resolution during cold native startup and leave the
+// root empty with only the index.html "Chargement..." fallback visible.
 
 const PlanipretMobile = lazyWithRetry(() => import('@/pages/planipret/PlanipretMobile'), 'PlanipretMobile');
 const MHome = lazyWithRetry(() => import('@/pages/planipret/mobile/MHome'), 'MHome');
@@ -113,6 +111,11 @@ function NativeDeepLinkBridge() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const t = window.setTimeout(() => scheduleIdlePrefetch(CORE_MOBILE_TAB_PATHS), 1200);
+    return () => window.clearTimeout(t);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>

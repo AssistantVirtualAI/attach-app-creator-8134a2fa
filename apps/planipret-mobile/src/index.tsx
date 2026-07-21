@@ -10,6 +10,31 @@ import { Capacitor } from '@capacitor/core';
 import App from './App';
 import './styles.css';
 
+function isIgnorableNativeStartupError(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object') return !raw;
+  const obj = raw as Record<string, unknown>;
+  const message = String(obj.message ?? obj.errorMessage ?? '').trim();
+  const code = String(obj.code ?? '').trim();
+  const keys = new Set([...Object.keys(obj), ...Object.getOwnPropertyNames(obj)]);
+  return (
+    (!message && keys.size <= 3 && [...keys].every((k) => ['stack', 'name', 'message', 'errorMessage'].includes(k))) ||
+    (code === 'UNIMPLEMENTED' && /not implemented/i.test(message))
+  );
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (event) => {
+    if (!isIgnorableNativeStartupError((event as ErrorEvent).error)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+  window.addEventListener('unhandledrejection', (event) => {
+    if (!isIgnorableNativeStartupError(event.reason)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+}
+
 // Global anti-zoom guards for iOS/Android WebView (no pinch, no double-tap zoom).
 if (typeof document !== 'undefined') {
   document.addEventListener('gesturestart', (e) => e.preventDefault());

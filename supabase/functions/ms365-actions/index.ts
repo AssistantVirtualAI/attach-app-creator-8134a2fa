@@ -82,8 +82,20 @@ Deno.serve(async (req) => {
         const selectFields = (requestedFolder === "sent" || requestedFolder === "drafts")
           ? "id,subject,toRecipients,sentDateTime,receivedDateTime,bodyPreview,isRead,hasAttachments,importance,flag"
           : "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,hasAttachments,importance,flag";
-        const r = await graph(admin, profile, `/me/mailFolders/${folderName}/messages?$top=${top}&$skip=${skip}&$orderby=${orderBy}&$count=true&$select=${selectFields}${filter}`);
+        // Note: $count=true requires ConsistencyLevel: eventual header in Graph API.
+        // To avoid silent failures, we use $count only when filtering (unread),
+        // and always pass ConsistencyLevel when $count is present.
+        const useCount = requestedFolder === "unread";
+        const countParam = useCount ? "&$count=true" : "";
+        const consistencyHeader = useCount ? { "ConsistencyLevel": "eventual" } : {};
+        const r = await graph(admin, profile,
+          `/me/mailFolders/${folderName}/messages?$top=${top}&$skip=${skip}&$orderby=${orderBy}${countParam}&$select=${selectFields}${filter}`,
+          { headers: consistencyHeader }
+        );
         const d = await r.json();
+        if (!r.ok) {
+          console.error("[ms365-actions] read_emails Graph error", r.status, JSON.stringify(d?.error ?? d).slice(0, 300));
+        }
         const emails = d.value ?? [];
         return j({ success: r.ok, emails, hasMore: emails.length === top, nextSkip: skip + emails.length, total: d["@odata.count"] ?? null, error: d?.error?.message, details: d?.error, code: r.status }, 200);
       }

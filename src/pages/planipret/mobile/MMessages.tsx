@@ -1126,6 +1126,7 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
   onOptimisticRemove?: (id: string) => void;
 }) {
   const { t } = useMplanipretLang();
+  const safeArea = useSafeAreaInsets();
   const [detail, setDetail] = useState<any | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [sumOpen, setSumOpen] = useState(false);

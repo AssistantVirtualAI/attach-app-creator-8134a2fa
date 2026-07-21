@@ -37,7 +37,15 @@ export interface PpSipSnapshot {
 }
 
 
+export interface PpSipEvent {
+  time: number;
+  level: "info" | "warn" | "error";
+  event: string;
+  detail?: string;
+}
+
 type Listener = (s: PpSipSnapshot) => void;
+type EventsListener = (e: PpSipEvent[]) => void;
 
 let sipParserGuardInstalled = false;
 

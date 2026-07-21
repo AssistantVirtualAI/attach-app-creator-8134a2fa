@@ -1285,11 +1285,13 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
           border: "1px solid var(--pp-bg-border-2)",
           height: "calc(100vh - env(safe-area-inset-top) - 24px)",
           maxHeight: "calc(100dvh - 24px)",
-          paddingBottom: "env(safe-area-inset-bottom)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
+        <div
+          className="flex items-center justify-between px-4 pt-3 pb-2"
+          style={{ borderBottom: "1px solid var(--pp-bg-border)", flexShrink: 0, paddingTop: Math.max(safeArea.top, 12) }}
+        >
           <button onClick={onClose} className="p-1.5 rounded-full" style={{ color: "var(--pp-text-secondary)" }}>
             <ArrowLeft className="w-5 h-5" />
           </button>

@@ -1352,8 +1352,11 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
             {loadingDetail && !detail ? (
               <div className="text-center py-6"><Loader2 className="w-4 h-4 animate-spin mx-auto" /></div>
             ) : bodyType === "html" && bodyHtml ? (
-              <div className="pp-email-body" style={{ maxWidth: "100%", overflowWrap: "anywhere" }}
-                   dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+              <div
+                className="pp-email-body"
+                style={{ maxWidth: "100%", overflowWrap: "anywhere", overflow: "hidden" }}
+                dangerouslySetInnerHTML={{ __html: bodyHtml }}
+              />
             ) : (
               <div className="whitespace-pre-wrap">{bodyHtml || merged.bodyPreview || t("messages.previewUnavailable")}</div>
             )}

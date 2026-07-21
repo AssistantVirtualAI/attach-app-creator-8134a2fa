@@ -206,8 +206,45 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
 
     // Navigation & stats
     mk("navigate_to", "Navigue vers une page de l'app Planiprêt.", {
-      route: { type: "string", description: "Route ex: /mplanipret/home, /mplanipret/calls, /mplanipret/messages?tab=sms, /mplanipret/voicemail, /mplanipret/stats" },
+      route: { type: "string", description: "Route ex: /mplanipret/home, /mplanipret/calls, /mplanipret/messages?tab=sms, /mplanipret/voicemail, /mplanipret/stats, /mplanipret/pipeline, /mplanipret/notifications, /mplanipret/search" },
     }, ["route"]),
+    mk("show_client_in_app", "Ouvre la fiche d'un client dans l'app Planiprêt.", {
+      client_id: { type: "string", description: "ID du client Maestro ou local" },
+      open_tab: { type: "string", description: "Onglet à ouvrir (optionnel)" },
+    }, ["client_id"]),
+    mk("open_call_detail", "Ouvre le détail d'un appel (enregistrement/transcription).", {
+      call_id: { type: "string", description: "ID de l'appel" },
+      open_tab: { type: "string", description: "recording | transcript | coaching (optionnel)" },
+    }, ["call_id"]),
+    mk("get_sms_conversations", "Liste les dernières conversations SMS.", {
+      limit: { type: "number", description: "Nombre (défaut: 10)" },
+    }),
+    mk("get_unread_emails", "Liste les courriels non lus.", { limit: { type: "number", description: "Nombre (défaut: 10)" } }),
+    mk("get_recent_emails", "Liste les derniers courriels reçus.", { limit: { type: "number", description: "Nombre (défaut: 10)" } }),
+    mk("summarize_email", "Résume un courriel spécifique.", {
+      message_id: { type: "string", description: "ID du courriel M365 (ou fournir subject+body)" },
+      subject: { type: "string", description: "Sujet (si pas de message_id)" },
+      body: { type: "string", description: "Corps texte (si pas de message_id)" },
+    }),
+    mk("update_client", "Met à jour un profil client Maestro.", {
+      client_id: { type: "string", description: "ID du client Maestro" },
+      updates: { type: "object", description: "Champs à mettre à jour" },
+    }, ["client_id", "updates"]),
+    mk("list_teams_chats", "Liste les chats et équipes Microsoft Teams."),
+    mk("create_teams_chat", "Crée un chat Teams 1:1 ou de groupe.", {
+      contact_email: { type: "string", description: "Email destinataire (optionnel)" },
+      contact_emails: { type: "array", description: "Emails destinataires (optionnel)" },
+      contact_name: { type: "string", description: "Nom (résolu depuis contacts, optionnel)" },
+      topic: { type: "string", description: "Sujet du chat (optionnel)" },
+    }),
+    mk("send_teams_message", "Envoie un message Teams à un chat ou canal. Demande confirmation.", {
+      chat_id: { type: "string", description: "ID du chat Teams" },
+      team_id: { type: "string", description: "ID de l'équipe (avec channel_id)" },
+      channel_id: { type: "string", description: "ID du canal (avec team_id)" },
+      contact_name: { type: "string", description: "Nom du contact (fallback)" },
+      contact_email: { type: "string", description: "Email du contact (fallback)" },
+      content: { type: "string", description: "Message à envoyer" },
+    }, ["content"]),
     mk("get_daily_briefing", "Brief quotidien: emails, rendez-vous, appels, leads chauds, tâches."),
     mk("get_my_stats", "Statistiques d'appels et performance.", { period: { type: "string", description: "today, week ou month" } }),
     mk("generate_voicemail_greeting", "Génère un nouveau message de boîte vocale avec ElevenLabs. Demande confirmation.", {

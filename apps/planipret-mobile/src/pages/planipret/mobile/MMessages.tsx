@@ -987,8 +987,10 @@ function SwipeableEmailRow({
     if (Math.abs(dx) < 8) return;
     const clamped = Math.max(-140, Math.min(140, dx));
     setOffset(clamped);
-    if (clamped < -THRESHOLD) setAction("delete");
-    else if (clamped > THRESHOLD) setAction("archive");
+    // Swipe RIGHT (positive dx) → Delete revealed on left
+    // Swipe LEFT (negative dx)  → Archive revealed on right
+    if (clamped > THRESHOLD) setAction("delete");
+    else if (clamped < -THRESHOLD) setAction("archive");
     else setAction(null);
   };
   const onTouchEnd = () => {
@@ -998,18 +1000,26 @@ function SwipeableEmailRow({
   };
 
   const unread = email.isRead === false;
+  const showDelete = offset > 8;   // swiping right → delete backdrop visible
+  const showArchive = offset < -8; // swiping left  → archive backdrop visible
   return (
     <li className="relative overflow-hidden rounded-2xl">
-      {/* Left reveal — archive (swipe right) */}
-      <div className="absolute inset-y-0 left-0 flex items-center justify-start px-4 rounded-2xl"
-        style={{ background: "#16a34a", minWidth: 80 }}>
-        <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>Archive</span>
-      </div>
-      {/* Right reveal — delete (swipe left) */}
-      <div className="absolute inset-y-0 right-0 flex items-center justify-end px-4 rounded-2xl"
-        style={{ background: "#dc2626", minWidth: 80 }}>
-        <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>Suppr.</span>
-      </div>
+      {/* Left backdrop — Delete (revealed when swiping RIGHT) */}
+      {showDelete && (
+        <div className="absolute inset-y-0 left-0 flex items-center justify-start px-4 rounded-2xl"
+          style={{ background: "#dc2626", minWidth: 80 }}>
+            <Trash2 className="w-4 h-4" style={{ color: "#fff" }} />
+            <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, marginLeft: 6 }}>Suppr.</span>
+        </div>
+      )}
+      {/* Right backdrop — Archive (revealed when swiping LEFT) */}
+      {showArchive && (
+        <div className="absolute inset-y-0 right-0 flex items-center justify-end px-4 rounded-2xl"
+          style={{ background: "#16a34a", minWidth: 80 }}>
+            <span style={{ color: "#fff", fontSize: 11, fontWeight: 700, marginRight: 6 }}>Archive</span>
+            <Archive className="w-4 h-4" style={{ color: "#fff" }} />
+        </div>
+      )}
       {/* Email card */}
       <button
         onTouchStart={onTouchStart}

@@ -55,6 +55,20 @@ function normaliseError(raw: unknown): Error {
   return new Error('Unknown error');
 }
 
+function isEmptyNativeArtifact(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object') return !raw;
+  const obj = raw as Record<string, unknown>;
+  const keys = new Set([
+    ...Object.keys(obj),
+    ...Object.getOwnPropertyNames(obj),
+  ]);
+  for (const key of ['message', 'stack', 'name', 'code', 'details', 'hint', 'error']) {
+    const value = obj[key] ?? Object.getOwnPropertyDescriptor(obj, key)?.value;
+    if (value != null && String(value).trim()) return false;
+  }
+  return keys.size === 0;
+}
+
 export class AppErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
@@ -63,10 +77,15 @@ export class AppErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(raw: unknown): Partial<State> {
+    if (isEmptyNativeArtifact(raw)) return {};
     return { hasError: true, error: normaliseError(raw) };
   }
 
   public componentDidCatch(raw: unknown, errorInfo: ErrorInfo) {
+    if (isEmptyNativeArtifact(raw)) {
+      console.warn('[ErrorBoundary] Ignored empty native React artifact');
+      return;
+    }
     const error = normaliseError(raw);
     console.error('[ErrorBoundary] Caught error:', error, errorInfo);
     this.setState({ errorInfo });

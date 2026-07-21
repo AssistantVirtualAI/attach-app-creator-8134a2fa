@@ -35,6 +35,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/ava",       key: "ava",      Icon: Sparkles },
       { to: "/planipret/admin/ava-agent",  key: "avaAgent", Icon: Bot },
       { to: "/planipret/admin/ava-logs",   key: "avaLogs",  Icon: Activity },
+      { to: "/planipret/admin/ava-tools-audit", key: "avaToolsAudit", Icon: Activity },
     ],
   },
   {
@@ -78,6 +79,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/ava": "ava",
   "/planipret/admin/ava-agent": "avaAgent",
   "/planipret/admin/ava-logs": "avaLogs",
+  "/planipret/admin/ava-tools-audit": "avaToolsAudit",
   "/planipret/admin/mobile-devices": "mobileDevices",
   "/planipret/admin/sip-diagnostic": "sipDiagnostic",
   "/planipret/admin/diagnostics": "diagnostics",
@@ -316,6 +318,7 @@ export default function PlanipretAdminLayout() {
                   ? raw
                   : (key === "diagnostics" ? (lang === "en" ? "Diagnostics" : "Diagnostic")
                     : key === "maestroSync" ? (lang === "en" ? "Maestro sync" : "Sync Maestro")
+                    : key === "avaToolsAudit" ? (lang === "en" ? "AVA tools audit" : "Audit outils AVA")
                     : key);
                 return (
                   <PrefetchNavLink key={to} to={to} end

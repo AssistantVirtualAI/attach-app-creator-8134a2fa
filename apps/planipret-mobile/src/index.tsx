@@ -71,6 +71,8 @@ async function bootstrap() {
   try {
     const container = document.getElementById('root');
     if (!container) throw new Error('Root element not found');
+    (window as any).__PP_REACT_BOOTED__ = true;
+    if (container.textContent?.trim() === 'Chargement...') container.innerHTML = '';
     // React.StrictMode intentionally double-mounts components in development,
     // which triggers error boundaries with empty errors on Capacitor iOS.
     // We disable it unconditionally in this native build.

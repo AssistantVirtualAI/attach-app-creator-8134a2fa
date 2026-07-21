@@ -86,8 +86,8 @@ export default function MMessages() {
   return (
     <div className="h-full flex flex-col" style={{ background: "var(--pp-bg-base)" }}>
       <div
-        className="px-4 pt-5 pb-3"
-        style={{ background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)" }}
+        className="px-4 pb-3"
+        style={{ background: "var(--pp-bg-deep)", borderBottom: "1px solid var(--pp-bg-border)", paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
       >
         <h1 className="text-2xl font-bold mb-3" style={{ color: "var(--pp-text-primary)" }}>{t("messages.title")}</h1>
         <div

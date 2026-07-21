@@ -31,6 +31,7 @@ export default function MAvaChat() {
   const [speakReplies, setSpeakReplies] = useState<boolean>(() => localStorage.getItem("ava_tts_on") === "1");
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [runningSuggestion, setRunningSuggestion] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<AvaSuggestion | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const suppressSessionLoadRef = useRef<string | null>(null);
@@ -116,10 +117,10 @@ export default function MAvaChat() {
     } finally { setBusy(false); }
   };
 
-  const runSuggestion = async (suggestion: AvaSuggestion) => {
+  const runSuggestion = async (suggestion: AvaSuggestion, opts: { skipConfirm?: boolean } = {}) => {
     const action = String(suggestion.payload?.action ?? "");
     const needsConfirm = suggestion.kind === "call" || suggestion.kind === "sms" || MUTATING_ACTIONS.has(action);
-    if (needsConfirm && !confirm(`Confirmer: ${suggestion.label}`)) return;
+    if (needsConfirm && !opts.skipConfirm) { setPendingConfirm(suggestion); return; }
     setRunningSuggestion(suggestion.id);
     try {
       const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
@@ -220,7 +221,7 @@ export default function MAvaChat() {
   }
 
   return (
-    <div className="flex flex-col min-h-full" style={{ background: "var(--pp-bg-base)" }}>
+    <div className="flex flex-col" style={{ height: "calc(100dvh - 242px)", minHeight: 400, background: "var(--pp-bg-base)" }}>
       <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2.5 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 78%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>
         <Sheet>
           <SheetTrigger asChild>
@@ -396,6 +397,15 @@ export default function MAvaChat() {
       </div>
       </div>
 
+      {pendingConfirm && (
+        <div className="sticky bottom-0 left-0 right-0 z-20 px-3 py-2 flex flex-col gap-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 92%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
+          <div className="text-sm" style={{ color: "var(--pp-text-primary)" }}>Confirmer : {pendingConfirm.label}</div>
+          <div className="flex gap-2">
+            <Button variant="ghost" className="flex-1" onClick={() => setPendingConfirm(null)}>Annuler</Button>
+            <Button className="flex-1" onClick={() => { const s = pendingConfirm; setPendingConfirm(null); runSuggestion(s, { skipConfirm: true }); }}>Confirmer</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

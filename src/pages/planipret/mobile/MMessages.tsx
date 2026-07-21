@@ -1396,7 +1396,10 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
         </div>
 
 
-        <div className="px-3 py-2 grid grid-cols-3 gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
+        <div
+          className="px-3 py-2 grid grid-cols-3 gap-2"
+          style={{ borderTop: "1px solid var(--pp-bg-border)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)", flexShrink: 0 }}
+        >
           <ToolbarBtn onClick={openReply} icon={<Reply className="w-4 h-4" />} label="Répondre" />
           <ToolbarBtn onClick={openReplyAll} icon={<UsersRound className="w-4 h-4" />} label="Rép. tous" />
           <ToolbarBtn onClick={openForward} icon={<Forward className="w-4 h-4" />} label="Transférer" />

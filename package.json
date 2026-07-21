@@ -17,6 +17,7 @@
     "@capacitor-community/bluetooth-le": "^8.2.0",
     "@capacitor-community/contacts": "^6.0.1",
     "@capacitor/app": "^6.0.1",
+    "@capacitor/browser": "^6.0.6",
     "@capacitor/camera": "^6.1.0",
     "@capacitor/core": "^6.1.2",
     "@capacitor/device": "^6.0.1",

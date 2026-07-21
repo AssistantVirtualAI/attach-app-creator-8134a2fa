@@ -62,8 +62,7 @@
 
       setTimeout(function () {
         var root = document.getElementById('root');
-        var hasVisibleShell = !!(root && (root.querySelector('#pp-mobile-frame') || root.querySelector('[data-pp-boot-visible="1"]') || String(root.textContent || '').trim().length > 0));
-        if (!hasVisibleShell && window.__PP_SHOW_BOOT_FALLBACK__) {
+        if (root && !window.__PP_REACT_BOOTED__ && window.__PP_SHOW_BOOT_FALLBACK__) {
           window.__PP_SHOW_BOOT_FALLBACK__('Le démarrage iOS a été interrompu avant le premier écran. Fermez puis relancez l’application.');
         }
       }, 4500);

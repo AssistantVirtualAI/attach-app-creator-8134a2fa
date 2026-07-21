@@ -109,6 +109,15 @@ function NativeDeepLinkBridge() {
   return null;
 }
 
+function NativeBootMarker() {
+  useEffect(() => {
+    (window as any).__PP_REACT_BOOTED__ = true;
+    const fallback = document.getElementById('pp-native-boot-fallback');
+    if (fallback) fallback.style.display = 'none';
+  }, []);
+  return null;
+}
+
 export default function App() {
   useEffect(() => {
     const t = window.setTimeout(() => scheduleIdlePrefetch(CORE_MOBILE_TAB_PATHS), 1200);
@@ -121,6 +130,7 @@ export default function App() {
         <ThemeProvider>
           <TooltipProvider>
             <Toaster position="top-center" richColors />
+            <NativeBootMarker />
             <PlanipretErrorBoundary>
               <LazyRouteBoundary>
                 <NativeDeepLinkBridge />

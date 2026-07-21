@@ -256,7 +256,10 @@ Deno.serve(async (req) => {
         return jsonResponse({ ok: false, error: "Aucun numéro SMS (DID) assigné à ce courtier" }, 200);
       }
 
-      // NS-API v2 SMS body — recipient=destination, sender="from-number".
+      // NS-API v2 SMS: POST /users/{ext}/messagesessions/messages creates the
+      // session (if needed) and sends the message in one shot. This is the
+      // endpoint NetSapiens actually accepts — POSTing to /messagesessions
+      // directly returns HTTP 500 on most tenants.
       const nsBody: Record<string, unknown> = {
         type: type === "chat" ? "chat" : "sms",
         destination,
@@ -264,15 +267,23 @@ Deno.serve(async (req) => {
         "from-number": fromNumber,
       };
 
-      // If we have an existing thread_id, POST to that session; otherwise POST
-      // to the /messagesessions collection and NS-API will create the session
-      // AND send the message in one step, returning { messagesession_id }.
       const path = thread_id
         ? `${userBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`
-        : `${userBase}/messagesessions`;
+        : `${userBase}/messagesessions/messages`;
 
-      const res = await nsFetch(path, { method: "POST", body: JSON.stringify(nsBody) });
-      const lastText = await res.text();
+      let res = await nsFetch(path, { method: "POST", body: JSON.stringify(nsBody) });
+      let lastText = await res.text();
+
+      // Fallback: some older NS builds accept POST /messagesessions with the
+      // same body. Try it only if the primary endpoint failed with a 4xx/5xx
+      // that is not an auth error.
+      if (!res.ok && !thread_id && res.status !== 401 && res.status !== 403) {
+        const altPath = `${userBase}/messagesessions`;
+        const alt = await nsFetch(altPath, { method: "POST", body: JSON.stringify(nsBody) });
+        const altText = await alt.text();
+        if (alt.ok) { res = alt; lastText = altText; }
+      }
+
       let result: any = null;
       try { result = lastText ? JSON.parse(lastText) : {}; } catch { result = { raw: lastText }; }
 

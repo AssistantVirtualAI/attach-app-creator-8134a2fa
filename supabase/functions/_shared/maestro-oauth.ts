@@ -158,14 +158,19 @@ export async function getUserMaestroAccessToken(
 export async function fetchMaestroUserProfile(env: MaestroOAuthEnv, accessToken: string) {
   const base = Deno.env.get("MAESTRO_TELECOM_BASE_URL") ?? Deno.env.get("MAESTRO_API_BASE_URL") ?? "";
   if (!base) return null;
-  try {
-    const r = await fetch(`${base.replace(/\/$/, "")}/users/me`, {
-      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-    });
-    if (!r.ok) return null;
-    return await r.json();
-  } catch (e) {
-    console.warn("[maestro-oauth] fetch /users/me failed", (e as Error).message);
-    return null;
+  const root = base.replace(/\/$/, "");
+  // Scott confirmed /user (singular) is the auto-resolved "me" endpoint.
+  // Try it first, then fall back to legacy /users/me and /me.
+  const candidates = [`${root}/user`, `${root}/users/me`, `${root}/me`];
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      });
+      if (r.ok) return await r.json();
+    } catch (e) {
+      console.warn(`[maestro-oauth] fetch ${url} failed`, (e as Error).message);
+    }
   }
+  return null;
 }

@@ -992,6 +992,83 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       ],
     };
   },
+
+  // ===== ALIASES (naming harmonization with ava-tools.ts specs) =====
+  async update_calendar_event(ctx, p) { return TOOLS.move_calendar_event(ctx, { ...p, new_start: p.new_start ?? p.start, new_end: p.new_end ?? p.end, confirmed: p.confirmed ?? true }); },
+  async delete_calendar_event(ctx, p) { return TOOLS.cancel_calendar_event(ctx, p); },
+  async search_ms365_contacts(ctx, p) {
+    const query = String(p?.query ?? "").trim();
+    if (!query) return { success: false, error: "query_required" };
+    const j = await msAction(ctx, "search_contact", { query });
+    const results = (j?.results ?? []).slice(0, 10);
+    return { success: !j?.error, count: results.length, contacts: results, message: results.length ? `${results.length} contact(s) M365` : "Aucun contact M365 trouvé", ...(j?.error ? { error: j.error } : {}) };
+  },
+
+  // ===== PUSH TO MAESTRO =====
+  async push_call_summary(ctx, p) {
+    if (!p?.call_id) return { success: false, error: "call_id_required" };
+    // Récupère l'appel + client Maestro associé
+    const { data: call } = await ctx.admin.from("planipret_phone_calls")
+      .select("*").eq("id", p.call_id).maybeSingle();
+    if (!call) return { success: false, error: "call_not_found" };
+    const clientId = call.maestro_client_id ?? p.client_id;
+    if (!clientId) return { success: false, error: "no_maestro_client_linked", message: "Aucun client Maestro lié à cet appel." };
+    const noteBody = [
+      p.summary ? `**Résumé**\n${p.summary}` : null,
+      p.coaching ? `**Coaching**\n${p.coaching}` : null,
+      p.notes ? `**Notes**\n${p.notes}` : null,
+      p.next_steps ? `**Prochaines étapes**\n${p.next_steps}` : null,
+      p.sentiment ? `_Sentiment: ${p.sentiment}_` : null,
+    ].filter(Boolean).join("\n\n");
+    try {
+      const result = await maestroFetch(ctx, `/api/v1/clients/${clientId}/communications`, {
+        method: "POST",
+        body: JSON.stringify({
+          channel: "call",
+          direction: call.direction ?? "outbound",
+          summary: p.summary ?? "",
+          notes: noteBody,
+          sentiment: p.sentiment,
+          duration_seconds: call.duration_seconds,
+          occurred_at: call.created_at,
+          external_call_id: call.id,
+        }),
+      });
+      // Marque local pour éviter les doublons
+      await ctx.admin.from("planipret_phone_calls").update({ maestro_pushed_at: new Date().toISOString() }).eq("id", call.id).then(() => null).catch(() => null);
+      return { success: true, communication_id: result?.id, message: "Résumé poussé vers Maestro." };
+    } catch (e) { return { success: false, error: String(e), message: `Push Maestro échoué : ${e}` }; }
+  },
+
+  async push_client_note(ctx, p) {
+    if (!p?.client_id || !p?.note) return { success: false, error: "client_id_and_note_required" };
+    try {
+      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ content: p.note, type: p.type ?? "general" }),
+      });
+      return { success: true, note_id: result?.id, message: "Note ajoutée dans Maestro." };
+    } catch (e) { return { success: false, error: String(e), message: `Push note Maestro échoué : ${e}` }; }
+  },
+
+  async push_communication_log(ctx, p) {
+    if (!p?.client_id) return { success: false, error: "client_id_required" };
+    const payload: any = {
+      channel: p.channel ?? "note",
+      direction: p.direction ?? "outbound",
+      summary: p.summary ?? "",
+      notes: p.notes ?? p.coaching ?? "",
+      duration_seconds: p.duration_seconds,
+      occurred_at: p.occurred_at ?? new Date().toISOString(),
+    };
+    try {
+      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}/communications`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      return { success: true, communication_id: result?.id, message: `Communication ${payload.channel} enregistrée dans Maestro.` };
+    } catch (e) { return { success: false, error: String(e), message: `Push communication Maestro échoué : ${e}` }; }
+  },
 };
 
 Deno.serve(async (req) => {

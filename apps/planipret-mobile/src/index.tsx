@@ -31,7 +31,10 @@ if (typeof window !== 'undefined') {
   // stops inside vendor-react before the first screen renders. Ignore only the
   // known empty/UNIMPLEMENTED native artifacts and let real app errors through.
   try {
-    const proto = EventTarget?.prototype as EventTarget['prototype'] & { __ppSafeAddEventListener?: boolean };
+    const proto = (globalThis as any).EventTarget?.prototype as {
+      addEventListener?: EventTarget['addEventListener'];
+      __ppSafeAddEventListener?: boolean;
+    } | undefined;
     if (proto?.addEventListener && !proto.__ppSafeAddEventListener) {
       const originalAdd = proto.addEventListener;
       proto.addEventListener = function patchedAddEventListener(type, listener, options) {

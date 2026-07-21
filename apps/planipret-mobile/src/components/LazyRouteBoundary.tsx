@@ -8,8 +8,10 @@ function isEmptyNativeArtifact(raw: unknown): boolean {
   if (raw instanceof Error && !String(raw.message ?? '').trim()) return true;
   const obj = raw as Record<string, unknown>;
   const keys = new Set([...Object.keys(obj), ...Object.getOwnPropertyNames(obj)]);
-  const hasOnlyGeneratedErrorFields = [...keys].every((key) => key === 'stack' || key === 'name');
-  for (const key of ['message', 'code', 'details', 'hint', 'error']) {
+  const hasOnlyGeneratedErrorFields = [...keys].every((key) =>
+    ['stack', 'name', 'message', 'errorMessage'].includes(key)
+  );
+  for (const key of ['message', 'errorMessage', 'code', 'details', 'hint', 'error']) {
     const value = obj[key] ?? Object.getOwnPropertyDescriptor(obj, key)?.value;
     if (value != null && String(value).trim()) return false;
   }

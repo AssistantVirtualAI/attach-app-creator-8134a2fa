@@ -1312,7 +1312,10 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        <div
+          className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
+          style={{ WebkitOverflowScrolling: "touch", minHeight: 0, overflowX: "hidden", maxWidth: "100vw" }}
+        >
           <div>
             <p className="text-base font-semibold" style={{ color: "var(--pp-text-primary)" }}>{subject}</p>
             <p className="text-xs mt-1" style={{ color: "var(--pp-text-muted)" }}>

@@ -10,7 +10,6 @@ import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { LanguageProvider } from '@/context/LanguageContext';
 import { ThemeProvider } from '@/context/ThemeContext';
-import { OrganizationProvider } from '@/context/OrganizationContext';
 import { MplanipretGuard } from '@/components/auth/MplanipretGuard';
 import { PlanipretErrorBoundary } from '@/components/PlanipretErrorBoundary';
 import { LazyRouteBoundary } from '@/components/LazyRouteBoundary';
@@ -122,46 +121,43 @@ export default function App() {
         <ThemeProvider>
           <TooltipProvider>
             <Toaster position="top-center" richColors />
-
-            <OrganizationProvider>
-              <PlanipretErrorBoundary>
-                <LazyRouteBoundary>
-                  <NativeDeepLinkBridge />
-                  <Routes>
-                    <Route path="/" element={<Navigate to="/mplanipret" replace />} />
-                    <Route path="/login" element={<Navigate to="/mplanipret" replace />} />
-                    <Route path="/auth/ms365/callback" element={<Ms365Callback />} />
-                    <Route path="/auth/microsoft/callback" element={<Ms365Callback />} />
-                    <Route path="/auth/maestro/callback" element={<MaestroCallback />} />
-                    <Route
-                      path="/mplanipret"
-                      element={<MplanipretGuard><PlanipretMobile /></MplanipretGuard>}
-                    >
-                      <Route index element={<MHome />} />
-                      <Route path="home" element={<MHome />} />
-                      <Route path="calls" element={<MCalls />} />
-                      <Route path="messages" element={<MMessages />} />
-                      <Route path="voicemail" element={<MVoicemail />} />
-                      <Route path="contacts" element={<MContacts />} />
-                      <Route path="more" element={<MMore />} />
-                      <Route path="pipeline" element={<MPipeline />} />
-                      <Route path="search" element={<MSearch />} />
-                      <Route path="stats" element={<MStats />} />
-                      <Route path="ava" element={<MAvaChat />} />
-                      <Route path="notifications" element={<MAvaNotifications />} />
-                      <Route path="extension-sync" element={<MExtensionSync />} />
-                      <Route path="ms365-diagnostics" element={<MMs365Diagnostics />} />
-                      <Route path="style-diagnostics" element={<MStyleDiagnostics />} />
-                      <Route path="diagnostics" element={<MDiagnostics />} />
-                      <Route path="sip-debug" element={<MSipDebug />} />
-                      <Route path="kpi-audit" element={<MKpiAudit />} />
-                      <Route path="qa/layout" element={<MLayoutQA />} />
-                    </Route>
-                    <Route path="*" element={<Navigate to="/mplanipret" replace />} />
-                  </Routes>
-                </LazyRouteBoundary>
-              </PlanipretErrorBoundary>
-            </OrganizationProvider>
+            <PlanipretErrorBoundary>
+              <LazyRouteBoundary>
+                <NativeDeepLinkBridge />
+                <Routes>
+                  <Route path="/" element={<Navigate to="/mplanipret" replace />} />
+                  <Route path="/login" element={<Navigate to="/mplanipret" replace />} />
+                  <Route path="/auth/ms365/callback" element={<Ms365Callback />} />
+                  <Route path="/auth/microsoft/callback" element={<Ms365Callback />} />
+                  <Route path="/auth/maestro/callback" element={<MaestroCallback />} />
+                  <Route
+                    path="/mplanipret"
+                    element={<MplanipretGuard><PlanipretMobile /></MplanipretGuard>}
+                  >
+                    <Route index element={<MHome />} />
+                    <Route path="home" element={<MHome />} />
+                    <Route path="calls" element={<MCalls />} />
+                    <Route path="messages" element={<MMessages />} />
+                    <Route path="voicemail" element={<MVoicemail />} />
+                    <Route path="contacts" element={<MContacts />} />
+                    <Route path="more" element={<MMore />} />
+                    <Route path="pipeline" element={<MPipeline />} />
+                    <Route path="search" element={<MSearch />} />
+                    <Route path="stats" element={<MStats />} />
+                    <Route path="ava" element={<MAvaChat />} />
+                    <Route path="notifications" element={<MAvaNotifications />} />
+                    <Route path="extension-sync" element={<MExtensionSync />} />
+                    <Route path="ms365-diagnostics" element={<MMs365Diagnostics />} />
+                    <Route path="style-diagnostics" element={<MStyleDiagnostics />} />
+                    <Route path="diagnostics" element={<MDiagnostics />} />
+                    <Route path="sip-debug" element={<MSipDebug />} />
+                    <Route path="kpi-audit" element={<MKpiAudit />} />
+                    <Route path="qa/layout" element={<MLayoutQA />} />
+                  </Route>
+                  <Route path="*" element={<Navigate to="/mplanipret" replace />} />
+                </Routes>
+              </LazyRouteBoundary>
+            </PlanipretErrorBoundary>
           </TooltipProvider>
         </ThemeProvider>
       </LanguageProvider>

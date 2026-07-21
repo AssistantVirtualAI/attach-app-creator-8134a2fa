@@ -5,21 +5,12 @@ type State = { error: Error | null; retryKey: number };
 
 function isEmptyNativeArtifact(raw: unknown): boolean {
   if (!raw || typeof raw !== 'object') return !raw;
-  if (raw instanceof Error && !String(raw.message ?? '').trim()) return true;
   const obj = raw as Record<string, unknown>;
-  const keys = new Set([...Object.keys(obj), ...Object.getOwnPropertyNames(obj)]);
   const message = String(obj.message ?? Object.getOwnPropertyDescriptor(obj, 'message')?.value ?? '').trim();
   const errorMessage = String(obj.errorMessage ?? Object.getOwnPropertyDescriptor(obj, 'errorMessage')?.value ?? '').trim();
   const code = String(obj.code ?? Object.getOwnPropertyDescriptor(obj, 'code')?.value ?? '').trim();
   if (code === 'UNIMPLEMENTED' && /not implemented/i.test(message || errorMessage)) return true;
-  const hasOnlyGeneratedErrorFields = [...keys].every((key) =>
-    ['stack', 'name', 'message', 'errorMessage', 'code', 'data'].includes(key)
-  );
-  for (const key of ['message', 'errorMessage', 'code', 'details', 'hint', 'error']) {
-    const value = obj[key] ?? Object.getOwnPropertyDescriptor(obj, key)?.value;
-    if (value != null && String(value).trim()) return false;
-  }
-  return keys.size === 0 || hasOnlyGeneratedErrorFields;
+  return false;
 }
 
 /**
@@ -107,7 +98,7 @@ export class LazyRouteBoundary extends React.Component<
             >
               {isChunk
                 ? "Impossible de télécharger cette section. Vérifiez votre connexion."
-                : msg || "Erreur inattendue."}
+                : msg || "Le démarrage a été interrompu avant l’affichage de l’écran."}
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
               <button

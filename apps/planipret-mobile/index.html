@@ -29,84 +29,17 @@
           if (!raw || typeof raw !== 'object') return !raw;
           var message = String(raw.message || raw.errorMessage || '').trim();
           var code = String(raw.code || '').trim();
-          var keys = [];
-          try {
-            keys = Object.keys(raw).concat(Object.getOwnPropertyNames(raw));
-          } catch (_) {}
-          var onlyGeneratedFields = keys.length <= 4 && keys.every(function (key) {
-            return ['stack', 'name', 'message', 'errorMessage'].indexOf(key) !== -1;
-          });
-          return (!message && onlyGeneratedFields) || (code === 'UNIMPLEMENTED' && /not implemented/i.test(message));
+          return code === 'UNIMPLEMENTED' && /not implemented/i.test(message);
         }
         window.__PP_REACT_BOOTED__ = false;
         window.__PP_REACT_BOOT_ATTEMPTED__ = false;
-        try {
-          var proto = EventTarget && EventTarget.prototype;
-          var originalAdd = proto && proto.addEventListener;
-          var originalRemove = proto && proto.removeEventListener;
-          var fnWrappers = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
-          var objWrappers = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
-          function isNativeShell() {
-            try { return location.protocol === 'capacitor:' || !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
-            catch (_) { return location.protocol === 'capacitor:'; }
-          }
-          function wrapListener(listener) {
-            if (!listener || !isNativeShell()) return listener;
-            if (typeof listener === 'function') {
-              if (fnWrappers && fnWrappers.has(listener)) return fnWrappers.get(listener);
-              var wrappedFn = function (event) {
-                try { return listener.call(this, event); }
-                catch (err) {
-                  if (isIgnorableNativeStartupError(err)) {
-                    try { console.warn('[PP] swallowed native listener artifact', event && event.type); } catch (_) {}
-                    return;
-                  }
-                  throw err;
-                }
-              };
-              if (fnWrappers) fnWrappers.set(listener, wrappedFn);
-              return wrappedFn;
-            }
-            if (listener && typeof listener.handleEvent === 'function') {
-              if (objWrappers && objWrappers.has(listener)) return objWrappers.get(listener);
-              var wrappedObj = {
-                handleEvent: function (event) {
-                  try { return listener.handleEvent(event); }
-                  catch (err) {
-                    if (isIgnorableNativeStartupError(err)) {
-                      try { console.warn('[PP] swallowed native handleEvent artifact', event && event.type); } catch (_) {}
-                      return;
-                    }
-                    throw err;
-                  }
-                }
-              };
-              if (objWrappers) objWrappers.set(listener, wrappedObj);
-              return wrappedObj;
-            }
-            return listener;
-          }
-          function unwrapListener(listener) {
-            if (!listener) return listener;
-            return (fnWrappers && fnWrappers.get(listener)) || (objWrappers && objWrappers.get(listener)) || listener;
-          }
-          if (originalAdd && !proto.__ppSafeAddEventListener) {
-            proto.addEventListener = function (type, listener, options) {
-              try {
-                return originalAdd.call(this, type, wrapListener(listener), options);
-              } catch (err) {
-                if (isNativeShell() && isIgnorableNativeStartupError(err)) return;
-                throw err;
-              }
-            };
-            if (originalRemove) {
-              proto.removeEventListener = function (type, listener, options) {
-                return originalRemove.call(this, type, unwrapListener(listener), options);
-              };
-            }
-            proto.__ppSafeAddEventListener = true;
-          }
-        } catch (_) {}
+        function showBootFallback(message) {
+          var fallback = document.getElementById('pp-native-boot-fallback');
+          if (!fallback) return;
+          var body = fallback.querySelector('[data-pp-boot-message]');
+          if (body && message) body.textContent = message;
+          fallback.style.display = 'flex';
+        }
         window.addEventListener('error', function (event) {
           if (!isIgnorableNativeStartupError(event.error)) return;
           event.preventDefault();
@@ -117,22 +50,32 @@
           event.preventDefault();
           event.stopImmediatePropagation();
         }, true);
+        window.__PP_SHOW_BOOT_FALLBACK__ = showBootFallback;
       })();
 
       setTimeout(function () {
         var root = document.getElementById('root');
         if (root && root.innerHTML === '' && !window.__PP_REACT_BOOTED__) {
-          root.innerHTML = '<div style="color:white;padding:20px;background:#0A1425;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif">Démarrage...</div>';
+          root.innerHTML = '<div data-pp-boot-visible="1" style="color:white;padding:20px;background:#0A1425;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif">Démarrage...</div>';
         }
       }, 1200);
 
       setTimeout(function () {
         var root = document.getElementById('root');
-        if (root && root.innerHTML.indexOf('Démarrage...') !== -1 && !window.__PP_REACT_BOOTED__) {
-          root.innerHTML = '<div style="color:white;padding:24px;background:#0A1425;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;text-align:center">Démarrage interrompu.<br/>Fermez puis relancez l’application.</div>';
+        var hasVisibleShell = !!(root && (root.querySelector('#pp-mobile-frame') || root.querySelector('[data-pp-boot-visible="1"]') || String(root.textContent || '').trim().length > 0));
+        if (!hasVisibleShell && window.__PP_SHOW_BOOT_FALLBACK__) {
+          window.__PP_SHOW_BOOT_FALLBACK__('Le démarrage iOS a été interrompu avant le premier écran. Fermez puis relancez l’application.');
         }
-      }, 8000);
+      }, 4500);
     </script>
+    <div id="pp-native-boot-fallback" style="display:none;position:fixed;inset:0;z-index:2147483647;align-items:center;justify-content:center;background:#0A1425;color:#E2E8F0;font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;padding:24px;text-align:center">
+      <div style="max-width:320px">
+        <div style="width:58px;height:58px;border-radius:18px;background:#fff;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;color:#1A4A8A;font-weight:800;font-size:20px">PP</div>
+        <div style="font-weight:800;font-size:18px;margin-bottom:8px">Planiprêt Mobile</div>
+        <div data-pp-boot-message style="font-size:13px;line-height:1.45;opacity:.82;margin-bottom:18px">Démarrage interrompu.</div>
+        <button onclick="location.reload()" style="border:0;border-radius:12px;background:#2E9BDC;color:white;font-weight:800;padding:12px 18px">Relancer</button>
+      </div>
+    </div>
     <script type="module" src="/src/index.tsx"></script>
   </body>
 </html>

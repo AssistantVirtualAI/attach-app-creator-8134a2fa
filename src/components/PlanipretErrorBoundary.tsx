@@ -4,9 +4,15 @@ type State = { error: Error | null };
 
 function isEmptyNativeArtifact(raw: unknown): boolean {
   if (!raw || typeof raw !== 'object') return !raw;
+
+  // Capacitor iOS sometimes reports an internal React/router artifact as
+  // `Error {}` with only a generated stack. No message means no actionable
+  // render failure, so keep the mobile app mounted.
+  if (raw instanceof Error && !String(raw.message ?? '').trim()) return true;
+
   const obj = raw as Record<string, unknown>;
   const keys = new Set([...Object.keys(obj), ...Object.getOwnPropertyNames(obj)]);
-  for (const key of ['message', 'stack', 'name', 'code', 'details', 'hint', 'error']) {
+  for (const key of ['message', 'code', 'details', 'hint', 'error']) {
     const value = obj[key] ?? Object.getOwnPropertyDescriptor(obj, key)?.value;
     if (value != null && String(value).trim()) return false;
   }

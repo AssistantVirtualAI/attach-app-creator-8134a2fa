@@ -4,15 +4,27 @@ import { openMs365Authorize } from "@/lib/ms365OAuth";
 const INTENT_KEY = "pp_ms365_auth_intent";
 const NEXT_KEY = "pp_ms365_auth_next";
 
+/**
+ * Fetches Microsoft SSO start configuration from the versioned
+ * `pp-ms-auth-start` edge function. Falls back to `ms365-public-config`
+ * for backward compatibility if the new function is not yet deployed.
+ */
+async function fetchStartConfig(): Promise<any | null> {
+  const start = await supabase.functions.invoke("pp-ms-auth-start", { body: {} });
+  if (!start.error && (start.data as any)?.configured) return start.data;
+  const legacy = await supabase.functions.invoke("ms365-public-config", { body: {} });
+  if (!legacy.error && (legacy.data as any)?.configured) return legacy.data;
+  return null;
+}
+
 export async function isMs365LoginConfigured(): Promise<boolean> {
-  const { data, error } = await supabase.functions.invoke("ms365-public-config", { body: {} });
-  return !error && Boolean((data as any)?.configured && (data as any)?.client_id);
+  const cfg = await fetchStartConfig();
+  return Boolean(cfg?.configured && cfg?.client_id);
 }
 
 export async function startMicrosoftSignIn(nextPath = "/post-login"): Promise<void> {
-  const { data, error } = await supabase.functions.invoke("ms365-public-config", { body: {} });
-  const cfg = data as any;
-  if (error || !cfg?.configured || !cfg?.client_id) {
+  const cfg = await fetchStartConfig();
+  if (!cfg?.configured || !cfg?.client_id) {
     throw new Error("Microsoft SSO n'est pas configuré.");
   }
   try {

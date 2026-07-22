@@ -31,7 +31,13 @@ export default function Ms365Callback() {
       const state = params.get("state");
       const code_verifier = getRememberedMs365CodeVerifier(state);
       if (getMicrosoftSignInIntent() === "login") {
-        const { data, error: e } = await supabase.functions.invoke("ms365-auth-session", { body: { code, redirect_uri, code_verifier } });
+        let resp = await supabase.functions.invoke("pp-ms-auth-callback", { body: { code, redirect_uri, code_verifier } });
+        // Backward-compat: fall back to the legacy name if the new function isn't deployed yet.
+        if (resp.error && !(resp.data as any)?.success) {
+          const legacy = await supabase.functions.invoke("ms365-auth-session", { body: { code, redirect_uri, code_verifier } });
+          if (!legacy.error || (legacy.data as any)?.success) resp = legacy;
+        }
+        const { data, error: e } = resp;
         if (e || !(data as any)?.success) {
           const details = (data as any)?.details;
           const msg = (data as any)?.error ?? e?.message ?? "Échec OAuth";

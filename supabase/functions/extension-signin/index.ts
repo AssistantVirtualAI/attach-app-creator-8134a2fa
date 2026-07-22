@@ -77,7 +77,8 @@ Deno.serve(async (req) => {
   const provisionedEmail = `ext-${extension}@${safeDomain}`.toLowerCase();
   // Generate a deterministic-but-strong password we control so we can mint a session via signInWithPassword.
   // It's never returned to the client and is rotated on every login.
-  const sessionPassword = `lemtel-${crypto.randomUUID()}-${crypto.randomUUID()}`;
+  // Must stay <= 72 chars (Supabase Auth / bcrypt limit)
+  const sessionPassword = `lem-${crypto.randomUUID().replace(/-/g, '')}${crypto.randomUUID().replace(/-/g, '')}`.slice(0, 64);
 
   if (!userId) {
     // Try to find an existing auth user matching the provisioned email first (idempotent).

@@ -197,6 +197,11 @@ class VertoClient {
   private loggedIn = false;
   cfg: VertoConfig | null = null; // intentionally public for initVerto guard
   private audioTagId = 'verto-remote-audio';
+  private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
+  private manualDisconnect = false;
+
 
   on(fn: Listener): () => void {
     this.listeners.add(fn);

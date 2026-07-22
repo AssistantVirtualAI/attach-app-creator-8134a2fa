@@ -16,6 +16,11 @@ import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import mobileHero from "@/assets/planipret-mobile-hero.jpg.asset.json";
 import adminDashboard from "@/assets/planipret-admin-dashboard.jpg.asset.json";
 import avaVoice from "@/assets/planipret-ava-voice.jpg.asset.json";
+import mobileSms from "@/assets/planipret-mobile-sms.jpg.asset.json";
+import mobileEmail from "@/assets/planipret-mobile-email.jpg.asset.json";
+import mobileAnalytics from "@/assets/planipret-mobile-analytics.jpg.asset.json";
+import adminMaestro from "@/assets/planipret-admin-maestro.jpg.asset.json";
+import heroStats from "@/assets/planipret-hero-stats.jpg.asset.json";
 
 const copy = {
   fr: {
@@ -58,6 +63,35 @@ const copy = {
         title: "Analytics & Coaching",
         desc: "Statistiques quotidiennes, analyse d'appels, leads chauds et briefing IA du jour.",
       },
+      {
+        icon: ShieldCheck,
+        title: "Sécurité entreprise",
+        desc: "RLS multi-tenant, chiffrement au repos, audit d'accès, conformité GDPR & HIPAA.",
+      },
+      {
+        icon: Sparkles,
+        title: "AI Text Improve",
+        desc: "Amélioration IA en un tap pour SMS et emails — ton pro, ton amical, correction et traduction.",
+      },
+      {
+        icon: Globe2,
+        title: "Push protocole natif",
+        desc: "Notifications VoIP en background, foreground service Android, universal links iOS.",
+      },
+    ],
+    screensTag: "Aperçu app mobile",
+    screensTitle: "Chaque écran pensé pour le terrain",
+    screens: [
+      { img: mobileSms, alt: "SMS avec améliorateur IA", caption: "SMS + AI Improve" },
+      { img: mobileEmail, alt: "Boîte Outlook mobile", caption: "Outlook M365" },
+      { img: mobileAnalytics, alt: "Dashboard analytics", caption: "Analytics & Pipeline" },
+    ],
+    adminScreensTag: "Portail admin",
+    adminScreensTitle: "Contrôle total, sécurité entreprise",
+    adminScreens: [
+      { img: adminDashboard, alt: "Dashboard admin", caption: "Vue d'ensemble agence" },
+      { img: adminMaestro, alt: "Statut OAuth Maestro", caption: "OAuth Maestro par courtier" },
+      { img: heroStats, alt: "Stats hero", caption: "KPI temps réel" },
     ],
     adminTag: "Portail Admin",
     adminTitle: "Un centre de contrôle pour toute l'agence",
@@ -116,6 +150,35 @@ const copy = {
         title: "Analytics & Coaching",
         desc: "Daily stats, call analysis, hot leads and AI daily briefing.",
       },
+      {
+        icon: ShieldCheck,
+        title: "Enterprise security",
+        desc: "Multi-tenant RLS, encryption at rest, access audit, GDPR & HIPAA compliant.",
+      },
+      {
+        icon: Sparkles,
+        title: "AI Text Improve",
+        desc: "One-tap AI rewrite for SMS and emails — pro tone, friendly tone, fix & translate.",
+      },
+      {
+        icon: Globe2,
+        title: "Native push protocol",
+        desc: "Background VoIP notifications, Android foreground service, iOS universal links.",
+      },
+    ],
+    screensTag: "Mobile app preview",
+    screensTitle: "Every screen built for the field",
+    screens: [
+      { img: mobileSms, alt: "SMS with AI improver", caption: "SMS + AI Improve" },
+      { img: mobileEmail, alt: "Outlook mobile inbox", caption: "Outlook M365" },
+      { img: mobileAnalytics, alt: "Analytics dashboard", caption: "Analytics & Pipeline" },
+    ],
+    adminScreensTag: "Admin portal",
+    adminScreensTitle: "Total control, enterprise security",
+    adminScreens: [
+      { img: adminDashboard, alt: "Admin dashboard", caption: "Agency overview" },
+      { img: adminMaestro, alt: "Maestro OAuth status", caption: "Per-broker Maestro OAuth" },
+      { img: heroStats, alt: "Hero stats", caption: "Real-time KPIs" },
     ],
     adminTag: "Admin Portal",
     adminTitle: "A control center for the whole agency",
@@ -279,6 +342,108 @@ export const PlanipretShowcaseSection = () => {
             </motion.div>
           ))}
         </motion.div>
+
+        {/* Mobile screens gallery */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="mb-24"
+        >
+          <div className="text-center mb-10">
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4"
+              style={{ background: "rgba(155,127,232,0.15)", border: "1px solid rgba(155,127,232,0.3)" }}
+            >
+              <Smartphone className="w-3.5 h-3.5" style={{ color: "#9B7FE8" }} />
+              <span className="text-xs font-semibold" style={{ color: "#9B7FE8" }}>{t.screensTag}</span>
+            </div>
+            <h3 className="text-3xl md:text-4xl font-bold text-white">{t.screensTitle}</h3>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {t.screens.map((s, i) => (
+              <motion.div
+                key={s.caption}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: i * 0.1 }}
+                whileHover={{ y: -6 }}
+                className="relative rounded-3xl overflow-hidden"
+                style={{
+                  border: "1px solid rgba(46,155,220,0.2)",
+                  boxShadow: "0 30px 80px -30px rgba(46,155,220,0.4)",
+                }}
+              >
+                <img
+                  src={s.img.url}
+                  alt={s.alt}
+                  className="w-full h-auto object-cover"
+                  loading="lazy"
+                  width={1088}
+                  height={1360}
+                />
+                <div
+                  className="absolute bottom-0 inset-x-0 p-4 text-sm font-medium text-white"
+                  style={{ background: "linear-gradient(0deg, rgba(6,13,26,0.9), transparent)" }}
+                >
+                  {s.caption}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Admin screens gallery */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="mb-24"
+        >
+          <div className="text-center mb-10">
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4"
+              style={{ background: "rgba(46,155,220,0.15)", border: "1px solid rgba(46,155,220,0.3)" }}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" style={{ color: "#2E9BDC" }} />
+              <span className="text-xs font-semibold" style={{ color: "#2E9BDC" }}>{t.adminScreensTag}</span>
+            </div>
+            <h3 className="text-3xl md:text-4xl font-bold text-white">{t.adminScreensTitle}</h3>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {t.adminScreens.map((s, i) => (
+              <motion.div
+                key={s.caption}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: i * 0.1 }}
+                whileHover={{ y: -6 }}
+                className="relative rounded-2xl overflow-hidden"
+                style={{
+                  border: "1px solid rgba(46,155,220,0.2)",
+                  boxShadow: "0 20px 60px -20px rgba(0,0,0,0.6)",
+                }}
+              >
+                <img
+                  src={s.img.url}
+                  alt={s.alt}
+                  className="w-full h-48 object-cover"
+                  loading="lazy"
+                  width={1600}
+                  height={1000}
+                />
+                <div className="p-4 backdrop-blur-xl" style={{ background: "rgba(13,31,53,0.6)" }}>
+                  <div className="text-sm font-semibold text-white">{s.caption}</div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
 
         {/* Admin banner */}
         <motion.div

@@ -3,6 +3,9 @@ import { ArrowLeft } from "lucide-react";
 import { Navbar } from "@/components/landing/Navbar";
 import { FooterSection } from "@/components/landing/FooterSection";
 import { LemtelShowcaseSection } from "@/components/landing/LemtelShowcaseSection";
+import { AppsShowcaseSection } from "@/components/landing/AppsShowcaseSection";
+import { LemtelInteractiveDemo } from "@/components/landing/LemtelInteractiveDemo";
+import { SectionDivider } from "@/components/landing/SectionDivider";
 import { useLanguage } from "@/context/LanguageContext";
 import { useEffect } from "react";
 
@@ -33,6 +36,13 @@ export default function CaseStudyLemtel() {
         </Link>
       </div>
       <LemtelShowcaseSection />
+      <SectionDivider variant="pulse" />
+      <div id="apps-showcase">
+        <AppsShowcaseSection />
+      </div>
+      <div id="lemtel-demo">
+        <LemtelInteractiveDemo />
+      </div>
       <FooterSection />
     </div>
   );

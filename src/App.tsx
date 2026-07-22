@@ -15,6 +15,8 @@ import { Capacitor } from "@capacitor/core";
 
 
 const Landing = lazyWithRetry(() => import("./pages/Landing"));
+const CaseStudyPlanipret = lazyWithRetry(() => import("./pages/CaseStudyPlanipret"));
+const CaseStudyLemtel = lazyWithRetry(() => import("./pages/CaseStudyLemtel"));
 const AuthPage = lazyWithRetry(() => import("./pages/Auth"));
 const AgencyHome = lazyWithRetry(() => import("./pages/AgencyHome"));
 const PostLoginRedirect = lazyWithRetry(() => import("./pages/PostLoginRedirect"));

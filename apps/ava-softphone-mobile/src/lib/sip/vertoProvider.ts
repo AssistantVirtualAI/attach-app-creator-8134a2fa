@@ -832,12 +832,16 @@ class VertoClient {
   }
 
   disconnect() {
+    this.manualDisconnect = true;
+    this.stopKeepAlive();
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
     try { this.ws?.close(); } catch { /* ignore */ }
     this.ws = null;
     this.connected = false;
     this.loggedIn = false;
     this.dialogs.clear();
   }
+
 }
 
 // Singleton — matches the JsSIP UA lifecycle model used elsewhere.

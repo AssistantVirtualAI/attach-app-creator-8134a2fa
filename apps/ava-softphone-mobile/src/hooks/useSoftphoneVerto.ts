@@ -20,6 +20,7 @@ import { attachRemoteStream, toggleSpeaker } from '../lib/sip/audioOutput';
 import { initVerto, getVertoClient, VertoDialog, VertoEvent } from '../lib/sip/vertoProvider';
 import { normalizePhone } from '../lib/phoneNormalize';
 import { attachNativeAutoReconnect } from '../lib/sip/nativeAutoReconnect';
+import { startAndroidSipService, stopAndroidSipService } from '../lib/sip/nativeSipProvider';
 
 const VERTO_HOST = 'pbxnode.lemtel.tel';
 const VERTO_PORT = 8082;
@@ -116,6 +117,9 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         log('verto.registered');
         setStatus('registered');
         setRetryAttempt(0);
+        // Start foreground service to hold WakeLock + WifiLock so the Verto
+        // WebSocket survives screen-off / background throttling on Android.
+        startAndroidSipService().catch(() => { /* ignore on non-Android */ });
       } catch (e: any) {
         if (cancelled) return;
         const msg = e?.message || 'Verto connection failed';
@@ -153,6 +157,9 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         case 'disconnected':
           log('verto.disconnected', { reason: e.reason });
           setStatus('retrying', 'WebSocket disconnected');
+          // Stop the foreground service when disconnected — it will be
+          // restarted when Verto reconnects and emits 'registered' again.
+          stopAndroidSipService().catch(() => { /* ignore */ });
           break;
         case 'error':
           log('verto.error', { message: e.error });

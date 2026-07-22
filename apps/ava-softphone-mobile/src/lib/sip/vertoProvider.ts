@@ -478,15 +478,24 @@ class VertoClient {
     }
   }
 
-  private waitForIce(pc: RTCPeerConnection, timeoutMs = 5000): Promise<void> {
-    // 5 s timeout gives STUN servers enough time to respond on LTE/slow networks.
+  private waitForIce(pc: RTCPeerConnection, timeoutMs = 1500): Promise<void> {
+    // 1.5 s timeout: iceCandidatePoolSize=10 pre-gathers candidates so
+    // gathering completes well before the timeout on most networks.
+    // The previous 5 s timeout caused a 3-5 s delay before verto.invite
+    // was sent. FreeSWITCH Verto does not support trickle ICE, so we must
+    // wait for gathering to complete, but 1.5 s is sufficient in practice.
     return new Promise((resolve) => {
       if (pc.iceGatheringState === 'complete') { resolve(); return; }
-      const t = setTimeout(() => { pc.removeEventListener('icegatheringstatechange', check); resolve(); }, timeoutMs);
+      const t = setTimeout(() => {
+        pc.removeEventListener('icegatheringstatechange', check);
+        console.log('[verto][DIAG] ICE gathering timeout after', timeoutMs, 'ms — sending SDP with available candidates');
+        resolve();
+      }, timeoutMs);
       const check = () => {
         if (pc.iceGatheringState === 'complete') {
           clearTimeout(t);
           pc.removeEventListener('icegatheringstatechange', check);
+          console.log('[verto][DIAG] ICE gathering complete (fast path)');
           resolve();
         }
       };
@@ -656,21 +665,24 @@ class VertoClient {
     }
   }
 
-  private async hangup(callID: string) {
+  private hangup(callID: string): Promise<void> {
     const rec = this.dialogs.get(callID);
-    if (!rec) return;
+    if (!rec) return Promise.resolve();
+    // Emit hangup and close PC immediately — do NOT await verto.bye.
+    // Waiting for the RPC response caused a 1-2 s UI freeze before the
+    // call screen dismissed. FreeSWITCH accepts verto.bye fire-and-forget.
+    try { rec.pc.close(); } catch { /* ignore */ }
+    this.dialogs.delete(callID);
+    this.emit({ type: 'hangup', dialog: rec.wrapped, cause: 'NORMAL_CLEARING' });
+    // Send verto.bye in the background (best-effort, no await)
     const dialogParams = {
       callID,
       caller_id_name: rec.callerIdName || this.cfg?.caller_id_name || '',
       caller_id_number: rec.callerIdNumber || this.cfg?.caller_id_number || '',
       destination_number: rec.destination,
     };
-    try {
-      await this.rpc('verto.bye', { cause: 'NORMAL_CLEARING', dialogParams });
-    } catch { /* ignore */ }
-    try { rec.pc.close(); } catch { /* ignore */ }
-    this.dialogs.delete(callID);
-    this.emit({ type: 'hangup', dialog: rec.wrapped, cause: 'NORMAL_CLEARING' });
+    this.rpc('verto.bye', { cause: 'NORMAL_CLEARING', dialogParams }).catch(() => { /* ignore */ });
+    return Promise.resolve();
   }
 
   private async dtmf(callID: string, digit: string) {

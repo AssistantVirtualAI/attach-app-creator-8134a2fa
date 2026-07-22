@@ -78,6 +78,18 @@
             android:foregroundServiceType="microphone|phoneCall"
             android:exported="false"
             android:stopWithTask="false" />
+
+        <!-- BOOT RECEIVER — redémarre le service SIP après un reboot du téléphone -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

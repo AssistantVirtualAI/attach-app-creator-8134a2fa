@@ -623,28 +623,40 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
     setMessages((prev) => [...prev, optimistic]);
     setText("");
     try {
-      const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
-        body: { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) },
-      });
-      if (err) throw err;
-      if ((data as any)?.ok === false || (data as any)?.error) {
-        const detail = (data as any)?.body || (data as any)?.error || t("messages.sendFailed");
-        throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      const payload = { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) };
+      console.info("[pp-ns-sms] send →", { to: number, len: body.length, thread_id: currentThreadId ?? null });
+      const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", { body: payload });
+      if (err) {
+        console.error("[pp-ns-sms] invoke error", err);
+        throw new Error(err.message || t("messages.sendFailed"));
       }
-      const result = (data as any)?.result ?? {};
+      const d: any = data ?? {};
+      if (d.ok === false || d.error) {
+        const status = d.status ? ` (HTTP ${d.status})` : "";
+        const bodyDetail =
+          typeof d.body === "string" ? d.body :
+          d.body ? JSON.stringify(d.body) :
+          typeof d.error === "string" ? d.error :
+          JSON.stringify(d.error ?? d);
+        console.error("[pp-ns-sms] server rejected", { status: d.status, from: d.from, to: d.to, endpoint: d.endpoint, body: d.body, error: d.error });
+        const hint = d.from ? "" : " — aucun numéro SMS (DID) assigné à ce courtier.";
+        throw new Error(`SMS refusé${status}${hint}\n${bodyDetail.slice(0, 260)}`);
+      }
+      const result = d.result ?? {};
       const newThreadId = result?.messagesession_id ?? result?.["messagesession-id"] ?? result?.session_id ?? result?.id;
       if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);
-      // Maestro mirror is handled server-side inside pp-ns-sms.
       // Refresh from server to reconcile optimistic message
       setTimeout(() => loadMessages(), 600);
 
     } catch (e: any) {
-      toast.error(e?.message ?? t("messages.sendFailed"));
+      console.error("[pp-ns-sms] send failed", e);
+      toast.error(e?.message ?? t("messages.sendFailed"), { duration: 6000 });
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
     } finally {
       setSending(false);
     }
   };
+
 
   return (
     <div className="absolute inset-0 flex flex-col min-h-0" style={{ background: "var(--pp-bg-base)" }}>

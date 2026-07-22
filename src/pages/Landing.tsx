@@ -27,6 +27,7 @@ import { AppsShowcaseSection } from "@/components/landing/AppsShowcaseSection";
 import { LemtelInteractiveDemo } from "@/components/landing/LemtelInteractiveDemo";
 import { LandingDownloadSection } from "@/components/landing/LandingDownloadSection";
 import { PlanipretShowcaseSection } from "@/components/landing/PlanipretShowcaseSection";
+import { LemtelShowcaseSection } from "@/components/landing/LemtelShowcaseSection";
 import { useTranslation } from "@/hooks/useTranslation";
 
 const Landing = () => {

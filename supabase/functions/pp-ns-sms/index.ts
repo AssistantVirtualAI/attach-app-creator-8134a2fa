@@ -301,7 +301,7 @@ Deno.serve(async (req) => {
         ?? result?.messagesession_id
         ?? result?.["messagesession-id"]
         ?? result?.messagesession
-        ?? null;
+        ?? sessionId;
 
       try {
         await supabase

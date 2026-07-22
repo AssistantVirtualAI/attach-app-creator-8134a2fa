@@ -53,6 +53,9 @@ const Landing = () => {
         transition={{ duration: 0.5 }}
       >
         <HeroSection />
+        <div id="case-studies">
+          <CaseStudiesPreviewSection />
+        </div>
         <div id="nouveautes">
           <WhatsNewSection />
         </div>

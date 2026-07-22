@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
@@ -19,8 +19,13 @@ export default function Ms365Callback() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
+  const ranRef = useRef(false);
 
   useEffect(() => {
+    // Guard against StrictMode / re-render double-invocation. Microsoft
+    // authorization codes are single-use — a second call returns invalid_grant.
+    if (ranRef.current) return;
+    ranRef.current = true;
     (async () => {
       const code = params.get("code");
       const err = params.get("error_description") ?? params.get("error");
@@ -30,19 +35,21 @@ export default function Ms365Callback() {
       const redirect_uri = getRememberedMs365RedirectUri();
       const state = params.get("state");
       const code_verifier = getRememberedMs365CodeVerifier(state);
+      if (!code_verifier) {
+        setStatus("error");
+        setError("Code verifier PKCE introuvable — recommencez la connexion sans changer de navigateur/onglet.");
+        return;
+      }
+      console.info("[ms365-callback] exchange", { redirect_uri, hasVerifier: Boolean(code_verifier), state });
       if (getMicrosoftSignInIntent() === "login") {
-        let resp = await supabase.functions.invoke("pp-ms-auth-callback", { body: { code, redirect_uri, code_verifier } });
-        // Backward-compat: fall back to the legacy name if the new function isn't deployed yet.
-        if (resp.error && !(resp.data as any)?.success) {
-          const legacy = await supabase.functions.invoke("ms365-auth-session", { body: { code, redirect_uri, code_verifier } });
-          if (!legacy.error || (legacy.data as any)?.success) resp = legacy;
-        }
-        const { data, error: e } = resp;
+        const { data, error: e } = await supabase.functions.invoke("pp-ms-auth-callback", {
+          body: { code, redirect_uri, code_verifier },
+        });
         if (e || !(data as any)?.success) {
           const details = (data as any)?.details;
           const msg = (data as any)?.error ?? e?.message ?? "Échec OAuth";
           const full = details ? `${msg} — ${details.error_description ?? details.error ?? ""}`.trim() : msg;
-          console.error("ms365 auth failed", { data, e });
+          console.error("ms365 auth failed", { data, e, redirect_uri });
           setStatus("error"); setError(full);
           return;
         }
@@ -69,11 +76,9 @@ export default function Ms365Callback() {
       }
       clearRememberedMs365RedirectUri();
       try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}
-      // Active automatiquement l'abonnement AVA aux nouveaux courriels (non-bloquant)
       supabase.functions.invoke("ms365-mail-webhook-setup", { body: {} }).then(({ error }) => {
         if (error) console.warn("ms365 webhook setup skipped", error.message);
       }).catch((err) => console.warn("ms365 webhook setup skipped", err?.message ?? err));
-      // Fire-and-forget: link Maestro Telecom ID from Microsoft profile
       const msAccessToken = (data as any)?.ms_access_token ?? null;
       try {
         void supabase.functions.invoke("maestro-telecom-link", {
@@ -84,6 +89,7 @@ export default function Ms365Callback() {
       setTimeout(() => navigate("/mplanipret/more?ms365=ok", { replace: true }), 1200);
     })();
   }, [params, navigate]);
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">

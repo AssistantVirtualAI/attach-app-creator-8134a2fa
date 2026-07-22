@@ -110,7 +110,7 @@ function DashboardScreenInner({
   const [notifOpen, setNotifOpen] = useState(false);
   const notifCounts = useNotificationCounts();
   const me = useAutoSync<MeResponse>(() => mobileApi.me(), { intervalMs: 5 * 60_000, cacheKey: 'me', staleTimeMs: 120_000 });
-  const stats = useAutoSync<DomainStats>(() => mobileApi.domainStats(range), { intervalMs: 120_000, deps: [range], cacheKey: `domainStats:${range}`, staleTimeMs: 60_000 });
+  const stats = useAutoSync<DomainStats>(() => mobileApi.domainStats(range), { intervalMs: 15 * 60_000, deps: [range], cacheKey: `domainStats:${range}`, staleTimeMs: 5 * 60_000 });
   const m = isRecord(me.data) ? (me.data as any) : null;
   const hasStats = isUsableStats(stats.data);
   const s = useMemo(() => sanitizeStats(stats.data), [stats.data]);

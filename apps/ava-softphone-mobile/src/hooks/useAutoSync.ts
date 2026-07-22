@@ -89,7 +89,7 @@ export function useAutoSync<T>(
   } = {},
 ) {
   const {
-    intervalMs = 120_000,
+    intervalMs = 15 * 60_000, // 15 min default (was 2 min) — reduces server load & BLF issues
     deps = [],
     cacheKey,
     timeoutMs = 10_000,

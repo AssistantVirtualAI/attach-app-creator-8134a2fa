@@ -101,8 +101,9 @@ export default function TeamChatScreen(props: { accessToken?: string | null; use
         if (!cancelled) { setError(e?.message || 'Failed to load team chat'); setLoading(false); }
       }
     })();
-    const heartbeat = window.setInterval(() => chatCall('heartbeat', { status: 'available', platform: 'mobile', call_state: 'idle' }).catch(() => {}), 30000);
-    return () => { cancelled = true; clearInterval(heartbeat); };
+    // Heartbeat sent once on screen open only — periodic 30s interval removed
+    // to reduce server load and BLF registration issues.
+    return () => { cancelled = true; };
   }, [chatCall, loadChannels, loadMembers, mobile.loading, mobile.domainUuid, mobile.organizationId, token]);
 
   useEffect(() => {

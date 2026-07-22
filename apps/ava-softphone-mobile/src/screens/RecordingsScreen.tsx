@@ -57,7 +57,7 @@ export default function RecordingsScreen({
     setItems(null);
     setError(null);
     const cancel = reload();
-    const poll = setInterval(reload, 30000);
+    // 30s polling removed — realtime subscriptions + focus + callEnded events handle refresh.
     const onFocus = () => reload();
     const onCallEnded = () => { setTimeout(reload, 1500); setTimeout(reload, 8000); };
     window.addEventListener('focus', onFocus);
@@ -81,7 +81,6 @@ export default function RecordingsScreen({
 
     return () => {
       cancel();
-      clearInterval(poll);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('ava:callEnded', onCallEnded as any);
       (async () => { try { const { supabase } = await import('../lib/mobileSupabase'); ch && supabase.removeChannel(ch); } catch {} })();

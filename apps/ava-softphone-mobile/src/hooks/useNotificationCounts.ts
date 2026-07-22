@@ -87,12 +87,16 @@ export function useNotificationCounts(opts: {
     loadChat(); loadCalls(); loadVm();
   }, [loadChat, loadCalls, loadVm]);
 
-  // Initial + periodic refresh
+  // Initial load only — realtime subscriptions below handle live updates.
+  // Periodic polling removed to reduce server load and BLF registration issues.
+  // Users can manually refresh via the SyncIndicator button.
   useEffect(() => {
     if (!accessToken) return;
     refresh();
-    const iv = window.setInterval(refresh, 60_000);
-    return () => clearInterval(iv);
+    // Refresh on app focus (coming back from background)
+    const onFocus = () => refresh();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, [accessToken, refresh]);
 
   // Realtime: any new chat message → reload counts

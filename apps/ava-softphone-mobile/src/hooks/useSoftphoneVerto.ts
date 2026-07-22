@@ -109,6 +109,18 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         console.error('[Verto] connection error:', msg);
         log('verto.error', { message: msg });
         setStatus('error', msg);
+        // Auto-retry with exponential backoff: 5s → 10s → 20s → 30s (max).
+        // This ensures ALL users register reliably even on slow/flaky networks
+        // or when the server is temporarily overloaded (SQLite BUSY).
+        setRetryAttempt((prev) => {
+          const attempt = prev + 1;
+          const delay = Math.min(5000 * Math.pow(2, attempt - 1), 30000);
+          console.log(`[Verto] auto-retry in ${delay}ms (attempt ${attempt})`);
+          setTimeout(() => {
+            if (!cancelled) reconnect();
+          }, delay);
+          return attempt;
+        });
       }
     })();
 

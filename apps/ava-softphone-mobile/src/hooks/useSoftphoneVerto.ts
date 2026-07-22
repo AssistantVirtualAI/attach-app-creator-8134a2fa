@@ -162,10 +162,12 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         case 'disconnected':
           log('verto.disconnected', { reason: e.reason });
           setStatus('retrying', 'WebSocket disconnected');
-          // Stop the foreground service when disconnected — it will be
-          // restarted when Verto reconnects and emits 'registered' again.
-          stopAndroidSipService().catch(() => { /* ignore */ });
+          // Keep the foreground service RUNNING so WakeLock/WifiLock stay
+          // held while the Verto client auto-reconnects. Stopping the
+          // service here was letting Android Doze mode kill the socket and
+          // block reconnection until the app was re-opened.
           break;
+
         case 'error':
           log('verto.error', { message: e.error });
           setStatus('error', e.error);

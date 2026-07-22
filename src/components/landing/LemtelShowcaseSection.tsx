@@ -444,6 +444,45 @@ export const LemtelShowcaseSection = () => {
           ))}
         </div>
 
+        {/* Screens gallery */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="grid md:grid-cols-2 gap-6 mb-20"
+        >
+          {[
+            { img: chromeExt, alt: "Lemtel Chrome extension click-to-dial", caption: "Chrome extension · click-to-dial", h: 500 },
+            { img: pbxAnalytics, alt: "Lemtel PBX analytics", caption: "PBX analytics · live queues & SIP map", h: 500 },
+            { img: desktopApp, alt: "Lemtel desktop app", caption: "Desktop · Windows · macOS · Linux", h: 400 },
+            { img: mobileHero, alt: "Lemtel mobile app", caption: "Native iOS & Android softphone", h: 400 },
+          ].map((s, i) => (
+            <motion.div
+              key={s.caption}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: i * 0.08 }}
+              whileHover={{ y: -6 }}
+              className="relative rounded-2xl overflow-hidden"
+              style={{ border: `1px solid ${BORDER}`, boxShadow: "0 30px 80px -30px rgba(155,127,232,0.4)" }}
+            >
+              <img
+                src={s.img.url}
+                alt={s.alt}
+                className="w-full h-64 object-cover"
+                loading="lazy"
+                width={1600}
+                height={1000}
+              />
+              <div className="p-4 backdrop-blur-xl" style={{ background: "rgba(15,10,30,0.7)" }}>
+                <div className="text-sm font-semibold text-white">{s.caption}</div>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
+
         {/* Admin banner */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}

@@ -23,8 +23,6 @@ import { LiveDemoSection } from "@/components/landing/LiveDemoSection";
 import { AIForCompaniesSection } from "@/components/landing/AIForCompaniesSection";
 import { CompetitorComparisonSection } from "@/components/landing/CompetitorComparisonSection";
 import { WhatsNewSection } from "@/components/landing/WhatsNewSection";
-import { AppsShowcaseSection } from "@/components/landing/AppsShowcaseSection";
-import { LemtelInteractiveDemo } from "@/components/landing/LemtelInteractiveDemo";
 import { LandingDownloadSection } from "@/components/landing/LandingDownloadSection";
 import { CaseStudiesPreviewSection } from "@/components/landing/CaseStudiesPreviewSection";
 import { useTranslation } from "@/hooks/useTranslation";

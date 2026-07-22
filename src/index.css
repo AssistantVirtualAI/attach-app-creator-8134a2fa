@@ -849,3 +849,14 @@ All colors MUST be HSL.
 /* Case study back link and any other text-white with opacity we may
    have missed — ensure readable foreground in light. */
 .light .hover\:text-white:hover { color: hsl(var(--foreground)) !important; }
+
+/* Planipret mobile — email body rendering: keep any remote images, tables and
+   pre-formatted content within the sheet width so Microsoft/marketing emails
+   don't blow out the mobile viewport. */
+.pp-email-body { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+.pp-email-body img,
+.pp-email-body video,
+.pp-email-body iframe { max-width: 100% !important; height: auto !important; }
+.pp-email-body table { max-width: 100% !important; width: auto !important; table-layout: auto; }
+.pp-email-body td, .pp-email-body th { max-width: 100vw; word-break: break-word; }
+.pp-email-body pre { white-space: pre-wrap; word-break: break-word; }

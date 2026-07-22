@@ -267,19 +267,21 @@ Deno.serve(async (req) => {
         "from-number": fromNumber,
       };
 
-      const path = thread_id
-        ? `${userBase}/messagesessions/${encodeURIComponent(thread_id)}/messages`
-        : `${userBase}/messagesessions/messages`;
+      // NS-API requires a 32-char random session id when creating a new thread.
+      const sessionId = thread_id ?? newMessageSessionId();
+      const path = `${userBase}/messagesessions/${encodeURIComponent(sessionId)}/messages`;
 
       let res = await nsFetch(path, { method: "POST", body: JSON.stringify(nsBody) });
       let lastText = await res.text();
 
-      // Fallback: some older NS builds accept POST /messagesessions with the
-      // same body. Try it only if the primary endpoint failed with a 4xx/5xx
-      // that is not an auth error.
-      if (!res.ok && !thread_id && res.status !== 401 && res.status !== 403) {
+      // Fallback: older NS builds accept POST /messagesessions with the
+      // session id embedded in the body.
+      if (!res.ok && res.status !== 401 && res.status !== 403) {
         const altPath = `${userBase}/messagesessions`;
-        const alt = await nsFetch(altPath, { method: "POST", body: JSON.stringify(nsBody) });
+        const alt = await nsFetch(altPath, {
+          method: "POST",
+          body: JSON.stringify({ ...nsBody, "messagesession-id": sessionId, messagesession_id: sessionId }),
+        });
         const altText = await alt.text();
         if (alt.ok) { res = alt; lastText = altText; }
       }
@@ -299,7 +301,7 @@ Deno.serve(async (req) => {
         ?? result?.messagesession_id
         ?? result?.["messagesession-id"]
         ?? result?.messagesession
-        ?? null;
+        ?? sessionId;
 
       try {
         await supabase

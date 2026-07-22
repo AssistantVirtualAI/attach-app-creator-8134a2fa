@@ -6,7 +6,7 @@ import {
   Phone, PhoneMissed, MessageSquare, Voicemail,
   ArrowDownLeft, ArrowUpRight, X, Calendar, Headphones, Bot,
   BellOff, Flame, Sparkles, ChevronRight, ChevronLeft, Mail, Users as UsersIcon,
-  CheckSquare, RefreshCw, AlertCircle, Video, ExternalLink,
+  CheckSquare, RefreshCw, AlertCircle, Video, ExternalLink, Plus,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { toast } from "sonner";
@@ -615,6 +615,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
   const today = new Date(); today.setHours(0,0,0,0);
   const [cursor, setCursor] = useState(() => { const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; });
   const [selected, setSelected] = useState<Date>(today);
+  const [showCreate, setShowCreate] = useState(false);
 
   const locale = lang === "en" ? "en-CA" : "fr-CA";
 
@@ -657,8 +658,26 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
         </h2>
         <div className="flex items-center gap-2">
           <span className="pp-eyebrow">{events.length}</span>
+          {profile?.ms365_access_token && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-95"
+              style={{ background: "var(--pp-brand-accent)", color: "#fff" }}
+              aria-label="Créer une réunion"
+              title="Créer une réunion"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
+      {showCreate && (
+        <NewMeetingSheet
+          initialDate={selected}
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setShowCreate(false); toast.success(lang === "en" ? "Meeting created" : "Réunion créée"); }}
+        />
+      )}
 
       {!profile?.ms365_access_token ? (
         <p className="text-xs text-center py-4" style={{ color: "var(--pp-text-muted)" }}>
@@ -795,4 +814,131 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
     </section>
   );
 }
+
+function NewMeetingSheet({
+  initialDate,
+  onClose,
+  onCreated,
+}: {
+  initialDate: Date;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const toLocalInput = (d: Date) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  const base = new Date(initialDate);
+  base.setHours(9, 0, 0, 0);
+  const endBase = new Date(base);
+  endBase.setMinutes(base.getMinutes() + 30);
+
+  const [subject, setSubject] = useState("");
+  const [start, setStart] = useState(toLocalInput(base));
+  const [end, setEnd] = useState(toLocalInput(endBase));
+  const [attendees, setAttendees] = useState("");
+  const [location, setLocation] = useState("");
+  const [teams, setTeams] = useState(true);
+  const [body, setBody] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Toronto";
+
+  const submit = async () => {
+    if (!subject.trim()) { toast.error("Titre requis"); return; }
+    setSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("ms365-actions", {
+        body: {
+          action: "create_calendar_event",
+          payload: {
+            subject: subject.trim(),
+            start: { dateTime: new Date(start).toISOString(), timeZone: tz },
+            end: { dateTime: new Date(end).toISOString(), timeZone: tz },
+            body,
+            attendees: attendees.split(",").map((s) => s.trim()).filter(Boolean),
+            isOnlineMeeting: teams,
+            onlineMeetingProvider: "teamsForBusiness",
+            ...(location ? { location: { displayName: location } } : {}),
+          },
+        },
+      });
+      if (error || (data as any)?.success === false) {
+        throw new Error((data as any)?.error || error?.message || "Échec");
+      }
+      onCreated();
+    } catch (e: any) {
+      toast.error(e?.message || "Échec de création");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(4,10,25,0.55)",
+        display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 9999,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="pp-card"
+        style={{
+          width: "100%", maxWidth: 520, borderRadius: "16px 16px 0 0",
+          padding: 16, maxHeight: "90dvh", overflowY: "auto",
+          background: "var(--pp-bg-elevated, #fff)",
+        }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-semibold pp-heading">Nouvelle réunion</h3>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.06)" }}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="space-y-3">
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Titre"
+            className="pp-input w-full" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs" style={{ color: "var(--pp-text-muted)" }}>
+              Début
+              <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)}
+                className="w-full mt-1" style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
+            </label>
+            <label className="text-xs" style={{ color: "var(--pp-text-muted)" }}>
+              Fin
+              <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)}
+                className="w-full mt-1" style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
+            </label>
+          </div>
+          <input value={attendees} onChange={(e) => setAttendees(e.target.value)}
+            placeholder="Participants (courriels, séparés par des virgules)"
+            className="w-full" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
+          <input value={location} onChange={(e) => setLocation(e.target.value)}
+            placeholder="Lieu (optionnel)"
+            className="w-full" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)}
+            placeholder="Notes / ordre du jour"
+            rows={3}
+            className="w-full" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={teams} onChange={(e) => setTeams(e.target.checked)} />
+            Créer une réunion Teams
+          </label>
+          <button
+            onClick={submit}
+            disabled={saving}
+            className="w-full h-11 rounded-xl font-semibold active:scale-[0.98]"
+            style={{ background: "var(--pp-brand-accent)", color: "#fff", opacity: saving ? 0.6 : 1 }}
+          >
+            {saving ? "Création…" : "Créer la réunion"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 

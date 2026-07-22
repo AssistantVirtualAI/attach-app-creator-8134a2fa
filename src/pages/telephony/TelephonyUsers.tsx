@@ -92,6 +92,7 @@ export default function TelephonyUsers() {
   const { data: users = [], isLoading, refetch } = useSoftphoneUsers();
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
+  const [pwdTarget, setPwdTarget] = useState<UserRow | null>(null);
   const qc = useQueryClient();
 
   const stats = useMemo(() => {

@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
@@ -14,32 +13,34 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.util.Base64
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import okhttp3.*
-import okio.ByteString
 import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStream
+import java.net.URI
+import java.security.MessageDigest
+import java.security.SecureRandom
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 
 /**
  * Foreground service that maintains a native Kotlin WebSocket connection to
  * FreeSWITCH Verto (port 8082) independently of the WebView / JavaScript layer.
  *
+ * Uses only Android-native APIs (javax.net.ssl.SSLSocket) — no OkHttp dependency.
  * This ensures the extension stays REGISTERED even when:
  *  - The screen is locked
  *  - The app is in the background
  *  - Android throttles JS timers in the WebView
- *
- * The service holds a PARTIAL_WAKE_LOCK (CPU) and WIFI_MODE_FULL_HIGH_PERF
- * WifiLock (radio) so the WebSocket stays alive 24/7.
- *
- * Credentials are stored in SharedPreferences by CapacitorPjsip when the JS
- * layer calls startSipService({ host, port, login, password, domain }).
- *
- * When an incoming call arrives (verto.invite), the service fires a local
- * notification so the user can tap to open the app and answer.
  */
 class SipConnectionService : Service() {
 
@@ -51,7 +52,6 @@ class SipConnectionService : Service() {
         const val INCOMING_CALL_NOTIFICATION_ID = 1002
         const val PREFS_NAME = "verto_creds"
 
-        // Keys stored in SharedPreferences
         const val KEY_HOST = "verto_host"
         const val KEY_PORT = "verto_port"
         const val KEY_LOGIN = "verto_login"
@@ -91,79 +91,54 @@ class SipConnectionService : Service() {
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
-    private var okHttpClient: OkHttpClient? = null
-    private var webSocket: WebSocket? = null
+    private val executor: ScheduledExecutorService = Executors.newScheduledThreadPool(2)
     private val handler = Handler(Looper.getMainLooper())
+    private var isDestroyed = false
+
+    // WebSocket state
+    private var sslSocket: SSLSocket? = null
+    private var outputStream: OutputStream? = null
     private var sessionUUID: String = UUID.randomUUID().toString()
     private var isLoggedIn = false
     private var reconnectAttempt = 0
-    private var isDestroyed = false
-
-    // Ping interval to keep WebSocket alive (every 25 seconds)
-    private val pingRunnable = object : Runnable {
-        override fun run() {
-            if (!isDestroyed) {
-                sendPing()
-                handler.postDelayed(this, 25_000)
-            }
-        }
-    }
+    private var pingFuture: ScheduledFuture<*>? = null
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannels()
 
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "LemtelSoftphone::SipWakeLock"
-        ).apply {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LemtelSoftphone::SipWakeLock").apply {
             setReferenceCounted(false)
             acquire()
         }
 
-        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        wifiLock = wifiManager.createWifiLock(
-            WifiManager.WIFI_MODE_FULL_HIGH_PERF,
-            "LemtelSoftphone::SipWifiLock"
-        ).apply {
+        val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "LemtelSoftphone::SipWifiLock").apply {
             setReferenceCounted(false)
             acquire()
         }
-
-        okHttpClient = OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
-            .pingInterval(20, TimeUnit.SECONDS)
-            .build()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = buildNotification("Connecté · Prêt à recevoir des appels")
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceCompat.startForeground(
                 this, NOTIFICATION_ID, notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-
-        // Connect native WebSocket to Verto
-        connectVerto()
-
+        executor.submit { connectVerto() }
         return START_STICKY
     }
 
     override fun onDestroy() {
         isDestroyed = true
-        handler.removeCallbacks(pingRunnable)
-        webSocket?.close(1000, "Service stopped")
-        webSocket = null
-        okHttpClient?.dispatcher?.executorService?.shutdown()
+        pingFuture?.cancel(true)
+        closeSocket()
+        executor.shutdownNow()
         wakeLock?.let { if (it.isHeld) it.release() }
         wifiLock?.let { if (it.isHeld) it.release() }
         super.onDestroy()
@@ -171,70 +146,184 @@ class SipConnectionService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    // ── Verto WebSocket ──────────────────────────────────────────────────────
+    // ── WebSocket (RFC 6455) over TLS ────────────────────────────────────────
 
     private fun connectVerto() {
+        if (isDestroyed) return
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val host = prefs.getString(KEY_HOST, "pbxnode.lemtel.tel") ?: "pbxnode.lemtel.tel"
         val port = prefs.getInt(KEY_PORT, 8082)
         val login = prefs.getString(KEY_LOGIN, "") ?: ""
         val password = prefs.getString(KEY_PASSWORD, "") ?: ""
+        val domain = prefs.getString(KEY_DOMAIN, "lemtel.lemtel.tel") ?: "lemtel.lemtel.tel"
+        val displayName = prefs.getString(KEY_DISPLAY_NAME, login) ?: login
 
         if (login.isEmpty() || password.isEmpty()) {
             Log.w(TAG, "No credentials stored — skipping native Verto connect")
             return
         }
 
-        val url = "wss://$host:$port"
-        Log.i(TAG, "Connecting native Verto WebSocket to $url ext=$login")
+        try {
+            Log.i(TAG, "Connecting native Verto WS to wss://$host:$port ext=$login")
+            updateNotification("Connexion en cours...")
 
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Sec-WebSocket-Protocol", "json")
-            .build()
+            val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
+            val socket = factory.createSocket(host, port) as SSLSocket
+            socket.soTimeout = 60_000
+            socket.startHandshake()
 
-        sessionUUID = UUID.randomUUID().toString()
-        isLoggedIn = false
-
-        webSocket = okHttpClient?.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(ws: WebSocket, response: Response) {
-                Log.i(TAG, "Verto WS opened — sending verto.login")
-                sendVertoLogin(ws, login, password)
+            // WebSocket HTTP Upgrade handshake
+            val wsKey = Base64.encodeToString(ByteArray(16).also { SecureRandom().nextBytes(it) }, Base64.NO_WRAP)
+            val handshake = buildString {
+                append("GET / HTTP/1.1\r\n")
+                append("Host: $host:$port\r\n")
+                append("Upgrade: websocket\r\n")
+                append("Connection: Upgrade\r\n")
+                append("Sec-WebSocket-Key: $wsKey\r\n")
+                append("Sec-WebSocket-Version: 13\r\n")
+                append("Sec-WebSocket-Protocol: json\r\n")
+                append("\r\n")
             }
+            socket.outputStream.write(handshake.toByteArray(Charsets.US_ASCII))
+            socket.outputStream.flush()
 
-            override fun onMessage(ws: WebSocket, text: String) {
-                handleVertoMessage(text)
-            }
+            // Read HTTP response
+            val reader = BufferedReader(InputStreamReader(socket.inputStream, Charsets.US_ASCII))
+            val statusLine = reader.readLine() ?: throw Exception("No HTTP response")
+            if (!statusLine.contains("101")) throw Exception("WS upgrade failed: $statusLine")
+            // Drain headers
+            while (true) { val line = reader.readLine() ?: break; if (line.isEmpty()) break }
 
-            override fun onMessage(ws: WebSocket, bytes: ByteString) {
-                handleVertoMessage(bytes.utf8())
-            }
+            sslSocket = socket
+            outputStream = socket.outputStream
+            sessionUUID = UUID.randomUUID().toString()
+            isLoggedIn = false
+            reconnectAttempt = 0
 
-            override fun onClosing(ws: WebSocket, code: Int, reason: String) {
-                Log.w(TAG, "Verto WS closing: $code $reason")
-                ws.close(1000, null)
-                isLoggedIn = false
-            }
+            // Send verto.login
+            sendVertoLogin(login, password, domain, displayName)
 
-            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                Log.w(TAG, "Verto WS closed: $code $reason — scheduling reconnect")
-                isLoggedIn = false
-                scheduleReconnect()
-            }
+            // Start ping keepalive
+            pingFuture?.cancel(false)
+            pingFuture = executor.scheduleAtFixedRate({
+                if (isLoggedIn && !isDestroyed) sendPing()
+            }, 25, 25, TimeUnit.SECONDS)
 
-            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "Verto WS failure: ${t.message} — scheduling reconnect")
-                isLoggedIn = false
-                scheduleReconnect()
-            }
-        })
+            // Read loop
+            readLoop(socket)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Verto WS error: ${e.message}")
+            isLoggedIn = false
+            closeSocket()
+            scheduleReconnect()
+        }
     }
 
-    private fun sendVertoLogin(ws: WebSocket, login: String, password: String) {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val domain = prefs.getString(KEY_DOMAIN, "lemtel.lemtel.tel") ?: "lemtel.lemtel.tel"
-        val displayName = prefs.getString(KEY_DISPLAY_NAME, login) ?: login
+    private fun readLoop(socket: SSLSocket) {
+        try {
+            val input = socket.inputStream
+            while (!isDestroyed && !socket.isClosed) {
+                // Read WebSocket frame header (2 bytes minimum)
+                val b0 = input.read()
+                val b1 = input.read()
+                if (b0 < 0 || b1 < 0) break
 
+                val isMasked = (b1 and 0x80) != 0
+                var payloadLen = (b1 and 0x7F).toLong()
+
+                payloadLen = when (payloadLen.toInt()) {
+                    126 -> {
+                        val ext = ByteArray(2)
+                        input.read(ext)
+                        ((ext[0].toInt() and 0xFF) shl 8 or (ext[1].toInt() and 0xFF)).toLong()
+                    }
+                    127 -> {
+                        val ext = ByteArray(8)
+                        input.read(ext)
+                        var len = 0L
+                        for (i in 0..7) len = (len shl 8) or (ext[i].toLong() and 0xFF)
+                        len
+                    }
+                    else -> payloadLen
+                }
+
+                val maskKey = if (isMasked) ByteArray(4).also { input.read(it) } else null
+                val payload = ByteArray(payloadLen.toInt())
+                var read = 0
+                while (read < payload.size) {
+                    val n = input.read(payload, read, payload.size - read)
+                    if (n < 0) break
+                    read += n
+                }
+                if (maskKey != null) {
+                    for (i in payload.indices) payload[i] = (payload[i].toInt() xor maskKey[i % 4].toInt()).toByte()
+                }
+
+                val opcode = b0 and 0x0F
+                when (opcode) {
+                    0x1 -> handleVertoMessage(String(payload, Charsets.UTF_8)) // text
+                    0x8 -> { Log.i(TAG, "Verto WS close frame"); break }        // close
+                    0x9 -> sendPong(payload)                                     // ping
+                }
+            }
+        } catch (e: Exception) {
+            if (!isDestroyed) Log.w(TAG, "Read loop ended: ${e.message}")
+        }
+        isLoggedIn = false
+        closeSocket()
+        if (!isDestroyed) scheduleReconnect()
+    }
+
+    private fun sendFrame(text: String) {
+        try {
+            val payload = text.toByteArray(Charsets.UTF_8)
+            val out = outputStream ?: return
+            // Client frames must be masked
+            val mask = ByteArray(4).also { SecureRandom().nextBytes(it) }
+            val masked = ByteArray(payload.size) { i -> (payload[i].toInt() xor mask[i % 4].toInt()).toByte() }
+
+            val header = mutableListOf<Byte>()
+            header.add(0x81.toByte()) // FIN + text opcode
+            when {
+                payload.size <= 125 -> header.add((0x80 or payload.size).toByte())
+                payload.size <= 65535 -> {
+                    header.add((0x80 or 126).toByte())
+                    header.add((payload.size shr 8).toByte())
+                    header.add((payload.size and 0xFF).toByte())
+                }
+                else -> {
+                    header.add((0x80 or 127).toByte())
+                    for (i in 7 downTo 0) header.add(((payload.size.toLong() shr (i * 8)) and 0xFF).toByte())
+                }
+            }
+            header.addAll(mask.toList())
+            out.write(header.toByteArray())
+            out.write(masked)
+            out.flush()
+        } catch (e: Exception) {
+            Log.w(TAG, "sendFrame failed: ${e.message}")
+        }
+    }
+
+    private fun sendPong(payload: ByteArray) {
+        try {
+            val out = outputStream ?: return
+            out.write(byteArrayOf(0x8A.toByte(), payload.size.toByte()))
+            out.write(payload)
+            out.flush()
+        } catch (e: Exception) { /* ignore */ }
+    }
+
+    private fun closeSocket() {
+        try { sslSocket?.close() } catch (e: Exception) { /* ignore */ }
+        sslSocket = null
+        outputStream = null
+    }
+
+    // ── Verto protocol ───────────────────────────────────────────────────────
+
+    private fun sendVertoLogin(login: String, password: String, domain: String, displayName: String) {
         val msg = JSONObject().apply {
             put("jsonrpc", "2.0")
             put("id", 1)
@@ -249,7 +338,22 @@ class SipConnectionService : Service() {
                 })
             })
         }
-        ws.send(msg.toString())
+        sendFrame(msg.toString())
+    }
+
+    private fun sendPing() {
+        if (!isLoggedIn) return
+        try {
+            val ping = JSONObject().apply {
+                put("jsonrpc", "2.0")
+                put("id", System.currentTimeMillis().toInt())
+                put("method", "verto.ping")
+                put("params", JSONObject().apply { put("sessid", sessionUUID) })
+            }
+            sendFrame(ping.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "Ping failed: ${e.message}")
+        }
     }
 
     private fun handleVertoMessage(text: String) {
@@ -259,36 +363,24 @@ class SipConnectionService : Service() {
             val result = json.optJSONObject("result")
 
             when {
-                // Login response
                 result != null && json.optInt("id") == 1 -> {
                     val sessid = result.optString("sessid")
                     if (sessid.isNotEmpty()) {
                         isLoggedIn = true
                         reconnectAttempt = 0
                         Log.i(TAG, "Verto login SUCCESS — extension registered ✅")
-                        updateNotification("Connecté · Prêt à recevoir des appels")
-                        // Start ping keepalive
-                        handler.removeCallbacks(pingRunnable)
-                        handler.postDelayed(pingRunnable, 25_000)
+                        handler.post { updateNotification("Connecté · Prêt à recevoir des appels") }
                     } else {
                         Log.e(TAG, "Verto login FAILED: $text")
                         scheduleReconnect()
                     }
                 }
-
-                // Incoming call
                 method == "verto.invite" -> {
                     val params = json.optJSONObject("params")
-                    val callID = params?.optString("callID") ?: ""
-                    val callerIdName = params?.optString("caller_id_name") ?: "Appel entrant"
-                    val callerIdNumber = params?.optString("caller_id_number") ?: ""
-                    Log.i(TAG, "Incoming call from $callerIdName <$callerIdNumber> callID=$callID")
-                    showIncomingCallNotification(callerIdName, callerIdNumber)
-                }
-
-                // Ping response (keep-alive)
-                method == "verto.pong" || (result != null && result.has("pong")) -> {
-                    Log.d(TAG, "Verto pong received")
+                    val callerName = params?.optString("caller_id_name") ?: "Appel entrant"
+                    val callerNumber = params?.optString("caller_id_number") ?: ""
+                    Log.i(TAG, "Incoming call: $callerName <$callerNumber>")
+                    handler.post { showIncomingCallNotification(callerName, callerNumber) }
                 }
             }
         } catch (e: Exception) {
@@ -296,37 +388,13 @@ class SipConnectionService : Service() {
         }
     }
 
-    private fun sendPing() {
-        val ws = webSocket ?: return
-        if (!isLoggedIn) return
-        try {
-            val ping = JSONObject().apply {
-                put("jsonrpc", "2.0")
-                put("id", System.currentTimeMillis().toInt())
-                put("method", "verto.ping")
-                put("params", JSONObject().apply {
-                    put("sessid", sessionUUID)
-                })
-            }
-            ws.send(ping.toString())
-        } catch (e: Exception) {
-            Log.w(TAG, "Ping failed: ${e.message}")
-        }
-    }
-
     private fun scheduleReconnect() {
         if (isDestroyed) return
         reconnectAttempt++
         val delay = minOf(5_000L * reconnectAttempt, 30_000L)
-        Log.i(TAG, "Scheduling Verto reconnect in ${delay}ms (attempt $reconnectAttempt)")
-        updateNotification("Reconnexion en cours...")
-        handler.postDelayed({
-            if (!isDestroyed) {
-                webSocket?.cancel()
-                webSocket = null
-                connectVerto()
-            }
-        }, delay)
+        Log.i(TAG, "Reconnecting in ${delay}ms (attempt $reconnectAttempt)")
+        handler.post { updateNotification("Reconnexion en cours...") }
+        executor.schedule({ if (!isDestroyed) connectVerto() }, delay, TimeUnit.MILLISECONDS)
     }
 
     // ── Notifications ────────────────────────────────────────────────────────
@@ -334,13 +402,12 @@ class SipConnectionService : Service() {
     private fun showIncomingCallNotification(callerName: String, callerNumber: String) {
         val nm = getSystemService(NotificationManager::class.java)
         val notification = NotificationCompat.Builder(this, CALL_CHANNEL_ID)
-            .setContentTitle("Appel entrant")
-            .setContentText("$callerName ${if (callerNumber.isNotEmpty()) "<$callerNumber>" else ""}")
+            .setContentTitle("Appel entrant — Lemtel")
+            .setContentText("$callerName${if (callerNumber.isNotEmpty()) " <$callerNumber>" else ""}")
             .setSmallIcon(android.R.drawable.ic_menu_call)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setAutoCancel(true)
-            .setFullScreenIntent(null, true)
             .build()
         nm.notify(INCOMING_CALL_NOTIFICATION_ID, notification)
     }
@@ -364,16 +431,12 @@ class SipConnectionService : Service() {
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = getSystemService(NotificationManager::class.java)
-
-            // Persistent connection channel (low priority — no sound)
             nm.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "Connexion SIP", NotificationManager.IMPORTANCE_LOW).apply {
                     description = "Maintien de la connexion téléphonique"
                     setShowBadge(false)
                 }
             )
-
-            // Incoming call channel (high priority — full screen intent)
             nm.createNotificationChannel(
                 NotificationChannel(CALL_CHANNEL_ID, "Appels entrants", NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "Notifications d'appels entrants"

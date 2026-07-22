@@ -15,6 +15,8 @@ import { Capacitor } from "@capacitor/core";
 
 
 const Landing = lazyWithRetry(() => import("./pages/Landing"));
+const CaseStudyPlanipret = lazyWithRetry(() => import("./pages/CaseStudyPlanipret"));
+const CaseStudyLemtel = lazyWithRetry(() => import("./pages/CaseStudyLemtel"));
 const AuthPage = lazyWithRetry(() => import("./pages/Auth"));
 const AgencyHome = lazyWithRetry(() => import("./pages/AgencyHome"));
 const PostLoginRedirect = lazyWithRetry(() => import("./pages/PostLoginRedirect"));
@@ -477,6 +479,8 @@ const App = () => (
               <Routes>
                 {/* Landing page on root */}
                 <Route path="/" element={<Landing />} />
+                <Route path="/case/planipret" element={<CaseStudyPlanipret />} />
+                <Route path="/case/lemtel" element={<CaseStudyLemtel />} />
 
                 {/* Public full feature list */}
                 <Route path="/features" element={<FeaturesPage />} />

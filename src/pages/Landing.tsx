@@ -26,8 +26,7 @@ import { WhatsNewSection } from "@/components/landing/WhatsNewSection";
 import { AppsShowcaseSection } from "@/components/landing/AppsShowcaseSection";
 import { LemtelInteractiveDemo } from "@/components/landing/LemtelInteractiveDemo";
 import { LandingDownloadSection } from "@/components/landing/LandingDownloadSection";
-import { PlanipretShowcaseSection } from "@/components/landing/PlanipretShowcaseSection";
-import { LemtelShowcaseSection } from "@/components/landing/LemtelShowcaseSection";
+import { CaseStudiesPreviewSection } from "@/components/landing/CaseStudiesPreviewSection";
 import { useTranslation } from "@/hooks/useTranslation";
 
 const Landing = () => {
@@ -54,6 +53,9 @@ const Landing = () => {
         transition={{ duration: 0.5 }}
       >
         <HeroSection />
+        <div id="case-studies">
+          <CaseStudiesPreviewSection />
+        </div>
         <div id="nouveautes">
           <WhatsNewSection />
         </div>
@@ -78,12 +80,6 @@ const Landing = () => {
         </div>
         <div id="apps-showcase">
           <AppsShowcaseSection />
-        </div>
-        <div id="planipret-case">
-          <PlanipretShowcaseSection />
-        </div>
-        <div id="lemtel-case">
-          <LemtelShowcaseSection />
         </div>
         <LandingDownloadSection />
         <div id="lemtel-demo">

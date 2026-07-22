@@ -348,6 +348,7 @@ export default function TelephonyUsers() {
       <InvitesTable isAdmin={isAdmin} />
 
       <AddUserDialog open={open} onOpenChange={setOpen} suggestedExtension={nextExtension} />
+      <SetPasswordDialog user={pwdTarget} onClose={() => { setPwdTarget(null); refetch(); }} />
     </div>
   );
 }

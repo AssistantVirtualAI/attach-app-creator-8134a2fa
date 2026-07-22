@@ -26,6 +26,7 @@ import { WhatsNewSection } from "@/components/landing/WhatsNewSection";
 import { AppsShowcaseSection } from "@/components/landing/AppsShowcaseSection";
 import { LemtelInteractiveDemo } from "@/components/landing/LemtelInteractiveDemo";
 import { LandingDownloadSection } from "@/components/landing/LandingDownloadSection";
+import { PlanipretShowcaseSection } from "@/components/landing/PlanipretShowcaseSection";
 import { useTranslation } from "@/hooks/useTranslation";
 
 const Landing = () => {
@@ -76,6 +77,9 @@ const Landing = () => {
         </div>
         <div id="apps-showcase">
           <AppsShowcaseSection />
+        </div>
+        <div id="planipret-case">
+          <PlanipretShowcaseSection />
         </div>
         <LandingDownloadSection />
         <div id="lemtel-demo">

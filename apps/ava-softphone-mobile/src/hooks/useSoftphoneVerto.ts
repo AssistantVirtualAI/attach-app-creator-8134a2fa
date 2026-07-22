@@ -20,7 +20,7 @@ import { attachRemoteStream, toggleSpeaker } from '../lib/sip/audioOutput';
 import { initVerto, getVertoClient, VertoDialog, VertoEvent } from '../lib/sip/vertoProvider';
 import { normalizePhone } from '../lib/phoneNormalize';
 import { attachNativeAutoReconnect } from '../lib/sip/nativeAutoReconnect';
-import { startAndroidSipService, stopAndroidSipService } from '../lib/sip/nativeSipProvider';
+import { requestAndroidBatteryOptimizationExemption, startAndroidSipService, stopAndroidSipService } from '../lib/sip/nativeSipProvider';
 
 const VERTO_HOST = 'pbxnode.lemtel.tel';
 const VERTO_PORT = 8082;
@@ -135,6 +135,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
           domain: config.domain || 'lemtel.lemtel.tel',
           displayName: config.displayName || config.extension,
         }).catch(() => { /* ignore on non-Android */ });
+        requestAndroidBatteryOptimizationExemption().catch(() => { /* ignore on non-Android */ });
       } catch (e: any) {
 
         if (cancelled) return;

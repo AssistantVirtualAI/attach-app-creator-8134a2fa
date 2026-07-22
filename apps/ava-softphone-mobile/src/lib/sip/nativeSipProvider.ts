@@ -120,8 +120,9 @@ export const CapacitorPjsip = CapacitorSipNative;
 // invoke the SIP foreground service (WakeLock + WifiLock) without unlocking
 // the full native SIP path on Android.
 interface AndroidSipServiceBridge {
-  startSipService?: () => Promise<{ ok: boolean }>;
+  startSipService?: (opts?: any) => Promise<{ ok: boolean }>;
   stopSipService?: () => Promise<{ ok: boolean }>;
+  requestBatteryOptimizationExemption?: () => Promise<{ ok: boolean; ignored?: boolean; requested?: boolean }>;
   // Audio routing — real implementation in CapacitorPjsip.kt
   setAudioRoute?: (opts: { route: string }) => Promise<{ ok: boolean; route?: string }>;
   getAudioRoute?: () => Promise<{ route?: string; outputs?: any; inputs?: any }>;
@@ -160,6 +161,12 @@ export async function stopAndroidSipService(): Promise<void> {
   if (__platform !== 'android') return;
   try { await AndroidSipServicePlugin.stopSipService?.(); }
   catch (e) { console.warn('[sip] stopSipService failed', e); }
+}
+
+export async function requestAndroidBatteryOptimizationExemption(): Promise<void> {
+  if (__platform !== 'android') return;
+  try { await AndroidSipServicePlugin.requestBatteryOptimizationExemption?.(); }
+  catch (e) { console.warn('[sip] battery optimization exemption request failed', e); }
 }
 
 /**

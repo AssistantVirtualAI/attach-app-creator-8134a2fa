@@ -479,6 +479,8 @@ const App = () => (
               <Routes>
                 {/* Landing page on root */}
                 <Route path="/" element={<Landing />} />
+                <Route path="/case/planipret" element={<CaseStudyPlanipret />} />
+                <Route path="/case/lemtel" element={<CaseStudyLemtel />} />
 
                 {/* Public full feature list */}
                 <Route path="/features" element={<FeaturesPage />} />

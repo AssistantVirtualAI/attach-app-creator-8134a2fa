@@ -76,13 +76,7 @@ const Landing = () => {
         <div id="features">
           <FeaturesSection />
         </div>
-        <div id="apps-showcase">
-          <AppsShowcaseSection />
-        </div>
         <LandingDownloadSection />
-        <div id="lemtel-demo">
-          <LemtelInteractiveDemo />
-        </div>
         <SectionDivider variant="pulse" />
         <div id="live-demo">
           <LiveDemoSection />

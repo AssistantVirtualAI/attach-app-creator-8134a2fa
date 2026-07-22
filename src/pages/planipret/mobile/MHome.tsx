@@ -657,8 +657,26 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
         </h2>
         <div className="flex items-center gap-2">
           <span className="pp-eyebrow">{events.length}</span>
+          {profile?.ms365_access_token && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-95"
+              style={{ background: "var(--pp-brand-accent)", color: "#fff" }}
+              aria-label="Créer une réunion"
+              title="Créer une réunion"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
+      {showCreate && (
+        <NewMeetingSheet
+          initialDate={selected}
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setShowCreate(false); toast.success(lang === "en" ? "Meeting created" : "Réunion créée"); }}
+        />
+      )}
 
       {!profile?.ms365_access_token ? (
         <p className="text-xs text-center py-4" style={{ color: "var(--pp-text-muted)" }}>

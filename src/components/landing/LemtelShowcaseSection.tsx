@@ -18,6 +18,8 @@ import { useLanguage } from "@/context/LanguageContext";
 import mobileHero from "@/assets/lemtel-mobile-hero.jpg.asset.json";
 import desktopApp from "@/assets/lemtel-desktop-app.jpg.asset.json";
 import adminPortal from "@/assets/lemtel-admin-portal.jpg.asset.json";
+import chromeExt from "@/assets/lemtel-chrome-extension.jpg.asset.json";
+import pbxAnalytics from "@/assets/lemtel-pbx-analytics.jpg.asset.json";
 
 const copy = {
   fr: {

@@ -124,6 +124,17 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         log('verto.registered');
         setStatus('registered');
         setRetryAttempt(0);
+        // Start foreground service with native Kotlin WebSocket that maintains
+        // Verto registration independently of the WebView — survives screen-off,
+        // background throttling, and JS timer suspension on Android.
+        startAndroidSipService({
+          host: VERTO_HOST,
+          port: VERTO_PORT,
+          login: config.extension,
+          password: config.password,
+          domain: config.domain || 'lemtel.lemtel.tel',
+          displayName: config.displayName || config.extension,
+        }).catch(() => { /* ignore on non-Android */ });
       } catch (e: any) {
 
         if (cancelled) return;

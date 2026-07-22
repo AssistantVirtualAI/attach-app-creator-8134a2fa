@@ -99,6 +99,17 @@ class CapacitorPjsip : Plugin() {
     @PluginMethod
     fun startSipService(call: PluginCall) {
         try {
+            // Save credentials so the native Verto WebSocket can re-register
+            // independently of the WebView when the screen is locked.
+            val host = call.getString("host") ?: "pbxnode.lemtel.tel"
+            val port = call.getInt("port") ?: 8082
+            val login = call.getString("login") ?: call.getString("extension") ?: ""
+            val password = call.getString("password") ?: ""
+            val domain = call.getString("domain") ?: "lemtel.lemtel.tel"
+            val displayName = call.getString("displayName") ?: login
+            if (login.isNotEmpty() && password.isNotEmpty()) {
+                SipConnectionService.saveCredentials(context, host, port, login, password, domain, displayName)
+            }
             SipConnectionService.start(context)
             call.resolve(JSObject().apply { put("ok", true) })
         } catch (e: Exception) {

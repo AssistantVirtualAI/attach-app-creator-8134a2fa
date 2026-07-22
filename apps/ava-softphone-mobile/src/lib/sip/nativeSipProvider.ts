@@ -148,9 +148,12 @@ export async function setAndroidAudioRoute(route: 'earpiece' | 'speaker' | 'blue
   }
 }
 
-export async function startAndroidSipService(): Promise<void> {
+export async function startAndroidSipService(creds?: {
+  host?: string; port?: number; login?: string;
+  password?: string; domain?: string; displayName?: string;
+}): Promise<void> {
   if (__platform !== 'android') return;
-  try { await AndroidSipServicePlugin.startSipService?.(); }
+  try { await (AndroidSipServicePlugin as any).startSipService?.(creds ?? {}); }
   catch (e) { console.warn('[sip] startSipService failed', e); }
 }
 export async function stopAndroidSipService(): Promise<void> {

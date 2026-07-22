@@ -1366,12 +1366,13 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
             ) : bodyType === "html" && bodyHtml ? (
               <div
                 className="pp-email-body"
-                style={{ maxWidth: "100%", overflowWrap: "anywhere", overflow: "hidden" }}
+                style={{ maxWidth: "100%", width: "100%", overflowWrap: "anywhere", overflowX: "auto", overflowY: "visible" }}
                 dangerouslySetInnerHTML={{ __html: bodyHtml }}
               />
             ) : (
-              <div className="whitespace-pre-wrap">{bodyHtml || merged.bodyPreview || t("messages.previewUnavailable")}</div>
+              <div className="whitespace-pre-wrap break-words">{bodyHtml || merged.bodyPreview || t("messages.previewUnavailable")}</div>
             )}
+
           </div>
 
           {attachments.length > 0 && (

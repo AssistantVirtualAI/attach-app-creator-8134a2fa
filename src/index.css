@@ -816,8 +816,36 @@ All colors MUST be HSL.
 .light .bg-white\/10 { background-color: hsl(var(--foreground) / 0.06) !important; }
 .light .bg-white\/20 { background-color: hsl(var(--foreground) / 0.1) !important; }
 
-/* Common dark glassy inline styles rgba(13,31,53,x) used across
-   the landing/case components — soften to a neutral card in light */
-.light [style*="rgba(13,31,53"] {
-  background-color: hsl(var(--card)) !important;
+/* Common dark glassy inline styles used across the landing/case
+   components — soften to neutral card/border in light mode.
+   These target inline `style` attributes containing dark rgba tuples. */
+.light [style*="rgba(13,31,53"],
+.light [style*="rgba(15,10,30"],
+.light [style*="rgba(11,6,32"],
+.light [style*="rgba(6,13,26"],
+.light [style*="rgba(10,22,40"],
+.light [style*="rgba(10,29,40"] {
+  background: hsl(var(--card)) !important;
+  border-color: hsl(var(--border)) !important;
 }
+
+/* Page-level dark gradient backgrounds used by Planipret/Lemtel
+   showcase sections — flatten to the theme background in light. */
+.light [style*="#0B0620"],
+.light [style*="#060D1A"],
+.light [style*="#0A1628"],
+.light [style*="#0A1D28"] {
+  background: hsl(var(--background)) !important;
+}
+
+/* Translucent white surfaces inlined as rgba(255,255,255,x) */
+.light [style*="rgba(255,255,255,0.06"],
+.light [style*="rgba(255,255,255,0.1"],
+.light [style*="rgba(255,255,255,0.15"] {
+  background: hsl(var(--foreground) / 0.05) !important;
+  border-color: hsl(var(--foreground) / 0.12) !important;
+}
+
+/* Case study back link and any other text-white with opacity we may
+   have missed — ensure readable foreground in light. */
+.light .hover\:text-white:hover { color: hsl(var(--foreground)) !important; }

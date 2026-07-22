@@ -5,11 +5,13 @@
 // (offer/answer over verto.invite / verto.answer).
 //
 // ICE / NAT traversal strategy:
-// We use multiple public STUN servers so the device can discover its
-// reflexive (srflx) public IP regardless of whether it is on WiFi, LTE,
-// or behind any type of NAT (full-cone, symmetric, carrier-grade, etc.).
-// Without at least one srflx candidate, FreeSWITCH cannot reach the
-// device and terminates the call with INCOMPATIBLE_DESTINATION (88).
+// We use getActivePcConfig() from rtcConfig.ts which includes both STUN and
+// TURN (Metered.ca) relay servers. STUN alone is insufficient on mobile
+// networks with symmetric NAT or carrier-grade NAT — the NAT binding expires
+// after ~30 s, causing ICE to transition to 'disconnected' and RTP to stop
+// (audio drop mid-call). TURN relay ensures the media path survives NAT
+// binding expiry and works on all network types.
+import { getActivePcConfig } from './rtcConfig';
 
 export interface VertoConfig {
   host: string;
@@ -48,24 +50,7 @@ export type VertoEvent =
 
 type Listener = (e: VertoEvent) => void;
 
-/**
- * ICE server list used for every RTCPeerConnection.
- * Multiple STUN servers from different providers ensure at least one
- * is reachable on any network (WiFi, LTE, corporate, carrier-grade NAT).
- * Google STUN servers are globally available and free; Cloudflare and
- * Twilio STUN servers provide redundancy.
- */
-const ICE_SERVERS: RTCIceServer[] = [
-  // Google — primary, globally available
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
-  // Cloudflare — low-latency anycast
-  { urls: 'stun:stun.cloudflare.com:3478' },
-  // Twilio — reliable fallback
-  { urls: 'stun:global.stun.twilio.com:3478' },
-];
+
 
 /**
  * Ensure PCMU (payload 0) and PCMA (payload 8) are present in the SDP offer.
@@ -420,7 +405,7 @@ class VertoClient {
   }
 
   private async handleInboundInvite(callID: string, params: any) {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 10 });
+    const pc = new RTCPeerConnection({ ...getActivePcConfig(), iceCandidatePoolSize: 10 });
     const remoteStream = new MediaStream();
     pc.ontrack = (ev) => {
       ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
@@ -513,7 +498,7 @@ class VertoClient {
   async call(destination: string, callerIdName: string, callerIdNumber: string): Promise<VertoDialog | null> {
     if (!this.loggedIn || !this.cfg) throw new Error('Verto not registered');
     const callID = uuid();
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceCandidatePoolSize: 10, sdpSemantics: 'unified-plan' } as any);
+    const pc = new RTCPeerConnection({ ...getActivePcConfig(), iceCandidatePoolSize: 10, sdpSemantics: 'unified-plan' } as any);
     const remoteStream = new MediaStream();
     pc.ontrack = (ev) => {
       ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
@@ -521,7 +506,18 @@ class VertoClient {
       if (rec) this.emit({ type: 'media', dialog: rec.wrapped, stream: remoteStream });
     };
     pc.oniceconnectionstatechange = () => {
-      console.log('[verto][DIAG] ICE connection state:', pc.iceConnectionState, 'signaling:', pc.signalingState);
+      const iceState = pc.iceConnectionState;
+      console.log('[verto][DIAG] ICE connection state:', iceState, 'signaling:', pc.signalingState);
+      // If ICE disconnects mid-call, attempt an ICE restart to recover the
+      // media path. This handles NAT binding expiry (~30 s) on mobile networks
+      // where STUN reflexive candidates expire but TURN relay can reconnect.
+      if ((iceState === 'disconnected' || iceState === 'failed')) {
+        const rec = this.dialogs.get(callID);
+        if (rec && rec.answered) {
+          console.warn('[verto][DIAG] ICE', iceState, '— attempting ICE restart for callID:', callID);
+          try { (pc as any).restartIce?.(); } catch (e) { console.warn('[verto][DIAG] restartIce failed:', e); }
+        }
+      }
     };
     pc.onicegatheringstatechange = () => {
       console.log('[verto][DIAG] ICE gathering state:', pc.iceGatheringState);

@@ -343,6 +343,108 @@ export const PlanipretShowcaseSection = () => {
           ))}
         </motion.div>
 
+        {/* Mobile screens gallery */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="mb-24"
+        >
+          <div className="text-center mb-10">
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4"
+              style={{ background: "rgba(155,127,232,0.15)", border: "1px solid rgba(155,127,232,0.3)" }}
+            >
+              <Smartphone className="w-3.5 h-3.5" style={{ color: "#9B7FE8" }} />
+              <span className="text-xs font-semibold" style={{ color: "#9B7FE8" }}>{t.screensTag}</span>
+            </div>
+            <h3 className="text-3xl md:text-4xl font-bold text-white">{t.screensTitle}</h3>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {t.screens.map((s, i) => (
+              <motion.div
+                key={s.caption}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: i * 0.1 }}
+                whileHover={{ y: -6 }}
+                className="relative rounded-3xl overflow-hidden"
+                style={{
+                  border: "1px solid rgba(46,155,220,0.2)",
+                  boxShadow: "0 30px 80px -30px rgba(46,155,220,0.4)",
+                }}
+              >
+                <img
+                  src={s.img.url}
+                  alt={s.alt}
+                  className="w-full h-auto object-cover"
+                  loading="lazy"
+                  width={1088}
+                  height={1360}
+                />
+                <div
+                  className="absolute bottom-0 inset-x-0 p-4 text-sm font-medium text-white"
+                  style={{ background: "linear-gradient(0deg, rgba(6,13,26,0.9), transparent)" }}
+                >
+                  {s.caption}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Admin screens gallery */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="mb-24"
+        >
+          <div className="text-center mb-10">
+            <div
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4"
+              style={{ background: "rgba(46,155,220,0.15)", border: "1px solid rgba(46,155,220,0.3)" }}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" style={{ color: "#2E9BDC" }} />
+              <span className="text-xs font-semibold" style={{ color: "#2E9BDC" }}>{t.adminScreensTag}</span>
+            </div>
+            <h3 className="text-3xl md:text-4xl font-bold text-white">{t.adminScreensTitle}</h3>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {t.adminScreens.map((s, i) => (
+              <motion.div
+                key={s.caption}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: i * 0.1 }}
+                whileHover={{ y: -6 }}
+                className="relative rounded-2xl overflow-hidden"
+                style={{
+                  border: "1px solid rgba(46,155,220,0.2)",
+                  boxShadow: "0 20px 60px -20px rgba(0,0,0,0.6)",
+                }}
+              >
+                <img
+                  src={s.img.url}
+                  alt={s.alt}
+                  className="w-full h-48 object-cover"
+                  loading="lazy"
+                  width={1600}
+                  height={1000}
+                />
+                <div className="p-4 backdrop-blur-xl" style={{ background: "rgba(13,31,53,0.6)" }}>
+                  <div className="text-sm font-semibold text-white">{s.caption}</div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+
         {/* Admin banner */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}

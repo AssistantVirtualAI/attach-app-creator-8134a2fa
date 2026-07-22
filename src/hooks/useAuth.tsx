@@ -208,7 +208,7 @@ export const useAuth = () => {
       return { error: null };
     } catch (error: any) {
       const msg = String(error?.message || "");
-      logAuthError("signInWithMicrosoft", error, { notEnabled });
+      logAuthError("signInWithMicrosoft", error);
       toast({
         title: "Erreur de connexion Microsoft",
         description: msg || friendlyAuthError(error),

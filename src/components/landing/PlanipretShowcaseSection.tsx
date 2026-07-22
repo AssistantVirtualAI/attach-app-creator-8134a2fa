@@ -16,6 +16,11 @@ import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import mobileHero from "@/assets/planipret-mobile-hero.jpg.asset.json";
 import adminDashboard from "@/assets/planipret-admin-dashboard.jpg.asset.json";
 import avaVoice from "@/assets/planipret-ava-voice.jpg.asset.json";
+import mobileSms from "@/assets/planipret-mobile-sms.jpg.asset.json";
+import mobileEmail from "@/assets/planipret-mobile-email.jpg.asset.json";
+import mobileAnalytics from "@/assets/planipret-mobile-analytics.jpg.asset.json";
+import adminMaestro from "@/assets/planipret-admin-maestro.jpg.asset.json";
+import heroStats from "@/assets/planipret-hero-stats.jpg.asset.json";
 
 const copy = {
   fr: {

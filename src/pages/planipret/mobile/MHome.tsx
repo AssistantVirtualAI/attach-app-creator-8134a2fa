@@ -615,6 +615,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
   const today = new Date(); today.setHours(0,0,0,0);
   const [cursor, setCursor] = useState(() => { const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; });
   const [selected, setSelected] = useState<Date>(today);
+  const [showCreate, setShowCreate] = useState(false);
 
   const locale = lang === "en" ? "en-CA" : "fr-CA";
 

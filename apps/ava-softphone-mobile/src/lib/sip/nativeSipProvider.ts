@@ -122,11 +122,31 @@ export const CapacitorPjsip = CapacitorSipNative;
 interface AndroidSipServiceBridge {
   startSipService?: () => Promise<{ ok: boolean }>;
   stopSipService?: () => Promise<{ ok: boolean }>;
+  // Audio routing — real implementation in CapacitorPjsip.kt
+  setAudioRoute?: (opts: { route: string }) => Promise<{ ok: boolean; route?: string }>;
+  getAudioRoute?: () => Promise<{ route?: string; outputs?: any; inputs?: any }>;
 }
 const AndroidSipServicePlugin: AndroidSipServiceBridge =
   __platform === 'android'
     ? (registerPlugin<AndroidSipServiceBridge>('CapacitorPjsip') as AndroidSipServiceBridge)
     : {};
+
+/**
+ * Android audio route helper — calls the real Kotlin CapacitorPjsip.setAudioRoute()
+ * which uses AudioManager.isSpeakerphoneOn. This bypasses the no-op CapacitorSipNative
+ * stub that is intentionally installed on Android for the full SIP path.
+ */
+export async function setAndroidAudioRoute(route: 'earpiece' | 'speaker' | 'bluetooth'): Promise<boolean> {
+  if (__platform !== 'android') return false;
+  try {
+    await AndroidSipServicePlugin.setAudioRoute?.({ route });
+    console.log('[audioRoute] Android setAudioRoute', route, 'OK');
+    return true;
+  } catch (e) {
+    console.warn('[audioRoute] Android setAudioRoute failed:', e);
+    return false;
+  }
+}
 
 export async function startAndroidSipService(): Promise<void> {
   if (__platform !== 'android') return;

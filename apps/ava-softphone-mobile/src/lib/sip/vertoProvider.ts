@@ -34,6 +34,9 @@ export interface VertoDialog {
   hold: () => void;
   unhold: () => void;
   toggleHold: () => void;
+  mute: () => void;
+  unmute: () => void;
+  transfer: (target: string) => void;
   rtc?: RTCPeerConnection;
 }
 
@@ -179,6 +182,7 @@ interface DialogRecord {
   callerIdName?: string;
   callerIdNumber?: string;
   remoteStream?: MediaStream;
+  localStream?: MediaStream;
   answered?: boolean;
 }
 
@@ -450,6 +454,7 @@ class VertoClient {
       callID, direction: 'inbound', pc,
       wrapped: this.wrap(callID),
       remoteStream,
+      localStream: local || undefined,
     };
     this.dialogs.set(callID, rec);
 
@@ -504,6 +509,9 @@ class VertoClient {
         if (!rec) return;
         this.hold(callID, true); // best-effort toggle
       },
+      mute: () => this.setLocalMic(callID, false),
+      unmute: () => this.setLocalMic(callID, true),
+      transfer: (target: string) => this.transfer(callID, target),
       rtc: undefined,
     };
     return w;
@@ -571,6 +579,7 @@ class VertoClient {
     const rec: DialogRecord = {
       callID, direction: 'outbound', pc, wrapped,
       destination, callerIdName, callerIdNumber, remoteStream,
+      localStream: local,
     };
     this.dialogs.set(callID, rec);
 
@@ -679,11 +688,79 @@ class VertoClient {
     const rec = this.dialogs.get(callID);
     if (!rec) return;
     try {
+      // Hold/unhold via SDP re-negotiation: set direction to sendonly (hold)
+      // or sendrecv (unhold). verto.modify is not reliably supported by
+      // FreeSWITCH Verto for hold — SDP re-offer is the correct approach.
+      const senders = rec.pc.getSenders();
+      senders.forEach((s) => {
+        if (s.track?.kind === 'audio') {
+          // Mute local track on hold so we don't send audio while on hold
+          s.track.enabled = !on;
+        }
+      });
+      // Re-negotiate with updated direction
+      const offer = await rec.pc.createOffer();
+      // Patch SDP direction
+      const patchedSdp = offer.sdp?.replace(
+        /a=sendrecv/g, on ? 'a=sendonly' : 'a=sendrecv'
+      ) || offer.sdp;
+      await rec.pc.setLocalDescription({ type: 'offer', sdp: patchedSdp });
+      await this.waitForIce(rec.pc, 3000);
+      const localSdp = rec.pc.localDescription?.sdp || '';
+      // Send verto.modify with the new SDP
       await this.rpc('verto.modify', {
         action: on ? 'hold' : 'unhold',
+        sdp: localSdp,
         dialogParams: { callID },
       });
-    } catch { /* ignore */ }
+      console.log('[verto] hold', on, 'SDP re-negotiation sent');
+    } catch (e) {
+      console.warn('[verto] hold SDP re-negotiation failed, trying simple modify:', e);
+      // Fallback: simple verto.modify without SDP
+      try {
+        await this.rpc('verto.modify', {
+          action: on ? 'hold' : 'unhold',
+          dialogParams: { callID },
+        });
+      } catch { /* ignore */ }
+    }
+  }
+
+  setLocalMic(callID: string, on: boolean) {
+    const rec = this.dialogs.get(callID);
+    if (!rec) return;
+    // Mute/unmute the local audio track directly on the MediaStream
+    const stream = rec.localStream;
+    if (stream) {
+      stream.getAudioTracks().forEach((t) => { t.enabled = on; });
+      console.log('[verto] setLocalMic', on, 'tracks:', stream.getAudioTracks().length);
+    } else {
+      // Fallback: mute via RTCRtpSender
+      rec.pc.getSenders().forEach((s) => {
+        if (s.track?.kind === 'audio') s.track.enabled = on;
+      });
+      console.log('[verto] setLocalMic (sender fallback)', on);
+    }
+  }
+
+  private async transfer(callID: string, target: string) {
+    const rec = this.dialogs.get(callID);
+    if (!rec) return;
+    // Blind transfer via verto.modify with action 'transfer'
+    try {
+      await this.rpc('verto.modify', {
+        action: 'transfer',
+        destination: target,
+        dialogParams: { callID },
+      });
+      console.log('[verto] blind transfer to', target);
+      // After transfer, FreeSWITCH will send verto.bye — hangup locally
+      try { rec.pc.close(); } catch { /* ignore */ }
+      this.dialogs.delete(callID);
+      this.emit({ type: 'hangup', dialog: rec.wrapped, cause: 'NORMAL_CLEARING' });
+    } catch (e) {
+      console.warn('[verto] transfer failed', e);
+    }
   }
 
   hangupAll() {

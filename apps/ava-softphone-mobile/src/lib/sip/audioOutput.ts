@@ -14,7 +14,7 @@
 // iOS: routed through AVAudioSession via CapacitorPjsip native bridge.
 
 import { Capacitor } from '@capacitor/core';
-import { CapacitorSipNative } from './nativeSipProvider';
+import { CapacitorSipNative, setAndroidAudioRoute } from './nativeSipProvider';
 
 export type AudioRoute = 'earpiece' | 'speaker' | 'bluetooth';
 
@@ -118,11 +118,25 @@ export function attachRemoteStream(input: RTCPeerConnection | MediaStream) {
  */
 function _forceEarpiece() {
   if (!Capacitor.isNativePlatform()) return;
-  // Already earpiece — still call native to ensure AudioManager mode is set.
+  const platform = Capacitor.getPlatform();
+  if (platform === 'android') {
+    // Android: use the real Kotlin bridge (bypasses the no-op CapacitorSipNative stub)
+    setAndroidAudioRoute('earpiece')
+      .then((ok) => {
+        console.log('[audioOutput] _forceEarpiece (android) ok:', ok);
+        route = 'earpiece';
+        emit();
+      })
+      .catch((e) => {
+        console.warn('[audioOutput] _forceEarpiece (android) failed:', e);
+        if (audioEl) applySink(audioEl, 'earpiece').catch(() => {});
+      });
+    return;
+  }
+  // iOS: use CapacitorSipNative
   CapacitorSipNative.setAudioRoute({ route: 'earpiece' })
     .then((res) => {
       console.log('[audioOutput] _forceEarpiece result:', res?.route, res?.outputs);
-      // Sync route state from native response
       const outs = (res?.outputs || '').toLowerCase();
       if (outs.includes('speaker')) route = 'speaker';
       else if (outs.includes('bluetooth')) route = 'bluetooth';
@@ -131,11 +145,7 @@ function _forceEarpiece() {
     })
     .catch((e) => {
       console.warn('[audioOutput] _forceEarpiece failed (non-iOS stub):', e?.message || e);
-      // On Android the native bridge is a no-op stub — fall back to
-      // setSinkId('default') which at least avoids the media stream path.
-      if (audioEl) {
-        applySink(audioEl, 'earpiece').catch(() => {});
-      }
+      if (audioEl) applySink(audioEl, 'earpiece').catch(() => {});
     });
 }
 
@@ -156,21 +166,31 @@ export async function setRoute(next: AudioRoute): Promise<boolean> {
   busy = true; emit();
   try {
     if (Capacitor.isNativePlatform()) {
-      try {
-        const res = await CapacitorSipNative.setAudioRoute({ route: next });
-        console.log('[audioOutput] setRoute', next, '→ native result:', res?.route, res?.outputs);
-        // Sync route from native response (native knows the actual output)
-        const outs = (res?.outputs || '').toLowerCase();
-        if (outs.includes('speaker')) route = 'speaker';
-        else if (outs.includes('bluetooth')) route = 'bluetooth';
-        else route = 'earpiece';
-      } catch (e) {
-        // On Android the native bridge is a no-op stub for audio routing.
-        // Fall back to setSinkId and update route state optimistically.
-        console.warn('[audioOutput] native setAudioRoute failed, using setSinkId fallback:', e);
-        route = next;
-        if (audioEl) {
-          try { await applySink(audioEl, route); } catch {}
+      const platform = Capacitor.getPlatform();
+      if (platform === 'android') {
+        // Android: use the real Kotlin bridge (bypasses the no-op CapacitorSipNative stub)
+        const ok = await setAndroidAudioRoute(next);
+        if (ok) {
+          route = next;
+          console.log('[audioOutput] setRoute (android)', next, 'OK');
+        } else {
+          // Fallback: setSinkId
+          route = next;
+          if (audioEl) { try { await applySink(audioEl, route); } catch {} }
+        }
+      } else {
+        // iOS: use CapacitorSipNative
+        try {
+          const res = await CapacitorSipNative.setAudioRoute({ route: next });
+          console.log('[audioOutput] setRoute (ios)', next, '→ native result:', res?.route, res?.outputs);
+          const outs = (res?.outputs || '').toLowerCase();
+          if (outs.includes('speaker')) route = 'speaker';
+          else if (outs.includes('bluetooth')) route = 'bluetooth';
+          else route = 'earpiece';
+        } catch (e) {
+          console.warn('[audioOutput] native setAudioRoute failed, using setSinkId fallback:', e);
+          route = next;
+          if (audioEl) { try { await applySink(audioEl, route); } catch {} }
         }
       }
     } else {

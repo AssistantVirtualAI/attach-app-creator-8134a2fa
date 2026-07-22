@@ -16,7 +16,7 @@ import {
 } from '../lib/sip/sipPersistence';
 import { EMPTY_QUALITY, CallQuality } from '../lib/sip/callQuality';
 import { AudioProfile, loadAudioProfile, saveAudioProfile } from '../lib/sip/audioProfile';
-import { attachRemoteStream } from '../lib/sip/audioOutput';
+import { attachRemoteStream, toggleSpeaker } from '../lib/sip/audioOutput';
 import { initVerto, getVertoClient, VertoDialog, VertoEvent } from '../lib/sip/vertoProvider';
 import { normalizePhone } from '../lib/phoneNormalize';
 import { attachNativeAutoReconnect } from '../lib/sip/nativeAutoReconnect';
@@ -238,15 +238,28 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     activeDialogRef.current?.answer();
   }, []);
 
-  const setMic = (on: boolean) => {
-    const s = localStreamRef.current;
-    if (s) s.getAudioTracks().forEach((t) => (t.enabled = on));
-  };
-  const mute = useCallback(() => { setMic(false); setIsMuted(true); }, []);
-  const unmute = useCallback(() => { setMic(true); setIsMuted(false); }, []);
+  const mute = useCallback(() => {
+    const d = activeDialogRef.current;
+    if (d) { try { d.mute(); } catch { /* ignore */ } }
+    setIsMuted(true);
+  }, []);
+  const unmute = useCallback(() => {
+    const d = activeDialogRef.current;
+    if (d) { try { d.unmute(); } catch { /* ignore */ } }
+    setIsMuted(false);
+  }, []);
   const hold = useCallback(() => { activeDialogRef.current?.hold(); setIsOnHold(true); }, []);
   const unhold = useCallback(() => { activeDialogRef.current?.unhold(); setIsOnHold(false); }, []);
   const sendDTMF = useCallback((k: string) => { activeDialogRef.current?.dtmf(k); }, []);
+
+  const transfer = useCallback((target: string) => {
+    const d = activeDialogRef.current;
+    if (d) { try { d.transfer(target); } catch { /* ignore */ } }
+  }, []);
+
+  const toggleSpeakerFn = useCallback(async () => {
+    try { await toggleSpeaker(); } catch (e) { console.warn('[verto] toggleSpeaker failed', e); }
+  }, []);
 
   const setStatusPresence = useCallback((_s: string) => { /* presence not wired to Verto */ }, []);
   const reconnect = useCallback(() => {
@@ -306,10 +319,13 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     audioProfile, setAudioProfile,
     offeredCodecs: ['opus/48000/2', 'PCMU/8000'],
     negotiatedCodec: callState === 'active' ? 'opus/48000/2' : null,
+    transfer,
+    transferCall: transfer,
+    addCall: toggleSpeakerFn, // speaker toggle exposed via addCall slot for Android
   }), [
     sipStatus, sipError, callState, callTimer, isMuted, isOnHold, activeCallNumber,
     call, hangup, answer, mute, unmute, hold, unhold, sendDTMF, setStatusPresence, reconnect,
     lastPersistedError, sipLog, clearSipLog, clearSipState, retryAttempt,
-    audioProfile, setAudioProfile,
+    audioProfile, setAudioProfile, transfer, toggleSpeakerFn,
   ]);
 }

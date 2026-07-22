@@ -82,6 +82,9 @@ const Landing = () => {
         <div id="planipret-case">
           <PlanipretShowcaseSection />
         </div>
+        <div id="lemtel-case">
+          <LemtelShowcaseSection />
+        </div>
         <LandingDownloadSection />
         <div id="lemtel-demo">
           <LemtelInteractiveDemo />

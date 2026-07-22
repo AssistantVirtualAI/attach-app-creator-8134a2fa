@@ -218,8 +218,11 @@ class VertoClient {
     this.audioTagId = cfg.audioTag || 'verto-remote-audio';
     ensureAudioTag(this.audioTagId);
     this.emit({ type: 'connecting' });
+    this.manualDisconnect = false;
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
 
     const url = `wss://${cfg.host}:${cfg.port}`;
+
     return new Promise<void>((resolve, reject) => {
       let settled = false;
       const done = (ok: boolean, err?: string) => {

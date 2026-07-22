@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { startMicrosoftSignIn } from '@/lib/ms365AuthLogin';
 
 // Structured client-side auth logging so failures can be diagnosed from the console.
 function logAuthError(op: string, error: any, extra?: Record<string, any>) {
@@ -203,40 +204,14 @@ export const useAuth = () => {
 
   const signInWithMicrosoft = async () => {
     try {
-      const scopes = [
-        "openid",
-        "profile",
-        "email",
-        "offline_access",
-        "User.Read",
-        "Mail.ReadWrite",
-        "Mail.Send",
-        "Calendars.ReadWrite",
-        "Chat.ReadWrite",
-        "ChatMessage.Send",
-        "Contacts.ReadWrite",
-        "Presence.Read.All",
-      ].join(" ");
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'azure',
-        options: {
-          redirectTo: `${window.location.origin}/post-login`,
-          scopes,
-        },
-      });
-
-      if (error) throw error;
+      await startMicrosoftSignIn('/post-login');
       return { error: null };
     } catch (error: any) {
       const msg = String(error?.message || "");
-      const notEnabled = /provider is not enabled|Unsupported provider|validation_failed/i.test(msg);
-      logAuthError("signInWithMicrosoft", error, { notEnabled });
+      logAuthError("signInWithMicrosoft", error);
       toast({
-        title: notEnabled ? "Microsoft SSO indisponible" : "Erreur de connexion Microsoft",
-        description: notEnabled
-          ? "La connexion Microsoft n'est pas activée. Utilisez Google ou email/mot de passe. Vos intégrations Microsoft 365 restent disponibles une fois connecté."
-          : friendlyAuthError(error),
+        title: "Erreur de connexion Microsoft",
+        description: msg || friendlyAuthError(error),
         variant: "destructive",
       });
       return { error };

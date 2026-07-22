@@ -104,5 +104,13 @@ export async function openMs365Authorize(cfg: {
   prompt?: "select_account" | "consent" | "none";
   scopes?: string;
 }): Promise<void> {
-  window.location.href = await buildMs365AuthorizeUrl(cfg);
+  const url = await buildMs365AuthorizeUrl(cfg);
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url, presentationStyle: "fullscreen" });
+      return;
+    }
+  } catch { /* fall through to web */ }
+  window.location.href = url;
 }

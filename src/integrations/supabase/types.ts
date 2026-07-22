@@ -13524,6 +13524,7 @@ export type Database = {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      cleanup_expired_maestro_oauth_states: { Args: never; Returns: undefined }
       create_group_chat: {
         Args: { _member_ids: string[]; _name: string }
         Returns: {

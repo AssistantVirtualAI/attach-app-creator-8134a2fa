@@ -197,6 +197,11 @@ class VertoClient {
   private loggedIn = false;
   cfg: VertoConfig | null = null; // intentionally public for initVerto guard
   private audioTagId = 'verto-remote-audio';
+  private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
+  private manualDisconnect = false;
+
 
   on(fn: Listener): () => void {
     this.listeners.add(fn);
@@ -213,8 +218,11 @@ class VertoClient {
     this.audioTagId = cfg.audioTag || 'verto-remote-audio';
     ensureAudioTag(this.audioTagId);
     this.emit({ type: 'connecting' });
+    this.manualDisconnect = false;
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
 
     const url = `wss://${cfg.host}:${cfg.port}`;
+
     return new Promise<void>((resolve, reject) => {
       let settled = false;
       const done = (ok: boolean, err?: string) => {
@@ -245,6 +253,8 @@ class VertoClient {
           });
           if (res?.message && String(res.message).toLowerCase().includes('logged in')) {
             this.loggedIn = true;
+            this.reconnectAttempts = 0;
+            this.startKeepAlive();
             this.emit({ type: 'registered' });
             done(true);
           } else {
@@ -266,13 +276,53 @@ class VertoClient {
         const wasLoggedIn = this.loggedIn;
         this.connected = false;
         this.loggedIn = false;
+        this.stopKeepAlive();
         this.emit({ type: 'disconnected', reason: `code=${ev.code}` });
         if (!wasLoggedIn) done(false, `WebSocket closed (code=${ev.code})`);
+        // Auto-reconnect when the socket dies unexpectedly (screen off, doze,
+        // NAT rebind, brief network glitch). Uses exponential backoff capped
+        // at 30 s so we recover without waiting for app foreground / network
+        // change events.
+        if (wasLoggedIn && !this.manualDisconnect && this.cfg) {
+          this.scheduleReconnect();
+        }
       };
 
       ws.onmessage = (ev) => this.handleMessage(ev.data);
     });
   }
+
+  private startKeepAlive() {
+    this.stopKeepAlive();
+    // 25 s echo keeps the WebSocket + NAT mapping alive on carrier networks
+    // that idle-close TCP sockets after ~30-60 s of silence.
+    this.keepAliveTimer = setInterval(() => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      try {
+        this.send({ jsonrpc: '2.0', id: this.nextId++, method: 'echo', params: { keepalive: Date.now() } });
+      } catch { /* ignore */ }
+    }, 25000);
+  }
+
+  private stopKeepAlive() {
+    if (this.keepAliveTimer) { clearInterval(this.keepAliveTimer); this.keepAliveTimer = null; }
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimer) return;
+    this.reconnectAttempts += 1;
+    const delay = Math.min(2000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
+    console.log(`[verto] auto-reconnect scheduled in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.manualDisconnect || !this.cfg) return;
+      this.connect(this.cfg).catch((e) => {
+        console.warn('[verto] auto-reconnect failed:', e?.message);
+        // onclose will fire and reschedule via scheduleReconnect().
+      });
+    }, delay);
+  }
+
 
   private send(obj: any) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) throw new Error('WebSocket not open');
@@ -782,12 +832,16 @@ class VertoClient {
   }
 
   disconnect() {
+    this.manualDisconnect = true;
+    this.stopKeepAlive();
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
     try { this.ws?.close(); } catch { /* ignore */ }
     this.ws = null;
     this.connected = false;
     this.loggedIn = false;
     this.dialogs.clear();
   }
+
 }
 
 // Singleton — matches the JsSIP UA lifecycle model used elsewhere.

@@ -101,6 +101,13 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     console.log('[Verto] connecting to', VERTO_HOST + ':' + VERTO_PORT, 'ext=', config.extension);
     log('verto.connecting', { host: VERTO_HOST, port: VERTO_PORT, ext: config.extension });
 
+    // Start the Android foreground service BEFORE opening the WebSocket so
+    // WakeLock + WifiLock are held throughout register (and beyond). Keep it
+    // running for the full lifetime of the hook — stopping it releases the
+    // WakeLock and lets Doze mode kill the socket, which is exactly why the
+    // app went 'unregistered' when the screen locked.
+    startAndroidSipService().catch(() => { /* ignore on non-Android */ });
+
     (async () => {
       try {
         await initVerto({
@@ -117,10 +124,8 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         log('verto.registered');
         setStatus('registered');
         setRetryAttempt(0);
-        // Start foreground service to hold WakeLock + WifiLock so the Verto
-        // WebSocket survives screen-off / background throttling on Android.
-        startAndroidSipService().catch(() => { /* ignore on non-Android */ });
       } catch (e: any) {
+
         if (cancelled) return;
         const msg = e?.message || 'Verto connection failed';
         console.error('[Verto] connection error:', msg);
@@ -157,10 +162,12 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         case 'disconnected':
           log('verto.disconnected', { reason: e.reason });
           setStatus('retrying', 'WebSocket disconnected');
-          // Stop the foreground service when disconnected — it will be
-          // restarted when Verto reconnects and emits 'registered' again.
-          stopAndroidSipService().catch(() => { /* ignore */ });
+          // Keep the foreground service RUNNING so WakeLock/WifiLock stay
+          // held while the Verto client auto-reconnects. Stopping the
+          // service here was letting Android Doze mode kill the socket and
+          // block reconnection until the app was re-opened.
           break;
+
         case 'error':
           log('verto.error', { message: e.error });
           setStatus('error', e.error);

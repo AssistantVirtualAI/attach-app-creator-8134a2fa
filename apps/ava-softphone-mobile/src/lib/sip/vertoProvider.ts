@@ -348,6 +348,20 @@ class VertoClient {
           } catch (e) {
             console.error('[verto][DIAG] setRemoteDescription(answer) FAILED:', e);
           }
+        } else if (rec && !params?.sdp) {
+          // FreeSWITCH sometimes sends verto.answer without an SDP when the
+          // remote description was already applied via a prior verto.media
+          // (183 Session Progress). In that case the dialog is already in
+          // 'stable' signaling state and we just need to flip the UI state.
+          console.log('[verto][DIAG] verto.answer has no SDP — already answered via verto.media:', rec.answered, 'signalingState:', rec.pc.signalingState);
+          if (!rec.answered) {
+            rec.answered = true;
+            this.emit({ type: 'answered', dialog: rec.wrapped });
+          } else {
+            // Already answered — re-emit to ensure UI is in sync.
+            console.log('[verto][DIAG] verto.answer (no SDP) — re-emitting answered to sync UI');
+            this.emit({ type: 'answered', dialog: rec.wrapped });
+          }
         }
         return;
       }

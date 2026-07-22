@@ -12,7 +12,7 @@ import type { SIPConfig } from '../lib/sip/jssipProvider';
 import type { UseSoftphoneReturn, SIPStatus, CallState } from './useSoftphone';
 import {
   appendSipLog, clearSipLog as clearPersistedLog, clearPersistedStatus, loadPersistedError,
-  loadSipLog, savePersistedError, savePersistedStatus, SipLogEntry, PersistedSipError,
+  loadPersistedStatus, loadSipLog, savePersistedError, savePersistedStatus, SipLogEntry, PersistedSipError,
 } from '../lib/sip/sipPersistence';
 import { EMPTY_QUALITY, CallQuality } from '../lib/sip/callQuality';
 import { AudioProfile, loadAudioProfile, saveAudioProfile } from '../lib/sip/audioProfile';
@@ -25,7 +25,15 @@ const VERTO_HOST = 'pbxnode.lemtel.tel';
 const VERTO_PORT = 8082;
 
 export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn {
-  const [sipStatus, setSipStatusState] = useState<SIPStatus>('idle');
+  // Restore the last known status from storage so the UI never flashes 'idle'
+  // on first render while hydration / Verto connect is still in progress.
+  // 'registered' will be re-confirmed by initVerto; 'connecting'/'retrying'
+  // are safe to show while reconnecting.
+  const [sipStatus, setSipStatusState] = useState<SIPStatus>(() => {
+    const persisted = loadPersistedStatus() as SIPStatus | null;
+    if (persisted && persisted !== 'idle' && persisted !== 'error') return persisted;
+    return 'idle';
+  });
   const [sipError, setSipError] = useState('');
   const [callState, setCallState] = useState<CallState>('idle');
   const [callTimer, setCallTimer] = useState(0);
@@ -77,8 +85,13 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   // ── Connect / register lifecycle ────────────────────────────────────────
   useEffect(() => {
     if (!config?.extension || !config?.password) {
-      console.log('[Verto] no config — staying idle');
-      setStatus('idle');
+      // Don't override a meaningful persisted status (e.g. 'connecting') while
+      // hydration is still in progress — only reset to idle if we were already idle.
+      if (sipStatus === 'idle') {
+        console.log('[Verto] no config — staying idle');
+      } else {
+        console.log('[Verto] no config yet — keeping status:', sipStatus);
+      }
       return;
     }
 

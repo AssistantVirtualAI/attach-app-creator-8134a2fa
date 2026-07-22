@@ -191,14 +191,14 @@ class VertoClient {
   private dialogs = new Map<string, DialogRecord>();
   private connected = false;
   private loggedIn = false;
-  private cfg: VertoConfig | null = null;
+  cfg: VertoConfig | null = null; // intentionally public for initVerto guard
   private audioTagId = 'verto-remote-audio';
 
   on(fn: Listener): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
   }
-  private emit(e: VertoEvent) {
+  emit(e: VertoEvent) { // intentionally public for initVerto guard
     this.listeners.forEach((fn) => { try { fn(e); } catch (err) { console.warn('[verto] listener threw', err); } });
   }
   isConnected() { return this.loggedIn; }
@@ -694,9 +694,28 @@ export function getVertoClient(): VertoClient {
   return singleton;
 }
 
-/** Convenience: initialize + register. Resolves after successful login. */
+/** Convenience: initialize + register. Resolves after successful login.
+ * If the singleton is already logged in with the same extension, skip the
+ * reconnect to avoid creating a second WebSocket on the same singleton.
+ * If the extension changed or the socket is dead, disconnect first.
+ */
 export async function initVerto(cfg: VertoConfig): Promise<VertoClient> {
   const c = getVertoClient();
+  // If already connected with the same credentials, emit registered and return
+  // immediately. This prevents a double-connect race when the React effect
+  // fires twice (StrictMode, token refresh, etc.).
+  const currentLogin = c.cfg?.login?.split('@')[0]; // strip domain for comparison
+  const newLogin = cfg.login?.split('@')[0];
+  if (c.isConnected() && currentLogin === newLogin) {
+    // Already registered with the same extension — emit registered so the UI
+    // reflects the correct state without opening a second WebSocket.
+    c.emit({ type: 'registered' });
+    return c;
+  }
+  // Tear down any stale connection before opening a new one.
+  try { c.disconnect(); } catch { /* ignore */ }
+  // Brief pause to let the OS release the socket before reconnecting.
+  await new Promise<void>((r) => setTimeout(r, 200));
   await c.connect(cfg);
   return c;
 }

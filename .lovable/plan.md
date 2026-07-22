@@ -1,52 +1,58 @@
-## Nouvelle section Landing : "Planiprêt — Étude de cas"
+# Section Lemtel dédiée sur la landing page
 
-Ajouter une section dédiée sur `src/pages/Landing.tsx` mettant en valeur tout le travail réalisé pour Planiprêt (portail admin + app mobile courtier + AVA voice/chat + intégrations Maestro/M365/Teams/NS-API).
+Créer une section visuelle premium type "case study" pour Lemtel, dans le même esprit que celle de Planiprêt, couvrant tout l'écosystème : portail web, app desktop (Electron), apps mobiles iOS/Android, extension Chrome, et toutes les fonctionnalités softphone/IA.
 
-### Structure de la nouvelle section
+## 1. Nouveau composant `PlanipretShowcaseSection` → équivalent Lemtel
 
-Nouveau composant `src/components/landing/PlanipretShowcaseSection.tsx` inséré entre `AppsShowcaseSection` et `LandingDownloadSection`.
+Créer `src/components/landing/LemtelShowcaseSection.tsx` — bilingue FR/EN via `useLanguage()`, palette Lemtel (violet/cyan, distincte du bleu Planiprêt pour éviter la répétition visuelle).
 
-Contenu :
-1. **Header** — logo Planiprêt + badge "Étude de cas / Case study" bilingue (FR/EN via `useTranslation`).
-2. **Hero visuel** — image AI générée : mockup iPhone montrant l'app mobile courtier (dashboard + AVA chat), style glass-morphism cohérent avec le reste du site.
-3. **Grille de fonctionnalités mobiles** (6 cartes avec icônes lucide + micro-illustrations AI) :
-   - AVA Voice + Chat (ElevenLabs, 48 tools)
-   - Softphone SIP intégré (NS-API)
-   - Emails Outlook / Teams / Calendrier M365
-   - Sync Maestro CRM (OAuth per-broker)
-   - Pipeline & Contacts
-   - Analytics & Coaching IA
-4. **Bandeau "Portail Admin"** — image AI du dashboard admin (courtiers, intégrations, audit outils AVA, Maestro status) + bullets : gestion courtiers, provisioning DID, audit sécurité, bilingue FR/EN.
-5. **Stats bar** — 4 chiffres : "48 outils AVA", "3 plateformes (iOS/Android/Web)", "100% bilingue", "SSO Microsoft + Maestro".
-6. **CTA** — bouton vers `#pricing`.
+Structure :
 
-### Assets AI à générer (imagegen `fast`)
+- **Header** — badge "Étude de cas · Lemtel" avec logo, titre h2, sous-titre
+- **Split hero** — visuel principal (softphone mobile en action) + texte d'intro sur la suite unifiée
+- **Grille 4 plateformes** — cartes distinctes pour :
+  - Portail Web (admin, PBX, users, extensions)
+  - App Desktop (Electron, Windows/macOS/Linux, tray, shortcuts, notifications)
+  - App Mobile iOS (Capacitor, PjSIP natif, CallKit)
+  - App Mobile Android (Capacitor, foreground service, WSS/Verto)
+  - Extension Chrome (click-to-call, popup)
+- **Grille de features** (6-8 cartes) :
+  - Softphone SIP HD (JsSIP + PjSIP + Verto)
+  - TURN dynamique Metered
+  - Enregistrements d'appels sécurisés
+  - Messagerie SMS/MMS
+  - Voicemail
+  - Contacts & annuaire d'entreprise
+  - Statistiques d'appels & rapports
+  - Multi-tenant / whitelabel
+- **Bandeau admin** — screenshot du portail admin Lemtel avec bullets (gestion PBX, DID, devices, users, RLS, audit sécurité)
+- **Stats** — 4 chiffres (ex. plateformes, protocoles supportés, langues, uptime)
+- **CTA** — bouton vers `#pricing` ou téléchargement
 
-- `src/assets/planipret-mobile-hero.jpg` — mockup iPhone dark, app courtier avec AVA chat visible, palette bleu Planiprêt (#1A4A8A / #2E9BDC).
-- `src/assets/planipret-admin-dashboard.jpg` — mockup laptop dashboard admin bilingue.
-- `src/assets/planipret-ava-voice.jpg` — visuel abstrait onde vocale + logo AVA.
+## 2. Assets visuels
 
-Le logo Planiprêt existe déjà : `src/assets/planipret-logo.png.asset.json`.
+Générer 3 images AI (fast quality, externalisées via `lovable-assets`) :
 
-### i18n
+- `lemtel-mobile-hero.jpg` — softphone mobile en cours d'appel, look moderne
+- `lemtel-desktop-app.jpg` — capture stylisée de l'app desktop (fenêtre avec liste d'appels + composer)
+- `lemtel-admin-portal.jpg` — dashboard admin PBX
 
-Ajouter clés `planipretShowcase.*` dans `src/locales/index.ts` (FR + EN) : badge, titre, sous-titre, 6 features (titre + description), admin bullets, stats labels, CTA.
+Réutiliser le logo Lemtel s'il existe déjà dans le projet (à vérifier dans `src/assets/`), sinon fallback texte "Lemtel".
 
-### Intégration
+## 3. Intégration dans `src/pages/Landing.tsx`
 
-- `src/pages/Landing.tsx` : import + `<div id="planipret-case"><PlanipretShowcaseSection /></div>` après `AppsShowcaseSection`.
-- Animation `framer-motion` cohérente avec les autres sections (fade + slide, `whileInView`).
-- Respect strict des tokens de design existants (pas de couleurs hardcodées hors palette Planiprêt pour le branding de la section).
+Insérer `<LemtelShowcaseSection />` juste après la section Planiprêt (`#planipret-case`) dans une nouvelle `<div id="lemtel-case">`, avant `<LandingDownloadSection />`.
 
-### Détails techniques
+## Détails techniques
 
-- Composant purement présentationnel, aucune logique métier.
-- Utilise `motion` déjà importé ailleurs, icônes `lucide-react` déjà en dépendance.
-- Images externalisées via `lovable-assets` après génération.
-- Aucun changement backend, aucun edge function.
+- Framer Motion pour les animations d'entrée (`whileInView`, `staggerChildren`)
+- Palette : dégradés violet `#6C5CE7` → cyan `#00D4AA` (distincte de Planiprêt)
+- Icônes Lucide (`Phone`, `Monitor`, `Smartphone`, `Chrome`, `Voicemail`, `MessageSquare`, `BarChart3`, `ShieldCheck`, `Globe2`, `Server`)
+- Images en `loading="lazy"`, dimensions explicites
+- Aucune modification du reste de la landing ou d'autres pages
 
-### Hors scope
+## Hors scope
 
-- Pas de modification des autres sections landing.
-- Pas de changement au portail admin ni à l'app mobile.
-- Pas de nouvelle route.
+- Pas de nouvelle route dédiée (`/lemtel`) — c'est une section dans la landing
+- Pas de traductions dans `src/locales/` — copy inline dans le composant (comme Planiprêt)
+- Pas de changement backend

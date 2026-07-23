@@ -1120,7 +1120,9 @@ Deno.serve(async (req) => {
           extension_uuid: extensionUuid,
           domain_uuid: current.domain_uuid || requestedDomain,
           dial_string: dialString,
-          call_timeout: "20",
+          call_timeout: "35",
+          hangup_after_bridge: "true",
+          user_record: "all",
         };
         const write = await pbxWrite("extensions", "POST", { extensions: [patchPayload] });
         const wroteOk = write.ok || String((write as any).embeddedCode) === "000";

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { clearRememberedMs365RedirectUri, getRememberedMs365CodeVerifier, getRememberedMs365RedirectUri } from "@/lib/ms365OAuth";
+import { clearMs365Pending } from "@/lib/ms365Pending";
 import { clearMicrosoftSignInIntent, getMicrosoftSignInIntent, getMicrosoftSignInNext } from "@/lib/ms365AuthLogin";
 
 async function getSessionWithRetry() {
@@ -34,6 +35,7 @@ export default function Ms365Callback() {
         const { Browser } = await import("@capacitor/browser");
         await Browser.close();
       } catch {}
+      clearMs365Pending();
       const code = params.get("code");
       const err = params.get("error_description") ?? params.get("error");
       if (err) { setStatus("error"); setError(err); return; }

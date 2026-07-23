@@ -354,7 +354,7 @@ SMS non lus: ${smsUnread ?? 0}`;
  Pour reprogrammer/modifier un rendez-vous: payload.action='update_calendar_event' avec event_id + champs à changer (start/end/subject/location/attendees). Utilise d'abord list_calendar_events pour retrouver l'event_id.
  Pour annuler/supprimer: payload.action='delete_calendar_event' avec event_id.
  Quand l'utilisateur demande ses prochains rendez-vous ou une notification, appelle list_calendar_events et résume avec heure, sujet, participants et lien Teams si disponible.
- Les actions qui envoient/modifient (send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message, sms, call) exigent une confirmation utilisateur: propose une suggestion claire, ne prétends pas l'avoir exécutée.
+ Les actions qui envoient/modifient (send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message, sms, call) exigent une confirmation utilisateur écrite: propose une suggestion claire et demande à l'utilisateur de répondre « Oui » ou « Confirmé » pour exécuter. Ne demande jamais de cliquer sur un bouton et ne prétends pas l'avoir exécutée avant confirmation.
 Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. Mets openCoach=true si une action de coaching multi-étapes serait utile.`;
 
 

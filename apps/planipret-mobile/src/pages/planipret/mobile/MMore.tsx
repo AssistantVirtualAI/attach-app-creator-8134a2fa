@@ -162,7 +162,8 @@ export default function MMore() {
     if (!confirm(t("more.logoutConfirm"))) return;
     await supabase.auth.signOut();
     toast.success(t("more.logoutSuccess"));
-    navigate("/login", { replace: true });
+    // Reload the mobile shell so the auth guard renders MobileAuthScreen.
+    window.location.href = "/mplanipret";
   };
 
   return (

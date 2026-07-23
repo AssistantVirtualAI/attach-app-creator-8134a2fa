@@ -118,25 +118,33 @@ async function syncMail(admin: any, profile: any, initial = false) {
         if (!r.ok) throw new Error(`mail ${folder.id} ${r.status}`);
         const d: any = await r.json();
         const myEmail = String(profile.ms365_email ?? "").toLowerCase();
-        const rows = (d.value ?? []).filter((m: any) => m.id).map((m: any) => ({
-          user_id,
-          graph_id: m.id,
-          conversation_id: m.conversationId ?? null,
-          folder: folder.id === "sent" ? "sent" : "inbox",
-          subject: m.subject ?? null,
-          from_email: m?.from?.emailAddress?.address ?? null,
-          from_name: m?.from?.emailAddress?.name ?? null,
-          to_recipients: (m.toRecipients ?? []).map((r: any) => ({ address: r.emailAddress?.address, name: r.emailAddress?.name })),
-          cc_recipients: (m.ccRecipients ?? []).map((r: any) => ({ address: r.emailAddress?.address, name: r.emailAddress?.name })),
-          body_preview: m.bodyPreview ?? null,
-          body_html: m?.body?.content ?? null,
-          is_read: !!m.isRead,
-          is_sent_by_me: myEmail && (m?.from?.emailAddress?.address ?? "").toLowerCase() === myEmail,
-          has_attachments: !!m.hasAttachments,
-          importance: m.importance ?? null,
-          sent_at: m.sentDateTime ?? null,
-          received_at: m.receivedDateTime ?? null,
-          last_synced_at: new Date().toISOString(),
+        const rowsRaw = (d.value ?? []).filter((m: any) => m.id && !m["@removed"]);
+        const rows = await Promise.all(rowsRaw.map(async (m: any) => {
+          const toAddrs = (m.toRecipients ?? []).map((r: any) => (r.emailAddress?.address ?? "").toLowerCase()).filter(Boolean).sort();
+          const hashBase = `${(m.subject ?? "").trim().toLowerCase()}|${toAddrs.join(",")}|${(m.bodyPreview ?? "").trim().slice(0, 500)}`;
+          const content_hash = await sha1(hashBase);
+          return {
+            user_id,
+            graph_id: m.id,
+            internet_message_id: m.internetMessageId ?? null,
+            content_hash,
+            conversation_id: m.conversationId ?? null,
+            folder: folder.id === "sent" ? "sent" : "inbox",
+            subject: m.subject ?? null,
+            from_email: m?.from?.emailAddress?.address ?? null,
+            from_name: m?.from?.emailAddress?.name ?? null,
+            to_recipients: (m.toRecipients ?? []).map((r: any) => ({ address: r.emailAddress?.address, name: r.emailAddress?.name })),
+            cc_recipients: (m.ccRecipients ?? []).map((r: any) => ({ address: r.emailAddress?.address, name: r.emailAddress?.name })),
+            body_preview: m.bodyPreview ?? null,
+            body_html: m?.body?.content ?? null,
+            is_read: !!m.isRead,
+            is_sent_by_me: myEmail && (m?.from?.emailAddress?.address ?? "").toLowerCase() === myEmail,
+            has_attachments: !!m.hasAttachments,
+            importance: m.importance ?? null,
+            sent_at: m.sentDateTime ?? null,
+            received_at: m.receivedDateTime ?? null,
+            last_synced_at: new Date().toISOString(),
+          };
         }));
         if (rows.length) await admin.from("planipret_email_messages").upsert(rows, { onConflict: "user_id,graph_id" });
         total += rows.length;
@@ -144,6 +152,7 @@ async function syncMail(admin: any, profile: any, initial = false) {
         else url = d["@odata.nextLink"] ?? null;
       }
     }
+    // Rewrite $select to include internetMessageId for future delta requests
     await setState(admin, user_id, "mail", {
       status: "success",
       last_full_sync_at: initial ? new Date().toISOString() : undefined,
@@ -158,40 +167,66 @@ async function syncMail(admin: any, profile: any, initial = false) {
   }
 }
 
-// ─── Sync calendar (90 jours autour d'aujourd'hui) ─────────────────────
-async function syncCalendar(admin: any, profile: any) {
+// ─── Sync calendar (delta: create/update/delete) ───────────────────────
+async function syncCalendar(admin: any, profile: any, initial = false) {
   const user_id = profile.user_id;
   await setState(admin, user_id, "calendar", { status: "running", last_error: null });
   let total = 0;
+  let deleted = 0;
   try {
+    const { data: state } = await admin.from("planipret_ms_sync_state").select("delta_link").eq("user_id", user_id).eq("resource", "calendar").maybeSingle();
+    const useDelta = !initial && state?.delta_link;
     const start = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-    const end   = new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString();
-    let url: string | null = `/me/calendarView?startDateTime=${start}&endDateTime=${end}&$top=100&$select=id,subject,bodyPreview,location,start,end,isAllDay,isOnlineMeeting,onlineMeeting,organizer,attendees`;
+    const end   = new Date(Date.now() + 180 * 24 * 3600 * 1000).toISOString();
+    let url: string | null = useDelta
+      ? state!.delta_link
+      : `/me/calendarView/delta?startDateTime=${start}&endDateTime=${end}&$top=100`;
+    let deltaLink: string | null = null;
     while (url) {
-      const r = await graph(admin, profile, url);
+      const r = await graph(admin, profile, url, { headers: { Prefer: 'odata.maxpagesize=100, outlook.body-content-type="text"' } });
       if (!r.ok) throw new Error(`calendar ${r.status}`);
       const d: any = await r.json();
-      const rows = (d.value ?? []).map((e: any) => ({
-        user_id,
-        graph_id: e.id,
-        subject: e.subject ?? null,
-        body_preview: e.bodyPreview ?? null,
-        location: e?.location?.displayName ?? null,
-        starts_at: e?.start?.dateTime ? new Date(`${e.start.dateTime}Z`).toISOString() : null,
-        ends_at:   e?.end?.dateTime   ? new Date(`${e.end.dateTime}Z`).toISOString()   : null,
-        is_all_day: !!e.isAllDay,
-        is_online_meeting: !!e.isOnlineMeeting,
-        join_url: e?.onlineMeeting?.joinUrl ?? null,
-        organizer_email: e?.organizer?.emailAddress?.address ?? null,
-        attendees: (e.attendees ?? []).map((a: any) => ({ address: a?.emailAddress?.address, name: a?.emailAddress?.name, type: a?.type })),
-        last_synced_at: new Date().toISOString(),
-      }));
+      const removed: string[] = [];
+      const rows: any[] = [];
+      for (const e of (d.value ?? [])) {
+        if (e["@removed"] || e.removed) { removed.push(e.id); continue; }
+        rows.push({
+          user_id,
+          graph_id: e.id,
+          subject: e.subject ?? null,
+          body_preview: e.bodyPreview ?? null,
+          location: e?.location?.displayName ?? null,
+          starts_at: e?.start?.dateTime ? new Date(`${e.start.dateTime}Z`).toISOString() : null,
+          ends_at:   e?.end?.dateTime   ? new Date(`${e.end.dateTime}Z`).toISOString()   : null,
+          is_all_day: !!e.isAllDay,
+          is_online_meeting: !!e.isOnlineMeeting,
+          join_url: e?.onlineMeeting?.joinUrl ?? null,
+          organizer_email: e?.organizer?.emailAddress?.address ?? null,
+          attendees: (e.attendees ?? []).map((a: any) => ({ address: a?.emailAddress?.address, name: a?.emailAddress?.name, type: a?.type })),
+          is_deleted: false,
+          deleted_at: null,
+          last_synced_at: new Date().toISOString(),
+        });
+      }
       if (rows.length) await admin.from("planipret_calendar_events").upsert(rows, { onConflict: "user_id,graph_id" });
+      if (removed.length) {
+        await admin.from("planipret_calendar_events")
+          .update({ is_deleted: true, deleted_at: new Date().toISOString(), last_synced_at: new Date().toISOString() })
+          .eq("user_id", user_id).in("graph_id", removed);
+        deleted += removed.length;
+      }
       total += rows.length;
-      url = d["@odata.nextLink"] ?? null;
+      if (d["@odata.deltaLink"]) { deltaLink = d["@odata.deltaLink"]; url = null; }
+      else url = d["@odata.nextLink"] ?? null;
     }
-    await setState(admin, user_id, "calendar", { status: "success", last_full_sync_at: new Date().toISOString(), items_synced: total });
-    return { ok: true, count: total };
+    await setState(admin, user_id, "calendar", {
+      status: "success",
+      last_full_sync_at: initial ? new Date().toISOString() : undefined,
+      last_delta_sync_at: new Date().toISOString(),
+      delta_link: deltaLink,
+      items_synced: total,
+    });
+    return { ok: true, count: total, deleted };
   } catch (e) {
     await setState(admin, user_id, "calendar", { status: "error", last_error: String(e) });
     return { ok: false, error: String(e) };

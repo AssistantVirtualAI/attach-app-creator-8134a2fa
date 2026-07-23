@@ -290,6 +290,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     }
     const message = firstText(p?.message, p?.body, p?.text, p?.content);
     if (!to || !message) return { success: false, error: "to_and_message_required", message: "Il manque le numéro ou le contenu du SMS." };
+    to = normalizePhoneE164(to) ?? to;
     const r = await callPlanipretFunction(ctx, "pp-ns-sms", {
       action: "send",
       to,

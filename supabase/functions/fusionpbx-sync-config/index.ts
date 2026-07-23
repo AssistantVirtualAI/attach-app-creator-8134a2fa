@@ -32,6 +32,24 @@ Deno.serve(async (req) => {
       stats.note = "live config sync not yet wired to FusionPBX endpoint";
     }
 
+    // Ensure every extension has the correct Verto dial_string + call_timeout
+    // so mobile softphones ring. Safe to run on every sync.
+    try {
+      const repairRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/fusionpbx-proxy`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!}`,
+        },
+        body: JSON.stringify({ action: "repair-all-extensions-verto", organization_id }),
+      });
+      stats.verto_repair = await repairRes.json().catch(() => ({ status: repairRes.status }));
+    } catch (e: any) {
+      stats.verto_repair = { error: e?.message || String(e) };
+    }
+
+
     await admin.from("pbx_sync_jobs").update({
       status: "completed", completed_at: new Date().toISOString(), stats,
     }).eq("id", job!.id);

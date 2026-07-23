@@ -428,8 +428,16 @@ function NativeDeepLinkBridge() {
 
         if (isMs365Callback) {
           localStorage.setItem('pp_ms365_callback_url', rawUrl);
+          // Dismiss the in-app browser (SFSafariViewController / Chrome Custom Tab)
+          // so the user is returned to the app after Microsoft consent.
+          import('@capacitor/browser')
+            .then(({ Browser }) => Browser.close().catch(() => {}))
+            .catch(() => {});
           navigate(`/auth/microsoft/callback${url.search}`, { replace: true });
         } else if (isMaestroCallback) {
+          import('@capacitor/browser')
+            .then(({ Browser }) => Browser.close().catch(() => {}))
+            .catch(() => {});
           navigate(`/auth/maestro/callback${url.search}`, { replace: true });
         }
       } catch {
@@ -452,6 +460,7 @@ function NativeDeepLinkBridge() {
 
     return () => unsubscribe?.();
   }, [navigate]);
+
 
   return null;
 }

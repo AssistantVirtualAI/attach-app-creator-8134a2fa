@@ -17,6 +17,7 @@ import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { loadMHomeCache, saveMHomeCache, type SourceStatusMap } from "@/lib/mhomeCache";
+import PerformanceReportCard from "@/components/planipret/mobile/PerformanceReportCard";
 
 
 type Period = "day" | "week" | "month" | "shift";

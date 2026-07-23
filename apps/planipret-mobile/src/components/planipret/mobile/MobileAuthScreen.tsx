@@ -100,6 +100,7 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
         </div>
 
         {/* Form */}
+        <Ms365PendingBanner onRetry={signInWithMicrosoft} />
         {/* Microsoft SSO (primary) */}
         <div className="px-6 mb-3">
           <button type="button" onClick={signInWithMicrosoft} disabled={loading}

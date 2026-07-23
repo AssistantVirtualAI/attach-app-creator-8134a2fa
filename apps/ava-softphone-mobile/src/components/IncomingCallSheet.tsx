@@ -1,5 +1,6 @@
 import React from 'react';
 import { colors } from '../lib/theme';
+import { formatSipParty } from '../lib/sip/formatSipParty';
 
 interface Props {
   open: boolean;
@@ -17,6 +18,9 @@ interface Props {
 export default function IncomingCallSheet({ open, callerName, callerNumber, onAccept, onDecline, onReplySms }: Props) {
   const [replying, setReplying] = React.useState(false);
   const quickReplies = ["Can't talk now", "Call you back", "On my way"];
+  const lang: 'fr' | 'en' = (typeof localStorage !== 'undefined' && localStorage.getItem('ava.mobile.lang') === 'en') ? 'en' : 'fr';
+  const party = formatSipParty(callerName || callerNumber || '', lang);
+  const displayName = callerName && !/^sip:|<sip:/i.test(callerName) ? callerName : party.name;
 
   return (
     <>
@@ -31,9 +35,20 @@ export default function IncomingCallSheet({ open, callerName, callerNumber, onAc
             paddingBottom: 'calc(var(--safe-bottom) + 40px)',
           }}
         >
-          <div style={{ fontSize: 14, opacity: 0.7 }}>Incoming call</div>
-          <div style={{ fontSize: 28, fontWeight: 600, marginTop: 12 }}>{callerName || 'Unknown'}</div>
-          <div style={{ fontSize: 16, opacity: 0.8, marginTop: 4 }}>{callerNumber}</div>
+          <div style={{ fontSize: 14, opacity: 0.7 }}>{lang === 'en' ? 'Incoming call' : 'Appel entrant'}</div>
+          <div style={{ fontSize: 28, fontWeight: 600, marginTop: 12, textAlign: 'center', padding: '0 24px' }}>{displayName}</div>
+          {party.subtitle ? (
+            <div style={{
+              marginTop: 6, fontSize: 13, opacity: 0.85,
+              padding: party.isInternal ? '4px 12px' : 0,
+              borderRadius: 999,
+              background: party.isInternal ? 'rgba(35,214,255,0.14)' : 'transparent',
+              border: party.isInternal ? '1px solid rgba(35,214,255,0.45)' : 'none',
+              letterSpacing: 0.5,
+            }}>{party.subtitle}</div>
+          ) : (
+            <div style={{ fontSize: 16, opacity: 0.8, marginTop: 4 }}>{party.user || callerNumber}</div>
+          )}
 
           <div style={{
             width: 140, height: 140, borderRadius: '50%', marginTop: 40,

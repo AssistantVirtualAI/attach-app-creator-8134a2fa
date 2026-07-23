@@ -1,42 +1,61 @@
-## Problème observé
 
-Depuis Settings → « Se connecter à Maestro » (page `PAMaestroStatus`) :
-1. L'utilisateur est redirigé vers `dev.planipret.com` (page de login Maestro)
-2. Après avoir saisi ses identifiants + code 2FA, Safari affiche :
-   > Safari ne peut ouvrir la page, car l'adresse n'est pas valide.
+# Softphone — Appels internes, réception background, hold/transfer, UI
 
-Cela veut dire que **l'URL finale vers laquelle Maestro tente de rediriger n'est pas une URL HTTPS valide** — le OAuth d'AVA/Planiprêt côté serveur reçoit probablement une réponse OK, mais le redirect final émis par Maestro est cassé (souvent `undefined/...`, un `redirect_uri` vide, ou un schème custom `capacitor://` sur Safari web).
+## Problèmes constatés (capture 223 → 300)
 
-## Diagnostic à confirmer avant fix
+1. **L'appelé (300) ne sonne pas / ne peut pas répondre** en interne, ni en foreground ni en background sur Android/iOS.
+2. **L'affichage de l'appel interne** montre l'URI SIP brute (`"Kenny Rooney" <sip:223@lemtel.lemtel.tel>`) au lieu d'un affichage propre (nom + extension + badge "Interne").
+3. **Hold et Transfer** ne sont pas exposés/opérationnels de façon fiable pour les appels internes.
+4. **Réception en arrière-plan** : parité iOS (PushKit/APNs) et Android (SipConnectionService + FCM data push) à consolider pour que le poste sonne toujours quand l'app est fermée ou l'écran verrouillé.
 
-Ces points doivent être vérifiés — je ne peux pas les affirmer sans les lire :
+## Plan par plateforme
 
-1. **URL réelle affichée par Safari** dans la barre au moment de l'erreur (l'utilisateur peut la copier depuis la barre d'adresse avant de cliquer OK). C'est le signal #1.
-2. **Secrets edge functions** : valeurs de `MAESTRO_OAUTH_AUTHORIZE_URL`, `MAESTRO_OAUTH_TOKEN_URL`, `MAESTRO_OAUTH_CLIENT_ID` (doit être `2` pour le web), `MAESTRO_OAUTH_CLIENT_SECRET`.
-3. **Redirect URI enregistré côté Maestro** pour `client_id=2` : doit être exactement `https://avastatistic.ca/auth/maestro/callback` (à confirmer avec Scott).
-4. **Logs de `maestro-oauth-start`** : vérifier que `authorize_url` retournée contient bien `redirect_uri=https%3A%2F%2Favastatistic.ca%2Fauth%2Fmaestro%2Fcallback` et pas une valeur vide/mobile.
-5. **Ligne insérée dans `planipret_maestro_oauth_states`** : que `redirect_uri` est bien persisté (utile si Maestro reprend la valeur de leur DB plutôt que du query string).
+### 1. Réception des appels internes (routage FusionPBX)
+- Vérifier via `fusionpbx-proxy` que le dialplan interne (ext→ext) route bien via **Sofia mobile profile** (WSS 7443 pour Android JsSIP, port 5060 TLS pour PJSIP iOS, port 8082 Verto pour Android Verto), pas seulement via un profil "internal" 5060 sans WS/Verto.
+- Ajouter un check dans `repair-verto-extension-routing` (Android) qui s'assure que le user_record de l'extension 300 pointe vers le contact WS actif ; sinon `sofia profile mobile flush_inbound_reg`.
+- Ajouter côté iOS : quand PushKit reçoit un `INVITE` push, forcer un re-REGISTER **avant** d'accepter, sinon FusionPBX envoie le INVITE au vieux contact (cause probable du 300 muet).
 
-## Correctifs prévus (une fois la cause confirmée)
+### 2. iOS — sonnerie background/verrouillé
+- `CapacitorSip.swift` : vérifier que `PKPushRegistry` reçoit bien un `pushRegistry(_:didReceiveIncomingPushWith:for:completion:)` et **immédiatement** :
+  - Reporte l'appel via `CXProvider.reportNewIncomingCall` (CallKit) — sinon iOS 13+ tue l'app.
+  - Puis pousse un event `incomingCall` vers le JS via Capacitor `notifyListeners`.
+- Ajouter CallKit minimal (déjà partiellement présent) : `CXProvider` + `CXCallController`, actions Answer/End/Hold branchées sur PJSIP.
+- S'assurer que le topic APNs `com.lemtel.softphone.voip` est bien envoyé par FusionPBX (déjà corrigé) — ajouter un log serveur `push-diag` pour tracer chaque push émis vers 300.
 
-### A. Si Maestro renvoie sur un redirect_uri incorrect
-- Aligner la valeur enregistrée côté Maestro (Scott) sur `https://avastatistic.ca/auth/maestro/callback` pour `client_id=2`.
-- Ajouter un log en début de `maestro-oauth-callback` avec le `redirect_uri` reçu vs celui persisté dans `planipret_maestro_oauth_states` pour détecter les divergences futures.
+### 3. Android — sonnerie background/verrouillé
+- `SipConnectionService.kt` : promouvoir le service en `phoneCall` foreground type dès qu'un `verto.invite` arrive (déjà présent) + réveiller la WebView via `PowerManager.PARTIAL_WAKE_LOCK` **avant** de dispatcher l'event JS.
+- Ajouter fallback **FCM data-push** (haute priorité) déclenché côté serveur si Verto WS est mort (>30 s sans pong) → réveille l'app, force reconnect Verto, puis accepte l'INVITE.
+- Ajouter une `HeadsUpNotification` (full-screen intent) pour afficher `IncomingCallSheet` même si l'écran est verrouillé.
 
-### B. Si l'URL Safari commence par `capacitor://` ou `undefined`
-- Bug dans `PAMaestroStatus` où `platform` serait envoyé à `"mobile"` par erreur. Forcer `platform: "web"` explicitement dans l'invocation `maestro-oauth-start` depuis le portail admin.
-- Valider côté `maestro-oauth-start` que si `platform !== "mobile"` alors `redirect_uri` doit commencer par `https://` — sinon renvoyer une erreur claire.
+### 4. UI d'appel interne
+- `ActiveCallSheet.tsx` + `IncomingCallSheet.tsx` : formatter proprement :
+  - Extraire `user` de `sip:USER@domain` → afficher **"Kenny Rooney"** en grand + **"Poste 223 · Interne"** en sous-titre.
+  - Badge visuel "Interne" quand `remoteParty` matche une extension de l'org (via cache `pbx_softphone_users`).
+  - Retirer complètement l'URI SIP brute de l'écran.
+- Timeline (COMPOSITION → SONNERIE → TONALITÉ → CONNECTÉ) : masquer sur appel entrant, garder seulement sur sortant.
 
-### C. Si `MAESTRO_OAUTH_AUTHORIZE_URL` est mal configurée
-- Corriger la valeur du secret (via `secrets--set_secret`) et redéployer `maestro-oauth-start`.
+### 5. Hold + Transfer (interne et externe)
+- `useSoftphone.ts` : exposer `hold/unhold` sur les 3 providers (jssip, verto, native-pjsip) — actuellement `hold` n'est branché que pour JsSIP.
+- Ajouter `attendedTransfer(target)` et `blindTransfer(target)` :
+  - JsSIP : `session.refer(target)`.
+  - Verto : `verto.modify` avec `action: 'transfer'` + `dest_number`.
+  - PJSIP iOS : `pjsua_call_xfer`.
+- Ajouter boutons **Hold** et **Transférer** dans `ActiveCallSheet` avec une feuille de sélection d'extension (autocomplete sur les postes de l'org).
 
-### D. UX : afficher un fallback lisible
-- Sur la page `PAMaestroStatus`, avant `window.location.href = url`, vérifier via `URL()` que `url` est absolue et HTTPS ; sinon afficher un message d'erreur explicite plutôt que d'ouvrir Safari sur une URL invalide.
-- Enregistrer chaque échec dans `planipret_integration_secrets` avec la raison exacte (`invalid_authorize_url`, `redirect_uri_mismatch`, `pkce_missing`, etc.) pour l'afficher directement dans l'UI.
+## Détails techniques
 
-### E. Callback resilience
-- Dans `maestro-oauth-callback`, si `state` n'est pas retrouvé dans `planipret_maestro_oauth_states`, retomber sur le `redirect_uri` envoyé dans le body (comme aujourd'hui) mais logguer explicitement le mismatch.
+- Fichiers modifiés :
+  - `apps/ava-softphone-mobile/src/components/ActiveCallSheet.tsx`, `IncomingCallSheet.tsx`
+  - `apps/ava-softphone-mobile/src/hooks/useSoftphone.ts`, `useSoftphoneNative.ts`, `useSoftphoneVerto.ts`
+  - `apps/ava-softphone-mobile/src/lib/sip/{jssipProvider,vertoProvider,nativeSipProvider}.ts`
+  - `apps/ava-softphone-mobile/ios/App/App/CapacitorSip.swift` (+ CallKit provider)
+  - `apps/ava-softphone-mobile/android/app/src/main/java/.../SipConnectionService.kt` (+ full-screen intent)
+- Edge functions : nouveau `pbx-fcm-wake` (Android fallback) + amélioration `repair-verto-extension-routing`.
+- Nouveau util `formatSipParty(remoteUri, orgExtensions)` partagé pour l'affichage.
 
-## Question bloquante avant d'implémenter
-
-Peux-tu me donner **l'URL exacte** que Safari affiche comme « adresse non valide » (barre d'adresse ou message complet) ? C'est le signal qui différencie A/B/C. Sans ça je risque de corriger la mauvaise cause.
+## Ordre d'exécution
+1. Util `formatSipParty` + refactor UI (`ActiveCallSheet` / `IncomingCallSheet`) — impact visuel immédiat.
+2. Hold/Transfer sur les 3 providers + boutons UI.
+3. iOS : CallKit + re-REGISTER sur PushKit.
+4. Android : full-screen intent + FCM wake fallback.
+5. Diagnostic serveur `push-diag` + validation 223↔300 en background.

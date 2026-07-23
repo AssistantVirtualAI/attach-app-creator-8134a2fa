@@ -11,6 +11,7 @@ import CallStatusBadge from './CallStatusBadge';
 import { isVibrationEnabled } from '../lib/sip/ringPreferences';
 import IncomingCallerPanel from './IncomingCallerPanel';
 import { lookupCaller, type CallerLookup } from '../lib/sip/callerLookup';
+import { formatSipParty } from '../lib/sip/formatSipParty';
 // LiveTranscriptPanel intentionally not imported — live transcription disabled during calls.
 import { useMobileCredentials } from '../hooks/useMobileCredentials';
 import { useT } from '../lib/i18n';
@@ -70,7 +71,10 @@ export default function ActiveCallSheet({
   const fmt = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
-  const remote = sp.snap.remoteParty || sp.snap.remoteUri || 'Unknown';
+  const rawRemote = sp.snap.remoteParty || sp.snap.remoteUri || '';
+  const lang: 'fr' | 'en' = (typeof localStorage !== 'undefined' && localStorage.getItem('ava.mobile.lang') === 'en') ? 'en' : 'fr';
+  const party = formatSipParty(String(rawRemote), lang);
+  const remote = party.name;
   const isIncoming = sp.snap.callState === 'ringing-in';
   const isOutgoing = sp.snap.callState === 'ringing-out';
   const onHold = !!sp.snap.onHold || sp.snap.callState === 'held';
@@ -216,13 +220,27 @@ export default function ActiveCallSheet({
             }} />
           )}
         </div>
-        <div style={{ fontSize: 26, fontWeight: 600, color: colors.textIce }}>{remote}</div>
+        <div style={{ fontSize: 26, fontWeight: 600, color: colors.textIce, textAlign: 'center', padding: '0 24px', wordBreak: 'break-word' }}>{remote}</div>
+        {party.subtitle && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontSize: 12, color: colors.mutedSilver, fontFamily: 'JetBrains Mono, monospace',
+            padding: party.isInternal ? '4px 10px' : 0,
+            borderRadius: 999,
+            background: party.isInternal ? 'rgba(35,214,255,0.10)' : 'transparent',
+            border: party.isInternal ? `1px solid ${colors.avaCyan}55` : 'none',
+            letterSpacing: 0.5,
+          }}>
+            {party.isInternal && <span style={{ fontSize: 10 }}>●</span>}
+            {party.subtitle}
+          </div>
+        )}
         <div style={{ fontSize: 13, color: colors.mutedSilver, fontFamily: 'JetBrains Mono, monospace' }}>
-          {isIncoming && 'Incoming call…'}
-          {isOutgoing && 'Calling…'}
+          {isIncoming && (lang === 'en' ? 'Incoming call…' : 'Appel entrant…')}
+          {isOutgoing && (lang === 'en' ? 'Calling…' : 'Appel en cours…')}
           {inCall && fmt(timer)}
-          {isTransfer && 'Transferring call…'}
-          {isEnded && 'Call has ended'}
+          {isTransfer && (lang === 'en' ? 'Transferring call…' : 'Transfert en cours…')}
+          {isEnded && (lang === 'en' ? 'Call has ended' : 'Appel terminé')}
         </div>
         {sp.snap.muted && inCall && (
           <div style={{ fontSize: 11, color: colors.warning, letterSpacing: 1.2, fontWeight: 700, textTransform: 'uppercase' }}>Microphone muted</div>

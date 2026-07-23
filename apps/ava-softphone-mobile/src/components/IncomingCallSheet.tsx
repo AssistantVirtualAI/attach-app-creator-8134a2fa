@@ -1,5 +1,6 @@
 import React from 'react';
 import { colors } from '../lib/theme';
+import { formatSipParty } from '../lib/sip/formatSipParty';
 
 interface Props {
   open: boolean;

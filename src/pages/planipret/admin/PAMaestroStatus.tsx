@@ -124,29 +124,47 @@ export default function PAMaestroStatus() {
   const retry = async () => {
     if (!data) return;
     setRetrying(true);
+    setError(null);
     try {
       await supabase.from("planipret_integration_secrets" as any)
         .delete().eq("provider", "maestro_oauth_error");
     } catch { /* ignore */ }
     try {
       // Maestro n'a enregistré QUE https://avastatistic.ca/auth/maestro/callback.
-      // On force ce redirect_uri même depuis les previews Lovable.
+      // On force ce redirect_uri et platform=web même depuis les previews Lovable.
       const { data: start, error: fnErr } = await supabase.functions.invoke("maestro-oauth-start", {
         body: {
+          platform: "web",
           origin: "https://avastatistic.ca",
           redirect_uri: "https://avastatistic.ca/auth/maestro/callback",
         },
       });
       if (fnErr) throw fnErr;
-      const url = (start as any)?.authorize_url;
-      if (url) { window.location.href = url; return; }
-      throw new Error((start as any)?.error ?? "no_authorize_url");
+      const startResp = start as any;
+      if (startResp?.error) {
+        throw new Error(`${startResp.error}${startResp.detail ? ` — ${startResp.detail}` : ""}`);
+      }
+      const url: string | undefined = startResp?.authorize_url;
+      if (!url) throw new Error("no_authorize_url");
+
+      // Sanity-check the URL locally so we never send Safari to an invalid address.
+      let parsed: URL;
+      try {
+        parsed = new URL(url);
+      } catch {
+        throw new Error(`authorize_url_invalid: ${url}`);
+      }
+      if (parsed.protocol !== "https:") {
+        throw new Error(`authorize_url_not_https: ${url}`);
+      }
+      window.location.href = parsed.toString();
     } catch (e: any) {
       setError(e?.message ?? t.cannotStartConnection);
     } finally {
       setRetrying(false);
     }
   };
+
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">

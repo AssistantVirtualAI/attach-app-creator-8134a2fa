@@ -54,13 +54,17 @@ Deno.serve(async (req) => {
 
   try {
     switch (action) {
+      case "me": {
+        // GET /user — current broker profile
+        const r = await maestroTelecomFetch<any>(cfg, `/user`);
+        return jsonResponse({ ok: r.ok, status: r.status, data: r.data });
+      }
       case "sip": {
-        // Confirm the Maestro broker id resolves on the Maestro Telecom side
-        // and expose the SIP username (best-effort — endpoint shape can vary).
-        const r = await maestroTelecomFetch<any>(cfg, `/users/${meId}`);
+        // GET /users/{id}/sip — SIP credentials
+        const r = await maestroTelecomFetch<any>(cfg, `/users/${meId}/sip`);
         const d: any = r.data ?? {};
         const sip_username =
-          d?.sip_username ?? d?.sip?.username ?? d?.extension ?? d?.user?.sip_username ?? null;
+          d?.sip_username ?? d?.username ?? d?.sip?.username ?? d?.extension ?? null;
         return jsonResponse({
           ok: r.ok,
           status: r.status,
@@ -69,6 +73,49 @@ Deno.serve(async (req) => {
           data: r.data,
         });
       }
+      case "calls-list": {
+        // GET /users/{id}/calls
+        const r = await maestroTelecomFetch(cfg, `/users/${meId}/calls`);
+        return jsonResponse({ ok: r.ok, status: r.status, data: r.data });
+      }
+      case "call-create": {
+        // POST /users/{id}/calls
+        if (!body.call) return jsonResponse({ error: "call payload required" }, 400);
+        const r = await maestroTelecomFetch(cfg, `/users/${meId}/calls`, {
+          method: "POST", body: body.call,
+        });
+        return jsonResponse({ ok: r.ok, status: r.status, data: r.data });
+      }
+      case "call-update": {
+        // PUT /users/{id}/calls/{callId}
+        if (!body.call_id) return jsonResponse({ error: "call_id required" }, 400);
+        if (!body.patch) return jsonResponse({ error: "patch payload required" }, 400);
+        const r = await maestroTelecomFetch(cfg,
+          `/users/${meId}/calls/${encodeURIComponent(body.call_id)}`,
+          { method: "PUT", body: body.patch });
+        return jsonResponse({ ok: r.ok, status: r.status, data: r.data });
+      }
+      case "sms-send": {
+        // POST /users/{id}/messages
+        if (!body.message) return jsonResponse({ error: "message payload required" }, 400);
+        const r = await maestroTelecomFetch(cfg, `/users/${meId}/messages`, {
+          method: "POST", body: body.message,
+        });
+        return jsonResponse({ ok: r.ok, status: r.status, data: r.data });
+      }
+      case "inbox": {
+        // GET /users/{id}/inbox
+        const r = await maestroTelecomFetch(cfg, `/users/${meId}/inbox`);
+        return jsonResponse({ ok: r.ok, status: r.status, data: r.data });
+      }
+      case "messages-with": {
+        // GET /users/{id}/messages/with/{phoneNumber}
+        if (!body.phone_number) return jsonResponse({ error: "phone_number required" }, 400);
+        const r = await maestroTelecomFetch(cfg,
+          `/users/${meId}/messages/with/${encodeURIComponent(String(body.phone_number))}`);
+        return jsonResponse({ ok: r.ok, status: r.status, data: r.data });
+      }
+
       case "lookup-by-phone": {
         if (!body.phone) return jsonResponse({ error: "phone required" }, 400);
         const r = await maestroTelecomFetch(cfg, `/users/${meId}/lookup-by-phone`, {

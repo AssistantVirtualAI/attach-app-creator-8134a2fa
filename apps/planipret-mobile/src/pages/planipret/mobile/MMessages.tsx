@@ -1311,7 +1311,7 @@ function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
     <div className="fixed inset-0 z-[9999] flex flex-col" style={{ background: "rgba(0,0,0,0.5)" }}>
       <div
         className="w-full flex flex-col mt-auto"
-        style={{ background: "var(--pp-bg-base)", borderTop: "1px solid var(--pp-bg-border-2)", height: "100%", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        style={{ background: "var(--pp-bg-base)", borderTop: "1px solid var(--pp-bg-border-2)", height: "100%", paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
           <button onClick={onClose} className="p-1.5 rounded-full" style={{ color: "var(--pp-text-secondary)" }}>

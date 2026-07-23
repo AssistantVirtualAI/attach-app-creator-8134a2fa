@@ -4,6 +4,8 @@ import WebKit
 import AVFoundation
 import PushKit
 import Intents
+import BackgroundTasks
+
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {

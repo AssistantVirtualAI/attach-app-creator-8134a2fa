@@ -19,6 +19,11 @@ import UIKit
     public var onAnswer: (() -> Void)?
     /// Called by CallKit when the user taps End in the native UI.
     public var onEnd: (() -> Void)?
+    /// Called by CallKit when the user toggles Hold in the native UI.
+    /// `held == true` means the call should be placed on hold.
+    public var onHold: ((Bool) -> Void)?
+    /// Called by CallKit when the user toggles Mute in the native UI.
+    public var onMuted: ((Bool) -> Void)?
     /// Called by CallKit when the audio session is activated.
     /// CapacitorSip dispatches pjsua_set_snd_dev on sipQueue from this callback.
     public var onAudioActivated: (() -> Void)?

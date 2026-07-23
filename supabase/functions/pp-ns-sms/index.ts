@@ -307,6 +307,18 @@ Deno.serve(async (req) => {
         );
       }
 
+      // NS-API returns HTTP 200 even when the message failed downstream —
+      // inspect result body for explicit error/failure flags before claiming success.
+      const nsError = result?.error ?? result?.errorMessage ?? result?.error_message ?? result?.message?.error;
+      const nsStatus = String(result?.status ?? result?.state ?? "").toLowerCase();
+      if (nsError || nsStatus === "failed" || nsStatus === "error" || result?.ok === false || result?.success === false) {
+        console.error("[pp-ns-sms] NS send returned 200 with error body:", result);
+        return jsonResponse(
+          { ok: false, error: nsError ?? `NS-API a rejeté le SMS (status=${nsStatus || "unknown"})`, ns_result: result, from: fromNumber, to: destination },
+          200,
+        );
+      }
+
       const resolvedThreadId = thread_id
         ?? result?.messagesession_id
         ?? result?.["messagesession-id"]

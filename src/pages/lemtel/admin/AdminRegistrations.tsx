@@ -28,6 +28,7 @@ type Reg = {
 
 export default function AdminRegistrations() {
   const [q, setQ] = useState('');
+  const [repairing, setRepairing] = useState(false);
 
   const { data, isLoading, refetch, dataUpdatedAt, isFetching } = useQuery({
     queryKey: ['fpbx', 'registrations-live'],
@@ -50,6 +51,38 @@ export default function AdminRegistrations() {
   const filtered = useMemo(() => rows.filter(r =>
     !q || `${r.extension ?? ''} ${r.user ?? ''} ${r.contact ?? ''} ${r.agent ?? ''} ${r.user_agent ?? ''} ${r.network_ip ?? ''} ${r.hostname ?? ''}`.toLowerCase().includes(q.toLowerCase())
   ), [rows, q]);
+
+  // Group by extension/user to see multi-device ring readiness
+  const perUser = useMemo(() => {
+    const map = new Map<string, Reg[]>();
+    for (const r of rows) {
+      const key = String(r.user || r.extension || '').split('@')[0];
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(r);
+    }
+    return Array.from(map.entries())
+      .map(([user, regs]) => ({ user, regs, count: regs.length }))
+      .sort((a, b) => b.count - a.count);
+  }, [rows]);
+
+  const configureFork = async () => {
+    setRepairing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fusionpbx-proxy', {
+        body: { action: 'repair-all-extensions-verto' },
+      });
+      if (error) throw error;
+      const fixed = (data as any)?.fixed ?? 0;
+      const failed = (data as any)?.failed ?? 0;
+      toast.success(`Multi-device ring activé — ${fixed} extension(s) mises à jour${failed ? `, ${failed} échec(s)` : ''}`);
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message || 'Échec de la configuration');
+    } finally {
+      setRepairing(false);
+    }
+  };
 
   return (
     <div className="space-y-5 w-full min-w-0">

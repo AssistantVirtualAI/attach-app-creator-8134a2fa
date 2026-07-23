@@ -162,9 +162,17 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     });
     const j = r.data;
     const ok = r.httpOk && j?.success === true;
-    if (!ok) {
-      const reason = j?.error ?? j?.message ?? j?.body ?? `Erreur téléphone (${r.status})`;
-      return { success: false, error: reason, message: `Appel NON lancé vers ${contact_name ?? to_number} : ${reason}`, raw: j };
+    // Device not registered → fall back to opening the mobile dialer with the
+    // number prefilled so the courtier can trigger the call from the softphone UI.
+    if (!ok || j?.device_registered === false) {
+      await broadcastNav(ctx, "/mplanipret/calls", { open_dialer: { number: to_number, autoDial: true } });
+      return {
+        success: true,
+        fallback: "open_dialer",
+        destination: to_number,
+        message: `Aucun softphone Planiprêt enregistré — j'ai ouvert le clavier avec ${contact_name ?? to_number} pré-composé.`,
+        raw: j,
+      };
     }
     return {
       success: true,
@@ -174,6 +182,48 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       message: j?.message ?? `Appel lancé vers ${contact_name ?? to_number}`,
       raw: j,
     };
+  },
+
+  async open_dialer(ctx, p) {
+    let number = firstText(p?.number, p?.to, p?.to_number, p?.phone, p?.phone_number);
+    let name = p?.contact_name;
+    if (!number && name) {
+      const hit = await resolveContact(ctx, name, "phone");
+      if (!hit) return { success: false, error: "contact_not_found", message: `Aucun numéro trouvé pour ${name}` };
+      number = hit.value; name = hit.name;
+    }
+    if (!number) return { success: false, error: "number_required" };
+    await broadcastNav(ctx, "/mplanipret/calls", { open_dialer: { number, autoDial: !!p?.auto_dial } });
+    return { success: true, message: `Clavier ouvert avec ${name ?? number}` };
+  },
+
+  async open_sms_composer(ctx, p) {
+    let number = firstText(p?.number, p?.to, p?.to_number, p?.phone, p?.phone_number);
+    let name = p?.contact_name;
+    if (!number && name) {
+      const hit = await resolveContact(ctx, name, "phone");
+      if (!hit) return { success: false, error: "contact_not_found", message: `Aucun numéro trouvé pour ${name}` };
+      number = hit.value; name = hit.name;
+    }
+    if (!number) return { success: false, error: "number_required" };
+    const body = firstText(p?.body, p?.message, p?.text);
+    await broadcastNav(ctx, "/mplanipret/messages", { open_sms_composer: { number, body } });
+    return { success: true, message: `Composeur SMS ouvert pour ${name ?? number}` };
+  },
+
+  async open_email_composer(ctx, p) {
+    let to = firstText(p?.to, p?.email, p?.address);
+    let name = p?.contact_name;
+    if (!to && name) {
+      const hit = await resolveContact(ctx, name, "email");
+      if (!hit) return { success: false, error: "contact_not_found", message: `Aucun courriel trouvé pour ${name}` };
+      to = hit.value; name = hit.name;
+    }
+    if (!to) return { success: false, error: "to_required" };
+    await broadcastNav(ctx, "/mplanipret/messages", {
+      open_email_composer: { to, subject: p?.subject, body: firstText(p?.body, p?.message, p?.text) },
+    });
+    return { success: true, message: `Composeur courriel ouvert pour ${name ?? to}` };
   },
 
   async get_active_calls(ctx) {

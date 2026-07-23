@@ -1144,11 +1144,14 @@ Deno.serve(async (req) => {
         if (write.ok) { fixed++; results.push({ extension: extNum, ok: true }); }
         else { failed++; results.push({ extension: extNum, ok: false, status: write.status }); }
       }
-      await admin.from("audit_logs").insert({
-        organization_id, user_id: userId, action: "repair_all_extensions_verto",
-        resource_type: "pbx_domain", resource_id: requestedDomain,
-        metadata: { fixed, failed, total: rows.length },
-      }).catch(() => null);
+      try {
+        await admin.from("audit_logs").insert({
+          organization_id, user_id: userId, action: "repair_all_extensions_verto",
+          resource_type: "pbx_domain", resource_id: requestedDomain,
+          metadata: { fixed, failed, total: rows.length },
+        });
+      } catch { /* audit best-effort */ }
+
       return json({ ok: true, domain_uuid: requestedDomain, total: rows.length, fixed, failed, results });
     }
 

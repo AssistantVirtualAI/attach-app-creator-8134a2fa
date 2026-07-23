@@ -1075,14 +1075,22 @@ Deno.serve(async (req) => {
       if (!extensionUuid) return json({ ok: false, error: "EXTENSION_NOT_FOUND", extension: extNum }, 404);
 
       const dialString = buildVertoDialString();
-      const patchPayload = {
-        ...current,
+      const patchPayload: Record<string, unknown> = {
         extension_uuid: extensionUuid,
         domain_uuid: current.domain_uuid || requestedDomain,
         extension: extNum,
         effective_caller_id_number: String(current.effective_caller_id_number || extNum),
-        dial_string: hasVertoContact(current.dial_string) ? current.dial_string : dialString,
+        effective_caller_id_name: current.effective_caller_id_name || extNum,
+        outbound_caller_id_number: current.outbound_caller_id_number || extNum,
+        outbound_caller_id_name: current.outbound_caller_id_name || extNum,
+        directory_first_name: current.directory_first_name || "",
+        directory_last_name: current.directory_last_name || "",
+        directory_visible: current.directory_visible ?? "true",
+        directory_exten_visible: current.directory_exten_visible ?? "true",
         enabled: current.enabled ?? "true",
+        password: current.password || "",
+        dial_string: dialString,
+        call_timeout: "20",
       };
       const write = await pbxWrite("extensions", "POST", { extensions: [patchPayload] });
       if (!write.ok) return json({ ok: false, extension: extNum, error: "ROUTING_REPAIR_FAILED", details: write }, 200);
@@ -1103,6 +1111,47 @@ Deno.serve(async (req) => {
         pbx_status: write.status,
       });
     }
+
+    if (action === "repair-all-extensions-verto") {
+      const list = await pbxFetch(`extensions?domain_uuid=${requestedDomain}`);
+      if (!list.ok) return json({ ok: false, error: "EXTENSION_LIST_FAILED", details: list }, list.status || 502);
+      const rows = collection(list.data, "extensions");
+      const dialString = buildVertoDialString();
+      const results: Array<Record<string, unknown>> = [];
+      let fixed = 0, failed = 0;
+      for (const current of rows) {
+        const extNum = String(current.extension || "").trim();
+        const extensionUuid = current?.extension_uuid;
+        if (!extNum || !extensionUuid) continue;
+        const patchPayload: Record<string, unknown> = {
+          extension_uuid: extensionUuid,
+          domain_uuid: current.domain_uuid || requestedDomain,
+          extension: extNum,
+          effective_caller_id_number: String(current.effective_caller_id_number || extNum),
+          effective_caller_id_name: current.effective_caller_id_name || extNum,
+          outbound_caller_id_number: current.outbound_caller_id_number || extNum,
+          outbound_caller_id_name: current.outbound_caller_id_name || extNum,
+          directory_first_name: current.directory_first_name || "",
+          directory_last_name: current.directory_last_name || "",
+          directory_visible: current.directory_visible ?? "true",
+          directory_exten_visible: current.directory_exten_visible ?? "true",
+          enabled: current.enabled ?? "true",
+          password: current.password || "",
+          dial_string: dialString,
+          call_timeout: "20",
+        };
+        const write = await pbxWrite("extensions", "POST", { extensions: [patchPayload] });
+        if (write.ok) { fixed++; results.push({ extension: extNum, ok: true }); }
+        else { failed++; results.push({ extension: extNum, ok: false, status: write.status }); }
+      }
+      await admin.from("audit_logs").insert({
+        organization_id, user_id: userId, action: "repair_all_extensions_verto",
+        resource_type: "pbx_domain", resource_id: requestedDomain,
+        metadata: { fixed, failed, total: rows.length },
+      }).catch(() => null);
+      return json({ ok: true, domain_uuid: requestedDomain, total: rows.length, fixed, failed, results });
+    }
+
 
     if (action === "delete-extension") {
       const id = params.extension_uuid;

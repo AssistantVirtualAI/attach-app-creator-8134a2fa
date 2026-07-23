@@ -59,9 +59,13 @@ Deno.serve(async (req) => {
     }
 
     const effectiveRedirect = redirect_uri ?? storedRedirect ?? "";
+    if (storedRedirect && redirect_uri && storedRedirect !== redirect_uri) {
+      console.warn("[maestro-oauth-callback] redirect_uri mismatch", { stored: storedRedirect, received: redirect_uri });
+    }
     // Utiliser le code_verifier stocké si présent (flux PKCE mobile client_id=3)
     const codeVerifier = body?.code_verifier ?? storedCodeVerifier ?? null;
     const exch = await exchangeAuthorizationCode(env, code, effectiveRedirect, codeVerifier);
+
     if (!exch.ok || !exch.data) {
       await admin.from("planipret_integration_secrets").upsert({
         provider: "maestro_oauth_error", key_name: "last",

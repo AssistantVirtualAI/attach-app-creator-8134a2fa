@@ -522,6 +522,29 @@ export default function PlanipretMobile() {
   useRealtimeManager(profile?.user_id, { onInboundRinging, onAiInsight });
   useAvaNavigation(profile?.user_id);
 
+  // React to open_dialer / open_sms_composer events broadcast by AVA tools.
+  useEffect(() => {
+    const onOpenDialer = (e: Event) => {
+      const detail = (e as CustomEvent).detail ?? {};
+      if (detail.number) openDialer(String(detail.number));
+    };
+    const onOpenSms = (e: Event) => {
+      const detail = (e as CustomEvent).detail ?? {};
+      const to = detail.number ? `to=${encodeURIComponent(detail.number)}` : "";
+      const body = detail.body ? `&body=${encodeURIComponent(detail.body)}` : "";
+      const qs = to ? `?${to}${body}` : "";
+      navigate(`/mplanipret/messages${qs}`);
+    };
+    window.addEventListener("ava:open-dialer", onOpenDialer);
+    window.addEventListener("ava:open-sms-composer", onOpenSms);
+    window.addEventListener("ava:open-email-composer", onOpenSms);
+    return () => {
+      window.removeEventListener("ava:open-dialer", onOpenDialer);
+      window.removeEventListener("ava:open-sms-composer", onOpenSms);
+      window.removeEventListener("ava:open-email-composer", onOpenSms);
+    };
+  }, [navigate]);
+
   // Aggressive: prefetch every mobile chunk immediately on mount so tab
   // switches feel instant — especially Microsoft integration screens which
   // are heavy and used often.

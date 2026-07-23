@@ -505,9 +505,19 @@ class SipConnectionService : Service() {
                     val params = json.optJSONObject("params")
                     val callerName = params?.optString("caller_id_name") ?: "Appel entrant"
                     val callerNumber = params?.optString("caller_id_number") ?: ""
-                    Log.i(TAG, "Incoming call: $callerName <$callerNumber>")
+                    val callId = params?.optString("callID") ?: ""
+                    if (callId.isNotEmpty()) currentCallId = callId
+                    Log.i(TAG, "Incoming call: $callerName <$callerNumber> callID=$callId")
+                    try { AudioFocusHelper.requestCallAudioFocus(this) } catch (_: Exception) {}
                     emitStatus("incoming", "${callerName} <${callerNumber}>")
                     handler.post { showIncomingCallNotification(callerName, callerNumber) }
+                }
+                method == "verto.bye" -> {
+                    Log.i(TAG, "Remote hangup (verto.bye)")
+                    currentCallId = null
+                    try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
+                    handler.post { clearCallNotifications() }
+                    emitStatus("idle", "remote_bye")
                 }
             }
         } catch (e: Exception) {

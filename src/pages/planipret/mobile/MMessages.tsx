@@ -1526,6 +1526,18 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
         subject, body,
         attachments: attachmentsPayload,
       };
+      // Duplicate detection (only for brand-new emails, not replies/forwards)
+      try {
+        const { data: dup } = await supabase.functions.invoke("ms365-actions", {
+          body: { action: "check_duplicate_email", payload: { to: payload.to, subject, body, since_days: 14 } },
+        });
+        if ((dup as any)?.duplicate && (dup as any)?.matches?.length) {
+          const m = (dup as any).matches[0];
+          const when = m?.sent_at ? new Date(m.sent_at).toLocaleString() : "";
+          const ok = window.confirm(`Un courriel identique a déjà été envoyé${when ? ` le ${when}` : ""}. Envoyer quand même ?`);
+          if (!ok) { setSending(false); return; }
+        }
+      } catch { /* non-blocking */ }
     }
     const { data, error } = await supabase.functions.invoke("ms365-actions", { body: { action, payload } });
     setSending(false);

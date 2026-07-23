@@ -1056,6 +1056,48 @@ Deno.serve(async (req) => {
     }
 
     if (action === "update-extension") return json(await writeCollection("extensions", "extensions", params), 200);
+
+    if (action === "repair-verto-extension-routing") {
+      const extNum = String(params.extension || body.extension || "").trim();
+      if (!extNum) return json({ error: "extension required" }, 400);
+
+      const list = await pbxFetch(`extensions?domain_uuid=${requestedDomain}&extension=${encodeURIComponent(extNum)}`);
+      if (!list.ok) return json({ ok: false, error: "EXTENSION_LOOKUP_FAILED", details: list }, list.status || 502);
+      const rows = collection(list.data, "extensions");
+      const current = rows.find((e: any) => String(e.extension || "") === extNum) || rows[0];
+      const extensionUuid = current?.extension_uuid;
+      if (!extensionUuid) return json({ ok: false, error: "EXTENSION_NOT_FOUND", extension: extNum }, 404);
+
+      const dialString = buildVertoDialString();
+      const patchPayload = {
+        ...current,
+        extension_uuid: extensionUuid,
+        domain_uuid: current.domain_uuid || requestedDomain,
+        extension: extNum,
+        effective_caller_id_number: String(current.effective_caller_id_number || extNum),
+        dial_string: hasVertoContact(current.dial_string) ? current.dial_string : dialString,
+        enabled: current.enabled ?? "true",
+      };
+      const write = await pbxWrite("extensions", "POST", { extensions: [patchPayload] });
+      if (!write.ok) return json({ ok: false, extension: extNum, error: "ROUTING_REPAIR_FAILED", details: write }, 200);
+
+      await admin.from("audit_logs").insert({
+        organization_id, user_id: userId, action: "repair_verto_extension_routing",
+        resource_type: "pbx_extension", resource_id: extensionUuid,
+        metadata: { extension: extNum, had_verto_contact: hasVertoContact(current.dial_string), domain_uuid: requestedDomain },
+      }).catch(() => null);
+
+      return json({
+        ok: true,
+        extension: extNum,
+        extension_uuid: extensionUuid,
+        effective_caller_id_number: patchPayload.effective_caller_id_number,
+        dial_string_has_verto: true,
+        previous_dial_string_has_verto: hasVertoContact(current.dial_string),
+        pbx_status: write.status,
+      });
+    }
+
     if (action === "delete-extension") {
       const id = params.extension_uuid;
       if (!id) return json({ error: "extension_uuid required" }, 400);

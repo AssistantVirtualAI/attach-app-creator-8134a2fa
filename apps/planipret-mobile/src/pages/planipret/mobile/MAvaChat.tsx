@@ -14,7 +14,7 @@ type AvaSuggestion = { id: string; label: string; kind: string; payload?: Record
 type Msg = { id: string; role: "user" | "assistant"; message: string; created_at: string; suggestions?: AvaSuggestion[] };
 type Session = { id: string; title: string; last_message_at: string };
 
-const MUTATING_ACTIONS = new Set(["send_email", "create_calendar_event", "send_teams_message", "reply_teams_message"]);
+const MUTATING_ACTIONS = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message"]);
 type PendingConfirm = { suggestion: AvaSuggestion; label: string } | null;
 
 const CONFIRM_RE = /^(oui|ok|okay|confirm[eé]?|confirm[eé] pour envoyer|j['’]?autorise|autorise|vas-y|go|envoie|envoyer|appelle|appel|cr[eé]e|supprime|delete|yes|yep|approved?|approuv[eé])\b/i;

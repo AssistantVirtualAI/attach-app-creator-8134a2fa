@@ -43,6 +43,19 @@ const KEEP = new Set([
   'probe.ok',
   'probe.fail',
   'sdp.fallback-rewritten',
+  'verto.connecting',
+  'verto.registered',
+  'verto.error',
+  'verto.disconnected',
+  'verto.incoming',
+  'verto.reconnect',
+  'verto.call.error',
+  'verto.native.status',
+  'verto.native.poll',
+  'verto.native.error',
+  'verto.disconnected.native-held',
+  'verto.app.background.native-hold',
+  'verto.app.foreground.sync',
 ]);
 
 function pad(n: number, l = 2) { return String(n).padStart(l, '0'); }
@@ -70,6 +83,7 @@ export default function SipDebugScreen({ sp }: { sp: any }) {
   const extension: string | undefined = sp?.sipConfig?.extension;
   const domain: string | undefined = sp?.sipConfig?.domain;
   const rawLog: SipLogEntry[] = sp?.sipLog || [];
+  const nativeStatus = sp?.androidSipServiceStatus || sp?.snap?.androidSipServiceStatus || null;
 
   const events = useMemo(
     () => rawLog.filter((e) => KEEP.has(e.event)).slice(-200).reverse(),
@@ -160,6 +174,21 @@ export default function SipDebugScreen({ sp }: { sp: any }) {
           </div>
         )}
       </Card>
+
+      {platform === 'android' && (
+        <>
+          <SectionTitle eyebrow="ANDROID" title={tx('Service natif background', 'Native background service')} />
+          <Card padded={false} style={{ marginBottom: 14 }}>
+            <SettingsRow label={tx('Statut natif', 'Native status')} icon="◆" value={nativeStatus?.status || 'unknown'} />
+            <SettingsRow label={tx('Dernière raison', 'Last reason')} icon="!" value={nativeStatus?.reason || '—'} />
+            <SettingsRow label="WakeLock" icon="◉" value={nativeStatus?.wakeLockHeld ? 'held' : 'not held'} />
+            <SettingsRow label="WifiLock" icon="≋" value={nativeStatus?.wifiLockHeld ? 'held' : 'not held'} />
+            <SettingsRow label={tx('Dernier login', 'Last login')} icon="✓" value={nativeStatus?.lastLoginAt ? new Date(nativeStatus.lastLoginAt).toLocaleTimeString() : '—'} />
+            <SettingsRow label={tx('Dernier ping', 'Last ping')} icon="↔" value={nativeStatus?.lastPingAt ? new Date(nativeStatus.lastPingAt).toLocaleTimeString() : '—'} />
+            <SettingsRow label={tx('Tentatives', 'Attempts')} icon="#" value={String(nativeStatus?.reconnectAttempt ?? 0)} />
+          </Card>
+        </>
+      )}
 
       {/* Actions */}
       <SectionTitle eyebrow="SIP" title={tx('Actions', 'Actions')} />

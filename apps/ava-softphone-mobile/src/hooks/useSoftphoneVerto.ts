@@ -20,7 +20,13 @@ import { attachRemoteStream, toggleSpeaker } from '../lib/sip/audioOutput';
 import { initVerto, getVertoClient, VertoDialog, VertoEvent } from '../lib/sip/vertoProvider';
 import { normalizePhone } from '../lib/phoneNormalize';
 import { attachNativeAutoReconnect } from '../lib/sip/nativeAutoReconnect';
-import { requestAndroidBatteryOptimizationExemption, startAndroidSipService } from '../lib/sip/nativeSipProvider';
+import {
+  getAndroidSipServiceStatus,
+  onAndroidSipServiceStatus,
+  requestAndroidBatteryOptimizationExemption,
+  startAndroidSipService,
+  type AndroidSipServiceStatus,
+} from '../lib/sip/nativeSipProvider';
 
 const VERTO_HOST = 'pbxnode.lemtel.tel';
 const VERTO_PORT = 8082;
@@ -45,6 +51,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const [sipLog, setSipLog] = useState<SipLogEntry[]>(() => loadSipLog());
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [audioProfile, setAudioProfileState] = useState<AudioProfile>(() => loadAudioProfile() || 'auto');
+  const [androidSipServiceStatus, setAndroidSipServiceStatus] = useState<AndroidSipServiceStatus | null>(null);
 
   const activeDialogRef = useRef<VertoDialog | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -83,6 +90,36 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     }
   }, []);
 
+  const applyNativeStatus = useCallback((native: AndroidSipServiceStatus | null, source = 'event') => {
+    if (!native) return;
+    setAndroidSipServiceStatus(native);
+    log(source === 'poll' ? 'verto.native.poll' : 'verto.native.status', {
+      status: native.status,
+      reason: native.reason,
+      loggedIn: native.loggedIn,
+      wake: native.wakeLockHeld,
+      wifi: native.wifiLockHeld,
+      attempt: native.reconnectAttempt,
+    });
+
+    const nativeStatus = String(native.status || '').toLowerCase();
+    if (native.loggedIn || nativeStatus === 'registered' || nativeStatus === 'incoming') {
+      setStatus('registered');
+      return;
+    }
+    if (nativeStatus === 'connecting') {
+      setStatus('connecting', native.reason || undefined);
+      return;
+    }
+    if (nativeStatus === 'reconnecting' || nativeStatus === 'disconnected') {
+      setStatus('retrying', native.reason || 'Native Verto reconnecting');
+      return;
+    }
+    if (nativeStatus === 'error') {
+      setStatus('error', native.reason || 'Native Verto service error');
+    }
+  }, [log, setStatus]);
+
   // ── Connect / register lifecycle ────────────────────────────────────────
   useEffect(() => {
     if (!config?.extension || !config?.password) {
@@ -106,7 +143,14 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     // running for the full lifetime of the hook — stopping it releases the
     // WakeLock and lets Doze mode kill the socket, which is exactly why the
     // app went 'unregistered' when the screen locked.
-    startAndroidSipService().catch(() => { /* ignore on non-Android */ });
+    startAndroidSipService({
+      host: VERTO_HOST,
+      port: VERTO_PORT,
+      login: config.extension,
+      password: config.password,
+      domain: config.domain || 'lemtel.lemtel.tel',
+      displayName: config.displayName || config.extension,
+    }).then((native) => applyNativeStatus(native, 'start')).catch(() => { /* ignore on non-Android */ });
 
     (async () => {
       try {
@@ -134,7 +178,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
           password: config.password,
           domain: config.domain || 'lemtel.lemtel.tel',
           displayName: config.displayName || config.extension,
-        }).catch(() => { /* ignore on non-Android */ });
+        }).then((native) => applyNativeStatus(native, 'start')).catch(() => { /* ignore on non-Android */ });
         requestAndroidBatteryOptimizationExemption().catch(() => { /* ignore on non-Android */ });
       } catch (e: any) {
 
@@ -163,6 +207,45 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     };
   }, [config?.extension, config?.password, config?.refreshNonce, log, setStatus]);
 
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    onAndroidSipServiceStatus((native) => {
+      if (!cancelled) applyNativeStatus(native, 'event');
+    }).then((fn) => { cleanup = fn; }).catch(() => {});
+
+    const poll = setInterval(() => {
+      getAndroidSipServiceStatus()
+        .then((native) => { if (!cancelled && native) applyNativeStatus(native, 'poll'); })
+        .catch((e) => log('verto.native.error', { message: e?.message || String(e) }));
+    }, 15000);
+
+    getAndroidSipServiceStatus()
+      .then((native) => { if (!cancelled && native) applyNativeStatus(native, 'poll'); })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+      cleanup?.();
+    };
+  }, [applyNativeStatus, log]);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    import('@capacitor/app').then(({ App }) => App.addListener('appStateChange', (state) => {
+      if (cancelled) return;
+      if (state.isActive) {
+        log('verto.app.foreground.sync');
+        getAndroidSipServiceStatus().then((native) => applyNativeStatus(native, 'poll')).catch(() => {});
+      } else {
+        log('verto.app.background.native-hold');
+      }
+    })).then((handle) => { cleanup = () => { handle.remove().catch(() => {}); }; }).catch(() => {});
+    return () => { cancelled = true; cleanup?.(); };
+  }, [applyNativeStatus, log]);
+
   // ── Verto event stream → local state ────────────────────────────────────
   useEffect(() => {
     const client = getVertoClient();
@@ -173,7 +256,12 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
           break;
         case 'disconnected':
           log('verto.disconnected', { reason: e.reason });
-          setStatus('retrying', 'WebSocket disconnected');
+          if (androidSipServiceStatus?.loggedIn || androidSipServiceStatus?.status === 'registered') {
+            log('verto.disconnected.native-held', { reason: e.reason });
+            setStatus('registered');
+          } else {
+            setStatus('retrying', 'WebSocket disconnected');
+          }
           // Keep the foreground service RUNNING so WakeLock/WifiLock stay
           // held while the Verto client auto-reconnects. Stopping the
           // service here was letting Android Doze mode kill the socket and
@@ -217,7 +305,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       }
     });
     return () => { off(); };
-  }, [log, setStatus]);
+  }, [androidSipServiceStatus, log, setStatus]);
 
   // ── Actions ────────────────────────────────────────────────────────────
   const call = useCallback((number: string): boolean => {
@@ -348,10 +436,11 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     transfer,
     transferCall: transfer,
     addCall: toggleSpeakerFn, // speaker toggle exposed via addCall slot for Android
+    androidSipServiceStatus,
   }), [
     sipStatus, sipError, callState, callTimer, isMuted, isOnHold, activeCallNumber,
     call, hangup, answer, mute, unmute, hold, unhold, sendDTMF, setStatusPresence, reconnect,
     lastPersistedError, sipLog, clearSipLog, clearSipState, retryAttempt,
-    audioProfile, setAudioProfile, transfer, toggleSpeakerFn,
+    audioProfile, setAudioProfile, transfer, toggleSpeakerFn, androidSipServiceStatus,
   ]);
 }

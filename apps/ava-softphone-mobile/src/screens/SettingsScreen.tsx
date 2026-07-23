@@ -341,6 +341,8 @@ export default function SettingsScreen({
         />
         <SettingsRow label={lang === 'fr' ? 'Provider' : 'Provider'} icon="⇄" value={`${sp?.sipProvider || 'jssip-wss'} · ${sp?.platform || 'unknown'}`} />
         <SettingsRow label="WSS" icon="↔" value={sp?.sipConfig?.wssUrl || '—'} />
+        {sp?.platform === 'android' && <SettingsRow label={lang === 'fr' ? 'Service natif' : 'Native service'} icon="◆" value={`${sp?.androidSipServiceStatus?.status || 'unknown'} · ${sp?.androidSipServiceStatus?.wakeLockHeld ? 'WakeLock' : 'no WakeLock'}`} />}
+        {sp?.platform === 'android' && <SettingsRow label={lang === 'fr' ? 'Raison native' : 'Native reason'} icon="!" value={sp?.androidSipServiceStatus?.reason || '—'} />}
         <SettingsRow label={lang === 'fr' ? 'Dernière erreur' : 'Last error'} icon="!" value={sp?.snap?.error || sp?.lastPersistedError?.error || t('common.none')} />
         <SettingsRow label={lang === 'fr' ? "Relancer l'enregistrement" : 'Retry Registration'} icon="↻" onPress={() => sp?.reconnect?.()} />
         <SettingsRow label={lang === 'fr' ? "Vider l'état SIP" : 'Clear SIP status'} icon="✕" onPress={() => sp?.clearSipState?.()} />

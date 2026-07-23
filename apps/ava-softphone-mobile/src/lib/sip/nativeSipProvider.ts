@@ -122,10 +122,26 @@ export const CapacitorPjsip = CapacitorSipNative;
 interface AndroidSipServiceBridge {
   startSipService?: (opts?: any) => Promise<{ ok: boolean }>;
   stopSipService?: () => Promise<{ ok: boolean }>;
+  getSipServiceStatus?: () => Promise<AndroidSipServiceStatus & { ok: boolean }>;
   requestBatteryOptimizationExemption?: () => Promise<{ ok: boolean; ignored?: boolean; requested?: boolean }>;
+  addListener?: (event: 'sipServiceStatus', callback: (data: AndroidSipServiceStatus) => void) => Promise<{ remove: () => Promise<void> }>;
   // Audio routing — real implementation in CapacitorPjsip.kt
   setAudioRoute?: (opts: { route: string }) => Promise<{ ok: boolean; route?: string }>;
   getAudioRoute?: () => Promise<{ route?: string; outputs?: any; inputs?: any }>;
+}
+
+export interface AndroidSipServiceStatus {
+  status?: 'idle' | 'connecting' | 'registered' | 'incoming' | 'reconnecting' | 'disconnected' | 'error' | 'unknown' | string;
+  reason?: string;
+  updatedAt?: number;
+  lastLoginAt?: number;
+  lastPingAt?: number;
+  lastFrameAt?: number;
+  reconnectAttempt?: number;
+  connecting?: boolean;
+  loggedIn?: boolean;
+  wakeLockHeld?: boolean;
+  wifiLockHeld?: boolean;
 }
 const AndroidSipServicePlugin: AndroidSipServiceBridge =
   __platform === 'android'
@@ -152,15 +168,35 @@ export async function setAndroidAudioRoute(route: 'earpiece' | 'speaker' | 'blue
 export async function startAndroidSipService(creds?: {
   host?: string; port?: number; login?: string;
   password?: string; domain?: string; displayName?: string;
-}): Promise<void> {
-  if (__platform !== 'android') return;
-  try { await (AndroidSipServicePlugin as any).startSipService?.(creds ?? {}); }
+}): Promise<AndroidSipServiceStatus | null> {
+  if (__platform !== 'android') return null;
+  try { return await (AndroidSipServicePlugin as any).startSipService?.(creds ?? {}) ?? null; }
   catch (e) { console.warn('[sip] startSipService failed', e); }
+  return null;
 }
 export async function stopAndroidSipService(): Promise<void> {
   if (__platform !== 'android') return;
   try { await AndroidSipServicePlugin.stopSipService?.(); }
   catch (e) { console.warn('[sip] stopSipService failed', e); }
+}
+
+export async function getAndroidSipServiceStatus(): Promise<AndroidSipServiceStatus | null> {
+  if (__platform !== 'android') return null;
+  try { return await AndroidSipServicePlugin.getSipServiceStatus?.() ?? null; }
+  catch (e) { console.warn('[sip] getSipServiceStatus failed', e); return null; }
+}
+
+export async function onAndroidSipServiceStatus(
+  cb: (status: AndroidSipServiceStatus) => void,
+): Promise<() => void> {
+  if (__platform !== 'android') return () => {};
+  try {
+    const handle = await AndroidSipServicePlugin.addListener?.('sipServiceStatus', cb);
+    return () => { handle?.remove().catch(() => {}); };
+  } catch (e) {
+    console.warn('[sip] sipServiceStatus listener failed', e);
+    return () => {};
+  }
 }
 
 export async function requestAndroidBatteryOptimizationExemption(): Promise<void> {

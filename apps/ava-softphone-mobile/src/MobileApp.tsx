@@ -328,12 +328,14 @@ function AuthenticatedShell({
         audioStatus: softphone.audioStatus,
         audioError: softphone.audioError,
         audioRestartAttempts: softphone.audioRestartAttempts,
+        androidSipServiceStatus: softphone.androidSipServiceStatus || null,
       },
       sipConfig,
       sipStatus: softphone.sipStatus,
       sipError: softphone.sipError,
-      sipProvider: Capacitor.getPlatform() === 'ios' ? 'native-pjsip' : 'jssip-wss',
+      sipProvider: _sipProvider,
       platform: Capacitor.getPlatform(),
+      androidSipServiceStatus: softphone.androidSipServiceStatus || null,
       call: softphone.call,
       addCall: softphone.addCall || softphone.call,
       hangup: softphone.hangup,
@@ -365,7 +367,7 @@ function AuthenticatedShell({
       startRecord: softphone.startRecord || softphone.startRecording || (() => {}),
       stopRecord: softphone.stopRecord || softphone.stopRecording || (() => {}),
     };
-  }, [softphone, sipConfig]);
+  }, [softphone, sipConfig, _sipProvider]);
 
   const notif = useNotificationCounts({
     accessToken: creds.accessToken,

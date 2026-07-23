@@ -667,11 +667,13 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
                 pjsua_call_make_call(self.accId, &d, nil, nil, nil, &newCallId)
             }
             call.resolve(["ok": true, "target": target, "callId": Int(newCallId)])
+        }
+    }
 
     // MARK: - Background keep-alive helpers (parity with Android SipConnectionService)
 
     /// Internal helper: force a SIP re-REGISTER. Safe to call from any thread.
-    public func triggerReregister() {
+    func triggerReregister() {
         sipQueue.async { [weak self] in
             guard let self = self else { return }
             self.registerThreadIfNeeded()
@@ -719,6 +721,4 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
             ])
         }
     }
-}
-
 }

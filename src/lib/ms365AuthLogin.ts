@@ -35,6 +35,7 @@ export async function startMicrosoftSignIn(
     localStorage.setItem(INTENT_KEY, "login");
     localStorage.setItem(NEXT_KEY, nextPath);
   } catch {}
+  markMs365Pending();
   await openMs365Authorize({
     clientId: cfg.client_id,
     tenant: cfg.tenant_id || "common",

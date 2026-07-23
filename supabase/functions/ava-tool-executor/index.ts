@@ -298,8 +298,20 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const ok = r.httpOk && (j?.ok === true || j?.success === true);
     if (!ok) {
       const reason = j?.error ?? j?.body ?? j?.message ?? `Erreur SMS (${r.status})`;
-      return { success: false, error: reason, message: `SMS NON envoyé à ${name ?? to} : ${reason}`, raw: j };
+      // Failure → open the composer with the message prefilled so the
+      // courtier can review/retry manually from the SMS screen.
+      await broadcastNav(ctx, "/mplanipret/messages", { open_sms_composer: { number: to, body: message } });
+      return {
+        success: false,
+        fallback: "open_sms_composer",
+        error: reason,
+        message: `SMS NON envoyé à ${name ?? to} : ${reason}. J'ai ouvert le composeur pour que tu puisses renvoyer manuellement.`,
+        raw: j,
+      };
     }
+    // Success → broadcast a navigate event so the mobile app opens the thread
+    // and the courtier can see the outbound message immediately.
+    await broadcastNav(ctx, `/mplanipret/messages?thread=${encodeURIComponent(j?.thread_id ?? "")}`);
     return {
       success: true,
       message: `SMS envoyé à ${name ?? j?.to ?? to}`,

@@ -346,6 +346,15 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     const d = activeDialogRef.current;
     if (d) { try { d.hangup(); } catch { /* ignore */ } }
     else { getVertoClient().hangupAll(); }
+
+    // Immediately reset local call state so the UI doesn't freeze waiting
+    // for a server-side hangup event that may never arrive on flaky networks.
+    setCallState('ended');
+    setIsMuted(false);
+    setIsOnHold(false);
+    setActiveCallNumber('');
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    setTimeout(() => setCallState('idle'), 800);
   }, []);
 
   const answer = useCallback(() => {

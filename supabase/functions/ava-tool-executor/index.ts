@@ -154,6 +154,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       to_number = hit.value; contact_name = hit.name;
     }
     if (!to_number) return { success: false, error: "to_number_required" };
+    to_number = normalizePhoneE164(to_number) ?? to_number;
     const r = await callPlanipretFunction(ctx, "pp-ns-calls", {
       action: "start",
       to_number,

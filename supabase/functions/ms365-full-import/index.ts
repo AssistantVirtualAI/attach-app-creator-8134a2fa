@@ -28,40 +28,70 @@ async function setState(admin: any, user_id: string, resource: string, patch: Re
   }, { onConflict: "user_id,resource" });
 }
 
+async function sha1(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Dedup key: prefer 1st email, then normalized phone, then normalized name
+function computeContactDedupKey(c: any): string | null {
+  const email = (c.emailAddresses ?? [])[0]?.address?.toLowerCase().trim();
+  if (email) return `e:${email}`;
+  const phone = c.mobilePhone ?? (c.businessPhones ?? [])[0] ?? (c.homePhones ?? [])[0];
+  if (phone) {
+    const digits = String(phone).replace(/[^\d]/g, "");
+    if (digits) return `p:${digits.length === 10 ? "1" + digits : digits}`;
+  }
+  const name = String(c.displayName ?? "").toLowerCase().trim().replace(/\s+/g, " ");
+  if (name) return `n:${name}`;
+  return null;
+}
+
 // ─── Sync contacts ─────────────────────────────────────────────────────
 async function syncContacts(admin: any, profile: any) {
   const user_id = profile.user_id;
   await setState(admin, user_id, "contacts", { status: "running", last_error: null });
+  const tenantId = String(profile.ms365_tenant_id ?? profile.ms365_tid ?? "");
+  const accountEmail = String(profile.ms365_email ?? "").toLowerCase();
   let url = "/me/contacts?$top=100&$select=id,displayName,givenName,surname,emailAddresses,businessPhones,mobilePhone,homePhones,companyName,jobTitle";
   let total = 0;
+  const seenKeys = new Set<string>();
   try {
     while (url) {
       const r = await graph(admin, profile, url);
       if (!r.ok) throw new Error(`contacts ${r.status}`);
       const d = await r.json();
-      const rows = (d.value ?? []).map((c: any) => ({
-        user_id,
-        graph_id: c.id,
-        display_name: c.displayName ?? null,
-        given_name: c.givenName ?? null,
-        surname: c.surname ?? null,
-        emails: (c.emailAddresses ?? []).map((e: any) => ({ address: e.address, name: e.name })),
-        phones: [
-          ...(c.businessPhones ?? []).map((n: string) => ({ type: "business", number: n })),
-          ...(c.mobilePhone ? [{ type: "mobile", number: c.mobilePhone }] : []),
-          ...(c.homePhones ?? []).map((n: string) => ({ type: "home", number: n })),
-        ],
-        company: c.companyName ?? null,
-        job_title: c.jobTitle ?? null,
-        last_synced_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }));
+      const rows = (d.value ?? []).map((c: any) => {
+        const dedup = computeContactDedupKey(c);
+        if (dedup) seenKeys.add(dedup);
+        return {
+          user_id,
+          graph_id: c.id,
+          source: "ms365_outlook",
+          source_tenant_id: tenantId || null,
+          source_account_email: accountEmail || null,
+          dedup_key: dedup,
+          display_name: c.displayName ?? null,
+          given_name: c.givenName ?? null,
+          surname: c.surname ?? null,
+          emails: (c.emailAddresses ?? []).map((e: any) => ({ address: e.address, name: e.name })),
+          phones: [
+            ...(c.businessPhones ?? []).map((n: string) => ({ type: "business", number: n })),
+            ...(c.mobilePhone ? [{ type: "mobile", number: c.mobilePhone }] : []),
+            ...(c.homePhones ?? []).map((n: string) => ({ type: "home", number: n })),
+          ],
+          company: c.companyName ?? null,
+          job_title: c.jobTitle ?? null,
+          last_synced_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+      });
       if (rows.length) await admin.from("planipret_ms_contacts").upsert(rows, { onConflict: "user_id,graph_id" });
       total += rows.length;
       url = d["@odata.nextLink"] ?? "";
     }
     await setState(admin, user_id, "contacts", { status: "success", last_full_sync_at: new Date().toISOString(), items_synced: total });
-    return { ok: true, count: total };
+    return { ok: true, count: total, unique_keys: seenKeys.size };
   } catch (e) {
     await setState(admin, user_id, "contacts", { status: "error", last_error: String(e) });
     return { ok: false, error: String(e) };

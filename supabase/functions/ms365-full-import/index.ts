@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
     if (!userId) return json({ success: false, error: "unauthorized" }, 401);
 
     const { data: profile } = await admin.from("planipret_profiles")
-      .select("id, user_id, full_name, ms365_email, ms365_access_token, ms365_refresh_token, ms365_scopes, ms365_token_expiry")
+      .select("id, user_id, full_name, ms365_email, ms365_tenant_id, ms365_access_token, ms365_refresh_token, ms365_scopes, ms365_token_expiry")
       .eq("user_id", userId).maybeSingle();
     if (!profile?.ms365_access_token) return json({ success: false, error: "ms365_not_connected" }, 400);
 
@@ -320,7 +320,7 @@ Deno.serve(async (req) => {
     const results: Record<string, unknown> = {};
     if (resources.includes("contacts")) results.contacts = await syncContacts(admin, profile);
     if (resources.includes("mail"))     results.mail     = await syncMail(admin, profile, mode === "initial");
-    if (resources.includes("calendar")) results.calendar = await syncCalendar(admin, profile);
+    if (resources.includes("calendar")) results.calendar = await syncCalendar(admin, profile, mode === "initial");
     if (resources.includes("teams"))    results.teams    = await syncTeams(admin, profile);
 
     return json({ success: true, mode, results });

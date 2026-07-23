@@ -39,7 +39,10 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "addCall", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
         CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getSipServiceStatus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "triggerReregister", returnType: CAPPluginReturnPromise),
     ]
+
 
     // Serial queue for all PJSUA calls. PJSUA itself is thread-safe but
     // keeping work off the main thread guarantees the UI never blocks.
@@ -320,7 +323,7 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
             // q=1.0 = priorité maximale pour le forking FreeSWITCH.
             // ka_interval=15 = keep-alive TCP toutes les 15s pour maintenir
             // la connexion active en arrière-plan (workaround avant PushKit).
-            accCfg.ka_interval = 15
+            accCfg.ka_interval = 25
 
             // +sip.instance (RFC 5626) — unique per-device identifier.
             // FreeSWITCH/FusionPBX uses this to distinguish contacts from
@@ -649,6 +652,58 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
                 pjsua_call_make_call(self.accId, &d, nil, nil, nil, &newCallId)
             }
             call.resolve(["ok": true, "target": target, "callId": Int(newCallId)])
+
+    // MARK: - Background keep-alive helpers (parity with Android SipConnectionService)
+
+    /// Internal helper: force a SIP re-REGISTER. Safe to call from any thread.
+    public func triggerReregister() {
+        sipQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.registerThreadIfNeeded()
+            guard self.accId != pjsua_acc_id(PJSUA_INVALID_ID.rawValue) else {
+                NSLog("[CapacitorPjsip] triggerReregister: no account — skipping")
+                return
+            }
+            let status = pjsua_acc_set_registration(self.accId, pj_bool_t(PJ_TRUE.rawValue))
+            NSLog("[CapacitorPjsip] triggerReregister: pjsua_acc_set_registration status=\(status)")
+            self.notifyBg("registration", ["state": "reregistering", "source": "background_task"])
         }
     }
+
+    /// Capacitor-facing wrapper so JS can call `triggerReregister()`.
+    @objc func triggerReregister(_ call: CAPPluginCall) {
+        triggerReregister()
+        call.resolve(["ok": true])
+    }
+
+
+    /// iOS equivalent of Android `getSipServiceStatus` so the Settings /
+    /// Diagnostics screen shows the same shape on both platforms.
+    @objc func getSipServiceStatus(_ call: CAPPluginCall) {
+        sipQueue.async { [weak self] in
+            guard let self = self else { call.resolve(["loggedIn": false]); return }
+            self.registerThreadIfNeeded()
+            let hasAccount = self.accId != pjsua_acc_id(PJSUA_INVALID_ID.rawValue)
+            var regState = "unregistered"
+            var loggedIn = false
+            if hasAccount {
+                var accInfo = pjsua_acc_info()
+                pjsua_acc_get_info(self.accId, &accInfo)
+                let code = Int(accInfo.status.rawValue)
+                loggedIn = code == 200
+                regState = loggedIn ? "registered" : (code == 0 ? "connecting" : "error")
+            }
+            call.resolve([
+                "ok": true,
+                "loggedIn": loggedIn,
+                "status": regState,
+                "wakeLockHeld": true,  // iOS: PushKit + BGTask act as the wake-lock equivalent
+                "wifiLockHeld": true,
+                "pushKitEnabled": !(self.voipPushToken?.isEmpty ?? true),
+                "voipPushToken": String(self.voipPushToken?.prefix(8) ?? "")
+            ])
+        }
+    }
+}
+
 }

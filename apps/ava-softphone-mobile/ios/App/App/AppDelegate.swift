@@ -4,6 +4,8 @@ import WebKit
 import AVFoundation
 import PushKit
 import Intents
+import BackgroundTasks
+
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -83,14 +85,76 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         )
         webConfig.userContentController.addUserScript(script)
 
+        // Register BGProcessingTask for periodic SIP re-registration (parity with Android SipConnectionService)
+        if #available(iOS 13.0, *) {
+            BGTaskScheduler.shared.register(forTaskWithIdentifier: "com.lemtel.softphone.sip-refresh", using: nil) { task in
+                self.handleSipRefreshTask(task as! BGProcessingTask)
+            }
+            self.scheduleSipRefreshTask()
+        }
+
         return true
     }
 
     func applicationWillResignActive(_ application: UIApplication) {}
-    func applicationDidEnterBackground(_ application: UIApplication) {}
-    func applicationWillEnterForeground(_ application: UIApplication) {}
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        // Give PJSIP up to ~25 seconds to finish any pending re-REGISTER
+        // before iOS suspends the process. Parity with Android WakeLock.
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = application.beginBackgroundTask(withName: "SIPKeepAlive") {
+            NSLog("[SIP] Background task expired — PJSIP will be suspended")
+            if bgTask != .invalid {
+                application.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
+        DispatchQueue.global(qos: .background).asyncAfter(deadline: .now() + 20) {
+            NSLog("[SIP] Background keep-alive: triggering re-REGISTER")
+            CapacitorPjsip.shared?.triggerReregister()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                if bgTask != .invalid {
+                    application.endBackgroundTask(bgTask)
+                    bgTask = .invalid
+                }
+            }
+        }
+    }
+    func applicationWillEnterForeground(_ application: UIApplication) {
+        // Force an immediate re-REGISTER so the UI reflects reality after resume.
+        CapacitorPjsip.shared?.triggerReregister()
+    }
     func applicationDidBecomeActive(_ application: UIApplication) {}
     func applicationWillTerminate(_ application: UIApplication) {}
+
+    // MARK: - Background tasks (SIP registration refresh)
+    @available(iOS 13.0, *)
+    private func scheduleSipRefreshTask() {
+        let request = BGProcessingTaskRequest(identifier: "com.lemtel.softphone.sip-refresh")
+        request.requiresNetworkConnectivity = true
+        request.requiresExternalPower = false
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        do {
+            try BGTaskScheduler.shared.submit(request)
+            NSLog("[BGTask] Scheduled sip-refresh in 15 min")
+        } catch {
+            NSLog("[BGTask] Failed to schedule sip-refresh: \(error)")
+        }
+    }
+
+    @available(iOS 13.0, *)
+    private func handleSipRefreshTask(_ task: BGProcessingTask) {
+        scheduleSipRefreshTask()
+        task.expirationHandler = {
+            NSLog("[BGTask] sip-refresh expired")
+            task.setTaskCompleted(success: false)
+        }
+        NSLog("[BGTask] sip-refresh running — triggering re-REGISTER")
+        CapacitorPjsip.shared?.triggerReregister()
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5) {
+            task.setTaskCompleted(success: true)
+        }
+    }
+
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         // Intercept tel: URLs from iOS Recents / Contacts tap.

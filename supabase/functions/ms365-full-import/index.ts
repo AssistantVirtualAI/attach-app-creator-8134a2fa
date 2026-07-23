@@ -107,8 +107,8 @@ async function syncMail(admin: any, profile: any, initial = false) {
     const { data: state } = await admin.from("planipret_ms_sync_state").select("delta_link").eq("user_id", user_id).eq("resource", "mail").maybeSingle();
     const useDelta = !initial && state?.delta_link;
     const folders = useDelta ? [{ id: "delta", url: state.delta_link }] : [
-      { id: "inbox", url: "/me/mailFolders/inbox/messages/delta?$top=50&$select=id,conversationId,subject,from,toRecipients,ccRecipients,bodyPreview,body,isRead,importance,hasAttachments,sentDateTime,receivedDateTime" },
-      { id: "sent",  url: "/me/mailFolders/sentitems/messages/delta?$top=50&$select=id,conversationId,subject,from,toRecipients,ccRecipients,bodyPreview,body,isRead,importance,hasAttachments,sentDateTime,receivedDateTime" },
+      { id: "inbox", url: "/me/mailFolders/inbox/messages/delta?$top=50&$select=id,internetMessageId,conversationId,subject,from,toRecipients,ccRecipients,bodyPreview,body,isRead,importance,hasAttachments,sentDateTime,receivedDateTime" },
+      { id: "sent",  url: "/me/mailFolders/sentitems/messages/delta?$top=50&$select=id,internetMessageId,conversationId,subject,from,toRecipients,ccRecipients,bodyPreview,body,isRead,importance,hasAttachments,sentDateTime,receivedDateTime" },
     ];
     let deltaLink: string | null = null;
     for (const folder of folders) {

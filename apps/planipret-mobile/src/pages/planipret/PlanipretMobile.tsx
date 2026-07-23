@@ -595,6 +595,31 @@ export default function PlanipretMobile() {
   useRealtimeManager(profile?.user_id, { onInboundRinging, onAiInsight });
   useAvaNavigation(profile?.user_id);
 
+  // React to open_dialer / open_sms_composer / open_email_composer events
+  // broadcast by AVA tools so the mobile UI can open the composer with the
+  // number/body prefilled instead of the assistant claiming success silently.
+  useEffect(() => {
+    const onOpenDialer = (e: Event) => {
+      const detail = (e as CustomEvent).detail ?? {};
+      if (detail.number) openDialer(String(detail.number));
+    };
+    const onOpenSms = (e: Event) => {
+      const detail = (e as CustomEvent).detail ?? {};
+      const to = detail.number ? `to=${encodeURIComponent(detail.number)}` : "";
+      const body = detail.body ? `&body=${encodeURIComponent(detail.body)}` : "";
+      const qs = to ? `?${to}${body}` : "";
+      navigate(`/mplanipret/messages${qs}`);
+    };
+    window.addEventListener("ava:open-dialer", onOpenDialer);
+    window.addEventListener("ava:open-sms-composer", onOpenSms);
+    window.addEventListener("ava:open-email-composer", onOpenSms);
+    return () => {
+      window.removeEventListener("ava:open-dialer", onOpenDialer);
+      window.removeEventListener("ava:open-sms-composer", onOpenSms);
+      window.removeEventListener("ava:open-email-composer", onOpenSms);
+    };
+  }, [navigate]);
+
   // Warm up sibling tab chunks during idle time so tab switches feel instant.
   useEffect(() => {
     if (loading) return;

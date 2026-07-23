@@ -60,7 +60,7 @@ function NativeDeepLinkBridge() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const routeFromUrl = (rawUrl?: string | null) => {
+    const routeFromUrl = async (rawUrl?: string | null) => {
       if (!rawUrl) return;
       try {
         const url = new URL(rawUrl);
@@ -103,9 +103,9 @@ function NativeDeepLinkBridge() {
       try {
         const { App: CapacitorApp } = await import('@capacitor/app');
         const launch = await CapacitorApp.getLaunchUrl();
-        routeFromUrl(launch?.url);
+        void routeFromUrl(launch?.url);
         const listener = await CapacitorApp.addListener('appUrlOpen', (event: { url: string }) => {
-          routeFromUrl(event.url);
+          void routeFromUrl(event.url);
         });
         unsubscribe = () => { try { listener.remove(); } catch {} };
       } catch {

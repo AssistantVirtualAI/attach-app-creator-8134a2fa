@@ -21,7 +21,7 @@ import { getPpContacts } from "@/lib/ppContactsCache";
 import RecipientAutocomplete from "@/components/planipret/mobile/RecipientAutocomplete";
 
 
-type SubTab = "sms" | "team" | "teams365" | "emails" | "roster";
+type SubTab = "sms" | "team" | "teams365" | "emails" | "history" | "roster";
 
 
 type Msg = {

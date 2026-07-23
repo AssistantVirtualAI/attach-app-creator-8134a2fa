@@ -135,6 +135,7 @@ export default function MMessages() {
         {sub === "team" && <TeamChat profile={profile} />}
         {sub === "teams365" && <Teams365Panel profile={profile} />}
         {sub === "emails" && <EmailsList profile={profile} initialTo={qTo} initialName={qName} />}
+        {sub === "history" && <EmailHistoryList />}
       </div>
     </div>
   );

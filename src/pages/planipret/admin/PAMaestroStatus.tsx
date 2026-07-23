@@ -109,6 +109,21 @@ export default function PAMaestroStatus() {
 
   useEffect(() => { load(); }, [load]);
 
+  const badge = () => {
+    if (!data) return null;
+    const map: Record<StatusResp["status"], { label: string; cls: string; Icon: any }> = {
+      connected:      { label: t.statusConnected,     cls: "bg-emerald-600",  Icon: CheckCircle2 },
+      pending:        { label: t.statusPending,       cls: "bg-amber-600",    Icon: Clock },
+      not_configured: { label: t.statusNotConfigured, cls: "bg-slate-600",    Icon: AlertTriangle },
+      disconnected:   { label: t.statusDisconnected,  cls: "bg-red-600",      Icon: XCircle },
+      error:          { label: t.statusError,         cls: "bg-red-700",      Icon: AlertCircle },
+    };
+    const m = map[data.status];
+    const Icon = m.Icon;
+    return <Badge className={`${m.cls} text-white gap-1.5`}><Icon className="h-3.5 w-3.5" />{m.label}</Badge>;
+  };
+
+
   // --- Guided setup wizard state ---
   const REDIRECT_URI = "https://avastatistic.ca/auth/maestro/callback";
   type ConfigCheck = {

@@ -209,6 +209,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       number = hit.value; name = hit.name;
     }
     if (!number) return { success: false, error: "number_required" };
+    number = normalizePhoneE164(number) ?? number;
     const body = firstText(p?.body, p?.message, p?.text);
     await broadcastNav(ctx, "/mplanipret/messages", { open_sms_composer: { number, body } });
     return { success: true, message: `Composeur SMS ouvert pour ${name ?? number}` };

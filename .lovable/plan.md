@@ -1,84 +1,49 @@
-## Contexte
+## Objectif
 
-Corrections ciblées sur **`apps/planipret-mobile`** uniquement. Toutes les régressions signalées viennent de refactors récents du header et des flux d'auth/AVA.
+Re-vérifier que les 6 livrables du tour précédent sont bel et bien en place, fonctionnels, et que toutes les intégrations (Maestro, Microsoft 365, AVA tools, Claude report) sont connectées.
 
-## 1. Restaurer les contrôles du header (langue + thème)
+## Étapes de vérification
 
-Fichier : `apps/planipret-mobile/src/components/planipret/mobile/MobileHeaderControls.tsx`
+### 1. Header mobile (FR/EN + thème)
+- Lire `apps/planipret-mobile/src/components/planipret/mobile/MobileHeaderControls.tsx`
+- Confirmer présence : logo Planiprêt, toggle FR/EN (via `useMplanipretLang`), toggle thème (Sun/Moon + `localStorage planipret_dark`), Bell, Settings
+- Vérifier ordre visuel et absence de doublons
 
-La version actuelle n'affiche que Bell + Settings. Ajouter, à gauche de la cloche :
-- Toggle **FR / EN** compact (pill 2 boutons) branché sur `useMplanipretLang()` — persiste dans `planipret_profiles.language` si `profile.user_id`.
-- Toggle **thème clair / sombre** (icône `Sun` / `Moon`) qui bascule `document.documentElement.classList` + `localStorage.setItem("planipret_dark", …)`, aligné avec la logique existante dans `MMore.tsx`.
+### 2. Settings — carte Maestro visible
+- Lire `apps/planipret-mobile/src/pages/planipret/mobile/MMore.tsx` (section Intégrations)
+- Confirmer `<MaestroConnectCard />` rendu inconditionnellement
+- Vérifier `MaestroConnectCard.tsx` — pas de garde masquant la carte
+- Vérifier bouton "Se connecter à Maestro" présent
 
-Conserver le layout : logo Planiprêt à gauche (déjà géré ailleurs), à droite dans l'ordre → Langue, Thème, Bell, Settings.
+### 3. Sign-out
+- Vérifier `logout()` dans `MMore.tsx` : `supabase.auth.signOut()` → `navigate("/mplanipret", { replace: true })` + `window.location.reload()`
+- Confirmer que `PlanipretMobile.tsx` bascule sur `MobileAuthScreen` quand `accessError = "unauthenticated"`
 
-## 2. Restaurer la connexion Maestro dans Settings
+### 4. Safe-area emails (iOS)
+- Lire `MMessages.tsx` — `EmailComposeSheet` et détail email
+- Confirmer safe-area appliquée uniquement sur le header Outlook (pas de double padding)
 
-Fichier : `apps/planipret-mobile/src/pages/planipret/mobile/MMore.tsx`
+### 5. AVA chatbot — SMS/appels réels
+- Lire `supabase/functions/ava-tool-executor/index.ts`
+  - `send_sms` → invoque `pp-ns-sms`, retourne erreur si `success:false`
+  - `make_call` → invoque `pp-ns-calls` avec `synchronous:yes`, retourne `call_id` ou erreur
+  - `open_sms_composer` / `open_dialer` → renvoient `client_action`
+- Lire `MAvaChat.tsx` : dispatch `pp:ava-client-action` sur réception + badge résultat réel
+- Lire `PlanipretMobile.tsx` : listener de l'événement → `openDialer` / navigation
+- Tester via `supabase--curl_edge_functions` un appel `send_sms` factice pour valider le retour d'erreur
 
-`<MaestroConnectCard />` est bien présent (l. 334) mais rendu à l'intérieur du `Section` "Intégrations" **après** la div de config détectée. Le composant a probablement une garde interne qui le masque. Vérifier `apps/planipret-mobile/src/components/planipret/mobile/MaestroConnectCard.tsx` :
-- Retirer toute condition qui masque la carte si non-connectée.
-- Toujours afficher au minimum : statut (`pending` / `connected` / `error`), bouton **"Connecter à Maestro"** ou **"Reconnecter"**, lien vers `/mplanipret/maestro-status`.
+### 6. Rapport de performance (Claude)
+- Lire `apps/planipret-mobile/src/components/planipret/mobile/PerformanceReportCard.tsx`
+- Lire `MHome.tsx` — carte présente avec 3 pills Jour/Semaine/Mois
+- Lire `supabase/functions/pp-ava-report/index.ts` — utilise Lovable AI Gateway avec `anthropic/claude-sonnet-4-5`, agrège les tables Planiprêt
+- Vérifier `supabase/config.toml` : `[functions.pp-ava-report] verify_jwt = true`
+- Tester déploiement via `supabase--edge_function_logs` ou `curl` avec payload minimal
 
-## 3. Corriger le sign-out
+### 7. Intégrations connectées (backend)
+- Vérifier secrets présents : `LOVABLE_API_KEY`, `planipret_integration_secrets` (Maestro machine token)
+- Lister edge functions déployées : `maestro-oauth-*`, `pp-ns-sms`, `pp-ns-calls`, `pp-ms-auth-*`, `pp-maestro-telecom`, `pp-ava-report`, `ava-tool-executor`
+- Vérifier logs récents sans erreurs 500
 
-Fichier : `MMore.tsx` (fonction `logout`, l. 161-166)
+## Livrable
 
-`navigate("/login", …)` ne correspond à aucune route de l'app mobile → l'utilisateur retombe sur `/` (portail). Remplacer par :
-- Après `supabase.auth.signOut()`, `navigate("/mplanipret", { replace: true })` puis `window.location.reload()` pour laisser `PlanipretMobile.tsx` détecter `accessError = "unauthenticated"` et afficher `MobileAuthScreen` (le vrai écran d'auth mobile).
-
-## 4. Respecter la safe-area sur l'écran email
-
-Fichier : `apps/planipret-mobile/src/pages/planipret/mobile/MMessages.tsx` (composant `EmailComposeSheet`, l. 1492+ et wrapper l. 1314)
-
-Le portail plein écran a `paddingTop: env(safe-area-inset-top)` sur le conteneur racine, mais le header Outlook (l. 1581) applique **aussi** `paddingTop: calc(env(safe-area-inset-top) + 8px)` → double compensation OU header collé au notch selon la structure. Corriger :
-- Retirer la duplication : garder la safe-area **uniquement** sur le header bleu Outlook.
-- Le wrapper racine passe à `paddingTop: 0`.
-- Idem pour la liste des emails ouverte (`MMessages` détail email) : envelopper dans `<MobileScreen>` (ou appliquer `env(safe-area-inset-top)` sur le header) pour ne plus rogner le notch iOS.
-
-## 5. AVA chatbot : vraiment déclencher appels et SMS
-
-Fichiers : `supabase/functions/ava-tool-executor/index.ts` + `apps/planipret-mobile/src/pages/planipret/mobile/MAvaChat.tsx`
-
-Aujourd'hui AVA répond "envoyé" sans effet réel. Corriger :
-
-**Backend** :
-- `send_sms` doit invoquer directement `pp-ns-sms` (déjà nommé correctement) et **retourner l'erreur** si `success: false` au lieu d'annoncer succès.
-- `make_call` (ou `place_call`) doit poster à `pp-ns-calls` avec `synchronous: yes` déjà en place, retourner `call_id` OU l'erreur exacte.
-- Les tools `open_sms_composer` / `open_dialer` restent des tools "client-side" : le backend renvoie `client_action: { kind: "open_sms"|"open_dialer", payload }` dans la réponse.
-
-**Frontend `MAvaChat.tsx`** :
-- Après réception, si `data.client_action`, dispatcher un `CustomEvent("pp:ava-client-action", { detail })` capté par `PlanipretMobile.tsx` qui appelle `openDialer(n)` / navigue vers `/mplanipret/messages?to=X&text=Y`.
-- Afficher un badge de résultat réel ("✅ SMS envoyé" / "❌ Échec : …") plutôt que le texte du LLM.
-
-Aucune modification du prompt système : il attend déjà une confirmation écrite (mémoire actuelle).
-
-## 6. Bouton "Rapport détaillé" sur Home (Claude)
-
-Fichier : `apps/planipret-mobile/src/pages/planipret/mobile/MHome.tsx` + nouveau `supabase/functions/pp-ava-report/index.ts`
-
-**UI** : dans MHome, sous le hero, ajouter une carte "Rapport de performance" avec 3 pills → **Aujourd'hui / Semaine / Mois**. Au tap : ouvre un bottom-sheet, appelle la fonction, streame/affiche le markdown formaté par Claude.
-
-**Backend** : nouvelle edge function `pp-ava-report` :
-- Input : `{ broker_id, range: "day"|"week"|"month" }`.
-- Aggrège depuis Supabase : `planipret_phone_calls`, `planipret_sms_messages`, `planipret_email_messages`, `planipret_contacts`, `planipret_leads` sur la fenêtre.
-- Envoie à Lovable AI Gateway avec `model: "anthropic/claude-sonnet-4-5"` (via `openai-compatible` + `LOVABLE_API_KEY`, cf. `ai-sdk-lovable-gateway` knowledge) — system prompt = "Tu es AVA, produit un rapport structuré (KPIs, tendances, recommandations) en français, format markdown".
-- Retourne `{ report: string, generated_at }`. Enregistre dans `planipret_reports` (créer table si absente).
-
-Pas de nouvelle dépendance NPM ; réutilise `supabase.functions.invoke("pp-ava-report", …)`.
-
-## Détails techniques
-
-- Tous les composants restent en dark-first ; le toggle thème réutilise la logique déjà en place dans `MMore` — pas de nouveau contexte.
-- L'événement `pp:ava-client-action` sera écouté au niveau de `PlanipretMobile.tsx` (déjà racine avec accès à `openDialer` via `FabDialer` bus).
-- `pp-ava-report` doit être ajouté à `supabase/config.toml` (`[functions.pp-ava-report] verify_jwt = true`) puis déployé.
-- Aucune modif hors `apps/planipret-mobile` et `supabase/functions/` — respect strict de la mémoire `mplanipret-isolation-locked` et `landing-page-locked`.
-
-## Livrables
-
-1. Header enrichi (FR/EN + thème) sur toutes les pages mobiles.
-2. Carte Maestro toujours visible dans Settings.
-3. Sign-out → écran d'auth mobile natif.
-4. Composer/lecteur d'email respectent la safe-area iOS.
-5. AVA envoie réellement SMS/appels et rapporte le vrai statut.
-6. Bouton "Rapport détaillé" Home → Claude → rapport Daily/Weekly/Monthly.
+Un rapport concis par point (✅ / ⚠️ + détail), avec les correctifs immédiats si régression détectée.

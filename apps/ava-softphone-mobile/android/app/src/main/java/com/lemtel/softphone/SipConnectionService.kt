@@ -125,8 +125,10 @@ class SipConnectionService : Service() {
     @Volatile private var lastLoginAt = 0L
     @Volatile private var lastPingAt = 0L
     @Volatile private var lastReason = ""
+    @Volatile private var currentCallId: String? = null
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var callActionReceiver: android.content.BroadcastReceiver? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -145,6 +147,7 @@ class SipConnectionService : Service() {
         }
         emitStatus("idle", "service_created")
         registerNetworkWatchdog()
+        registerCallActionReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

@@ -4,6 +4,11 @@ import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
+async function sha1(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function refreshToken(admin: any, profile: any) {
   return await refreshMicrosoftAccessToken(admin, profile, MS365_DELEGATED_SCOPES);
 }

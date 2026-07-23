@@ -19,6 +19,7 @@ import { useCallerNames } from "@/lib/planipret/callerLookup";
 import { connectMs365 } from "@/lib/ms365Connect";
 import { getPpContacts } from "@/lib/ppContactsCache";
 import RecipientAutocomplete from "@/components/planipret/mobile/RecipientAutocomplete";
+import EmailHistoryList from "@/components/planipret/mobile/EmailHistoryList";
 
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "history" | "roster";

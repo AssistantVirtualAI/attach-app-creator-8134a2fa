@@ -1224,6 +1224,91 @@ function EmailsList({ profile }: { profile: any }) {
   );
 }
 
+function SenderQuickActions({ email, name }: { email: string; name: string }) {
+  const { openDialer } = useOutletContext<PlanipretMobileContext>();
+  const [state, setState] = useState<"idle" | "loading" | "found" | "not_found">("idle");
+  const [phone, setPhone] = useState<string | null>(null);
+  const [contactName, setContactName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!email) { setState("not_found"); return; }
+    setState("loading");
+    (async () => {
+      try {
+        const contacts = await getPpContacts();
+        const hit = (contacts ?? []).find((c: any) =>
+          (c?.email ?? "").toLowerCase() === email.toLowerCase() ||
+          (Array.isArray(c?.emails) && c.emails.some((e: string) => (e ?? "").toLowerCase() === email.toLowerCase()))
+        );
+        const ph = hit?.phone ?? hit?.mobile ?? hit?.phones?.[0] ?? null;
+        if (cancelled) return;
+        if (ph) {
+          setPhone(String(ph));
+          setContactName(hit?.name ?? hit?.display_name ?? null);
+          setState("found");
+        } else {
+          setState("not_found");
+        }
+      } catch {
+        if (!cancelled) setState("not_found");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [email]);
+
+  const callNow = () => {
+    if (!phone) { toast.info("Aucun numéro trouvé pour cet expéditeur"); return; }
+    try { openDialer(phone); } catch { toast.error("Impossible d'ouvrir le clavier"); }
+  };
+  const smsNow = () => {
+    if (!phone) { toast.info("Aucun numéro trouvé pour cet expéditeur"); return; }
+    const url = `/mplanipret/messages?tab=sms&to=${encodeURIComponent(phone)}`;
+    window.location.hash = "";
+    window.history.pushState({}, "", url);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
+  const disabled = state !== "found";
+  const subLabel =
+    state === "loading" ? "Recherche du contact…" :
+    state === "found" ? `${contactName ?? name} · ${phone}` :
+    "Aucun numéro connu pour cet expéditeur";
+
+  return (
+    <div
+      className="rounded-xl p-2.5 flex items-center gap-2"
+      style={{ background: "rgba(46,155,220,0.08)", border: "1px solid rgba(46,155,220,0.25)" }}
+    >
+      <Sparkles className="w-4 h-4 flex-shrink-0" style={{ color: "var(--pp-brand-accent)" }} />
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-semibold" style={{ color: "var(--pp-text-primary)" }}>AVA · Contacter</p>
+        <p className="text-[10px] truncate" style={{ color: "var(--pp-text-muted)" }}>{subLabel}</p>
+      </div>
+      <button
+        onClick={callNow}
+        disabled={disabled}
+        className="w-9 h-9 rounded-full flex items-center justify-center disabled:opacity-40"
+        style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.35)", color: "#22c55e" }}
+        aria-label="Appeler"
+      >
+        {state === "loading" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Phone className="w-4 h-4" />}
+      </button>
+      <button
+        onClick={smsNow}
+        disabled={disabled}
+        className="w-9 h-9 rounded-full flex items-center justify-center disabled:opacity-40"
+        style={{ background: "rgba(46,155,220,0.15)", border: "1px solid rgba(46,155,220,0.35)", color: "var(--pp-brand-accent)" }}
+        aria-label="Texto"
+      >
+        <MessageSquare className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+
+
 function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
   email: any;
   onClose: () => void;

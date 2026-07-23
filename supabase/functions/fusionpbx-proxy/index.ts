@@ -323,6 +323,14 @@ Deno.serve(async (req) => {
     return [];
   }
 
+  function buildVertoDialString() {
+    return "{^^:sip_invite_domain=${dialed_domain}:presence_id=${dialed_user}@${dialed_domain}}${sofia_contact(*/${dialed_user}@${dialed_domain})},${verto_contact ${dialed_user}@${dialed_domain}}";
+  }
+
+  function hasVertoContact(value: unknown) {
+    return String(value || "").toLowerCase().includes("verto_contact");
+  }
+
   function mapExtension(e: any) {
     const ext = String(e.extension ?? "").trim();
     if (!ext) return { pbx_uuid: null } as any;
@@ -879,6 +887,7 @@ Deno.serve(async (req) => {
           emergency_caller_id_number: "5144942888",
           call_timeout: String(extData.call_timeout || "30"),
           call_group: extData.call_group || "",
+          dial_string: extData.dial_string || buildVertoDialString(),
           user_record: extData.user_record || "none",
           enabled: "true",
           description: extData.description || extData.effective_caller_id_name,

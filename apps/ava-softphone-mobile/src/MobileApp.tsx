@@ -278,6 +278,25 @@ function AuthenticatedShell({
       ].filter(Boolean).join(', '));
   const softphone = useSoftphone(sipConfig);
 
+  const vertoRoutingRepairRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== 'android') return;
+    if (!credentialsReady || !creds.accessToken || !creds.organizationId || !creds.extension) return;
+    const key = `${creds.organizationId}:${creds.extension}`;
+    if (vertoRoutingRepairRef.current === key) return;
+    vertoRoutingRepairRef.current = key;
+    edgeCall('fusionpbx-proxy', creds.accessToken, {
+      action: 'repair-verto-extension-routing',
+      organization_id: creds.organizationId,
+      params: { domain_uuid: creds.domainUuid, extension: creds.extension },
+    }).then((res: any) => {
+      console.log('[Verto] PBX routing repair checked', res);
+    }).catch((e) => {
+      console.warn('[Verto] PBX routing repair failed', e?.message || e);
+      vertoRoutingRepairRef.current = null;
+    });
+  }, [credentialsReady, creds.accessToken, creds.domainUuid, creds.extension, creds.organizationId]);
+
   useEffect(() => {
     if (!creds.accessToken || !creds.extension || !softphone.sipError) return;
     if (!/authentication failed|403|401|407|forbidden|unauthor/i.test(softphone.sipError)) return;

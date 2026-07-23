@@ -17,6 +17,9 @@ type Session = { id: string; title: string; last_message_at: string };
 const MUTATING_ACTIONS = new Set(["send_email", "create_calendar_event", "send_teams_message", "reply_teams_message"]);
 type PendingConfirm = { suggestion: AvaSuggestion; label: string } | null;
 
+const CONFIRM_RE = /^(oui|ok|okay|confirm[eé]?|confirm[eé] pour envoyer|j['’]?autorise|autorise|vas-y|go|envoie|envoyer|appelle|appel|cr[eé]e|supprime|delete|yes|yep|approved?|approuv[eé])\b/i;
+const CANCEL_RE = /^(non|annule|annuler|stop|cancel|cancelled?|no|n\b)/i;
+
 export default function MAvaChat() {
   const [userId, setUserId] = useState<string | null>(null);
   const [voiceAgentAllowed, setVoiceAgentAllowed] = useState(false);
@@ -96,6 +99,15 @@ export default function MAvaChat() {
     const optimistic: Msg = { id: `tmp-${Date.now()}`, role: "user", message: text, created_at: new Date().toISOString() };
     setMessages((m) => [...m, optimistic]);
     try {
+      if (pendingConfirm && CONFIRM_RE.test(text)) {
+        await executeConfirmedAction(pendingConfirm.suggestion, { keepBusy: true });
+        return;
+      }
+      if (pendingConfirm && CANCEL_RE.test(text)) {
+        setPendingConfirm(null);
+        setMessages((m) => [...m, { id: `cancel-${Date.now()}`, role: "assistant", message: "Action annulée.", created_at: new Date().toISOString() }]);
+        return;
+      }
       const history = messages.slice(-8).map((m) => ({ role: m.role, content: m.message }));
       const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
         body: { mode: "chat", user_message: text, session_id: sessionId, history },
@@ -121,12 +133,20 @@ export default function MAvaChat() {
   const runSuggestion = async (suggestion: AvaSuggestion) => {
     const action = String(suggestion.payload?.action ?? "");
     const needsConfirm = suggestion.kind === "call" || suggestion.kind === "sms" || MUTATING_ACTIONS.has(action);
-    // On iOS WebView, window.confirm() is blocked — use inline confirmation instead
-    if (needsConfirm) { setPendingConfirm({ suggestion, label: suggestion.label }); return; }
+    if (needsConfirm) {
+      setPendingConfirm({ suggestion, label: suggestion.label });
+      setMessages((m) => [...m, {
+        id: `confirm-${Date.now()}`,
+        role: "assistant",
+        message: `Confirmation requise: ${suggestion.label}\nRéponds simplement « Oui » ou « Confirmé » pour exécuter, ou « Annuler » pour arrêter.`,
+        created_at: new Date().toISOString(),
+      }]);
+      return;
+    }
     await executeConfirmedAction(suggestion);
   };
 
-  const executeConfirmedAction = async (suggestion: AvaSuggestion) => {
+  const executeConfirmedAction = async (suggestion: AvaSuggestion, opts: { keepBusy?: boolean } = {}) => {
     setPendingConfirm(null);
     setRunningSuggestion(suggestion.id);
     try {
@@ -145,6 +165,7 @@ export default function MAvaChat() {
       toast.error(e?.message ?? "Action AVA impossible");
     } finally {
       setRunningSuggestion(null);
+      if (opts.keepBusy) setBusy(false);
     }
   };
 
@@ -373,28 +394,6 @@ export default function MAvaChat() {
           )}
         </div>
       </div>
-
-      {/* Inline confirmation — replaces window.confirm() blocked on iOS WebView */}
-      {pendingConfirm && (
-        <div className="fixed inset-0 z-[300] flex items-end justify-center" style={{ background: "rgba(0,0,0,0.55)" }}>
-          <div className="w-full max-w-md mx-4 mb-8 rounded-2xl p-5 space-y-4" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", boxShadow: "0 24px 48px rgba(0,0,0,0.4)" }}>
-            <p className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>Confirmer l'action</p>
-            <p className="text-sm" style={{ color: "var(--pp-text-secondary)" }}>{pendingConfirm.label}</p>
-            <div className="flex gap-3 pt-1">
-              <button
-                onClick={() => setPendingConfirm(null)}
-                className="flex-1 py-2 rounded-xl text-sm font-semibold"
-                style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border-2)" }}
-              >Annuler</button>
-              <button
-                onClick={() => executeConfirmedAction(pendingConfirm.suggestion)}
-                className="flex-1 py-2 rounded-xl text-sm font-semibold text-white"
-                style={{ background: "linear-gradient(135deg,#2E9BDC,#7C3AED)", boxShadow: "0 6px 18px rgba(124,58,237,0.4)" }}
-              >Confirmer</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="shrink-0 z-10 backdrop-blur-xl px-3 pt-2" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 70%, transparent)", borderTop: "1px solid var(--pp-bg-border)", transform: "translateZ(0)", paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))" }}>
        <div className="flex items-end gap-2 max-w-3xl w-full mx-auto rounded-full pl-2 pr-1.5 py-1.5" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", boxShadow: "0 10px 30px -10px rgba(124,58,237,0.25)" }}>

@@ -1564,14 +1564,16 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
           {(mode === "new" || mode === "forward") && (
             <>
-              <div className="flex items-center gap-2">
-                <input
-                  value={to} onChange={(e) => setTo(e.target.value)} placeholder={t("messages.toPlaceholder")}
-                  className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
-                />
+              <div className="flex items-start gap-2">
+                <div className="flex-1">
+                  <RecipientAutocomplete
+                    value={to} onChange={setTo} placeholder={t("messages.toPlaceholder")}
+                    className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                    style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }}
+                  />
+                </div>
                 {mode === "new" && (
-                  <button onClick={() => setShowCc((s) => !s)} className="text-[11px] px-2 py-1 rounded-lg"
+                  <button onClick={() => setShowCc((s) => !s)} className="text-[11px] px-2 py-2 rounded-lg shrink-0"
                     style={{ color: "var(--pp-brand-accent)", background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
                     Cc/Cci
                   </button>
@@ -1579,10 +1581,10 @@ function EmailComposeSheet({ init, onClose, onSent }: { init: ComposeInit; onClo
               </div>
               {mode === "new" && showCc && (
                 <>
-                  <input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="Cc"
+                  <RecipientAutocomplete value={cc} onChange={setCc} placeholder="Cc"
                     className="w-full px-3 py-2 rounded-lg text-sm outline-none"
                     style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
-                  <input value={bcc} onChange={(e) => setBcc(e.target.value)} placeholder="Cci"
+                  <RecipientAutocomplete value={bcc} onChange={setBcc} placeholder="Cci"
                     className="w-full px-3 py-2 rounded-lg text-sm outline-none"
                     style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
                 </>

@@ -2,12 +2,17 @@ package com.lemtel.softphone
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.AudioFormat
 import android.media.AudioAttributes
+import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import com.getcapacitor.JSArray
@@ -114,6 +119,33 @@ class CapacitorPjsip : Plugin() {
             call.resolve(JSObject().apply { put("ok", true) })
         } catch (e: Exception) {
             call.reject(e.message ?: "startSipService failed")
+        }
+    }
+
+    @PluginMethod
+    fun requestBatteryOptimizationExemption(call: PluginCall) {
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                call.resolve(JSObject().apply { put("ok", true); put("ignored", true); put("requested", false) })
+                return
+            }
+            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val packageName = context.packageName
+            val alreadyIgnored = pm.isIgnoringBatteryOptimizations(packageName)
+            if (!alreadyIgnored) {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            }
+            call.resolve(JSObject().apply {
+                put("ok", true)
+                put("ignored", alreadyIgnored)
+                put("requested", !alreadyIgnored)
+            })
+        } catch (e: Exception) {
+            call.reject(e.message ?: "battery optimization request failed")
         }
     }
 

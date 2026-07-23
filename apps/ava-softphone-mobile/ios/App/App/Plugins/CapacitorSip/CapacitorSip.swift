@@ -344,14 +344,22 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
             }
             let instanceParam = "+sip.instance=\"<urn:uuid:\(instanceId)>\""
 
+            // RFC 8599 — pn-param MUST be the APNs topic. For VoIP PushKit
+            // the topic is <bundle-id>.voip. Previously we sent "apns.voip"
+            // which FusionPBX/mod_sofia rejects, so no push was ever emitted
+            // when the app was suspended → phone never rang while locked.
+            let bundleId = Bundle.main.bundleIdentifier ?? "com.lemtel.softphone"
+            let apnsTopic = "\(bundleId).voip"
             if let token = self.voipPushToken, !token.isEmpty {
-                let contact = "sip:\(username)@\(server);transport=tcp;pn-prid=\(token);pn-param=apns.voip;pn-provider=apns;q=1.0;\(instanceParam)"
+                // q=1.0 = highest priority so FreeSWITCH prefers this contact
+                // over any other binding (e.g. Ringotel) when routing INVITE.
+                let contact = "sip:\(username)@\(server);transport=tcp;pn-prid=\(token);pn-param=\(apnsTopic);pn-provider=apns;pn-silent=1;q=1.0;\(instanceParam)"
                 accCfg.force_contact = self.pjStrDup(contact)
-                NSLog("[CapacitorPjsip] REGISTER contact with VoIP push token q=1.0 instance=%@", instanceId)
+                NSLog("[CapacitorPjsip] REGISTER contact with VoIP push token topic=%@ q=1.0 instance=%@ token=%@…", apnsTopic, instanceId, String(token.prefix(12)))
             } else {
                 let contact = "sip:\(username)@\(server);transport=tcp;q=1.0;\(instanceParam)"
                 accCfg.force_contact = self.pjStrDup(contact)
-                NSLog("[CapacitorPjsip] REGISTER contact without push token q=1.0 instance=%@", instanceId)
+                NSLog("[CapacitorPjsip] ⚠️ REGISTER without VoIP push token — app will only ring while foregrounded. instance=%@", instanceId)
             }
 
             accCfg.cred_count = 1

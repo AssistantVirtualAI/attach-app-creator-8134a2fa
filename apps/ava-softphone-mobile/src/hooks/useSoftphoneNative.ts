@@ -8,7 +8,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SIPConfig } from '../lib/sip/jssipProvider';
-import { CapacitorPjsip, onNativeSipEvent } from '../lib/sip/nativeSipProvider';
+import { Capacitor } from '@capacitor/core';
+import { CapacitorPjsip, onNativeSipEvent, getIosSipServiceStatus } from '../lib/sip/nativeSipProvider';
+
 import { EMPTY_QUALITY, type CallQuality } from '../lib/sip/callQuality';
 import { loadAudioProfile, saveAudioProfile, type AudioProfile } from '../lib/sip/audioProfile';
 import { startNativeSipTracking, setNativeRegStatus } from '../lib/sip/nativeSipState';

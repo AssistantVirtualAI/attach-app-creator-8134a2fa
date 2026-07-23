@@ -177,6 +177,16 @@ extension CallKitManager: CXProviderDelegate {
         activeUUID = nil
     }
 
+    public func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction) {
+        onHold?(action.isOnHold)
+        action.fulfill()
+    }
+
+    public func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
+        onMuted?(action.isMuted)
+        action.fulfill()
+    }
+
     public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
         action.fulfill()
     }

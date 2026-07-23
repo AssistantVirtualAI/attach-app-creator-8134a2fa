@@ -22,7 +22,10 @@ export async function isMs365LoginConfigured(): Promise<boolean> {
   return Boolean(cfg?.configured && cfg?.client_id);
 }
 
-export async function startMicrosoftSignIn(nextPath = "/post-login"): Promise<void> {
+export async function startMicrosoftSignIn(
+  nextPath = "/post-login",
+  opts?: { loginHint?: string; prompt?: "select_account" | "consent" | "login" | "none" },
+): Promise<void> {
   const cfg = await fetchStartConfig();
   if (!cfg?.configured || !cfg?.client_id) {
     throw new Error("Microsoft SSO n'est pas configuré.");
@@ -31,7 +34,13 @@ export async function startMicrosoftSignIn(nextPath = "/post-login"): Promise<vo
     localStorage.setItem(INTENT_KEY, "login");
     localStorage.setItem(NEXT_KEY, nextPath);
   } catch {}
-  await openMs365Authorize({ clientId: cfg.client_id, tenant: cfg.tenant_id || "common", state: "login" });
+  await openMs365Authorize({
+    clientId: cfg.client_id,
+    tenant: cfg.tenant_id || "common",
+    state: "login",
+    prompt: opts?.prompt,
+    loginHint: opts?.loginHint,
+  });
 }
 
 export function getMicrosoftSignInIntent(): string | null {

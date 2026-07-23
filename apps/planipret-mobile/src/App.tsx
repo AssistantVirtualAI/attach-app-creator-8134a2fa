@@ -72,16 +72,26 @@ function NativeDeepLinkBridge() {
           pathWithHost === '/auth/ms365/callback';
 
         if (isMs365Callback) {
+          try {
+            const { Browser } = await import('@capacitor/browser');
+            await Browser.close();
+          } catch {}
           localStorage.setItem('pp_ms365_callback_url', rawUrl);
           navigate(`/auth/microsoft/callback${url.search}`, { replace: true });
+          return;
         }
 
         const isMaestroCallback =
           url.pathname === '/auth/maestro/callback' ||
           pathWithHost === '/auth/maestro/callback';
         if (isMaestroCallback) {
+          try {
+            const { Browser } = await import('@capacitor/browser');
+            await Browser.close();
+          } catch {}
           localStorage.setItem('pp_maestro_callback_url', rawUrl);
           navigate(`/auth/maestro/callback${url.search}`, { replace: true });
+          return;
         }
       } catch {
         // Ignore non-URL events.

@@ -30,6 +30,33 @@ function createCodeVerifier(): string {
   return base64Url(bytes);
 }
 
+async function setNativeItem(key: string, value: string): Promise<void> {
+  try {
+    if (!Capacitor.isNativePlatform()) return;
+    const { Preferences } = await import("@capacitor/preferences");
+    await Preferences.set({ key, value });
+  } catch {}
+}
+
+async function getNativeItem(key: string): Promise<string | null> {
+  try {
+    if (!Capacitor.isNativePlatform()) return null;
+    const { Preferences } = await import("@capacitor/preferences");
+    const { value } = await Preferences.get({ key });
+    return value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function removeNativeItem(key: string): Promise<void> {
+  try {
+    if (!Capacitor.isNativePlatform()) return;
+    const { Preferences } = await import("@capacitor/preferences");
+    await Preferences.remove({ key });
+  } catch {}
+}
+
 export function getMs365RedirectUri(): string {
   if (Capacitor.isNativePlatform()) return MS365_NATIVE_REDIRECT_URI;
   return `${window.location.origin}${MS365_WEB_CALLBACK_PATH}`;
@@ -38,13 +65,14 @@ export function getMs365RedirectUri(): string {
 export function rememberMs365RedirectUri(redirectUri: string): void {
   try { sessionStorage.setItem(REDIRECT_STORAGE_KEY, redirectUri); } catch {}
   try { localStorage.setItem(REDIRECT_STORAGE_KEY, redirectUri); } catch {}
+  void setNativeItem(REDIRECT_STORAGE_KEY, redirectUri);
 }
 
-export function getRememberedMs365RedirectUri(): string {
+export async function getRememberedMs365RedirectUri(): Promise<string> {
   try {
-    return sessionStorage.getItem(REDIRECT_STORAGE_KEY) || localStorage.getItem(REDIRECT_STORAGE_KEY) || getMs365RedirectUri();
+    return sessionStorage.getItem(REDIRECT_STORAGE_KEY) || localStorage.getItem(REDIRECT_STORAGE_KEY) || await getNativeItem(REDIRECT_STORAGE_KEY) || getMs365RedirectUri();
   } catch {
-    return getMs365RedirectUri();
+    return await getNativeItem(REDIRECT_STORAGE_KEY) || getMs365RedirectUri();
   }
 }
 
@@ -53,19 +81,27 @@ export function clearRememberedMs365RedirectUri(): void {
   try { localStorage.removeItem(REDIRECT_STORAGE_KEY); } catch {}
   try { sessionStorage.removeItem(VERIFIER_STORAGE_KEY); } catch {}
   try { localStorage.removeItem(VERIFIER_STORAGE_KEY); } catch {}
+  void removeNativeItem(REDIRECT_STORAGE_KEY);
+  void removeNativeItem(VERIFIER_STORAGE_KEY);
   try {
-    Object.keys(sessionStorage).filter((k) => k.startsWith(`${VERIFIER_STORAGE_KEY}:`)).forEach((k) => sessionStorage.removeItem(k));
+    Object.keys(sessionStorage).filter((k) => k.startsWith(`${VERIFIER_STORAGE_KEY}:`)).forEach((k) => {
+      sessionStorage.removeItem(k);
+      void removeNativeItem(k);
+    });
   } catch {}
   try {
-    Object.keys(localStorage).filter((k) => k.startsWith(`${VERIFIER_STORAGE_KEY}:`)).forEach((k) => localStorage.removeItem(k));
+    Object.keys(localStorage).filter((k) => k.startsWith(`${VERIFIER_STORAGE_KEY}:`)).forEach((k) => {
+      localStorage.removeItem(k);
+      void removeNativeItem(k);
+    });
   } catch {}
 }
 
-export function getRememberedMs365CodeVerifier(state?: string | null): string | null {
+export async function getRememberedMs365CodeVerifier(state?: string | null): Promise<string | null> {
   try {
-    return sessionStorage.getItem(verifierKey(state)) || localStorage.getItem(verifierKey(state)) || sessionStorage.getItem(VERIFIER_STORAGE_KEY) || localStorage.getItem(VERIFIER_STORAGE_KEY);
+    return sessionStorage.getItem(verifierKey(state)) || localStorage.getItem(verifierKey(state)) || sessionStorage.getItem(VERIFIER_STORAGE_KEY) || localStorage.getItem(VERIFIER_STORAGE_KEY) || await getNativeItem(verifierKey(state)) || await getNativeItem(VERIFIER_STORAGE_KEY);
   } catch {
-    return null;
+    return await getNativeItem(verifierKey(state)) || await getNativeItem(VERIFIER_STORAGE_KEY);
   }
 }
 
@@ -83,6 +119,8 @@ export async function buildMs365AuthorizeUrl(cfg: {
   const challenge = await sha256Base64Url(verifier);
   try { sessionStorage.setItem(verifierKey(oauthState), verifier); sessionStorage.setItem(VERIFIER_STORAGE_KEY, verifier); } catch {}
   try { localStorage.setItem(verifierKey(oauthState), verifier); localStorage.setItem(VERIFIER_STORAGE_KEY, verifier); } catch {}
+  await setNativeItem(verifierKey(oauthState), verifier);
+  await setNativeItem(VERIFIER_STORAGE_KEY, verifier);
   const params = new URLSearchParams({
     client_id: cfg.clientId,
     response_type: "code",

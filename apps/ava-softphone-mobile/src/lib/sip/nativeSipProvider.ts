@@ -186,6 +186,30 @@ export async function getAndroidSipServiceStatus(): Promise<AndroidSipServiceSta
   catch (e) { console.warn('[sip] getSipServiceStatus failed', e); return null; }
 }
 
+/**
+ * iOS equivalent of getAndroidSipServiceStatus — polls the PJSIP plugin for
+ * the current registration state so the UI can reflect background/foreground
+ * transitions.
+ */
+export async function getIosSipServiceStatus(): Promise<AndroidSipServiceStatus | null> {
+  if (__platform !== 'ios') return null;
+  try {
+    const r = await (CapacitorSipNative as any).getSipServiceStatus?.();
+    return (r ?? null) as AndroidSipServiceStatus | null;
+  } catch (e) {
+    console.warn('[sip] iOS getSipServiceStatus failed', e);
+    return null;
+  }
+}
+
+/** Force a native re-REGISTER (iOS only; Android service handles its own loop). */
+export async function triggerIosReregister(): Promise<void> {
+  if (__platform !== 'ios') return;
+  try { await (CapacitorSipNative as any).triggerReregister?.(); }
+  catch (e) { console.warn('[sip] iOS triggerReregister failed', e); }
+}
+
+
 export async function onAndroidSipServiceStatus(
   cb: (status: AndroidSipServiceStatus) => void,
 ): Promise<() => void> {

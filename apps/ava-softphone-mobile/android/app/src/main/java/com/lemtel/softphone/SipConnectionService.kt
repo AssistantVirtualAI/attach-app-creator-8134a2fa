@@ -63,6 +63,19 @@ class SipConnectionService : Service() {
         const val KEY_DOMAIN = "verto_domain"
         const val KEY_DISPLAY_NAME = "verto_display_name"
 
+        const val ACTION_STATUS = "com.lemtel.softphone.SIP_SERVICE_STATUS"
+        const val KEY_STATUS = "verto_native_status"
+        const val KEY_REASON = "verto_native_reason"
+        const val KEY_UPDATED_AT = "verto_native_updated_at"
+        const val KEY_LAST_LOGIN_AT = "verto_native_last_login_at"
+        const val KEY_LAST_PING_AT = "verto_native_last_ping_at"
+        const val KEY_LAST_FRAME_AT = "verto_native_last_frame_at"
+        const val KEY_RECONNECT_ATTEMPT = "verto_native_reconnect_attempt"
+        const val KEY_CONNECTING = "verto_native_connecting"
+        const val KEY_LOGGED_IN = "verto_native_logged_in"
+        const val KEY_WAKE_HELD = "verto_native_wake_held"
+        const val KEY_WIFI_HELD = "verto_native_wifi_held"
+
         fun start(context: Context) {
             val intent = Intent(context, SipConnectionService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -109,6 +122,9 @@ class SipConnectionService : Service() {
     private var reconnectFuture: ScheduledFuture<*>? = null
     @Volatile private var connecting = false
     @Volatile private var lastFrameAt = 0L
+    @Volatile private var lastLoginAt = 0L
+    @Volatile private var lastPingAt = 0L
+    @Volatile private var lastReason = ""
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -127,6 +143,7 @@ class SipConnectionService : Service() {
             setReferenceCounted(false)
             acquire()
         }
+        emitStatus("idle", "service_created")
         registerNetworkWatchdog()
     }
 
@@ -140,6 +157,7 @@ class SipConnectionService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        emitStatus(if (isLoggedIn) "registered" else "connecting", "service_start")
         if (!isLoggedIn && !connecting) executor.submit { connectVerto() }
         return START_STICKY
     }
@@ -162,6 +180,7 @@ class SipConnectionService : Service() {
         // Keep the SIP/Verto foreground registration alive even if Android removes
         // the WebView task. The stored credentials let the sticky service restore
         // the connection without opening the UI.
+        emitStatus("reconnecting", "task_removed")
         scheduleReconnect(1_000L)
         super.onTaskRemoved(rootIntent)
     }
@@ -184,12 +203,14 @@ class SipConnectionService : Service() {
         if (login.isEmpty() || password.isEmpty()) {
             Log.w(TAG, "No credentials stored — skipping native Verto connect")
             connecting = false
+            emitStatus("error", "missing_credentials")
             return
         }
 
         try {
             Log.i(TAG, "Connecting native Verto WS to wss://$host:$port ext=$login")
             updateNotification("Connexion en cours...")
+            emitStatus("connecting", "open_socket")
 
             val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
             val socket = factory.createSocket(host, port) as SSLSocket
@@ -225,6 +246,7 @@ class SipConnectionService : Service() {
             isLoggedIn = false
             lastFrameAt = System.currentTimeMillis()
             connecting = false
+            emitStatus("connecting", "ws_upgraded")
 
             // Send verto.login
             sendVertoLogin(login, password, domain, displayName)
@@ -242,6 +264,7 @@ class SipConnectionService : Service() {
             Log.e(TAG, "Verto WS error: ${e.message}")
             isLoggedIn = false
             connecting = false
+            emitStatus("disconnected", e.message ?: "verto_ws_error")
             closeSocket()
             scheduleReconnect()
         }
@@ -301,6 +324,7 @@ class SipConnectionService : Service() {
         }
         isLoggedIn = false
         connecting = false
+        emitStatus("disconnected", "read_loop_ended")
         closeSocket()
         if (!isDestroyed) scheduleReconnect()
     }
@@ -409,6 +433,7 @@ class SipConnectionService : Service() {
     private fun sendPing() {
         if (!isLoggedIn) return
         try {
+            lastPingAt = System.currentTimeMillis()
             val ping = JSONObject().apply {
                 put("jsonrpc", "2.0")
                 put("id", System.currentTimeMillis().toInt())
@@ -420,12 +445,14 @@ class SipConnectionService : Service() {
             }
             if (!sendFrame(ping.toString())) {
                 isLoggedIn = false
+                emitStatus("disconnected", "ping_send_failed")
                 closeSocket()
                 scheduleReconnect()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Ping failed: ${e.message}")
             isLoggedIn = false
+            emitStatus("disconnected", e.message ?: "ping_failed")
             closeSocket()
             scheduleReconnect()
         }
@@ -454,14 +481,17 @@ class SipConnectionService : Service() {
                     if (loginOk) {
                         isLoggedIn = true
                         connecting = false
+                        lastLoginAt = System.currentTimeMillis()
                         reconnectAttempt = 0
                         reconnectFuture?.cancel(false)
                         Log.i(TAG, "Verto login SUCCESS — extension registered ✅")
+                        emitStatus("registered", "login_ok")
                         handler.post { updateNotification("Connecté · Prêt à recevoir des appels") }
                     } else {
                         Log.e(TAG, "Verto login FAILED: $text")
                         isLoggedIn = false
                         connecting = false
+                        emitStatus("error", "login_failed")
                         closeSocket()
                         scheduleReconnect()
                     }
@@ -471,6 +501,7 @@ class SipConnectionService : Service() {
                     val callerName = params?.optString("caller_id_name") ?: "Appel entrant"
                     val callerNumber = params?.optString("caller_id_number") ?: ""
                     Log.i(TAG, "Incoming call: $callerName <$callerNumber>")
+                    emitStatus("incoming", "${callerName} <${callerNumber}>")
                     handler.post { showIncomingCallNotification(callerName, callerNumber) }
                 }
             }
@@ -489,6 +520,7 @@ class SipConnectionService : Service() {
         reconnectAttempt++
         val delay = forcedDelayMs ?: minOf(5_000L * reconnectAttempt, 30_000L)
         Log.i(TAG, "Reconnecting in ${delay}ms (attempt $reconnectAttempt)")
+        emitStatus("reconnecting", "delay=${delay}ms attempt=$reconnectAttempt")
         handler.post { updateNotification("Reconnexion en cours...") }
         reconnectFuture = executor.schedule({ if (!isDestroyed) connectVerto() }, delay, TimeUnit.MILLISECONDS)
     }
@@ -505,10 +537,12 @@ class SipConnectionService : Service() {
                     if (!isDestroyed) {
                         if (!isLoggedIn && connecting) return
                         if (!isLoggedIn && sslSocket == null) {
+                            emitStatus("reconnecting", "network_available_no_socket")
                             scheduleReconnect(1_000L)
                             return
                         }
                         isLoggedIn = false
+                        emitStatus("reconnecting", "network_available_refresh")
                         closeSocket()
                         scheduleReconnect(1_000L)
                     }
@@ -517,6 +551,7 @@ class SipConnectionService : Service() {
                 override fun onLost(network: Network) {
                     Log.i(TAG, "Network lost — marking Verto offline")
                     isLoggedIn = false
+                    emitStatus("disconnected", "network_lost")
                     closeSocket()
                     if (!isDestroyed) scheduleReconnect(5_000L)
                 }
@@ -536,6 +571,44 @@ class SipConnectionService : Service() {
         } finally {
             networkCallback = null
         }
+    }
+
+    private fun emitStatus(status: String, reason: String? = null) {
+        val now = System.currentTimeMillis()
+        lastReason = reason ?: lastReason
+        try {
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().apply {
+                putString(KEY_STATUS, status)
+                putString(KEY_REASON, lastReason)
+                putLong(KEY_UPDATED_AT, now)
+                putLong(KEY_LAST_LOGIN_AT, lastLoginAt)
+                putLong(KEY_LAST_PING_AT, lastPingAt)
+                putLong(KEY_LAST_FRAME_AT, lastFrameAt)
+                putInt(KEY_RECONNECT_ATTEMPT, reconnectAttempt)
+                putBoolean(KEY_CONNECTING, connecting)
+                putBoolean(KEY_LOGGED_IN, isLoggedIn)
+                putBoolean(KEY_WAKE_HELD, wakeLock?.isHeld == true)
+                putBoolean(KEY_WIFI_HELD, wifiLock?.isHeld == true)
+                apply()
+            }
+        } catch (_: Exception) {}
+
+        try {
+            sendBroadcast(Intent(ACTION_STATUS).apply {
+                setPackage(packageName)
+                putExtra("status", status)
+                putExtra("reason", lastReason)
+                putExtra("updatedAt", now)
+                putExtra("lastLoginAt", lastLoginAt)
+                putExtra("lastPingAt", lastPingAt)
+                putExtra("lastFrameAt", lastFrameAt)
+                putExtra("reconnectAttempt", reconnectAttempt)
+                putExtra("connecting", connecting)
+                putExtra("loggedIn", isLoggedIn)
+                putExtra("wakeLockHeld", wakeLock?.isHeld == true)
+                putExtra("wifiLockHeld", wifiLock?.isHeld == true)
+            })
+        } catch (_: Exception) {}
     }
 
     // ── Notifications ────────────────────────────────────────────────────────

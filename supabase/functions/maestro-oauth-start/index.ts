@@ -28,8 +28,34 @@ Deno.serve(async (req) => {
     const env = getMaestroOAuthEnv();
     if (!isMaestroOAuthConfigured(env)) return j({ error: "not_configured" }, 200);
 
+    // Validate authorize URL is absolute + https to avoid Safari "invalid address"
+    let authorizeBase: URL;
+    try {
+      authorizeBase = new URL(env.authUrl);
+    } catch {
+      console.error("[maestro-oauth-start] MAESTRO_OAUTH_AUTHORIZE_URL invalid:", env.authUrl);
+      return j({ error: "authorize_url_invalid", detail: "MAESTRO_OAUTH_AUTHORIZE_URL secret is not a valid absolute URL" }, 500);
+    }
+    if (authorizeBase.protocol !== "https:") {
+      return j({ error: "authorize_url_not_https", detail: `authorize URL must be https, got ${authorizeBase.protocol}` }, 500);
+    }
+
     const platform = body?.platform ?? "web"; // "web" | "mobile"
     const isMobile = platform === "mobile";
+
+    // For web, refuse non-https redirect_uri — Maestro would echo it and Safari
+    // would then fail to open the returned page ("l'adresse n'est pas valide").
+    if (!isMobile) {
+      try {
+        const r = new URL(redirectUri);
+        if (r.protocol !== "https:") {
+          return j({ error: "redirect_uri_not_https", detail: `web redirect_uri must be https, got ${redirectUri}` }, 400);
+        }
+      } catch {
+        return j({ error: "redirect_uri_invalid", detail: `redirect_uri is not a valid URL: ${redirectUri}` }, 400);
+      }
+    }
+
     const clientId = isMobile ? env.mobileClientId : env.clientId;
 
     // PKCE pour le client mobile (client_id=3) — généré avant l'insert
@@ -65,7 +91,16 @@ Deno.serve(async (req) => {
       url.searchParams.set("code_challenge_method", "S256");
     }
 
-    return j({ ok: true, authorize_url: url.toString(), state, redirect_uri: redirectUri, platform });
+    const finalUrl = url.toString();
+    console.log("[maestro-oauth-start]", {
+      platform,
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      authorize_host: authorizeBase.host,
+    });
+
+    return j({ ok: true, authorize_url: finalUrl, state, redirect_uri: redirectUri, platform });
+
   } catch (e) {
     console.error("[maestro-oauth-start]", e);
     return j({ error: (e as Error).message }, 500);

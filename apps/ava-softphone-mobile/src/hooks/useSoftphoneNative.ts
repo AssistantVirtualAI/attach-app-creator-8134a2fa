@@ -394,7 +394,7 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
 
   const call = (number: string) => {
     if (sipStatus !== 'registered') return false;
-    emitNativeCallSnapshot({ callState: 'ringing', activeCallNumber: number, isMuted: false, isOnHold: false, direction: 'out', endReason: null, callPhase: 'dialing', lastSipCode: null });
+    emitNativeCallSnapshot({ callState: 'ringing-out' as any, activeCallNumber: number, isMuted: false, isOnHold: false, direction: 'out', endReason: null, callPhase: 'dialing', lastSipCode: null });
     // iOS WebAudio requires a user-gesture to unlock the AudioContext. Start
     // the ringback here (synchronous to the tap) and let it run until 180/183
     // arrives. It is stopped on 'active', 'early-media' or 'ended'.

@@ -1236,7 +1236,7 @@ function SenderQuickActions({ email, name }: { email: string; name: string }) {
     setState("loading");
     (async () => {
       try {
-        const contacts = await getPpContacts();
+        const contacts = await getPpContacts("directory");
         const hit = (contacts ?? []).find((c: any) =>
           (c?.email ?? "").toLowerCase() === email.toLowerCase() ||
           (Array.isArray(c?.emails) && c.emails.some((e: string) => (e ?? "").toLowerCase() === email.toLowerCase()))

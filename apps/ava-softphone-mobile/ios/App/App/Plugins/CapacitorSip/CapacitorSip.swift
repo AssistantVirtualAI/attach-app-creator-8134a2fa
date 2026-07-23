@@ -323,7 +323,7 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
             // q=1.0 = priorité maximale pour le forking FreeSWITCH.
             // ka_interval=15 = keep-alive TCP toutes les 15s pour maintenir
             // la connexion active en arrière-plan (workaround avant PushKit).
-            accCfg.ka_interval = 15
+            accCfg.ka_interval = 25
 
             // +sip.instance (RFC 5626) — unique per-device identifier.
             // FreeSWITCH/FusionPBX uses this to distinguish contacts from

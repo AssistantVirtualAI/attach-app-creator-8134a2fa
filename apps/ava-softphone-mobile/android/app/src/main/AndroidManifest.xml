@@ -91,6 +91,21 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </receiver>
+
+        <!-- CALL ACTION RECEIVER — traite les boutons Answer/Decline/Hold/Resume des notifications -->
+        <receiver
+            android:name=".CallActionReceiver"
+            android:exported="false"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="com.lemtel.softphone.CALL_ANSWER" />
+                <action android:name="com.lemtel.softphone.CALL_DECLINE" />
+                <action android:name="com.lemtel.softphone.CALL_HANGUP" />
+                <action android:name="com.lemtel.softphone.CALL_HOLD" />
+                <action android:name="com.lemtel.softphone.CALL_RESUME" />
+                <action android:name="com.lemtel.softphone.CALL_MUTE" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

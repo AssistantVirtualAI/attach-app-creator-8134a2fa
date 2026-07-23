@@ -64,9 +64,16 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
     internal static weak var shared: CapacitorPjsip?
 
     /// Called by AppDelegate when PushKit delivers a new VoIP token.
+    /// If the account is already registered we trigger an immediate
+    /// re-REGISTER so the Contact header carries the fresh pn-prid —
+    /// otherwise FusionPBX has no way to wake the app via APNs.
     public func setVoipPushToken(_ token: String?) {
+        let changed = voipPushToken != token
         voipPushToken = token
-        NSLog("[CapacitorPjsip] VoIP push token updated: \(token?.prefix(16) ?? "nil")")
+        NSLog("[CapacitorPjsip] VoIP push token updated: \(token?.prefix(16) ?? "nil") changed=\(changed)")
+        if changed, token != nil, self.accId != pjsua_acc_id(PJSUA_INVALID_ID.rawValue) {
+            self.triggerReregister()
+        }
     }
 
     public override func load() {

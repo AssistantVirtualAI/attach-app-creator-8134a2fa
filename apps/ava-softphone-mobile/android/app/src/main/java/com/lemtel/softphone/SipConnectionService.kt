@@ -170,6 +170,8 @@ class SipConnectionService : Service() {
         pingFuture?.cancel(true)
         reconnectFuture?.cancel(true)
         unregisterNetworkWatchdog()
+        unregisterCallActionReceiver()
+        try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
         closeSocket()
         executor.shutdownNow()
         wakeLock?.let { if (it.isHeld) it.release() }

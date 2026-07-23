@@ -98,7 +98,7 @@ function ensureNativeCallEventBridge() {
       console.log('[NativeSIP] CALL_EVENT|callReceived', d);
       stopRingback();
       emitNativeCallSnapshot({
-        callState: 'ringing',
+        callState: 'ringing-in',
         activeCallNumber: d?.from || d?.number || 'Unknown',
         direction: 'in',
         endReason: null,

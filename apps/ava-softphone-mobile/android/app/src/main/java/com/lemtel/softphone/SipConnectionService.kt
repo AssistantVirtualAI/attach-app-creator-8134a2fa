@@ -613,31 +613,83 @@ class SipConnectionService : Service() {
 
     // ── Notifications ────────────────────────────────────────────────────────
 
+    private fun actionPendingIntent(action: String, requestCode: Int): PendingIntent {
+        val intent = Intent(action).setPackage(packageName).setClass(this, CallActionReceiver::class.java)
+        return PendingIntent.getBroadcast(
+            this, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     private fun showIncomingCallNotification(callerName: String, callerNumber: String) {
         val nm = getSystemService(NotificationManager::class.java)
-        val intent = Intent(this, MainActivity::class.java).apply {
+        val fullScreen = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("incoming_call", true)
             putExtra("caller_number", callerNumber)
         }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            INCOMING_CALL_NOTIFICATION_ID,
-            intent,
+        val fullScreenPI = PendingIntent.getActivity(
+            this, INCOMING_CALL_NOTIFICATION_ID, fullScreen,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val answerPI  = actionPendingIntent(CallActionReceiver.ACTION_ANSWER,  110)
+        val declinePI = actionPendingIntent(CallActionReceiver.ACTION_DECLINE, 111)
+
         val notification = NotificationCompat.Builder(this, CALL_CHANNEL_ID)
             .setContentTitle("Appel entrant — Lemtel")
             .setContentText("$callerName${if (callerNumber.isNotEmpty()) " <$callerNumber>" else ""}")
             .setSmallIcon(android.R.drawable.ic_menu_call)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setDefaults(Notification.DEFAULT_ALL)
-            .setContentIntent(pendingIntent)
-            .setFullScreenIntent(pendingIntent, true)
+            .setContentIntent(fullScreenPI)
+            .setFullScreenIntent(fullScreenPI, true)
             .setAutoCancel(true)
+            .setOngoing(true)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Refuser", declinePI)
+            .addAction(android.R.drawable.ic_menu_call, "Répondre", answerPI)
             .build()
         nm.notify(INCOMING_CALL_NOTIFICATION_ID, notification)
+    }
+
+    /**
+     * Ongoing-call notification with Hangup / Hold / Resume actions so the user
+     * can control an active call from the lockscreen or notification drawer.
+     */
+    fun showOngoingCallNotification(peerLabel: String, onHold: Boolean) {
+        val nm = getSystemService(NotificationManager::class.java)
+        val openApp = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val openPI = PendingIntent.getActivity(
+            this, 120, openApp,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val hangupPI = actionPendingIntent(CallActionReceiver.ACTION_HANGUP, 121)
+        val holdPI   = actionPendingIntent(
+            if (onHold) CallActionReceiver.ACTION_RESUME else CallActionReceiver.ACTION_HOLD,
+            122,
+        )
+        val builder = NotificationCompat.Builder(this, CALL_CHANNEL_ID)
+            .setContentTitle(if (onHold) "En attente — Lemtel" else "Appel en cours — Lemtel")
+            .setContentText(peerLabel)
+            .setSmallIcon(android.R.drawable.ic_menu_call)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setContentIntent(openPI)
+            .setOngoing(true)
+            .setSilent(true)
+            .addAction(
+                if (onHold) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
+                if (onHold) "Reprendre" else "En attente",
+                holdPI,
+            )
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Raccrocher", hangupPI)
+        nm.notify(INCOMING_CALL_NOTIFICATION_ID, builder.build())
+    }
+
+    fun clearCallNotifications() {
+        try { getSystemService(NotificationManager::class.java).cancel(INCOMING_CALL_NOTIFICATION_ID) } catch (_: Exception) {}
     }
 
     private fun updateNotification(text: String) {

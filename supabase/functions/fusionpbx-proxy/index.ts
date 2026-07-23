@@ -1086,11 +1086,13 @@ Deno.serve(async (req) => {
       if (!wroteOk) return json({ ok: false, extension: extNum, error: "ROUTING_REPAIR_FAILED", details: write }, 200);
 
 
-      await admin.from("audit_logs").insert({
-        organization_id, user_id: userId, action: "repair_verto_extension_routing",
-        resource_type: "pbx_extension", resource_id: extensionUuid,
-        metadata: { extension: extNum, had_verto_contact: hasVertoContact(current.dial_string), domain_uuid: requestedDomain },
-      }).catch(() => null);
+      try {
+        await admin.from("audit_logs").insert({
+          organization_id, user_id: userId, action: "repair_verto_extension_routing",
+          resource_type: "pbx_extension", resource_id: extensionUuid,
+          metadata: { extension: extNum, had_verto_contact: hasVertoContact(current.dial_string), domain_uuid: requestedDomain },
+        });
+      } catch { /* audit best-effort */ }
 
       return json({
         ok: true,

@@ -20,6 +20,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
 import java.net.URI
@@ -197,12 +198,12 @@ class SipConnectionService : Service() {
             socket.outputStream.write(handshake.toByteArray(Charsets.US_ASCII))
             socket.outputStream.flush()
 
-            // Read HTTP response
-            val reader = BufferedReader(InputStreamReader(socket.inputStream, Charsets.US_ASCII))
-            val statusLine = reader.readLine() ?: throw Exception("No HTTP response")
+            // Read HTTP response without BufferedReader so it cannot pre-buffer
+            // the first WebSocket frame after \r\n\r\n. Losing that frame can
+            // make the native background service think it never registered.
+            val responseHeader = readHttpHeader(socket)
+            val statusLine = responseHeader.lineSequence().firstOrNull() ?: throw Exception("No HTTP response")
             if (!statusLine.contains("101")) throw Exception("WS upgrade failed: $statusLine")
-            // Drain headers
-            while (true) { val line = reader.readLine() ?: break; if (line.isEmpty()) break }
 
             sslSocket = socket
             outputStream = socket.outputStream
@@ -293,6 +294,24 @@ class SipConnectionService : Service() {
         connecting = false
         closeSocket()
         if (!isDestroyed) scheduleReconnect()
+    }
+
+    private fun readHttpHeader(socket: SSLSocket): String {
+        val input = socket.inputStream
+        val buffer = ByteArrayOutputStream()
+        var previous3 = -1
+        var previous2 = -1
+        var previous1 = -1
+        while (buffer.size() < 16_384) {
+            val b = input.read()
+            if (b < 0) break
+            buffer.write(b)
+            if (previous3 == '\r'.code && previous2 == '\n'.code && previous1 == '\r'.code && b == '\n'.code) break
+            previous3 = previous2
+            previous2 = previous1
+            previous1 = b
+        }
+        return buffer.toString(Charsets.US_ASCII.name())
     }
 
     @Synchronized
@@ -468,7 +487,7 @@ class SipConnectionService : Service() {
             .setSmallIcon(android.R.drawable.ic_menu_call)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setDefaults(Notification.DEFAULT_ALL)
             .setContentIntent(pendingIntent)
             .setFullScreenIntent(pendingIntent, true)
             .setAutoCancel(true)

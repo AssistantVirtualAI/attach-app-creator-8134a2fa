@@ -503,6 +503,11 @@ class SipConnectionService : Service() {
                 override fun onAvailable(network: Network) {
                     Log.i(TAG, "Network available — refreshing Verto registration")
                     if (!isDestroyed) {
+                        if (!isLoggedIn && connecting) return
+                        if (!isLoggedIn && sslSocket == null) {
+                            scheduleReconnect(1_000L)
+                            return
+                        }
                         isLoggedIn = false
                         closeSocket()
                         scheduleReconnect(1_000L)

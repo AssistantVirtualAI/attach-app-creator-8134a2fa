@@ -28,6 +28,7 @@ export default function Ms365Callback() {
     if (ranRef.current) return;
     ranRef.current = true;
     (async () => {
+      clearMs365Pending();
       const code = params.get("code");
       const err = params.get("error_description") ?? params.get("error");
       if (err) { setStatus("error"); setError(err); return; }

@@ -1,61 +1,73 @@
+# Lemtel — Inbound External Calls, Background Ring, Multi-Device Fork
 
-# Softphone — Appels internes, réception background, hold/transfer, UI
+Goal: External PSTN calls ring reliably on Android + iOS + Desktop softphone **at the same time**, even when mobile apps are in background / screen locked, with both mobile apps staying registered 24/7.
 
-## Problèmes constatés (capture 223 → 300)
+## 1. FusionPBX — Enable simultaneous ring (fork)
 
-1. **L'appelé (300) ne sonne pas / ne peut pas répondre** en interne, ni en foreground ni en background sur Android/iOS.
-2. **L'affichage de l'appel interne** montre l'URI SIP brute (`"Kenny Rooney" <sip:223@lemtel.lemtel.tel>`) au lieu d'un affichage propre (nom + extension + badge "Interne").
-3. **Hold et Transfer** ne sont pas exposés/opérationnels de façon fiable pour les appels internes.
-4. **Réception en arrière-plan** : parité iOS (PushKit/APNs) et Android (SipConnectionService + FCM data push) à consolider pour que le poste sonne toujours quand l'app est fermée ou l'écran verrouillé.
+Root cause today: each device registers with the **same AOR** but different `+sip.instance`, and the dialplan sends `INVITE user@domain` which FreeSWITCH resolves to a single contact. We need parallel fork.
 
-## Plan par plateforme
+- Edge function `pbx-configure-multidevice`:
+  - For each extension, set `dial_string` = `{presence_id=${dialed_extension}@${domain_name}}${sofia_contact(*/${dialed_extension}@${domain_name})}` (the `*/` prefix forks to **all registered contacts**).
+  - Set `call_timeout=35`, `sip_force_expires=120` so short-lived mobile registrations are refreshed frequently enough to be included in fork.
+  - Ensure `missed_call` only fires when **all** legs fail (not first-to-fail).
+- Verify per-extension: `user_record=all`, `hangup_after_bridge=true`.
 
-### 1. Réception des appels internes (routage FusionPBX)
-- Vérifier via `fusionpbx-proxy` que le dialplan interne (ext→ext) route bien via **Sofia mobile profile** (WSS 7443 pour Android JsSIP, port 5060 TLS pour PJSIP iOS, port 8082 Verto pour Android Verto), pas seulement via un profil "internal" 5060 sans WS/Verto.
-- Ajouter un check dans `repair-verto-extension-routing` (Android) qui s'assure que le user_record de l'extension 300 pointe vers le contact WS actif ; sinon `sofia profile mobile flush_inbound_reg`.
-- Ajouter côté iOS : quand PushKit reçoit un `INVITE` push, forcer un re-REGISTER **avant** d'accepter, sinon FusionPBX envoie le INVITE au vieux contact (cause probable du 300 muet).
+## 2. External DID → Extension routing
 
-### 2. iOS — sonnerie background/verrouillé
-- `CapacitorSip.swift` : vérifier que `PKPushRegistry` reçoit bien un `pushRegistry(_:didReceiveIncomingPushWith:for:completion:)` et **immédiatement** :
-  - Reporte l'appel via `CXProvider.reportNewIncomingCall` (CallKit) — sinon iOS 13+ tue l'app.
-  - Puis pousse un event `incomingCall` vers le JS via Capacitor `notifyListeners`.
-- Ajouter CallKit minimal (déjà partiellement présent) : `CXProvider` + `CXCallController`, actions Answer/End/Hold branchées sur PJSIP.
-- S'assurer que le topic APNs `com.lemtel.softphone.voip` est bien envoyé par FusionPBX (déjà corrigé) — ajouter un log serveur `push-diag` pour tracer chaque push émis vers 300.
+- Inbound route for each DID must target the extension (not a ring group) so the fork above applies.
+- Add fallback ring group `<ext>-mobile` with strategy `simultaneous`, timeout 30s, members = `user/<ext>@domain` only, used if we ever need to force-include mobile.
 
-### 3. Android — sonnerie background/verrouillé
-- `SipConnectionService.kt` : promouvoir le service en `phoneCall` foreground type dès qu'un `verto.invite` arrive (déjà présent) + réveiller la WebView via `PowerManager.PARTIAL_WAKE_LOCK` **avant** de dispatcher l'event JS.
-- Ajouter fallback **FCM data-push** (haute priorité) déclenché côté serveur si Verto WS est mort (>30 s sans pong) → réveille l'app, force reconnect Verto, puis accepte l'INVITE.
-- Ajouter une `HeadsUpNotification` (full-screen intent) pour afficher `IncomingCallSheet` même si l'écran est verrouillé.
+## 3. Registration persistence (already partly done, harden)
 
-### 4. UI d'appel interne
-- `ActiveCallSheet.tsx` + `IncomingCallSheet.tsx` : formatter proprement :
-  - Extraire `user` de `sip:USER@domain` → afficher **"Kenny Rooney"** en grand + **"Poste 223 · Interne"** en sous-titre.
-  - Badge visuel "Interne" quand `remoteParty` matche une extension de l'org (via cache `pbx_softphone_users`).
-  - Retirer complètement l'URI SIP brute de l'écran.
-- Timeline (COMPOSITION → SONNERIE → TONALITÉ → CONNECTÉ) : masquer sur appel entrant, garder seulement sur sortant.
+Android (`SipConnectionService.kt`):
+- Confirm foreground service `startForeground` runs at boot (`BOOT_COMPLETED` receiver).
+- WakeLock + WifiLock held.
+- Verto/PJSIP re-REGISTER on `ConnectivityManager` network change.
+- Alarm-based keepalive every 25s via `AlarmManager.setExactAndAllowWhileIdle` (survives Doze).
 
-### 5. Hold + Transfer (interne et externe)
-- `useSoftphone.ts` : exposer `hold/unhold` sur les 3 providers (jssip, verto, native-pjsip) — actuellement `hold` n'est branché que pour JsSIP.
-- Ajouter `attendedTransfer(target)` et `blindTransfer(target)` :
-  - JsSIP : `session.refer(target)`.
-  - Verto : `verto.modify` avec `action: 'transfer'` + `dest_number`.
-  - PJSIP iOS : `pjsua_call_xfer`.
-- Ajouter boutons **Hold** et **Transférer** dans `ActiveCallSheet` avec une feuille de sélection d'extension (autocomplete sur les postes de l'org).
+iOS (`CapacitorSip.swift` / `AppDelegate.swift`):
+- PushKit VoIP token registered on every launch and pushed as SIP contact param `pn-voip-tok`.
+- `BGProcessingTask` schedules re-REGISTER every 20 min.
+- On PushKit incoming, report to CallKit **within 5s** (Apple requirement) then trigger SIP INVITE handling.
 
-## Détails techniques
+Server: `pbx-push-config` edge function writes per-device push params to `sofia` contact so FreeSWITCH `mod_push` wakes the phone before sending INVITE.
 
-- Fichiers modifiés :
-  - `apps/ava-softphone-mobile/src/components/ActiveCallSheet.tsx`, `IncomingCallSheet.tsx`
-  - `apps/ava-softphone-mobile/src/hooks/useSoftphone.ts`, `useSoftphoneNative.ts`, `useSoftphoneVerto.ts`
-  - `apps/ava-softphone-mobile/src/lib/sip/{jssipProvider,vertoProvider,nativeSipProvider}.ts`
-  - `apps/ava-softphone-mobile/ios/App/App/CapacitorSip.swift` (+ CallKit provider)
-  - `apps/ava-softphone-mobile/android/app/src/main/java/.../SipConnectionService.kt` (+ full-screen intent)
-- Edge functions : nouveau `pbx-fcm-wake` (Android fallback) + amélioration `repair-verto-extension-routing`.
-- Nouveau util `formatSipParty(remoteUri, orgExtensions)` partagé pour l'affichage.
+## 4. Desktop softphone sync
 
-## Ordre d'exécution
-1. Util `formatSipParty` + refactor UI (`ActiveCallSheet` / `IncomingCallSheet`) — impact visuel immédiat.
-2. Hold/Transfer sur les 3 providers + boutons UI.
-3. iOS : CallKit + re-REGISTER sur PushKit.
-4. Android : full-screen intent + FCM wake fallback.
-5. Diagnostic serveur `push-diag` + validation 223↔300 en background.
+- Ensure desktop app registers with distinct `+sip.instance=<uuid-desktop>` and same AOR/extension.
+- Confirm `sofia_contact(*/...)` returns both mobile + desktop contacts (query `show registrations` via `pbx-list-registrations` edge function to validate).
+- Add admin page badge: "N devices registered" per extension.
+
+## 5. Incoming call UI revival
+
+- Android: `Full-Screen Intent` notification with high-priority channel (already scaffolded) — verify `USE_FULL_SCREEN_INTENT` permission declared (Android 14+).
+- iOS: `CXProvider.reportNewIncomingCall` on every PushKit event; if SIP INVITE doesn't arrive within 8s, end call with reason `.failed` so CallKit UI clears.
+- Both platforms: play ringtone via native (not WebAudio) so it works while JS bridge is asleep.
+
+## 6. Diagnostics
+
+- Extend `SipDebugScreen.tsx` with:
+  - Registered contacts list (from FusionPBX API).
+  - Last INVITE received timestamp.
+  - Push token status (APNs VoIP / FCM).
+- Add admin page `PATelephonyForkDiag.tsx`: pick extension → show all registered contacts + test-call button.
+
+## Deliverables
+
+1. Migrations / SQL: none (config only).
+2. Edge functions: `pbx-configure-multidevice`, `pbx-list-registrations`, `pbx-push-config`.
+3. Native: Android boot receiver + AlarmManager keepalive; iOS BGProcessingTask + PushKit hardening.
+4. UI: fork diagnostics page, per-extension "N devices" badge.
+5. Docs: `/docs/telephony/multidevice.md` explaining fork + push flow.
+
+## Test matrix
+
+| Scenario | Expected |
+|---|---|
+| External DID → ext 300, desktop + iOS + Android all registered | 3 devices ring simultaneously |
+| iOS app in background, screen locked | CallKit incoming UI within 5s |
+| Android app killed by user | FCM/foreground service revives, ring within 6s |
+| One device answers | Others stop ringing (CANCEL) |
+| Wi-Fi → LTE handover mid-idle | Re-REGISTER within 10s, still receives calls |
+
+Approve to implement in staged commits (server config → native hardening → UI).

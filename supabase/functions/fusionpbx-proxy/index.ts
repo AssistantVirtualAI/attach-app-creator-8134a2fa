@@ -178,9 +178,15 @@ Deno.serve(async (req) => {
     const rpcName = isRead ? "is_lemtel_member" : "is_lemtel_admin";
     const { data: allowed } = await admin.rpc(rpcName, { _user_id: userId });
     let permitted = !!allowed;
-    if (!permitted && _earlyAction === "originate-click-to-call") {
+    if (!permitted && (_earlyAction === "originate-click-to-call" || _earlyAction === "repair-verto-extension-routing")) {
       const targetOrg = _bodyEarly?.organization_id;
-      const fromExtension = String(_bodyEarly?.params?.from_extension || _bodyEarly?.from_extension || "");
+      const fromExtension = String(
+        _bodyEarly?.params?.from_extension ||
+        _bodyEarly?.from_extension ||
+        _bodyEarly?.params?.extension ||
+        _bodyEarly?.extension ||
+        ""
+      );
       if (targetOrg && fromExtension) {
         const { data: spu } = await admin.from("pbx_softphone_users").select("id").eq("portal_user_id", userId).eq("organization_id", targetOrg).eq("extension", fromExtension).limit(1).maybeSingle();
         if (spu?.id) permitted = true;

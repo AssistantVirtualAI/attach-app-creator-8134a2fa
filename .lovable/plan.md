@@ -1,73 +1,36 @@
-# Lemtel — Inbound External Calls, Background Ring, Multi-Device Fork
+## 4 fixes pour l'app mobile Planiprêt
 
-Goal: External PSTN calls ring reliably on Android + iOS + Desktop softphone **at the same time**, even when mobile apps are in background / screen locked, with both mobile apps staying registered 24/7.
+### 1. Header : un seul logo Planiprêt + 1 bell + 1 settings
+Actuellement `MobileHeaderControls` rend Bell + Settings + Lang + Theme + Profil (MH), en plus du bloc gauche Planiprêt+REST dans `PlanipretMobile.tsx`. La capture montre en plus une barre AVA (logo AVA + REST + settings + bell) — c'est une deuxième instance héritée de l'ancien header brand.
 
-## 1. FusionPBX — Enable simultaneous ring (fork)
+Correction :
+- Dans `PlanipretMobile.tsx` (l. 943–969) garder **uniquement** : logo Planiprêt (56×56, à gauche, en grand) + un point live/REST, et à droite **une seule** cloche (notifications) + **un seul** engrenage (settings/more). Lang, Theme et avatar MH déplacés dans la page More (déjà accessible via l'engrenage).
+- Dans `MobileHeaderControls.tsx` : supprimer les boutons Lang, Theme, avatar Profil (et le `MobileProfileSheet`) pour ne laisser que Bell + Settings. Retirer aussi l'éventuel logo/statut AVA si présent ailleurs (grep confirmera qu'il n'y a pas un second header monté par un layout parent).
 
-Root cause today: each device registers with the **same AOR** but different `+sip.instance`, and the dialplan sends `INVITE user@domain` which FreeSWITCH resolves to a single contact. We need parallel fork.
+### 2. FabDialer : masquer partout sauf Home et Calls
+Aujourd'hui `FabDialer` n'est caché que sur `/messages` et `/ava`. Il cache le bouton d'envoi sur d'autres pages (contacts, more, pipeline, etc.).
 
-- Edge function `pbx-configure-multidevice`:
-  - For each extension, set `dial_string` = `{presence_id=${dialed_extension}@${domain_name}}${sofia_contact(*/${dialed_extension}@${domain_name})}` (the `*/` prefix forks to **all registered contacts**).
-  - Set `call_timeout=35`, `sip_force_expires=120` so short-lived mobile registrations are refreshed frequently enough to be included in fork.
-  - Ensure `missed_call` only fires when **all** legs fail (not first-to-fail).
-- Verify per-extension: `user_record=all`, `hangup_after_bridge=true`.
+Correction dans `PlanipretMobile.tsx` (l. 522) : remplacer le test `isChatSurface` par une allow‑list — n'afficher le FAB que si `pathname` correspond à `/mplanipret` (home) ou `/mplanipret/calls`. Sur toutes les autres routes → `return null`.
 
-## 2. External DID → Extension routing
+### 3. Microsoft SSO : erreur « Code verifier PKCE introuvable » (image 270)
+Le flux ouvre Microsoft dans Safari/Browser Capacitor, revient via deep link, mais le `code_verifier` stocké au démarrage n'est pas retrouvé au callback. Causes possibles :
+- Sur iOS, `openMs365Authorize` stocke le verifier via `localStorage` alors que le callback lit via `@capacitor/preferences` (ou l'inverse) → pas la même clé/storage entre les deux contextes (SFSafariViewController vs WKWebView).
+- Le `state` passé à Microsoft ne correspond pas à la clé utilisée pour retrouver le verifier.
+- Le retour arrive dans un **nouvel onglet Safari** (image 267 : `dev.planipret.com` ouvert dans Safari externe au lieu de l'app), donc aucun storage partagé.
 
-- Inbound route for each DID must target the extension (not a ring group) so the fork above applies.
-- Add fallback ring group `<ext>-mobile` with strategy `simultaneous`, timeout 30s, members = `user/<ext>@domain` only, used if we ever need to force-include mobile.
+Correction :
+- Auditer `ms365OAuth.ts` (`openMs365Authorize`, `getRememberedMs365CodeVerifier`) et harmoniser sur `@capacitor/preferences` **des deux côtés**, avec la clé dérivée du `state`.
+- Persister aussi le verifier côté serveur (table `pp_ms365_oauth_states` déjà utilisée pour Maestro) et le récupérer dans `pp-ms-auth-callback` en fallback si le storage local est vide → règle définitivement le cas « app relancée depuis un lien Universal ».
+- Vérifier que `capacitor.config.ts` a bien `com.planipret.mobile://…` en scheme ET l'Universal Link `dev.planipret.com/auth/microsoft/callback` déclaré dans `apple-app-site-association`, sinon iOS ouvre le retour dans Safari externe (image 267).
 
-## 3. Registration persistence (already partly done, harden)
+### 4. Maestro : connexion toujours KO
+Même famille de problèmes que MS365 :
+- Vérifier que `maestro-oauth-start` renvoie bien une URL HTTPS absolue valide (le message Safari « l'adresse n'est pas valide » indique une URL vide/mal formée retournée par l'edge function).
+- Vérifier le `redirect_uri` envoyé : doit être `https://dev.planipret.com/auth/maestro/callback` (Universal Link) **et** enregistré côté Maestro. Le scheme `planipret://` fonctionne uniquement si l'app est installée avec les entitlements — sur Safari web ça produit l'alerte de l'image 267.
+- `MaestroCallback.tsx` : ajouter le même fallback serveur (récupération verifier via table `planipret_maestro_oauth_states`) et loguer précisément la cause d'échec dans `PAMaestroStatus`.
 
-Android (`SipConnectionService.kt`):
-- Confirm foreground service `startForeground` runs at boot (`BOOT_COMPLETED` receiver).
-- WakeLock + WifiLock held.
-- Verto/PJSIP re-REGISTER on `ConnectivityManager` network change.
-- Alarm-based keepalive every 25s via `AlarmManager.setExactAndAllowWhileIdle` (survives Doze).
+### Détails techniques
+- Fichiers : `apps/planipret-mobile/src/pages/planipret/PlanipretMobile.tsx`, `apps/planipret-mobile/src/components/planipret/mobile/MobileHeaderControls.tsx`, `apps/planipret-mobile/src/lib/ms365OAuth.ts`, `apps/planipret-mobile/src/lib/ms365AuthLogin.ts`, `apps/planipret-mobile/src/pages/planipret/Ms365Callback.tsx`, `supabase/functions/pp-ms-auth-start`, `supabase/functions/pp-ms-auth-callback`, `supabase/functions/maestro-oauth-start`, `supabase/functions/maestro-oauth-callback`, `apple-app-site-association`, `capacitor.config.ts`.
+- Aucune modif à `/mplanipret` routing, `MplanipretGuard`, `OrganizationContext` (verrous respectés).
 
-iOS (`CapacitorSip.swift` / `AppDelegate.swift`):
-- PushKit VoIP token registered on every launch and pushed as SIP contact param `pn-voip-tok`.
-- `BGProcessingTask` schedules re-REGISTER every 20 min.
-- On PushKit incoming, report to CallKit **within 5s** (Apple requirement) then trigger SIP INVITE handling.
-
-Server: `pbx-push-config` edge function writes per-device push params to `sofia` contact so FreeSWITCH `mod_push` wakes the phone before sending INVITE.
-
-## 4. Desktop softphone sync
-
-- Ensure desktop app registers with distinct `+sip.instance=<uuid-desktop>` and same AOR/extension.
-- Confirm `sofia_contact(*/...)` returns both mobile + desktop contacts (query `show registrations` via `pbx-list-registrations` edge function to validate).
-- Add admin page badge: "N devices registered" per extension.
-
-## 5. Incoming call UI revival
-
-- Android: `Full-Screen Intent` notification with high-priority channel (already scaffolded) — verify `USE_FULL_SCREEN_INTENT` permission declared (Android 14+).
-- iOS: `CXProvider.reportNewIncomingCall` on every PushKit event; if SIP INVITE doesn't arrive within 8s, end call with reason `.failed` so CallKit UI clears.
-- Both platforms: play ringtone via native (not WebAudio) so it works while JS bridge is asleep.
-
-## 6. Diagnostics
-
-- Extend `SipDebugScreen.tsx` with:
-  - Registered contacts list (from FusionPBX API).
-  - Last INVITE received timestamp.
-  - Push token status (APNs VoIP / FCM).
-- Add admin page `PATelephonyForkDiag.tsx`: pick extension → show all registered contacts + test-call button.
-
-## Deliverables
-
-1. Migrations / SQL: none (config only).
-2. Edge functions: `pbx-configure-multidevice`, `pbx-list-registrations`, `pbx-push-config`.
-3. Native: Android boot receiver + AlarmManager keepalive; iOS BGProcessingTask + PushKit hardening.
-4. UI: fork diagnostics page, per-extension "N devices" badge.
-5. Docs: `/docs/telephony/multidevice.md` explaining fork + push flow.
-
-## Test matrix
-
-| Scenario | Expected |
-|---|---|
-| External DID → ext 300, desktop + iOS + Android all registered | 3 devices ring simultaneously |
-| iOS app in background, screen locked | CallKit incoming UI within 5s |
-| Android app killed by user | FCM/foreground service revives, ring within 6s |
-| One device answers | Others stop ringing (CANCEL) |
-| Wi-Fi → LTE handover mid-idle | Re-REGISTER within 10s, still receives calls |
-
-Approve to implement in staged commits (server config → native hardening → UI).
+Confirmer et je passe en build.

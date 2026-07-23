@@ -1,70 +1,70 @@
-# Plan — Corriger SSO Microsoft, envoi SMS/Appels AVA et intégration MS365
+# Plan — Audit AVA + Sync Microsoft 365 complet
 
-## 1. Bouton « Continuer » gris dans l’écran Microsoft (mobile Planiprêt)
+## Partie 1 — Audit AVA chatbot (vérification connexions & normalisation)
 
-**Cause** : l’écran « Essayez‑vous de vous connecter à AVA Soft Phone ? » est la page de conformité mobile Entra ID. Le bouton reste désactivé quand `redirect_uri` envoyé ne correspond pas exactement à un URI **de plateforme mobile/desktop publique** enregistrée, ou quand `client_id` est marqué « web » seulement.
+### 1.1 Outils AVA existants confirmés
+`ava-tool-executor` expose déjà : `make_call`, `send_sms`, `send_email`, `read_emails`, `send_teams_message`, `list_teams_chats`, `create_teams_chat`, `create_calendar_event`, `get_calendar_today/week`, `move/cancel/update/delete_calendar_event`, `find_contact` (fusion Maestro + local), `search_ms365_contacts`, `push_call_summary`, etc.
 
-**Actions**
-- Dans `src/lib/ms365AuthLogin.ts` + `apps/planipret-mobile/src/lib/ms365AuthLogin.ts` : forcer le scheme `planipret://auth/ms365-callback` sur natif (Capacitor) et l’URL HTTPS `${origin}/planipret/ms365-callback` sur web. Ne jamais mélanger.
-- Dans `pp-ms-auth-start` : renvoyer explicitement `redirect_uri` selon le paramètre `platform` (`mobile` vs `web`) reçu du client, et l’enregistrer dans le state PKCE.
-- Dans `pp-ms-auth-callback` : valider que le `redirect_uri` de l’échange token = celui du state (sinon `invalid_grant`).
-- Documenter (README) que Scott doit avoir enregistré dans Entra, sous le **même** App Registration :
-  - Plateforme **Mobile and desktop applications** → `planipret://auth/ms365-callback`
-  - Plateforme **Web** → `https://avastatistic.ca/planipret/ms365-callback` + Supabase callback
-  - Activer `Allow public client flows = Yes`
-- Ajouter un fallback UX : si l’écran mobile Microsoft bloque, MobileAuthScreen affiche un bouton « Ouvrir dans le navigateur système » (`@capacitor/browser` → `Browser.open`), qui contourne le WKWebView.
+### 1.2 Corrections d'audit à faire
+- **Normalisation E.164** : centraliser dans un helper `_shared/phone-normalize.ts` (règle : détecte 10 chiffres → préfixe `+1`, strip `()- .`, valide `^\+[1-9]\d{7,14}$`). L'appliquer dans `send_sms`, `make_call`, `resolveContact`, `find_contact`, et `pp-ns-sms` / `pp-ns-calls` côté entrée. Consigner en log si un numéro est rejeté.
+- **Vérifier tokens MS365 avant appel** : dans `msAction`, si `ms365_access_token` absent ou expiré → invoquer `ms365-token-refresh` puis réessayer une fois; sinon retourner `{success:false, error:"ms365_not_connected", fallback:"open_settings"}`.
+- **`get_integration_status`** : ajouter check réel (ping léger `/me` Graph, `/me` NetSapiens, `/ping` Maestro) au lieu de simple présence du token.
+- **Prompt système `pp-ava-chat`** : documenter les outils avec exemples (déjà partiel), ajouter règles bilingues et confirmation textuelle uniforme.
 
-## 2. Envoi SMS via chatbot AVA (numéro jamais reçu)
+## Partie 2 — Historique courriel & auto-complétion contacts
 
-**Cause probable** : `send_sms` retourne `success:true` dès que NS-API répond 200, mais NS-API renvoie souvent 200 avec `result: { error: "..." }` (ex. DID non SMS‑enabled, destinataire non valide, from mismatch). De plus, l’UI ne montre pas le message envoyé dans la vraie thread.
+### 2.1 Nouvelles tables (migration)
+```
+planipret_email_messages       -- copie locale des mails MS365 (id graph, thread_id, from, to[], cc[], subject, body_preview, body_html, sent_at, received_at, folder, is_read, is_sent_by_me, has_attachments, importance)
+planipret_email_threads        -- conversation_id → dernier subject, participants[], last_activity_at, unread_count
+planipret_ms_contacts          -- contacts importés MS365 (graph_id, display_name, emails[], phones[], company, job_title, last_synced_at)
+planipret_calendar_events      -- events MS365 (graph_id, subject, start, end, attendees[], location, is_online_meeting, join_url)
+planipret_teams_conversations  -- chats/sessions Teams (chat_id, topic, members[], last_message_at, last_message_preview)
+planipret_teams_messages       -- messages Teams (chat_id, graph_id, from, content, sent_at)
+planipret_ms_sync_state        -- par user_id + resource(mail|contacts|calendar|teams) : delta_link, last_full_sync_at, status, error
+```
+Toutes avec RLS `user_id = auth.uid()`, GRANT `authenticated`+`service_role`, index sur `(user_id, sent_at desc)`, `(user_id, thread_id)`, `(user_id, email)` pour lookup rapide.
 
-**Actions**
-- `supabase/functions/pp-ns-sms/index.ts` : après `res.ok`, inspecter `result` — si `result?.error` ou `result?.status === "failed"`, renvoyer `{ ok: false, error: result.error }` (200 → 200 mais avec ok=false). Ajouter log clair (`console.error`).
-- Renforcer `normalizeE164` : rejeter tout numéro < 10 chiffres au lieu de préfixer `+`.
-- `ava-tool-executor` `send_sms` : après appel `pp-ns-sms`, si `ok`, **diffuser un événement Realtime** (`broadcastNav`) vers `/mplanipret/messages?thread=<id>` pour ouvrir la conversation dans l’app et afficher le message envoyé.
-- Ajouter tool `open_sms_composer` : au lieu d’envoyer directement, permet à AVA d’ouvrir l’UI SMS avec `to` et `message` préremplis, l’utilisateur appuie sur Envoyer. Utile quand `to` est ambigu ou message long. AVA choisit `send_sms` (confirmation écrite) vs `open_sms_composer` selon le prompt.
-- Mettre à jour prompt système `pp-ava-chat` : après confirmation écrite, appeler `send_sms` **puis** `navigate_to /mplanipret/messages` pour que le courtier voie la thread.
+### 2.2 Nouvelles edge functions
+- `ms365-full-import` : orchestrateur invoqué au signin OU depuis Settings → « Synchroniser Microsoft 365 ». Lance en parallèle 4 workers via `EdgeRuntime.waitUntil` :
+  - `ms365-sync-contacts` : `GET /me/contacts?$top=100` + pagination `@odata.nextLink`, upsert dans `planipret_ms_contacts`.
+  - `ms365-sync-mail` : premier passage `GET /me/mailFolders/inbox/messages?$top=50` + Sent Items ; passages suivants `GET /me/mailFolders/{id}/messages/delta` avec `delta_link` stocké. Upsert dans `planipret_email_messages`, dédup par `graph_id`.
+  - `ms365-sync-calendar` : `GET /me/calendarView/delta?startDateTime=...&endDateTime=+90d`.
+  - `ms365-sync-teams` : `GET /me/chats?$expand=members`, puis pour chaque chat `GET /me/chats/{id}/messages` (limité à 50 récents).
+- `ms365-sync-status` : retourne progression par ressource (%, dernière erreur, delta link présent) pour l'UI.
+- `ms365-contacts-search` : recherche locale rapide `ILIKE` sur `planipret_ms_contacts.display_name`/`emails` (autocomplétion instantanée dans le composer email).
 
-## 3. Appels via chatbot AVA (« Je lance l’appel » sans rien)
+### 2.3 Déclencheurs de sync
+1. **À la connexion MS365** : dans `Ms365Callback.tsx` et `pp-ms-auth-callback`, après stockage du token, appeler `ms365-full-import` (mode `initial`).
+2. **Depuis Settings** : nouveau bouton « Réimporter maintenant » dans `MMs365Diagnostics.tsx` → `ms365-full-import` (mode `manual`).
+3. **Cron delta** : réutiliser cron existant ou nouveau appelant `ms365-full-import` (mode `delta`) toutes les 15 min.
+4. **À la déconnexion MS365** : conserver l'historique local (ne pas supprimer) mais marquer `planipret_ms_sync_state.status = 'disconnected'`.
 
-**Cause** : `make_call` appelle `pp-ns-calls` action `start` qui déclenche le click‑to‑call NetSapiens (ring vers le softphone puis compose la destination). Si le device n’est pas registered ou si le CID n’est pas SMS/voix, l’appel échoue silencieusement.
+### 2.4 UI courriel améliorée (`MMessages.tsx` + `EmailComposeSheet`)
+- Onglet « Boîte de réception » lit d'abord `planipret_email_messages` (instantané), puis rafraîchit via `ms365-actions/read_emails`.
+- Fil de conversation (`thread_id`) : quand on ouvre un courriel, afficher tous les messages du même `conversation_id` avec toggle « Répondre » qui préremplit destinataires.
+- **Autocomplétion À/Cc** : nouveau composant `RecipientAutocomplete` qui interroge `ms365-contacts-search` (contacts MS365) + `planipret_contacts` (locaux) + « déjà écrit à » (distinct `to` des `planipret_email_messages` de l'utilisateur). Fusion + dédup par email, tri par récence.
+- Badge « Déjà en contact » quand l'adresse tapée existe dans `planipret_email_messages` (indique nombre de messages échangés).
 
-**Actions**
-- `pp-ns-calls` : renvoyer `device_registered:false` quand aucun endpoint n’est actif, avec message explicite; propager dans réponse AVA.
-- `ava-tool-executor` `make_call` : si `device_registered === false`, retomber sur **ouverture du dialer mobile** avec le numéro préchargé (nouvel event Realtime `open_dialer` → mobile app écoute et navigue vers `/mplanipret/calls` + ouvre `FabDialer` avec numéro).
-- Ajouter tool `open_dialer` (pareil à open_sms_composer) pour laisser AVA décider : `make_call` (direct via PBX) vs `open_dialer` (composeur UI).
-- Prompt AVA `pp-ava-chat` : après confirmation, appeler `make_call`; si `device_registered:false`, tomber sur `open_dialer` automatiquement et informer le courtier.
-- Ajouter listener global dans `MobileApp.tsx` / `PlanipretMobile.tsx` pour événements Realtime `pp:navigate` avec `open_dialer` / `open_sms_composer` payload et rediriger vers le bon écran avec les params.
+### 2.5 Page Contacts améliorée (`MContacts.tsx`)
+- Ajouter source badge (Maestro / MS365 / Local).
+- Filtrer / rechercher via `planipret_ms_contacts` + `planipret_contacts` + `maestro_clients`.
+- Bouton « Réimporter les contacts Microsoft ».
 
-## 4. Intégration Microsoft complète du chatbot
+## Partie 3 — Détails techniques
 
-Vérifier que les tools existants sont bien exposés et fonctionnent :
-- Emails : `send_email` (déjà), ajouter `reply_email`, `forward_email` via `ms365-actions`.
-- Calendrier : `create_calendar_event`, `move_calendar_event`, `cancel_calendar_event`, `update_calendar_event` (déjà). Vérifier confirmation écrite pour delete/update.
-- Teams : `list_teams_chats`, `create_teams_chat`, `send_teams_message` (déjà). Vérifier que `ms365-teams-list` retourne 200 avec le token courtier.
-- Ajouter au **prompt système** de `pp-ava-chat` la liste complète des capacités MS365 pour qu’AVA les propose spontanément.
-- Ajouter test `pp-call-e2e-check` étendu qui vérifie l’auth MS365 par courtier avant chaque session de chat, avec bannière « Reconnecter Microsoft » si `needs_reconnect`.
+**Delta sync Graph** : `Prefer: odata.maxpagesize=50` header + boucle `@odata.deltaLink` pour incrémental. Sauver `delta_link` dans `planipret_ms_sync_state.delta_link`.
 
-## Détails techniques
+**Rate limits Graph** : respecter `Retry-After` sur 429, backoff exponentiel. Batch requests (`$batch`) quand ≥5 items.
 
-**Fichiers principaux modifiés**
-- `src/lib/ms365AuthLogin.ts`, `apps/planipret-mobile/src/lib/ms365AuthLogin.ts`
-- `src/components/planipret/mobile/MobileAuthScreen.tsx` + variante mobile (bouton fallback navigateur)
-- `supabase/functions/pp-ms-auth-start/index.ts`, `pp-ms-auth-callback/index.ts` (validation redirect_uri par plateforme)
-- `supabase/functions/pp-ns-sms/index.ts` (inspection result NS-API, normalisation stricte)
-- `supabase/functions/pp-ns-calls/index.ts` (device_registered dans réponse)
-- `supabase/functions/ava-tool-executor/index.ts` (tools `open_dialer`, `open_sms_composer`, fallback make_call → open_dialer, navigate après send_sms)
-- `supabase/functions/pp-ava-chat/index.ts` (prompt système + confirmations)
-- `src/pages/planipret/mobile/MMessages.tsx`, `MCalls.tsx` + `FabDialer` (écoute events Realtime `open_*`, préremplissage)
-- `apps/planipret-mobile/**` équivalent
+**Sécurité** : toutes les tables scoped `user_id = auth.uid()`. Aucun token Graph exposé côté client. Toutes les invocations Graph via `_shared/ms365-client.ts` centralisé avec refresh auto.
 
-**Verrous respectés**
-- Aucune modification de `/mplanipret` routes, `MplanipretGuard`, `App.tsx` (mémoire `mplanipret-isolation-locked`).
-- Landing page non touchée.
+**Rebuild / redeploy** : les 4 nouvelles fonctions + migration + code frontend. Après rebuild : `npx cap sync` pour l'app mobile.
 
-## Étape de validation
-1. Rebuild + `npx cap sync` iOS/Android.
-2. Test SSO MS : bouton « Continuer » actif, retour dans l’app authentifié.
-3. Test chat : « envoie SMS à X » → confirmation écrite → SMS reçu + navigation vers thread.
-4. Test chat : « appelle X » → soit ring téléphone, soit dialer préchargé.
-5. Test chat : email, événement calendrier, message Teams — vérifier retour succès + effet réel dans Outlook/Teams.
+## Livraison ordonnée
+1. Migration DB (7 tables + indexes + RLS + GRANT).
+2. Helper `_shared/phone-normalize.ts` + `_shared/ms365-client.ts` (fetch + auto-refresh).
+3. Edge functions : `ms365-sync-{contacts,mail,calendar,teams}` + `ms365-full-import` + `ms365-sync-status` + `ms365-contacts-search`.
+4. Patch `ava-tool-executor` : normalisation E.164 + `get_integration_status` réel.
+5. Frontend : `RecipientAutocomplete`, refonte `MMessages` (threads + cache local), badge « Déjà en contact », bouton resync dans Settings + Auth callback.
+6. Déclenchement auto sync dans `Ms365Callback.tsx` et `pp-ms-auth-callback`.

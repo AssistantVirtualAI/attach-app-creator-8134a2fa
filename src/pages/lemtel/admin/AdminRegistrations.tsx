@@ -91,11 +91,38 @@ export default function AdminRegistrations() {
         title="SIP Registrations"
         subtitle="Currently registered endpoints. Auto-refresh every 10s."
         actions={
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} /> Refresh
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="default" size="sm" onClick={configureFork} disabled={repairing}>
+              {repairing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PhoneForwarded className="w-4 h-4 mr-2" />}
+              Activer sonnerie multi-appareils
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} /> Refresh
+            </Button>
+          </div>
         }
       />
+
+      {perUser.length > 0 && (
+        <Card className="border-border/60 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Appareils enregistrés par poste (fork simultané)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {perUser.map(({ user, count }) => (
+                <div key={user} className={`px-3 py-1.5 rounded-md text-xs border ${count > 1 ? 'border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-300' : 'border-border bg-muted/40'}`}>
+                  <span className="font-mono font-semibold">{user}</span>
+                  <span className="ml-2 opacity-70">{count} appareil{count > 1 ? 's' : ''}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Les postes avec plusieurs appareils sonneront simultanément sur mobile + desktop. Si un poste n'a qu'un seul appareil, cliquez sur "Activer sonnerie multi-appareils" pour réparer la configuration.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="border-border/60 shadow-sm">
         <CardHeader>

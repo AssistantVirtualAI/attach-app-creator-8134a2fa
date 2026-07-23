@@ -20,6 +20,7 @@ export async function startMicrosoftSignIn(nextPath = "/mplanipret"): Promise<vo
     localStorage.setItem(INTENT_KEY, "login");
     localStorage.setItem(NEXT_KEY, nextPath);
   } catch {}
+  markMs365Pending();
   await openMs365Authorize({ clientId: cfg.client_id, tenant: cfg.tenant_id || "common", state: "login" });
 }
 

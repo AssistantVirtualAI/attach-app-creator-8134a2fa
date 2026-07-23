@@ -652,6 +652,54 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
                 pjsua_call_make_call(self.accId, &d, nil, nil, nil, &newCallId)
             }
             call.resolve(["ok": true, "target": target, "callId": Int(newCallId)])
+
+    // MARK: - Background keep-alive helpers (parity with Android SipConnectionService)
+
+    /// Force a SIP re-REGISTER. Called from AppDelegate background tasks and
+    /// from JS via `triggerReregister()`. Safe to call from any thread.
+    @objc public func triggerReregister(_ call: CAPPluginCall? = nil) {
+        sipQueue.async { [weak self] in
+            guard let self = self else { call?.resolve(["ok": false]); return }
+            self.registerThreadIfNeeded()
+            guard self.accId != pjsua_acc_id(PJSUA_INVALID_ID.rawValue) else {
+                NSLog("[CapacitorPjsip] triggerReregister: no account — skipping")
+                call?.resolve(["ok": false, "reason": "no_account"])
+                return
+            }
+            let status = pjsua_acc_set_registration(self.accId, pj_bool_t(PJ_TRUE.rawValue))
+            NSLog("[CapacitorPjsip] triggerReregister: pjsua_acc_set_registration status=\(status)")
+            self.notifyBg("registration", ["state": "reregistering", "source": "background_task"])
+            call?.resolve(["ok": true, "status": Int(status)])
         }
     }
+
+    /// iOS equivalent of Android `getSipServiceStatus` so the Settings /
+    /// Diagnostics screen shows the same shape on both platforms.
+    @objc func getSipServiceStatus(_ call: CAPPluginCall) {
+        sipQueue.async { [weak self] in
+            guard let self = self else { call.resolve(["loggedIn": false]); return }
+            self.registerThreadIfNeeded()
+            let hasAccount = self.accId != pjsua_acc_id(PJSUA_INVALID_ID.rawValue)
+            var regState = "unregistered"
+            var loggedIn = false
+            if hasAccount {
+                var accInfo = pjsua_acc_info()
+                pjsua_acc_get_info(self.accId, &accInfo)
+                let code = Int(accInfo.status.rawValue)
+                loggedIn = code == 200
+                regState = loggedIn ? "registered" : (code == 0 ? "connecting" : "error")
+            }
+            call.resolve([
+                "ok": true,
+                "loggedIn": loggedIn,
+                "status": regState,
+                "wakeLockHeld": true,  // iOS: PushKit + BGTask act as the wake-lock equivalent
+                "wifiLockHeld": true,
+                "pushKitEnabled": !(self.voipPushToken?.isEmpty ?? true),
+                "voipPushToken": String(self.voipPushToken?.prefix(8) ?? "")
+            ])
+        }
+    }
+}
+
 }

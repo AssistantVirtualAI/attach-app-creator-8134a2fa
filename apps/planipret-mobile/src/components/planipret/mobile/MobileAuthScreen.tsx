@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "@/hooks/useSafeAreaInsets";
 import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
 import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
 import { startMicrosoftSignIn } from "@/lib/ms365AuthLogin";
+import { Ms365PendingBanner } from "@/components/planipret/mobile/Ms365PendingBanner";
 
 const AvaBadge = ({ size = 44 }: { size?: number }) => (
   <img src={avaLogoAsset.url} alt="AVA" style={{ width: size, height: size, objectFit: "contain", borderRadius: 10 }} />

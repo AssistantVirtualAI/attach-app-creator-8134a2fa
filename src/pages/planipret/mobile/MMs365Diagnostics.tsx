@@ -143,6 +143,30 @@ export default function MMs365Diagnostics() {
             )}
           </div>
         </Card>
+
+        <Card title="Synchronisation complète (Contacts · Courriels · Calendrier · Teams)">
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <button onClick={() => runImport("initial")} disabled={importState.loading}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-60"
+              style={{ background: "#0078D4", color: "white" }}>
+              {importState.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              Import initial complet
+            </button>
+            <button onClick={() => runImport("delta")} disabled={importState.loading}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-60"
+              style={{ background: "#0D1F35", border: "1px solid #0E2A45", color: "#2E9BDC" }}>
+              Delta (nouveautés)
+            </button>
+            {importState.ok !== null && (
+              <span className="text-xs" style={{ color: importState.ok ? "#2EDC78" : "#E84C4C" }}>
+                {importState.ok ? "✅" : "❌"} {importState.message}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px]" style={{ color: "#8FA8C0" }}>
+            Importe et met en cache localement les contacts, courriels (delta), rendez-vous et chats Teams pour un affichage instantané et de meilleures suggestions AVA.
+          </p>
+        </Card>
       </div>
     </div>
   );

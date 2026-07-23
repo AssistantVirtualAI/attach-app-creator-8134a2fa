@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { openMs365Authorize } from "@/lib/ms365OAuth";
+import { markMs365Pending } from "@/lib/ms365Pending";
 
 const INTENT_KEY = "pp_ms365_auth_intent";
 const NEXT_KEY = "pp_ms365_auth_next";

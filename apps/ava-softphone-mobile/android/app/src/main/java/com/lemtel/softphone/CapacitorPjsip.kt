@@ -36,6 +36,7 @@ class CapacitorPjsip : Plugin() {
 
     private var audioManager: AudioManager? = null
     private var sipStatusReceiver: BroadcastReceiver? = null
+    private var callActionReceiver: BroadcastReceiver? = null
 
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -45,21 +46,36 @@ class CapacitorPjsip : Plugin() {
                 notifyListeners("sipServiceStatus", statusFromIntent(intent), true)
             }
         }
+        callActionReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent?.action != CallActionReceiver.ACTION_CALL_ACTION_EVENT) return
+                val action = intent.getStringExtra(CallActionReceiver.EXTRA_ACTION) ?: return
+                val payload = JSObject().put("action", action)
+                notifyListeners("sipCallAction", payload, true)
+            }
+        }
         try {
             val filter = IntentFilter(SipConnectionService.ACTION_STATUS)
+            val callFilter = IntentFilter(CallActionReceiver.ACTION_CALL_ACTION_EVENT)
             val receiver = sipStatusReceiver ?: return
+            val callRecv = callActionReceiver ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                context.registerReceiver(callRecv, callFilter, Context.RECEIVER_NOT_EXPORTED)
             } else {
                 @Suppress("DEPRECATION")
                 context.registerReceiver(receiver, filter)
+                @Suppress("DEPRECATION")
+                context.registerReceiver(callRecv, callFilter)
             }
         } catch (_: Exception) {}
     }
 
     override fun handleOnDestroy() {
         try { sipStatusReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
+        try { callActionReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         sipStatusReceiver = null
+        callActionReceiver = null
         super.handleOnDestroy()
     }
 

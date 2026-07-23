@@ -98,7 +98,7 @@ function ensureNativeCallEventBridge() {
       console.log('[NativeSIP] CALL_EVENT|callReceived', d);
       stopRingback();
       emitNativeCallSnapshot({
-        callState: 'ringing',
+        callState: 'ringing-in',
         activeCallNumber: d?.from || d?.number || 'Unknown',
         direction: 'in',
         endReason: null,
@@ -129,7 +129,8 @@ function ensureNativeCallEventBridge() {
         // Local ringback: only when outgoing AND no early media from PBX.
         if (dir === 'out' && phase !== 'early-media') startRingback();
         else stopRingback();
-        emitNativeCallSnapshot({ callState: 'ringing', activeCallNumber: d?.number || nativeCallSnapshot.activeCallNumber, direction: dir, endReason: null, callPhase: phase, lastSipCode: code });
+        const richState = dir === 'in' ? 'ringing-in' : dir === 'out' ? 'ringing-out' : 'ringing';
+        emitNativeCallSnapshot({ callState: richState as any, activeCallNumber: d?.number || nativeCallSnapshot.activeCallNumber, direction: dir, endReason: null, callPhase: phase, lastSipCode: code });
       }
     });
     const callEndedHandle = await CapacitorPjsip.addListener('callEnded', (d: any) => {
@@ -393,7 +394,7 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
 
   const call = (number: string) => {
     if (sipStatus !== 'registered') return false;
-    emitNativeCallSnapshot({ callState: 'ringing', activeCallNumber: number, isMuted: false, isOnHold: false, direction: 'out', endReason: null, callPhase: 'dialing', lastSipCode: null });
+    emitNativeCallSnapshot({ callState: 'ringing-out' as any, activeCallNumber: number, isMuted: false, isOnHold: false, direction: 'out', endReason: null, callPhase: 'dialing', lastSipCode: null });
     // iOS WebAudio requires a user-gesture to unlock the AudioContext. Start
     // the ringback here (synchronous to the tap) and let it run until 180/183
     // arrives. It is stopped on 'active', 'early-media' or 'ended'.

@@ -71,7 +71,10 @@ export default function ActiveCallSheet({
   const fmt = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
-  const remote = sp.snap.remoteParty || sp.snap.remoteUri || 'Unknown';
+  const rawRemote = sp.snap.remoteParty || sp.snap.remoteUri || '';
+  const lang: 'fr' | 'en' = (typeof localStorage !== 'undefined' && localStorage.getItem('ava.mobile.lang') === 'en') ? 'en' : 'fr';
+  const party = formatSipParty(String(rawRemote), lang);
+  const remote = party.name;
   const isIncoming = sp.snap.callState === 'ringing-in';
   const isOutgoing = sp.snap.callState === 'ringing-out';
   const onHold = !!sp.snap.onHold || sp.snap.callState === 'held';

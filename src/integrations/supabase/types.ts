@@ -3180,6 +3180,47 @@ export type Database = {
         }
         Relationships: []
       }
+      org_chat_channel_member_audit: {
+        Row: {
+          action: string
+          actor_id: string | null
+          channel_id: string
+          channel_type: string | null
+          created_at: string
+          id: string
+          organization_id: string
+          target_user_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          channel_id: string
+          channel_type?: string | null
+          created_at?: string
+          id?: string
+          organization_id: string
+          target_user_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          channel_id?: string
+          channel_type?: string | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+          target_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_chat_channel_member_audit_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "org_chat_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_chat_channels: {
         Row: {
           archived_at: string | null
@@ -8877,6 +8918,7 @@ export type Database = {
         Row: {
           code_verifier: string | null
           created_at: string
+          expires_at: string
           redirect_uri: string | null
           state: string
           user_id: string
@@ -8884,6 +8926,7 @@ export type Database = {
         Insert: {
           code_verifier?: string | null
           created_at?: string
+          expires_at?: string
           redirect_uri?: string | null
           state: string
           user_id: string
@@ -8891,6 +8934,7 @@ export type Database = {
         Update: {
           code_verifier?: string | null
           created_at?: string
+          expires_at?: string
           redirect_uri?: string | null
           state?: string
           user_id?: string

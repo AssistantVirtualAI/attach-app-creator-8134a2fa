@@ -56,7 +56,7 @@ const fmtTime = (iso: string, lang: "fr" | "en" = "fr", t?: (key: string) => str
 };
 
 export default function MMessages() {
-  const { t } = useMplanipretLang();
+  const { t, lang } = useMplanipretLang();
   const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();
   const [searchParams] = useSearchParams();
   const initialTab = ((): SubTab => {

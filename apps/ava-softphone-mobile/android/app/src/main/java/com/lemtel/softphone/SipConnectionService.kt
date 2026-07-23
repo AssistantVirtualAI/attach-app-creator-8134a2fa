@@ -8,6 +8,10 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
@@ -20,6 +24,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.io.OutputStream
 import java.net.SocketTimeoutException
 import java.security.SecureRandom
@@ -103,6 +108,9 @@ class SipConnectionService : Service() {
     private var pingFuture: ScheduledFuture<*>? = null
     private var reconnectFuture: ScheduledFuture<*>? = null
     @Volatile private var connecting = false
+    @Volatile private var lastFrameAt = 0L
+    private var connectivityManager: ConnectivityManager? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -119,6 +127,7 @@ class SipConnectionService : Service() {
             setReferenceCounted(false)
             acquire()
         }
+        registerNetworkWatchdog()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -126,7 +135,7 @@ class SipConnectionService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceCompat.startForeground(
                 this, NOTIFICATION_ID, notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)
@@ -139,6 +148,7 @@ class SipConnectionService : Service() {
         isDestroyed = true
         pingFuture?.cancel(true)
         reconnectFuture?.cancel(true)
+        unregisterNetworkWatchdog()
         closeSocket()
         executor.shutdownNow()
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -147,6 +157,14 @@ class SipConnectionService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Keep the SIP/Verto foreground registration alive even if Android removes
+        // the WebView task. The stored credentials let the sticky service restore
+        // the connection without opening the UI.
+        scheduleReconnect(1_000L)
+        super.onTaskRemoved(rootIntent)
+    }
 
     // ── WebSocket (RFC 6455) over TLS ────────────────────────────────────────
 
@@ -205,6 +223,7 @@ class SipConnectionService : Service() {
             outputStream = socket.outputStream
             sessionUUID = UUID.randomUUID().toString()
             isLoggedIn = false
+            lastFrameAt = System.currentTimeMillis()
             connecting = false
 
             // Send verto.login
@@ -239,23 +258,23 @@ class SipConnectionService : Service() {
                     b0 = input.read()
                     b1 = input.read()
                 } catch (_: SocketTimeoutException) {
-                    if (isLoggedIn) continue
+                    if (isLoggedIn && System.currentTimeMillis() - lastFrameAt < 95_000L) continue
+                    if (isLoggedIn) throw Exception("Verto socket stale in background")
                     throw Exception("Verto read timeout before login")
                 }
                 if (b0 < 0 || b1 < 0) break
+                lastFrameAt = System.currentTimeMillis()
 
                 val isMasked = (b1 and 0x80) != 0
                 var payloadLen = (b1 and 0x7F).toLong()
 
                 payloadLen = when (payloadLen.toInt()) {
                     126 -> {
-                        val ext = ByteArray(2)
-                        input.read(ext)
+                        val ext = input.readExact(2)
                         ((ext[0].toInt() and 0xFF) shl 8 or (ext[1].toInt() and 0xFF)).toLong()
                     }
                     127 -> {
-                        val ext = ByteArray(8)
-                        input.read(ext)
+                        val ext = input.readExact(8)
                         var len = 0L
                         for (i in 0..7) len = (len shl 8) or (ext[i].toLong() and 0xFF)
                         len
@@ -263,14 +282,8 @@ class SipConnectionService : Service() {
                     else -> payloadLen
                 }
 
-                val maskKey = if (isMasked) ByteArray(4).also { input.read(it) } else null
-                val payload = ByteArray(payloadLen.toInt())
-                var read = 0
-                while (read < payload.size) {
-                    val n = input.read(payload, read, payload.size - read)
-                    if (n < 0) break
-                    read += n
-                }
+                val maskKey = if (isMasked) input.readExact(4) else null
+                val payload = input.readExact(payloadLen.toInt())
                 if (maskKey != null) {
                     for (i in payload.indices) payload[i] = (payload[i].toInt() xor maskKey[i % 4].toInt()).toByte()
                 }
@@ -362,6 +375,17 @@ class SipConnectionService : Service() {
         outputStream = null
     }
 
+    private fun InputStream.readExact(size: Int): ByteArray {
+        val buffer = ByteArray(size)
+        var offset = 0
+        while (offset < size) {
+            val n = read(buffer, offset, size - offset)
+            if (n < 0) throw Exception("WebSocket frame ended early")
+            offset += n
+        }
+        return buffer
+    }
+
     // ── Verto protocol ───────────────────────────────────────────────────────
 
     private fun sendVertoLogin(login: String, password: String, domain: String, displayName: String) {
@@ -388,8 +412,11 @@ class SipConnectionService : Service() {
             val ping = JSONObject().apply {
                 put("jsonrpc", "2.0")
                 put("id", System.currentTimeMillis().toInt())
-                put("method", "verto.ping")
-                put("params", JSONObject().apply { put("sessid", sessionUUID) })
+                put("method", "echo")
+                put("params", JSONObject().apply {
+                    put("sessid", sessionUUID)
+                    put("keepalive", System.currentTimeMillis())
+                })
             }
             if (!sendFrame(ping.toString())) {
                 isLoggedIn = false
@@ -453,13 +480,57 @@ class SipConnectionService : Service() {
     }
 
     private fun scheduleReconnect() {
+        scheduleReconnect(null)
+    }
+
+    private fun scheduleReconnect(forcedDelayMs: Long?) {
         if (isDestroyed) return
         if (reconnectFuture?.isDone == false) return
         reconnectAttempt++
-        val delay = minOf(5_000L * reconnectAttempt, 30_000L)
+        val delay = forcedDelayMs ?: minOf(5_000L * reconnectAttempt, 30_000L)
         Log.i(TAG, "Reconnecting in ${delay}ms (attempt $reconnectAttempt)")
         handler.post { updateNotification("Reconnexion en cours...") }
         reconnectFuture = executor.schedule({ if (!isDestroyed) connectVerto() }, delay, TimeUnit.MILLISECONDS)
+    }
+
+    private fun registerNetworkWatchdog() {
+        try {
+            connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val request = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            val callback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    Log.i(TAG, "Network available — refreshing Verto registration")
+                    if (!isDestroyed) {
+                        isLoggedIn = false
+                        closeSocket()
+                        scheduleReconnect(1_000L)
+                    }
+                }
+
+                override fun onLost(network: Network) {
+                    Log.i(TAG, "Network lost — marking Verto offline")
+                    isLoggedIn = false
+                    closeSocket()
+                    if (!isDestroyed) scheduleReconnect(5_000L)
+                }
+            }
+            connectivityManager?.registerNetworkCallback(request, callback)
+            networkCallback = callback
+        } catch (e: Exception) {
+            Log.w(TAG, "Network watchdog unavailable: ${e.message}")
+        }
+    }
+
+    private fun unregisterNetworkWatchdog() {
+        try {
+            val cb = networkCallback ?: return
+            connectivityManager?.unregisterNetworkCallback(cb)
+        } catch (_: Exception) {
+        } finally {
+            networkCallback = null
+        }
     }
 
     // ── Notifications ────────────────────────────────────────────────────────

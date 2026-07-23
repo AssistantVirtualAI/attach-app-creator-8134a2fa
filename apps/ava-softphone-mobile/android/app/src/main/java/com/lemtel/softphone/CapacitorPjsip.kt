@@ -37,6 +37,7 @@ class CapacitorPjsip : Plugin() {
     private var audioManager: AudioManager? = null
     private var sipStatusReceiver: BroadcastReceiver? = null
     private var callActionReceiver: BroadcastReceiver? = null
+    private var scoReceiver: BroadcastReceiver? = null
 
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -54,19 +55,38 @@ class CapacitorPjsip : Plugin() {
                 notifyListeners("sipCallAction", payload, true)
             }
         }
+        scoReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent?.action != AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED) return
+                val state = intent.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, -1)
+                if (state == AudioManager.SCO_AUDIO_STATE_CONNECTED) {
+                    audioManager?.isBluetoothScoOn = true
+                    notifyListeners("audioRouteChanged", JSObject().apply { put("route", "bluetooth") }, true)
+                } else if (state == AudioManager.SCO_AUDIO_STATE_DISCONNECTED) {
+                    audioManager?.isBluetoothScoOn = false
+                    val r = if (audioManager?.isSpeakerphoneOn == true) "speaker" else "earpiece"
+                    notifyListeners("audioRouteChanged", JSObject().apply { put("route", r) }, true)
+                }
+            }
+        }
         try {
             val filter = IntentFilter(SipConnectionService.ACTION_STATUS)
             val callFilter = IntentFilter(CallActionReceiver.ACTION_CALL_ACTION_EVENT)
+            val scoFilter = IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
             val receiver = sipStatusReceiver ?: return
             val callRecv = callActionReceiver ?: return
+            val scoRecv = scoReceiver ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
                 context.registerReceiver(callRecv, callFilter, Context.RECEIVER_NOT_EXPORTED)
+                context.registerReceiver(scoRecv, scoFilter, Context.RECEIVER_NOT_EXPORTED)
             } else {
                 @Suppress("DEPRECATION")
                 context.registerReceiver(receiver, filter)
                 @Suppress("DEPRECATION")
                 context.registerReceiver(callRecv, callFilter)
+                @Suppress("DEPRECATION")
+                context.registerReceiver(scoRecv, scoFilter)
             }
         } catch (_: Exception) {}
     }
@@ -74,8 +94,11 @@ class CapacitorPjsip : Plugin() {
     override fun handleOnDestroy() {
         try { sipStatusReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         try { callActionReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
+        try { scoReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         sipStatusReceiver = null
         callActionReceiver = null
+        scoReceiver = null
+        try { AudioFocusHelper.releaseCallAudioFocus(context) } catch (_: Exception) {}
         super.handleOnDestroy()
     }
 
@@ -119,16 +142,26 @@ class CapacitorPjsip : Plugin() {
     @PluginMethod fun makeCall(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true); put("status", "calling") }) }
     @PluginMethod
     fun startCall(call: PluginCall) {
-        audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
-        audioManager?.isSpeakerphoneOn = false
+        AudioFocusHelper.requestCallAudioFocus(context)
         call.resolve(JSObject().apply { put("ok", true) })
     }
-    @PluginMethod fun hangup(call: PluginCall) { audioManager?.mode = AudioManager.MODE_NORMAL; call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun answer(call: PluginCall) { audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION; call.resolve(JSObject().apply { put("ok", true) }) }
+    @PluginMethod fun hangup(call: PluginCall) {
+        AudioFocusHelper.releaseCallAudioFocus(context)
+        try { if (audioManager?.isBluetoothScoOn == true) { audioManager?.isBluetoothScoOn = false; audioManager?.stopBluetoothSco() } } catch (_: Exception) {}
+        call.resolve(JSObject().apply { put("ok", true) })
+    }
+    @PluginMethod fun answer(call: PluginCall) {
+        AudioFocusHelper.requestCallAudioFocus(context)
+        call.resolve(JSObject().apply { put("ok", true) })
+    }
     @PluginMethod fun setMute(call: PluginCall) { val m = call.getBoolean("muted", false) ?: false; audioManager?.isMicrophoneMute = m; call.resolve(JSObject().apply { put("ok", true); put("muted", m) }) }
     @PluginMethod fun setHold(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
     @PluginMethod fun sendDTMF(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
-    @PluginMethod fun disconnect(call: PluginCall) { audioManager?.mode = AudioManager.MODE_NORMAL; call.resolve(JSObject().apply { put("ok", true) }) }
+    @PluginMethod fun disconnect(call: PluginCall) {
+        AudioFocusHelper.releaseCallAudioFocus(context)
+        try { if (audioManager?.isBluetoothScoOn == true) { audioManager?.isBluetoothScoOn = false; audioManager?.stopBluetoothSco() } } catch (_: Exception) {}
+        call.resolve(JSObject().apply { put("ok", true) })
+    }
     @PluginMethod fun setLogLevel(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
     @PluginMethod fun getSnapshot(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
     @PluginMethod fun setHeld(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
@@ -207,10 +240,26 @@ class CapacitorPjsip : Plugin() {
 
     @PluginMethod
     fun setAudioRoute(call: PluginCall) {
+        // MODE_IN_COMMUNICATION MUST be set before flipping speakerphone /
+        // bluetooth, otherwise Android routes through the media stream.
+        audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
         when (call.getString("route", "earpiece")) {
-            "speaker" -> { audioManager?.isSpeakerphoneOn = true }
-            "earpiece" -> { audioManager?.isSpeakerphoneOn = false }
-            "bluetooth" -> { audioManager?.isBluetoothScoOn = true }
+            "speaker" -> {
+                try { audioManager?.stopBluetoothSco() } catch (_: Exception) {}
+                audioManager?.isBluetoothScoOn = false
+                audioManager?.isSpeakerphoneOn = true
+            }
+            "earpiece" -> {
+                try { audioManager?.stopBluetoothSco() } catch (_: Exception) {}
+                audioManager?.isBluetoothScoOn = false
+                audioManager?.isSpeakerphoneOn = false
+            }
+            "bluetooth" -> {
+                audioManager?.isSpeakerphoneOn = false
+                try { audioManager?.startBluetoothSco() } catch (_: Exception) {}
+                // isBluetoothScoOn is flipped to true by the SCO_AUDIO_STATE
+                // broadcast receiver once the SCO link is actually connected.
+            }
         }
         call.resolve(JSObject().apply { put("ok", true) })
     }

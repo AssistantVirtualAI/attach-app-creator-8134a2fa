@@ -70,6 +70,26 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     setSipLog(next);
   }, []);
 
+  const setStatus = useCallback((next: SIPStatus, err?: string) => {
+    setSipStatusState(next);
+    savePersistedStatus(next);
+    if (err !== undefined) setSipError(err);
+    if (next === 'error' && err) {
+      const cfg = configRef.current;
+      const persisted: PersistedSipError = {
+        error: err,
+        extension: cfg?.extension || '',
+        domain: cfg?.domain || '',
+        time: Date.now(),
+      };
+      savePersistedError(persisted);
+      setLastPersistedError(persisted);
+    }
+    if (next === 'registered') {
+      setSipError('');
+    }
+  }, []);
+
   const applyNativeStatus = useCallback((native: AndroidSipServiceStatus | null, source = 'event') => {
     if (!native) return;
     setAndroidSipServiceStatus(native);
@@ -99,26 +119,6 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       setStatus('error', native.reason || 'Native Verto service error');
     }
   }, [log, setStatus]);
-
-  const setStatus = useCallback((next: SIPStatus, err?: string) => {
-    setSipStatusState(next);
-    savePersistedStatus(next);
-    if (err !== undefined) setSipError(err);
-    if (next === 'error' && err) {
-      const cfg = configRef.current;
-      const persisted: PersistedSipError = {
-        error: err,
-        extension: cfg?.extension || '',
-        domain: cfg?.domain || '',
-        time: Date.now(),
-      };
-      savePersistedError(persisted);
-      setLastPersistedError(persisted);
-    }
-    if (next === 'registered') {
-      setSipError('');
-    }
-  }, []);
 
   // ── Connect / register lifecycle ────────────────────────────────────────
   useEffect(() => {
@@ -305,7 +305,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       }
     });
     return () => { off(); };
-  }, [log, setStatus]);
+  }, [androidSipServiceStatus, log, setStatus]);
 
   // ── Actions ────────────────────────────────────────────────────────────
   const call = useCallback((number: string): boolean => {

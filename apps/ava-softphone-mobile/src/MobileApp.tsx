@@ -367,7 +367,7 @@ function AuthenticatedShell({
       startRecord: softphone.startRecord || softphone.startRecording || (() => {}),
       stopRecord: softphone.stopRecord || softphone.stopRecording || (() => {}),
     };
-  }, [softphone, sipConfig]);
+  }, [softphone, sipConfig, _sipProvider]);
 
   const notif = useNotificationCounts({
     accessToken: creds.accessToken,

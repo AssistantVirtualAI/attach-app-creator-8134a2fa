@@ -47,17 +47,18 @@ class CapacitorPjsip : Plugin() {
         }
         try {
             val filter = IntentFilter(SipConnectionService.ACTION_STATUS)
+            val receiver = sipStatusReceiver ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(sipStatusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+                context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
             } else {
                 @Suppress("DEPRECATION")
-                context.registerReceiver(sipStatusReceiver, filter)
+                context.registerReceiver(receiver, filter)
             }
         } catch (_: Exception) {}
     }
 
     override fun handleOnDestroy() {
-        try { context.unregisterReceiver(sipStatusReceiver) } catch (_: Exception) {}
+        try { sipStatusReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         sipStatusReceiver = null
         super.handleOnDestroy()
     }

@@ -39,7 +39,10 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "addCall", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
         CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getSipServiceStatus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "triggerReregister", returnType: CAPPluginReturnPromise),
     ]
+
 
     // Serial queue for all PJSUA calls. PJSUA itself is thread-safe but
     // keeping work off the main thread guarantees the UI never blocks.

@@ -655,23 +655,27 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
 
     // MARK: - Background keep-alive helpers (parity with Android SipConnectionService)
 
-    /// Force a SIP re-REGISTER. Called from AppDelegate background tasks and
-    /// from JS via `triggerReregister()`. Safe to call from any thread.
-    @objc public func triggerReregister(_ call: CAPPluginCall? = nil) {
+    /// Internal helper: force a SIP re-REGISTER. Safe to call from any thread.
+    public func triggerReregister() {
         sipQueue.async { [weak self] in
-            guard let self = self else { call?.resolve(["ok": false]); return }
+            guard let self = self else { return }
             self.registerThreadIfNeeded()
             guard self.accId != pjsua_acc_id(PJSUA_INVALID_ID.rawValue) else {
                 NSLog("[CapacitorPjsip] triggerReregister: no account — skipping")
-                call?.resolve(["ok": false, "reason": "no_account"])
                 return
             }
             let status = pjsua_acc_set_registration(self.accId, pj_bool_t(PJ_TRUE.rawValue))
             NSLog("[CapacitorPjsip] triggerReregister: pjsua_acc_set_registration status=\(status)")
             self.notifyBg("registration", ["state": "reregistering", "source": "background_task"])
-            call?.resolve(["ok": true, "status": Int(status)])
         }
     }
+
+    /// Capacitor-facing wrapper so JS can call `triggerReregister()`.
+    @objc func triggerReregister(_ call: CAPPluginCall) {
+        triggerReregister()
+        call.resolve(["ok": true])
+    }
+
 
     /// iOS equivalent of Android `getSipServiceStatus` so the Settings /
     /// Diagnostics screen shows the same shape on both platforms.

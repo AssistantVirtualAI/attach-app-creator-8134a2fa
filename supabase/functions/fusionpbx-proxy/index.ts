@@ -1142,7 +1142,8 @@ Deno.serve(async (req) => {
         };
         const write = await pbxWrite("extensions", "POST", { extensions: [patchPayload] });
         if (write.ok) { fixed++; results.push({ extension: extNum, ok: true }); }
-        else { failed++; results.push({ extension: extNum, ok: false, status: write.status }); }
+        else { failed++; results.push({ extension: extNum, ok: false, status: write.status, code: (write as any).embeddedCode, message: (write as any).message, data: (write as any).data }); }
+
       }
       try {
         await admin.from("audit_logs").insert({

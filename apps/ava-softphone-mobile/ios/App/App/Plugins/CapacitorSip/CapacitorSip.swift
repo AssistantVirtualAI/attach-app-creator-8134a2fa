@@ -438,6 +438,11 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
             if self.currentCallId != pjsua_call_id(PJSUA_INVALID_ID.rawValue) {
                 pjsua_call_hangup(self.currentCallId, 0, nil, nil)
                 self.currentCallId = pjsua_call_id(PJSUA_INVALID_ID.rawValue)
+                // Explicitly emit ended events — when the call is still in
+                // CALLING state PJSUA may not fire on_call_state(DISCONNECTED),
+                // which would leave the JS side stuck on the active-call sheet.
+                self.notifyBg("callEnded", ["reason": "local_hangup"])
+                self.notifyBg("callStateChanged", ["state": "ended"])
             }
             call.resolve(["ok": true])
         }

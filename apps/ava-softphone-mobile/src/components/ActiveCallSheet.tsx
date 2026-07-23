@@ -12,6 +12,7 @@ import { isVibrationEnabled } from '../lib/sip/ringPreferences';
 import IncomingCallerPanel from './IncomingCallerPanel';
 import { lookupCaller, type CallerLookup } from '../lib/sip/callerLookup';
 import { formatSipParty } from '../lib/sip/formatSipParty';
+import { useCallActionBridge } from '../lib/sip/useCallActionBridge';
 // LiveTranscriptPanel intentionally not imported — live transcription disabled during calls.
 import { useMobileCredentials } from '../hooks/useMobileCredentials';
 import { useT } from '../lib/i18n';
@@ -90,6 +91,17 @@ export default function ActiveCallSheet({
   const inCall = sp.snap.callState === 'active' || sp.snap.callState === 'held' || onHold;
   const isTransfer = !!sp.snap.transferring;
   const isEnded = sp.snap.callState === 'ended' || sp.snap.callState === 'idle';
+
+  // Route notification-button taps (Android) and CallKit actions (iOS) to the
+  // same sp handlers so the user can control the call from the lockscreen.
+  useCallActionBridge({
+    onAnswer: () => sp.answer?.(),
+    onDecline: () => sp.hangup?.(),
+    onHangup: () => sp.hangup?.(),
+    onHold: () => sp.hold?.(),
+    onResume: () => sp.unhold?.(),
+    onMute: () => (sp.snap.muted ? sp.unmute?.() : sp.mute?.()),
+  }, inCall || isIncoming || isOutgoing);
 
   // Native audio-engine status (iOS plugin). When 'starting' or 'retrying' the
   // RTP pipeline isn't ready yet, so audio-affecting buttons must be disabled.
@@ -236,8 +248,12 @@ export default function ActiveCallSheet({
           </div>
         )}
         <div style={{ fontSize: 13, color: colors.mutedSilver, fontFamily: 'JetBrains Mono, monospace' }}>
-          {isIncoming && (lang === 'en' ? 'Incoming call…' : 'Appel entrant…')}
-          {isOutgoing && (lang === 'en' ? 'Calling…' : 'Appel en cours…')}
+          {isIncoming && (party.isInternal
+            ? (lang === 'en' ? 'Internal incoming call…' : 'Appel interne entrant…')
+            : (lang === 'en' ? 'Incoming call…' : 'Appel entrant…'))}
+          {isOutgoing && (party.isInternal
+            ? (lang === 'en' ? 'Calling internal extension…' : 'Appel interne…')
+            : (lang === 'en' ? 'Calling…' : 'Appel en cours…'))}
           {inCall && fmt(timer)}
           {isTransfer && (lang === 'en' ? 'Transferring call…' : 'Transfert en cours…')}
           {isEnded && (lang === 'en' ? 'Call has ended' : 'Appel terminé')}

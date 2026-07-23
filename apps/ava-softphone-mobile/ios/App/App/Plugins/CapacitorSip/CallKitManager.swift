@@ -19,6 +19,11 @@ import UIKit
     public var onAnswer: (() -> Void)?
     /// Called by CallKit when the user taps End in the native UI.
     public var onEnd: (() -> Void)?
+    /// Called by CallKit when the user toggles Hold in the native UI.
+    /// `held == true` means the call should be placed on hold.
+    public var onHold: ((Bool) -> Void)?
+    /// Called by CallKit when the user toggles Mute in the native UI.
+    public var onMuted: ((Bool) -> Void)?
     /// Called by CallKit when the audio session is activated.
     /// CapacitorSip dispatches pjsua_set_snd_dev on sipQueue from this callback.
     public var onAudioActivated: (() -> Void)?
@@ -156,6 +161,14 @@ import UIKit
         provider.reportCall(with: uuid, endedAt: nil, reason: .remoteEnded)
         activeUUID = nil
     }
+
+    /// Programmatically toggle hold state (e.g. when JS taps the in-app Hold
+    /// button). Routes through CallKit so the native UI stays in sync.
+    @objc public func requestHold(_ held: Bool) {
+        guard let uuid = activeUUID else { return }
+        let action = CXSetHeldCallAction(call: uuid, onHold: held)
+        callController.request(CXTransaction(action: action)) { _ in }
+    }
 }
 
 extension CallKitManager: CXProviderDelegate {
@@ -170,6 +183,16 @@ extension CallKitManager: CXProviderDelegate {
         onEnd?()
         action.fulfill()
         activeUUID = nil
+    }
+
+    public func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction) {
+        onHold?(action.isOnHold)
+        action.fulfill()
+    }
+
+    public func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
+        onMuted?(action.isMuted)
+        action.fulfill()
     }
 
     public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {

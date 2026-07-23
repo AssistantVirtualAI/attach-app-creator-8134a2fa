@@ -248,8 +248,12 @@ export default function ActiveCallSheet({
           </div>
         )}
         <div style={{ fontSize: 13, color: colors.mutedSilver, fontFamily: 'JetBrains Mono, monospace' }}>
-          {isIncoming && (lang === 'en' ? 'Incoming call…' : 'Appel entrant…')}
-          {isOutgoing && (lang === 'en' ? 'Calling…' : 'Appel en cours…')}
+          {isIncoming && (party.isInternal
+            ? (lang === 'en' ? 'Internal incoming call…' : 'Appel interne entrant…')
+            : (lang === 'en' ? 'Incoming call…' : 'Appel entrant…'))}
+          {isOutgoing && (party.isInternal
+            ? (lang === 'en' ? 'Calling internal extension…' : 'Appel interne…')
+            : (lang === 'en' ? 'Calling…' : 'Appel en cours…'))}
           {inCall && fmt(timer)}
           {isTransfer && (lang === 'en' ? 'Transferring call…' : 'Transfert en cours…')}
           {isEnded && (lang === 'en' ? 'Call has ended' : 'Appel terminé')}

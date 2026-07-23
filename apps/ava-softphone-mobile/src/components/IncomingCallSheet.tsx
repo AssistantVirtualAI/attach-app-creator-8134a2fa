@@ -1,6 +1,7 @@
 import React from 'react';
 import { colors } from '../lib/theme';
 import { formatSipParty } from '../lib/sip/formatSipParty';
+import { useCallActionBridge } from '../lib/sip/useCallActionBridge';
 
 interface Props {
   open: boolean;
@@ -21,6 +22,17 @@ export default function IncomingCallSheet({ open, callerName, callerNumber, onAc
   const lang: 'fr' | 'en' = (typeof localStorage !== 'undefined' && localStorage.getItem('ava.mobile.lang') === 'en') ? 'en' : 'fr';
   const party = formatSipParty(callerName || callerNumber || '', lang);
   const displayName = callerName && !/^sip:|<sip:/i.test(callerName) ? callerName : party.name;
+  const initials = (displayName || '?')
+    .split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('') || '📞';
+
+  // Forward notification-button taps (Android) and CallKit actions (iOS) to
+  // the same accept/decline handlers so the app behaves identically whether
+  // the user interacts via UI, notification, or lockscreen.
+  useCallActionBridge({
+    onAnswer: onAccept,
+    onDecline: onDecline,
+    onHangup: onDecline,
+  }, open);
 
   return (
     <>
@@ -35,15 +47,17 @@ export default function IncomingCallSheet({ open, callerName, callerNumber, onAc
             paddingBottom: 'calc(var(--safe-bottom) + 40px)',
           }}
         >
-          <div style={{ fontSize: 14, opacity: 0.7 }}>{lang === 'en' ? 'Incoming call' : 'Appel entrant'}</div>
+          <div style={{ fontSize: 14, opacity: 0.7, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {party.isInternal ? (lang === 'en' ? 'Internal call' : 'Appel interne') : (lang === 'en' ? 'Incoming call' : 'Appel entrant')}
+          </div>
           <div style={{ fontSize: 28, fontWeight: 600, marginTop: 12, textAlign: 'center', padding: '0 24px' }}>{displayName}</div>
           {party.subtitle ? (
             <div style={{
-              marginTop: 6, fontSize: 13, opacity: 0.85,
-              padding: party.isInternal ? '4px 12px' : 0,
+              marginTop: 6, fontSize: 13, opacity: 0.9,
+              padding: '4px 12px',
               borderRadius: 999,
-              background: party.isInternal ? 'rgba(35,214,255,0.14)' : 'transparent',
-              border: party.isInternal ? '1px solid rgba(35,214,255,0.45)' : 'none',
+              background: party.isInternal ? 'rgba(35,214,255,0.14)' : 'rgba(255,255,255,0.06)',
+              border: party.isInternal ? '1px solid rgba(35,214,255,0.45)' : '1px solid rgba(255,255,255,0.10)',
               letterSpacing: 0.5,
             }}>{party.subtitle}</div>
           ) : (

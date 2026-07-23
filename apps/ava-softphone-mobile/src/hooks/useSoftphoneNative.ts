@@ -236,8 +236,26 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
         setNativeRegStatus('error', msg);
       }
     }).then((h: any) => { micHandle = h; }).catch(() => {});
-    return () => { unsub(); audioHandle?.remove().catch(() => {}); micHandle?.remove().catch(() => {}); };
+    // iOS parity with Android SipConnectionService: poll native PJSIP registration
+    // status every 30s so the UI reflects background re-registers.
+    let iosPoll: ReturnType<typeof setInterval> | null = null;
+    if (Capacitor.getPlatform() === 'ios') {
+      iosPoll = setInterval(async () => {
+        try {
+          const s = await getIosSipServiceStatus();
+          if (!s) return;
+          if (s.loggedIn && s.status === 'registered') {
+            setSipStatus('registered');
+            setNativeRegStatus('registered', null);
+          } else if (s.loggedIn || s.status === 'connecting') {
+            setSipStatus((prev) => (prev === 'registered' ? prev : 'connecting'));
+          }
+        } catch {}
+      }, 30_000);
+    }
+    return () => { unsub(); audioHandle?.remove().catch(() => {}); micHandle?.remove().catch(() => {}); if (iosPoll) clearInterval(iosPoll); };
   }, []);
+
 
   // Register account on config change.
   useEffect(() => {

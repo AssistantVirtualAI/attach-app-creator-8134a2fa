@@ -8267,10 +8267,12 @@ export type Database = {
           attendees: Json
           body_preview: string | null
           created_at: string
+          deleted_at: string | null
           ends_at: string | null
           graph_id: string
           id: string
           is_all_day: boolean | null
+          is_deleted: boolean | null
           is_online_meeting: boolean | null
           join_url: string | null
           last_synced_at: string
@@ -8284,10 +8286,12 @@ export type Database = {
           attendees?: Json
           body_preview?: string | null
           created_at?: string
+          deleted_at?: string | null
           ends_at?: string | null
           graph_id: string
           id?: string
           is_all_day?: boolean | null
+          is_deleted?: boolean | null
           is_online_meeting?: boolean | null
           join_url?: string | null
           last_synced_at?: string
@@ -8301,10 +8305,12 @@ export type Database = {
           attendees?: Json
           body_preview?: string | null
           created_at?: string
+          deleted_at?: string | null
           ends_at?: string | null
           graph_id?: string
           id?: string
           is_all_day?: boolean | null
+          is_deleted?: boolean | null
           is_online_meeting?: boolean | null
           join_url?: string | null
           last_synced_at?: string
@@ -8668,6 +8674,7 @@ export type Database = {
           body_html: string | null
           body_preview: string | null
           cc_recipients: Json
+          content_hash: string | null
           conversation_id: string | null
           created_at: string
           folder: string | null
@@ -8677,9 +8684,11 @@ export type Database = {
           has_attachments: boolean | null
           id: string
           importance: string | null
+          internet_message_id: string | null
           is_read: boolean | null
           is_sent_by_me: boolean | null
           last_synced_at: string
+          locally_saved: boolean | null
           received_at: string | null
           sent_at: string | null
           subject: string | null
@@ -8690,6 +8699,7 @@ export type Database = {
           body_html?: string | null
           body_preview?: string | null
           cc_recipients?: Json
+          content_hash?: string | null
           conversation_id?: string | null
           created_at?: string
           folder?: string | null
@@ -8699,9 +8709,11 @@ export type Database = {
           has_attachments?: boolean | null
           id?: string
           importance?: string | null
+          internet_message_id?: string | null
           is_read?: boolean | null
           is_sent_by_me?: boolean | null
           last_synced_at?: string
+          locally_saved?: boolean | null
           received_at?: string | null
           sent_at?: string | null
           subject?: string | null
@@ -8712,6 +8724,7 @@ export type Database = {
           body_html?: string | null
           body_preview?: string | null
           cc_recipients?: Json
+          content_hash?: string | null
           conversation_id?: string | null
           created_at?: string
           folder?: string | null
@@ -8721,9 +8734,11 @@ export type Database = {
           has_attachments?: boolean | null
           id?: string
           importance?: string | null
+          internet_message_id?: string | null
           is_read?: boolean | null
           is_sent_by_me?: boolean | null
           last_synced_at?: string
+          locally_saved?: boolean | null
           received_at?: string | null
           sent_at?: string | null
           subject?: string | null
@@ -8925,6 +8940,7 @@ export type Database = {
         Row: {
           company: string | null
           created_at: string
+          dedup_key: string | null
           display_name: string | null
           emails: Json
           given_name: string | null
@@ -8933,6 +8949,9 @@ export type Database = {
           job_title: string | null
           last_synced_at: string
           phones: Json
+          source: string | null
+          source_account_email: string | null
+          source_tenant_id: string | null
           surname: string | null
           updated_at: string
           user_id: string
@@ -8940,6 +8959,7 @@ export type Database = {
         Insert: {
           company?: string | null
           created_at?: string
+          dedup_key?: string | null
           display_name?: string | null
           emails?: Json
           given_name?: string | null
@@ -8948,6 +8968,9 @@ export type Database = {
           job_title?: string | null
           last_synced_at?: string
           phones?: Json
+          source?: string | null
+          source_account_email?: string | null
+          source_tenant_id?: string | null
           surname?: string | null
           updated_at?: string
           user_id: string
@@ -8955,6 +8978,7 @@ export type Database = {
         Update: {
           company?: string | null
           created_at?: string
+          dedup_key?: string | null
           display_name?: string | null
           emails?: Json
           given_name?: string | null
@@ -8963,6 +8987,9 @@ export type Database = {
           job_title?: string | null
           last_synced_at?: string
           phones?: Json
+          source?: string | null
+          source_account_email?: string | null
+          source_tenant_id?: string | null
           surname?: string | null
           updated_at?: string
           user_id?: string

@@ -740,4 +740,66 @@ class SipConnectionService : Service() {
             )
         }
     }
+
+    // ── Notification-action → native hangup fallback ─────────────────────────
+    // When the user taps "Raccrocher" from the lockscreen notification while
+    // the WebView is not running (app killed/suspended), the JS bridge is
+    // unavailable and verto.bye would never reach FreeSWITCH. Send it from
+    // the native WebSocket directly so the PBX-side leg is torn down.
+
+    private fun registerCallActionReceiver() {
+        try {
+            val filter = android.content.IntentFilter(CallActionReceiver.ACTION_CALL_ACTION_EVENT)
+            val recv = object : android.content.BroadcastReceiver() {
+                override fun onReceive(ctx: Context?, intent: Intent?) {
+                    val action = intent?.getStringExtra(CallActionReceiver.EXTRA_ACTION) ?: return
+                    when (action) {
+                        "hangup", "decline" -> handleNativeHangup(action)
+                    }
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(recv, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                @Suppress("DEPRECATION")
+                registerReceiver(recv, filter)
+            }
+            callActionReceiver = recv
+        } catch (e: Exception) {
+            Log.w(TAG, "registerCallActionReceiver failed: ${e.message}")
+        }
+    }
+
+    private fun unregisterCallActionReceiver() {
+        try { callActionReceiver?.let { unregisterReceiver(it) } } catch (_: Exception) {}
+        callActionReceiver = null
+    }
+
+    private fun handleNativeHangup(reason: String) {
+        val callId = currentCallId
+        if (callId != null && isLoggedIn) {
+            try { sendFrame(buildVertoByeMessage(callId)) } catch (_: Exception) {}
+        }
+        currentCallId = null
+        try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
+        handler.post { clearCallNotifications() }
+        emitStatus("idle", "native_${reason}")
+    }
+
+    private fun buildVertoByeMessage(callId: String): String {
+        val msg = JSONObject().apply {
+            put("jsonrpc", "2.0")
+            put("id", System.currentTimeMillis().toInt())
+            put("method", "verto.bye")
+            put("params", JSONObject().apply {
+                put("sessid", sessionUUID)
+                put("dialogParams", JSONObject().apply {
+                    put("callID", callId)
+                })
+                put("cause", "NORMAL_CLEARING")
+                put("causeCode", 16)
+            })
+        }
+        return msg.toString()
+    }
 }

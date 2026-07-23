@@ -44,6 +44,37 @@ async function safeAudit(client: any, row: Record<string, unknown>) {
   try { await client.from("audit_logs").insert(row); } catch { /* non-fatal */ }
 }
 
+async function repairVertoRoutingForMobile(opts: {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+  organizationId: string;
+  domainUuid?: string | null;
+  extension: string;
+}) {
+  try {
+    const res = await fetch(`${opts.supabaseUrl}/functions/v1/fusionpbx-proxy`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: opts.serviceRoleKey,
+        Authorization: `Bearer ${opts.serviceRoleKey}`,
+      },
+      body: JSON.stringify({
+        action: "repair-verto-extension-routing",
+        organization_id: opts.organizationId,
+        params: {
+          domain_uuid: opts.domainUuid || undefined,
+          extension: opts.extension,
+        },
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    return { ok: res.ok && data?.ok !== false, status: res.status, data };
+  } catch (e) {
+    return { ok: false, status: 0, error: (e as Error)?.message || String(e) };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const reqId = crypto.randomUUID().slice(0, 8);
@@ -226,6 +257,23 @@ Deno.serve(async (req) => {
     }
 
 
+    let vertoRoutingRepair: any = null;
+    if (platform === "mobile") {
+      vertoRoutingRepair = await repairVertoRoutingForMobile({
+        supabaseUrl: SUPABASE_URL,
+        serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        organizationId: sp.organization_id,
+        domainUuid: org?.fusionpbx_domain_uuid,
+        extension: sp.extension,
+      });
+      log("verto routing repair", {
+        extension: sp.extension,
+        ok: vertoRoutingRepair?.ok,
+        status: vertoRoutingRepair?.status,
+        already_had_verto: vertoRoutingRepair?.data?.previous_dial_string_has_verto,
+      });
+    }
+
     await safeAudit(supabaseAdmin, {
       organization_id: sp.organization_id,
       user_id: user.id,
@@ -272,6 +320,11 @@ Deno.serve(async (req) => {
       can_record: true,
       can_sms: true,
       can_ai: true,
+      verto_routing_repair: vertoRoutingRepair ? {
+        ok: !!vertoRoutingRepair.ok,
+        status: vertoRoutingRepair.status,
+        dial_string_has_verto: vertoRoutingRepair.data?.dial_string_has_verto === true,
+      } : undefined,
       mock: false,
     });
   } catch (err) {

@@ -311,14 +311,14 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const call = useCallback((number: string): boolean => {
     const cfg = configRef.current;
     if (!cfg?.extension) return false;
-    // Normalize the destination to E.164 format (+1XXXXXXXXXX for NANP).
-    // FreeSWITCH Verto requires E.164 to route outbound PSTN calls correctly.
-    // Without normalization, a 10-digit number like "5142163359" is sent as-is
-    // and FreeSWITCH returns INCOMPATIBLE_DESTINATION (causeCode 88).
-    // iOS uses the native PJSIP plugin which normalizes internally; Android
-    // WebView/Verto must do it here.
-    const normalized = normalizePhone(number) || number;
-    console.log('[verto][DIAG] call() normalizing:', number, '->', normalized);
+    // Only normalize external PSTN numbers (10+ digits or +E.164).
+    // Internal extensions (3-4 digits) and star feature codes (*97, *72, *0…)
+    // must be passed through untouched — normalizePhone would strip `*` and
+    // return null for short numbers, breaking feature codes entirely.
+    const digitsOnly = number.replace(/\D/g, '');
+    const isExternal = /^\+/.test(number) || digitsOnly.length >= 10;
+    const normalized = isExternal ? (normalizePhone(number) || number) : number;
+    console.log('[verto][DIAG] call() normalizing:', number, '->', normalized, 'external=', isExternal);
     // vertoProvider.call() handles getUserMedia internally with a silent-track
     // fallback for emulators. A pre-flight getUserMedia here would cause a
     // double mic acquisition which corrupts the WebRTC audio send stream
@@ -346,6 +346,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     const d = activeDialogRef.current;
     if (d) { try { d.hangup(); } catch { /* ignore */ } }
     else { getVertoClient().hangupAll(); }
+    activeDialogRef.current = null;
 
     // Immediately reset local call state so the UI doesn't freeze waiting
     // for a server-side hangup event that may never arrive on flaky networks.
@@ -355,6 +356,13 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     setActiveCallNumber('');
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setTimeout(() => setCallState('idle'), 800);
+
+    // Safety watchdog: if for any reason callState is still active/ringing
+    // 5s after hangup was requested, force it to idle so the ActiveCallSheet
+    // never gets stuck on flaky networks.
+    setTimeout(() => {
+      setCallState((prev) => (prev === 'active' || prev === 'ringing') ? 'idle' : prev);
+    }, 5000);
   }, []);
 
   const answer = useCallback(() => {

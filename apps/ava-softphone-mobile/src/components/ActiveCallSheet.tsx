@@ -12,6 +12,7 @@ import { isVibrationEnabled } from '../lib/sip/ringPreferences';
 import IncomingCallerPanel from './IncomingCallerPanel';
 import { lookupCaller, type CallerLookup } from '../lib/sip/callerLookup';
 import { formatSipParty } from '../lib/sip/formatSipParty';
+import { useCallActionBridge } from '../lib/sip/useCallActionBridge';
 // LiveTranscriptPanel intentionally not imported — live transcription disabled during calls.
 import { useMobileCredentials } from '../hooks/useMobileCredentials';
 import { useT } from '../lib/i18n';

@@ -87,6 +87,10 @@ export default function Ms365Callback() {
           body: { action: "link", ms_access_token: msAccessToken },
         }).catch(() => {});
       } catch {}
+      // Kick off full MS365 import in the background (contacts, mail, calendar, teams).
+      try {
+        void supabase.functions.invoke("ms365-full-import", { body: { mode: "initial" } }).catch(() => {});
+      } catch {}
       setStatus("ok");
       setTimeout(() => navigate("/mplanipret/more?ms365=ok", { replace: true }), 1200);
     })();

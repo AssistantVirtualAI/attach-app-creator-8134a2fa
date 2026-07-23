@@ -8262,6 +8262,60 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_calendar_events: {
+        Row: {
+          attendees: Json
+          body_preview: string | null
+          created_at: string
+          ends_at: string | null
+          graph_id: string
+          id: string
+          is_all_day: boolean | null
+          is_online_meeting: boolean | null
+          join_url: string | null
+          last_synced_at: string
+          location: string | null
+          organizer_email: string | null
+          starts_at: string | null
+          subject: string | null
+          user_id: string
+        }
+        Insert: {
+          attendees?: Json
+          body_preview?: string | null
+          created_at?: string
+          ends_at?: string | null
+          graph_id: string
+          id?: string
+          is_all_day?: boolean | null
+          is_online_meeting?: boolean | null
+          join_url?: string | null
+          last_synced_at?: string
+          location?: string | null
+          organizer_email?: string | null
+          starts_at?: string | null
+          subject?: string | null
+          user_id: string
+        }
+        Update: {
+          attendees?: Json
+          body_preview?: string | null
+          created_at?: string
+          ends_at?: string | null
+          graph_id?: string
+          id?: string
+          is_all_day?: boolean | null
+          is_online_meeting?: boolean | null
+          join_url?: string | null
+          last_synced_at?: string
+          location?: string | null
+          organizer_email?: string | null
+          starts_at?: string | null
+          subject?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_calendar_sync: {
         Row: {
           created_at: string
@@ -8609,6 +8663,75 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_email_messages: {
+        Row: {
+          body_html: string | null
+          body_preview: string | null
+          cc_recipients: Json
+          conversation_id: string | null
+          created_at: string
+          folder: string | null
+          from_email: string | null
+          from_name: string | null
+          graph_id: string
+          has_attachments: boolean | null
+          id: string
+          importance: string | null
+          is_read: boolean | null
+          is_sent_by_me: boolean | null
+          last_synced_at: string
+          received_at: string | null
+          sent_at: string | null
+          subject: string | null
+          to_recipients: Json
+          user_id: string
+        }
+        Insert: {
+          body_html?: string | null
+          body_preview?: string | null
+          cc_recipients?: Json
+          conversation_id?: string | null
+          created_at?: string
+          folder?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          graph_id: string
+          has_attachments?: boolean | null
+          id?: string
+          importance?: string | null
+          is_read?: boolean | null
+          is_sent_by_me?: boolean | null
+          last_synced_at?: string
+          received_at?: string | null
+          sent_at?: string | null
+          subject?: string | null
+          to_recipients?: Json
+          user_id: string
+        }
+        Update: {
+          body_html?: string | null
+          body_preview?: string | null
+          cc_recipients?: Json
+          conversation_id?: string | null
+          created_at?: string
+          folder?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          graph_id?: string
+          has_attachments?: boolean | null
+          id?: string
+          importance?: string | null
+          is_read?: boolean | null
+          is_sent_by_me?: boolean | null
+          last_synced_at?: string
+          received_at?: string | null
+          sent_at?: string | null
+          subject?: string | null
+          to_recipients?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_integration_config: {
         Row: {
           config_data: Json
@@ -8795,6 +8918,93 @@ export type Database = {
           response_status?: number | null
           success?: boolean | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      planipret_ms_contacts: {
+        Row: {
+          company: string | null
+          created_at: string
+          display_name: string | null
+          emails: Json
+          given_name: string | null
+          graph_id: string
+          id: string
+          job_title: string | null
+          last_synced_at: string
+          phones: Json
+          surname: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          display_name?: string | null
+          emails?: Json
+          given_name?: string | null
+          graph_id: string
+          id?: string
+          job_title?: string | null
+          last_synced_at?: string
+          phones?: Json
+          surname?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          display_name?: string | null
+          emails?: Json
+          given_name?: string | null
+          graph_id?: string
+          id?: string
+          job_title?: string | null
+          last_synced_at?: string
+          phones?: Json
+          surname?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      planipret_ms_sync_state: {
+        Row: {
+          delta_link: string | null
+          id: string
+          items_synced: number | null
+          last_delta_sync_at: string | null
+          last_error: string | null
+          last_full_sync_at: string | null
+          resource: string
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          delta_link?: string | null
+          id?: string
+          items_synced?: number | null
+          last_delta_sync_at?: string | null
+          last_error?: string | null
+          last_full_sync_at?: string | null
+          resource: string
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          delta_link?: string | null
+          id?: string
+          items_synced?: number | null
+          last_delta_sync_at?: string | null
+          last_error?: string | null
+          last_full_sync_at?: string | null
+          resource?: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -9999,6 +10209,81 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      planipret_teams_conversations: {
+        Row: {
+          chat_id: string
+          chat_type: string | null
+          created_at: string
+          id: string
+          last_message_at: string | null
+          last_message_preview: string | null
+          last_synced_at: string
+          members: Json
+          topic: string | null
+          user_id: string
+        }
+        Insert: {
+          chat_id: string
+          chat_type?: string | null
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_synced_at?: string
+          members?: Json
+          topic?: string | null
+          user_id: string
+        }
+        Update: {
+          chat_id?: string
+          chat_type?: string | null
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_synced_at?: string
+          members?: Json
+          topic?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      planipret_teams_messages: {
+        Row: {
+          chat_id: string
+          content: string | null
+          created_at: string
+          from_email: string | null
+          from_name: string | null
+          graph_id: string
+          id: string
+          sent_at: string | null
+          user_id: string
+        }
+        Insert: {
+          chat_id: string
+          content?: string | null
+          created_at?: string
+          from_email?: string | null
+          from_name?: string | null
+          graph_id: string
+          id?: string
+          sent_at?: string | null
+          user_id: string
+        }
+        Update: {
+          chat_id?: string
+          content?: string | null
+          created_at?: string
+          from_email?: string | null
+          from_name?: string | null
+          graph_id?: string
+          id?: string
+          sent_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       planipret_voicemails: {
         Row: {

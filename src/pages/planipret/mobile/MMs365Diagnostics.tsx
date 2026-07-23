@@ -13,6 +13,21 @@ export default function MMs365Diagnostics() {
   const nav = useNavigate();
   const { data, loading, refresh } = useMs365Status(30_000);
   const [teamsCheck, setTeamsCheck] = useState<{ loading: boolean; ok: boolean | null; message: string; sample?: any[] }>({ loading: false, ok: null, message: "" });
+  const [importState, setImportState] = useState<{ loading: boolean; ok: boolean | null; message: string }>({ loading: false, ok: null, message: "" });
+
+  async function runImport(mode: "initial" | "delta" | "manual") {
+    setImportState({ loading: true, ok: null, message: "" });
+    try {
+      const { data: res, error } = await supabase.functions.invoke("ms365-full-import", { body: { mode } });
+      if (error) throw error;
+      const summary = (res as any)?.summary ?? res;
+      setImportState({ loading: false, ok: true, message: `Import ${mode} terminé (${JSON.stringify(summary)})` });
+      toast.success("Synchronisation Microsoft 365 lancée");
+    } catch (e: any) {
+      setImportState({ loading: false, ok: false, message: e?.message ?? String(e) });
+      toast.error("Échec de synchronisation");
+    }
+  }
 
   const callbackUrl = getMs365RedirectUri();
 

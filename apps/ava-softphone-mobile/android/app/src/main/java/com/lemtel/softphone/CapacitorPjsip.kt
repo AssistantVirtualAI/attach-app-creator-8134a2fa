@@ -37,6 +37,7 @@ class CapacitorPjsip : Plugin() {
     private var audioManager: AudioManager? = null
     private var sipStatusReceiver: BroadcastReceiver? = null
     private var callActionReceiver: BroadcastReceiver? = null
+    private var scoReceiver: BroadcastReceiver? = null
 
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -54,19 +55,38 @@ class CapacitorPjsip : Plugin() {
                 notifyListeners("sipCallAction", payload, true)
             }
         }
+        scoReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent?.action != AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED) return
+                val state = intent.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, -1)
+                if (state == AudioManager.SCO_AUDIO_STATE_CONNECTED) {
+                    audioManager?.isBluetoothScoOn = true
+                    notifyListeners("audioRouteChanged", JSObject().apply { put("route", "bluetooth") }, true)
+                } else if (state == AudioManager.SCO_AUDIO_STATE_DISCONNECTED) {
+                    audioManager?.isBluetoothScoOn = false
+                    val r = if (audioManager?.isSpeakerphoneOn == true) "speaker" else "earpiece"
+                    notifyListeners("audioRouteChanged", JSObject().apply { put("route", r) }, true)
+                }
+            }
+        }
         try {
             val filter = IntentFilter(SipConnectionService.ACTION_STATUS)
             val callFilter = IntentFilter(CallActionReceiver.ACTION_CALL_ACTION_EVENT)
+            val scoFilter = IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
             val receiver = sipStatusReceiver ?: return
             val callRecv = callActionReceiver ?: return
+            val scoRecv = scoReceiver ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
                 context.registerReceiver(callRecv, callFilter, Context.RECEIVER_NOT_EXPORTED)
+                context.registerReceiver(scoRecv, scoFilter, Context.RECEIVER_NOT_EXPORTED)
             } else {
                 @Suppress("DEPRECATION")
                 context.registerReceiver(receiver, filter)
                 @Suppress("DEPRECATION")
                 context.registerReceiver(callRecv, callFilter)
+                @Suppress("DEPRECATION")
+                context.registerReceiver(scoRecv, scoFilter)
             }
         } catch (_: Exception) {}
     }
@@ -74,8 +94,11 @@ class CapacitorPjsip : Plugin() {
     override fun handleOnDestroy() {
         try { sipStatusReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         try { callActionReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
+        try { scoReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         sipStatusReceiver = null
         callActionReceiver = null
+        scoReceiver = null
+        try { AudioFocusHelper.releaseCallAudioFocus(context) } catch (_: Exception) {}
         super.handleOnDestroy()
     }
 

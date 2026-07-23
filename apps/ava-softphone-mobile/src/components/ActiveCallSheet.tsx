@@ -92,6 +92,17 @@ export default function ActiveCallSheet({
   const isTransfer = !!sp.snap.transferring;
   const isEnded = sp.snap.callState === 'ended' || sp.snap.callState === 'idle';
 
+  // Route notification-button taps (Android) and CallKit actions (iOS) to the
+  // same sp handlers so the user can control the call from the lockscreen.
+  useCallActionBridge({
+    onAnswer: () => sp.answer?.(),
+    onDecline: () => sp.hangup?.(),
+    onHangup: () => sp.hangup?.(),
+    onHold: () => sp.hold?.(),
+    onResume: () => sp.unhold?.(),
+    onMute: () => (sp.snap.muted ? sp.unmute?.() : sp.mute?.()),
+  }, inCall || isIncoming || isOutgoing);
+
   // Native audio-engine status (iOS plugin). When 'starting' or 'retrying' the
   // RTP pipeline isn't ready yet, so audio-affecting buttons must be disabled.
   const audioStatus: 'idle' | 'starting' | 'running' | 'retrying' | 'error' =

@@ -85,8 +85,13 @@
 		<string>remote-notification</string>
 		<string>voip</string>
 	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.lemtel.softphone.sip-refresh</string>
+	</array>
 	<key>UIRequiresPersistentWiFi</key>
 	<true/>
+
 
 	<!-- App-to-app schemes used by click-to-call fallbacks -->
 	<key>LSApplicationQueriesSchemes</key>

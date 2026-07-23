@@ -2,6 +2,7 @@
 // Every tool the agent triggers passes through here. Logs each call into
 // planipret_ava_conversations.
 import { authBroker, corsHeaders, jsonResponse, nsBrokerFetch } from "../_shared/ns-broker.ts";
+import { normalizePhoneE164 } from "../_shared/phone-normalize.ts";
 
 const DOMAIN = "planipret.ca";
 

@@ -1,8 +1,10 @@
 package com.lemtel.softphone
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.AudioFormat
@@ -33,9 +35,31 @@ import com.getcapacitor.annotation.PermissionCallback
 class CapacitorPjsip : Plugin() {
 
     private var audioManager: AudioManager? = null
+    private var sipStatusReceiver: BroadcastReceiver? = null
 
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        sipStatusReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent?.action != SipConnectionService.ACTION_STATUS) return
+                notifyListeners("sipServiceStatus", statusFromIntent(intent), true)
+            }
+        }
+        try {
+            val filter = IntentFilter(SipConnectionService.ACTION_STATUS)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(sipStatusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                @Suppress("DEPRECATION")
+                context.registerReceiver(sipStatusReceiver, filter)
+            }
+        } catch (_: Exception) {}
+    }
+
+    override fun handleOnDestroy() {
+        try { context.unregisterReceiver(sipStatusReceiver) } catch (_: Exception) {}
+        sipStatusReceiver = null
+        super.handleOnDestroy()
     }
 
     @PluginMethod
@@ -116,10 +140,15 @@ class CapacitorPjsip : Plugin() {
                 SipConnectionService.saveCredentials(context, host, port, login, password, domain, displayName)
             }
             SipConnectionService.start(context)
-            call.resolve(JSObject().apply { put("ok", true) })
+            call.resolve(readSipServiceStatus().apply { put("ok", true) })
         } catch (e: Exception) {
             call.reject(e.message ?: "startSipService failed")
         }
+    }
+
+    @PluginMethod
+    fun getSipServiceStatus(call: PluginCall) {
+        call.resolve(readSipServiceStatus().apply { put("ok", true) })
     }
 
     @PluginMethod
@@ -242,5 +271,38 @@ class CapacitorPjsip : Plugin() {
     fun micPermCallback(call: PluginCall) {
         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         call.resolve(JSObject().apply { put("granted", granted) })
+    }
+
+    private fun statusFromIntent(intent: Intent): JSObject {
+        return JSObject().apply {
+            put("status", intent.getStringExtra("status") ?: "unknown")
+            put("reason", intent.getStringExtra("reason") ?: "")
+            put("updatedAt", intent.getLongExtra("updatedAt", 0L))
+            put("lastLoginAt", intent.getLongExtra("lastLoginAt", 0L))
+            put("lastPingAt", intent.getLongExtra("lastPingAt", 0L))
+            put("lastFrameAt", intent.getLongExtra("lastFrameAt", 0L))
+            put("reconnectAttempt", intent.getIntExtra("reconnectAttempt", 0))
+            put("connecting", intent.getBooleanExtra("connecting", false))
+            put("loggedIn", intent.getBooleanExtra("loggedIn", false))
+            put("wakeLockHeld", intent.getBooleanExtra("wakeLockHeld", false))
+            put("wifiLockHeld", intent.getBooleanExtra("wifiLockHeld", false))
+        }
+    }
+
+    private fun readSipServiceStatus(): JSObject {
+        val p = context.getSharedPreferences(SipConnectionService.PREFS_NAME, Context.MODE_PRIVATE)
+        return JSObject().apply {
+            put("status", p.getString(SipConnectionService.KEY_STATUS, "unknown") ?: "unknown")
+            put("reason", p.getString(SipConnectionService.KEY_REASON, "") ?: "")
+            put("updatedAt", p.getLong(SipConnectionService.KEY_UPDATED_AT, 0L))
+            put("lastLoginAt", p.getLong(SipConnectionService.KEY_LAST_LOGIN_AT, 0L))
+            put("lastPingAt", p.getLong(SipConnectionService.KEY_LAST_PING_AT, 0L))
+            put("lastFrameAt", p.getLong(SipConnectionService.KEY_LAST_FRAME_AT, 0L))
+            put("reconnectAttempt", p.getInt(SipConnectionService.KEY_RECONNECT_ATTEMPT, 0))
+            put("connecting", p.getBoolean(SipConnectionService.KEY_CONNECTING, false))
+            put("loggedIn", p.getBoolean(SipConnectionService.KEY_LOGGED_IN, false))
+            put("wakeLockHeld", p.getBoolean(SipConnectionService.KEY_WAKE_HELD, false))
+            put("wifiLockHeld", p.getBoolean(SipConnectionService.KEY_WIFI_HELD, false))
+        }
     }
 }

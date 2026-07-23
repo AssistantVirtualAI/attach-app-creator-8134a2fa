@@ -66,10 +66,13 @@ export default function IncomingCallSheet({ open, callerName, callerNumber, onAc
 
           <div style={{
             width: 140, height: 140, borderRadius: '50%', marginTop: 40,
-            background: 'rgba(0,35,230,0.25)',
+            background: party.isInternal
+              ? 'linear-gradient(135deg, rgba(35,214,255,0.30), rgba(0,35,230,0.35))'
+              : 'rgba(0,35,230,0.25)',
+            border: party.isInternal ? '1px solid rgba(35,214,255,0.55)' : '1px solid rgba(255,255,255,0.12)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 48,
-          }}>📞</div>
+            fontSize: initials.length > 1 ? 42 : 48, fontWeight: 600, letterSpacing: 1,
+          }}>{initials}</div>
 
           {replying ? (
             <div style={{ marginTop: 'auto', width: '100%', padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>

@@ -1336,6 +1336,10 @@ function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
             </p>
           </div>
 
+          <SenderQuickActions email={fromAddr} name={from} />
+
+
+
           <button
             onClick={analyzeWithAva}
             disabled={analyzing}

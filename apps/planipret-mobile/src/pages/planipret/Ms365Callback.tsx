@@ -35,6 +35,7 @@ export default function Ms365Callback() {
         const { Browser } = await import("@capacitor/browser");
         await Browser.close();
       } catch {}
+      clearMs365Pending();
       const code = params.get("code");
       const err = params.get("error_description") ?? params.get("error");
       if (err) { setStatus("error"); setError(err); return; }

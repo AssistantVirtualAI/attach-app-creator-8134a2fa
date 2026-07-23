@@ -161,6 +161,14 @@ import UIKit
         provider.reportCall(with: uuid, endedAt: nil, reason: .remoteEnded)
         activeUUID = nil
     }
+
+    /// Programmatically toggle hold state (e.g. when JS taps the in-app Hold
+    /// button). Routes through CallKit so the native UI stays in sync.
+    @objc public func requestHold(_ held: Bool) {
+        guard let uuid = activeUUID else { return }
+        let action = CXSetHeldCallAction(call: uuid, onHold: held)
+        callController.request(CXTransaction(action: action)) { _ in }
+    }
 }
 
 extension CallKitManager: CXProviderDelegate {

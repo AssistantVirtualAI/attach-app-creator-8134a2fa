@@ -20,7 +20,7 @@ import { attachRemoteStream, toggleSpeaker } from '../lib/sip/audioOutput';
 import { initVerto, getVertoClient, VertoDialog, VertoEvent } from '../lib/sip/vertoProvider';
 import { normalizePhone } from '../lib/phoneNormalize';
 import { attachNativeAutoReconnect } from '../lib/sip/nativeAutoReconnect';
-import { requestAndroidBatteryOptimizationExemption, startAndroidSipService, stopAndroidSipService } from '../lib/sip/nativeSipProvider';
+import { requestAndroidBatteryOptimizationExemption, startAndroidSipService } from '../lib/sip/nativeSipProvider';
 
 const VERTO_HOST = 'pbxnode.lemtel.tel';
 const VERTO_PORT = 8082;

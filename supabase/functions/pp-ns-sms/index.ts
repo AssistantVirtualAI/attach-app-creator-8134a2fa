@@ -31,12 +31,15 @@ function normalizeE164(raw: unknown): string | null {
   // Strip all non-digit characters (including leading +)
   const digits = s.replace(/\D/g, "");
   if (!digits) return null;
+  // Reject clearly-invalid short numbers (extensions, half-typed inputs).
+  if (digits.length < 10) return null;
   // 10-digit North American number → always prefix with +1
   if (digits.length === 10) return `+1${digits}`;
   // 11-digit starting with 1 → standard NANP E.164
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  // Anything else: prepend + as-is
-  return `+${digits}`;
+  // International (>=11 digits, not NANP): return as +digits
+  if (digits.length >= 11 && digits.length <= 15) return `+${digits}`;
+  return null;
 }
 
 function pickSmsNumber(row: any): string | null {

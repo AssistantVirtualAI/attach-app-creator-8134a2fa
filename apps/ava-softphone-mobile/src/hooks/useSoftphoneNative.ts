@@ -129,7 +129,8 @@ function ensureNativeCallEventBridge() {
         // Local ringback: only when outgoing AND no early media from PBX.
         if (dir === 'out' && phase !== 'early-media') startRingback();
         else stopRingback();
-        emitNativeCallSnapshot({ callState: 'ringing', activeCallNumber: d?.number || nativeCallSnapshot.activeCallNumber, direction: dir, endReason: null, callPhase: phase, lastSipCode: code });
+        const richState = dir === 'in' ? 'ringing-in' : dir === 'out' ? 'ringing-out' : 'ringing';
+        emitNativeCallSnapshot({ callState: richState as any, activeCallNumber: d?.number || nativeCallSnapshot.activeCallNumber, direction: dir, endReason: null, callPhase: phase, lastSipCode: code });
       }
     });
     const callEndedHandle = await CapacitorPjsip.addListener('callEnded', (d: any) => {

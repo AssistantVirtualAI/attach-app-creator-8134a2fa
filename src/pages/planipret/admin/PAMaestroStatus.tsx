@@ -3,8 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, Clock, XCircle, AlertCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, Clock, XCircle, AlertCircle, ShieldCheck, Wand2, RotateCcw, Copy } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { toast } from "sonner";
 
 const DICT = {
   fr: {

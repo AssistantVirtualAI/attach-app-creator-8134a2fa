@@ -100,6 +100,7 @@ export default function MMessages() {
             { k: "team" as SubTab, label: t("messages.tabs.team"), Icon: UsersRound },
             { k: "teams365" as SubTab, label: "Teams", Icon: Users },
             { k: "emails" as SubTab, label: t("messages.tabs.emails"), Icon: Mail },
+            { k: "history" as SubTab, label: lang === "fr" ? "Historique" : "History", Icon: Mail },
           ].map((item) => {
             const active = sub === item.k;
             return (

@@ -52,7 +52,7 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
   const signInWithMicrosoft = async () => {
     setLoading(true);
     try {
-      await startMicrosoftSignIn("/mplanipret", {
+      await startMicrosoftSignIn("/mplanipret/home", {
         loginHint: email.trim() || undefined,
         prompt: "login",
       });

@@ -1,49 +1,25 @@
-## Objectif
+Plan de correction Microsoft SSO
 
-Re-vérifier que les 6 livrables du tour précédent sont bel et bien en place, fonctionnels, et que toutes les intégrations (Maestro, Microsoft 365, AVA tools, Claude report) sont connectées.
+1. Rendre le retour mobile fiable
+- Sauvegarder `state`, `code_verifier`, `redirect_uri`, `intent=login` et `next` aussi dans le stockage natif Capacitor, pas seulement `localStorage/sessionStorage`.
+- Lire ces valeurs depuis le stockage natif dans `Ms365Callback` avant de déclarer une erreur.
+- Si `intent` est perdu mais que `state` commence par `login:`, traiter quand même le callback comme une connexion SSO.
 
-## Étapes de vérification
+2. Rediriger vers le bon Home après connexion
+- Pour le login Microsoft Planiprêt mobile, forcer le retour final vers `/mplanipret/home`.
+- Pour le login Microsoft depuis la page principale, détecter un utilisateur Planiprêt broker/member et envoyer vers `/mplanipret/home` au lieu de rester sur `/post-login` ou `/planipret/admin`.
+- Garder les admins Planiprêt vers `/planipret/admin/overview`.
 
-### 1. Header mobile (FR/EN + thème)
-- Lire `apps/planipret-mobile/src/components/planipret/mobile/MobileHeaderControls.tsx`
-- Confirmer présence : logo Planiprêt, toggle FR/EN (via `useMplanipretLang`), toggle thème (Sun/Moon + `localStorage planipret_dark`), Bell, Settings
-- Vérifier ordre visuel et absence de doublons
+3. Corriger l’écran d’erreur actuel
+- Remplacer le bouton “Retour” qui renvoie vers `/mplanipret/more` par un retour clair vers `/mplanipret/home` ou relancer Microsoft selon le cas.
+- Afficher le vrai message backend si l’échange Microsoft échoue, pas juste “connexion interrompue”.
 
-### 2. Settings — carte Maestro visible
-- Lire `apps/planipret-mobile/src/pages/planipret/mobile/MMore.tsx` (section Intégrations)
-- Confirmer `<MaestroConnectCard />` rendu inconditionnellement
-- Vérifier `MaestroConnectCard.tsx` — pas de garde masquant la carte
-- Vérifier bouton "Se connecter à Maestro" présent
+4. Sécuriser le deep link
+- Garder `capacitor://localhost/auth/microsoft/callback` comme callback natif.
+- S’assurer que `NativeDeepLinkBridge` ferme le navigateur et route toujours vers `/auth/microsoft/callback?...` dès que l’URL Microsoft arrive.
+- Ajouter un fallback : si l’app revient active avec une URL callback stockée, traiter cette URL même si l’évènement `appUrlOpen` n’a pas déclenché.
 
-### 3. Sign-out
-- Vérifier `logout()` dans `MMore.tsx` : `supabase.auth.signOut()` → `navigate("/mplanipret", { replace: true })` + `window.location.reload()`
-- Confirmer que `PlanipretMobile.tsx` bascule sur `MobileAuthScreen` quand `accessError = "unauthenticated"`
-
-### 4. Safe-area emails (iOS)
-- Lire `MMessages.tsx` — `EmailComposeSheet` et détail email
-- Confirmer safe-area appliquée uniquement sur le header Outlook (pas de double padding)
-
-### 5. AVA chatbot — SMS/appels réels
-- Lire `supabase/functions/ava-tool-executor/index.ts`
-  - `send_sms` → invoque `pp-ns-sms`, retourne erreur si `success:false`
-  - `make_call` → invoque `pp-ns-calls` avec `synchronous:yes`, retourne `call_id` ou erreur
-  - `open_sms_composer` / `open_dialer` → renvoient `client_action`
-- Lire `MAvaChat.tsx` : dispatch `pp:ava-client-action` sur réception + badge résultat réel
-- Lire `PlanipretMobile.tsx` : listener de l'événement → `openDialer` / navigation
-- Tester via `supabase--curl_edge_functions` un appel `send_sms` factice pour valider le retour d'erreur
-
-### 6. Rapport de performance (Claude)
-- Lire `apps/planipret-mobile/src/components/planipret/mobile/PerformanceReportCard.tsx`
-- Lire `MHome.tsx` — carte présente avec 3 pills Jour/Semaine/Mois
-- Lire `supabase/functions/pp-ava-report/index.ts` — utilise Lovable AI Gateway avec `anthropic/claude-sonnet-4-5`, agrège les tables Planiprêt
-- Vérifier `supabase/config.toml` : `[functions.pp-ava-report] verify_jwt = true`
-- Tester déploiement via `supabase--edge_function_logs` ou `curl` avec payload minimal
-
-### 7. Intégrations connectées (backend)
-- Vérifier secrets présents : `LOVABLE_API_KEY`, `planipret_integration_secrets` (Maestro machine token)
-- Lister edge functions déployées : `maestro-oauth-*`, `pp-ns-sms`, `pp-ns-calls`, `pp-ms-auth-*`, `pp-maestro-telecom`, `pp-ava-report`, `ava-tool-executor`
-- Vérifier logs récents sans erreurs 500
-
-## Livrable
-
-Un rapport concis par point (✅ / ⚠️ + détail), avec les correctifs immédiats si régression détectée.
+5. Vérification finale
+- Tester le flow web `/login` → Microsoft → retour Home.
+- Tester le flow mobile `/mplanipret` → Microsoft → retour `/mplanipret/home`.
+- Vérifier que la connexion Microsoft stocke bien les tokens et que la session utilisateur est active après retour.

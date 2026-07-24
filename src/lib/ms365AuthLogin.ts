@@ -1,9 +1,37 @@
 import { supabase } from "@/integrations/supabase/client";
 import { openMs365Authorize } from "@/lib/ms365OAuth";
 import { markMs365Pending } from "@/lib/ms365Pending";
+import { Capacitor } from "@capacitor/core";
 
 const INTENT_KEY = "pp_ms365_auth_intent";
 const NEXT_KEY = "pp_ms365_auth_next";
+
+async function nativeSet(key: string, value: string): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const { Preferences } = await import("@capacitor/preferences");
+    await Preferences.set({ key, value });
+  } catch {}
+}
+
+async function nativeGet(key: string): Promise<string | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  try {
+    const { Preferences } = await import("@capacitor/preferences");
+    const { value } = await Preferences.get({ key });
+    return value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function nativeRemove(key: string): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const { Preferences } = await import("@capacitor/preferences");
+    await Preferences.remove({ key });
+  } catch {}
+}
 
 /**
  * Fetches Microsoft SSO start configuration from the versioned
@@ -35,6 +63,8 @@ export async function startMicrosoftSignIn(
     localStorage.setItem(INTENT_KEY, "login");
     localStorage.setItem(NEXT_KEY, nextPath);
   } catch {}
+  await nativeSet(INTENT_KEY, "login");
+  await nativeSet(NEXT_KEY, nextPath);
   markMs365Pending();
   await openMs365Authorize({
     clientId: cfg.client_id,
@@ -49,6 +79,10 @@ export function getMicrosoftSignInIntent(): string | null {
   try { return localStorage.getItem(INTENT_KEY); } catch { return null; }
 }
 
+export async function getMicrosoftSignInIntentAsync(): Promise<string | null> {
+  return getMicrosoftSignInIntent() || (await nativeGet(INTENT_KEY));
+}
+
 export function getMicrosoftSignInNext(defaultPath = "/post-login"): string {
   try {
     const next = localStorage.getItem(NEXT_KEY) || defaultPath;
@@ -58,7 +92,22 @@ export function getMicrosoftSignInNext(defaultPath = "/post-login"): string {
   }
 }
 
+export async function getMicrosoftSignInNextAsync(defaultPath = "/post-login"): Promise<string> {
+  const next = getMicrosoftSignInNext(defaultPath);
+  if (next !== defaultPath) return next;
+  const nativeNext = await nativeGet(NEXT_KEY);
+  return nativeNext && nativeNext.startsWith("/") && !nativeNext.startsWith("//") ? nativeNext : defaultPath;
+}
+
 export function clearMicrosoftSignInIntent(): void {
   try { localStorage.removeItem(INTENT_KEY); } catch {}
   try { localStorage.removeItem(NEXT_KEY); } catch {}
+  void nativeRemove(INTENT_KEY);
+  void nativeRemove(NEXT_KEY);
+}
+
+export async function clearMicrosoftSignInIntentAsync(): Promise<void> {
+  clearMicrosoftSignInIntent();
+  await nativeRemove(INTENT_KEY);
+  await nativeRemove(NEXT_KEY);
 }

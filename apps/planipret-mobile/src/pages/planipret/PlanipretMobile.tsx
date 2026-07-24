@@ -568,6 +568,13 @@ export default function PlanipretMobile() {
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [showPrimer, setShowPrimer] = useState(false);
   const openDialer = (n?: string) => { setDialerInit(n); setDialerOpen(true); };
+  const openSmsComposer = useCallback((detail: { number?: string; body?: string } = {}) => {
+    const qs = new URLSearchParams();
+    qs.set("tab", "sms");
+    if (detail.number) qs.set("to", detail.number);
+    if (detail.body) qs.set("body", detail.body);
+    navigate(`/mplanipret/messages?${qs.toString()}`);
+  }, [navigate]);
   const openAva = () => { setAvaMode(profile?.voice_agent_enabled ? "voice" : "chat"); setAvaOpen(true); };
   const refreshFn = useRef<(() => Promise<void> | void) | null>(null);
   const registerRefresh = (fn: (() => Promise<void> | void) | null) => { refreshFn.current = fn; };
@@ -604,10 +611,7 @@ export default function PlanipretMobile() {
     };
     const onOpenSms = (e: Event) => {
       const detail = (e as CustomEvent).detail ?? {};
-      const to = detail.number ? `to=${encodeURIComponent(detail.number)}` : "";
-      const body = detail.body ? `&body=${encodeURIComponent(detail.body)}` : "";
-      const qs = to ? `?${to}${body}` : "";
-      navigate(`/mplanipret/messages${qs}`);
+      openSmsComposer({ number: detail.number ? String(detail.number) : undefined, body: detail.body ? String(detail.body) : undefined });
     };
     window.addEventListener("ava:open-dialer", onOpenDialer);
     window.addEventListener("ava:open-sms-composer", onOpenSms);
@@ -617,7 +621,7 @@ export default function PlanipretMobile() {
       window.removeEventListener("ava:open-sms-composer", onOpenSms);
       window.removeEventListener("ava:open-email-composer", onOpenSms);
     };
-  }, [navigate]);
+  }, [openSmsComposer]);
 
   // Warm up sibling tab chunks during idle time so tab switches feel instant.
   useEffect(() => {
@@ -1070,7 +1074,7 @@ export default function PlanipretMobile() {
 
 
 
-        <Dialer open={dialerOpen} onClose={() => setDialerOpen(false)} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); navigate(`/mplanipret/messages${n ? `?to=${encodeURIComponent(n)}` : ""}`); }} softphone={softphone} />
+        <Dialer open={dialerOpen} onClose={() => setDialerOpen(false)} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); openSmsComposer({ number: n }); }} softphone={softphone} />
         <PpActiveCallScreen softphone={softphone} />
         <InboundCallOverlay call={inbound} onClose={() => setInbound(null)} />
         {avaOpen && profile?.user_id && (

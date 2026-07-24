@@ -169,8 +169,8 @@ export default function MAvaChat() {
         const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
         const body = String(suggestion.payload?.message ?? suggestion.payload?.text ?? suggestion.payload?.body ?? "").trim();
         if (!number) throw new Error("Numéro manquant");
-        window.dispatchEvent(new CustomEvent("ava:open-sms-composer", { detail: { number, body } }));
-        setMessages((m) => [...m, { id: `sms-${Date.now()}`, role: "assistant", message: `J’ouvre la page Texto pour ${number}${body ? " avec le message préparé" : ""}. Le statut d’envoi sera celui de la page Texto.`, created_at: new Date().toISOString() }]);
+        window.dispatchEvent(new CustomEvent("ava:open-sms-composer", { detail: { number, body, autoSend: true } }));
+        setMessages((m) => [...m, { id: `sms-${Date.now()}`, role: "assistant", message: `J’envoie le texto à ${number} depuis la page Texto.`, created_at: new Date().toISOString() }]);
         toast.success("Texto préparé");
         return;
       }

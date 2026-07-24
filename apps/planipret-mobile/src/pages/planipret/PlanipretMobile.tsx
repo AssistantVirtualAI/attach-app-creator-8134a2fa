@@ -93,7 +93,7 @@ const PlanipretBadge = () => (
   </div>
 );
 
-export type PlanipretMobileContext = { profile: any; reloadProfile: () => Promise<void>; openDialer: (number?: string) => void; openAva: () => void; registerRefresh: (fn: (() => Promise<void> | void) | null) => void; softphone: ReturnType<typeof useMplanipretSoftphone> };
+export type PlanipretMobileContext = { profile: any; reloadProfile: () => Promise<void>; openDialer: (number?: string, autoDial?: boolean) => void; openAva: () => void; registerRefresh: (fn: (() => Promise<void> | void) | null) => void; softphone: ReturnType<typeof useMplanipretSoftphone> };
 
 const TABS = [
   { to: "/mplanipret/home", labelKey: "tabs.home", Icon: Home },
@@ -141,7 +141,7 @@ function contactPrimaryPhone(c: DialerContact): string | undefined {
   return c.cell_phone || c.phone || c.work_phone || c.home_phone || c.extension;
 }
 
-function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boolean; onClose: () => void; initial?: string; openMessages: (n?: string) => void; softphone: ReturnType<typeof useMplanipretSoftphone> }) {
+function Dialer({ open, onClose, initial, autoDial, openMessages, softphone }: { open: boolean; onClose: () => void; initial?: string; autoDial?: boolean; openMessages: (n?: string) => void; softphone: ReturnType<typeof useMplanipretSoftphone> }) {
   const { t } = useMplanipretLang();
   const [mode, setMode] = useState<"keypad" | "search">("keypad");
   const [number, setNumber] = useState("");
@@ -153,6 +153,7 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
   const [contactsError, setContactsError] = useState<string | null>(null);
   const [contactsLoadKey, setContactsLoadKey] = useState(0);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoDialKeyRef = useRef("");
   useEffect(() => {
     if (open) {
       setNumber(initial ?? "");
@@ -191,6 +192,16 @@ function Dialer({ open, onClose, initial, openMessages, softphone }: { open: boo
     setNumber("");
     onClose();
   };
+
+  useEffect(() => {
+    if (!open || !autoDial || !initial) return;
+    const key = `${initial}:${Date.now()}`;
+    if (autoDialKeyRef.current === initial) return;
+    autoDialKeyRef.current = initial;
+    const id = window.setTimeout(() => { void startCall(initial); }, 350);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoDial, initial]);
 
 
 
@@ -560,6 +571,7 @@ export default function PlanipretMobile() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [dialerOpen, setDialerOpen] = useState(false);
   const [dialerInit, setDialerInit] = useState<string | undefined>(undefined);
+  const [dialerAutoDial, setDialerAutoDial] = useState(false);
   const [unreadMsg, setUnreadMsg] = useState(0);
   const [unreadVm, setUnreadVm] = useState(0);
   const [inbound, setInbound] = useState<InboundCall>(null);
@@ -567,12 +579,13 @@ export default function PlanipretMobile() {
   const [avaMode, setAvaMode] = useState<"voice" | "chat">("voice");
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [showPrimer, setShowPrimer] = useState(false);
-  const openDialer = (n?: string) => { setDialerInit(n); setDialerOpen(true); };
+  const openDialer = (n?: string, autoDial = false) => { setDialerInit(n); setDialerAutoDial(autoDial); setDialerOpen(true); };
   const openSmsComposer = useCallback((detail: { number?: string; body?: string } = {}) => {
     const qs = new URLSearchParams();
     qs.set("tab", "sms");
     if (detail.number) qs.set("to", detail.number);
     if (detail.body) qs.set("body", detail.body);
+    if ((detail as any).autoSend) qs.set("autosend", "1");
     navigate(`/mplanipret/messages?${qs.toString()}`);
   }, [navigate]);
   const openAva = () => { setAvaMode(profile?.voice_agent_enabled ? "voice" : "chat"); setAvaOpen(true); };
@@ -607,11 +620,11 @@ export default function PlanipretMobile() {
   useEffect(() => {
     const onOpenDialer = (e: Event) => {
       const detail = (e as CustomEvent).detail ?? {};
-      if (detail.number) openDialer(String(detail.number));
+      if (detail.number) openDialer(String(detail.number), !!detail.autoDial);
     };
     const onOpenSms = (e: Event) => {
       const detail = (e as CustomEvent).detail ?? {};
-      openSmsComposer({ number: detail.number ? String(detail.number) : undefined, body: detail.body ? String(detail.body) : undefined });
+      openSmsComposer({ number: detail.number ? String(detail.number) : undefined, body: detail.body ? String(detail.body) : undefined, autoSend: !!detail.autoSend } as any);
     };
     window.addEventListener("ava:open-dialer", onOpenDialer);
     window.addEventListener("ava:open-sms-composer", onOpenSms);
@@ -1074,7 +1087,7 @@ export default function PlanipretMobile() {
 
 
 
-        <Dialer open={dialerOpen} onClose={() => setDialerOpen(false)} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); openSmsComposer({ number: n }); }} softphone={softphone} />
+        <Dialer open={dialerOpen} autoDial={dialerAutoDial} onClose={() => { setDialerOpen(false); setDialerAutoDial(false); }} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); openSmsComposer({ number: n }); }} softphone={softphone} />
         <PpActiveCallScreen softphone={softphone} />
         <InboundCallOverlay call={inbound} onClose={() => setInbound(null)} />
         {avaOpen && profile?.user_id && (

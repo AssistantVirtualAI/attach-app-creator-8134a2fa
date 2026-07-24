@@ -1499,32 +1499,19 @@ function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
                 ✨ {t ? (t as any)("messages.aiSummary") ?? "Résumé AI" : "Résumé AI"}
               </button>
             </div>
-            <div className="p-3">
+            <div className="p-0">
               {!showAiSummary ? (
                 loadingBody ? (
                   <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin" style={{ color: "var(--pp-brand-accent)" }} /></div>
                 ) : fullBodyHtml ? (
-                  <div
-                    className="text-sm email-body"
-                    style={{ color: "var(--pp-text-secondary)", maxWidth: "100%", overflowX: "hidden", wordBreak: "break-word" }}
-                  >
-                    <style>{`
-                      .email-body img { max-width: 100% !important; height: auto !important; }
-                      .email-body table { max-width: 100% !important; width: 100% !important; table-layout: fixed !important; word-break: break-word; }
-                      .email-body td, .email-body th { word-break: break-word; }
-                      .email-body a { word-break: break-all; }
-                      .email-body * { max-width: 100% !important; box-sizing: border-box; }
-                      .email-body div, .email-body p, .email-body span { font-size: 14px !important; line-height: 1.5 !important; }
-                    `}</style>
-                    <div dangerouslySetInnerHTML={{ __html: fullBodyHtml }} />
-                  </div>
+                  <EmailBodyFrame html={fullBodyHtml} />
                 ) : (
-                  <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--pp-text-secondary)" }}>
+                  <p className="text-sm whitespace-pre-wrap p-3" style={{ color: "var(--pp-text-secondary)" }}>
                     {fullBodyText ?? preview ?? t("messages.previewUnavailable")}
                   </p>
                 )
               ) : (
-                <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--pp-text-secondary)" }}>
+                <p className="text-sm whitespace-pre-wrap p-3" style={{ color: "var(--pp-text-secondary)" }}>
                   {preview || t("messages.previewUnavailable")}
                 </p>
               )}

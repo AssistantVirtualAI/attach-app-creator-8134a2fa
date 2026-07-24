@@ -72,6 +72,13 @@ function wantsReminders(text: string) {
   return /rappels?|reminders?|t[âa]ches?|tasks?|todo|à faire/i.test(text);
 }
 
+function wantsReport(text: string): "day" | "week" | "month" | null {
+  if (!/rapport|report|brief|briefing|bilan|r[ée]sum[ée] de (ma |la )?(journ[ée]e|semaine|mois)|performance|comment (s'est|c'est|c'était) (pass[ée]e? )?(ma |la )?(journ[ée]e|semaine|mois)|how (was|did) (my |the )?(day|week|month)/i.test(text)) return null;
+  if (/mois|month/i.test(text)) return "month";
+  if (/semaine|week|7 jours/i.test(text)) return "week";
+  return "day";
+}
+
 function wantsSendEmail(text: string) {
   return /(envoie|envoyer|envoi|send)\s+(un\s+)?(courriel|email|mail)|(courriel|email|mail)\s+(à|a|to)\s+/i.test(text);
 }

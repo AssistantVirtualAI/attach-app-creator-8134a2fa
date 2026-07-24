@@ -4,7 +4,10 @@ export const MS365_DELEGATED_SCOPES =
   "openid profile email offline_access User.Read User.ReadBasic.All User.Read.All Contacts.Read Contacts.ReadWrite People.Read Mail.ReadWrite Mail.Send MailboxSettings.Read Calendars.ReadWrite Chat.Read Chat.ReadBasic Chat.ReadWrite ChatMessage.Send Channel.ReadBasic.All ChannelMessage.Read.All ChannelMessage.Send Team.ReadBasic.All Presence.Read.All Files.ReadWrite Files.ReadWrite.All Sites.ReadWrite.All Organization.Read.All Application.Read.All";
 
 export const MS365_WEB_CALLBACK_PATH = "/auth/microsoft/callback";
-export const MS365_NATIVE_REDIRECT_URI = "capacitor://localhost/auth/microsoft/callback";
+// Use HTTPS Universal Link so Azure (which whitelists an HTTPS URL) redirects
+// to a real page; iOS Universal Links / Android App Links then hand the URL
+// back to the app via App.appUrlOpen (see NativeDeepLinkBridge in App.tsx).
+export const MS365_NATIVE_REDIRECT_URI = "https://avastatistic.ca/auth/microsoft/callback";
 
 const REDIRECT_STORAGE_KEY = "pp_ms365_redirect_uri";
 const VERIFIER_STORAGE_KEY = "pp_ms365_code_verifier";

@@ -10,16 +10,19 @@ import App from './App';
 import './styles.css';
 
 function isIgnorableNativeStartupError(raw: unknown): boolean {
+  const rawText = String(raw instanceof Error ? raw.message : raw ?? '');
+  if (/multi_header\.length|multi_header/i.test(rawText)) return true;
   if (!raw || typeof raw !== 'object') return !raw;
   const obj = raw as Record<string, unknown>;
   const message = String(obj.message ?? obj.errorMessage ?? '').trim();
   const code = String(obj.code ?? '').trim();
+  if (/multi_header\.length|multi_header/i.test(message)) return true;
   return code === 'UNIMPLEMENTED' && /not implemented/i.test(message);
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (event) => {
-    if (!isIgnorableNativeStartupError((event as ErrorEvent).error)) return;
+    if (!isIgnorableNativeStartupError((event as ErrorEvent).error) && !isIgnorableNativeStartupError((event as ErrorEvent).message)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   }, true);

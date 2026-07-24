@@ -36,6 +36,8 @@ export default function Ms365Callback() {
     exchangeInFlight = true;
     if (code) exchangedCodes.add(code);
     (async () => {
+    try {
+
 
       clearMs365Pending();
       const code = params.get("code");

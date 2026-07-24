@@ -1331,6 +1331,67 @@ function SenderQuickActions({ email, name }: { email: string; name: string }) {
 
 
 
+function EmailBodyFrame({ html }: { html: string }) {
+  const ref = useRef<HTMLIFrameElement | null>(null);
+  const [height, setHeight] = useState(400);
+  const doc = useMemo(() => {
+    const isDark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+    const fg = isDark ? "#E5E7EB" : "#111827";
+    const bg = isDark ? "#0B1220" : "#FFFFFF";
+    const link = isDark ? "#7DD3FC" : "#0369A1";
+    return `<!doctype html><html><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"/>
+<base target="_blank"/>
+<style>
+  html,body{margin:0;padding:12px;background:${bg};color:${fg};font:15px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;-webkit-text-size-adjust:100%;word-wrap:break-word;overflow-wrap:anywhere;}
+  *{max-width:100%!important;box-sizing:border-box;}
+  img,video,iframe{max-width:100%!important;height:auto!important;}
+  table{max-width:100%!important;width:100%!important;table-layout:auto!important;border-collapse:collapse;}
+  td,th{word-break:break-word;padding:4px;}
+  pre,code{white-space:pre-wrap;word-break:break-word;}
+  a{color:${link};word-break:break-all;}
+  blockquote{margin:8px 0;padding-left:10px;border-left:3px solid ${isDark ? "#374151" : "#E5E7EB"};color:${isDark ? "#9CA3AF" : "#6B7280"};}
+</style></head><body>${html}<script>
+  (function(){
+    function post(){
+      var h=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight);
+      parent.postMessage({__emailFrame:true,height:h},'*');
+    }
+    window.addEventListener('load',post);
+    setTimeout(post,50);setTimeout(post,300);setTimeout(post,1000);
+    var ro=new ResizeObserver(post);ro.observe(document.body);
+    document.addEventListener('click',function(e){
+      var a=e.target && e.target.closest && e.target.closest('a');
+      if(a && a.href){e.preventDefault();parent.postMessage({__emailFrame:true,openUrl:a.href},'*');}
+    });
+  })();
+<\/script></body></html>`;
+  }, [html]);
+
+  useEffect(() => {
+    const onMsg = (ev: MessageEvent) => {
+      const d: any = ev.data;
+      if (!d || !d.__emailFrame) return;
+      if (typeof d.height === "number") setHeight(Math.min(Math.max(d.height + 8, 200), 5000));
+      if (d.openUrl) {
+        try { window.open(d.openUrl, "_blank"); } catch {}
+      }
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  return (
+    <iframe
+      ref={ref}
+      title="email"
+      srcDoc={doc}
+      sandbox="allow-same-origin allow-scripts allow-popups"
+      style={{ width: "100%", height, border: 0, background: "transparent", display: "block" }}
+    />
+  );
+}
+
 function EmailDetailSheet({ email, onClose, onReply, onForward, onChanged }: {
   email: any;
   onClose: () => void;

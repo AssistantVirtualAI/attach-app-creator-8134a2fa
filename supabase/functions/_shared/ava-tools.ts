@@ -247,6 +247,10 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
     }, ["content"]),
     mk("get_daily_briefing", "Brief quotidien: emails, rendez-vous, appels, leads chauds, tâches."),
     mk("get_my_stats", "Statistiques d'appels et performance.", { period: { type: "string", description: "today, week ou month" } }),
+    mk("get_performance_report", "Rapport de performance détaillé (Markdown) généré par IA pour la journée, la semaine ou le mois. Contient vue d'ensemble, téléphonie, leads chauds, suivi client et recommandations.", {
+      period: { type: "string", description: "day, week ou month (défaut day)" },
+      language: { type: "string", description: "fr ou en (défaut fr)" },
+    }),
     mk("generate_voicemail_greeting", "Génère un nouveau message de boîte vocale avec ElevenLabs. Demande confirmation.", {
       text: { type: "string", description: "Texte à générer" },
       voice_id: { type: "string", description: "ID voix (optionnel)" },

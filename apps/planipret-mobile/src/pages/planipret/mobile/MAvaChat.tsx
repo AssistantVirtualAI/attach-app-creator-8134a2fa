@@ -121,9 +121,19 @@ export default function MAvaChat() {
         const { data: srow } = await supabase.from("planipret_ava_chat_sessions").select("id,title,last_message_at").eq("id", newSid).maybeSingle();
         if (srow) setSessions((s) => [srow as Session, ...s.filter((x) => x.id !== newSid)]);
       }
-      const replyText = String(d.reply ?? "…");
+      const parsedReply = parseAvaReply(String(d.reply ?? "…"), Array.isArray(d.suggestions) ? d.suggestions : []);
+      const immediate = parsedReply.suggestions.find((s) => {
+        const action = String(s.payload?.action ?? "");
+        return s.kind === "call" || s.kind === "sms" || MUTATING_ACTIONS.has(action);
+      });
+      const replyText = immediate?.kind === "call"
+        ? `Je peux lancer l’appel vers ${String(immediate.payload?.number ?? immediate.payload?.to ?? immediate.payload?.phone ?? "ce numéro")}. Réponds « Oui » pour confirmer.`
+        : immediate?.kind === "sms"
+          ? `Je peux envoyer ce texto à ${String(immediate.payload?.number ?? immediate.payload?.to ?? immediate.payload?.phone ?? "ce contact")}. Réponds « Oui » pour confirmer.`
+          : parsedReply.text;
       const replyId = `a-${Date.now()}`;
-      setMessages((m) => [...m, { id: replyId, role: "assistant", message: replyText, suggestions: Array.isArray(d.suggestions) ? d.suggestions : [], created_at: new Date().toISOString() }]);
+      setMessages((m) => [...m, { id: replyId, role: "assistant", message: replyText, suggestions: parsedReply.suggestions, created_at: new Date().toISOString() }]);
+      if (immediate) setPendingConfirm({ suggestion: immediate, label: immediate.label });
       if (speakReplies) speak(replyId, replyText);
     } catch (e: any) {
       toast.error(e?.message ?? "Erreur AVA");
@@ -150,6 +160,25 @@ export default function MAvaChat() {
     setPendingConfirm(null);
     setRunningSuggestion(suggestion.id);
     try {
+      if (suggestion.kind === "call") {
+        const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
+        if (!number) throw new Error("Numéro manquant");
+        window.dispatchEvent(new CustomEvent("ava:open-dialer", { detail: { number, autoDial: true } }));
+        setMessages((m) => [...m, { id: `dial-${Date.now()}`, role: "assistant", message: `J’ouvre le dialer avec ${number}.`, created_at: new Date().toISOString() }]);
+        toast.success("Dialer ouvert");
+        return;
+      }
+
+      if (suggestion.kind === "sms") {
+        const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
+        const body = String(suggestion.payload?.message ?? suggestion.payload?.text ?? suggestion.payload?.body ?? "").trim();
+        if (!number) throw new Error("Numéro manquant");
+        window.dispatchEvent(new CustomEvent("ava:open-sms-composer", { detail: { number, body, autoSend: true } }));
+        setMessages((m) => [...m, { id: `sms-${Date.now()}`, role: "assistant", message: `J’envoie le texto à ${number} depuis la page Texto.`, created_at: new Date().toISOString() }]);
+        toast.success("Texto préparé");
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
         body: { mode: "chat", confirm_action: suggestion, approved: true, session_id: sessionId },
       });
@@ -448,4 +477,36 @@ function cleanReply(raw: string): string {
   const m = s.match(/^([\s\S]{40,}?)\n+(\[[\s\S]*\]|\{[\s\S]*\})\s*$/);
   if (m && m[1].trim().length > 0) s = m[1].trim();
   return s;
+}
+
+function parseAvaReply(raw: string, suggestions: AvaSuggestion[]): { text: string; suggestions: AvaSuggestion[] } {
+  const found: AvaSuggestion[] = [];
+  const candidates: string[] = [];
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) candidates.push(fenced[1].trim());
+  const trailing = raw.match(/\n\s*(\[[\s\S]*\])\s*$/);
+  if (trailing?.[1]) candidates.push(trailing[1].trim());
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (!Array.isArray(parsed)) continue;
+      for (const item of parsed) {
+        if (!item || typeof item !== "object") continue;
+        const kind = String((item as any).kind ?? "");
+        if (!["call", "sms", "email", "reminder", "maestro_action", "ms365_action", "open_voice", "open_coach"].includes(kind)) continue;
+        found.push({
+          id: String((item as any).id ?? `${kind}-${Date.now()}-${found.length}`),
+          label: String((item as any).label ?? (kind === "call" ? "Appeler" : kind === "sms" ? "Texto" : "Action")),
+          kind,
+          payload: ((item as any).payload && typeof (item as any).payload === "object") ? (item as any).payload : {},
+        });
+      }
+    } catch {}
+  }
+
+  return {
+    text: cleanReply(raw),
+    suggestions: suggestions.length ? suggestions : found,
+  };
 }

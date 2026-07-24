@@ -315,6 +315,8 @@ export const MP_DICT = {
       noSubject: "(Sans objet)",
       from: "De",
       previewUnavailable: "(Aperçu non disponible)",
+      fullEmail: "Courriel complet",
+      aiSummary: "Résumé IA",
       reply: "Répondre",
       newEmail: "Nouveau message",
       recipientRequired: "Destinataire requis",

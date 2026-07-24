@@ -31,7 +31,7 @@ RÈGLES IMPORTANTES :
 
 const TOOLS = [
   "make_call", "send_sms", "send_email", "create_task", "create_calendar_event",
-  "get_daily_briefing", "search_contact", "read_emails", "get_call_history", "read_voicemails",
+  "get_daily_briefing", "get_performance_report", "search_contact", "read_emails", "get_call_history", "read_voicemails",
 ];
 
 Deno.serve(async (req) => {

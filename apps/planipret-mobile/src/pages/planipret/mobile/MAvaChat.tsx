@@ -125,6 +125,11 @@ export default function MAvaChat() {
       const replyText = parsedReply.text;
       const replyId = `a-${Date.now()}`;
       setMessages((m) => [...m, { id: replyId, role: "assistant", message: replyText, suggestions: parsedReply.suggestions, created_at: new Date().toISOString() }]);
+      const immediate = parsedReply.suggestions.find((s) => {
+        const action = String(s.payload?.action ?? "");
+        return s.kind === "call" || s.kind === "sms" || MUTATING_ACTIONS.has(action);
+      });
+      if (immediate) setPendingConfirm({ suggestion: immediate, label: immediate.label });
       if (speakReplies) speak(replyId, replyText);
     } catch (e: any) {
       toast.error(e?.message ?? "Erreur AVA");

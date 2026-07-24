@@ -15,19 +15,28 @@ async function getSessionWithRetry() {
   return null;
 }
 
+// Module-level dedupe: survives StrictMode remounts and any parent re-renders.
+// A Microsoft authorization code is single-use — a second exchange returns invalid_grant.
+const exchangedCodes = new Set<string>();
+let exchangeInFlight = false;
+
 export default function Ms365Callback() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
-  const ranRef = useRef(false);
+  const exchangeStarted = useRef(false);
 
   useEffect(() => {
-    // Guard against StrictMode / re-render double-invocation. Microsoft
-    // authorization codes are single-use — a second call returns invalid_grant.
-    if (ranRef.current) return;
-    ranRef.current = true;
+    if (exchangeStarted.current) return;
+    const code = params.get("code");
+    if (code && exchangedCodes.has(code)) { exchangeStarted.current = true; return; }
+    if (exchangeInFlight) return;
+    exchangeStarted.current = true;
+    exchangeInFlight = true;
+    if (code) exchangedCodes.add(code);
     (async () => {
+
       clearMs365Pending();
       const code = params.get("code");
       const err = params.get("error_description") ?? params.get("error");

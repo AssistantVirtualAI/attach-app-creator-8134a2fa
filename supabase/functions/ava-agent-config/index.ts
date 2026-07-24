@@ -105,7 +105,7 @@ RÈGLES D'ORCHESTRATION OBLIGATOIRES
    → send_teams_message { contact_email, content } (le tool crée le chat 1-1 automatiquement)
    Pour un canal existant : list_teams_chats puis send_teams_message avec team_id + channel_id.
 NAVIGATION: navigate_to, show_client_in_app, open_call_detail
-STATS: get_daily_briefing, get_my_stats
+STATS: get_daily_briefing, get_my_stats, get_performance_report (rapport IA détaillé day/week/month)
 AIDE: explain_feature, get_integration_status
 
 ═══════════════════════════════════

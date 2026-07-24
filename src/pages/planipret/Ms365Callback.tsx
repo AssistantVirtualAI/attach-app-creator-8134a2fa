@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-import { clearRememberedMs365RedirectUri, getRememberedMs365CodeVerifier, getRememberedMs365RedirectUri } from "@/lib/ms365OAuth";
+import { clearRememberedMs365RedirectUri, getRememberedMs365CodeVerifierAsync, getRememberedMs365RedirectUriAsync } from "@/lib/ms365OAuth";
 import { clearMs365Pending } from "@/lib/ms365Pending";
-import { clearMicrosoftSignInIntent, getMicrosoftSignInIntent, getMicrosoftSignInNext } from "@/lib/ms365AuthLogin";
+import { clearMicrosoftSignInIntentAsync, getMicrosoftSignInIntentAsync, getMicrosoftSignInNextAsync } from "@/lib/ms365AuthLogin";
 
 async function getSessionWithRetry() {
   for (let i = 0; i < 8; i += 1) {
@@ -45,9 +45,9 @@ export default function Ms365Callback() {
       if (err) { setStatus("error"); setError(err); return; }
       if (!code) { setStatus("error"); setError("Code OAuth manquant"); return; }
       // Must match the redirect URI registered in Azure App Registration.
-      const redirect_uri = getRememberedMs365RedirectUri();
+      const redirect_uri = await getRememberedMs365RedirectUriAsync();
       const state = params.get("state");
-      const code_verifier = getRememberedMs365CodeVerifier(state);
+      const code_verifier = await getRememberedMs365CodeVerifierAsync(state);
       if (!code_verifier) {
         setStatus("error");
         setError("Code verifier PKCE introuvable — recommencez la connexion sans changer de navigateur/onglet.");
@@ -73,7 +73,8 @@ export default function Ms365Callback() {
         return { data: parsed, errMsg: full };
       }
 
-      if (getMicrosoftSignInIntent() === "login") {
+      const isMicrosoftLogin = (await getMicrosoftSignInIntentAsync()) === "login" || Boolean(state?.startsWith("login:"));
+      if (isMicrosoftLogin) {
         const { data, errMsg } = await invokeAndParse("pp-ms-auth-callback", { code, redirect_uri, code_verifier });
         if (errMsg || !(data as any)?.success) {
           console.error("ms365 auth failed", { data, errMsg, redirect_uri });
@@ -83,8 +84,8 @@ export default function Ms365Callback() {
         const verify = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: (data as any).token_hash });
         if (verify.error) { setStatus("error"); setError(verify.error.message); return; }
         clearRememberedMs365RedirectUri();
-        const next = getMicrosoftSignInNext("/post-login");
-        clearMicrosoftSignInIntent();
+        const next = await getMicrosoftSignInNextAsync("/post-login");
+        await clearMicrosoftSignInIntentAsync();
         try { void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin()); } catch {}
         setStatus("ok");
         setTimeout(() => navigate(next, { replace: true }), 700);
@@ -114,7 +115,7 @@ export default function Ms365Callback() {
         void supabase.functions.invoke("ms365-full-import", { body: { mode: "initial" } }).catch(() => {});
       } catch {}
       setStatus("ok");
-      setTimeout(() => navigate("/mplanipret/more?ms365=ok", { replace: true }), 1200);
+      setTimeout(() => navigate("/mplanipret/home?ms365=ok", { replace: true }), 1200);
     } finally {
       exchangeInFlight = false;
     }
@@ -128,7 +129,7 @@ export default function Ms365Callback() {
       <div className="bg-white rounded-xl shadow p-6 max-w-md w-full text-center">
         {status === "loading" && (<><Loader2 className="w-8 h-8 mx-auto animate-spin text-blue-600 mb-3" /><p className="text-slate-700">Connexion à Microsoft 365…</p></>)}
         {status === "ok" && (<><CheckCircle2 className="w-10 h-10 mx-auto text-emerald-600 mb-3" /><p className="font-semibold text-slate-800">Microsoft 365 connecté avec succès ✅</p><p className="text-xs text-slate-500 mt-2">Redirection…</p></>)}
-        {status === "error" && (<><AlertCircle className="w-10 h-10 mx-auto text-red-600 mb-3" /><p className="font-semibold text-slate-800">Erreur de connexion</p><p className="text-xs text-slate-500 mt-2">{error}</p><button onClick={() => navigate("/mplanipret/more")} className="mt-4 px-4 py-2 text-sm bg-slate-100 rounded-lg">Retour</button></>)}
+        {status === "error" && (<><AlertCircle className="w-10 h-10 mx-auto text-red-600 mb-3" /><p className="font-semibold text-slate-800">Erreur de connexion</p><p className="text-xs text-slate-500 mt-2">{error}</p><button onClick={() => navigate("/mplanipret/home", { replace: true })} className="mt-4 px-4 py-2 text-sm bg-slate-100 rounded-lg">Retour à l'accueil</button></>)}
       </div>
     </div>
   );

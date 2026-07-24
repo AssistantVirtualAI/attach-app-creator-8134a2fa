@@ -451,8 +451,16 @@ function NativeDeepLinkBridge() {
         const { App: CapacitorApp } = await import('@capacitor/app');
         const launch = await CapacitorApp.getLaunchUrl();
         routeFromUrl(launch?.url);
+        const stateListener = await CapacitorApp.addListener('appStateChange', async (state: { isActive: boolean }) => {
+          if (!state.isActive) return;
+          try {
+            const latestLaunch = await CapacitorApp.getLaunchUrl();
+            routeFromUrl(latestLaunch?.url);
+          } catch {}
+          try { routeFromUrl(localStorage.getItem('pp_ms365_callback_url')); } catch {}
+        });
         const listener = await CapacitorApp.addListener('appUrlOpen', (event: { url: string }) => routeFromUrl(event.url));
-        unsubscribe = () => { try { listener.remove(); } catch {} };
+        unsubscribe = () => { try { listener.remove(); } catch {}; try { stateListener.remove(); } catch {} };
       } catch {
         // Web preview: no native deep links.
       }

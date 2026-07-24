@@ -29,12 +29,23 @@ export class LazyRouteBoundary extends React.Component<
   state: State = { error: null, retryKey: 0 };
 
   static getDerivedStateFromError(error: Error): Partial<State> | null {
-    if (isEmptyNativeArtifact(error)) return null;
+    // Empty native startup artifacts (Capacitor "not implemented" errors that
+    // arrive as empty objects) must NOT show a fallback, but we still have to
+    // remount the subtree — React unmounts the failing tree even when
+    // getDerivedStateFromError returns null. Bump retryKey to force remount.
+    if (isEmptyNativeArtifact(error)) {
+      return { error: null };
+    }
     return { error };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    if (isEmptyNativeArtifact(error)) return;
+    if (isEmptyNativeArtifact(error)) {
+      // Force a remount of the Suspense subtree so the app actually shows
+      // instead of leaving a blank white/black screen.
+      this.setState((s) => ({ error: null, retryKey: s.retryKey + 1 }));
+      return;
+    }
     console.error("[LazyRouteBoundary]", error, info);
   }
 

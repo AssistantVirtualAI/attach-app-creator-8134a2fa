@@ -159,11 +159,17 @@ export default function MMore() {
   };
 
   const logout = async () => {
-    if (!confirm(t("more.logoutConfirm"))) return;
-    await supabase.auth.signOut();
-    toast.success(t("more.logoutSuccess"));
-    // Reload the mobile shell so the auth guard renders MobileAuthScreen.
-    window.location.href = "/mplanipret";
+    try {
+      const ok = typeof window !== "undefined" && typeof window.confirm === "function"
+        ? window.confirm(t("more.logoutConfirm"))
+        : true;
+      if (!ok) return;
+    } catch { /* ignore native confirm errors */ }
+    try { await supabase.auth.signOut(); } catch (e) { console.warn("[logout] signOut error", e); }
+    try { toast.success(t("more.logoutSuccess")); } catch {}
+    // Hard reload the mobile shell so any in-flight edge-function calls are aborted
+    // and the auth guard renders MobileAuthScreen with a clean state.
+    setTimeout(() => { window.location.replace("/mplanipret"); }, 50);
   };
 
   return (

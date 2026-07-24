@@ -3,6 +3,7 @@
  * Uses the exact same shell + routes + providers as /mplanipret on web.
  */
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { logDeepLink } from '@/lib/deepLinkDebug';
 import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
@@ -41,6 +42,7 @@ const MDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MDiagn
 const MSipDebug = lazyWithRetry(() => import('@/pages/planipret/mobile/MSipDebug'), 'MSipDebug');
 const MKpiAudit = lazyWithRetry(() => import('@/pages/planipret/mobile/MKpiAudit'), 'MKpiAudit');
 const MLayoutQA = lazyWithRetry(() => import('@/pages/planipret/mobile/MLayoutQA'), 'MLayoutQA');
+const MDeepLinkDebug = lazyWithRetry(() => import('@/pages/planipret/mobile/MDeepLinkDebug'), 'MDeepLinkDebug');
 
 
 
@@ -64,8 +66,9 @@ function NativeDeepLinkBridge() {
       try { localStorage.setItem(key, rawUrl); } catch {}
     };
 
-    const routeFromUrl = async (rawUrl?: string | null) => {
+    const routeFromUrl = async (rawUrl?: string | null, source = "unknown") => {
       if (!rawUrl) return;
+      logDeepLink({ kind: "received", source, url: rawUrl });
       try {
         const url = new URL(rawUrl);
         const pathWithHost = `/${[url.hostname, url.pathname].filter(Boolean).join('/')}`.replace(/\/+/g, '/');
@@ -88,7 +91,7 @@ function NativeDeepLinkBridge() {
         const isMaestroCallback =
           url.pathname === '/auth/maestro/callback' ||
           pathWithHost === '/auth/maestro/callback' ||
-          url.protocol === 'planipret:';
+          (url.protocol === 'planipret:' && (url.hostname === 'auth' || rawUrl.includes('/auth/maestro/callback')));
         if (isMaestroCallback) {
           try {
             const { Browser } = await import('@capacitor/browser');
@@ -98,28 +101,29 @@ function NativeDeepLinkBridge() {
           navigate(`/auth/maestro/callback${url.search}`, { replace: true });
           return;
         }
-      } catch {
-        // Ignore non-URL events.
+      } catch (e) {
+        logDeepLink({ kind: "error", source, url: rawUrl, detail: (e as Error).message });
       }
     };
+
 
     let unsubscribe: null | (() => void) = null;
     (async () => {
       try {
         const { App: CapacitorApp } = await import('@capacitor/app');
         const launch = await CapacitorApp.getLaunchUrl();
-        void routeFromUrl(launch?.url);
+        void routeFromUrl(launch?.url, "launchUrl");
         const stateListener = await CapacitorApp.addListener('appStateChange', async (state: { isActive: boolean }) => {
           if (!state.isActive) return;
           try {
             const latestLaunch = await CapacitorApp.getLaunchUrl();
-            void routeFromUrl(latestLaunch?.url);
+            void routeFromUrl(latestLaunch?.url, "appStateChange");
           } catch {}
-          try { void routeFromUrl(localStorage.getItem('pp_ms365_callback_url')); } catch {}
-          try { void routeFromUrl(localStorage.getItem('pp_maestro_callback_url')); } catch {}
+          try { void routeFromUrl(localStorage.getItem('pp_ms365_callback_url'), "appStateChange:cached-ms365"); } catch {}
+          try { void routeFromUrl(localStorage.getItem('pp_maestro_callback_url'), "appStateChange:cached-maestro"); } catch {}
         });
         const listener = await CapacitorApp.addListener('appUrlOpen', (event: { url: string }) => {
-          void routeFromUrl(event.url);
+          void routeFromUrl(event.url, "appUrlOpen");
         });
         unsubscribe = () => { try { listener.remove(); } catch {}; try { stateListener.remove(); } catch {} };
       } catch {
@@ -187,6 +191,7 @@ export default function App() {
                     <Route path="sip-debug" element={<MSipDebug />} />
                     <Route path="kpi-audit" element={<MKpiAudit />} />
                     <Route path="qa/layout" element={<MLayoutQA />} />
+                    <Route path="deep-link-debug" element={<MDeepLinkDebug />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/mplanipret" replace />} />
                 </Routes>

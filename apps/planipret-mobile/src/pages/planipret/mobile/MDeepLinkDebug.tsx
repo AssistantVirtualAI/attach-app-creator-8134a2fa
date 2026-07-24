@@ -175,6 +175,40 @@ export default function MDeepLinkDebug() {
       </div>
 
       <div className="rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", padding: 12 }}>
+        <div className="flex items-center justify-between mb-2">
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)" }}>Validation Maestro + Microsoft</div>
+          <button
+            onClick={runFullValidation}
+            disabled={running}
+            className="flex items-center gap-1 rounded-md"
+            style={{ background: "#22c55e", color: "white", fontSize: 11, fontWeight: 600, padding: "6px 10px" }}
+          >
+            {running ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />} Lancer
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {checks.length === 0 && (
+            <div style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>
+              Clique « Lancer » pour vérifier la config serveur, le scheme natif et les endpoints des deux connexions.
+            </div>
+          )}
+          {checks.map((c, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 11 }}>
+              {c.state === "ok" && <CheckCircle2 className="w-3 h-3 mt-0.5" style={{ color: "#22c55e" }} />}
+              {c.state === "fail" && <XCircle className="w-3 h-3 mt-0.5" style={{ color: "#ef4444" }} />}
+              {c.state === "running" && <Loader2 className="w-3 h-3 mt-0.5 animate-spin" style={{ color: "#0369a1" }} />}
+              {c.state === "idle" && <div className="w-3 h-3 mt-0.5" />}
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>{c.label}</div>
+                {c.detail && <div style={{ color: "var(--pp-text-muted)", fontFamily: "monospace", fontSize: 10 }}>{c.detail}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+
+      <div className="rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", padding: 12 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--pp-text-primary)", marginBottom: 8 }}>
           Historique ({events.length})
         </div>

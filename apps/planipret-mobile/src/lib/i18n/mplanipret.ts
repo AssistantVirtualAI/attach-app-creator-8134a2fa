@@ -1243,6 +1243,8 @@ export const MP_DICT = {
       noSubject: "(No subject)",
       from: "From",
       previewUnavailable: "(Preview unavailable)",
+      fullEmail: "Full email",
+      aiSummary: "AI summary",
       reply: "Reply",
       newEmail: "New message",
       recipientRequired: "Recipient required",

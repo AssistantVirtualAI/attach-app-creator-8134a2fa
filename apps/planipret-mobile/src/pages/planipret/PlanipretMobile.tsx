@@ -160,6 +160,7 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone }: {
       setMode("keypad");
       setQuery("");
     } else {
+      autoDialKeyRef.current = "";
       // Reset contacts so next open always re-fetches fresh data
       setContacts([]);
       setContactsError(null);
@@ -195,7 +196,6 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone }: {
 
   useEffect(() => {
     if (!open || !autoDial || !initial) return;
-    const key = `${initial}:${Date.now()}`;
     if (autoDialKeyRef.current === initial) return;
     autoDialKeyRef.current = initial;
     const id = window.setTimeout(() => { void startCall(initial); }, 350);

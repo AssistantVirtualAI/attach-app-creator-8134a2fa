@@ -202,6 +202,14 @@ export default function MaestroConnectCard() {
             </>
           )}
         </div>
+
+        <Link
+          to="/mplanipret/deep-link-debug"
+          className="flex items-center gap-1 mt-2"
+          style={{ fontSize: 10, color: "var(--pp-text-muted)", textDecoration: "none" }}
+        >
+          <Bug className="w-3 h-3" /> {isFr ? "Debug deep links" : "Deep link debug"}
+        </Link>
       </div>
     </div>
   );

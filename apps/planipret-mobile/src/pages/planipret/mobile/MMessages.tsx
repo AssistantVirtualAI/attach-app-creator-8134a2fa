@@ -331,6 +331,12 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
     } else {
       openSmsThread({ id: "", number: to, body, autoSend }, false);
     }
+    const clean = new URLSearchParams(searchParams);
+    clean.delete("to");
+    clean.delete("name");
+    clean.delete("body");
+    clean.delete("autosend");
+    setSearchParams(clean, { replace: true });
   }, [searchParams, loading, threads]);
 
   if (activeThread) {
@@ -349,6 +355,8 @@ function SmsList({ profile, openDialer, registerRefresh }: any) {
             const clean = new URLSearchParams(searchParams);
             clean.delete("to");
             clean.delete("name");
+            clean.delete("body");
+            clean.delete("autosend");
             clean.delete("tab");
             setSearchParams(clean, { replace: true });
             load();

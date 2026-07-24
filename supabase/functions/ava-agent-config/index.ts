@@ -27,7 +27,7 @@ const TOOL_NAMES = [
   // navigation
   "navigate_to", "show_client_in_app", "open_call_detail",
   // stats
-  "get_daily_briefing", "get_my_stats",
+  "get_daily_briefing", "get_my_stats", "get_performance_report",
   // help
   "explain_feature", "get_integration_status",
 ];

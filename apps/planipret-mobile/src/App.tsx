@@ -191,6 +191,7 @@ export default function App() {
                     <Route path="sip-debug" element={<MSipDebug />} />
                     <Route path="kpi-audit" element={<MKpiAudit />} />
                     <Route path="qa/layout" element={<MLayoutQA />} />
+                    <Route path="deep-link-debug" element={<MDeepLinkDebug />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/mplanipret" replace />} />
                 </Routes>

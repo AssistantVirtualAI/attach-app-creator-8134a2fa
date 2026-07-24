@@ -60,6 +60,10 @@ function NativeDeepLinkBridge() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const rememberCallbackUrl = (key: string, rawUrl: string) => {
+      try { localStorage.setItem(key, rawUrl); } catch {}
+    };
+
     const routeFromUrl = async (rawUrl?: string | null) => {
       if (!rawUrl) return;
       try {
@@ -76,7 +80,7 @@ function NativeDeepLinkBridge() {
             const { Browser } = await import('@capacitor/browser');
             await Browser.close();
           } catch {}
-          localStorage.setItem('pp_ms365_callback_url', rawUrl);
+          rememberCallbackUrl('pp_ms365_callback_url', rawUrl);
           navigate(`/auth/microsoft/callback${url.search}`, { replace: true });
           return;
         }
@@ -89,7 +93,7 @@ function NativeDeepLinkBridge() {
             const { Browser } = await import('@capacitor/browser');
             await Browser.close();
           } catch {}
-          localStorage.setItem('pp_maestro_callback_url', rawUrl);
+          rememberCallbackUrl('pp_maestro_callback_url', rawUrl);
           navigate(`/auth/maestro/callback${url.search}`, { replace: true });
           return;
         }
@@ -104,10 +108,19 @@ function NativeDeepLinkBridge() {
         const { App: CapacitorApp } = await import('@capacitor/app');
         const launch = await CapacitorApp.getLaunchUrl();
         void routeFromUrl(launch?.url);
+        const stateListener = await CapacitorApp.addListener('appStateChange', async (state: { isActive: boolean }) => {
+          if (!state.isActive) return;
+          try {
+            const latestLaunch = await CapacitorApp.getLaunchUrl();
+            void routeFromUrl(latestLaunch?.url);
+          } catch {}
+          try { void routeFromUrl(localStorage.getItem('pp_ms365_callback_url')); } catch {}
+          try { void routeFromUrl(localStorage.getItem('pp_maestro_callback_url')); } catch {}
+        });
         const listener = await CapacitorApp.addListener('appUrlOpen', (event: { url: string }) => {
           void routeFromUrl(event.url);
         });
-        unsubscribe = () => { try { listener.remove(); } catch {} };
+        unsubscribe = () => { try { listener.remove(); } catch {}; try { stateListener.remove(); } catch {} };
       } catch {
         // Web preview: no native deep links.
       }

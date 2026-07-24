@@ -25,12 +25,25 @@
     android:theme="@style/AppTheme.Planipret">
 
     <activity android:name=".MainActivity">
-        <!-- Custom scheme deep link : planipret:// -->
+        <!-- Custom scheme deep links:
+             - planipret://auth/maestro/callback for Maestro mobile OAuth
+             - capacitor://localhost/auth/microsoft/callback for Microsoft mobile OAuth
+        -->
         <intent-filter>
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="planipret" />
+        </intent-filter>
+
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="capacitor" android:host="localhost"
+                  android:pathPrefix="/auth/microsoft/callback" />
+            <data android:scheme="capacitor" android:host="localhost"
+                  android:pathPrefix="/auth/ms365/callback" />
         </intent-filter>
 
         <!--

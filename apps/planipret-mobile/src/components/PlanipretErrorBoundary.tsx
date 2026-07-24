@@ -13,25 +13,32 @@ function isEmptyNativeArtifact(raw: unknown): boolean {
   return false;
 }
 
-export class PlanipretErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
-  state: State = { error: null };
+export class PlanipretErrorBoundary extends React.Component<{ children: React.ReactNode }, State & { retryKey: number }> {
+  state: State & { retryKey: number } = { error: null, retryKey: 0 };
   static getDerivedStateFromError(error: Error) {
-    if (isEmptyNativeArtifact(error)) return null;
+    if (isEmptyNativeArtifact(error)) return { error: null };
     return { error };
   }
   componentDidCatch(error: Error, info: any) {
-    if (isEmptyNativeArtifact(error)) return;
+    if (isEmptyNativeArtifact(error)) {
+      // Empty native startup artifact — swallow AND remount subtree so the
+      // app doesn't stay blank after React unmounts the failing tree.
+      this.setState((s) => ({ error: null, retryKey: s.retryKey + 1 }));
+      return;
+    }
     console.error("[PlanipretErrorBoundary]", error, info);
   }
   render() {
-    if (!this.state.error) return this.props.children;
+    if (!this.state.error) {
+      return <React.Fragment key={this.state.retryKey}>{this.props.children}</React.Fragment>;
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
         <div className="max-w-md bg-white rounded-xl shadow-md p-6 text-center">
           <div className="text-3xl mb-2">⚠️</div>
           <h2 className="font-semibold text-lg mb-2">Une erreur est survenue</h2>
           <p className="text-sm text-slate-600 mb-4">{this.state.error.message || "Le démarrage a été interrompu."}</p>
-          <button onClick={() => { this.setState({ error: null }); location.reload(); }}
+          <button onClick={() => { this.setState({ error: null, retryKey: this.state.retryKey + 1 }); location.reload(); }}
             className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">Recharger</button>
         </div>
       </div>

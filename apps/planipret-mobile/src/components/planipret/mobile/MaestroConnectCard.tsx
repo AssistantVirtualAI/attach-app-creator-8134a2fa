@@ -66,8 +66,11 @@ export default function MaestroConnectCard() {
     try {
       const isNative = Capacitor.isNativePlatform();
       const platform = isNative ? "mobile" : "web";
+      // Maestro only whitelists the https callback. Universal/App Links on
+      // avastatistic.ca hop back into the native app. A custom scheme like
+      // planipret:// makes Safari show "l'adresse n'est pas valide".
       const redirectUri = isNative
-        ? "planipret://auth/maestro/callback"
+        ? "https://avastatistic.ca/auth/maestro/callback"
         : `${window.location.origin}/auth/maestro/callback`;
 
       const { data: res, error } = await supabase.functions.invoke("maestro-oauth-start", {

@@ -43,16 +43,30 @@ export default function Ms365Callback() {
         return;
       }
       console.info("[ms365-callback] exchange", { redirect_uri, hasVerifier: Boolean(code_verifier), state });
+      // supabase.functions.invoke returns error=FunctionsHttpError and data=null for non-2xx.
+      // We must read the response body from the error context to surface the real message.
+      async function invokeAndParse(fn: string, body: unknown): Promise<{ data: any; errMsg: string | null }> {
+        const { data, error: e } = await supabase.functions.invoke(fn, { body: body as any });
+        if (!e) return { data, errMsg: null };
+        let parsed: any = null;
+        try {
+          const res = (e as any)?.context as Response | undefined;
+          if (res && typeof res.text === "function") {
+            const txt = await res.text();
+            try { parsed = JSON.parse(txt); } catch { parsed = { error: txt }; }
+          }
+        } catch {}
+        const details = parsed?.details;
+        const msg = parsed?.error ?? e.message ?? "Échec OAuth";
+        const full = details ? `${msg} — ${details.error_description ?? details.error ?? ""}`.trim() : msg;
+        return { data: parsed, errMsg: full };
+      }
+
       if (getMicrosoftSignInIntent() === "login") {
-        const { data, error: e } = await supabase.functions.invoke("pp-ms-auth-callback", {
-          body: { code, redirect_uri, code_verifier },
-        });
-        if (e || !(data as any)?.success) {
-          const details = (data as any)?.details;
-          const msg = (data as any)?.error ?? e?.message ?? "Échec OAuth";
-          const full = details ? `${msg} — ${details.error_description ?? details.error ?? ""}`.trim() : msg;
-          console.error("ms365 auth failed", { data, e, redirect_uri });
-          setStatus("error"); setError(full);
+        const { data, errMsg } = await invokeAndParse("pp-ms-auth-callback", { code, redirect_uri, code_verifier });
+        if (errMsg || !(data as any)?.success) {
+          console.error("ms365 auth failed", { data, errMsg, redirect_uri });
+          setStatus("error"); setError(errMsg ?? (data as any)?.error ?? "Échec OAuth");
           return;
         }
         const verify = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: (data as any).token_hash });
@@ -67,13 +81,10 @@ export default function Ms365Callback() {
       }
       const session = await getSessionWithRetry();
       if (!session) { setStatus("error"); setError("Session expirée — reconnectez-vous"); return; }
-      const { data, error: e } = await supabase.functions.invoke("ms365-oauth-exchange", { body: { code, redirect_uri, code_verifier } });
-      if (e || !(data as any)?.success) {
-        const details = (data as any)?.details;
-        const msg = (data as any)?.error ?? e?.message ?? "Échec OAuth";
-        const full = details ? `${msg} — ${details.error_description ?? details.error ?? ""}`.trim() : msg;
-        console.error("ms365 exchange failed", { data, e });
-        setStatus("error"); setError(full);
+      const { data, errMsg } = await invokeAndParse("ms365-oauth-exchange", { code, redirect_uri, code_verifier });
+      if (errMsg || !(data as any)?.success) {
+        console.error("ms365 exchange failed", { data, errMsg });
+        setStatus("error"); setError(errMsg ?? (data as any)?.error ?? "Échec OAuth");
         return;
       }
       clearRememberedMs365RedirectUri();

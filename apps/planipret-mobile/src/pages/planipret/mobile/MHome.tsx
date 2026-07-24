@@ -276,9 +276,9 @@ export default function MHome() {
 
 
 
-  useEffect(() => { loadStats(); loadBrief(false); /* eslint-disable-next-line */ }, [profile?.user_id, period]);
+  useEffect(() => { loadStats(); /* eslint-disable-next-line */ }, [profile?.user_id, period]);
   useEffect(() => {
-    registerRefresh(async () => { await Promise.all([loadStats(), loadBrief(true)]); });
+    registerRefresh(async () => { await loadStats(); });
     return () => registerRefresh(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.user_id, period]);

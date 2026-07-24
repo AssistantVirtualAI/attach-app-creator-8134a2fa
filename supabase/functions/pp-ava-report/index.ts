@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
         .or(orgFilter).gte("started_at", since).order("started_at", { ascending: false }).limit(200),
       admin.from("planipret_phone_messages")
         .select("id, direction, from_number, to_number, body, created_at, read_at")
-        .eq("user_id", u.user.id).gte("created_at", since).order("created_at", { ascending: false }).limit(200),
+        .eq("user_id", effectiveUserId).gte("created_at", since).order("created_at", { ascending: false }).limit(200),
       admin.from("planipret_voicemails")
         .select("id, from_number, from_name, duration_seconds, transcript, is_read, created_at")
         .or(orgFilter).gte("created_at", since).order("created_at", { ascending: false }).limit(100),

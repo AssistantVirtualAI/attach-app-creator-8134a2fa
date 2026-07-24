@@ -63,7 +63,7 @@ export default function MobileHeaderControls({ profile, reloadProfile: _reloadPr
         {lang === "fr" ? "FR" : "EN"}
       </button>
       <button
-        onClick={() => setDark((d) => !d)}
+        onClick={toggleTheme}
         className="flex items-center justify-center rounded-full"
         style={pill}
         aria-label="Theme"

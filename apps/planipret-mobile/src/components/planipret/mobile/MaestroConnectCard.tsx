@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link2, CheckCircle2, AlertCircle, Loader2, RefreshCw, LogOut } from "lucide-react";
+import { Link2, CheckCircle2, AlertCircle, Loader2, RefreshCw, LogOut, Bug } from "lucide-react";
 import { toast } from "sonner";
 import { Capacitor } from "@capacitor/core";
 import { Browser } from "@capacitor/browser";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { probePlanipretScheme, logDeepLink } from "@/lib/deepLinkDebug";
 
 type Status = "loading" | "disconnected" | "connected" | "error";
 

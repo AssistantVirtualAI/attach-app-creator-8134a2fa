@@ -115,7 +115,11 @@ export default function Ms365Callback() {
       } catch {}
       setStatus("ok");
       setTimeout(() => navigate("/mplanipret/more?ms365=ok", { replace: true }), 1200);
+    } finally {
+      exchangeInFlight = false;
+    }
     })();
+
   }, [params, navigate]);
 
 

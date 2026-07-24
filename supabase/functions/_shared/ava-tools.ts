@@ -296,6 +296,6 @@ export const EXPECTED_TOOL_NAMES = [
   "search_ms365_contacts","find_contact",
   "list_teams_chats","create_teams_chat","send_teams_message",
   "navigate_to","show_client_in_app","open_call_detail",
-  "get_daily_briefing","get_my_stats","generate_voicemail_greeting","explain_feature","get_integration_status",
+  "get_daily_briefing","get_my_stats","get_performance_report","generate_voicemail_greeting","explain_feature","get_integration_status",
   "push_call_summary","push_client_note","push_communication_log",
 ];

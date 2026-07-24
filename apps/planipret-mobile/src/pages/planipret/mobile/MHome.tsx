@@ -87,9 +87,6 @@ export default function MHome() {
   // so the cached view stays on-screen while KPIs refresh silently.
   const [statsLoading, setStatsLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
-  const [brief, setBrief] = useState<any | null>(() => cached?.brief ?? null);
-  const [briefLoading, setBriefLoading] = useState(false);
-  const [briefErr, setBriefErr] = useState<string | null>(null);
 
   useMaestroPipelineToasts(profile?.user_id);
 

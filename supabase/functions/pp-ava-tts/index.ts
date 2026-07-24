@@ -8,7 +8,7 @@ const j = (b: unknown, s = 200) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    const { text, voiceId = "RCSF5YgDtAhZXpNZfGek", language = "fr" } = await req.json();
+    const { text, voiceId = "EXAVITQu4vr4xnSDxMaL", language = "fr" } = await req.json();
     if (!text || typeof text !== "string") return j({ error: "text_required" }, 400);
     if (text.length > 4000) return j({ error: "text_too_long" }, 400);
     const key = Deno.env.get("ELEVENLABS_API_KEY");

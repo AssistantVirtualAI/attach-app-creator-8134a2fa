@@ -84,8 +84,10 @@ Deno.serve(async (req) => {
     if (!key) return json({ error: "ai_not_configured" }, 500);
     const gateway = createLovableAiGatewayProvider(key);
 
-    const periodLabel = period === "day" ? "de la journée" : period === "week" ? "de la semaine (7 jours)" : "du mois (30 jours)";
-    const prompt = `Tu es AVA, l'assistante d'un courtier hypothécaire au Québec. Génère un rapport de performance détaillé ${periodLabel} pour ${profile?.full_name ?? "le courtier"} (extension ${profile?.extension ?? "n/d"}).
+    const periodLabelFr = period === "day" ? "de la journée" : period === "week" ? "de la semaine (7 jours)" : "du mois (30 jours)";
+    const periodLabelEn = period === "day" ? "for today" : period === "week" ? "for this week (7 days)" : "for this month (30 days)";
+
+    const promptFr = `Tu es AVA, l'assistante d'un courtier hypothécaire au Québec. Génère un rapport de performance détaillé ${periodLabelFr} pour ${profile?.full_name ?? "le courtier"} (extension ${profile?.extension ?? "n/d"}).
 
 Statistiques agrégées:
 ${JSON.stringify(stats, null, 2)}
@@ -100,7 +102,7 @@ Messagerie vocale (max 5):
 ${JSON.stringify(voicemails.slice(0, 5), null, 2)}
 
 Structure ATTENDUE en Markdown, en français, ton professionnel et actionnable:
-## 📊 Rapport ${periodLabel}
+## 📊 Rapport ${periodLabelFr}
 ### Vue d'ensemble
 (3-4 lignes: activité globale, tendances, points forts/faibles)
 ### 📞 Téléphonie
@@ -114,8 +116,39 @@ Structure ATTENDUE en Markdown, en français, ton professionnel et actionnable:
 
 Sois précis, chiffré, et ne fabrique aucune donnée qui n'est pas dans les stats fournies.`;
 
+    const promptEn = `You are AVA, the assistant of a Quebec mortgage broker. Generate a detailed performance report ${periodLabelEn} for ${profile?.full_name ?? "the broker"} (extension ${profile?.extension ?? "n/a"}).
+
+Aggregated statistics:
+${JSON.stringify(stats, null, 2)}
+
+Call sample (max 20):
+${JSON.stringify(calls.slice(0, 20), null, 2)}
+
+SMS sample (max 10):
+${JSON.stringify(sms.slice(0, 10), null, 2)}
+
+Voicemails (max 5):
+${JSON.stringify(voicemails.slice(0, 5), null, 2)}
+
+EXPECTED structure in Markdown, in English, professional and actionable tone:
+## 📊 Report ${periodLabelEn}
+### Overview
+(3-4 lines: overall activity, trends, strengths/weaknesses)
+### 📞 Telephony
+(inbound/outbound volume, answer rate, missed calls, average duration)
+### 🔥 Hot leads
+(count, main opportunities identified from ai_summary)
+### 📩 Client follow-up
+(sent SMS, unread voicemail, pending reminders)
+### ✅ Recommendations
+(3 to 5 concrete actions to take)
+
+Be precise, quantified, and never fabricate data not present in the provided stats.`;
+
+    const prompt = language === "en" ? promptEn : promptFr;
+
     const { text } = await generateText({
-      model: gateway("openai/gpt-5.5"),
+      model: gateway("google/gemini-2.5-flash"),
       prompt,
     });
 

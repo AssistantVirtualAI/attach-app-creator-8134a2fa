@@ -21,6 +21,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const period: "day" | "week" | "month" = ["day", "week", "month"].includes(body?.period) ? body.period : "day";
+    const language: "fr" | "en" = body?.language === "en" ? "en" : "fr";
 
     const sb = createClient(
       Deno.env.get("SUPABASE_URL")!,

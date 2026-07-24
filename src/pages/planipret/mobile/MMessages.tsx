@@ -20,6 +20,7 @@ import { connectMs365 } from "@/lib/ms365Connect";
 import { getPpContacts } from "@/lib/ppContactsCache";
 import RecipientAutocomplete from "@/components/planipret/mobile/RecipientAutocomplete";
 import EmailHistoryList from "@/components/planipret/mobile/EmailHistoryList";
+import EmailBodyFrame from "@/components/planipret/mobile/EmailBodyFrame";
 
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "history" | "roster";
@@ -1368,11 +1369,7 @@ function EmailDetailSheet({ email, onClose, onCompose, onChanged, onOptimisticRe
             {loadingDetail && !detail ? (
               <div className="text-center py-6"><Loader2 className="w-4 h-4 animate-spin mx-auto" /></div>
             ) : bodyType === "html" && bodyHtml ? (
-              <div
-                className="pp-email-body"
-                style={{ maxWidth: "100%", width: "100%", overflowWrap: "anywhere", overflowX: "auto", overflowY: "visible" }}
-                dangerouslySetInnerHTML={{ __html: bodyHtml }}
-              />
+              <EmailBodyFrame html={bodyHtml} />
             ) : (
               <div className="whitespace-pre-wrap break-words">{bodyHtml || merged.bodyPreview || t("messages.previewUnavailable")}</div>
             )}

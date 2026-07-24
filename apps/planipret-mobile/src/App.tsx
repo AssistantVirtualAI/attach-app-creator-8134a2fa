@@ -3,6 +3,7 @@
  * Uses the exact same shell + routes + providers as /mplanipret on web.
  */
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { logDeepLink } from '@/lib/deepLinkDebug';
 import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
@@ -41,6 +42,7 @@ const MDiagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MDiagn
 const MSipDebug = lazyWithRetry(() => import('@/pages/planipret/mobile/MSipDebug'), 'MSipDebug');
 const MKpiAudit = lazyWithRetry(() => import('@/pages/planipret/mobile/MKpiAudit'), 'MKpiAudit');
 const MLayoutQA = lazyWithRetry(() => import('@/pages/planipret/mobile/MLayoutQA'), 'MLayoutQA');
+const MDeepLinkDebug = lazyWithRetry(() => import('@/pages/planipret/mobile/MDeepLinkDebug'), 'MDeepLinkDebug');
 
 
 

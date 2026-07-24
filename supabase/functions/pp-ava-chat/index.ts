@@ -296,6 +296,16 @@ Deno.serve(async (req) => {
         dataBlocks.push(`Rappels/tâches en attente: ${JSON.stringify(rem ?? []).slice(0, 3000)}`);
       }
 
+      const reportPeriod = wantsReport(userMessage);
+      if (reportPeriod) {
+        try {
+          const rep = await invokeFunction("pp-ava-report", authHeader, { period: reportPeriod, language: "fr" });
+          if (rep.ok && rep.data?.report) {
+            dataBlocks.push(`Rapport de performance (${reportPeriod}) — Stats: ${JSON.stringify(rep.data.stats ?? {})}\n${String(rep.data.report).slice(0, 6000)}`);
+          }
+        } catch (e) { console.error("pp-ava-chat report fetch fail", e); }
+      }
+
       // Directory / contact lookup — always try when the message mentions a
       // name, email, or contact-oriented action (e.g. "envoie un email à X").
       const tokens = extractNameTokens(userMessage);

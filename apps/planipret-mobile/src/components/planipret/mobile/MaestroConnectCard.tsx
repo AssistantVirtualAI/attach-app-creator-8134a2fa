@@ -80,7 +80,8 @@ export default function MaestroConnectCard() {
       if (!url) throw new Error((res as any)?.error || "no_authorize_url");
 
       if (isNative) {
-        await Browser.open({ url, presentationStyle: "popover" });
+        await Browser.close().catch(() => {});
+        await Browser.open({ url, presentationStyle: "fullscreen" });
       } else {
         window.location.href = url;
       }

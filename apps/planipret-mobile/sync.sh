@@ -36,6 +36,9 @@ fi
 echo "🔨 Build..."
 npm run build
 
+echo "🔗 Vérification des deep links natifs..."
+node scripts/apply-native-config.mjs
+
 echo "📱 Copie vers iOS..."
 npx cap copy ios --silent
 

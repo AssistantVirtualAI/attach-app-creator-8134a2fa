@@ -87,7 +87,8 @@ function NativeDeepLinkBridge() {
 
         const isMaestroCallback =
           url.pathname === '/auth/maestro/callback' ||
-          pathWithHost === '/auth/maestro/callback';
+          pathWithHost === '/auth/maestro/callback' ||
+          url.protocol === 'planipret:';
         if (isMaestroCallback) {
           try {
             const { Browser } = await import('@capacitor/browser');

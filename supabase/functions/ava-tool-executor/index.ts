@@ -1031,6 +1031,20 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     };
   },
 
+  async get_performance_report(ctx, p) {
+    try {
+      const period = ["day", "week", "month"].includes(p?.period) ? p.period : "day";
+      const language = p?.language === "en" ? "en" : "fr";
+      const r = await callPlanipretFunction(ctx, "pp-ava-report", { period, language }, {
+        "x-ava-service": "1",
+        "x-broker-user-id": ctx.userId,
+      });
+      const b = r.data;
+      if (!r.httpOk || b?.error) return { success: false, error: b?.error ?? `report_failed_${r.status}`, raw: b };
+      return { success: true, period, language, report: b?.report ?? "", stats: b?.stats ?? {} };
+    } catch (e) { return { success: false, error: String(e) }; }
+  },
+
   // ===== HELP =====
   async explain_feature(_ctx, p) {
     const KB: Record<string, { explanation: string; tips: string[] }> = {

@@ -278,8 +278,14 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
                     var info = pjsua_call_info()
                     pjsua_call_get_info(callId, &info)
                     let remote = String(cString: info.remote_info.ptr)
-                    CallKitManager.shared.reportIncoming(from: remote)
-                    plugin.notifyBg("callReceived", ["from": remote])
+                    let parsed = plugin.parseSipParty(remote)
+                    let displayName = parsed.name.isEmpty ? parsed.number : parsed.name
+                    CallKitManager.shared.reportIncoming(from: displayName)
+                    plugin.notifyBg("callReceived", [
+                        "from": remote,
+                        "callerName": parsed.name,
+                        "callerNumber": parsed.number,
+                    ])
                     if plugin.pendingCallKitEnd {
                         pjsua_call_hangup(callId, 0, nil, nil)
                         plugin.pendingCallKitEnd = false
@@ -288,6 +294,7 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
                         plugin.pendingCallKitAnswer = false
                     }
                 }
+
 
                 var logCfg = pjsua_logging_config()
                 pjsua_logging_config_default(&logCfg)

@@ -7,7 +7,8 @@
 //   POST { "bulk": true, "batch_size": 10 }  → all brokers with ns_extension
 //   POST { "dry_run": true, ... }            → do not call NS, return payloads
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { nsFetch } from "../_shared/planipret-ns.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -17,9 +18,33 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-async function nsRead(res: Response) {
+async function readBody(res: Response) {
   const text = await res.text();
   try { return text ? JSON.parse(text) : null; } catch { return text; }
+}
+
+// NS-API v2 sub-resource for answering rules — probed once per invocation
+// because NetSapiens deployments differ ("answerrules" vs "answeringrules"
+// vs "answering-rules"). The first path that returns HTTP 200 on GET wins.
+const RULE_PATH_CANDIDATES = ["answerrules", "answeringrules", "answering-rules"];
+let cachedRulePath: string | null = null;
+
+async function resolveRulePath(domain: string, ext: string, fn: string): Promise<string | null> {
+  if (cachedRulePath) return cachedRulePath;
+  for (const p of RULE_PATH_CANDIDATES) {
+    const res = await nsFetch(
+      `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/${p}`,
+      { method: "GET" },
+      { functionName: fn },
+    );
+    if (res.status >= 200 && res.status < 300) {
+      cachedRulePath = p;
+      return p;
+    }
+    // consume body to avoid leak
+    await res.text().catch(() => {});
+  }
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -29,12 +54,10 @@ Deno.serve(async (req) => {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-  const NS_API_KEY = Deno.env.get("NS_API_KEY");
-  const NS_API_BASE_URL = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";
   const NS_DEFAULT_DOMAIN = Deno.env.get("NS_DEFAULT_DOMAIN") ?? "planipret.ca";
 
-  if (!SUPABASE_URL || !SERVICE_ROLE || !NS_API_KEY) {
-    return json({ error: "missing_config", detail: "SUPABASE_SERVICE_ROLE_KEY / NS_API_KEY required" }, 500);
+  if (!SUPABASE_URL || !SERVICE_ROLE) {
+    return json({ error: "missing_config", detail: "SUPABASE_SERVICE_ROLE_KEY required" }, 500);
   }
 
   try {
@@ -45,7 +68,7 @@ Deno.serve(async (req) => {
     const batch_size: number = Math.max(1, Math.min(20, Number(body?.batch_size ?? 10)));
     const ring_timeout: number = Math.max(5, Math.min(120, Number(body?.ring_timeout ?? 25)));
 
-    // Auth: admin only (single/bulk)
+    // Auth: admin only
     const authHeader = req.headers.get("Authorization") ?? "";
     const userClient = createClient(SUPABASE_URL, ANON_KEY ?? SERVICE_ROLE, {
       global: { headers: { Authorization: authHeader } },
@@ -60,15 +83,8 @@ Deno.serve(async (req) => {
     if (!isAdmin) { try { const { data } = await admin.rpc("is_super_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
     if (!isAdmin) return json({ error: "forbidden", detail: "admin role required" }, 403);
 
-    const nsHeaders = {
-      Authorization: `Bearer ${NS_API_KEY}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
-
     const buildRulePayload = (ext: string, domain: string) => {
       const mobileAor = `sip:${ext}_mobile@${domain}`;
-      // NS-API v2 answering rule schema — standard "default" time-frame rule.
       return {
         "time-frame": "Default",
         "simultaneous-ring-enabled": "yes",
@@ -91,11 +107,20 @@ Deno.serve(async (req) => {
         return { broker_id: broker.id ?? broker.user_id, extension: ext, domain, dry_run: true, payload, success: true };
       }
 
-      const base = `${NS_API_BASE_URL}/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/answering-rules`;
+      const rulePath = await resolveRulePath(domain, ext, "pp-sync-answering-rules");
+      if (!rulePath) {
+        return {
+          broker_id: broker.id ?? broker.user_id, broker_name: broker.full_name,
+          extension: ext, domain, success: false,
+          error: "no_ns_answering_rules_endpoint",
+          tried: RULE_PATH_CANDIDATES,
+        };
+      }
+      const base = `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/${rulePath}`;
 
       // 1) List existing rules
-      const listRes = await fetch(base, { headers: nsHeaders });
-      const existing: any = listRes.ok ? await nsRead(listRes) : null;
+      const listRes = await nsFetch(base, { method: "GET" }, { functionName: "pp-sync-answering-rules" });
+      const existing: any = listRes.ok ? await readBody(listRes) : null;
       const arr: any[] = Array.isArray(existing) ? existing : (existing?.data ?? existing?.items ?? []);
       const defaultRule = arr.find((r: any) => {
         const tf = String(r?.["time-frame"] ?? r?.timeframe ?? r?.time_frame ?? "").toLowerCase();
@@ -107,13 +132,13 @@ Deno.serve(async (req) => {
       let mode: "created" | "updated";
       if (defaultRule) {
         const ruleId = encodeURIComponent(String(defaultRule?.id ?? defaultRule?.["time-frame"] ?? "Default"));
-        opRes = await fetch(`${base}/${ruleId}`, { method: "PUT", headers: nsHeaders, body: JSON.stringify(payload) });
+        opRes = await nsFetch(`${base}/${ruleId}`, { method: "PUT", body: JSON.stringify(payload) }, { functionName: "pp-sync-answering-rules" });
         mode = "updated";
       } else {
-        opRes = await fetch(base, { method: "POST", headers: nsHeaders, body: JSON.stringify(payload) });
+        opRes = await nsFetch(base, { method: "POST", body: JSON.stringify(payload) }, { functionName: "pp-sync-answering-rules" });
         mode = "created";
       }
-      const opBody = await nsRead(opRes);
+      const opBody = await readBody(opRes);
 
       return {
         broker_id: broker.id ?? broker.user_id,
@@ -123,6 +148,7 @@ Deno.serve(async (req) => {
         success: opRes.ok,
         mode,
         status: opRes.status,
+        rule_path: rulePath,
         payload,
         response: opBody,
         list_status: listRes.status,
@@ -139,13 +165,18 @@ Deno.serve(async (req) => {
       return json({ success: result.success, result });
     }
 
-    // Bulk
+    // Bulk (supports offset/limit chunking so the caller can page through 352 brokers)
     if (bulk) {
+      const offset: number = Math.max(0, Number(body?.offset ?? 0));
+      const limit: number = Math.max(1, Math.min(500, Number(body?.limit ?? 100)));
+
       const { data: brokers } = await admin.from("planipret_profiles")
         .select("id, user_id, full_name, email, extension, ns_extension, ns_domain")
-        .not("ns_extension", "is", null);
+        .not("ns_extension", "is", null)
+        .order("ns_extension", { ascending: true })
+        .range(offset, offset + limit - 1);
       const list = brokers ?? [];
-      if (list.length === 0) return json({ success: true, message: "Aucun courtier avec extension NS", total: 0 });
+      if (list.length === 0) return json({ success: true, message: "Aucun courtier avec extension NS", total: 0, offset, limit });
 
       const all: any[] = [];
       let succeeded = 0, failed = 0;
@@ -157,19 +188,23 @@ Deno.serve(async (req) => {
         all.push(...res);
         succeeded += res.filter((r: any) => r.success).length;
         failed += res.filter((r: any) => !r.success).length;
-        if (i + batch_size < list.length) await new Promise((r) => setTimeout(r, 400));
+        if (i + batch_size < list.length) await new Promise((r) => setTimeout(r, 200));
       }
       return json({
         success: failed === 0,
-        total: list.length,
+        offset,
+        limit,
         processed: all.length,
         succeeded,
         failed,
         dry_run,
         ring_timeout,
+        rule_path: cachedRulePath,
+        next_offset: list.length === limit ? offset + limit : null,
         results: all,
       });
     }
+
 
     return json({ error: "provide broker_id or bulk:true" }, 400);
   } catch (e: any) {

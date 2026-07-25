@@ -20,7 +20,9 @@ import { callQualitySampler, type CallQualitySnapshot } from "@/lib/planipret/au
 import { getAudioConstraints, type NCMode } from "@/lib/planipret/audio/audioConstraints";
 import { ensureMicPermission, type MicPermissionState } from "@/lib/planipret/audio/micPermission";
 import {
+  acknowledgePlanipretIncoming,
   getPlanipretSipKeepAliveStatus,
+  onPlanipretIncomingInvite,
   onPlanipretNativeReregister,
   onPlanipretSipKeepAliveStatus,
   requestPlanipretBatteryOptimizationExemption,

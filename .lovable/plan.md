@@ -1,25 +1,27 @@
-Plan de correction Microsoft SSO
+Plan pour corriger Lemtel mobile Android + iOS:
 
-1. Rendre le retour mobile fiable
-- Sauvegarder `state`, `code_verifier`, `redirect_uri`, `intent=login` et `next` aussi dans le stockage natif Capacitor, pas seulement `localStorage/sessionStorage`.
-- Lire ces valeurs depuis le stockage natif dans `Ms365Callback` avant de déclarer une erreur.
-- Si `intent` est perdu mais que `state` commence par `login:`, traiter quand même le callback comme une connexion SSO.
+1. **Rétablir l’écran d’appel entrant**
+   - Corriger l’état `ringing` pour distinguer clairement `ringing-in` vs `ringing-out`.
+   - Faire afficher `ActiveCallSheet` avec les boutons **Répondre** et **Refuser** dès qu’un appel entrant arrive.
 
-2. Rediriger vers le bon Home après connexion
-- Pour le login Microsoft Planiprêt mobile, forcer le retour final vers `/mplanipret/home`.
-- Pour le login Microsoft depuis la page principale, détecter un utilisateur Planiprêt broker/member et envoyer vers `/mplanipret/home` au lieu de rester sur `/post-login` ou `/planipret/admin`.
-- Garder les admins Planiprêt vers `/planipret/admin/overview`.
+2. **Android: faire sonner en background**
+   - Brancher le service natif Verto background sur les événements `verto.invite`.
+   - Afficher une notification plein écran d’appel entrant avec numéro appelant.
+   - Ajouter les actions natives **Répondre / Refuser** qui réveillent l’app et déclenchent la bonne action.
+   - S’assurer que le service conserve le statut registered et relance la connexion si le socket tombe.
 
-3. Corriger l’écran d’erreur actuel
-- Remplacer le bouton “Retour” qui renvoie vers `/mplanipret/more` par un retour clair vers `/mplanipret/home` ou relancer Microsoft selon le cas.
-- Afficher le vrai message backend si l’échange Microsoft échoue, pas juste “connexion interrompue”.
+3. **iOS: CallKit + retour app**
+   - Vérifier/corriger le mapping `on_incoming_call` pour déclencher CallKit avec le bon numéro.
+   - Relayer l’action **Answer** de CallKit vers le JS/native call handler.
+   - Éviter que l’appel entrant reste sans bouton quand l’app revient au premier plan.
 
-4. Sécuriser le deep link
-- Garder `capacitor://localhost/auth/microsoft/callback` comme callback natif.
-- S’assurer que `NativeDeepLinkBridge` ferme le navigateur et route toujours vers `/auth/microsoft/callback?...` dès que l’URL Microsoft arrive.
-- Ajouter un fallback : si l’app revient active avec une URL callback stockée, traiter cette URL même si l’évènement `appUrlOpen` n’a pas déclenché.
+4. **Corriger l’affichage du numéro iOS**
+   - Normaliser les chaînes SIP comme `"+1514..." <sip:+1514...@domain>` pour ne plus afficher le SIP URI brut.
+   - Afficher un numéro propre ou “Poste XXX” pour les appels internes.
+   - Forcer le texte à rester dans l’écran avec wrapping/troncature professionnelle.
 
-5. Vérification finale
-- Tester le flow web `/login` → Microsoft → retour Home.
-- Tester le flow mobile `/mplanipret` → Microsoft → retour `/mplanipret/home`.
-- Vérifier que la connexion Microsoft stocke bien les tokens et que la session utilisateur est active après retour.
+5. **Validation**
+   - Vérifier les fichiers Android/iOS concernés et le flux React.
+   - Tester au moins la logique de formatage et confirmer que l’UI expose les boutons d’appel entrant.
+
+Après approbation, j’implémente directement.

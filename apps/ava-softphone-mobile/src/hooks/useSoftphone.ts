@@ -66,6 +66,8 @@ export interface UseSoftphoneReturn {
   parkCall?: (code?: string) => void | Promise<void>;
   park?: (code?: string) => void | Promise<void>;
   addCall?: (target: string) => void | Promise<void>;
+  /** Directly inject a native SIP service status snapshot (Android only). */
+  setNativeStatusDirectly?: (native: AndroidSipServiceStatus) => void;
 }
 
 export function useSoftphoneJsSip(

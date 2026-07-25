@@ -7,6 +7,9 @@ import { Capacitor } from "@capacitor/core";
 // delivered via both launchUrl and appUrlOpen (cold start).
 const inflightCodes = new Set<string>();
 const completedCodes = new Set<string>();
+// Guard remounts (iOS re-fires appUrlOpen after Browser.close) so
+// navigate({replace:true}) doesn't spam history.replaceState.
+let navigatedAway = false;
 
 export default function MaestroCallback() {
   const [params] = useSearchParams();

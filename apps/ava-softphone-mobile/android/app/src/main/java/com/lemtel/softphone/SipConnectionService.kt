@@ -424,7 +424,12 @@ class SipConnectionService : Service() {
             out.flush()
             return true
         } catch (e: Exception) {
-            Log.w(TAG, "sendFrame failed: ${e.message}")
+            Log.w(TAG, "sendFrame failed: ${e.message} — closing socket to force reconnect")
+            // Write half-close: mark logged out and close so readLoop dies and
+            // a new WS is established before FreeSWITCH times out the invite.
+            isLoggedIn = false
+            try { sslSocket?.close() } catch (_: Exception) {}
+            outputStream = null
             return false
         }
     }

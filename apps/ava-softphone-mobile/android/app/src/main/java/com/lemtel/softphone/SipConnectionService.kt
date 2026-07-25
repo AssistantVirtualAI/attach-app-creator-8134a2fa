@@ -565,11 +565,17 @@ class SipConnectionService : Service() {
                 }
                 method == "verto.invite" -> {
                     val params = json.optJSONObject("params")
+                    // Use the raw number as display name when the PBX sends a generic
+                    // name (empty, "unknown", or same as the number). This ensures the
+                    // caller ID shows the actual extension/number in the UI.
                     val rawName = params?.optString("caller_id_name") ?: ""
                     val callerNumber = params?.optString("caller_id_number") ?: ""
-                    // If FS didn't provide a CID name, fall back to the number
-                    // itself (never a hardcoded label) so the UI shows the caller.
-                    val callerName = if (rawName.isNotEmpty() && !rawName.equals("unknown", true)) rawName else callerNumber
+                    val callerName = when {
+                        rawName.isBlank() -> callerNumber.ifEmpty { "Appel entrant" }
+                        rawName.equals("unknown", ignoreCase = true) -> callerNumber.ifEmpty { rawName }
+                        rawName == callerNumber -> callerNumber
+                        else -> rawName
+                    }
                     val callId = params?.optString("callID") ?: ""
                     if (callId.isNotEmpty()) currentCallId = callId
                     currentCallerName = callerName
@@ -624,12 +630,14 @@ class SipConnectionService : Service() {
         if (isDestroyed) return
         // A forced 0ms reconnect (e.g. answer failure) must supersede any
         // pending back-off. Cancel first, then re-schedule.
+        // For any other forced delay or null (exponential back-off), if a
+        // reconnect is already scheduled, don't stack another one.
         if (forcedDelayMs != null && forcedDelayMs <= 0L) {
             reconnectFuture?.cancel(false)
         } else if (reconnectFuture?.isDone == false) return
         reconnectAttempt++
         val delay = forcedDelayMs ?: minOf(5_000L * reconnectAttempt, 30_000L)
-        Log.i(TAG, "Reconnecting in ${delay}ms (attempt $reconnectAttempt)")
+        Log.i(TAG, "scheduleReconnect: delay=${delay}ms attempt=$reconnectAttempt forcedDelay=$forcedDelayMs")
         emitStatus("reconnecting", "delay=${delay}ms attempt=$reconnectAttempt")
         handler.post { updateNotification("Reconnexion en cours...") }
         reconnectFuture = executor.schedule({ if (!isDestroyed) connectVerto() }, delay, TimeUnit.MILLISECONDS)
@@ -976,7 +984,11 @@ class SipConnectionService : Service() {
 
     private fun handleNativeAnswer(sdp: String, dialogParamsJson: String) {
         val callId = currentCallId
-        if (callId.isNullOrEmpty() || sdp.isEmpty()) return
+        Log.i(TAG, "handleNativeAnswer: callId=$callId sdpLen=${sdp.length} isLoggedIn=$isLoggedIn hasOutputStream=${outputStream != null}")
+        if (callId.isNullOrEmpty() || sdp.isEmpty()) {
+            Log.w(TAG, "handleNativeAnswer: skipped — callId=$callId sdpEmpty=${sdp.isEmpty()}")
+            return
+        }
         handler.post { stopRingtone() }
 
         if (!isLoggedIn || outputStream == null) {
@@ -1002,6 +1014,7 @@ class SipConnectionService : Service() {
                 put("params", params)
             }
             if (sendFrame(msg.toString())) {
+                Log.i(TAG, "verto.answer sent successfully for callId=$callId")
                 pendingAnswerSdp = null
                 pendingAnswerParams = null
                 handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }

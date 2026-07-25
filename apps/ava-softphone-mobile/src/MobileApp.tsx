@@ -344,7 +344,14 @@ function AuthenticatedShell({
         error: softphone.sipError,
         callState: richCallState,
         startedAt: softphone.callState === 'active' ? Date.now() - (softphone.callTimer || 0) * 1000 : null,
-        remoteParty: softphone.callerName || softphone.callerNumber || softphone.activeCallNumber,
+        // Prefer the raw number for remoteParty when callerName is a generic
+        // placeholder ("Appel entrant", "unknown") so the UI shows the actual number.
+        remoteParty: (() => {
+          const n = softphone.callerName || '';
+          const num = softphone.callerNumber || softphone.activeCallNumber || '';
+          const isGeneric = !n || n === 'Appel entrant' || n.toLowerCase() === 'unknown' || n === num;
+          return isGeneric ? (num || n) : n;
+        })(),
         remoteUri: softphone.callerNumber || softphone.activeCallNumber,
         remoteNumber: softphone.callerNumber || softphone.activeCallNumber,
         callerName: softphone.callerName || '',

@@ -208,7 +208,9 @@ export default function ActiveCallSheet({
       </div>
       {/* Caller ID — only during incoming ring */}
       {isIncoming && (
-        <IncomingCallerPanel lookup={callerLookup} rawNumber={String(remote)} />
+        // Pass the raw number (not the formatted name) so IncomingCallerPanel
+        // can display the actual extension/number while the lookup is in flight.
+        <IncomingCallerPanel lookup={callerLookup} rawNumber={String(sp.snap.callerNumber || sp.snap.remoteNumber || sp.snap.remoteUri || remote)} />
       )}
 
       {/* Identity */}

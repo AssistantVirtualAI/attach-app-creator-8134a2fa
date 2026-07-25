@@ -253,7 +253,7 @@ class SipConnectionService : Service() {
             socket.keepAlive = true
             // Detect dead sockets faster: 30s read timeout + ping every 15s so
             // Doze/network-drop induced silence is caught within ~45s instead of ~95s.
-            socket.soTimeout = 30_000
+            socket.soTimeout = 90_000
             socket.startHandshake()
 
             // WebSocket HTTP Upgrade handshake

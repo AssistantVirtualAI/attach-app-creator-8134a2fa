@@ -19,6 +19,16 @@ import { logDeepLink } from "@/lib/deepLinkDebug";
 // then returns invalid_grant on the second call.
 const inflightCodes = new Set<string>();
 const completedCodes = new Set<string>();
+// Module-level guard so remounts of this route (e.g. iOS re-firing appUrlOpen
+// after Browser.close) never re-navigate — otherwise navigate({replace:true})
+// spams history.replaceState and WKWebView throws
+// "Attempt to use history.replaceState() more than 100 times per 10 seconds".
+let navigatedAway = false;
+function goHomeOnce(navigate: (p: string, o?: { replace?: boolean }) => void) {
+  if (navigatedAway) return;
+  navigatedAway = true;
+  navigate("/mplanipret/more", { replace: true });
+}
 
 export default function MaestroCallback() {
   const [searchParams] = useSearchParams();

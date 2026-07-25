@@ -104,11 +104,13 @@ class CapacitorPjsip : Plugin() {
 
     @PluginMethod
     fun initAccount(call: PluginCall) {
-        val server = call.getString("server") ?: "pbxnode.lemtel.tel"
+        // server and domain MUST be provided by the JS layer — no hardcoded fallbacks
+        // so the plugin works on any PBX/domain.
+        val server = call.getString("server") ?: ""
         val port = call.getInt("port") ?: 5060
         val username = call.getString("username") ?: call.getString("extension") ?: ""
         val password = call.getString("password") ?: ""
-        val domain = call.getString("domain") ?: "lemtel.lemtel.tel"
+        val domain = call.getString("domain") ?: ""
         val transport = call.getString("transport") ?: "TCP"
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
@@ -213,11 +215,14 @@ class CapacitorPjsip : Plugin() {
         try {
             // Save credentials so the native Verto WebSocket can re-register
             // independently of the WebView when the screen is locked.
-            val host = call.getString("host") ?: "pbxnode.lemtel.tel"
+            // host, port, domain MUST be provided by the JS layer (derived from
+            // SIPConfig.wssUrl / SIPConfig.vertoHost). No hardcoded fallbacks so
+            // the service works on any PBX/domain.
+            val host = call.getString("host") ?: ""
             val port = call.getInt("port") ?: 8082
             val login = call.getString("login") ?: call.getString("extension") ?: ""
             val password = call.getString("password") ?: ""
-            val domain = call.getString("domain") ?: "lemtel.lemtel.tel"
+            val domain = call.getString("domain") ?: ""
             val displayName = call.getString("displayName") ?: login
             if (login.isNotEmpty() && password.isNotEmpty()) {
                 SipConnectionService.saveCredentials(context, host, port, login, password, domain, displayName)

@@ -242,16 +242,34 @@ function AuthenticatedShell({
   // Permissions are requested natively after login (see requestPermissionsAfterLogin).
 
   // Build SIP config from the same backend credentials used by desktop/portal.
-  // iOS uses native PJSIP (CapacitorPjsip). Android uses JsSIP over WSS 7443,
+  // iOS uses native PJSIP (CapacitorPjsip). Android uses Verto over WSS 8082,
   // and SipForegroundService keeps the WebView WebSocket alive in background.
+  //
+  // All connection parameters are derived from the credentials returned by the
+  // backend — no hardcoded hostnames or domains. This makes the app work on any
+  // PBX and any domain without code changes.
   const sipPassword = creds.sipPassword;
-  const WSS_PRIMARY = 'wss://pbxnode.lemtel.tel:7443';
-  const WSS_FALLBACK = 'wss://node.lemtelcloud.net:7443';
+
+  // WSS URLs: credential-provided values take precedence. If none are stored,
+  // fall back to deriving the WSS URL from the SIP domain (standard port 7443).
   const credentialWss = [creds.wssUrl, ...(creds.wssUrls || [])]
     .filter((url): url is string => typeof url === 'string' && url.startsWith('wss://'));
-  const WORKING_WSS = Array.from(new Set([WSS_PRIMARY, WSS_FALLBACK, ...credentialWss]));
-  const sipDomain = creds.sipDomain || 'lemtel.lemtel.tel';
-  const credentialsReady = sipReady && !!(creds.extension && sipPassword);
+  const sipDomain = creds.sipDomain || '';
+  // Derive a WSS URL from the SIP domain when no explicit URL is stored.
+  // This covers the case where the backend only returns sipDomain.
+  const derivedWss = sipDomain ? `wss://${sipDomain}:7443` : null;
+  const WORKING_WSS = Array.from(new Set([
+    ...credentialWss,
+    ...(derivedWss ? [derivedWss] : []),
+  ].filter(Boolean) as string[]));
+
+  const credentialsReady = sipReady && !!(creds.extension && sipPassword && WORKING_WSS.length > 0);
+
+  // Extract the server hostname from the primary WSS URL for the native SIP
+  // service (used by Android's Verto WebSocket in the foreground service).
+  const primaryWssHost = (() => {
+    try { return WORKING_WSS[0] ? new URL(WORKING_WSS[0]).hostname : ''; } catch { return ''; }
+  })();
 
   const sipConfig = credentialsReady && creds.extension && sipPassword
     ? {
@@ -259,13 +277,17 @@ function AuthenticatedShell({
         displayName: creds.displayName || creds.email || 'User',
         password: sipPassword,
         domain: sipDomain,
-        server: 'pbxnode.lemtel.tel',
+        // server is the raw hostname used by the native Android Verto service.
+        server: primaryWssHost,
         port: 7443,
         transport: 'WSS',
         wssUrl: WORKING_WSS[0],
         wssUrls: WORKING_WSS,
         authUsername: creds.authUsername || creds.extension,
         refreshNonce: freshCredentialToken,
+        // vertoHost/vertoPort are derived automatically from wssUrl in
+        // useSoftphoneVerto — no need to set them explicitly here unless the
+        // Verto endpoint is on a different host than the JsSIP WSS endpoint.
       }
     : null;
 
@@ -322,11 +344,11 @@ function AuthenticatedShell({
         error: softphone.sipError,
         callState: richCallState,
         startedAt: softphone.callState === 'active' ? Date.now() - (softphone.callTimer || 0) * 1000 : null,
-        remoteParty: (softphone as any).callerName || (softphone as any).callerNumber || softphone.activeCallNumber,
-        remoteUri: (softphone as any).callerNumber || softphone.activeCallNumber,
-        remoteNumber: (softphone as any).callerNumber || softphone.activeCallNumber,
-        callerName: (softphone as any).callerName || '',
-        callerNumber: (softphone as any).callerNumber || softphone.activeCallNumber,
+        remoteParty: softphone.callerName || softphone.callerNumber || softphone.activeCallNumber,
+        remoteUri: softphone.callerNumber || softphone.activeCallNumber,
+        remoteNumber: softphone.callerNumber || softphone.activeCallNumber,
+        callerName: softphone.callerName || '',
+        callerNumber: softphone.callerNumber || softphone.activeCallNumber,
         muted: softphone.isMuted,
         onHold: softphone.isOnHold,
         recording: !!softphone.isRecording,

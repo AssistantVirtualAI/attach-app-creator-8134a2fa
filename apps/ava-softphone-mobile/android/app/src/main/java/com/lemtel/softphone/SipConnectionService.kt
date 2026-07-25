@@ -227,14 +227,16 @@ class SipConnectionService : Service() {
         connecting = true
         reconnectFuture?.cancel(false)
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val host = prefs.getString(KEY_HOST, "pbxnode.lemtel.tel") ?: "pbxnode.lemtel.tel"
+        // host and domain are always written by the JS layer via saveCredentials().
+        // No hardcoded fallbacks — if they are empty the guard below will abort.
+        val host = prefs.getString(KEY_HOST, "") ?: ""
         val port = prefs.getInt(KEY_PORT, 8082)
         val login = prefs.getString(KEY_LOGIN, "") ?: ""
         val password = prefs.getString(KEY_PASSWORD, "") ?: ""
-        val domain = prefs.getString(KEY_DOMAIN, "lemtel.lemtel.tel") ?: "lemtel.lemtel.tel"
+        val domain = prefs.getString(KEY_DOMAIN, "") ?: ""
         val displayName = prefs.getString(KEY_DISPLAY_NAME, login) ?: login
 
-        if (login.isEmpty() || password.isEmpty()) {
+        if (login.isEmpty() || password.isEmpty() || host.isEmpty()) {
             Log.w(TAG, "No credentials stored — skipping native Verto connect")
             connecting = false
             emitStatus("error", "missing_credentials")

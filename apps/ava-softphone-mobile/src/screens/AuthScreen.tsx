@@ -65,7 +65,7 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
   const [screen, setScreen] = useState<Screen>('login');
   const [mode, setMode] = useState<Mode>('extension');
   const [extension, setExtension] = useState('');
-  const [sipDomain, setSipDomain] = useState('lemtel.lemtel.tel');
+  const [sipDomain, setSipDomain] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [portalUrl, setPortalUrl] = useState('https://avastatistic.ca');
@@ -252,7 +252,7 @@ export default function AuthScreen({ onAuthenticated }: { onAuthenticated: (c: C
             ) : (
               <>
                 <Field label={tx('Extension', 'Extension')} value={extension} onChange={(v) => { setExtension(v); setFieldErrors((f) => ({ ...f, extension: '' })); }} placeholder={tx('ex. 1001', 'e.g. 1001')} autoFocus error={fieldErrors.extension} />
-                <Field label={tx('Domaine SIP', 'SIP domain')} value={sipDomain} onChange={setSipDomain} placeholder="lemtel.lemtel.tel" />
+                <Field label={tx('Domaine SIP', 'SIP domain')} value={sipDomain} onChange={setSipDomain} placeholder="sip.example.com" />
                 <Field label={tx('Mot de passe SIP', 'SIP password')} value={password} onChange={(v) => { setPassword(v); setFieldErrors((f) => ({ ...f, password: '' })); }} type="password" placeholder="••••••••" error={fieldErrors.password} />
               </>
             )}

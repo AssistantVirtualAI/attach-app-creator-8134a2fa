@@ -35,6 +35,15 @@ export interface SIPConfig {
   transport?: string;
   /** Forces a clean registration cycle after credentials are refreshed. */
   refreshNonce?: string | number;
+  /**
+   * Verto WebSocket host for Android. If omitted, derived from `wssUrl`
+   * (same hostname, port replaced with `vertoPort`). Set explicitly when
+   * the Verto WS endpoint is on a different host than the JsSIP WSS endpoint.
+   * Example: "pbxnode.example.com"
+   */
+  vertoHost?: string;
+  /** Verto WebSocket port for Android. Defaults to 8082. */
+  vertoPort?: number;
 }
 
 export class JsSIPUnavailableError extends Error {
@@ -239,15 +248,21 @@ export function classifySipFailure(input: {
   return input.cause || input.message || 'SIP initialization failed';
 }
 
-/** Build the list of WSS URLs to try, primary first. Port 7443 is the TLS/WSS profile with DTLS-SRTP. */
+/**
+ * Build the list of WSS URLs to try, primary first.
+ * Port 7443 is the standard TLS/WSS profile with DTLS-SRTP on FusionPBX.
+ *
+ * All URLs come from the SIPConfig (provided by the backend) — no hardcoded
+ * hostnames so the app works on any PBX and any domain.
+ * If no explicit wssUrl is stored, one is derived from config.domain as a
+ * last-resort fallback (wss://<domain>:7443).
+ */
 export function buildWssFallbackList(config: SIPConfig): string[] {
-  const WSS_PRIMARY = 'wss://pbxnode.lemtel.tel:7443';
-  const WSS_FALLBACK = 'wss://node.lemtelcloud.net:7443';
+  const derived = config.domain ? `wss://${config.domain}:7443` : null;
   return Array.from(new Set([
-    WSS_PRIMARY,
-    WSS_FALLBACK,
     config.wssUrl,
     ...(config.wssUrls || []),
+    ...(derived ? [derived] : []),
   ].filter((url): url is string => typeof url === 'string' && url.startsWith('wss://'))));
 }
 

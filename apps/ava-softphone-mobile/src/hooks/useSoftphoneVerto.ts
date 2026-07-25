@@ -31,8 +31,33 @@ import {
   type AndroidSipServiceStatus,
 } from '../lib/sip/nativeSipProvider';
 
-const VERTO_HOST = 'pbxnode.lemtel.tel';
-const VERTO_PORT = 8082;
+/** Default Verto port used by FreeSWITCH. */
+const DEFAULT_VERTO_PORT = 8082;
+
+/**
+ * Derive the Verto WebSocket host and port from the SIPConfig.
+ *
+ * Priority order:
+ *  1. config.vertoHost / config.vertoPort  (explicit override)
+ *  2. Hostname extracted from config.wssUrl (same server, port replaced with vertoPort)
+ *  3. config.server (TCP SIP hint, often the same host)
+ *  4. config.domain (SIP domain — may differ from the WS host, last resort)
+ *
+ * This ensures the app works on any PBX/domain without hardcoded values.
+ */
+function resolveVertoEndpoint(config: SIPConfig): { host: string; port: number } {
+  const port = config.vertoPort ?? DEFAULT_VERTO_PORT;
+  if (config.vertoHost) return { host: config.vertoHost, port };
+  // Extract hostname from wssUrl: "wss://pbxnode.example.com:7443" → "pbxnode.example.com"
+  if (config.wssUrl) {
+    try {
+      const url = new URL(config.wssUrl);
+      if (url.hostname) return { host: url.hostname, port };
+    } catch { /* ignore malformed URL */ }
+  }
+  if (config.server) return { host: config.server, port };
+  return { host: config.domain, port };
+}
 
 export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn {
   // Restore the last known status from storage so the UI never flashes 'idle'
@@ -233,8 +258,10 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
 
     let cancelled = false;
     setStatus('connecting');
-    console.log('[Verto] connecting to', VERTO_HOST + ':' + VERTO_PORT, 'ext=', config.extension);
-    log('verto.connecting', { host: VERTO_HOST, port: VERTO_PORT, ext: config.extension });
+    // Resolve host/port dynamically from config — no hardcoded values.
+    const { host: vertoHost, port: vertoPort } = resolveVertoEndpoint(config);
+    console.log('[Verto] connecting to', vertoHost + ':' + vertoPort, 'ext=', config.extension);
+    log('verto.connecting', { host: vertoHost, port: vertoPort, ext: config.extension });
 
     // Start the Android foreground service BEFORE opening the WebSocket so
     // WakeLock + WifiLock are held throughout register (and beyond). Keep it
@@ -242,19 +269,19 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     // WakeLock and lets Doze mode kill the socket, which is exactly why the
     // app went 'unregistered' when the screen locked.
     startAndroidSipService({
-      host: VERTO_HOST,
-      port: VERTO_PORT,
+      host: vertoHost,
+      port: vertoPort,
       login: config.extension,
       password: config.password,
-      domain: config.domain || 'lemtel.lemtel.tel',
+      domain: config.domain,
       displayName: config.displayName || config.extension,
     }).then((native) => applyNativeStatus(native, 'start')).catch(() => { /* ignore on non-Android */ });
 
     (async () => {
       try {
         await initVerto({
-          host: VERTO_HOST,
-          port: VERTO_PORT,
+          host: vertoHost,
+          port: vertoPort,
           login: config.extension,
           password: config.password,
           domain: config.domain,
@@ -270,11 +297,11 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         // Verto registration independently of the WebView — survives screen-off,
         // background throttling, and JS timer suspension on Android.
         startAndroidSipService({
-          host: VERTO_HOST,
-          port: VERTO_PORT,
+          host: vertoHost,
+          port: vertoPort,
           login: config.extension,
           password: config.password,
-          domain: config.domain || 'lemtel.lemtel.tel',
+          domain: config.domain,
           displayName: config.displayName || config.extension,
         }).then((native) => applyNativeStatus(native, 'start')).catch(() => { /* ignore on non-Android */ });
         requestAndroidBatteryOptimizationExemption().catch(() => { /* ignore on non-Android */ });
@@ -558,9 +585,10 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     // refreshNonce changes upstream. Here we simply try a fresh connect.
     getVertoClient().disconnect();
     setStatus('connecting');
+    const { host: rHost, port: rPort } = resolveVertoEndpoint(configRef.current);
     initVerto({
-      host: VERTO_HOST,
-      port: VERTO_PORT,
+      host: rHost,
+      port: rPort,
       login: configRef.current.extension,
       password: configRef.current.password,
       domain: configRef.current.domain,

@@ -75,7 +75,7 @@ export default function SipConfigScreen({
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Field label="Extension" value={extension} onChange={setExtension} placeholder="300" autoFocus />
           <Field label="Nom affiché" value={displayName} onChange={setDisplayName} placeholder="Jean Tremblay" />
-          <Field label="Domaine SIP" value={sipDomain} onChange={setSipDomain} placeholder="lemtel.lemtel.tel" />
+          <Field label="Domaine SIP" value={sipDomain} onChange={setSipDomain} placeholder="sip.example.com" />
           <Field label="Mot de passe" value={password} onChange={setPassword} placeholder="••••••••" type="password" />
           <Field label="URL WSS" value={wssUrl} onChange={setWssUrl} placeholder="wss://sip.example.com:7443" />
 

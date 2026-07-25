@@ -619,7 +619,11 @@ class SipConnectionService : Service() {
 
     private fun scheduleReconnect(forcedDelayMs: Long?) {
         if (isDestroyed) return
-        if (reconnectFuture?.isDone == false) return
+        // A forced 0ms reconnect (e.g. answer failure) must supersede any
+        // pending back-off. Cancel first, then re-schedule.
+        if (forcedDelayMs != null && forcedDelayMs <= 0L) {
+            reconnectFuture?.cancel(false)
+        } else if (reconnectFuture?.isDone == false) return
         reconnectAttempt++
         val delay = forcedDelayMs ?: minOf(5_000L * reconnectAttempt, 30_000L)
         Log.i(TAG, "Reconnecting in ${delay}ms (attempt $reconnectAttempt)")

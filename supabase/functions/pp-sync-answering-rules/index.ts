@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
         return { broker_id: broker.id ?? broker.user_id, extension: ext, domain, dry_run: true, payload, success: true };
       }
 
-      const base = `${NS_API_BASE_URL}/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/answering-rules`;
+      const base = `${NS_API_BASE_URL}/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/answerrules`;
 
       // 1) List existing rules
       const listRes = await fetch(base, { headers: nsHeaders });

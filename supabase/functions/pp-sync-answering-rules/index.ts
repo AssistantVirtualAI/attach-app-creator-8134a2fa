@@ -83,17 +83,50 @@ Deno.serve(async (req) => {
     if (!isAdmin) { try { const { data } = await admin.rpc("is_super_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
     if (!isAdmin) return json({ error: "forbidden", detail: "admin role required" }, 403);
 
+    // NS-API v2 answering-rule schema. We include BOTH the nested-object
+    // form (documented on docs.ns-api.com) AND the flat-key aliases used
+    // by some NS deployments, so the rule is honored regardless of which
+    // NetSapiens build the domain runs on.
+    // `time-frame: "*"` is the built-in system default (always-on) —
+    // using the literal string "Default" only works if a timeframe with
+    // that exact name exists on the account, otherwise NS silently
+    // creates an inert rule that never matches inbound calls.
     const buildRulePayload = (ext: string, domain: string) => {
       const mobileAor = `sip:${ext}_mobile@${domain}`;
+      const webAor = `sip:${ext}_web@${domain}`;
+      const userAor = `sip:${ext}@${domain}`;
+      const destinations = [
+        { destination: userAor,   timeout: ring_timeout },
+        { destination: mobileAor, timeout: ring_timeout },
+        { destination: webAor,    timeout: ring_timeout },
+      ];
       return {
-        "time-frame": "Default",
+        "time-frame": "*",
+        "enabled": "yes",                    // voicemail fallback ON after no-answer
+        "do-not-disturb": "no",
+        // --- nested v2 form ---
+        "simultaneous-ring": {
+          "enabled": "yes",
+          "confirm": "no",
+          "timeout": ring_timeout,
+          "destinations": destinations,
+          "list": [userAor, mobileAor, webAor],
+        },
+        "forward-no-answer": {
+          "enabled": "yes",
+          "destination": `vmail:${ext}`,
+          "target": `vmail:${ext}`,
+          "timeout": ring_timeout,
+        },
+        // --- flat-key aliases (legacy NS builds) ---
         "simultaneous-ring-enabled": "yes",
-        "simultaneous-ring-list": [mobileAor],
         "simultaneous-ring-confirm": "no",
+        "simultaneous-ring-list": [userAor, mobileAor, webAor],
+        "sim-ring-destinations": destinations,
         "ring-timeout": ring_timeout,
         "forward-no-answer-enabled": "yes",
         "forward-no-answer-target": `vmail:${ext}`,
-        "do-not-disturb": "no",
+        "forward-no-answer-destination": `vmail:${ext}`,
       };
     };
 

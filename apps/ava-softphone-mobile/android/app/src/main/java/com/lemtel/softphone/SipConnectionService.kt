@@ -542,6 +542,13 @@ class SipConnectionService : Service() {
                             Log.i(TAG, "Flushing queued verto.answer after login")
                             handleNativeAnswer(pSdp, pParams)
                         }
+                        // Flush pending bye if user tapped Hangup while WS was reconnecting
+                        val pBye = pendingByeCallId
+                        if (pBye != null) {
+                            Log.i(TAG, "Flushing queued verto.bye after login for callId=$pBye")
+                            pendingByeCallId = null
+                            try { sendFrame(buildVertoByeMessage(pBye)) } catch (_: Exception) {}
+                        }
                     } else {
                         Log.e(TAG, "Verto login FAILED: $text")
                         isLoggedIn = false
@@ -918,8 +925,16 @@ class SipConnectionService : Service() {
 
     private fun handleNativeHangup(reason: String) {
         val callId = currentCallId
-        if (callId != null && isLoggedIn) {
-            try { sendFrame(buildVertoByeMessage(callId)) } catch (_: Exception) {}
+        if (callId != null) {
+            // Always attempt to send verto.bye regardless of isLoggedIn state.
+            // If the WebSocket is alive, sendFrame succeeds immediately.
+            // If not, queue the bye and reconnect so it is sent after login.
+            val sent = try { sendFrame(buildVertoByeMessage(callId)) } catch (_: Exception) { false }
+            if (!sent) {
+                Log.w(TAG, "handleNativeHangup: sendFrame failed, queuing bye for callId=$callId")
+                pendingByeCallId = callId
+                if (!isLoggedIn && !connecting) scheduleReconnect(500L)
+            }
         }
         currentCallId = null
         currentCallerName = null
@@ -940,6 +955,7 @@ class SipConnectionService : Service() {
 
     @Volatile private var pendingAnswerSdp: String? = null
     @Volatile private var pendingAnswerParams: String? = null
+    @Volatile private var pendingByeCallId: String? = null
 
     private fun handleNativeAnswer(sdp: String, dialogParamsJson: String) {
         val callId = currentCallId

@@ -204,7 +204,10 @@ class VertoClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private manualDisconnect = false;
-
+  // Pre-prepared inbound dialogs keyed by callID. Allows getUserMedia + ICE
+  // to run in the background while the phone is ringing so the call connects
+  // instantly when the user taps Answer.
+  private preparedInbound = new Map<string, Promise<VertoDialog | null>>();
 
   on(fn: Listener): () => void {
     this.listeners.add(fn);
@@ -479,6 +482,24 @@ class VertoClient {
     await this.prepareInboundDialog(callID, params);
   }
 
+  /**
+   * Pre-warm an inbound dialog as soon as the native service receives
+   * verto.invite. Runs getUserMedia + ICE in the background while the phone
+   * rings so the call connects instantly when the user taps Answer.
+   */
+  preWarmInboundDialog(params: any): void {
+    const callID: string | undefined = params?.callID;
+    if (!callID || !params?.sdp) return;
+    if (this.preparedInbound.has(callID) || this.dialogs.has(callID)) return;
+    console.log('[verto] preWarmInboundDialog: starting background ICE for callID', callID);
+    const p = this.prepareInboundDialog(callID, params);
+    this.preparedInbound.set(callID, p);
+    p.then((d) => {
+      if (d) console.log('[verto] preWarmInboundDialog: SDP ready for callID', callID);
+      else { console.warn('[verto] preWarmInboundDialog: failed for callID', callID); this.preparedInbound.delete(callID); }
+    }).catch(() => this.preparedInbound.delete(callID));
+  }
+
   async adoptNativeInboundInvite(
     params: any,
     nativeAnswerSender: (sdp: string, dialogParams: any) => Promise<void>,
@@ -488,8 +509,23 @@ class VertoClient {
     if (!callID || !params?.sdp) return null;
     const existing = this.dialogs.get(callID);
     if (existing) {
+      // Update senders in case they were not set during pre-warm
+      existing.nativeAnswerSender = nativeAnswerSender;
+      existing.nativeHangupSender = nativeHangupSender;
       this.emit({ type: 'incoming', dialog: existing.wrapped, from: existing.callerIdNumber || params?.caller_id_number || '', fromName: existing.callerIdName || params?.caller_id_name });
       return existing.wrapped;
+    }
+    // Use pre-warmed dialog if available (SDP already negotiated)
+    const preWarmed = this.preparedInbound.get(callID);
+    if (preWarmed) {
+      console.log('[verto] adoptNativeInboundInvite: using pre-warmed dialog for callID', callID);
+      this.preparedInbound.delete(callID);
+      const dialog = await preWarmed;
+      if (dialog) {
+        const rec = this.dialogs.get(callID);
+        if (rec) { rec.nativeAnswerSender = nativeAnswerSender; rec.nativeHangupSender = nativeHangupSender; }
+        return dialog;
+      }
     }
     return this.prepareInboundDialog(callID, params, nativeAnswerSender, nativeHangupSender);
   }
@@ -893,6 +929,7 @@ class VertoClient {
     this.connected = false;
     this.loggedIn = false;
     this.dialogs.clear();
+    this.preparedInbound.clear();
   }
 
 }

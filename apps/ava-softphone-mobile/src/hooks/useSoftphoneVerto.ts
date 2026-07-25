@@ -158,6 +158,10 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       console.log('[verto] native incoming inviteParams present:', !!inviteParams?.sdp, 'callId:', callID, 'reason:', native.reason);
       if (inviteParams?.sdp && callID && nativeInviteCallIdRef.current !== callID) {
         nativeInviteCallIdRef.current = callID;
+        // Pre-warm the inbound dialog IMMEDIATELY (getUserMedia + ICE) so the
+        // SDP is ready by the time the user taps Answer. This runs in parallel
+        // with the Verto WebSocket login, eliminating the 3-5 s delay.
+        try { getVertoClient().preWarmInboundDialog(inviteParams); } catch { /* ignore */ }
         // Retry adoption in case the Verto WebSocket hasn't finished
         // logging in yet (app just launched from a notification tap).
         (async () => {

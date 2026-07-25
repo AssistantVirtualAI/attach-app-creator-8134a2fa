@@ -51,7 +51,9 @@ export function formatSipParty(raw: string | null | undefined, lang: 'fr' | 'en'
     .replace(/^"|"$/g, '')
     .trim();
   name = cleanedName && cleanedName !== 'unknown' ? cleanedName : '';
-  if (!name || name === user) name = isInternal ? (lang === 'en' ? `Extension ${user}` : `Poste ${user}`) : user;
+  // Always show the raw number/user as the display name.
+  // 'Poste X' / 'Extension X' is kept only as a subtitle hint.
+  if (!name || name === user) name = user;
 
   const subtitle = isInternal
     ? (lang === 'en' ? `Ext. ${user} · Internal` : `Poste ${user} · Interne`)

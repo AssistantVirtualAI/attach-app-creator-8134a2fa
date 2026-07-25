@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
     for (const b of rawBrokers) if (!brokerByExt.has(b.extension)) brokerByExt.set(b.extension, b);
     const brokers = Array.from(brokerByExt.values());
 
-    return json({ ok: true, count: brokers.length, raw_count: list.length, domain, brokers, ns_warning: nsWarning, degraded: !!nsWarning, strategy: `nsFetchAll:${fetched.signal ?? "n/a"}`, total_from_header: fetched.total ?? null });
+    return json({ ok: true, count: brokers.length, raw_count: list.length, domain, brokers, ns_warning: nsWarning, degraded: !!nsWarning, strategy: nsWarning ? "local-only" : "nsFetchAll", total_from_header: null });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }

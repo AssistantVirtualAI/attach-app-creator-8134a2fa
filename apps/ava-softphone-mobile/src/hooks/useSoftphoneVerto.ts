@@ -8,6 +8,7 @@
 // need to know which transport is active.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import type { SIPConfig } from '../lib/sip/jssipProvider';
 import type { UseSoftphoneReturn, SIPStatus, CallState } from './useSoftphone';
 import {
@@ -121,18 +122,34 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       console.log('[verto] native incoming inviteParams present:', !!inviteParams?.sdp, 'callId:', callID, 'reason:', native.reason);
       if (inviteParams?.sdp && callID && nativeInviteCallIdRef.current !== callID) {
         nativeInviteCallIdRef.current = callID;
-        getVertoClient().adoptNativeInboundInvite(
-          inviteParams,
-          async (sdp, dialogParams) => { await answerAndroidNativeCall(sdp, dialogParams); },
-          async () => { await hangupAndroidNativeCall(); },
-        ).then((dialog) => {
-          if (!dialog) return;
-          activeDialogRef.current = dialog;
-          if (shouldAnswer) {
-            nativeAnswerRequestedCallIdRef.current = callID;
-            dialog.answer();
+        // Retry adoption in case the Verto WebSocket hasn't finished
+        // logging in yet (app just launched from a notification tap).
+        (async () => {
+          for (let i = 0; i < 5; i++) {
+            try {
+              const client = getVertoClient();
+              if (client?.isConnected?.()) {
+                const dialog = await client.adoptNativeInboundInvite(
+                  inviteParams,
+                  async (sdp, dialogParams) => { await answerAndroidNativeCall(sdp, dialogParams); },
+                  async () => { await hangupAndroidNativeCall(); },
+                );
+                if (dialog) {
+                  activeDialogRef.current = dialog;
+                  if (shouldAnswer) {
+                    nativeAnswerRequestedCallIdRef.current = callID;
+                    dialog.answer();
+                  }
+                }
+                return;
+              }
+            } catch (e: any) {
+              log('verto.native.adopt.error', { message: e?.message || String(e), attempt: i });
+            }
+            await new Promise((r) => setTimeout(r, 300));
           }
-        }).catch((e) => log('verto.native.adopt.error', { message: e?.message || String(e) }));
+          console.warn('[verto] adoptNativeInboundInvite: client not connected after retries');
+        })();
       } else if (shouldAnswer && activeDialogRef.current) {
         nativeAnswerRequestedCallIdRef.current = callID;
         activeDialogRef.current.answer();
@@ -432,9 +449,27 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     }, 5000);
   }, []);
 
-  const answer = useCallback(() => {
+  const answer = useCallback(async () => {
+    const d = activeDialogRef.current as any;
+    if (Capacitor.getPlatform() === 'android' && d) {
+      try {
+        const sdp: string | undefined = d.__pendingAnswer;
+        const dialogParams = d.__params || {};
+        if (sdp) {
+          await answerAndroidNativeCall(sdp, dialogParams);
+          setCallState('active');
+          return;
+        }
+      } catch (e) {
+        console.warn('[verto] native answer failed, falling back to dialog.answer()', e);
+      }
+    }
     activeDialogRef.current?.answer();
   }, []);
+
+  const setNativeStatusDirectly = useCallback((native: AndroidSipServiceStatus) => {
+    applyNativeStatus(native, 'direct');
+  }, [applyNativeStatus]);
 
   const mute = useCallback(() => {
     const d = activeDialogRef.current;
@@ -521,10 +556,12 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     transferCall: transfer,
     addCall: toggleSpeakerFn, // speaker toggle exposed via addCall slot for Android
     androidSipServiceStatus,
+    setNativeStatusDirectly,
   }), [
     sipStatus, sipError, callState, callTimer, isMuted, isOnHold, activeCallNumber,
     call, hangup, answer, mute, unmute, hold, unhold, sendDTMF, setStatusPresence, reconnect,
     lastPersistedError, sipLog, clearSipLog, clearSipState, retryAttempt,
     audioProfile, setAudioProfile, transfer, toggleSpeakerFn, androidSipServiceStatus,
+    setNativeStatusDirectly,
   ]);
 }

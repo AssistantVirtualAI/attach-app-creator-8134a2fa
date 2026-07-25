@@ -388,6 +388,27 @@ function AuthenticatedShell({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   useEffect(() => { sp.setAudioEl(audioRef.current); }, [sp]);
 
+  // Cold-launch from a notification tap: if the native SIP service reports
+  // an `incoming` call before the JS Verto stack has processed the event,
+  // pull the snapshot directly so the ActiveCallSheet renders immediately
+  // instead of the normal dialer while the invite is being adopted.
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== 'android') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getAndroidSipServiceStatus } = await import('./lib/sip/nativeSipProvider');
+        const s = await getAndroidSipServiceStatus();
+        if (cancelled || !s) return;
+        if (String(s.status || '').toLowerCase() === 'incoming') {
+          (softphone as any).setNativeStatusDirectly?.(s);
+        }
+      } catch { /* not android or plugin unavailable */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Handle tel: deep links from iOS Recents / Contacts.
   // deepLink.ts dispatches 'ava:pendingCall' and stores the number in
   // sessionStorage. We listen here (where sp is available) and auto-dial

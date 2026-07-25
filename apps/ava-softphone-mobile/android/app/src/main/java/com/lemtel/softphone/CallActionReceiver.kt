@@ -3,6 +3,8 @@ package com.lemtel.softphone
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 
 /**
@@ -41,14 +43,26 @@ class CallActionReceiver : BroadcastReceiver() {
         }
         Log.i(TAG, "Notification action tapped: $action")
 
-        // If the app is answering, bring it to foreground so the UI can take
-        // over (mic permission prompts, active-call sheet, audio routing).
+        // Answer flow: bring the Activity to foreground FIRST so MainActivity
+        // can call reEmitIncomingStatus() and the JS layer can adopt the
+        // invite. Delay the sipCallAction broadcast ~400ms so `activeDialog`
+        // is populated by the time `sp.answer()` fires — otherwise the tap
+        // is dropped and the call falls to voicemail.
         if (action == "answer") {
             val launch = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra("incoming_call_action", "answer")
             }
             try { context.startActivity(launch) } catch (_: Exception) {}
+
+            Handler(Looper.getMainLooper()).postDelayed({
+                context.sendBroadcast(
+                    Intent(ACTION_CALL_ACTION_EVENT)
+                        .setPackage(context.packageName)
+                        .putExtra(EXTRA_ACTION, action)
+                )
+            }, 400)
+            return
         }
 
         // Rebroadcast internally so CapacitorPjsip's receiver picks it up

@@ -128,6 +128,7 @@ class SipConnectionService : Service() {
     private var isLoggedIn = false
     private var reconnectAttempt = 0
     private var pingFuture: ScheduledFuture<*>? = null
+    private var reLoginFuture: ScheduledFuture<*>? = null
     private var reconnectFuture: ScheduledFuture<*>? = null
     @Volatile private var connecting = false
     @Volatile private var lastFrameAt = 0L
@@ -196,6 +197,7 @@ class SipConnectionService : Service() {
     override fun onDestroy() {
         isDestroyed = true
         pingFuture?.cancel(true)
+        reLoginFuture?.cancel(true)
         reconnectFuture?.cancel(true)
         unregisterNetworkWatchdog()
         unregisterCallActionReceiver()
@@ -298,9 +300,11 @@ class SipConnectionService : Service() {
             }, 30, 30, TimeUnit.SECONDS)
 
             // Re-login just before the 1800s expiry so the FS-side registration
-            // never lapses (was every 4 min).
-            executor.scheduleAtFixedRate({
+            // never lapses (was every 4 min). Cancel any previous timer to avoid orphaned timers.
+            reLoginFuture?.cancel(false)
+            reLoginFuture = executor.scheduleAtFixedRate({
                 if (isLoggedIn && !isDestroyed) {
+                    Log.i(TAG, "Re-login: refreshing Verto registration before 1800s expiry")
                     try { sendVertoLogin(login, password, domain, displayName) } catch (_: Exception) {}
                 }
             }, 1_700, 1_700, TimeUnit.SECONDS)

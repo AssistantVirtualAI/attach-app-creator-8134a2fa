@@ -397,17 +397,26 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
             }
 
             accCfg.cred_count = 1
-            accCfg.cred_info.0.realm = self.pjStrDup("*")
+            // Realm must match the SIP domain (FreeSWITCH/mod_sofia rejects
+            // wildcard "*" digest challenges with 403 on some builds).
+            accCfg.cred_info.0.realm = self.pjStrDup(domain)
             accCfg.cred_info.0.scheme = self.pjStrDup("digest")
             accCfg.cred_info.0.username = self.pjStrDup(username)
             accCfg.cred_info.0.data_type = Int32(PJSIP_CRED_DATA_PLAIN_PASSWD.rawValue)
             accCfg.cred_info.0.data = self.pjStrDup(password)
+
+            // Outbound proxy — force all REGISTER/INVITE through the edge
+            // server on TCP 5060 (some FusionPBX deployments only answer on
+            // the proxy port, not the domain SRV record).
+            accCfg.proxy_cnt = 1
+            accCfg.proxy.0 = self.pjStrDup("sip:\(server);transport=tcp;lr")
 
             if self.accId != pjsua_acc_id(PJSUA_INVALID_ID.rawValue) {
                 pjsua_acc_del(self.accId)
                 self.accId = pjsua_acc_id(PJSUA_INVALID_ID.rawValue)
             }
 
+            NSLog("[CapacitorPjsip] initAccount: ext=%@ domain=%@ server=%@ passwordLen=%d", username, domain, server, password.count)
             let status = pjsua_acc_add(&accCfg, pj_bool_t(PJ_TRUE.rawValue), &self.accId)
             guard status == PJ_SUCCESS.rawValue else {
                 call.reject("pjsua_acc_add failed: \(status)")

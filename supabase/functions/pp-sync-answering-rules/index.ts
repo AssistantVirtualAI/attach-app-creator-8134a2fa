@@ -173,6 +173,19 @@ Deno.serve(async (req) => {
       }
       const opBody = await readBody(opRes);
 
+      if (!opRes.ok) {
+        console.error("[syncBroker] FAILED", JSON.stringify({
+          extension: ext,
+          domain,
+          rule_path: rulePath,
+          mode,
+          status: opRes.status,
+          list_status: listRes.status,
+          response: typeof opBody === "string" ? opBody.substring(0, 300) : opBody,
+          payload,
+        }));
+      }
+
       return {
         broker_id: broker.id ?? broker.user_id,
         broker_name: broker.full_name,

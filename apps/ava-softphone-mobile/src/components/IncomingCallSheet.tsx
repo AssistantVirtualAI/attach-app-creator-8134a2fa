@@ -20,8 +20,14 @@ export default function IncomingCallSheet({ open, callerName, callerNumber, onAc
   const [replying, setReplying] = React.useState(false);
   const quickReplies = ["Can't talk now", "Call you back", "On my way"];
   const lang: 'fr' | 'en' = (typeof localStorage !== 'undefined' && localStorage.getItem('ava.mobile.lang') === 'en') ? 'en' : 'fr';
-  const party = formatSipParty(callerName || callerNumber || '', lang);
-  const displayName = callerName && !/^sip:|<sip:/i.test(callerName) ? callerName : party.name;
+  // Prefer the number for parsing; a generic fallback name (e.g. "Appel entrant"
+  // / "Incoming call" / "Unknown") should never mask the actual caller ID.
+  const GENERIC = /^(appel entrant|incoming call|unknown|inconnu|numero inconnu|numéro inconnu)$/i;
+  const nameIsGeneric = !callerName || GENERIC.test(callerName.trim());
+  const party = formatSipParty(callerNumber || callerName || '', lang);
+  const displayName = !nameIsGeneric && callerName && !/^sip:|<sip:/i.test(callerName)
+    ? callerName
+    : (callerNumber || party.name);
   const initials = (displayName || '?')
     .split(/\s+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('') || '📞';
 

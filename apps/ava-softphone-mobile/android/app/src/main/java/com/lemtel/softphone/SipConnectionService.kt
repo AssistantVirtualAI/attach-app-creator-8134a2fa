@@ -878,7 +878,7 @@ class SipConnectionService : Service() {
             }
             sendFrame(msg.toString())
             handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
-            emitStatus("registered", "native_answer_sent")
+            emitStatus("active", "native_answer_sent")
         } catch (e: Exception) {
             Log.w(TAG, "handleNativeAnswer failed: ${e.message}")
             emitStatus("error", e.message ?: "native_answer_failed")

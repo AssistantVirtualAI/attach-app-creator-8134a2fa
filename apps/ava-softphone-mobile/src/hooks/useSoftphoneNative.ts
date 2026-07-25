@@ -549,5 +549,7 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
     lastEndReason: endReason,
     callPhase,
     lastSipCode,
+    callerName,
+    callerNumber,
   } as UseSoftphoneReturn;
 }

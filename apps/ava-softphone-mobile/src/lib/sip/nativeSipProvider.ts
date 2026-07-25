@@ -123,6 +123,8 @@ interface AndroidSipServiceBridge {
   startSipService?: (opts?: any) => Promise<{ ok: boolean }>;
   stopSipService?: () => Promise<{ ok: boolean }>;
   getSipServiceStatus?: () => Promise<AndroidSipServiceStatus & { ok: boolean }>;
+  answerNativeCall?: (opts: { sdp: string; dialogParams: any }) => Promise<{ ok: boolean }>;
+  hangupNativeCall?: () => Promise<{ ok: boolean }>;
   requestBatteryOptimizationExemption?: () => Promise<{ ok: boolean; ignored?: boolean; requested?: boolean }>;
   addListener?: (event: 'sipServiceStatus', callback: (data: AndroidSipServiceStatus) => void) => Promise<{ remove: () => Promise<void> }>;
   // Audio routing — real implementation in CapacitorPjsip.kt
@@ -133,6 +135,10 @@ interface AndroidSipServiceBridge {
 export interface AndroidSipServiceStatus {
   status?: 'idle' | 'connecting' | 'registered' | 'incoming' | 'reconnecting' | 'disconnected' | 'error' | 'unknown' | string;
   reason?: string;
+  callerName?: string;
+  callerNumber?: string;
+  callId?: string;
+  inviteParams?: string | Record<string, any>;
   updatedAt?: number;
   lastLoginAt?: number;
   lastPingAt?: number;
@@ -184,6 +190,28 @@ export async function getAndroidSipServiceStatus(): Promise<AndroidSipServiceSta
   if (__platform !== 'android') return null;
   try { return await AndroidSipServicePlugin.getSipServiceStatus?.() ?? null; }
   catch (e) { console.warn('[sip] getSipServiceStatus failed', e); return null; }
+}
+
+export async function answerAndroidNativeCall(sdp: string, dialogParams: any): Promise<boolean> {
+  if (__platform !== 'android') return false;
+  try {
+    await AndroidSipServicePlugin.answerNativeCall?.({ sdp, dialogParams });
+    return true;
+  } catch (e) {
+    console.warn('[sip] answerNativeCall failed', e);
+    return false;
+  }
+}
+
+export async function hangupAndroidNativeCall(): Promise<boolean> {
+  if (__platform !== 'android') return false;
+  try {
+    await AndroidSipServicePlugin.hangupNativeCall?.();
+    return true;
+  } catch (e) {
+    console.warn('[sip] hangupNativeCall failed', e);
+    return false;
+  }
 }
 
 /**

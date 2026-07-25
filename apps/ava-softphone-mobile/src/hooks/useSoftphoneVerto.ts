@@ -23,6 +23,8 @@ import { attachNativeAutoReconnect } from '../lib/sip/nativeAutoReconnect';
 import {
   getAndroidSipServiceStatus,
   onAndroidSipServiceStatus,
+  answerAndroidNativeCall,
+  hangupAndroidNativeCall,
   requestAndroidBatteryOptimizationExemption,
   startAndroidSipService,
   type AndroidSipServiceStatus,
@@ -57,6 +59,8 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const localStreamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const configRef = useRef<SIPConfig | null>(config);
+  const nativeInviteCallIdRef = useRef<string | null>(null);
+  const nativeAnswerRequestedCallIdRef = useRef<string | null>(null);
   configRef.current = config;
 
   const log = useCallback((event: string, details?: any) => {
@@ -103,6 +107,41 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     });
 
     const nativeStatus = String(native.status || '').toLowerCase();
+    if (nativeStatus === 'incoming') {
+      const caller = native.callerNumber || native.callerName || native.reason || '';
+      setStatus('registered');
+      if (caller) setActiveCallNumber(caller);
+      setCallState('ringing-in');
+      const rawInvite = native.inviteParams;
+      const inviteParams = typeof rawInvite === 'string'
+        ? (() => { try { return rawInvite ? JSON.parse(rawInvite) : null; } catch { return null; } })()
+        : rawInvite;
+      const callID = inviteParams?.callID || native.callId;
+      const shouldAnswer = native.reason === 'answer_requested' && callID && nativeAnswerRequestedCallIdRef.current !== callID;
+      if (inviteParams?.sdp && callID && nativeInviteCallIdRef.current !== callID) {
+        nativeInviteCallIdRef.current = callID;
+        getVertoClient().adoptNativeInboundInvite(
+          inviteParams,
+          async (sdp, dialogParams) => { await answerAndroidNativeCall(sdp, dialogParams); },
+          async () => { await hangupAndroidNativeCall(); },
+        ).then((dialog) => {
+          if (!dialog) return;
+          activeDialogRef.current = dialog;
+          if (shouldAnswer) {
+            nativeAnswerRequestedCallIdRef.current = callID;
+            dialog.answer();
+          }
+        }).catch((e) => log('verto.native.adopt.error', { message: e?.message || String(e) }));
+      } else if (shouldAnswer && activeDialogRef.current) {
+        nativeAnswerRequestedCallIdRef.current = callID;
+        activeDialogRef.current.answer();
+      }
+      return;
+    }
+    if (nativeStatus !== 'incoming') {
+      nativeInviteCallIdRef.current = null;
+      nativeAnswerRequestedCallIdRef.current = null;
+    }
     if (native.loggedIn || nativeStatus === 'registered' || nativeStatus === 'incoming') {
       setStatus('registered');
       return;
@@ -283,11 +322,11 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         case 'incoming':
           activeDialogRef.current = e.dialog;
           setActiveCallNumber(e.from);
-          setCallState('ringing');
+          setCallState('ringing-in');
           log('verto.incoming', { from: e.from });
           break;
         case 'progress':
-          setCallState('ringing');
+          setCallState((prev) => prev === 'ringing-in' ? prev : 'ringing-out');
           break;
         case 'answered':
           activeDialogRef.current = e.dialog;
@@ -336,7 +375,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         if (d) {
           activeDialogRef.current = d;
           setActiveCallNumber(number);
-          setCallState('ringing');
+          setCallState('ringing-out');
           log('verto.call.out', { to: number, callID: d.callID });
         } else {
           setSipError('Verto refused to place the call');
@@ -369,7 +408,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     // 5s after hangup was requested, force it to idle so the ActiveCallSheet
     // never gets stuck on flaky networks.
     setTimeout(() => {
-      setCallState((prev) => (prev === 'active' || prev === 'ringing') ? 'idle' : prev);
+      setCallState((prev) => (prev === 'active' || prev === 'ringing' || prev === 'ringing-in' || prev === 'ringing-out') ? 'idle' : prev);
     }, 5000);
   }, []);
 

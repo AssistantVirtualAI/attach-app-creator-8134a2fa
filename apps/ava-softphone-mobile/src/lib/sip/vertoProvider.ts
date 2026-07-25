@@ -184,6 +184,8 @@ interface DialogRecord {
   remoteStream?: MediaStream;
   localStream?: MediaStream;
   answered?: boolean;
+  nativeAnswerSender?: (sdp: string, dialogParams: any) => Promise<void>;
+  nativeHangupSender?: () => Promise<void>;
 }
 
 class VertoClient {
@@ -473,6 +475,30 @@ class VertoClient {
   }
 
   private async handleInboundInvite(callID: string, params: any) {
+    await this.prepareInboundDialog(callID, params);
+  }
+
+  async adoptNativeInboundInvite(
+    params: any,
+    nativeAnswerSender: (sdp: string, dialogParams: any) => Promise<void>,
+    nativeHangupSender?: () => Promise<void>,
+  ): Promise<VertoDialog | null> {
+    const callID: string | undefined = params?.callID;
+    if (!callID || !params?.sdp) return null;
+    const existing = this.dialogs.get(callID);
+    if (existing) {
+      this.emit({ type: 'incoming', dialog: existing.wrapped, from: existing.callerIdNumber || params?.caller_id_number || '', fromName: existing.callerIdName || params?.caller_id_name });
+      return existing.wrapped;
+    }
+    return this.prepareInboundDialog(callID, params, nativeAnswerSender, nativeHangupSender);
+  }
+
+  private async prepareInboundDialog(
+    callID: string,
+    params: any,
+    nativeAnswerSender?: (sdp: string, dialogParams: any) => Promise<void>,
+    nativeHangupSender?: () => Promise<void>,
+  ): Promise<VertoDialog | null> {
     const pc = new RTCPeerConnection({ ...getActivePcConfig(), iceCandidatePoolSize: 10 });
     const remoteStream = new MediaStream();
     pc.ontrack = (ev) => {
@@ -505,6 +531,10 @@ class VertoClient {
       wrapped: this.wrap(callID),
       remoteStream,
       localStream: local || undefined,
+      callerIdName: params?.caller_id_name,
+      callerIdNumber: params?.caller_id_number,
+      nativeAnswerSender,
+      nativeHangupSender,
     };
     this.dialogs.set(callID, rec);
 
@@ -523,8 +553,12 @@ class VertoClient {
       // Note: answer is deferred until user calls .answer()
       (wrapped as any).__pendingAnswer = pc.localDescription?.sdp;
       (wrapped as any).__params = params;
+      return wrapped;
     } catch (e) {
       console.warn('[verto] inbound negotiation failed', e);
+      try { pc.close(); } catch { /* ignore */ }
+      this.dialogs.delete(callID);
+      return null;
     }
   }
 
@@ -707,7 +741,8 @@ class VertoClient {
       tag: this.audioTagId,
     };
     try {
-      await this.rpc('verto.answer', { sdp, dialogParams });
+      if (rec.nativeAnswerSender) await rec.nativeAnswerSender(sdp, dialogParams);
+      else await this.rpc('verto.answer', { sdp, dialogParams });
       rec.answered = true;
       this.emit({ type: 'answered', dialog: rec.wrapped });
     } catch (e) {
@@ -731,7 +766,8 @@ class VertoClient {
       caller_id_number: rec.callerIdNumber || this.cfg?.caller_id_number || '',
       destination_number: rec.destination,
     };
-    this.rpc('verto.bye', { cause: 'NORMAL_CLEARING', dialogParams }).catch(() => { /* ignore */ });
+    if (rec.nativeHangupSender) rec.nativeHangupSender().catch(() => { /* ignore */ });
+    else this.rpc('verto.bye', { cause: 'NORMAL_CLEARING', dialogParams }).catch(() => { /* ignore */ });
     return Promise.resolve();
   }
 

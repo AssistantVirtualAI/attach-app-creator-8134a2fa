@@ -154,6 +154,27 @@ class CapacitorPjsip : Plugin() {
         AudioFocusHelper.requestCallAudioFocus(context)
         call.resolve(JSObject().apply { put("ok", true) })
     }
+
+    @PluginMethod
+    fun answerNativeCall(call: PluginCall) {
+        val sdp = call.getString("sdp") ?: ""
+        val dialogParams = call.getObject("dialogParams")?.toString() ?: ""
+        context.sendBroadcast(Intent(SipConnectionService.ACTION_NATIVE_VERTO_ANSWER).apply {
+            setPackage(context.packageName)
+            putExtra("sdp", sdp)
+            putExtra("dialogParams", dialogParams)
+        })
+        call.resolve(JSObject().apply { put("ok", true) })
+    }
+
+    @PluginMethod
+    fun hangupNativeCall(call: PluginCall) {
+        context.sendBroadcast(Intent(SipConnectionService.ACTION_NATIVE_VERTO_HANGUP).apply {
+            setPackage(context.packageName)
+        })
+        call.resolve(JSObject().apply { put("ok", true) })
+    }
+
     @PluginMethod fun setMute(call: PluginCall) { val m = call.getBoolean("muted", false) ?: false; audioManager?.isMicrophoneMute = m; call.resolve(JSObject().apply { put("ok", true); put("muted", m) }) }
     @PluginMethod fun setHold(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
     @PluginMethod fun sendDTMF(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
@@ -343,6 +364,10 @@ class CapacitorPjsip : Plugin() {
         return JSObject().apply {
             put("status", intent.getStringExtra("status") ?: "unknown")
             put("reason", intent.getStringExtra("reason") ?: "")
+            put("callId", intent.getStringExtra("callId") ?: "")
+            put("callerName", intent.getStringExtra("callerName") ?: "")
+            put("callerNumber", intent.getStringExtra("callerNumber") ?: "")
+            put("inviteParams", intent.getStringExtra("inviteParams") ?: "")
             put("updatedAt", intent.getLongExtra("updatedAt", 0L))
             put("lastLoginAt", intent.getLongExtra("lastLoginAt", 0L))
             put("lastPingAt", intent.getLongExtra("lastPingAt", 0L))
@@ -360,6 +385,10 @@ class CapacitorPjsip : Plugin() {
         return JSObject().apply {
             put("status", p.getString(SipConnectionService.KEY_STATUS, "unknown") ?: "unknown")
             put("reason", p.getString(SipConnectionService.KEY_REASON, "") ?: "")
+            put("callId", p.getString("verto_current_call_id", "") ?: "")
+            put("callerName", p.getString("verto_current_caller_name", "") ?: "")
+            put("callerNumber", p.getString("verto_current_caller_number", "") ?: "")
+            put("inviteParams", p.getString("verto_current_invite_params", "") ?: "")
             put("updatedAt", p.getLong(SipConnectionService.KEY_UPDATED_AT, 0L))
             put("lastLoginAt", p.getLong(SipConnectionService.KEY_LAST_LOGIN_AT, 0L))
             put("lastPingAt", p.getLong(SipConnectionService.KEY_LAST_PING_AT, 0L))

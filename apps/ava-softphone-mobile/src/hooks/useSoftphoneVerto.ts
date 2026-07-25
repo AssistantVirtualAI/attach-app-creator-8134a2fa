@@ -143,6 +143,25 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       nativeInviteCallIdRef.current = null;
       nativeAnswerRequestedCallIdRef.current = null;
     }
+    if (nativeStatus === 'active') {
+      setStatus('registered');
+      setCallState((prev) => (prev === 'idle' ? 'active' : prev === 'ringing-in' ? 'active' : prev));
+      return;
+    }
+    if (nativeStatus === 'idle') {
+      setCallState((prev) => {
+        if (prev === 'active' || prev === 'ringing-in' || prev === 'ringing-out') {
+          console.log('[verto] native idle received — resetting call state');
+          setActiveCallNumber('');
+          setIsMuted(false);
+          setIsOnHold(false);
+          activeDialogRef.current = null;
+          nativeInviteCallIdRef.current = null;
+          return 'idle';
+        }
+        return prev;
+      });
+    }
     if (native.loggedIn || nativeStatus === 'registered' || nativeStatus === 'incoming') {
       setStatus('registered');
       return;

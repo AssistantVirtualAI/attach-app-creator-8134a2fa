@@ -474,11 +474,19 @@ class SipConnectionService : Service() {
                 put("login", "$login@$domain")
                 put("passwd", password)
                 put("sessid", sessionUUID)
+                // 30 min registration expiry (was 120s) → far fewer re-REGISTERs
+                put("expires", 1800)
+                put("loginParams", JSONObject().apply {
+                    put("expires", 1800)
+                })
                 put("userVariables", JSONObject().apply {
                     put("email", login)
                     put("display_name", displayName)
+                    put("expires", 1800)
+                    put("sip-expires", 1800)
                 })
             })
+
         }
         if (!sendFrame(msg.toString())) scheduleReconnect()
     }

@@ -215,6 +215,8 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
     ensureNativeCallEventBridge().catch((e) => console.warn('[NativeSIP] call event bridge failed', e));
     const unsub = subscribeNativeCallEvents((snapshot) => {
       setActiveCallNumber(snapshot.activeCallNumber);
+      setCallerName(snapshot.callerName);
+      setCallerNumber(snapshot.callerNumber);
       setIsMuted(snapshot.isMuted);
       setIsOnHold(snapshot.isOnHold);
       setIsRecording(snapshot.isRecording);

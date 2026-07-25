@@ -244,6 +244,104 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin {
 }
 `;
 
+const ANDROID_PLUGIN_JAVA = (pkg) => `package ${pkg};
+
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.net.Uri;
+import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+
+@CapacitorPlugin(name = "PpSipKeepAlive")
+public class PpSipKeepAlivePlugin extends Plugin {
+  private BroadcastReceiver statusReceiver;
+  private BroadcastReceiver reregisterReceiver;
+
+  @Override public void load() {
+    statusReceiver = new BroadcastReceiver() { @Override public void onReceive(Context c, Intent i) { if (!PpSipKeepAliveService.ACTION_STATUS.equals(i.getAction())) return; notifyListeners("sipServiceStatus", statusFromIntent(i), true); } };
+    reregisterReceiver = new BroadcastReceiver() { @Override public void onReceive(Context c, Intent i) { if (!PpSipKeepAliveService.ACTION_REREGISTER.equals(i.getAction())) return; notifyListeners("sipReregisterRequested", new JSObject().put("reason", i.getStringExtra("reason")), true); } };
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        getContext().registerReceiver(statusReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_STATUS), Context.RECEIVER_NOT_EXPORTED);
+        getContext().registerReceiver(reregisterReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_REREGISTER), Context.RECEIVER_NOT_EXPORTED);
+      } else {
+        getContext().registerReceiver(statusReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_STATUS));
+        getContext().registerReceiver(reregisterReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_REREGISTER));
+      }
+    } catch (Exception ignored) {}
+  }
+
+  @Override protected void handleOnDestroy() {
+    try { if (statusReceiver != null) getContext().unregisterReceiver(statusReceiver); } catch (Exception ignored) {}
+    try { if (reregisterReceiver != null) getContext().unregisterReceiver(reregisterReceiver); } catch (Exception ignored) {}
+    super.handleOnDestroy();
+  }
+
+  @PluginMethod public void startSipService(PluginCall call) {
+    PpSipKeepAliveService.saveConfig(getContext(), call.getString("host", call.getString("domain", "")), call.getInt("port", 443), call.getString("path", "/"), call.getString("login", call.getString("username", call.getString("extension", ""))), call.getString("domain", ""), call.getString("displayName", call.getString("extension", "")));
+    PpSipKeepAliveService.start(getContext());
+    call.resolve(readStatus().put("ok", true));
+  }
+  @PluginMethod public void stopSipService(PluginCall call) { PpSipKeepAliveService.stop(getContext()); call.resolve(new JSObject().put("ok", true)); }
+  @PluginMethod public void getSipServiceStatus(PluginCall call) { call.resolve(readStatus().put("ok", true)); }
+  @PluginMethod public void triggerReregister(PluginCall call) { PpSipKeepAliveService.requestReregister(getContext(), "manual"); call.resolve(readStatus().put("ok", true)); }
+  @PluginMethod public void requestBatteryOptimizationExemption(PluginCall call) {
+    try {
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) { call.resolve(new JSObject().put("ok", true).put("ignored", true).put("requested", false)); return; }
+      PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+      boolean ignored = pm != null && pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+      if (!ignored) getContext().startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).setData(Uri.parse("package:" + getContext().getPackageName())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+      call.resolve(new JSObject().put("ok", true).put("ignored", ignored).put("requested", !ignored));
+    } catch (Exception e) { call.reject(e.getMessage()); }
+  }
+  private JSObject statusFromIntent(Intent i) { return new JSObject().put("status", i.getStringExtra("status")).put("reason", i.getStringExtra("reason")).put("updatedAt", i.getLongExtra("updatedAt", 0)).put("wakeLockHeld", i.getBooleanExtra("wakeLockHeld", false)).put("wifiLockHeld", i.getBooleanExtra("wifiLockHeld", false)).put("loggedIn", i.getBooleanExtra("loggedIn", false)); }
+  private JSObject readStatus() { android.content.SharedPreferences p = getContext().getSharedPreferences(PpSipKeepAliveService.PREFS_NAME, Context.MODE_PRIVATE); return new JSObject().put("status", p.getString(PpSipKeepAliveService.KEY_STATUS, "unknown")).put("reason", p.getString(PpSipKeepAliveService.KEY_REASON, "")).put("updatedAt", p.getLong(PpSipKeepAliveService.KEY_UPDATED_AT, 0)).put("wakeLockHeld", p.getBoolean(PpSipKeepAliveService.KEY_WAKE_HELD, false)).put("wifiLockHeld", p.getBoolean(PpSipKeepAliveService.KEY_WIFI_HELD, false)).put("loggedIn", p.getBoolean(PpSipKeepAliveService.KEY_LOGGED_IN, false)); }
+}
+`;
+
+const ANDROID_SERVICE_JAVA = (pkg) => `package ${pkg};
+
+import android.app.*;
+import android.content.*;
+import android.content.pm.ServiceInfo;
+import android.net.*;
+import android.net.wifi.WifiManager;
+import android.os.*;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.ServiceCompat;
+import java.util.concurrent.*;
+
+public class PpSipKeepAliveService extends Service {
+  public static final String CHANNEL_ID = "pp_sip_keepalive_channel", PREFS_NAME = "pp_sip_keepalive", ACTION_STATUS = "com.planipret.mobile.PP_SIP_STATUS", ACTION_REREGISTER = "com.planipret.mobile.PP_SIP_REREGISTER";
+  public static final int NOTIFICATION_ID = 2201;
+  public static final String KEY_STATUS = "status", KEY_REASON = "reason", KEY_UPDATED_AT = "updated_at", KEY_WAKE_HELD = "wake_held", KEY_WIFI_HELD = "wifi_held", KEY_LOGGED_IN = "logged_in";
+  private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+  private ScheduledFuture<?> heartbeat; private PowerManager.WakeLock wakeLock; private WifiManager.WifiLock wifiLock; private ConnectivityManager cm; private ConnectivityManager.NetworkCallback networkCallback;
+  public static void start(Context c) { Intent i = new Intent(c, PpSipKeepAliveService.class); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) c.startForegroundService(i); else c.startService(i); }
+  public static void stop(Context c) { c.stopService(new Intent(c, PpSipKeepAliveService.class)); }
+  public static void saveConfig(Context c, String host, int port, String path, String login, String domain, String displayName) { c.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString("host", host).putInt("port", port).putString("path", path).putString("login", login).putString("domain", domain).putString("display_name", displayName).apply(); }
+  public static void requestReregister(Context c, String reason) { c.sendBroadcast(new Intent(ACTION_REREGISTER).setPackage(c.getPackageName()).putExtra("reason", reason)); }
+  @Override public void onCreate() { super.onCreate(); createChannel(); PowerManager pm = (PowerManager)getSystemService(POWER_SERVICE); wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Planipret::SipWakeLock"); wakeLock.setReferenceCounted(false); wakeLock.acquire(); WifiManager wm = (WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE); wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Planipret::SipWifiLock"); wifiLock.setReferenceCounted(false); wifiLock.acquire(); registerNetworkWatchdog(); emitStatus("protected", "service_created"); }
+  @Override public int onStartCommand(Intent intent, int flags, int startId) { Notification n = buildNotification("Téléphonie prête en arrière-plan"); if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL); else startForeground(NOTIFICATION_ID, n); emitStatus("registered", "native_guard_active"); requestReregister(this, "service_start"); if (heartbeat != null) heartbeat.cancel(false); heartbeat = executor.scheduleAtFixedRate(() -> { emitStatus("registered", "keepalive"); requestReregister(this, "keepalive"); }, 30, 240, TimeUnit.SECONDS); return START_STICKY; }
+  @Override public void onTaskRemoved(Intent rootIntent) { emitStatus("registered", "task_removed_keepalive"); requestReregister(this, "task_removed"); super.onTaskRemoved(rootIntent); }
+  @Override public void onDestroy() { if (heartbeat != null) heartbeat.cancel(true); unregisterNetworkWatchdog(); try { if (wakeLock != null && wakeLock.isHeld()) wakeLock.release(); } catch(Exception ignored) {} try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch(Exception ignored) {} executor.shutdownNow(); emitStatus("disconnected", "service_destroyed"); super.onDestroy(); }
+  @Override public IBinder onBind(Intent intent) { return null; }
+  private void registerNetworkWatchdog() { try { cm = (ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE); NetworkRequest req = new NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(); networkCallback = new ConnectivityManager.NetworkCallback() { @Override public void onAvailable(Network n) { emitStatus("registered", "network_available"); requestReregister(PpSipKeepAliveService.this, "network_available"); } @Override public void onLost(Network n) { emitStatus("reconnecting", "network_lost"); } }; cm.registerNetworkCallback(req, networkCallback); } catch(Exception ignored) {} }
+  private void unregisterNetworkWatchdog() { try { if (cm != null && networkCallback != null) cm.unregisterNetworkCallback(networkCallback); } catch(Exception ignored) {} networkCallback = null; }
+  private void emitStatus(String status, String reason) { long now = System.currentTimeMillis(); boolean wake = wakeLock != null && wakeLock.isHeld(), wifi = wifiLock != null && wifiLock.isHeld(), logged = status.equals("registered") || status.equals("protected"); getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_STATUS, status).putString(KEY_REASON, reason).putLong(KEY_UPDATED_AT, now).putBoolean(KEY_WAKE_HELD, wake).putBoolean(KEY_WIFI_HELD, wifi).putBoolean(KEY_LOGGED_IN, logged).apply(); sendBroadcast(new Intent(ACTION_STATUS).setPackage(getPackageName()).putExtra("status", status).putExtra("reason", reason).putExtra("updatedAt", now).putExtra("wakeLockHeld", wake).putExtra("wifiLockHeld", wifi).putExtra("loggedIn", logged)); }
+  private Notification buildNotification(String text) { return new NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle("Planiprêt Mobile").setContentText(text).setSmallIcon(android.R.drawable.ic_menu_call).setPriority(NotificationCompat.PRIORITY_LOW).setOngoing(true).setSilent(true).build(); }
+  private void createChannel() { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ((NotificationManager)getSystemService(NotificationManager.class)).createNotificationChannel(new NotificationChannel(CHANNEL_ID, "Connexion téléphonique", NotificationManager.IMPORTANCE_LOW)); }
+}
+`;
+
 function writeIfChanged(file, next) {
   const prev = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
   if (prev === next) return false;

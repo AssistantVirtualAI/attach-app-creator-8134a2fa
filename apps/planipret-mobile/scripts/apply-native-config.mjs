@@ -330,7 +330,7 @@ public class PpSipKeepAliveService extends Service {
   public static final String CHANNEL_ID = "pp_sip_keepalive_channel", PREFS_NAME = "pp_sip_keepalive", ACTION_STATUS = "com.planipret.mobile.PP_SIP_STATUS", ACTION_REREGISTER = "com.planipret.mobile.PP_SIP_REREGISTER";
   public static final int NOTIFICATION_ID = 2201;
   public static final String KEY_STATUS = "status", KEY_REASON = "reason", KEY_UPDATED_AT = "updated_at", KEY_WAKE_HELD = "wake_held", KEY_WIFI_HELD = "wifi_held", KEY_LOGGED_IN = "logged_in";
-  private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+  private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
   private ScheduledFuture<?> heartbeat; private PowerManager.WakeLock wakeLock; private WifiManager.WifiLock wifiLock; private ConnectivityManager cm; private ConnectivityManager.NetworkCallback networkCallback; private Socket wsSocket; private InputStream wsIn; private OutputStream wsOut; private int cseq = 1; private String callId = UUID.randomUUID().toString() + "@planipret-mobile"; private String fromTag = Long.toHexString(System.nanoTime()); private volatile boolean readerRunning = false;
   public static void start(Context c) { Intent i = new Intent(c, PpSipKeepAliveService.class); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) c.startForegroundService(i); else c.startService(i); }
   public static void stop(Context c) { c.stopService(new Intent(c, PpSipKeepAliveService.class)); }

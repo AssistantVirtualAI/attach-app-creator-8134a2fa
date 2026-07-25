@@ -65,6 +65,39 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
     private var pendingCallKitAnswer = false
     private var pendingCallKitEnd = false
 
+    /// Extracts a friendly (name, number) pair from a raw SIP identity such as
+    /// `"Alice" <sip:1000@pbx>` or `sip:1000@pbx;tag=xyz`. Kept `internal` so
+    /// it can be reached from the C-style on_incoming_call callback via
+    /// `plugin.parseSipParty(...)`.
+    func parseSipParty(_ raw: String) -> (name: String, number: String) {
+        var name = ""
+        var user = ""
+        let s = raw.trimmingCharacters(in: .whitespaces)
+        if let angleRange = s.range(of: #"<sips?:([^@;>\s]+)(?:@[^;>\s]+)?>"#, options: .regularExpression) {
+            let uri = String(s[angleRange])
+            if let userMatch = uri.range(of: #"sips?:([^@;>\s]+)"#, options: .regularExpression) {
+                user = String(uri[userMatch])
+                    .replacingOccurrences(of: #"sips?:"#, with: "", options: .regularExpression)
+                    .components(separatedBy: "@").first ?? ""
+            }
+            let before = String(s[s.startIndex..<angleRange.lowerBound])
+                .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            if !before.isEmpty && !before.lowercased().hasPrefix("sip") {
+                name = before
+            }
+        } else if s.lowercased().hasPrefix("sip:") {
+            user = s.replacingOccurrences(of: #"sips?:"#, with: "", options: .regularExpression)
+                .components(separatedBy: "@").first?
+                .components(separatedBy: ";").first ?? ""
+        } else {
+            user = s
+        }
+        if name.isEmpty { name = user }
+        return (name: name, number: user)
+    }
+
+
     /// Called by AppDelegate when PushKit delivers a new VoIP token.
     /// If the account is already registered we trigger an immediate
     /// re-REGISTER so the Contact header carries the fresh pn-prid —
@@ -278,8 +311,14 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
                     var info = pjsua_call_info()
                     pjsua_call_get_info(callId, &info)
                     let remote = String(cString: info.remote_info.ptr)
-                    CallKitManager.shared.reportIncoming(from: remote)
-                    plugin.notifyBg("callReceived", ["from": remote])
+                    let parsed = plugin.parseSipParty(remote)
+                    let displayName = parsed.name.isEmpty ? parsed.number : parsed.name
+                    CallKitManager.shared.reportIncoming(from: displayName)
+                    plugin.notifyBg("callReceived", [
+                        "from": remote,
+                        "callerName": parsed.name,
+                        "callerNumber": parsed.number,
+                    ])
                     if plugin.pendingCallKitEnd {
                         pjsua_call_hangup(callId, 0, nil, nil)
                         plugin.pendingCallKitEnd = false
@@ -288,6 +327,7 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
                         plugin.pendingCallKitAnswer = false
                     }
                 }
+
 
                 var logCfg = pjsua_logging_config()
                 pjsua_logging_config_default(&logCfg)
@@ -390,17 +430,26 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
             }
 
             accCfg.cred_count = 1
-            accCfg.cred_info.0.realm = self.pjStrDup("*")
+            // Realm must match the SIP domain (FreeSWITCH/mod_sofia rejects
+            // wildcard "*" digest challenges with 403 on some builds).
+            accCfg.cred_info.0.realm = self.pjStrDup(domain)
             accCfg.cred_info.0.scheme = self.pjStrDup("digest")
             accCfg.cred_info.0.username = self.pjStrDup(username)
             accCfg.cred_info.0.data_type = Int32(PJSIP_CRED_DATA_PLAIN_PASSWD.rawValue)
             accCfg.cred_info.0.data = self.pjStrDup(password)
+
+            // Outbound proxy — force all REGISTER/INVITE through the edge
+            // server on TCP 5060 (some FusionPBX deployments only answer on
+            // the proxy port, not the domain SRV record).
+            accCfg.proxy_cnt = 1
+            accCfg.proxy.0 = self.pjStrDup("sip:\(server);transport=tcp;lr")
 
             if self.accId != pjsua_acc_id(PJSUA_INVALID_ID.rawValue) {
                 pjsua_acc_del(self.accId)
                 self.accId = pjsua_acc_id(PJSUA_INVALID_ID.rawValue)
             }
 
+            NSLog("[CapacitorPjsip] initAccount: ext=%@ domain=%@ server=%@ passwordLen=%d", username, domain, server, password.count)
             let status = pjsua_acc_add(&accCfg, pj_bool_t(PJ_TRUE.rawValue), &self.accId)
             guard status == PJ_SUCCESS.rawValue else {
                 call.reject("pjsua_acc_add failed: \(status)")

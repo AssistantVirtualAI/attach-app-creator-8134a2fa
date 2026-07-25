@@ -24,6 +24,8 @@ export type CallPhase = 'idle' | 'dialing' | 'ringing' | 'early-media' | 'active
 type NativeCallSnapshot = {
   callState: CallState;
   activeCallNumber: string;
+  callerName: string;
+  callerNumber: string;
   isMuted: boolean;
   isOnHold: boolean;
   isRecording: boolean;
@@ -37,6 +39,8 @@ const nativeCallSubscribers = new Set<(snapshot: NativeCallSnapshot) => void>();
 let nativeCallSnapshot: NativeCallSnapshot = {
   callState: 'idle',
   activeCallNumber: '',
+  callerName: '',
+  callerNumber: '',
   isMuted: false,
   isOnHold: false,
   isRecording: false,
@@ -97,9 +101,13 @@ function ensureNativeCallEventBridge() {
     const callReceivedHandle = await CapacitorPjsip.addListener('callReceived', (d: any) => {
       console.log('[NativeSIP] CALL_EVENT|callReceived', d);
       stopRingback();
+      const callerName: string = d?.callerName || '';
+      const callerNumber: string = d?.callerNumber || d?.from || d?.number || 'Unknown';
       emitNativeCallSnapshot({
         callState: 'ringing-in',
-        activeCallNumber: d?.from || d?.number || 'Unknown',
+        activeCallNumber: callerNumber,
+        callerName,
+        callerNumber,
         direction: 'in',
         endReason: null,
         callPhase: 'ringing',
@@ -178,6 +186,8 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
   const [isOnHold, setIsOnHold] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [activeCallNumber, setActiveCallNumber] = useState('');
+  const [callerName, setCallerName] = useState('');
+  const [callerNumber, setCallerNumber] = useState('');
   const [endReason, setEndReason] = useState<string | null>(null);
   const [callPhase, setCallPhase] = useState<CallPhase>('idle');
   const [lastSipCode, setLastSipCode] = useState<string | null>(null);
@@ -205,6 +215,8 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
     ensureNativeCallEventBridge().catch((e) => console.warn('[NativeSIP] call event bridge failed', e));
     const unsub = subscribeNativeCallEvents((snapshot) => {
       setActiveCallNumber(snapshot.activeCallNumber);
+      setCallerName(snapshot.callerName);
+      setCallerNumber(snapshot.callerNumber);
       setIsMuted(snapshot.isMuted);
       setIsOnHold(snapshot.isOnHold);
       setIsRecording(snapshot.isRecording);
@@ -537,5 +549,7 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
     lastEndReason: endReason,
     callPhase,
     lastSipCode,
+    callerName,
+    callerNumber,
   } as UseSoftphoneReturn;
 }

@@ -118,6 +118,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         : rawInvite;
       const callID = inviteParams?.callID || native.callId;
       const shouldAnswer = native.reason === 'answer_requested' && callID && nativeAnswerRequestedCallIdRef.current !== callID;
+      console.log('[verto] native incoming inviteParams present:', !!inviteParams?.sdp, 'callId:', callID, 'reason:', native.reason);
       if (inviteParams?.sdp && callID && nativeInviteCallIdRef.current !== callID) {
         nativeInviteCallIdRef.current = callID;
         getVertoClient().adoptNativeInboundInvite(

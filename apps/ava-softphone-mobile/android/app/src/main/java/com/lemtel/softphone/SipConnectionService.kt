@@ -297,7 +297,8 @@ class SipConnectionService : Service() {
                     b0 = input.read()
                     b1 = input.read()
                 } catch (_: SocketTimeoutException) {
-                    if (isLoggedIn && System.currentTimeMillis() - lastFrameAt < 95_000L) continue
+                    // Any silence longer than 45s while logged in = force reconnect.
+                    if (isLoggedIn && System.currentTimeMillis() - lastFrameAt < 45_000L) continue
                     if (isLoggedIn) throw Exception("Verto socket stale in background")
                     throw Exception("Verto read timeout before login")
                 }

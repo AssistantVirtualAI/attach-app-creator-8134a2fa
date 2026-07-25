@@ -94,6 +94,7 @@ export default function MaestroCallback() {
 
         completedCodes.add(code);
         logDeepLink({ kind: "handler", source: "MaestroCallback", detail: "token exchange OK" });
+        try { window.dispatchEvent(new CustomEvent("maestro:connected")); } catch {}
         toast.success("Maestro connecté avec succès !");
       } catch (e: any) {
         logDeepLink({ kind: "error", source: "MaestroCallback", detail: e?.message || "exchange failed" });

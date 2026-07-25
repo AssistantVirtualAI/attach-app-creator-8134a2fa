@@ -576,6 +576,7 @@ class SipConnectionService : Service() {
                                 currentCallerName = null
                                 currentCallerNumber = null
                                 currentInviteParams = null
+                                currentCallActive = false
                                 handler.post { stopRingtone() }
                                 handler.post { clearCallNotifications() }
                                 emitStatus("idle", "bye_flushed")
@@ -1019,7 +1020,11 @@ class SipConnectionService : Service() {
         currentCallerNumber = null
         currentInviteParams = null
         currentCallActive = false
-        pendingByeCallId = null
+        if (pendingByeCallId == callId) {
+            Log.i(TAG, "handleNativeHangup: keeping queued bye for reconnect callId=$callId")
+        } else {
+            pendingByeCallId = null
+        }
         handler.post { stopRingtone() }
         try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
         handler.post { clearCallNotifications() }

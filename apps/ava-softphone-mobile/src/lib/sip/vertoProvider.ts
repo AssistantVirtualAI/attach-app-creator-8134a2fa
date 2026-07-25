@@ -356,6 +356,20 @@ class VertoClient {
     });
   }
 
+  /**
+   * Inject a Verto message received on the NATIVE (Kotlin) WebSocket so the JS
+   * layer can complete WebRTC negotiation / teardown even when FreeSWITCH
+   * replies on the native socket instead of the JS one.
+   */
+  injectServerMessage(rawJson: string): void {
+    try {
+      console.log('[verto] injectServerMessage from native socket');
+      this.handleMessage(rawJson);
+    } catch (e) {
+      console.warn('[verto] injectServerMessage failed', e);
+    }
+  }
+
   private handleMessage(raw: any) {
     let msg: any;
     try { msg = JSON.parse(String(raw)); } catch { return; }

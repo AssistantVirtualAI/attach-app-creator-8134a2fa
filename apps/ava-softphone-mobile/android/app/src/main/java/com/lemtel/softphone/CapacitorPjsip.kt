@@ -38,6 +38,7 @@ class CapacitorPjsip : Plugin() {
     private var sipStatusReceiver: BroadcastReceiver? = null
     private var callActionReceiver: BroadcastReceiver? = null
     private var scoReceiver: BroadcastReceiver? = null
+    private var vertoMessageReceiver: BroadcastReceiver? = null
 
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager

@@ -243,6 +243,7 @@ export function useMplanipretSoftphone() {
       window.clearInterval(poll);
       cleanupStatus?.();
       cleanupReregister?.();
+      cleanupInvite?.();
     };
   }, [user?.id]);
 

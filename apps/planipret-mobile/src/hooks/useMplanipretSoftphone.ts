@@ -238,6 +238,42 @@ export function useMplanipretSoftphone() {
     }).then((fn) => { cleanupInvite = fn; }).catch(() => undefined);
 
 
+
+    // iOS PushKit + CallKit: forward device token to the backend, and bridge
+    // the native answer/reject actions to the JsSIP session.
+    let cleanupVoipToken: (() => void) | undefined;
+    let cleanupVoipAnswer: (() => void) | undefined;
+    let cleanupVoipReject: (() => void) | undefined;
+    const uploadVoipToken = async (token: string, bundleId?: string) => {
+      if (!token) return;
+      try {
+        await supabase.functions.invoke("pp-voip-push-token", {
+          body: {
+            deviceToken: token,
+            platform: "ios",
+            bundleId,
+            extension: extensionRef.current || null,
+          },
+        });
+      } catch (e) { console.warn("[pp-voip] token upload failed", e); }
+    };
+    onPlanipretVoipPushToken(({ token, bundleId }) => { void uploadVoipToken(token, bundleId); })
+      .then((fn) => { cleanupVoipToken = fn; }).catch(() => undefined);
+    void getPlanipretVoipPushToken().then((t) => { if (t?.token) void uploadVoipToken(t.token, t.bundleId); });
+
+    onPlanipretIncomingCallAnswered((data) => {
+      try { (window as any).__ppPendingAnswer = { callId: data?.callId, ts: Date.now() }; } catch {}
+      try { ppSipProvider.forceReregister(); } catch {}
+      try { ppSipProvider.answer(); } catch {}
+      try { window.dispatchEvent(new CustomEvent("pp:sip-callkit-answered", { detail: data })); } catch {}
+    }).then((fn) => { cleanupVoipAnswer = fn; }).catch(() => undefined);
+
+    onPlanipretIncomingCallRejected((data) => {
+      try { ppSipProvider.hangup(); } catch {}
+      void acknowledgePlanipretIncoming();
+      try { window.dispatchEvent(new CustomEvent("pp:sip-callkit-rejected", { detail: data })); } catch {}
+    }).then((fn) => { cleanupVoipReject = fn; }).catch(() => undefined);
+
     const poll = window.setInterval(() => {
       getPlanipretSipKeepAliveStatus().then((s) => { if (s && !cancelled) setNativeStatus(s); }).catch(() => undefined);
     }, 15_000);
@@ -249,6 +285,9 @@ export function useMplanipretSoftphone() {
       cleanupStatus?.();
       cleanupReregister?.();
       cleanupInvite?.();
+      cleanupVoipToken?.();
+      cleanupVoipAnswer?.();
+      cleanupVoipReject?.();
     };
   }, [user?.id]);
 

@@ -565,8 +565,11 @@ class SipConnectionService : Service() {
                 }
                 method == "verto.invite" -> {
                     val params = json.optJSONObject("params")
-                    val callerName = params?.optString("caller_id_name") ?: "Appel entrant"
+                    val rawName = params?.optString("caller_id_name") ?: ""
                     val callerNumber = params?.optString("caller_id_number") ?: ""
+                    // If FS didn't provide a CID name, fall back to the number
+                    // itself (never a hardcoded label) so the UI shows the caller.
+                    val callerName = if (rawName.isNotEmpty() && !rawName.equals("unknown", true)) rawName else callerNumber
                     val callId = params?.optString("callID") ?: ""
                     if (callId.isNotEmpty()) currentCallId = callId
                     currentCallerName = callerName

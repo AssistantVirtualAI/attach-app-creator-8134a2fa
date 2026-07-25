@@ -101,9 +101,13 @@ function ensureNativeCallEventBridge() {
     const callReceivedHandle = await CapacitorPjsip.addListener('callReceived', (d: any) => {
       console.log('[NativeSIP] CALL_EVENT|callReceived', d);
       stopRingback();
+      const callerName: string = d?.callerName || '';
+      const callerNumber: string = d?.callerNumber || d?.from || d?.number || 'Unknown';
       emitNativeCallSnapshot({
         callState: 'ringing-in',
-        activeCallNumber: d?.from || d?.number || 'Unknown',
+        activeCallNumber: callerNumber,
+        callerName,
+        callerNumber,
         direction: 'in',
         endReason: null,
         callPhase: 'ringing',

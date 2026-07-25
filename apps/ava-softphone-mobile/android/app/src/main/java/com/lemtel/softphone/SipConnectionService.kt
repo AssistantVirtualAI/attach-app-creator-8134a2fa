@@ -424,7 +424,12 @@ class SipConnectionService : Service() {
             out.flush()
             return true
         } catch (e: Exception) {
-            Log.w(TAG, "sendFrame failed: ${e.message}")
+            Log.w(TAG, "sendFrame failed: ${e.message} — closing socket to force reconnect")
+            // Write half-close: mark logged out and close so readLoop dies and
+            // a new WS is established before FreeSWITCH times out the invite.
+            isLoggedIn = false
+            try { sslSocket?.close() } catch (_: Exception) {}
+            outputStream = null
             return false
         }
     }
@@ -560,8 +565,11 @@ class SipConnectionService : Service() {
                 }
                 method == "verto.invite" -> {
                     val params = json.optJSONObject("params")
-                    val callerName = params?.optString("caller_id_name") ?: "Appel entrant"
+                    val rawName = params?.optString("caller_id_name") ?: ""
                     val callerNumber = params?.optString("caller_id_number") ?: ""
+                    // If FS didn't provide a CID name, fall back to the number
+                    // itself (never a hardcoded label) so the UI shows the caller.
+                    val callerName = if (rawName.isNotEmpty() && !rawName.equals("unknown", true)) rawName else callerNumber
                     val callId = params?.optString("callID") ?: ""
                     if (callId.isNotEmpty()) currentCallId = callId
                     currentCallerName = callerName
@@ -614,7 +622,11 @@ class SipConnectionService : Service() {
 
     private fun scheduleReconnect(forcedDelayMs: Long?) {
         if (isDestroyed) return
-        if (reconnectFuture?.isDone == false) return
+        // A forced 0ms reconnect (e.g. answer failure) must supersede any
+        // pending back-off. Cancel first, then re-schedule.
+        if (forcedDelayMs != null && forcedDelayMs <= 0L) {
+            reconnectFuture?.cancel(false)
+        } else if (reconnectFuture?.isDone == false) return
         reconnectAttempt++
         val delay = forcedDelayMs ?: minOf(5_000L * reconnectAttempt, 30_000L)
         Log.i(TAG, "Reconnecting in ${delay}ms (attempt $reconnectAttempt)")

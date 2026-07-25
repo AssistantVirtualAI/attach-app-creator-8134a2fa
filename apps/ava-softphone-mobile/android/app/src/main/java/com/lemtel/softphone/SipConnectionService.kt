@@ -553,6 +553,18 @@ class SipConnectionService : Service() {
                             Log.i(TAG, "Flushing queued verto.bye after login for callId=$pBye")
                             pendingByeCallId = null
                             try { sendFrame(buildVertoByeMessage(pBye)) } catch (_: Exception) {}
+                            // If the bye is for the current call, clear call state now.
+                            // (handleNativeHangup already cleared it, but if the service
+                            // was restarted between hangup and reconnect, re-clear here.)
+                            if (pBye == currentCallId) {
+                                currentCallId = null
+                                currentCallerName = null
+                                currentCallerNumber = null
+                                currentInviteParams = null
+                                handler.post { stopRingtone() }
+                                handler.post { clearCallNotifications() }
+                                emitStatus("idle", "bye_flushed")
+                            }
                         }
                     } else {
                         Log.e(TAG, "Verto login FAILED: $text")
@@ -604,17 +616,26 @@ class SipConnectionService : Service() {
                     emitStatus("active", "remote_${method.replace("verto.", "")}")
                 }
                 method == "verto.bye" -> {
-                    Log.i(TAG, "Remote hangup (verto.bye)")
-                    currentCallId = null
-                    currentCallerName = null
-                    currentCallerNumber = null
-                    currentInviteParams = null
-                    pendingAnswerSdp = null
-                    pendingAnswerParams = null
-                    handler.post { stopRingtone() }
-                    try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
-                    handler.post { clearCallNotifications() }
-                    emitStatus("idle", "remote_bye")
+                    val byeCallId = json.optJSONObject("params")?.optString("callID") ?: ""
+                    Log.i(TAG, "Remote hangup (verto.bye) callID=$byeCallId currentCallId=$currentCallId")
+                    // Only reset state if this bye matches the current call (or is unscoped).
+                    // Avoids a stale bye from a previous call clearing an active new call.
+                    if (byeCallId.isEmpty() || byeCallId == currentCallId) {
+                        currentCallId = null
+                        currentCallerName = null
+                        currentCallerNumber = null
+                        currentInviteParams = null
+                        pendingAnswerSdp = null
+                        pendingAnswerParams = null
+                        pendingByeCallId = null
+                        reconnectAttempt = 0
+                        handler.post { stopRingtone() }
+                        try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
+                        handler.post { clearCallNotifications() }
+                        emitStatus("idle", "remote_bye")
+                    } else {
+                        Log.w(TAG, "verto.bye ignored: byeCallId=$byeCallId != currentCallId=$currentCallId")
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -950,21 +971,33 @@ class SipConnectionService : Service() {
 
     private fun handleNativeHangup(reason: String) {
         val callId = currentCallId
+        Log.i(TAG, "handleNativeHangup: reason=$reason callId=$callId isLoggedIn=$isLoggedIn")
+        // Cancel any pending answer — if we're hanging up, we don't want to
+        // accidentally send verto.answer after reconnect.
+        pendingAnswerSdp = null
+        pendingAnswerParams = null
         if (callId != null) {
             // Always attempt to send verto.bye regardless of isLoggedIn state.
             // If the WebSocket is alive, sendFrame succeeds immediately.
             // If not, queue the bye and reconnect so it is sent after login.
             val sent = try { sendFrame(buildVertoByeMessage(callId)) } catch (_: Exception) { false }
-            if (!sent) {
+            if (sent) {
+                Log.i(TAG, "handleNativeHangup: verto.bye sent immediately for callId=$callId")
+            } else {
                 Log.w(TAG, "handleNativeHangup: sendFrame failed, queuing bye for callId=$callId")
                 pendingByeCallId = callId
-                if (!isLoggedIn && !connecting) scheduleReconnect(500L)
+                // Reconnect immediately (0ms) so the bye is delivered before
+                // FreeSWITCH gives up and the remote phone keeps ringing.
+                scheduleReconnect(0L)
             }
+        } else {
+            Log.w(TAG, "handleNativeHangup: no currentCallId — bye not sent")
         }
         currentCallId = null
         currentCallerName = null
         currentCallerNumber = null
         currentInviteParams = null
+        pendingByeCallId = null
         handler.post { stopRingtone() }
         try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
         handler.post { clearCallNotifications() }

@@ -458,12 +458,18 @@ class VertoClient {
       case 'verto.bye': {
         ack();
         const rec = callID ? this.dialogs.get(callID) : undefined;
-        console.error('[verto][DIAG] verto.bye received! callID:', callID, 'cause:', params?.cause, 'causeCode:', params?.causeCode, 'full params:', JSON.stringify(params));
+        console.log('[verto][DIAG] verto.bye received! callID:', callID, 'cause:', params?.cause, 'dialogExists:', !!rec);
         if (rec) {
           console.log('[verto][DIAG] ICE state at hangup:', rec.pc.iceConnectionState, 'signaling:', rec.pc.signalingState);
           try { rec.pc.close(); } catch { /* ignore */ }
           this.dialogs.delete(rec.callID);
           this.emit({ type: 'hangup', dialog: rec.wrapped, cause: params?.cause });
+        } else {
+          // Dialog already removed (e.g. local hangup beat the remote bye), but
+          // still emit a synthetic hangup so the JS UI resets if it got stuck.
+          // Use a minimal wrapped dialog stub so listeners can handle it.
+          console.log('[verto][DIAG] verto.bye: no dialog found for callID', callID, '— emitting synthetic hangup');
+          this.emit({ type: 'hangup', dialog: { callID: callID || '', hangup: () => {}, answer: () => {}, hold: () => {}, unhold: () => {}, mute: () => {}, unmute: () => {}, sendDtmf: () => {}, transfer: () => {} } as any, cause: params?.cause });
         }
         return;
       }

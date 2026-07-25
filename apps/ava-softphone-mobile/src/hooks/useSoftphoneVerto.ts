@@ -217,14 +217,19 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     }
     if (nativeStatus === 'idle') {
       nativeAnsweredCallIdRef.current = null;
+      nativeInviteCallIdRef.current = null;
+      nativeAnswerRequestedCallIdRef.current = null;
       setCallState((prev) => {
-        if (prev === 'active' || prev === 'ringing-in' || prev === 'ringing-out') {
-          console.log('[verto] native idle received — resetting call state');
+        // Reset on any non-idle call state — including 'ended' which can get
+        // stuck if the 800ms setTimeout in hangup() fires after a new call starts.
+        if (prev === 'active' || prev === 'ringing-in' || prev === 'ringing-out' || prev === 'ended') {
+          console.log('[verto] native idle received — resetting call state from', prev);
           setActiveCallNumber('');
+          setCallerName('');
+          setCallerNumber('');
           setIsMuted(false);
           setIsOnHold(false);
           activeDialogRef.current = null;
-          nativeInviteCallIdRef.current = null;
           return 'idle';
         }
         return prev;
@@ -490,9 +495,16 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     if (Capacitor.getPlatform() === 'android') {
       hangupAndroidNativeCall().catch(() => { /* ignore */ });
     }
+    // Also hang up the JS dialog so the JS-side verto.bye is sent as a
+    // belt-and-suspenders fallback in case the native path misses it.
     if (d) { try { d.hangup(); } catch { /* ignore */ } }
-    else { getVertoClient().hangupAll(); }
+    else { try { getVertoClient().hangupAll(); } catch { /* ignore */ } }
     activeDialogRef.current = null;
+    // Clear native invite tracking so a stale re-invite from the same
+    // callID doesn't accidentally re-adopt after we've hung up.
+    nativeInviteCallIdRef.current = null;
+    nativeAnswerRequestedCallIdRef.current = null;
+    nativeAnsweredCallIdRef.current = null;
 
     // Immediately reset local call state so the UI doesn't freeze waiting
     // for a server-side hangup event that may never arrive on flaky networks.
@@ -506,11 +518,14 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     setTimeout(() => setCallState('idle'), 800);
 
     // Safety watchdog: if for any reason callState is still active/ringing
-    // 5s after hangup was requested, force it to idle so the ActiveCallSheet
+    // 3s after hangup was requested, force it to idle so the ActiveCallSheet
     // never gets stuck on flaky networks.
     setTimeout(() => {
-      setCallState((prev) => (prev === 'active' || prev === 'ringing' || prev === 'ringing-in' || prev === 'ringing-out') ? 'idle' : prev);
-    }, 5000);
+      setCallState((prev) =>
+        (prev === 'active' || prev === 'ringing' || prev === 'ringing-in' || prev === 'ringing-out')
+          ? 'idle' : prev
+      );
+    }, 3000);
   }, []);
 
   const answer = useCallback(async () => {

@@ -388,6 +388,27 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     return () => { cancelled = true; cleanup?.(); };
   }, [applyNativeStatus, log]);
 
+  // ── Native (Kotlin) Verto socket → JS Verto client bridge ───────────────
+  // FreeSWITCH replies (answer SDP, verto.bye) on whichever socket sent the
+  // request. When the native service sends verto.answer, those messages never
+  // reach the JS WebSocket — forward them so WebRTC negotiation completes and
+  // the UI learns about remote hangups.
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    import('../lib/sip/nativeSipProvider')
+      .then(({ CapacitorPjsip }) => CapacitorPjsip.addListener('vertoServerMessage', (d: any) => {
+        if (cancelled) return;
+        const raw = d?.raw;
+        if (!raw) return;
+        try { getVertoClient().injectServerMessage(String(raw)); } catch { /* ignore */ }
+      }))
+      .then((handle: any) => { cleanup = () => { try { handle?.remove?.(); } catch { /* ignore */ } }; })
+      .catch(() => {});
+    return () => { cancelled = true; cleanup?.(); };
+  }, []);
+
+
   // ── Verto event stream → local state ────────────────────────────────────
   useEffect(() => {
     const client = getVertoClient();

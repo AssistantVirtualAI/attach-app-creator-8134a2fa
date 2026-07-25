@@ -142,6 +142,7 @@ class SipConnectionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         createNotificationChannels()
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -159,6 +160,21 @@ class SipConnectionService : Service() {
         registerNetworkWatchdog()
         registerCallActionReceiver()
     }
+
+    /**
+     * Re-broadcasts the last incoming-INVITE state so the freshly-launched
+     * UI (opened via full-screen notification) can render the Answer button
+     * even if it missed the original `emitStatus("incoming", ...)` broadcast.
+     */
+    fun reEmitIncomingStatus() {
+        val invite = currentInviteParams ?: return
+        if (invite.isEmpty()) return
+        handler.post {
+            Log.i(TAG, "reEmitIncomingStatus: caller=${currentCallerNumber} inviteLen=${invite.length}")
+            emitStatus("incoming", "${currentCallerName ?: ""} <${currentCallerNumber ?: ""}>")
+        }
+    }
+
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = buildNotification("Connecté · Prêt à recevoir des appels")

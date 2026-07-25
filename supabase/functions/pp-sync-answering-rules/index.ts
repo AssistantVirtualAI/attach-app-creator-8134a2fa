@@ -172,9 +172,10 @@ Deno.serve(async (req) => {
 
       const { data: brokers } = await admin.from("planipret_profiles")
         .select("id, user_id, full_name, email, extension, ns_extension, ns_domain")
-        .or("ns_extension.not.is.null,extension.not.is.null")
+        .not("extension", "is", null)
         .order("ns_extension", { ascending: true })
         .range(offset, offset + limit - 1);
+      console.log("[pp-sync-answering-rules] bulk brokers found:", (brokers ?? []).length);
       const list = brokers ?? [];
       if (list.length === 0) return json({ success: true, message: "Aucun courtier avec extension NS", total: 0, offset, limit });
 

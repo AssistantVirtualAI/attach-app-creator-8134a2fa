@@ -449,9 +449,10 @@ function patchAndroidNativeFiles() {
     writeIfChanged(path.join(pkgDir, "PpSipKeepAlivePlugin.kt"), ANDROID_PLUGIN(pkg));
     writeIfChanged(path.join(pkgDir, "PpSipKeepAliveService.kt"), ANDROID_SERVICE_KT(pkg));
   }
-  if (mainActivity && !mainText.includes("PpSipKeepAlivePlugin::class.java")) {
+  const pluginAlreadyRegistered = mainText.includes("PpSipKeepAlivePlugin::class.java") || mainText.includes("PpSipKeepAlivePlugin.class");
+  if (mainActivity && !pluginAlreadyRegistered) {
     let next = mainText;
-    if (mainActivity.endsWith(".java") && !mainText.includes("PpSipKeepAlivePlugin.class")) {
+    if (mainActivity.endsWith(".java")) {
       if (next.includes("registerPlugin(")) {
         next = next.replace(/(registerPlugin\([^\n]+\);\n)/, `$1        registerPlugin(PpSipKeepAlivePlugin.class);\n`);
       } else if (next.includes("super.onCreate(savedInstanceState);")) {

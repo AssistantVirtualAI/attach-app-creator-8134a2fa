@@ -738,8 +738,8 @@ class SipConnectionService : Service() {
             else -> "Numéro inconnu"
         }
         val notification = NotificationCompat.Builder(this, CALL_CHANNEL_ID)
-            .setContentTitle("Appel entrant")
-            .setContentText(displayName)
+            .setContentTitle("Appel entrant — $displayName")
+            .setContentText("Appuyez pour répondre")
             .setSmallIcon(android.R.drawable.ic_menu_call)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)

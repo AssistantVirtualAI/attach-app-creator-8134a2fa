@@ -50,6 +50,8 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const [isMuted, setIsMuted] = useState(false);
   const [isOnHold, setIsOnHold] = useState(false);
   const [activeCallNumber, setActiveCallNumber] = useState('');
+  const [callerName, setCallerName] = useState('');
+  const [callerNumber, setCallerNumber] = useState('');
   const [lastPersistedError, setLastPersistedError] = useState<PersistedSipError | null>(() => loadPersistedError());
   const [sipLog, setSipLog] = useState<SipLogEntry[]>(() => loadSipLog());
   const [retryAttempt, setRetryAttempt] = useState(0);
@@ -62,6 +64,9 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const configRef = useRef<SIPConfig | null>(config);
   const nativeInviteCallIdRef = useRef<string | null>(null);
   const nativeAnswerRequestedCallIdRef = useRef<string | null>(null);
+  // Tracks calls already answered natively so the JS adoptNativeInboundInvite
+  // loop does NOT send a second verto.answer after the native path already did.
+  const nativeAnsweredCallIdRef = useRef<string | null>(null);
   configRef.current = config;
 
   const log = useCallback((event: string, details?: any) => {
@@ -112,6 +117,8 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       const caller = native.callerNumber || native.callerName || native.reason || '';
       setStatus('registered');
       if (caller) setActiveCallNumber(caller);
+      if (native.callerName) setCallerName(native.callerName);
+      if (native.callerNumber) setCallerNumber(native.callerNumber);
       setCallState('ringing-in');
       const rawInvite = native.inviteParams;
       const inviteParams = typeof rawInvite === 'string'
@@ -136,7 +143,10 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
                 );
                 if (dialog) {
                   activeDialogRef.current = dialog;
-                  if (shouldAnswer) {
+                  // Only answer via JS if the native path has NOT already answered.
+                  // nativeAnsweredCallIdRef is set when the native service emits 'active'.
+                  const alreadyAnsweredNatively = nativeAnsweredCallIdRef.current === callID;
+                  if (shouldAnswer && !alreadyAnsweredNatively) {
                     nativeAnswerRequestedCallIdRef.current = callID;
                     dialog.answer();
                   }
@@ -150,7 +160,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
           }
           console.warn('[verto] adoptNativeInboundInvite: client not connected after retries');
         })();
-      } else if (shouldAnswer && activeDialogRef.current) {
+      } else if (shouldAnswer && activeDialogRef.current && nativeAnsweredCallIdRef.current !== callID) {
         nativeAnswerRequestedCallIdRef.current = callID;
         activeDialogRef.current.answer();
       }
@@ -163,9 +173,13 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     if (nativeStatus === 'active') {
       setStatus('registered');
       setCallState((prev) => (prev === 'idle' ? 'active' : prev === 'ringing-in' ? 'active' : prev));
+      // Mark this call as natively answered so the JS adoptNativeInboundInvite
+      // loop does not send a redundant second verto.answer.
+      if (native.callId) nativeAnsweredCallIdRef.current = native.callId;
       return;
     }
     if (nativeStatus === 'idle') {
+      nativeAnsweredCallIdRef.current = null;
       setCallState((prev) => {
         if (prev === 'active' || prev === 'ringing-in' || prev === 'ringing-out') {
           console.log('[verto] native idle received — resetting call state');
@@ -359,6 +373,8 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         case 'incoming':
           activeDialogRef.current = e.dialog;
           setActiveCallNumber(e.from);
+          setCallerNumber(e.from);
+          if ((e as any).fromName) setCallerName((e as any).fromName);
           setCallState('ringing-in');
           log('verto.incoming', { from: e.from });
           break;
@@ -438,6 +454,8 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     setIsMuted(false);
     setIsOnHold(false);
     setActiveCallNumber('');
+    setCallerName('');
+    setCallerNumber('');
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setTimeout(() => setCallState('idle'), 800);
 
@@ -557,11 +575,13 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     addCall: toggleSpeakerFn, // speaker toggle exposed via addCall slot for Android
     androidSipServiceStatus,
     setNativeStatusDirectly,
-  }), [
+    callerName,
+    callerNumber,
+  } as any), [
     sipStatus, sipError, callState, callTimer, isMuted, isOnHold, activeCallNumber,
     call, hangup, answer, mute, unmute, hold, unhold, sendDTMF, setStatusPresence, reconnect,
     lastPersistedError, sipLog, clearSipLog, clearSipState, retryAttempt,
     audioProfile, setAudioProfile, transfer, toggleSpeakerFn, androidSipServiceStatus,
-    setNativeStatusDirectly,
+    setNativeStatusDirectly, callerName, callerNumber,
   ]);
 }

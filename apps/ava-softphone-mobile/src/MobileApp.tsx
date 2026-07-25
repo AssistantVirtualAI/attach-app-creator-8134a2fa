@@ -324,6 +324,7 @@ function AuthenticatedShell({
         startedAt: softphone.callState === 'active' ? Date.now() - (softphone.callTimer || 0) * 1000 : null,
         remoteParty: (softphone as any).callerName || (softphone as any).callerNumber || softphone.activeCallNumber,
         remoteUri: (softphone as any).callerNumber || softphone.activeCallNumber,
+        remoteNumber: (softphone as any).callerNumber || softphone.activeCallNumber,
         callerName: (softphone as any).callerName || '',
         callerNumber: (softphone as any).callerNumber || softphone.activeCallNumber,
         muted: softphone.isMuted,

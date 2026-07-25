@@ -542,7 +542,11 @@ class VertoClient {
       await pc.setRemoteDescription({ type: 'offer', sdp: params.sdp });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      await this.waitForIce(pc);
+      // 500 ms is sufficient for inbound: iceCandidatePoolSize=10 pre-gathers
+      // candidates while the phone is ringing, so gathering is already complete
+      // by the time the user taps Answer. Keeping this short eliminates the
+      // ~1.5 s delay between tap and audio connection.
+      await this.waitForIce(pc, 500);
       // Wrap dialog only once callID is known
       const wrapped = this.wrap(callID);
       rec.wrapped = wrapped;

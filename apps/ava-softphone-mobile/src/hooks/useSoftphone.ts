@@ -68,6 +68,10 @@ export interface UseSoftphoneReturn {
   addCall?: (target: string) => void | Promise<void>;
   /** Directly inject a native SIP service status snapshot (Android only). */
   setNativeStatusDirectly?: (native: AndroidSipServiceStatus) => void;
+  /** Caller display name for the current/incoming call (Android Verto). */
+  callerName?: string;
+  /** Caller number for the current/incoming call (Android Verto). */
+  callerNumber?: string;
 }
 
 export function useSoftphoneJsSip(

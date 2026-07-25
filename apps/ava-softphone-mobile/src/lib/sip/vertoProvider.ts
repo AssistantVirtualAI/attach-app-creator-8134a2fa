@@ -754,6 +754,14 @@ class VertoClient {
       else await this.rpc('verto.answer', { sdp, dialogParams });
       rec.answered = true;
       this.emit({ type: 'answered', dialog: rec.wrapped });
+      // Attach the remote stream immediately after verto.answer is sent.
+      // On Android WebView, pc.ontrack fires only when the first RTP packet
+      // arrives from FreeSWITCH — which can be 500 ms–2 s after our answer.
+      // Emitting 'media' here ensures attachRemoteStream() is called right
+      // away so the <audio> element is wired up before RTP starts flowing.
+      if (rec.remoteStream) {
+        this.emit({ type: 'media', dialog: rec.wrapped, stream: rec.remoteStream });
+      }
     } catch (e) {
       console.warn('[verto] answer RPC failed', e);
     }

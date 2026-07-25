@@ -68,7 +68,8 @@ export function attachRemoteStream(input: RTCPeerConnection | MediaStream) {
       console.warn('[audioOutput] attachRemoteStream(stream): no audio element registered');
       return;
     }
-    if (audioEl.srcObject !== input) {
+    const playStream = () => {
+      if (!audioEl) return;
       audioEl.srcObject = input;
       audioEl.muted = false;
       audioEl.volume = 1.0;
@@ -78,7 +79,17 @@ export function attachRemoteStream(input: RTCPeerConnection | MediaStream) {
           audioEl?.play().catch((e2) => console.warn('[audioOutput] play retry failed', e2));
         }, 500);
       });
-    }
+    };
+    // Wire the stream immediately (even if it has no tracks yet).
+    if (audioEl.srcObject !== input) playStream();
+    // On Android WebView, pc.ontrack fires AFTER verto.answer is sent —
+    // sometimes 500 ms–2 s later. When a new audio track is added to the
+    // already-attached stream we must re-play so the <audio> element picks
+    // up the live track and the caller becomes audible.
+    input.addEventListener('addtrack', () => {
+      console.log('[audioOutput] addtrack fired — re-playing stream');
+      playStream();
+    });
     // Force earpiece immediately after stream is attached on Android.
     // Without this the WebView AudioManager stays in STREAM_MUSIC mode
     // and routes audio to the loudspeaker by default.

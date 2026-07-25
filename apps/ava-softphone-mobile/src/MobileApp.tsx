@@ -303,7 +303,12 @@ function AuthenticatedShell({
     const key = `${creds.userId || creds.email}:${creds.extension}:${softphone.sipError}`;
     if (passwordHealRef.current === key) return;
     passwordHealRef.current = key;
-    edgeCall('softphone-sync-password', creds.accessToken, { force_local_to_pbx: false })
+    // 403/401 on REGISTER means the PBX rejected our creds. Force-push the
+    // canonical local password back into FusionPBX (an earlier repair-routing
+    // POST on Android could overwrite the extension row and blank the
+    // password). This fixes iOS too because both platforms share the same
+    // FusionPBX extension record.
+    edgeCall('softphone-sync-password', creds.accessToken, { force_local_to_pbx: true })
       .then(() => hydrateSoftphoneCredentials('mobile'))
       .then((next) => { if (next) setCreds(next); })
       .catch((e) => console.warn('[SIP] password auto-sync failed', e?.message || e));

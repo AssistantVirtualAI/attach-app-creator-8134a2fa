@@ -22,11 +22,13 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-async function nsListDevices(domain: string, ext: string) {
+async function nsListDevices(domain: string, ext: string, timeoutMs = 6000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(
       `${NS_API_BASE_URL}/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`,
-      { headers: { Authorization: `Bearer ${NS_API_KEY}`, Accept: "application/json" } },
+      { headers: { Authorization: `Bearer ${NS_API_KEY}`, Accept: "application/json" }, signal: ctrl.signal },
     );
     if (!res.ok) return { ok: false, status: res.status, ids: [] as string[] };
     const data = await res.json().catch(() => []);
@@ -36,6 +38,8 @@ async function nsListDevices(domain: string, ext: string) {
     return { ok: true, status: 200, ids };
   } catch (e) {
     return { ok: false, status: 0, ids: [] as string[], error: (e as Error).message };
+  } finally {
+    clearTimeout(t);
   }
 }
 

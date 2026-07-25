@@ -180,8 +180,10 @@ Deno.serve(async (req) => {
   let device: any = detail.ok ? (Array.isArray(detail.data) ? detail.data[0] : detail.data) : null;
   let availableDevices: string[] = [];
 
+  let unreachable = (detail as any).unreachable === true;
   if (!device) {
     const list = await nsGet(`/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`);
+    unreachable = unreachable && (list as any).unreachable === true;
     const arr: any[] = Array.isArray(list.data) ? list.data : [];
     availableDevices = arr.map(deviceIdOf).filter(Boolean) as string[];
     device = arr.find((d) => {
@@ -189,6 +191,18 @@ Deno.serve(async (req) => {
       return id === deviceName.toLowerCase();
     }) ?? null;
   }
+
+  if (!device && unreachable) {
+    return json({
+      ok: false,
+      error: "ns_unreachable",
+      extension: ext,
+      domain,
+      action: "Le serveur téléphonique est temporairement injoignable. Réessayez dans quelques instants.",
+    }, 200);
+  }
+
+
 
   if (!device) {
     return json({

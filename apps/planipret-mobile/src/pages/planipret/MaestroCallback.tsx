@@ -27,7 +27,7 @@ let navigatedAway = false;
 function goHomeOnce(navigate: (p: string, o?: { replace?: boolean }) => void) {
   if (navigatedAway) return;
   navigatedAway = true;
-  navigate("/mplanipret/more", { replace: true });
+  goHomeOnce(navigate);
 }
 
 export default function MaestroCallback() {
@@ -62,19 +62,19 @@ export default function MaestroCallback() {
 
     if (error) {
       toast.error(`Maestro: ${error}`);
-      navigate("/mplanipret/more", { replace: true });
+      goHomeOnce(navigate);
       return;
     }
 
     if (!code) {
       // App resumed on a stale callback URL — silently return home.
-      navigate("/mplanipret/home", { replace: true });
+      goHomeOnce(navigate);
       return;
     }
 
     if (completedCodes.has(code) || inflightCodes.has(code)) {
       logDeepLink({ kind: "handler", source: "MaestroCallback", detail: "duplicate deep link — skipping exchange" });
-      navigate("/mplanipret/more", { replace: true });
+      goHomeOnce(navigate);
       return;
     }
     inflightCodes.add(code);
@@ -100,7 +100,7 @@ export default function MaestroCallback() {
         toast.error(`Maestro: ${e?.message || "Erreur de connexion"}`);
       } finally {
         inflightCodes.delete(code);
-        navigate("/mplanipret/more", { replace: true });
+        goHomeOnce(navigate);
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

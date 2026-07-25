@@ -448,9 +448,27 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     }, 5000);
   }, []);
 
-  const answer = useCallback(() => {
+  const answer = useCallback(async () => {
+    const d = activeDialogRef.current as any;
+    if (Capacitor.getPlatform() === 'android' && d) {
+      try {
+        const sdp: string | undefined = d.__pendingAnswer;
+        const dialogParams = d.__params || {};
+        if (sdp) {
+          await answerAndroidNativeCall(sdp, dialogParams);
+          setCallState('active');
+          return;
+        }
+      } catch (e) {
+        console.warn('[verto] native answer failed, falling back to dialog.answer()', e);
+      }
+    }
     activeDialogRef.current?.answer();
   }, []);
+
+  const setNativeStatusDirectly = useCallback((native: AndroidSipServiceStatus) => {
+    applyNativeStatus(native, 'direct');
+  }, [applyNativeStatus]);
 
   const mute = useCallback(() => {
     const d = activeDialogRef.current;

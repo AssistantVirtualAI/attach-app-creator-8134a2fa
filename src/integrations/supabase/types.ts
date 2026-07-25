@@ -10418,6 +10418,42 @@ export type Database = {
           },
         ]
       }
+      planipret_voip_push_tokens: {
+        Row: {
+          bundle_id: string | null
+          created_at: string
+          device_token: string
+          environment: string | null
+          extension: string | null
+          id: string
+          platform: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bundle_id?: string | null
+          created_at?: string
+          device_token: string
+          environment?: string | null
+          extension?: string | null
+          id?: string
+          platform?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bundle_id?: string | null
+          created_at?: string
+          device_token?: string
+          environment?: string | null
+          extension?: string | null
+          id?: string
+          platform?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       platform_branding: {
         Row: {
           client_portal_favicon_url: string | null

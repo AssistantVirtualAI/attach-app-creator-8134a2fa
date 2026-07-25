@@ -933,6 +933,22 @@ class VertoClient {
     }
   }
 
+  /**
+   * Inject a raw Verto JSON message received on the Kotlin WebSocket into the
+   * JS message handler. This bridges the dual-WebSocket gap:
+   * - verto.answer (with SDP): allows the RTCPeerConnection to call setRemoteDescription
+   * - verto.bye: triggers the JS hangup event so the UI closes
+   * - verto.media: handles early-media SDP for outbound calls
+   */
+  injectServerMessage(rawJson: string): void {
+    try {
+      console.log('[verto] injectServerMessage from native relay:', rawJson.substring(0, 120));
+      this.handleMessage(rawJson);
+    } catch (e) {
+      console.warn('[verto] injectServerMessage failed:', e);
+    }
+  }
+
   hangupAll() {
     for (const rec of Array.from(this.dialogs.values())) {
       this.hangup(rec.callID).catch(() => { /* ignore */ });

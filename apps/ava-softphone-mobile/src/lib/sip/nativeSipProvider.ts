@@ -127,7 +127,14 @@ interface AndroidSipServiceBridge {
   hangupNativeCall?: () => Promise<{ ok: boolean }>;
   registerOutboundCall?: (opts: { callID: string; destination: string }) => Promise<{ ok: boolean }>;
   requestBatteryOptimizationExemption?: () => Promise<{ ok: boolean; ignored?: boolean; requested?: boolean }>;
-  addListener?: (event: 'sipServiceStatus', callback: (data: AndroidSipServiceStatus) => void) => Promise<{ remove: () => Promise<void> }>;
+  addListener?: (
+    event: 'sipServiceStatus',
+    callback: (data: AndroidSipServiceStatus) => void
+  ) => Promise<{ remove: () => Promise<void> }>;
+  addVertoServerMessageListener?: (
+    event: 'vertoServerMessage',
+    callback: (data: { raw: string }) => void
+  ) => Promise<{ remove: () => Promise<void> }>;
   // Audio routing — real implementation in CapacitorPjsip.kt
   setAudioRoute?: (opts: { route: string }) => Promise<{ ok: boolean; route?: string }>;
   getAudioRoute?: () => Promise<{ route?: string; outputs?: any; inputs?: any }>;
@@ -264,6 +271,28 @@ export async function onAndroidSipServiceStatus(
     return () => { handle?.remove().catch(() => {}); };
   } catch (e) {
     console.warn('[sip] sipServiceStatus listener failed', e);
+    return () => {};
+  }
+}
+
+/**
+ * Subscribe to raw Verto server messages relayed from the Kotlin WebSocket.
+ * This bridges the dual-WebSocket gap: when the native socket receives
+ * verto.answer (with SDP), verto.bye, or verto.media from FreeSWITCH,
+ * it broadcasts the raw JSON here so the JS RTCPeerConnection can process it.
+ */
+export async function onAndroidVertoServerMessage(
+  cb: (raw: string) => void,
+): Promise<() => void> {
+  if (__platform !== 'android') return () => {};
+  try {
+    const plugin = AndroidSipServicePlugin as any;
+    const handle = await plugin.addListener?.('vertoServerMessage', (data: { raw: string }) => {
+      if (data?.raw) cb(data.raw);
+    });
+    return () => { handle?.remove().catch(() => {}); };
+  } catch (e) {
+    console.warn('[sip] vertoServerMessage listener failed', e);
     return () => {};
   }
 }

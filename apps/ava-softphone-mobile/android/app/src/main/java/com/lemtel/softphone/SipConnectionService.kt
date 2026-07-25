@@ -69,6 +69,7 @@ class SipConnectionService : Service() {
         const val KEY_DISPLAY_NAME = "verto_display_name"
 
         const val ACTION_STATUS = "com.lemtel.softphone.SIP_SERVICE_STATUS"
+        const val ACTION_VERTO_SERVER_MESSAGE = "com.lemtel.softphone.VERTO_SERVER_MESSAGE"
         const val ACTION_NATIVE_VERTO_ANSWER = "com.lemtel.softphone.NATIVE_VERTO_ANSWER"
         const val ACTION_NATIVE_VERTO_HANGUP = "com.lemtel.softphone.NATIVE_VERTO_HANGUP"
         const val ACTION_NATIVE_ANSWER_REQUEST = "com.lemtel.softphone.NATIVE_ANSWER_REQUEST"
@@ -636,10 +637,26 @@ class SipConnectionService : Service() {
                     handler.post { stopRingtone() }
                     handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
                     emitStatus("active", "remote_${method.replace("verto.", "")}")
+                    // Relay the raw JSON to the JS layer so the WebRTC PeerConnection
+                    // receives the answer SDP and can complete media negotiation.
+                    // This bridges the dual-WebSocket gap: the Kotlin WS receives the
+                    // server response but the JS RTCPeerConnection lives in the WebView.
+                    Log.i(TAG, "Relaying $method to JS layer (sdpLen=${params?.optString("sdp")?.length ?: 0})")
+                    sendBroadcast(Intent(ACTION_VERTO_SERVER_MESSAGE).apply {
+                        setPackage(packageName)
+                        putExtra("raw", text)
+                    })
                 }
                 method == "verto.bye" -> {
                     val byeCallId = extractCallId(json.optJSONObject("params"))
                     Log.i(TAG, "Remote hangup (verto.bye) callID=$byeCallId currentCallId=$currentCallId active=$currentCallActive")
+                    // Relay verto.bye to JS so the UI hangup event fires even when
+                    // the JS WebSocket is disconnected or on a different session.
+                    Log.i(TAG, "Relaying verto.bye to JS layer for callID=$byeCallId")
+                    sendBroadcast(Intent(ACTION_VERTO_SERVER_MESSAGE).apply {
+                        setPackage(packageName)
+                        putExtra("raw", text)
+                    })
                     // Only reset state if this bye matches the current call (or is unscoped).
                     // Avoids a stale bye from a previous call clearing an active new call.
                     // If the app believes a call is active, also clear on an unmatched BYE:

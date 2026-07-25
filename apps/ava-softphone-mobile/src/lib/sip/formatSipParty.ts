@@ -55,8 +55,11 @@ export function formatSipParty(raw: string | null | undefined, lang: 'fr' | 'en'
   // 'Poste X' / 'Extension X' is kept only as a subtitle hint.
   if (!name || name === user) name = user;
 
+  // Do not show 'Poste X · Interne' / 'Ext. X · Internal' as subtitle.
+  // The raw extension number is already shown as the main name, so the
+  // subtitle would be redundant and confusing for the user.
   const subtitle = isInternal
-    ? (lang === 'en' ? `Ext. ${user} · Internal` : `Poste ${user} · Interne`)
+    ? ''
     : (user && user !== name ? user : '');
 
   return { name, user, domain, isInternal, subtitle };

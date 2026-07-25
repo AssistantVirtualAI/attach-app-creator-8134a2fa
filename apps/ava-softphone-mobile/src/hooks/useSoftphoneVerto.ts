@@ -24,6 +24,7 @@ import { attachNativeAutoReconnect } from '../lib/sip/nativeAutoReconnect';
 import {
   getAndroidSipServiceStatus,
   onAndroidSipServiceStatus,
+  onAndroidVertoServerMessage,
   answerAndroidNativeCall,
   hangupAndroidNativeCall,
   requestAndroidBatteryOptimizationExemption,
@@ -371,6 +372,34 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   // calls silently go to voicemail.
   useEffect(() => {
     requestAndroidBatteryOptimizationExemption().catch(() => {});
+  }, []);
+
+  // Bridge: relay raw Verto server messages from the Kotlin WebSocket to the
+  // JS VertoClient. When the native socket reconnects to send verto.answer,
+  // FreeSWITCH sends the answer SDP and subsequent verto.bye back on that
+  // Kotlin socket — not the JS WebSocket. Without this relay, the
+  // RTCPeerConnection never gets setRemoteDescription and the UI never
+  // receives the hangup event.
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    onAndroidVertoServerMessage((rawJson) => {
+      if (cancelled) return;
+      try {
+        const client = getVertoClient();
+        if (client) {
+          client.injectServerMessage(rawJson);
+        } else {
+          console.warn('[verto] injectServerMessage: no active VertoClient');
+        }
+      } catch (e) {
+        console.warn('[verto] injectServerMessage error:', e);
+      }
+    }).then((fn) => { unsubscribe = fn; }).catch(() => {});
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => {

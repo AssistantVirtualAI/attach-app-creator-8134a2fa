@@ -61,6 +61,47 @@ const NativePpSip: PpSipKeepAlivePlugin = isNative()
   ? registerPlugin<PpSipKeepAlivePlugin>("PpSipKeepAlive")
   : {};
 
+const NativePpVoipCall: PpVoipCallPlugin = isNative()
+  ? registerPlugin<PpVoipCallPlugin>("PpVoipCall")
+  : {};
+
+// ---------- CallKit + PushKit bridge (iOS only) ----------
+export async function getPlanipretVoipPushToken(): Promise<{ token: string | null; platform: string; bundleId?: string } | null> {
+  if (platform() !== "ios") return null;
+  try { return (await NativePpVoipCall.getVoipPushToken?.()) ?? null; }
+  catch (e) { console.warn("[pp-voip-call] getVoipPushToken failed", e); return null; }
+}
+
+export async function onPlanipretVoipPushToken(cb: (data: { token: string; bundleId?: string }) => void): Promise<() => void> {
+  if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
+  try {
+    const handle = await NativePpVoipCall.addListener("voipPushToken", (data: any) => cb(data ?? {}));
+    return () => { void handle?.remove?.(); };
+  } catch { return () => undefined; }
+}
+
+export async function onPlanipretIncomingCallAnswered(cb: (data: { callUUID: string; callId?: string }) => void): Promise<() => void> {
+  if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
+  try {
+    const handle = await NativePpVoipCall.addListener("incomingCallAnswered", (data: any) => cb(data ?? {}));
+    return () => { void handle?.remove?.(); };
+  } catch { return () => undefined; }
+}
+
+export async function onPlanipretIncomingCallRejected(cb: (data: { callUUID: string; callId?: string }) => void): Promise<() => void> {
+  if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
+  try {
+    const handle = await NativePpVoipCall.addListener("incomingCallRejected", (data: any) => cb(data ?? {}));
+    return () => { void handle?.remove?.(); };
+  } catch { return () => undefined; }
+}
+
+export async function reportPlanipretCallEnded(callId?: string, reason?: string): Promise<void> {
+  if (platform() !== "ios") return;
+  try { await NativePpVoipCall.reportCallEnded?.({ callId, reason }); }
+  catch { /* noop */ }
+}
+
 function parseWss(cfg: PpSipConfig) {
   try {
     const url = new URL(cfg.wssUrl);

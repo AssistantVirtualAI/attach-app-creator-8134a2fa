@@ -189,6 +189,42 @@ type Row = {
 
 type Stats = { total: number; ok: number; missing: number; error: number; partial: number };
 
+const EMPTY_STATS: Stats = { total: 0, ok: 0, missing: 0, error: 0, partial: 0 };
+
+const mobileDevicesCache: {
+  loaded: boolean;
+  rows: Row[];
+  stats: Stats;
+  inFlight: Promise<{ rows: Row[]; stats: Stats }> | null;
+} = {
+  loaded: false,
+  rows: [],
+  stats: EMPTY_STATS,
+  inFlight: null,
+};
+
+async function loadMobileDeviceStatus() {
+  if (mobileDevicesCache.inFlight) return mobileDevicesCache.inFlight;
+  mobileDevicesCache.inFlight = supabase.functions
+    .invoke("pp-mobile-device-status", { body: {} })
+    .then(({ data, error }) => {
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || "Invalid report");
+      const next = {
+        rows: (data.rows ?? []) as Row[],
+        stats: (data.stats ?? EMPTY_STATS) as Stats,
+      };
+      mobileDevicesCache.loaded = true;
+      mobileDevicesCache.rows = next.rows;
+      mobileDevicesCache.stats = next.stats;
+      return next;
+    })
+    .finally(() => {
+      mobileDevicesCache.inFlight = null;
+    });
+  return mobileDevicesCache.inFlight;
+}
+
 function StatePill({ state, t }: { state: Row["state"]; t: (typeof DICT)["fr"] }) {
   const cfg = state === "ok"
     ? { label: "OK", color: SUCCESS, icon: CheckCircle2 }
@@ -210,8 +246,8 @@ export default function PAMobileDevices() {
   const t = DICT[lang];
   const dateLocale = lang === "en" ? "en-CA" : "fr-CA";
   const [loading, setLoading] = useState(false);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [stats, setStats] = useState<Stats>({ total: 0, ok: 0, missing: 0, error: 0, partial: 0 });
+  const [rows, setRows] = useState<Row[]>(() => mobileDevicesCache.rows);
+  const [stats, setStats] = useState<Stats>(() => mobileDevicesCache.stats);
   const [filter, setFilter] = useState("");
   const [testBroker, setTestBroker] = useState<Row | null>(null);
   const [fromNumber, setFromNumber] = useState("");
@@ -227,19 +263,22 @@ export default function PAMobileDevices() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.functions.invoke("pp-mobile-device-status", { body: {} });
-    setLoading(false);
-    if (error) { toast.error(t.toastReportError, { description: error.message }); return; }
-    if (!data?.ok) { toast.error(t.toastInvalidReport, { description: data?.error }); return; }
-    setRows(data.rows ?? []);
-    setStats(data.stats ?? { total: 0, ok: 0, missing: 0, error: 0, partial: 0 });
+    try {
+      const next = await loadMobileDeviceStatus();
+      setRows(next.rows);
+      setStats(next.stats);
+    } catch (error: any) {
+      toast.error(t.toastReportError, { description: error?.message });
+    } finally {
+      setLoading(false);
+    }
   }, [t]);
 
-  // Chargement initial uniquement — ensuite l'actualisation est 100% manuelle
-  // (bouton « Rafraîchir »). Pas de polling, pas de refresh au focus/onglet,
-  // pas de realtime : la liste ne se recharge plus toute seule.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { refresh(); }, []);
+  // Charge une seule fois par session navigateur. Revenir sur la page réutilise
+  // le cache mémoire; seul le bouton « Rafraîchir » relance la vérification.
+  useEffect(() => {
+    if (!mobileDevicesCache.loaded) refresh();
+  }, [refresh]);
 
 
   const backfill = useCallback(async () => {

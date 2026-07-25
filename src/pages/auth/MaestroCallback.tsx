@@ -1,14 +1,25 @@
-import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { Capacitor } from "@capacitor/core";
+
+// Module-level dedupe: prevents double-exchange when the deep link is
+// delivered via both launchUrl and appUrlOpen (cold start).
+const inflightCodes = new Set<string>();
+const completedCodes = new Set<string>();
 
 export default function MaestroCallback() {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const ran = useRef(false);
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [message, setMessage] = useState<string>("Traitement de l'autorisation Maestro…");
   const [details, setDetails] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    if (ran.current) return;
+    ran.current = true;
+
     const code = params.get("code");
     const state = params.get("state");
     const error = params.get("error");
@@ -20,31 +31,45 @@ export default function MaestroCallback() {
       return;
     }
     if (!code) {
-      setStatus("error");
-      setMessage("Aucun code d'autorisation reçu de Maestro.");
+      // Stale callback URL on app resume — silently redirect home.
+      navigate("/", { replace: true });
       return;
     }
+
+    if (completedCodes.has(code) || inflightCodes.has(code)) {
+      setStatus("ok");
+      setMessage("Autorisation déjà traitée.");
+      return;
+    }
+    inflightCodes.add(code);
 
     setDetails({ code: code.slice(0, 12) + "…", state: state ?? "—" });
 
     (async () => {
       try {
+        const isNative = Capacitor.isNativePlatform();
+        const redirect_uri = isNative
+          ? "planipret://auth/maestro/callback"
+          : `${window.location.origin}/auth/maestro/callback`;
         const { data, error: fnErr } = await supabase.functions.invoke("maestro-oauth-callback", {
-          body: { code, state, redirect_uri: `${window.location.origin}/auth/maestro/callback` },
+          body: { code, state, redirect_uri },
         });
         if (fnErr || !(data as any)?.success) {
           setStatus("error");
           setMessage((data as any)?.error ?? fnErr?.message ?? "Échec de l'échange du code.");
           return;
         }
+        completedCodes.add(code);
         setStatus("ok");
         setMessage("Compte Maestro connecté avec succès. Vous pouvez fermer cet onglet.");
       } catch (e: any) {
         setStatus("error");
         setMessage(e?.message ?? "Erreur inconnue");
+      } finally {
+        inflightCodes.delete(code);
       }
     })();
-  }, [params]);
+  }, [params, navigate]);
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0b1220", color: "#e5e7eb", padding: 24 }}>

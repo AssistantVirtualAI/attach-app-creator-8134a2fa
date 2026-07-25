@@ -146,8 +146,7 @@ export default function Ms365Callback() {
         void supabase.functions.invoke("ms365-full-import", { body: { mode: "initial" } }).catch(() => {});
       } catch {}
       setStatus("ok");
-      try { window.history.replaceState(null, "", "/mplanipret/home?ms365=ok"); } catch {}
-      setTimeout(() => navigate("/mplanipret/home?ms365=ok", { replace: true }), 1200);
+      navigate("/mplanipret/home?ms365=ok", { replace: true });
     } finally {
       exchangeInFlight = false;
     }

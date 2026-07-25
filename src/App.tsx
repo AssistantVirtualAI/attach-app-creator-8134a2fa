@@ -454,19 +454,14 @@ function NativeDeepLinkBridge() {
     (async () => {
       try {
         const { App: CapacitorApp } = await import('@capacitor/app');
+        // Only act on real deep links + initial launch. iOS fires appStateChange
+        // every time SFSafariViewController is presented, which would replay a
+        // stale launchUrl/cached callback and close the OAuth browser before the
+        // user finishes signing in to Maestro/Microsoft.
         const launch = await CapacitorApp.getLaunchUrl();
         routeFromUrl(launch?.url);
-        const stateListener = await CapacitorApp.addListener('appStateChange', async (state: { isActive: boolean }) => {
-          if (!state.isActive) return;
-          try {
-            const latestLaunch = await CapacitorApp.getLaunchUrl();
-            routeFromUrl(latestLaunch?.url);
-          } catch {}
-          try { routeFromUrl(localStorage.getItem('pp_ms365_callback_url')); } catch {}
-          try { routeFromUrl(localStorage.getItem('pp_maestro_callback_url')); } catch {}
-        });
         const listener = await CapacitorApp.addListener('appUrlOpen', (event: { url: string }) => routeFromUrl(event.url));
-        unsubscribe = () => { try { listener.remove(); } catch {}; try { stateListener.remove(); } catch {} };
+        unsubscribe = () => { try { listener.remove(); } catch {} };
       } catch {
         // Web preview: no native deep links.
       }

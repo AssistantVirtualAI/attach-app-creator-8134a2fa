@@ -740,7 +740,18 @@ Deno.serve(async (req) => {
 
     if (!domain) return json({ error: "NS domain not configured" }, 412);
     const usersRes = await fetchAll(`/domains/${encodeURIComponent(domain)}/users`, 200, 30);
-    if (!usersRes.data.length) return json({ error: "NS users fetch failed", warning: usersRes.warning }, 502);
+    if (!usersRes.data.length) {
+      // Graceful degradation: NS unreachable/empty. Return 200 so the UI does not crash.
+      return json({
+        ok: false,
+        status: "skipped",
+        reason: "ns_unreachable",
+        domain,
+        users_total: 0,
+        raw_users_total: 0,
+        warning: usersRes.warning ?? "ns_users_empty",
+      });
+    }
     const brokerUsers = usersRes.data.filter(isPlanipretBrokerUser);
 
     const profileSync = await upsertProfiles(admin, domain, brokerUsers);

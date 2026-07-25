@@ -71,6 +71,7 @@ class SipConnectionService : Service() {
         const val ACTION_STATUS = "com.lemtel.softphone.SIP_SERVICE_STATUS"
         const val ACTION_NATIVE_VERTO_ANSWER = "com.lemtel.softphone.NATIVE_VERTO_ANSWER"
         const val ACTION_NATIVE_VERTO_HANGUP = "com.lemtel.softphone.NATIVE_VERTO_HANGUP"
+        const val ACTION_NATIVE_ANSWER_REQUEST = "com.lemtel.softphone.NATIVE_ANSWER_REQUEST"
         const val KEY_STATUS = "verto_native_status"
         const val KEY_REASON = "verto_native_reason"
         const val KEY_UPDATED_AT = "verto_native_updated_at"
@@ -730,9 +731,15 @@ class SipConnectionService : Service() {
         val answerPI  = actionPendingIntent(CallActionReceiver.ACTION_ANSWER,  110)
         val declinePI = actionPendingIntent(CallActionReceiver.ACTION_DECLINE, 111)
 
+        val displayName = when {
+            callerName.isNotEmpty() && callerNumber.isNotEmpty() && callerName != callerNumber -> "$callerName ($callerNumber)"
+            callerNumber.isNotEmpty() -> callerNumber
+            callerName.isNotEmpty() -> callerName
+            else -> "Numéro inconnu"
+        }
         val notification = NotificationCompat.Builder(this, CALL_CHANNEL_ID)
-            .setContentTitle("Appel entrant — Lemtel")
-            .setContentText("$callerName${if (callerNumber.isNotEmpty()) " <$callerNumber>" else ""}")
+            .setContentTitle("Appel entrant")
+            .setContentText(displayName)
             .setSmallIcon(android.R.drawable.ic_menu_call)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -841,6 +848,7 @@ class SipConnectionService : Service() {
             val filter = android.content.IntentFilter(CallActionReceiver.ACTION_CALL_ACTION_EVENT)
             filter.addAction(ACTION_NATIVE_VERTO_ANSWER)
             filter.addAction(ACTION_NATIVE_VERTO_HANGUP)
+            filter.addAction(ACTION_NATIVE_ANSWER_REQUEST)
             val recv = object : android.content.BroadcastReceiver() {
                 override fun onReceive(ctx: Context?, intent: Intent?) {
                     when (intent?.action) {
@@ -850,6 +858,10 @@ class SipConnectionService : Service() {
                         }
                         ACTION_NATIVE_VERTO_HANGUP -> {
                             handleNativeHangup("ui_hangup")
+                            return
+                        }
+                        ACTION_NATIVE_ANSWER_REQUEST -> {
+                            handleNativeAnswerRequest()
                             return
                         }
                     }

@@ -11,8 +11,9 @@ import android.util.Log
  * Receives notification action button taps (Answer / Decline / Hold / Resume)
  * from both the incoming-call notification and the ongoing-call notification.
  *
- * Rebroadcasts the action as an internal intent that CapacitorPjsip listens
- * to. The plugin then relays it to the JS layer as a `sipCallAction` event.
+ * For ANSWER: the service handles the answer natively (no JS bridge needed).
+ * For DECLINE/HANGUP: the service handles the hangup natively.
+ * For HOLD/RESUME/MUTE: relay to JS via CapacitorPjsip.
  */
 class CallActionReceiver : BroadcastReceiver() {
 
@@ -43,34 +44,57 @@ class CallActionReceiver : BroadcastReceiver() {
         }
         Log.i(TAG, "Notification action tapped: $action")
 
-        // Answer flow: bring the Activity to foreground FIRST so MainActivity
-        // can call reEmitIncomingStatus() and the JS layer can adopt the
-        // invite. Delay the sipCallAction broadcast ~400ms so `activeDialog`
-        // is populated by the time `sp.answer()` fires — otherwise the tap
-        // is dropped and the call falls to voicemail.
-        if (action == "answer") {
-            val launch = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("incoming_call_action", "answer")
-            }
-            try { context.startActivity(launch) } catch (_: Exception) {}
+        when (action) {
+            "answer" -> {
+                // Step 1: Bring the app to foreground so the UI can show the call screen.
+                val launch = Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra("incoming_call_action", "answer")
+                }
+                try { context.startActivity(launch) } catch (_: Exception) {}
 
-            Handler(Looper.getMainLooper()).postDelayed({
+                // Step 2: Tell SipConnectionService to answer natively (no JS needed).
+                // This is the primary answer path — it sends verto.answer directly
+                // from the native WebSocket without going through the JS bridge.
+                // The JS bridge path is kept as a secondary fallback via sipCallAction.
+                context.sendBroadcast(
+                    Intent(SipConnectionService.ACTION_NATIVE_ANSWER_REQUEST)
+                        .setPackage(context.packageName)
+                )
+
+                // Step 3: Also relay to JS after a delay in case the JS Verto client
+                // is connected and wants to do its own WebRTC negotiation.
+                Handler(Looper.getMainLooper()).postDelayed({
+                    context.sendBroadcast(
+                        Intent(ACTION_CALL_ACTION_EVENT)
+                            .setPackage(context.packageName)
+                            .putExtra(EXTRA_ACTION, action)
+                    )
+                }, 1500)
+            }
+
+            "decline", "hangup" -> {
+                // Tell the service to hang up natively (no JS needed).
+                context.sendBroadcast(
+                    Intent(SipConnectionService.ACTION_NATIVE_VERTO_HANGUP)
+                        .setPackage(context.packageName)
+                )
+                // Also relay to JS for UI cleanup.
                 context.sendBroadcast(
                     Intent(ACTION_CALL_ACTION_EVENT)
                         .setPackage(context.packageName)
                         .putExtra(EXTRA_ACTION, action)
                 )
-            }, 400)
-            return
-        }
+            }
 
-        // Rebroadcast internally so CapacitorPjsip's receiver picks it up
-        // and forwards to the JS bridge.
-        context.sendBroadcast(
-            Intent(ACTION_CALL_ACTION_EVENT)
-                .setPackage(context.packageName)
-                .putExtra(EXTRA_ACTION, action)
-        )
+            else -> {
+                // Hold, resume, mute — relay to JS via CapacitorPjsip.
+                context.sendBroadcast(
+                    Intent(ACTION_CALL_ACTION_EVENT)
+                        .setPackage(context.packageName)
+                        .putExtra(EXTRA_ACTION, action)
+                )
+            }
+        }
     }
 }

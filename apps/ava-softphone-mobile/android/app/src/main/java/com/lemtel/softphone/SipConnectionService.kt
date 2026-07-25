@@ -56,6 +56,11 @@ class SipConnectionService : Service() {
         const val INCOMING_CALL_NOTIFICATION_ID = 1002
         const val PREFS_NAME = "verto_creds"
 
+        // Weak-ish singleton so MainActivity can re-broadcast the current
+        // incoming-call state after Android relaunches the UI from a
+        // full-screen notification tap.
+        @Volatile var instance: SipConnectionService? = null
+
         const val KEY_HOST = "verto_host"
         const val KEY_PORT = "verto_port"
         const val KEY_LOGIN = "verto_login"

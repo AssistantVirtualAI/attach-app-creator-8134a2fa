@@ -109,9 +109,11 @@ class CapacitorPjsip : Plugin() {
         try { sipStatusReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         try { callActionReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         try { scoReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
+        try { vertoMessageReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         sipStatusReceiver = null
         callActionReceiver = null
         scoReceiver = null
+        vertoMessageReceiver = null
         try { AudioFocusHelper.releaseCallAudioFocus(context) } catch (_: Exception) {}
         super.handleOnDestroy()
     }

@@ -62,6 +62,8 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
     // C callbacks need a static reference to reach back into the instance.
     // internal (not fileprivate) so AppDelegate can reach shared + notifyBg
     internal static weak var shared: CapacitorPjsip?
+    private var pendingCallKitAnswer = false
+    private var pendingCallKitEnd = false
 
     /// Called by AppDelegate when PushKit delivers a new VoIP token.
     /// If the account is already registered we trigger an immediate
@@ -85,16 +87,26 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
         CallKitManager.shared.onAnswer = { [weak self] in
             self?.sipQueue.async {
                 self?.registerThreadIfNeeded()
-                guard let self = self, self.currentCallId != pjsua_call_id(PJSUA_INVALID_ID.rawValue) else { return }
+                guard let self = self else { return }
+                if self.currentCallId == pjsua_call_id(PJSUA_INVALID_ID.rawValue) {
+                    self.pendingCallKitAnswer = true
+                    return
+                }
                 pjsua_call_answer(self.currentCallId, 200, nil, nil)
+                self.pendingCallKitAnswer = false
             }
         }
         CallKitManager.shared.onEnd = { [weak self] in
             self?.sipQueue.async {
                 self?.registerThreadIfNeeded()
-                guard let self = self, self.currentCallId != pjsua_call_id(PJSUA_INVALID_ID.rawValue) else { return }
+                guard let self = self else { return }
+                if self.currentCallId == pjsua_call_id(PJSUA_INVALID_ID.rawValue) {
+                    self.pendingCallKitEnd = true
+                    return
+                }
                 pjsua_call_hangup(self.currentCallId, 0, nil, nil)
                 self.currentCallId = pjsua_call_id(PJSUA_INVALID_ID.rawValue)
+                self.pendingCallKitEnd = false
             }
         }
 
@@ -268,6 +280,13 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
                     let remote = String(cString: info.remote_info.ptr)
                     CallKitManager.shared.reportIncoming(from: remote)
                     plugin.notifyBg("callReceived", ["from": remote])
+                    if plugin.pendingCallKitEnd {
+                        pjsua_call_hangup(callId, 0, nil, nil)
+                        plugin.pendingCallKitEnd = false
+                    } else if plugin.pendingCallKitAnswer {
+                        pjsua_call_answer(callId, 200, nil, nil)
+                        plugin.pendingCallKitAnswer = false
+                    }
                 }
 
                 var logCfg = pjsua_logging_config()

@@ -60,6 +60,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const configRef = useRef<SIPConfig | null>(config);
   const nativeInviteCallIdRef = useRef<string | null>(null);
+  const nativeAnswerRequestedCallIdRef = useRef<string | null>(null);
   configRef.current = config;
 
   const log = useCallback((event: string, details?: any) => {
@@ -116,17 +117,31 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         ? (() => { try { return rawInvite ? JSON.parse(rawInvite) : null; } catch { return null; } })()
         : rawInvite;
       const callID = inviteParams?.callID || native.callId;
+      const shouldAnswer = native.reason === 'answer_requested' && callID && nativeAnswerRequestedCallIdRef.current !== callID;
       if (inviteParams?.sdp && callID && nativeInviteCallIdRef.current !== callID) {
         nativeInviteCallIdRef.current = callID;
         getVertoClient().adoptNativeInboundInvite(
           inviteParams,
           async (sdp, dialogParams) => { await answerAndroidNativeCall(sdp, dialogParams); },
           async () => { await hangupAndroidNativeCall(); },
-        ).catch((e) => log('verto.native.adopt.error', { message: e?.message || String(e) }));
+        ).then((dialog) => {
+          if (!dialog) return;
+          activeDialogRef.current = dialog;
+          if (shouldAnswer) {
+            nativeAnswerRequestedCallIdRef.current = callID;
+            dialog.answer();
+          }
+        }).catch((e) => log('verto.native.adopt.error', { message: e?.message || String(e) }));
+      } else if (shouldAnswer && activeDialogRef.current) {
+        nativeAnswerRequestedCallIdRef.current = callID;
+        activeDialogRef.current.answer();
       }
       return;
     }
-    if (nativeStatus !== 'incoming') nativeInviteCallIdRef.current = null;
+    if (nativeStatus !== 'incoming') {
+      nativeInviteCallIdRef.current = null;
+      nativeAnswerRequestedCallIdRef.current = null;
+    }
     if (native.loggedIn || nativeStatus === 'registered' || nativeStatus === 'incoming') {
       setStatus('registered');
       return;

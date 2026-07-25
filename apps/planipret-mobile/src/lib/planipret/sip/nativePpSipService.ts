@@ -36,6 +36,19 @@ type PpSipKeepAlivePlugin = {
   ) => Promise<ListenerHandle>;
 };
 
+type PpVoipCallPlugin = {
+  getVoipPushToken?: () => Promise<{ token: string | null; platform: string; bundleId?: string }>;
+  reportCallEnded?: (opts: { callId?: string; reason?: string }) => Promise<{ ok: boolean }>;
+  addListener?: (
+    event:
+      | "voipPushToken"
+      | "incomingCallAnswered"
+      | "incomingCallRejected"
+      | "callKitReady",
+    cb: (data: any) => void,
+  ) => Promise<ListenerHandle>;
+};
+
 const isNative = () => {
   try { return Capacitor.isNativePlatform(); } catch { return false; }
 };

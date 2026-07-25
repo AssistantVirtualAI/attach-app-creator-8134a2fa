@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
 
       const { data: brokers } = await admin.from("planipret_profiles")
         .select("id, user_id, full_name, email, extension, ns_extension, ns_domain")
-        .not("ns_extension", "is", null)
+        .or("ns_extension.not.is.null,extension.not.is.null")
         .order("ns_extension", { ascending: true })
         .range(offset, offset + limit - 1);
       const list = brokers ?? [];

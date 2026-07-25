@@ -202,6 +202,16 @@ export async function nsFetch(path: string, init: RequestInit = {}, opts: { func
   if (res.status >= 500) breakerRecordFailure(`HTTP ${res.status}`);
   else if (res.ok) breakerRecordSuccess();
 
+  // Log non-OK bodies (clone so callers can still read the body)
+  if (!res.ok) {
+    try {
+      const errText = await res.clone().text();
+      console.error(`[nsFetch] ${method} ${path} → ${res.status} ${errText.substring(0, 300)}`);
+    } catch { /* ignore */ }
+  }
+
+
+
   // Fire & forget log to planipret_ns_request_log
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;

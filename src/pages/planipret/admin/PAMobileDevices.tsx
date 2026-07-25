@@ -237,6 +237,39 @@ export default function PAMobileDevices() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Auto-poll every 30s + refresh on tab focus / network reconnect so the
+  // devices list stays live without the admin hitting "Refresh" manually.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 30_000);
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    const onFocus = () => refresh();
+    const onOnline = () => refresh();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [refresh]);
+
+  // Realtime: any change to profiles (extension/device link) triggers refresh.
+  useEffect(() => {
+    const ch = supabase
+      .channel("pa-mobile-devices-profiles")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "planipret_profiles" },
+        () => refresh(),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [refresh]);
+
   const backfill = useCallback(async () => {
     setBackfilling(true);
     const { data, error } = await supabase.functions.invoke("pp-backfill-mobile-devices", { body: {} });

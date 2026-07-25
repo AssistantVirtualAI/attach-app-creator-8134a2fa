@@ -202,6 +202,7 @@ class SipConnectionService : Service() {
         executor.shutdownNow()
         wakeLock?.let { if (it.isHeld) it.release() }
         wifiLock?.let { if (it.isHeld) it.release() }
+        if (instance === this) instance = null
         super.onDestroy()
     }
 

@@ -14,13 +14,26 @@ export type PpNativeSipStatus = {
 
 type ListenerHandle = { remove: () => Promise<void> | void };
 
+export type PpIncomingInvite = {
+  callId?: string;
+  from?: string;
+  fromUser?: string;
+  fromDisplay?: string;
+  /** Present only when user tapped Answer / Decline on the native notification. */
+  action?: "answer" | "decline";
+};
+
 type PpSipKeepAlivePlugin = {
   startSipService?: (opts: Record<string, unknown>) => Promise<PpNativeSipStatus>;
   stopSipService?: () => Promise<PpNativeSipStatus>;
   getSipServiceStatus?: () => Promise<PpNativeSipStatus>;
   requestBatteryOptimizationExemption?: () => Promise<PpNativeSipStatus>;
   triggerReregister?: () => Promise<PpNativeSipStatus>;
-  addListener?: (event: "sipServiceStatus" | "sipReregisterRequested", cb: (data: PpNativeSipStatus) => void) => Promise<ListenerHandle>;
+  acknowledgeIncoming?: () => Promise<{ ok: boolean }>;
+  addListener?: (
+    event: "sipServiceStatus" | "sipReregisterRequested" | "sipIncomingInvite",
+    cb: (data: any) => void,
+  ) => Promise<ListenerHandle>;
 };
 
 const isNative = () => {

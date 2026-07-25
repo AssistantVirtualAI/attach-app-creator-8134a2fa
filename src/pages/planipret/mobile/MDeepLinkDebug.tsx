@@ -62,14 +62,30 @@ export default function MDeepLinkDebug() {
       else set(1, { state: "ok", detail: `client_id=${String(d.client_id).slice(0, 8)}… tenant=${d.tenant_id}` });
     } catch (e: any) { set(1, { state: "fail", detail: e?.message }); }
 
+    // helper: invoke that never throws on non-2xx (parses response body)
+    const safeInvoke = async (name: string, body: any) => {
+      try {
+        const { data, error } = await supabase.functions.invoke(name, { body });
+        if (error && (error as any).context?.response) {
+          try { return { data: await (error as any).context.response.json(), error: null }; }
+          catch { return { data: null, error }; }
+        }
+        return { data, error };
+      } catch (e: any) {
+        if (e?.context?.response) {
+          try { return { data: await e.context.response.json(), error: null }; } catch {}
+        }
+        return { data: null, error: e };
+      }
+    };
+
     // 3. MS callback ping
     set(2, { state: "running" });
     try {
-      const { data } = await supabase.functions.invoke("pp-ms-auth-callback", {
-        body: { code: "PING_DEBUG", redirect_uri: "capacitor://localhost/auth/microsoft/callback", code_verifier: "x" },
+      const { data } = await safeInvoke("pp-ms-auth-callback", {
+        code: "PING_DEBUG", redirect_uri: "capacitor://localhost/auth/microsoft/callback", code_verifier: "x",
       });
       const d = data as any;
-      // Success case: MS rejects the fake code -> success:false with AAD error is the expected healthy response.
       const upstreamReached = d && d.success === false && typeof d.error === "string" && d.error.includes("AADSTS");
       set(2, upstreamReached
         ? { state: "ok", detail: "Azure a répondu (code rejeté = normal)" }
@@ -80,16 +96,18 @@ export default function MDeepLinkDebug() {
     set(3, { state: "running" });
     try {
       const isNative = Capacitor.isNativePlatform();
-      const { data, error } = await supabase.functions.invoke("maestro-oauth-start", {
-        body: {
-          platform: isNative ? "mobile" : "web",
-          redirect_uri: isNative ? "planipret://auth/maestro/callback" : `${window.location.origin}/auth/maestro/callback`,
-          origin: window.location.origin,
-        },
+      const { data, error } = await safeInvoke("maestro-oauth-start", {
+        platform: isNative ? "mobile" : "web",
+        redirect_uri: isNative ? "planipret://auth/maestro/callback" : `${window.location.origin}/auth/maestro/callback`,
+        origin: window.location.origin,
       });
       const d = data as any;
-      if (error || !d?.authorize_url) set(3, { state: "fail", detail: error?.message || d?.error || "no authorize_url" });
-      else {
+      if (!d?.authorize_url) {
+        const detail = d?.error === "unauthorized"
+          ? "requiert une session utilisateur (connecte-toi puis relance)"
+          : (error?.message || d?.error || "no authorize_url");
+        set(3, { state: "fail", detail });
+      } else {
         try {
           const u = new URL(d.authorize_url);
           set(3, { state: "ok", detail: `authorize host=${u.host}` });
@@ -100,8 +118,8 @@ export default function MDeepLinkDebug() {
     // 5. Maestro callback ping
     set(4, { state: "running" });
     try {
-      const { data } = await supabase.functions.invoke("maestro-oauth-callback", {
-        body: { code: "PING_DEBUG", state: "debug-ping", redirect_uri: "planipret://auth/maestro/callback" },
+      const { data } = await safeInvoke("maestro-oauth-callback", {
+        code: "PING_DEBUG", state: "debug-ping", redirect_uri: "planipret://auth/maestro/callback",
       });
       const d = data as any;
       const upstreamReached = d && d.success === false && typeof d.error === "string" && d.error.length > 0;
@@ -109,6 +127,7 @@ export default function MDeepLinkDebug() {
         ? { state: "ok", detail: "Maestro a répondu (code rejeté = normal)" }
         : { state: "fail", detail: d?.error || "réponse inattendue" });
     } catch (e: any) { set(4, { state: "fail", detail: e?.message }); }
+
 
     setRunning(false);
     toast.success("Validation terminée");

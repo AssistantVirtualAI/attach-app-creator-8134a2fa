@@ -531,6 +531,13 @@ class SipConnectionService : Service() {
                         Log.i(TAG, "Verto login SUCCESS — extension registered ✅")
                         emitStatus("registered", "login_ok")
                         handler.post { updateNotification("Connecté · Prêt à recevoir des appels") }
+                        // Flush pending answer if user tapped Answer while WS was reconnecting
+                        val pSdp = pendingAnswerSdp
+                        val pParams = pendingAnswerParams ?: ""
+                        if (pSdp != null && currentCallId != null) {
+                            Log.i(TAG, "Flushing queued verto.answer after login")
+                            handleNativeAnswer(pSdp, pParams)
+                        }
                     } else {
                         Log.e(TAG, "Verto login FAILED: $text")
                         isLoggedIn = false
@@ -560,6 +567,9 @@ class SipConnectionService : Service() {
                     currentCallerName = null
                     currentCallerNumber = null
                     currentInviteParams = null
+                    pendingAnswerSdp = null
+                    pendingAnswerParams = null
+                    handler.post { stopRingtone() }
                     try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
                     handler.post { clearCallNotifications() }
                     emitStatus("idle", "remote_bye")
@@ -689,7 +699,24 @@ class SipConnectionService : Service() {
         )
     }
 
+    private var activeRingtone: android.media.Ringtone? = null
+
+    private fun stopRingtone() {
+        try { activeRingtone?.stop() } catch (_: Exception) {}
+        activeRingtone = null
+    }
+
     private fun showIncomingCallNotification(callerName: String, callerNumber: String) {
+        stopRingtone()
+        try {
+            val uri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
+            val ringtone = android.media.RingtoneManager.getRingtone(applicationContext, uri)
+            if (ringtone != null) {
+                activeRingtone = ringtone
+                ringtone.play()
+                handler.postDelayed({ stopRingtone() }, 30_000)
+            }
+        } catch (_: Exception) {}
         val nm = getSystemService(NotificationManager::class.java)
         val fullScreen = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -789,6 +816,15 @@ class SipConnectionService : Service() {
                 NotificationChannel(CALL_CHANNEL_ID, "Appels entrants", NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "Notifications d'appels entrants"
                     setShowBadge(true)
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 500, 200, 500)
+                    setSound(
+                        android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE),
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
                 }
             )
         }
@@ -850,6 +886,7 @@ class SipConnectionService : Service() {
         currentCallerName = null
         currentCallerNumber = null
         currentInviteParams = null
+        handler.post { stopRingtone() }
         try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
         handler.post { clearCallNotifications() }
         emitStatus("idle", "native_${reason}")
@@ -862,9 +899,22 @@ class SipConnectionService : Service() {
         emitStatus("incoming", "answer_requested")
     }
 
+    @Volatile private var pendingAnswerSdp: String? = null
+    @Volatile private var pendingAnswerParams: String? = null
+
     private fun handleNativeAnswer(sdp: String, dialogParamsJson: String) {
         val callId = currentCallId
-        if (callId.isNullOrEmpty() || sdp.isEmpty() || !isLoggedIn) return
+        if (callId.isNullOrEmpty() || sdp.isEmpty()) return
+        handler.post { stopRingtone() }
+
+        if (!isLoggedIn || outputStream == null) {
+            Log.w(TAG, "verto.answer queued: isLoggedIn=$isLoggedIn outputStream=${outputStream != null}")
+            pendingAnswerSdp = sdp
+            pendingAnswerParams = dialogParamsJson
+            if (!connecting) executor.submit { connectVerto() }
+            return
+        }
+
         try {
             val params = JSONObject().apply {
                 put("sdp", sdp)
@@ -876,9 +926,17 @@ class SipConnectionService : Service() {
                 put("method", "verto.answer")
                 put("params", params)
             }
-            sendFrame(msg.toString())
-            handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
-            emitStatus("active", "native_answer_sent")
+            if (sendFrame(msg.toString())) {
+                pendingAnswerSdp = null
+                pendingAnswerParams = null
+                handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
+                emitStatus("active", "native_answer_sent")
+            } else {
+                Log.w(TAG, "sendFrame failed for verto.answer — queuing for reconnect")
+                pendingAnswerSdp = sdp
+                pendingAnswerParams = dialogParamsJson
+                scheduleReconnect()
+            }
         } catch (e: Exception) {
             Log.w(TAG, "handleNativeAnswer failed: ${e.message}")
             emitStatus("error", e.message ?: "native_answer_failed")

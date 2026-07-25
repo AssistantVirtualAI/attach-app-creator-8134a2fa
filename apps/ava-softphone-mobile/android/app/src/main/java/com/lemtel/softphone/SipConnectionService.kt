@@ -220,7 +220,9 @@ class SipConnectionService : Service() {
             val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
             val socket = factory.createSocket(host, port) as SSLSocket
             socket.keepAlive = true
-            socket.soTimeout = 75_000
+            // Detect dead sockets faster: 30s read timeout + ping every 15s so
+            // Doze/network-drop induced silence is caught within ~45s instead of ~95s.
+            socket.soTimeout = 30_000
             socket.startHandshake()
 
             // WebSocket HTTP Upgrade handshake
@@ -256,11 +258,20 @@ class SipConnectionService : Service() {
             // Send verto.login
             sendVertoLogin(login, password, domain, displayName)
 
-            // Start ping keepalive
+            // Start ping keepalive (tighter cadence so a silently-dead socket
+            // is caught before FreeSWITCH expires the contact).
             pingFuture?.cancel(false)
             pingFuture = executor.scheduleAtFixedRate({
                 if (isLoggedIn && !isDestroyed) sendPing()
-            }, 25, 25, TimeUnit.SECONDS)
+            }, 15, 15, TimeUnit.SECONDS)
+
+            // Periodic verto.login refresh (every 4 min) so the FS-side session
+            // never times out even if the WS stays open through Doze.
+            executor.scheduleAtFixedRate({
+                if (isLoggedIn && !isDestroyed) {
+                    try { sendVertoLogin(login, password, domain, displayName) } catch (_: Exception) {}
+                }
+            }, 240, 240, TimeUnit.SECONDS)
 
             // Read loop
             readLoop(socket)
@@ -286,7 +297,8 @@ class SipConnectionService : Service() {
                     b0 = input.read()
                     b1 = input.read()
                 } catch (_: SocketTimeoutException) {
-                    if (isLoggedIn && System.currentTimeMillis() - lastFrameAt < 95_000L) continue
+                    // Any silence longer than 45s while logged in = force reconnect.
+                    if (isLoggedIn && System.currentTimeMillis() - lastFrameAt < 45_000L) continue
                     if (isLoggedIn) throw Exception("Verto socket stale in background")
                     throw Exception("Verto read timeout before login")
                 }

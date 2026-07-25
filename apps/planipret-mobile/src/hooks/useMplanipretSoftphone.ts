@@ -252,7 +252,7 @@ export function useMplanipretSoftphone() {
             deviceToken: token,
             platform: "ios",
             bundleId,
-            extension: extensionRef.current || null,
+            extension: (ppSipProvider.getConfig?.() as any)?.extension ?? null,
           },
         });
       } catch (e) { console.warn("[pp-voip] token upload failed", e); }

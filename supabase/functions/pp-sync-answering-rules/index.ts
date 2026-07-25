@@ -165,13 +165,18 @@ Deno.serve(async (req) => {
       return json({ success: result.success, result });
     }
 
-    // Bulk
+    // Bulk (supports offset/limit chunking so the caller can page through 352 brokers)
     if (bulk) {
+      const offset: number = Math.max(0, Number(body?.offset ?? 0));
+      const limit: number = Math.max(1, Math.min(500, Number(body?.limit ?? 100)));
+
       const { data: brokers } = await admin.from("planipret_profiles")
         .select("id, user_id, full_name, email, extension, ns_extension, ns_domain")
-        .not("ns_extension", "is", null);
+        .not("ns_extension", "is", null)
+        .order("ns_extension", { ascending: true })
+        .range(offset, offset + limit - 1);
       const list = brokers ?? [];
-      if (list.length === 0) return json({ success: true, message: "Aucun courtier avec extension NS", total: 0 });
+      if (list.length === 0) return json({ success: true, message: "Aucun courtier avec extension NS", total: 0, offset, limit });
 
       const all: any[] = [];
       let succeeded = 0, failed = 0;
@@ -183,20 +188,23 @@ Deno.serve(async (req) => {
         all.push(...res);
         succeeded += res.filter((r: any) => r.success).length;
         failed += res.filter((r: any) => !r.success).length;
-        if (i + batch_size < list.length) await new Promise((r) => setTimeout(r, 400));
+        if (i + batch_size < list.length) await new Promise((r) => setTimeout(r, 200));
       }
       return json({
         success: failed === 0,
-        total: list.length,
+        offset,
+        limit,
         processed: all.length,
         succeeded,
         failed,
         dry_run,
         ring_timeout,
         rule_path: cachedRulePath,
+        next_offset: list.length === limit ? offset + limit : null,
         results: all,
       });
     }
+
 
     return json({ error: "provide broker_id or bulk:true" }, 400);
   } catch (e: any) {

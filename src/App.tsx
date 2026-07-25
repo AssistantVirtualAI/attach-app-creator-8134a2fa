@@ -563,6 +563,7 @@ const App = () => (
                 <Route path="/planipret/ms365-diagnostics" element={<Ms365Diagnostics />} />
                 <Route path="/mplanipret/style-diagnostics" element={<MStyleDiagnosticsWeb />} />
                 <Route path="/planipret/style-diagnostics" element={<MStyleDiagnosticsWeb />} />
+                <Route path="/mplanipret/deep-link-debug" element={<MDeepLinkDebug />} />
 
                 <Route path="/planipret/audit" element={<AppSeparationGuard app="planipret"><PlanipretAudit /></AppSeparationGuard>} />
                 <Route path="/planipret/store-preflight" element={<AppSeparationGuard app="planipret"><StorePreflightPreview /></AppSeparationGuard>} />

@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
   const stats = { total: 0, ok: 0, missing: 0, error: 0, partial: 0 };
 
   // Parallelize NS-API calls with bounded concurrency to keep the page fast.
-  const CONCURRENCY = 12;
+  const CONCURRENCY = Math.max(1, Math.min(32, Number(body?.concurrency) || 24));
   const list = profiles ?? [];
   const rows: any[] = new Array(list.length);
   let cursor = 0;

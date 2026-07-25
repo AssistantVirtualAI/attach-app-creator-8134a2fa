@@ -8,6 +8,7 @@
 // need to know which transport is active.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import type { SIPConfig } from '../lib/sip/jssipProvider';
 import type { UseSoftphoneReturn, SIPStatus, CallState } from './useSoftphone';
 import {

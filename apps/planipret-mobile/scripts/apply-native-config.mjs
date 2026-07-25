@@ -152,7 +152,7 @@ class PpSipKeepAlivePlugin : Plugin() {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) { call.resolve(JSObject().put("ok", true).put("ignored", true).put("requested", false)); return }
             val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             val ignored = pm.isIgnoringBatteryOptimizations(context.packageName)
-            if (!ignored) context.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply { data = Uri.parse("package:${context.packageName}"); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+            if (!ignored) context.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply { data = Uri.parse("package:\${context.packageName}"); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
             call.resolve(JSObject().put("ok", true).put("ignored", ignored).put("requested", !ignored))
         } catch (e: Exception) { call.reject(e.message ?: "battery optimization request failed") }
     }
@@ -247,8 +247,23 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin {
 function writeIfChanged(file, next) {
   const prev = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
   if (prev === next) return false;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, next);
   return true;
+}
+
+function walk(dir, files = []) {
+  if (!fs.existsSync(dir)) return files;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(full, files);
+    else files.push(full);
+  }
+  return files;
+}
+
+function findFile(root, name) {
+  return walk(root).find((file) => path.basename(file) === name);
 }
 
 function patchIosInfoPlist() {
@@ -259,19 +274,31 @@ function patchIosInfoPlist() {
   }
 
   let xml = fs.readFileSync(file, "utf8");
-  if (xml.includes("<string>planipret</string>") && xml.includes("<string>capacitor</string>")) {
-    console.log("[native-config] iOS URL schemes already present.");
-    return;
+  if (!(xml.includes("<string>planipret</string>") && xml.includes("<string>capacitor</string>"))) {
+    if (xml.includes("<key>CFBundleURLTypes</key>")) {
+      xml = xml.replace(/(<key>CFBundleURLTypes<\/key>\s*<array>)/, `$1${IOS_URL_TYPES_DICT}`);
+    } else {
+      xml = xml.replace(/\n<\/dict>\s*\n<\/plist>\s*$/, `${IOS_URL_TYPES}\n</dict>\n</plist>\n`);
+    }
   }
 
-  if (xml.includes("<key>CFBundleURLTypes</key>")) {
-    xml = xml.replace(/(<key>CFBundleURLTypes<\/key>\s*<array>)/, `$1${IOS_URL_TYPES_DICT}`);
-  } else {
-    xml = xml.replace(/\n<\/dict>\s*\n<\/plist>\s*$/, `${IOS_URL_TYPES}\n</dict>\n</plist>\n`);
+  if (!xml.includes("<string>audio</string>") || !xml.includes("<string>voip</string>")) {
+    const modes = `
+\t<key>UIBackgroundModes</key>
+\t<array>
+\t\t<string>audio</string>
+\t\t<string>voip</string>
+\t\t<string>remote-notification</string>
+\t\t<string>fetch</string>
+\t</array>
+`;
+    xml = xml.includes("<key>UIBackgroundModes</key>")
+      ? xml.replace(/<key>UIBackgroundModes<\/key>\s*<array>[\s\S]*?<\/array>/, modes.trim())
+      : xml.replace(/\n<\/dict>\s*\n<\/plist>\s*$/, `${modes}\n</dict>\n</plist>\n`);
   }
 
   writeIfChanged(file, xml);
-  console.log("[native-config] iOS URL schemes applied: planipret, capacitor.");
+  console.log("[native-config] iOS URL schemes + background modes applied.");
 }
 
 function patchAndroidManifest() {
@@ -282,23 +309,74 @@ function patchAndroidManifest() {
   }
 
   let xml = fs.readFileSync(file, "utf8");
+  for (const permission of ANDROID_PERMISSIONS) {
+    if (!xml.includes(permission)) {
+      xml = xml.replace(/<manifest([^>]*)>/, `<manifest$1>\n    <uses-permission android:name="${permission}" />`);
+    }
+  }
+
   const hasPlanipret = xml.includes('android:scheme="planipret"');
   const hasCapacitor = xml.includes('android:scheme="capacitor"') && xml.includes('android:host="localhost"');
-  if (hasPlanipret && hasCapacitor) {
-    console.log("[native-config] Android deep links already present.");
-    return;
+  if (!(hasPlanipret && hasCapacitor)) {
+    const mainActivityClose = /\n\s*<\/activity>/;
+    if (!mainActivityClose.test(xml)) {
+      console.warn("[native-config] Android MainActivity close tag not found; skipped deep links.");
+    } else {
+      xml = xml.replace(mainActivityClose, `${ANDROID_INTENT_FILTERS}\n        </activity>`);
+    }
   }
 
-  const mainActivityClose = /\n\s*<\/activity>/;
-  if (!mainActivityClose.test(xml)) {
-    console.warn("[native-config] Android MainActivity close tag not found; skipped.");
-    return;
+  if (!xml.includes(".PpSipKeepAliveService")) {
+    xml = xml.replace(/\n\s*<\/application>/, `${ANDROID_SERVICE}\n    </application>`);
   }
-
-  xml = xml.replace(mainActivityClose, `${ANDROID_INTENT_FILTERS}\n        </activity>`);
   writeIfChanged(file, xml);
-  console.log("[native-config] Android deep links applied: planipret, capacitor://localhost.");
+  console.log("[native-config] Android deep links + SIP keep-alive service applied.");
+}
+
+function patchAndroidNativeFiles() {
+  const javaRoot = path.join(appDir, "android", "app", "src", "main", "java");
+  if (!fs.existsSync(javaRoot)) {
+    console.log("[native-config] Android source tree not found — run npx cap add android first.");
+    return;
+  }
+  const mainActivity = findFile(javaRoot, "MainActivity.kt");
+  const mainText = mainActivity && fs.existsSync(mainActivity) ? fs.readFileSync(mainActivity, "utf8") : "";
+  const pkg = mainText.match(/^package\s+([\w.]+)/m)?.[1] || "com.planipret.mobile";
+  const pkgDir = path.join(javaRoot, ...pkg.split("."));
+  writeIfChanged(path.join(pkgDir, "PpSipKeepAlivePlugin.kt"), ANDROID_PLUGIN(pkg));
+  writeIfChanged(path.join(pkgDir, "PpSipKeepAliveService.kt"), ANDROID_SERVICE_KT(pkg));
+  if (mainActivity && !mainText.includes("PpSipKeepAlivePlugin::class.java")) {
+    let next = mainText;
+    if (next.includes("registerPlugin(")) {
+      next = next.replace(/(registerPlugin\([^\n]+\)\n)/, `$1        registerPlugin(PpSipKeepAlivePlugin::class.java)\n`);
+    } else if (next.includes("super.onCreate(savedInstanceState)")) {
+      next = next.replace("super.onCreate(savedInstanceState)", "registerPlugin(PpSipKeepAlivePlugin::class.java)\n        super.onCreate(savedInstanceState)");
+    }
+    writeIfChanged(mainActivity, next);
+  }
+  console.log("[native-config] Android PpSipKeepAlive plugin applied.");
+}
+
+function patchIosNativeFiles() {
+  const iosApp = path.join(appDir, "ios", "App", "App");
+  if (!fs.existsSync(iosApp)) {
+    console.log("[native-config] iOS source tree not found — run npx cap add ios first.");
+    return;
+  }
+  writeIfChanged(path.join(iosApp, "Plugins", "PpSipKeepAlive", "PpSipKeepAlive.swift"), IOS_PLUGIN);
+  for (const controllerName of ["AppBridgeViewController.swift", "ViewController.swift"]) {
+    const file = path.join(iosApp, controllerName);
+    if (!fs.existsSync(file)) continue;
+    let swift = fs.readFileSync(file, "utf8");
+    if (!swift.includes("PpSipKeepAlive()") && swift.includes("registerPluginInstance")) {
+      swift = swift.replace(/(bridge\?\.registerPluginInstance\([^\n]+\)\n)/, `$1        bridge?.registerPluginInstance(PpSipKeepAlive())\n`);
+      writeIfChanged(file, swift);
+    }
+  }
+  console.log("[native-config] iOS PpSipKeepAlive plugin applied.");
 }
 
 patchIosInfoPlist();
 patchAndroidManifest();
+patchAndroidNativeFiles();
+patchIosNativeFiles();

@@ -858,6 +858,7 @@ class SipConnectionService : Service() {
     private fun handleNativeAnswerRequest() {
         try { AudioFocusHelper.requestCallAudioFocus(this) } catch (_: Exception) {}
         handler.post { updateNotification("Réponse en cours...") }
+        Log.i(TAG, "handleNativeAnswerRequest: callId=${currentCallId} inviteLen=${currentInviteParams?.length}")
         emitStatus("incoming", "answer_requested")
     }
 

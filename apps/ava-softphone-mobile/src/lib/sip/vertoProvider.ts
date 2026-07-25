@@ -185,7 +185,7 @@ interface DialogRecord {
   remoteStream?: MediaStream;
   localStream?: MediaStream;
   answered?: boolean;
-  nativeAnswerSender?: (sdp: string, dialogParams: any) => Promise<void>;
+  nativeAnswerSender?: (sdp: string, dialogParams: any) => Promise<boolean | void>;
   nativeHangupSender?: () => Promise<void>;
 }
 
@@ -508,7 +508,7 @@ class VertoClient {
 
   async adoptNativeInboundInvite(
     params: any,
-    nativeAnswerSender: (sdp: string, dialogParams: any) => Promise<void>,
+    nativeAnswerSender: (sdp: string, dialogParams: any) => Promise<boolean | void>,
     nativeHangupSender?: () => Promise<void>,
   ): Promise<VertoDialog | null> {
     const callID: string | undefined = params?.callID;
@@ -539,7 +539,7 @@ class VertoClient {
   private async prepareInboundDialog(
     callID: string,
     params: any,
-    nativeAnswerSender?: (sdp: string, dialogParams: any) => Promise<void>,
+    nativeAnswerSender?: (sdp: string, dialogParams: any) => Promise<boolean | void>,
     nativeHangupSender?: () => Promise<void>,
   ): Promise<VertoDialog | null> {
     const pc = new RTCPeerConnection({ ...getActivePcConfig(), iceCandidatePoolSize: 10 });
@@ -792,8 +792,21 @@ class VertoClient {
       tag: this.audioTagId,
     };
     try {
-      if (rec.nativeAnswerSender) await rec.nativeAnswerSender(sdp, dialogParams);
-      else await this.rpc('verto.answer', { sdp, dialogParams });
+      if (rec.nativeAnswerSender) {
+        const nativeOk = await rec.nativeAnswerSender(sdp, dialogParams);
+        // Android native WS can be half-closed exactly when the user taps
+        // Answer. The Capacitor bridge only confirms the broadcast was sent,
+        // not that FreeSWITCH accepted the frame. Always send a JS Verto
+        // fallback too so the forked ringing legs are cancelled immediately.
+        this.rpc('verto.answer', { callID, sdp, dialogParams }).catch((e) => {
+          console.warn('[verto] JS fallback answer failed', e);
+        });
+        if (nativeOk === false) {
+          console.warn('[verto] native answer reported false; JS fallback already sent');
+        }
+      } else {
+        await this.rpc('verto.answer', { callID, sdp, dialogParams });
+      }
       rec.answered = true;
       this.emit({ type: 'answered', dialog: rec.wrapped });
       // Attach the remote stream immediately after verto.answer is sent.

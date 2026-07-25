@@ -139,6 +139,7 @@ class SipConnectionService : Service() {
     @Volatile private var currentCallerName: String? = null
     @Volatile private var currentCallerNumber: String? = null
     @Volatile private var currentInviteParams: String? = null
+    @Volatile private var currentCallActive = false
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var callActionReceiver: android.content.BroadcastReceiver? = null
@@ -282,7 +283,11 @@ class SipConnectionService : Service() {
 
             sslSocket = socket
             outputStream = socket.outputStream
-            sessionUUID = UUID.randomUUID().toString()
+            if (currentCallId.isNullOrEmpty() && pendingAnswerSdp == null && pendingByeCallId == null) {
+                sessionUUID = UUID.randomUUID().toString()
+            } else {
+                Log.i(TAG, "Preserving Verto sessid during active call recovery: callId=$currentCallId")
+            }
             isLoggedIn = false
             lastFrameAt = System.currentTimeMillis()
             connecting = false
@@ -575,6 +580,7 @@ class SipConnectionService : Service() {
                                 currentCallerName = null
                                 currentCallerNumber = null
                                 currentInviteParams = null
+                                currentCallActive = false
                                 handler.post { stopRingtone() }
                                 handler.post { clearCallNotifications() }
                                 emitStatus("idle", "bye_flushed")
@@ -604,6 +610,7 @@ class SipConnectionService : Service() {
                     }
                     val callId = params?.optString("callID") ?: ""
                     if (callId.isNotEmpty()) currentCallId = callId
+                    currentCallActive = false
                     currentCallerName = callerName
                     currentCallerNumber = callerNumber
                     currentInviteParams = params?.toString()
@@ -620,25 +627,30 @@ class SipConnectionService : Service() {
                 method == "verto.answer" || method == "verto.media" -> {
                     // Remote party answered an outbound call (or early media).
                     val params = json.optJSONObject("params")
-                    val callId = params?.optString("callID") ?: ""
+                    val callId = extractCallId(params)
                     if (callId.isNotEmpty() && currentCallId == null) {
                         currentCallId = callId
                     }
+                    currentCallActive = true
                     Log.i(TAG, "Outbound call answered: method=$method callID=$callId")
                     handler.post { stopRingtone() }
                     handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
                     emitStatus("active", "remote_${method.replace("verto.", "")}")
                 }
                 method == "verto.bye" -> {
-                    val byeCallId = json.optJSONObject("params")?.optString("callID") ?: ""
-                    Log.i(TAG, "Remote hangup (verto.bye) callID=$byeCallId currentCallId=$currentCallId")
+                    val byeCallId = extractCallId(json.optJSONObject("params"))
+                    Log.i(TAG, "Remote hangup (verto.bye) callID=$byeCallId currentCallId=$currentCallId active=$currentCallActive")
                     // Only reset state if this bye matches the current call (or is unscoped).
                     // Avoids a stale bye from a previous call clearing an active new call.
-                    if (byeCallId.isEmpty() || byeCallId == currentCallId) {
+                    // If the app believes a call is active, also clear on an unmatched BYE:
+                    // forked/sim-ring legs can arrive with a nested or sibling callID and the
+                    // UI must not stay stuck when the PBX tears down the call.
+                    if (byeCallId.isEmpty() || byeCallId == currentCallId || currentCallActive) {
                         currentCallId = null
                         currentCallerName = null
                         currentCallerNumber = null
                         currentInviteParams = null
+                        currentCallActive = false
                         pendingAnswerSdp = null
                         pendingAnswerParams = null
                         pendingByeCallId = null
@@ -1011,7 +1023,12 @@ class SipConnectionService : Service() {
         currentCallerName = null
         currentCallerNumber = null
         currentInviteParams = null
-        pendingByeCallId = null
+        currentCallActive = false
+        if (pendingByeCallId == callId) {
+            Log.i(TAG, "handleNativeHangup: keeping queued bye for reconnect callId=$callId")
+        } else {
+            pendingByeCallId = null
+        }
         handler.post { stopRingtone() }
         try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
         handler.post { clearCallNotifications() }
@@ -1050,9 +1067,17 @@ class SipConnectionService : Service() {
         }
 
         try {
+            val dialogParams = normalizedDialogParams(dialogParamsJson, callId)
             val params = JSONObject().apply {
+                // FreeSWITCH Verto accepts callID in dialogParams, but forked
+                // inbound calls are much more reliable when callID is also at
+                // params.callID. Without it the write can succeed while the PBX
+                // keeps ringing the other legs because the answer is not bound
+                // to the original dialog.
+                put("callID", callId)
+                put("sessid", sessionUUID)
                 put("sdp", sdp)
-                put("dialogParams", if (dialogParamsJson.isNotEmpty()) JSONObject(dialogParamsJson) else JSONObject().apply { put("callID", callId) })
+                put("dialogParams", dialogParams)
             }
             val msg = JSONObject().apply {
                 put("jsonrpc", "2.0")
@@ -1064,6 +1089,7 @@ class SipConnectionService : Service() {
                 Log.i(TAG, "verto.answer sent successfully for callId=$callId")
                 pendingAnswerSdp = null
                 pendingAnswerParams = null
+                currentCallActive = true
                 handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
                 emitStatus("active", "native_answer_sent")
             } else {
@@ -1086,6 +1112,7 @@ class SipConnectionService : Service() {
             put("id", System.currentTimeMillis().toInt())
             put("method", "verto.bye")
             put("params", JSONObject().apply {
+                put("callID", callId)
                 put("sessid", sessionUUID)
                 put("dialogParams", JSONObject().apply {
                     put("callID", callId)
@@ -1095,5 +1122,33 @@ class SipConnectionService : Service() {
             })
         }
         return msg.toString()
+    }
+
+    private fun extractCallId(params: JSONObject?): String {
+        if (params == null) return ""
+        val direct = params.optString("callID", "")
+        if (direct.isNotEmpty()) return direct
+        val dialog = params.optJSONObject("dialogParams")
+        val nested = dialog?.optString("callID", "") ?: ""
+        if (nested.isNotEmpty()) return nested
+        return ""
+    }
+
+    private fun normalizedDialogParams(dialogParamsJson: String, callId: String): JSONObject {
+        val dialogParams = try {
+            if (dialogParamsJson.isNotEmpty()) JSONObject(dialogParamsJson) else JSONObject()
+        } catch (_: Exception) {
+            JSONObject()
+        }
+        dialogParams.put("callID", dialogParams.optString("callID", callId).ifEmpty { callId })
+        if (!dialogParams.has("caller_id_name")) dialogParams.put("caller_id_name", currentCallerName ?: currentCallerNumber ?: "")
+        if (!dialogParams.has("caller_id_number")) dialogParams.put("caller_id_number", currentCallerNumber ?: currentCallerName ?: "")
+        if (!dialogParams.has("destination_number")) {
+            getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_LOGIN, "")
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { dialogParams.put("destination_number", it) }
+        }
+        return dialogParams
     }
 }

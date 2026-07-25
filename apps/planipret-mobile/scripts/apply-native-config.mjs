@@ -1,4 +1,13 @@
 #!/usr/bin/env node
+// ------------------------------------------------------------------
+// Planiprêt Mobile — native config generator (NetSapiens / SIP-over-WSS)
+//
+// DO NOT MERGE / SHARE WITH LEMTEL MOBILE.
+// Lemtel uses FreeSWITCH + Verto (port 8082, JSON-RPC).
+// Planiprêt uses NetSapiens over SIP-over-WSS (443, JsSIP + native REGISTER).
+// The two stacks must remain 100% isolated: PBX creds, transport, plugin
+// names, notification channels and background services are all distinct.
+// ------------------------------------------------------------------
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,6 +72,10 @@ const ANDROID_PERMISSIONS = [
   "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
   "android.permission.ACCESS_NETWORK_STATE",
   "android.permission.CHANGE_WIFI_STATE",
+  "android.permission.VIBRATE",
+  "android.permission.DISABLE_KEYGUARD",
+  "android.permission.TURN_SCREEN_ON",
+  "android.permission.SHOW_WHEN_LOCKED",
 ];
 
 const ANDROID_SERVICE = `
@@ -70,197 +83,14 @@ const ANDROID_SERVICE = `
             android:name=".PpSipKeepAliveService"
             android:foregroundServiceType="phoneCall"
             android:exported="false" />
-`;
-
-const ANDROID_PLUGIN = (pkg) => `package ${pkg}
-
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.net.Uri
-import android.os.Build
-import android.os.PowerManager
-import android.provider.Settings
-import com.getcapacitor.JSObject
-import com.getcapacitor.Plugin
-import com.getcapacitor.PluginCall
-import com.getcapacitor.PluginMethod
-import com.getcapacitor.annotation.CapacitorPlugin
-
-@CapacitorPlugin(name = "PpSipKeepAlive")
-class PpSipKeepAlivePlugin : Plugin() {
-    private var statusReceiver: BroadcastReceiver? = null
-    private var reregisterReceiver: BroadcastReceiver? = null
-
-    override fun load() {
-        statusReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                if (intent?.action != PpSipKeepAliveService.ACTION_STATUS) return
-                notifyListeners("sipServiceStatus", statusFromIntent(intent), true)
-            }
-        }
-        reregisterReceiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                if (intent?.action != PpSipKeepAliveService.ACTION_REREGISTER) return
-                notifyListeners("sipReregisterRequested", JSObject().put("reason", intent.getStringExtra("reason") ?: "native_keepalive"), true)
-            }
-        }
-        try {
-            val sf = IntentFilter(PpSipKeepAliveService.ACTION_STATUS)
-            val rf = IntentFilter(PpSipKeepAliveService.ACTION_REREGISTER)
-            val sr = statusReceiver ?: return
-            val rr = reregisterReceiver ?: return
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(sr, sf, Context.RECEIVER_NOT_EXPORTED)
-                context.registerReceiver(rr, rf, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                @Suppress("DEPRECATION") context.registerReceiver(sr, sf)
-                @Suppress("DEPRECATION") context.registerReceiver(rr, rf)
-            }
-        } catch (_: Exception) {}
-    }
-
-    override fun handleOnDestroy() {
-        try { statusReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
-        try { reregisterReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
-        statusReceiver = null
-        reregisterReceiver = null
-        super.handleOnDestroy()
-    }
-
-    @PluginMethod fun startSipService(call: PluginCall) {
-        try {
-            PpSipKeepAliveService.saveConfig(
-                context,
-                call.getString("host") ?: call.getString("domain") ?: "",
-                call.getInt("port") ?: 443,
-                call.getString("path") ?: "/",
-                call.getString("login") ?: call.getString("username") ?: call.getString("extension") ?: "",
-                call.getString("domain") ?: "",
-                call.getString("displayName") ?: call.getString("extension") ?: ""
-            )
-            PpSipKeepAliveService.start(context)
-            call.resolve(readStatus().apply { put("ok", true) })
-        } catch (e: Exception) { call.reject(e.message ?: "startSipService failed") }
-    }
-    @PluginMethod fun stopSipService(call: PluginCall) { PpSipKeepAliveService.stop(context); call.resolve(JSObject().put("ok", true)) }
-    @PluginMethod fun getSipServiceStatus(call: PluginCall) { call.resolve(readStatus().apply { put("ok", true) }) }
-    @PluginMethod fun triggerReregister(call: PluginCall) { PpSipKeepAliveService.requestReregister(context, "manual"); call.resolve(readStatus().apply { put("ok", true) }) }
-    @PluginMethod fun requestBatteryOptimizationExemption(call: PluginCall) {
-        try {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) { call.resolve(JSObject().put("ok", true).put("ignored", true).put("requested", false)); return }
-            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-            val ignored = pm.isIgnoringBatteryOptimizations(context.packageName)
-            if (!ignored) context.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply { data = Uri.parse("package:\${context.packageName}"); addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
-            call.resolve(JSObject().put("ok", true).put("ignored", ignored).put("requested", !ignored))
-        } catch (e: Exception) { call.reject(e.message ?: "battery optimization request failed") }
-    }
-    private fun statusFromIntent(intent: Intent): JSObject = JSObject().apply {
-        put("status", intent.getStringExtra("status") ?: "unknown"); put("reason", intent.getStringExtra("reason") ?: "")
-        put("updatedAt", intent.getLongExtra("updatedAt", 0L)); put("wakeLockHeld", intent.getBooleanExtra("wakeLockHeld", false))
-        put("wifiLockHeld", intent.getBooleanExtra("wifiLockHeld", false)); put("loggedIn", intent.getBooleanExtra("loggedIn", false))
-    }
-    private fun readStatus(): JSObject {
-        val p = context.getSharedPreferences(PpSipKeepAliveService.PREFS_NAME, Context.MODE_PRIVATE)
-        return JSObject().apply {
-            put("status", p.getString(PpSipKeepAliveService.KEY_STATUS, "unknown") ?: "unknown"); put("reason", p.getString(PpSipKeepAliveService.KEY_REASON, "") ?: "")
-            put("updatedAt", p.getLong(PpSipKeepAliveService.KEY_UPDATED_AT, 0L)); put("wakeLockHeld", p.getBoolean(PpSipKeepAliveService.KEY_WAKE_HELD, false))
-            put("wifiLockHeld", p.getBoolean(PpSipKeepAliveService.KEY_WIFI_HELD, false)); put("loggedIn", p.getBoolean(PpSipKeepAliveService.KEY_LOGGED_IN, false))
-        }
-    }
-}
-`;
-
-const ANDROID_SERVICE_KT = (pkg) => `package ${pkg}
-
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
-import android.content.Context
-import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
-import android.net.wifi.WifiManager
-import android.os.Build
-import android.os.IBinder
-import android.os.PowerManager
-import androidx.core.app.NotificationCompat
-import androidx.core.app.ServiceCompat
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
-
-class PpSipKeepAliveService : Service() {
-    companion object {
-        const val CHANNEL_ID = "pp_sip_keepalive_channel"; const val NOTIFICATION_ID = 2201; const val PREFS_NAME = "pp_sip_keepalive"
-        const val ACTION_STATUS = "com.planipret.mobile.PP_SIP_STATUS"; const val ACTION_REREGISTER = "com.planipret.mobile.PP_SIP_REREGISTER"
-        const val KEY_STATUS = "status"; const val KEY_REASON = "reason"; const val KEY_UPDATED_AT = "updated_at"; const val KEY_WAKE_HELD = "wake_held"; const val KEY_WIFI_HELD = "wifi_held"; const val KEY_LOGGED_IN = "logged_in"
-        fun start(context: Context) { val i = Intent(context, PpSipKeepAliveService::class.java); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(i) else context.startService(i) }
-        fun stop(context: Context) { context.stopService(Intent(context, PpSipKeepAliveService::class.java)) }
-        fun saveConfig(context: Context, host: String, port: Int, path: String, login: String, domain: String, displayName: String) { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().apply { putString("host", host); putInt("port", port); putString("path", path); putString("login", login); putString("domain", domain); putString("display_name", displayName); apply() } }
-        fun requestReregister(context: Context, reason: String) { context.sendBroadcast(Intent(ACTION_REREGISTER).setPackage(context.packageName).putExtra("reason", reason)) }
-    }
-    private val executor = Executors.newSingleThreadScheduledExecutor(); private var heartbeat: ScheduledFuture<*>? = null
-    private var wakeLock: PowerManager.WakeLock? = null; private var wifiLock: WifiManager.WifiLock? = null; private var connectivityManager: ConnectivityManager? = null; private var networkCallback: ConnectivityManager.NetworkCallback? = null
-    override fun onCreate() { super.onCreate(); createNotificationChannel(); wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Planipret::SipWakeLock").apply { setReferenceCounted(false); acquire() }; wifiLock = (applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager).createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Planipret::SipWifiLock").apply { setReferenceCounted(false); acquire() }; registerNetworkWatchdog(); emitStatus("protected", "service_created") }
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int { val n = buildNotification("Téléphonie prête en arrière-plan"); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) ServiceCompat.startForeground(this, NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL) else startForeground(NOTIFICATION_ID, n); emitStatus("registered", "native_guard_active"); requestReregister(this, "service_start"); heartbeat?.cancel(false); heartbeat = executor.scheduleAtFixedRate({ emitStatus("registered", "keepalive"); requestReregister(this, "keepalive") }, 30, 240, TimeUnit.SECONDS); return START_STICKY }
-    override fun onTaskRemoved(rootIntent: Intent?) { emitStatus("registered", "task_removed_keepalive"); requestReregister(this, "task_removed"); super.onTaskRemoved(rootIntent) }
-    override fun onDestroy() { heartbeat?.cancel(true); unregisterNetworkWatchdog(); try { wakeLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}; try { wifiLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}; executor.shutdownNow(); emitStatus("disconnected", "service_destroyed"); super.onDestroy() }
-    override fun onBind(intent: Intent?): IBinder? = null
-    private fun registerNetworkWatchdog() { try { connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager; val req = NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(); val cb = object : ConnectivityManager.NetworkCallback() { override fun onAvailable(network: Network) { emitStatus("registered", "network_available"); requestReregister(this@PpSipKeepAliveService, "network_available") }; override fun onLost(network: Network) { emitStatus("reconnecting", "network_lost") } }; connectivityManager?.registerNetworkCallback(req, cb); networkCallback = cb } catch (_: Exception) {} }
-    private fun unregisterNetworkWatchdog() { try { networkCallback?.let { connectivityManager?.unregisterNetworkCallback(it) } } catch (_: Exception) {}; networkCallback = null }
-    private fun emitStatus(status: String, reason: String) { val now = System.currentTimeMillis(); val wake = wakeLock?.isHeld == true; val wifi = wifiLock?.isHeld == true; getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().apply { putString(KEY_STATUS, status); putString(KEY_REASON, reason); putLong(KEY_UPDATED_AT, now); putBoolean(KEY_WAKE_HELD, wake); putBoolean(KEY_WIFI_HELD, wifi); putBoolean(KEY_LOGGED_IN, status == "registered" || status == "protected"); apply() }; sendBroadcast(Intent(ACTION_STATUS).setPackage(packageName).putExtra("status", status).putExtra("reason", reason).putExtra("updatedAt", now).putExtra("wakeLockHeld", wake).putExtra("wifiLockHeld", wifi).putExtra("loggedIn", status == "registered" || status == "protected")) }
-    private fun buildNotification(text: String): Notification = NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle("Planiprêt Mobile").setContentText(text).setSmallIcon(android.R.drawable.ic_menu_call).setPriority(NotificationCompat.PRIORITY_LOW).setOngoing(true).setSilent(true).build()
-    private fun createNotificationChannel() { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel(CHANNEL_ID, "Connexion téléphonique", NotificationManager.IMPORTANCE_LOW).apply { description = "Maintien de l'enregistrement téléphonique en arrière-plan"; setShowBadge(false) }) }
-}
-`;
-
-const IOS_PLUGIN = `import Foundation
-import Capacitor
-import UIKit
-import AVFoundation
-import CryptoKit
-
-@objc(PpSipKeepAlive)
-public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate {
-    public let identifier = "PpSipKeepAlive"; public let jsName = "PpSipKeepAlive"
-    public let pluginMethods: [CAPPluginMethod] = [CAPPluginMethod(name: "startSipService", returnType: CAPPluginReturnPromise), CAPPluginMethod(name: "stopSipService", returnType: CAPPluginReturnPromise), CAPPluginMethod(name: "getSipServiceStatus", returnType: CAPPluginReturnPromise), CAPPluginMethod(name: "triggerReregister", returnType: CAPPluginReturnPromise), CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback), CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise)]
-    private var status = "idle"; private var reason = "plugin_loaded"; private var updatedAt = Date().timeIntervalSince1970 * 1000; private var bgTask: UIBackgroundTaskIdentifier = .invalid
-    private var host = ""; private var port = 443; private var path = "/"; private var login = ""; private var domain = ""; private var displayName = ""; private var password = ""
-    private var socket: URLSessionWebSocketTask?; private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue())
-    private var timer: Timer?; private var cseq = 1; private let callId = UUID().uuidString + "@planipret-ios"; private let fromTag = String(Int(Date().timeIntervalSince1970 * 1000), radix: 16)
-    public override func load() { NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.didEnterBackgroundNotification, object: nil); NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.willEnterForegroundNotification, object: nil) }
-    deinit { NotificationCenter.default.removeObserver(self); timer?.invalidate(); socket?.cancel(with: .goingAway, reason: nil) }
-    @objc func startSipService(_ call: CAPPluginCall) { host = call.getString("host") ?? call.getString("domain") ?? ""; port = call.getInt("port") ?? 443; path = call.getString("path") ?? "/"; login = call.getString("login") ?? call.getString("username") ?? call.getString("extension") ?? ""; domain = call.getString("domain") ?? ""; displayName = call.getString("displayName") ?? login; password = call.getString("password") ?? ""; activateAudioSession(); connect(); scheduleRegister(); call.resolve(snapshot(ok: true)) }
-    @objc func stopSipService(_ call: CAPPluginCall) { timer?.invalidate(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; endBackgroundTask(); setStatus("disconnected", "stopped"); call.resolve(snapshot(ok: true)) }
-    @objc func getSipServiceStatus(_ call: CAPPluginCall) { call.resolve(snapshot(ok: true)) }
-    @objc func triggerReregister(_ call: CAPPluginCall) { sendRegister(challenge: nil); notifyListeners("sipReregisterRequested", data: ["reason": "manual"]); call.resolve(snapshot(ok: true)) }
-    @objc private func onBackground() { beginBackgroundTask(); activateAudioSession(); sendRegister(challenge: nil); notifyListeners("sipReregisterRequested", data: ["reason": "enter_background"]); setStatus("protected", "background_register_sent") }
-    @objc private func onForeground() { connect(); sendRegister(challenge: nil); notifyListeners("sipReregisterRequested", data: ["reason": "enter_foreground"]); setStatus("registered", "foreground_refresh"); endBackgroundTask() }
-    private func activateAudioSession() { try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]); try? AVAudioSession.sharedInstance().setActive(true) }
-    private func connect() { guard !host.isEmpty else { setStatus("error", "missing_host"); return }; if socket != nil { return }; var comps = URLComponents(); comps.scheme = port == 80 ? "ws" : "wss"; comps.host = host; comps.port = port; comps.path = path.isEmpty ? "/" : path; guard let url = comps.url else { setStatus("error", "bad_ws_url"); return }; var req = URLRequest(url: url); req.setValue("sip", forHTTPHeaderField: "Sec-WebSocket-Protocol"); socket = session.webSocketTask(with: req); socket?.resume(); setStatus("connecting", "ws_connecting"); receiveLoop(); DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.sendRegister(challenge: nil) } }
-    private func scheduleRegister() { timer?.invalidate(); timer = Timer.scheduledTimer(withTimeInterval: 240, repeats: true) { [weak self] _ in self?.sendRegister(challenge: nil) }; RunLoop.main.add(timer!, forMode: .common) }
-    private func receiveLoop() { socket?.receive { [weak self] result in guard let self = self else { return }; switch result { case .success(let message): if case .string(let text) = message { self.handle(text) }; self.receiveLoop(); case .failure: self.socket = nil; self.setStatus("reconnecting", "ws_closed"); DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.connect() } } } }
-    private func handle(_ msg: String) { if msg.hasPrefix("SIP/2.0 401") || msg.hasPrefix("SIP/2.0 407") { sendRegister(challenge: header(msg, msg.hasPrefix("SIP/2.0 407") ? "Proxy-Authenticate" : "WWW-Authenticate")); return }; if msg.hasPrefix("SIP/2.0 200") && msg.uppercased().contains(" REGISTER") { setStatus("registered", "native_register_200"); return }; if msg.hasPrefix("INVITE ") { setStatus("registered", "incoming_invite"); notifyListeners("sipReregisterRequested", data: ["reason": "incoming_invite"]) } }
-    private func sendRegister(challenge: String?) { if socket == nil { connect(); return }; guard !login.isEmpty, !domain.isEmpty else { setStatus("error", "missing_credentials"); return }; let seq = cseq; cseq += 1; let branch = "z9hG4bK" + UUID().uuidString.replacingOccurrences(of: "-", with: ""); let contact = "<sip:" + login + "@" + UUID().uuidString.replacingOccurrences(of: "-", with: "") + ".invalid;transport=wss>"; var sip = "REGISTER sip:" + domain + " SIP/2.0\r\n"; sip += "Via: SIP/2.0/WSS planipret-ios.invalid;branch=" + branch + "\r\nMax-Forwards: 70\r\n"; sip += "To: <sip:" + login + "@" + domain + ">\r\nFrom: \"" + displayName.replacingOccurrences(of: "\"", with: "") + "\" <sip:" + login + "@" + domain + ">;tag=" + fromTag + "\r\n"; sip += "Call-ID: " + callId + "\r\nCSeq: " + String(seq) + " REGISTER\r\nContact: " + contact + ";expires=600\r\nExpires: 600\r\nUser-Agent: Planipret iOS KeepAlive\r\nSupported: outbound,path,gruu\r\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\r\n"; if let ch = challenge, !password.isEmpty { sip += "Authorization: " + digest(challenge: ch) + "\r\n" }; sip += "Content-Length: 0\r\n\r\n"; socket?.send(.string(sip)) { [weak self] err in DispatchQueue.main.async { self?.setStatus(err == nil ? "connecting" : "error", err == nil ? (challenge == nil ? "register_sent" : "register_auth_sent") : "register_send_failed") } } }
-    private func digest(challenge: String) -> String { let m = parseDigest(challenge); let realm = m["realm"] ?? domain; let nonce = m["nonce"] ?? ""; let qop = m["qop"] ?? ""; let uri = "sip:" + domain; let nc = "00000001"; let cnonce = String(Int(Date().timeIntervalSince1970 * 1000), radix: 16); let ha1 = md5(login + ":" + realm + ":" + password); let ha2 = md5("REGISTER:" + uri); let response = qop.contains("auth") ? md5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":auth:" + ha2) : md5(ha1 + ":" + nonce + ":" + ha2); var out = "Digest username=\"" + login + "\", realm=\"" + realm + "\", nonce=\"" + nonce + "\", uri=\"" + uri + "\", response=\"" + response + "\", algorithm=MD5"; if qop.contains("auth") { out += ", qop=auth, nc=" + nc + ", cnonce=\"" + cnonce + "\"" }; if let opaque = m["opaque"] { out += ", opaque=\"" + opaque + "\"" }; return out }
-    private func parseDigest(_ h: String) -> [String:String] { var out: [String:String] = [:]; let s = h.replacingOccurrences(of: "Digest ", with: "", options: .caseInsensitive); for part in s.split(separator: ",") { let pieces = part.split(separator: "=", maxSplits: 1); if pieces.count == 2 { var v = pieces[1].trimmingCharacters(in: .whitespaces); if v.hasPrefix("\"") && v.hasSuffix("\"") { v.removeFirst(); v.removeLast() }; out[pieces[0].trimmingCharacters(in: .whitespaces)] = v } }; return out }
-    private func header(_ msg: String, _ name: String) -> String? { for line in msg.components(separatedBy: .newlines) { if line.lowercased().hasPrefix(name.lowercased() + ":") { return String(line.dropFirst(name.count + 1)).trimmingCharacters(in: .whitespaces) } }; return nil }
-    private func md5(_ s: String) -> String { let digest = Insecure.MD5.hash(data: Data(s.utf8)); return digest.map { String(format: "%02hhx", $0) }.joined() }
-    private func beginBackgroundTask() { if bgTask != .invalid { return }; bgTask = UIApplication.shared.beginBackgroundTask(withName: "PlanipretSIPKeepAlive") { [weak self] in self?.endBackgroundTask(); self?.setStatus("protected", "background_task_expired") }; DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in self?.sendRegister(challenge: nil); self?.endBackgroundTask() } }
-    private func endBackgroundTask() { if bgTask != .invalid { UIApplication.shared.endBackgroundTask(bgTask); bgTask = .invalid } }
-    private func setStatus(_ next: String, _ nextReason: String) { status = next; reason = nextReason; updatedAt = Date().timeIntervalSince1970 * 1000; DispatchQueue.main.async { self.notifyListeners("sipServiceStatus", data: self.snapshot(ok: true)) } }
-    private func snapshot(ok: Bool) -> [String: Any] { ["ok": ok, "status": status, "reason": reason, "updatedAt": updatedAt, "backgroundTaskActive": bgTask != .invalid, "loggedIn": status == "registered" || status == "protected"] }
-}
+        <receiver
+            android:name=".PpIncomingActionReceiver"
+            android:exported="false" />
 `;
 
 const ANDROID_PLUGIN_JAVA = (pkg) => `package ${pkg};
 
+// Planiprêt-only Capacitor plugin. DO NOT reuse in Lemtel (Verto stack).
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -279,17 +109,30 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class PpSipKeepAlivePlugin extends Plugin {
   private BroadcastReceiver statusReceiver;
   private BroadcastReceiver reregisterReceiver;
+  private BroadcastReceiver inviteReceiver;
 
   @Override public void load() {
     statusReceiver = new BroadcastReceiver() { @Override public void onReceive(Context c, Intent i) { if (!PpSipKeepAliveService.ACTION_STATUS.equals(i.getAction())) return; notifyListeners("sipServiceStatus", statusFromIntent(i), true); } };
     reregisterReceiver = new BroadcastReceiver() { @Override public void onReceive(Context c, Intent i) { if (!PpSipKeepAliveService.ACTION_REREGISTER.equals(i.getAction())) return; notifyListeners("sipReregisterRequested", new JSObject().put("reason", i.getStringExtra("reason")), true); } };
+    inviteReceiver = new BroadcastReceiver() { @Override public void onReceive(Context c, Intent i) {
+      if (!PpSipKeepAliveService.ACTION_INCOMING_INVITE.equals(i.getAction())) return;
+      JSObject data = new JSObject()
+        .put("callId", i.getStringExtra("callId"))
+        .put("from", i.getStringExtra("from"))
+        .put("fromUser", i.getStringExtra("fromUser"))
+        .put("fromDisplay", i.getStringExtra("fromDisplay"))
+        .put("action", i.getStringExtra("userAction"));
+      notifyListeners("sipIncomingInvite", data, true);
+    } };
     try {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         getContext().registerReceiver(statusReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_STATUS), Context.RECEIVER_NOT_EXPORTED);
         getContext().registerReceiver(reregisterReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_REREGISTER), Context.RECEIVER_NOT_EXPORTED);
+        getContext().registerReceiver(inviteReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_INCOMING_INVITE), Context.RECEIVER_NOT_EXPORTED);
       } else {
         getContext().registerReceiver(statusReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_STATUS));
         getContext().registerReceiver(reregisterReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_REREGISTER));
+        getContext().registerReceiver(inviteReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_INCOMING_INVITE));
       }
     } catch (Exception ignored) {}
   }
@@ -297,17 +140,26 @@ public class PpSipKeepAlivePlugin extends Plugin {
   @Override protected void handleOnDestroy() {
     try { if (statusReceiver != null) getContext().unregisterReceiver(statusReceiver); } catch (Exception ignored) {}
     try { if (reregisterReceiver != null) getContext().unregisterReceiver(reregisterReceiver); } catch (Exception ignored) {}
+    try { if (inviteReceiver != null) getContext().unregisterReceiver(inviteReceiver); } catch (Exception ignored) {}
     super.handleOnDestroy();
   }
 
   @PluginMethod public void startSipService(PluginCall call) {
-    PpSipKeepAliveService.saveConfig(getContext(), call.getString("host", call.getString("domain", "")), call.getInt("port", 443), call.getString("path", "/"), call.getString("login", call.getString("username", call.getString("extension", ""))), call.getString("domain", ""), call.getString("displayName", call.getString("extension", "")), call.getString("password", ""));
+    PpSipKeepAliveService.saveConfig(getContext(),
+      call.getString("host", call.getString("domain", "")),
+      call.getInt("port", 443),
+      call.getString("path", "/"),
+      call.getString("login", call.getString("username", call.getString("extension", ""))),
+      call.getString("domain", ""),
+      call.getString("displayName", call.getString("extension", "")),
+      call.getString("password", ""));
     PpSipKeepAliveService.start(getContext());
     call.resolve(readStatus().put("ok", true));
   }
   @PluginMethod public void stopSipService(PluginCall call) { PpSipKeepAliveService.stop(getContext()); call.resolve(new JSObject().put("ok", true)); }
   @PluginMethod public void getSipServiceStatus(PluginCall call) { call.resolve(readStatus().put("ok", true)); }
   @PluginMethod public void triggerReregister(PluginCall call) { PpSipKeepAliveService.requestReregister(getContext(), "manual"); call.resolve(readStatus().put("ok", true)); }
+  @PluginMethod public void acknowledgeIncoming(PluginCall call) { PpSipKeepAliveService.clearIncomingNotification(getContext()); call.resolve(new JSObject().put("ok", true)); }
   @PluginMethod public void requestBatteryOptimizationExemption(PluginCall call) {
     try {
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) { call.resolve(new JSObject().put("ok", true).put("ignored", true).put("requested", false)); return; }
@@ -322,11 +174,66 @@ public class PpSipKeepAlivePlugin extends Plugin {
 }
 `;
 
+// Small broadcast receiver: catches Answer / Decline actions from the
+// full-screen incoming-call notification and wakes MainActivity.
+const ANDROID_RECEIVER_JAVA = (pkg) => `package ${pkg};
+
+// Planiprêt-only. DO NOT reuse in Lemtel.
+import android.app.NotificationManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+
+public class PpIncomingActionReceiver extends BroadcastReceiver {
+  public static final String ACTION_ANSWER  = "com.planipret.mobile.PP_INCOMING_ANSWER";
+  public static final String ACTION_DECLINE = "com.planipret.mobile.PP_INCOMING_DECLINE";
+  @Override public void onReceive(Context c, Intent intent) {
+    String action = intent.getAction();
+    String callId = intent.getStringExtra("callId");
+    String from = intent.getStringExtra("from");
+    String fromUser = intent.getStringExtra("fromUser");
+    String fromDisplay = intent.getStringExtra("fromDisplay");
+    String userAction = ACTION_ANSWER.equals(action) ? "answer" : "decline";
+    try {
+      NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+      if (nm != null) nm.cancel(PpSipKeepAliveService.INCOMING_NOTIFICATION_ID);
+    } catch (Exception ignored) {}
+    // Forward to plugin listeners.
+    c.sendBroadcast(new Intent(PpSipKeepAliveService.ACTION_INCOMING_INVITE)
+      .setPackage(c.getPackageName())
+      .putExtra("callId", callId)
+      .putExtra("from", from)
+      .putExtra("fromUser", fromUser)
+      .putExtra("fromDisplay", fromDisplay)
+      .putExtra("userAction", userAction));
+    // Bring MainActivity to front so the JS softphone can pick up the retransmit.
+    try {
+      Intent launch = c.getPackageManager().getLaunchIntentForPackage(c.getPackageName());
+      if (launch != null) {
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        launch.putExtra("pp_incoming_call", true);
+        launch.putExtra("pp_call_action", userAction);
+        launch.putExtra("pp_call_id", callId);
+        launch.putExtra("pp_from", from);
+        c.startActivity(launch);
+      }
+    } catch (Exception ignored) {}
+    // Ask the softphone to reregister so JsSIP picks the ongoing INVITE.
+    PpSipKeepAliveService.requestReregister(c, "incoming_" + userAction);
+  }
+}
+`;
+
 const ANDROID_SERVICE_JAVA = (pkg) => `package ${pkg};
 
+// Planiprêt-only background SIP keep-alive over WSS (NetSapiens).
+// DO NOT reuse or unify with Lemtel's SipConnectionService (FreeSWITCH/Verto).
 import android.app.*;
 import android.content.*;
 import android.content.pm.ServiceInfo;
+import android.graphics.Color;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
 import android.net.*;
 import android.net.wifi.WifiManager;
 import android.os.*;
@@ -342,29 +249,158 @@ import java.util.concurrent.*;
 import javax.net.ssl.SSLSocketFactory;
 
 public class PpSipKeepAliveService extends Service {
-  public static final String CHANNEL_ID = "pp_sip_keepalive_channel", PREFS_NAME = "pp_sip_keepalive", ACTION_STATUS = "com.planipret.mobile.PP_SIP_STATUS", ACTION_REREGISTER = "com.planipret.mobile.PP_SIP_REREGISTER";
-  public static final int NOTIFICATION_ID = 2201;
+  public static final String
+    CHANNEL_ID = "pp_sip_keepalive_channel",
+    CHANNEL_INCOMING_ID = "pp_sip_incoming_channel",
+    PREFS_NAME = "pp_sip_keepalive",
+    ACTION_STATUS = "com.planipret.mobile.PP_SIP_STATUS",
+    ACTION_REREGISTER = "com.planipret.mobile.PP_SIP_REREGISTER",
+    ACTION_INCOMING_INVITE = "com.planipret.mobile.PP_SIP_INCOMING_INVITE";
+  public static final int NOTIFICATION_ID = 2201, INCOMING_NOTIFICATION_ID = 2202;
   public static final String KEY_STATUS = "status", KEY_REASON = "reason", KEY_UPDATED_AT = "updated_at", KEY_WAKE_HELD = "wake_held", KEY_WIFI_HELD = "wifi_held", KEY_LOGGED_IN = "logged_in";
   private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
-  private ScheduledFuture<?> heartbeat; private PowerManager.WakeLock wakeLock; private WifiManager.WifiLock wifiLock; private ConnectivityManager cm; private ConnectivityManager.NetworkCallback networkCallback; private Socket wsSocket; private InputStream wsIn; private OutputStream wsOut; private int cseq = 1; private String callId = UUID.randomUUID().toString() + "@planipret-mobile"; private String fromTag = Long.toHexString(System.nanoTime()); private volatile boolean readerRunning = false;
+  private ScheduledFuture<?> heartbeat;
+  private PowerManager.WakeLock wakeLock; private WifiManager.WifiLock wifiLock;
+  private ConnectivityManager cm; private ConnectivityManager.NetworkCallback networkCallback;
+  private Socket wsSocket; private InputStream wsIn; private OutputStream wsOut;
+  private int cseq = 1;
+  private final String callId = UUID.randomUUID().toString() + "@planipret-mobile";
+  private final String fromTag = Long.toHexString(System.nanoTime());
+  private volatile boolean readerRunning = false;
+
   public static void start(Context c) { Intent i = new Intent(c, PpSipKeepAliveService.class); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) c.startForegroundService(i); else c.startService(i); }
   public static void stop(Context c) { c.stopService(new Intent(c, PpSipKeepAliveService.class)); }
   public static void saveConfig(Context c, String host, int port, String path, String login, String domain, String displayName, String password) { c.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString("host", host).putInt("port", port).putString("path", path).putString("login", login).putString("domain", domain).putString("display_name", displayName).putString("password", password).apply(); }
   public static void requestReregister(Context c, String reason) { c.sendBroadcast(new Intent(ACTION_REREGISTER).setPackage(c.getPackageName()).putExtra("reason", reason)); }
-  @Override public void onCreate() { super.onCreate(); createChannel(); PowerManager pm = (PowerManager)getSystemService(POWER_SERVICE); wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Planipret::SipWakeLock"); wakeLock.setReferenceCounted(false); wakeLock.acquire(); WifiManager wm = (WifiManager)getApplicationContext().getSystemService(WIFI_SERVICE); wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Planipret::SipWifiLock"); wifiLock.setReferenceCounted(false); wifiLock.acquire(); registerNetworkWatchdog(); emitStatus("protected", "service_created"); }
-  @Override public int onStartCommand(Intent intent, int flags, int startId) { Notification n = buildNotification("Téléphonie prête en arrière-plan"); if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL); else startForeground(NOTIFICATION_ID, n); emitStatus("connecting", "native_register_start"); requestReregister(this, "service_start"); executor.execute(this::connectAndRegister); if (heartbeat != null) heartbeat.cancel(false); heartbeat = executor.scheduleAtFixedRate(() -> { try { sendRegister(null); } catch(Exception e) { emitStatus("reconnecting", "register_retry"); connectAndRegister(); } requestReregister(this, "keepalive"); }, 240, 240, TimeUnit.SECONDS); return START_STICKY; }
+  public static void clearIncomingNotification(Context c) { try { NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE); if (nm != null) nm.cancel(INCOMING_NOTIFICATION_ID); } catch(Exception ignored) {} }
+
+  @Override public void onCreate() {
+    super.onCreate();
+    createChannels();
+    PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+    wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Planipret::SipWakeLock"); wakeLock.setReferenceCounted(false); wakeLock.acquire();
+    WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+    wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Planipret::SipWifiLock"); wifiLock.setReferenceCounted(false); wifiLock.acquire();
+    registerNetworkWatchdog();
+    emitStatus("protected", "service_created");
+  }
+
+  @Override public int onStartCommand(Intent intent, int flags, int startId) {
+    Notification n = buildOngoingNotification("Téléphonie prête en arrière-plan");
+    if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
+    else startForeground(NOTIFICATION_ID, n);
+    emitStatus("connecting", "native_register_start");
+    requestReregister(this, "service_start");
+    executor.execute(this::connectAndRegister);
+    if (heartbeat != null) heartbeat.cancel(false);
+    heartbeat = executor.scheduleAtFixedRate(() -> {
+      try { sendRegister(null); } catch (Exception e) { emitStatus("reconnecting", "register_retry"); connectAndRegister(); }
+      requestReregister(this, "keepalive");
+    }, 240, 240, TimeUnit.SECONDS);
+    return START_STICKY;
+  }
+
   @Override public void onTaskRemoved(Intent rootIntent) { emitStatus("registered", "task_removed_keepalive"); requestReregister(this, "task_removed"); super.onTaskRemoved(rootIntent); }
-  @Override public void onDestroy() { if (heartbeat != null) heartbeat.cancel(true); unregisterNetworkWatchdog(); closeWs(); try { if (wakeLock != null && wakeLock.isHeld()) wakeLock.release(); } catch(Exception ignored) {} try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch(Exception ignored) {} executor.shutdownNow(); emitStatus("disconnected", "service_destroyed"); super.onDestroy(); }
+  @Override public void onDestroy() { if (heartbeat != null) heartbeat.cancel(true); unregisterNetworkWatchdog(); closeWs(); try { if (wakeLock != null && wakeLock.isHeld()) wakeLock.release(); } catch (Exception ignored) {} try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch (Exception ignored) {} executor.shutdownNow(); emitStatus("disconnected", "service_destroyed"); super.onDestroy(); }
   @Override public IBinder onBind(Intent intent) { return null; }
-  private void registerNetworkWatchdog() { try { cm = (ConnectivityManager)getSystemService(CONNECTIVITY_SERVICE); NetworkRequest req = new NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(); networkCallback = new ConnectivityManager.NetworkCallback() { @Override public void onAvailable(Network n) { emitStatus("registered", "network_available"); requestReregister(PpSipKeepAliveService.this, "network_available"); } @Override public void onLost(Network n) { emitStatus("reconnecting", "network_lost"); } }; cm.registerNetworkCallback(req, networkCallback); } catch(Exception ignored) {} }
+
+  private void registerNetworkWatchdog() { try { cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE); NetworkRequest req = new NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(); networkCallback = new ConnectivityManager.NetworkCallback() { @Override public void onAvailable(Network n) { emitStatus("registered", "network_available"); requestReregister(PpSipKeepAliveService.this, "network_available"); } @Override public void onLost(Network n) { emitStatus("reconnecting", "network_lost"); } }; cm.registerNetworkCallback(req, networkCallback); } catch(Exception ignored) {} }
   private void unregisterNetworkWatchdog() { try { if (cm != null && networkCallback != null) cm.unregisterNetworkCallback(networkCallback); } catch(Exception ignored) {} networkCallback = null; }
-  private void connectAndRegister() { synchronized (this) { try { closeWs(); SharedPreferences p = getSharedPreferences(PREFS_NAME, MODE_PRIVATE); String host = p.getString("host", ""); int port = p.getInt("port", 443); String path = p.getString("path", "/"); if (host == null || host.length() == 0) { emitStatus("error", "missing_host"); return; } Socket raw = port == 443 ? SSLSocketFactory.getDefault().createSocket(host, port) : new Socket(host, port); raw.setSoTimeout(65000); wsSocket = raw; wsIn = raw.getInputStream(); wsOut = raw.getOutputStream(); String key = websocketKey(); String req = "GET " + (path == null || path.length() == 0 ? "/" : path) + " HTTP/1.1\r\nHost: " + host + ":" + port + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + key + "\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: sip\r\nOrigin: https://" + host + "\r\n\r\n"; wsOut.write(req.getBytes(StandardCharsets.UTF_8)); wsOut.flush(); String headers = readHttpHeaders(); if (!headers.contains(" 101 ")) { emitStatus("error", "ws_handshake_failed"); return; } emitStatus("connecting", "ws_connected"); sendRegister(null); if (!readerRunning) { readerRunning = true; executor.execute(this::readLoop); } } catch(Exception e) { emitStatus("error", "connect_failed:" + e.getClass().getSimpleName()); } } }
-  private void readLoop() { try { while (wsSocket != null && wsSocket.isConnected() && !wsSocket.isClosed()) { String msg = readFrame(); if (msg == null) break; handleSipMessage(msg); } } catch(Exception ignored) {} finally { readerRunning = false; emitStatus("reconnecting", "ws_reader_closed"); if (wsSocket != null && !wsSocket.isClosed()) executor.schedule(this::connectAndRegister, 5, TimeUnit.SECONDS); } }
-  private void handleSipMessage(String msg) throws Exception { if (msg.startsWith("SIP/2.0 401") || msg.startsWith("SIP/2.0 407")) { String challenge = header(msg, msg.startsWith("SIP/2.0 407") ? "Proxy-Authenticate" : "WWW-Authenticate"); sendRegister(challenge); return; } if (msg.startsWith("SIP/2.0 200") && msg.toLowerCase(Locale.US).contains("cseq:") && msg.toUpperCase(Locale.US).contains(" REGISTER")) { emitStatus("registered", "native_register_200"); return; } if (msg.startsWith("INVITE ")) { emitStatus("registered", "incoming_invite"); requestReregister(this, "incoming_invite"); showIncomingNotification(); } }
-  private void sendRegister(String challenge) throws Exception { SharedPreferences p = getSharedPreferences(PREFS_NAME, MODE_PRIVATE); String login = p.getString("login", ""), domain = p.getString("domain", ""), display = p.getString("display_name", login), password = p.getString("password", ""); if (login == null || login.length() == 0 || domain == null || domain.length() == 0) { emitStatus("error", "missing_credentials"); return; } int seq = cseq++; String branch = "z9hG4bK" + UUID.randomUUID().toString().replace("-", ""); String contact = "<sip:" + login + "@" + UUID.randomUUID().toString().replace("-", "") + ".invalid;transport=wss>"; StringBuilder sip = new StringBuilder(); sip.append("REGISTER sip:").append(domain).append(" SIP/2.0\r\n"); sip.append("Via: SIP/2.0/WSS planipret-mobile.invalid;branch=").append(branch).append("\r\n"); sip.append("Max-Forwards: 70\r\n"); sip.append("To: <sip:").append(login).append("@").append(domain).append(">\r\n"); sip.append("From: \"").append(display == null ? login : display.replace("\"", "")).append("\" <sip:").append(login).append("@").append(domain).append(">;tag=").append(fromTag).append("\r\n"); sip.append("Call-ID: ").append(callId).append("\r\n"); sip.append("CSeq: ").append(seq).append(" REGISTER\r\n"); sip.append("Contact: ").append(contact).append(";expires=600\r\nExpires: 600\r\nUser-Agent: Planipret Native KeepAlive\r\nSupported: outbound,path,gruu\r\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\r\n"); if (challenge != null && password != null && password.length() > 0) sip.append("Authorization: ").append(digestAuth(challenge, login, password, domain)).append("\r\n"); sip.append("Content-Length: 0\r\n\r\n"); sendFrame(sip.toString()); emitStatus("connecting", challenge == null ? "register_sent" : "register_auth_sent"); }
+
+  private void connectAndRegister() { synchronized (this) { try {
+    closeWs();
+    SharedPreferences p = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+    String host = p.getString("host", ""); int port = p.getInt("port", 443); String path = p.getString("path", "/");
+    if (host == null || host.length() == 0) { emitStatus("error", "missing_host"); return; }
+    Socket raw = port == 443 ? SSLSocketFactory.getDefault().createSocket(host, port) : new Socket(host, port);
+    raw.setSoTimeout(65000);
+    wsSocket = raw; wsIn = raw.getInputStream(); wsOut = raw.getOutputStream();
+    String key = websocketKey();
+    String req = "GET " + (path == null || path.length() == 0 ? "/" : path) + " HTTP/1.1\r\nHost: " + host + ":" + port + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + key + "\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: sip\r\nOrigin: https://" + host + "\r\n\r\n";
+    wsOut.write(req.getBytes(StandardCharsets.UTF_8)); wsOut.flush();
+    String headers = readHttpHeaders();
+    if (!headers.contains(" 101 ")) { emitStatus("error", "ws_handshake_failed"); return; }
+    emitStatus("connecting", "ws_connected");
+    sendRegister(null);
+    if (!readerRunning) { readerRunning = true; executor.execute(this::readLoop); }
+  } catch(Exception e) { emitStatus("error", "connect_failed:" + e.getClass().getSimpleName()); } } }
+
+  private void readLoop() { try {
+    while (wsSocket != null && wsSocket.isConnected() && !wsSocket.isClosed()) {
+      String msg = readFrame(); if (msg == null) break; handleSipMessage(msg);
+    }
+  } catch(Exception ignored) {} finally { readerRunning = false; emitStatus("reconnecting", "ws_reader_closed"); if (wsSocket != null && !wsSocket.isClosed()) executor.schedule(this::connectAndRegister, 5, TimeUnit.SECONDS); } }
+
+  private void handleSipMessage(String msg) throws Exception {
+    if (msg.startsWith("SIP/2.0 401") || msg.startsWith("SIP/2.0 407")) {
+      String challenge = header(msg, msg.startsWith("SIP/2.0 407") ? "Proxy-Authenticate" : "WWW-Authenticate");
+      sendRegister(challenge); return;
+    }
+    if (msg.startsWith("SIP/2.0 200") && msg.toLowerCase(Locale.US).contains("cseq:") && msg.toUpperCase(Locale.US).contains(" REGISTER")) {
+      emitStatus("registered", "native_register_200"); return;
+    }
+    if (msg.startsWith("INVITE ")) {
+      emitStatus("registered", "incoming_invite");
+      // Parse caller identity + Call-ID + Via/From/To for a 180 Ringing reply.
+      String fromHdr = header(msg, "From"); String toHdr = header(msg, "To");
+      String viaHdr = header(msg, "Via"); String inviteCallId = header(msg, "Call-ID");
+      String inviteCSeq = header(msg, "CSeq");
+      String fromDisplay = parseDisplay(fromHdr); String fromUser = parseUser(fromHdr);
+      // Send 180 Ringing so the PBX keeps the INVITE alive while the app wakes.
+      try { sendRinging(viaHdr, fromHdr, toHdr, inviteCallId, inviteCSeq); } catch (Exception ignored) {}
+      // Broadcast to the JS plugin.
+      sendBroadcast(new Intent(ACTION_INCOMING_INVITE).setPackage(getPackageName())
+        .putExtra("callId", inviteCallId).putExtra("from", fromHdr)
+        .putExtra("fromUser", fromUser).putExtra("fromDisplay", fromDisplay));
+      // Fire the full-screen "ringing" notification with Answer / Decline actions.
+      showIncomingCallNotification(inviteCallId, fromHdr, fromUser, fromDisplay);
+      requestReregister(this, "incoming_invite");
+    }
+  }
+
+  private void sendRinging(String via, String from, String to, String cid, String cseqHeader) throws Exception {
+    if (via == null || from == null || to == null || cid == null || cseqHeader == null) return;
+    // Add a to-tag if none, so upstream proxies don't reject.
+    String toWithTag = to.contains(";tag=") ? to : to + ";tag=" + Long.toHexString(System.nanoTime());
+    StringBuilder r = new StringBuilder();
+    r.append("SIP/2.0 180 Ringing\r\n")
+     .append("Via: ").append(via).append("\r\n")
+     .append("From: ").append(from).append("\r\n")
+     .append("To: ").append(toWithTag).append("\r\n")
+     .append("Call-ID: ").append(cid).append("\r\n")
+     .append("CSeq: ").append(cseqHeader).append("\r\n")
+     .append("User-Agent: Planipret Native KeepAlive\r\n")
+     .append("Content-Length: 0\r\n\r\n");
+    sendFrame(r.toString());
+  }
+
+  private void sendRegister(String challenge) throws Exception {
+    SharedPreferences p = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+    String login = p.getString("login", ""), domain = p.getString("domain", ""), display = p.getString("display_name", login), password = p.getString("password", "");
+    if (login == null || login.length() == 0 || domain == null || domain.length() == 0) { emitStatus("error", "missing_credentials"); return; }
+    int seq = cseq++;
+    String branch = "z9hG4bK" + UUID.randomUUID().toString().replace("-", "");
+    String contact = "<sip:" + login + "@" + UUID.randomUUID().toString().replace("-", "") + ".invalid;transport=wss>";
+    StringBuilder sip = new StringBuilder();
+    sip.append("REGISTER sip:").append(domain).append(" SIP/2.0\r\n");
+    sip.append("Via: SIP/2.0/WSS planipret-mobile.invalid;branch=").append(branch).append("\r\n");
+    sip.append("Max-Forwards: 70\r\n");
+    sip.append("To: <sip:").append(login).append("@").append(domain).append(">\r\n");
+    sip.append("From: \"").append(display == null ? login : display.replace("\"", "")).append("\" <sip:").append(login).append("@").append(domain).append(">;tag=").append(fromTag).append("\r\n");
+    sip.append("Call-ID: ").append(callId).append("\r\n");
+    sip.append("CSeq: ").append(seq).append(" REGISTER\r\n");
+    sip.append("Contact: ").append(contact).append(";expires=600\r\nExpires: 600\r\nUser-Agent: Planipret Native KeepAlive\r\nSupported: outbound,path,gruu\r\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\r\n");
+    if (challenge != null && password != null && password.length() > 0) sip.append("Authorization: ").append(digestAuth(challenge, login, password, domain)).append("\r\n");
+    sip.append("Content-Length: 0\r\n\r\n");
+    sendFrame(sip.toString());
+    emitStatus("connecting", challenge == null ? "register_sent" : "register_auth_sent");
+  }
+
   private String digestAuth(String challenge, String user, String pass, String domain) throws Exception { Map<String,String> m = parseDigest(challenge); String realm = m.containsKey("realm") ? m.get("realm") : domain, nonce = m.get("nonce"), qop = m.get("qop"), opaque = m.get("opaque"), uri = "sip:" + domain, nc = "00000001", cnonce = Long.toHexString(System.nanoTime()); String ha1 = md5(user + ":" + realm + ":" + pass), ha2 = md5("REGISTER:" + uri); String resp = qop != null && qop.contains("auth") ? md5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":auth:" + ha2) : md5(ha1 + ":" + nonce + ":" + ha2); StringBuilder a = new StringBuilder("Digest username=\"").append(user).append("\", realm=\"").append(realm).append("\", nonce=\"").append(nonce).append("\", uri=\"").append(uri).append("\", response=\"").append(resp).append("\", algorithm=MD5"); if (qop != null && qop.contains("auth")) a.append(", qop=auth, nc=").append(nc).append(", cnonce=\"").append(cnonce).append("\""); if (opaque != null) a.append(", opaque=\"").append(opaque).append("\""); return a.toString(); }
-  private Map<String,String> parseDigest(String h) { Map<String,String> out = new HashMap<>(); String s = h.replaceFirst("(?i)^Digest\\s+", ""); for (String part : s.split(",")) { int i = part.indexOf('='); if (i <= 0) continue; String k = part.substring(0, i).trim(); String v = part.substring(i + 1).trim(); if (v.startsWith("\"") && v.endsWith("\"")) v = v.substring(1, v.length() - 1); out.put(k, v); } return out; }
+  private Map<String,String> parseDigest(String h) { Map<String,String> out = new HashMap<>(); String s = h.replaceFirst("(?i)^Digest\\\\s+", ""); for (String part : s.split(",")) { int i = part.indexOf('='); if (i <= 0) continue; String k = part.substring(0, i).trim(); String v = part.substring(i + 1).trim(); if (v.startsWith("\"") && v.endsWith("\"")) v = v.substring(1, v.length() - 1); out.put(k, v); } return out; }
   private String header(String msg, String name) { for (String line : msg.split("\\r?\\n")) if (line.toLowerCase(Locale.US).startsWith(name.toLowerCase(Locale.US) + ":")) return line.substring(name.length() + 1).trim(); return null; }
+  private String parseDisplay(String header) { if (header == null) return null; int lt = header.indexOf('<'); if (lt > 0) { String d = header.substring(0, lt).trim(); if (d.startsWith("\"") && d.endsWith("\"")) d = d.substring(1, d.length() - 1); return d.length() == 0 ? null : d; } return null; }
+  private String parseUser(String header) { if (header == null) return null; int lt = header.indexOf('<'); String uri = lt >= 0 ? header.substring(lt + 1, Math.max(lt + 1, header.indexOf('>', lt))) : header; if (uri.startsWith("sip:")) uri = uri.substring(4); else if (uri.startsWith("sips:")) uri = uri.substring(5); int at = uri.indexOf('@'); if (at > 0) uri = uri.substring(0, at); int semi = uri.indexOf(';'); if (semi > 0) uri = uri.substring(0, semi); return uri; }
   private String md5(String s) throws Exception { MessageDigest md = MessageDigest.getInstance("MD5"); byte[] b = md.digest(s.getBytes(StandardCharsets.UTF_8)); StringBuilder sb = new StringBuilder(); for (byte x : b) sb.append(String.format(Locale.US, "%02x", x & 0xff)); return sb.toString(); }
   private String websocketKey() { byte[] b = new byte[16]; new SecureRandom().nextBytes(b); return Base64.encodeToString(b, Base64.NO_WRAP); }
   private String readHttpHeaders() throws IOException { ByteArrayOutputStream b = new ByteArrayOutputStream(); int prev3 = -1, prev2 = -1, prev1 = -1, cur; while ((cur = wsIn.read()) != -1) { b.write(cur); if (prev3 == '\r' && prev2 == '\n' && prev1 == '\r' && cur == '\n') break; prev3 = prev2; prev2 = prev1; prev1 = cur; } return b.toString("UTF-8"); }
@@ -373,10 +409,202 @@ public class PpSipKeepAliveService extends Service {
   private void readFully(byte[] b) throws IOException { int off = 0; while (off < b.length) { int r = wsIn.read(b, off, b.length - off); if (r < 0) throw new EOFException(); off += r; } }
   private void sendPong(byte[] payload) throws IOException { if (wsOut == null) return; ByteArrayOutputStream f = new ByteArrayOutputStream(); f.write(0x8A); f.write(0x80 | payload.length); byte[] mask = new byte[4]; new SecureRandom().nextBytes(mask); f.write(mask); for (int i = 0; i < payload.length; i++) f.write(payload[i] ^ mask[i % 4]); wsOut.write(f.toByteArray()); wsOut.flush(); }
   private void closeWs() { try { if (wsSocket != null) wsSocket.close(); } catch(Exception ignored) {} wsSocket = null; wsIn = null; wsOut = null; }
-  private void showIncomingNotification() { try { NotificationManager nm = (NotificationManager)getSystemService(NOTIFICATION_SERVICE); nm.notify(NOTIFICATION_ID + 1, buildNotification("Appel entrant — ouvrir Planiprêt pour répondre")); } catch(Exception ignored) {} }
+
+  private void showIncomingCallNotification(String cid, String fromHdr, String fromUser, String fromDisplay) {
+    try {
+      String label = (fromDisplay != null && fromDisplay.length() > 0) ? fromDisplay :
+                     (fromUser != null && fromUser.length() > 0 ? fromUser : "Appel entrant");
+      Intent contentIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+      if (contentIntent == null) contentIntent = new Intent();
+      contentIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+      contentIntent.putExtra("pp_incoming_call", true).putExtra("pp_call_id", cid).putExtra("pp_from", fromHdr);
+      int pf = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT : PendingIntent.FLAG_UPDATE_CURRENT;
+      PendingIntent contentPi = PendingIntent.getActivity(this, 3001, contentIntent, pf);
+
+      Intent answer = new Intent(this, PpIncomingActionReceiver.class).setAction(PpIncomingActionReceiver.ACTION_ANSWER)
+        .putExtra("callId", cid).putExtra("from", fromHdr).putExtra("fromUser", fromUser).putExtra("fromDisplay", fromDisplay);
+      Intent decline = new Intent(this, PpIncomingActionReceiver.class).setAction(PpIncomingActionReceiver.ACTION_DECLINE)
+        .putExtra("callId", cid).putExtra("from", fromHdr).putExtra("fromUser", fromUser).putExtra("fromDisplay", fromDisplay);
+      PendingIntent answerPi = PendingIntent.getBroadcast(this, 3011, answer, pf);
+      PendingIntent declinePi = PendingIntent.getBroadcast(this, 3012, decline, pf);
+
+      NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_INCOMING_ID)
+        .setContentTitle("Appel entrant")
+        .setContentText(label)
+        .setSmallIcon(android.R.drawable.sym_call_incoming)
+        .setPriority(NotificationCompat.PRIORITY_MAX)
+        .setCategory(NotificationCompat.CATEGORY_CALL)
+        .setOngoing(true)
+        .setAutoCancel(true)
+        .setColor(Color.parseColor("#0023e6"))
+        .setContentIntent(contentPi)
+        .setFullScreenIntent(contentPi, true)
+        .addAction(new NotificationCompat.Action(android.R.drawable.sym_action_call, "Répondre", answerPi))
+        .addAction(new NotificationCompat.Action(android.R.drawable.ic_menu_close_clear_cancel, "Refuser", declinePi));
+      NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+      if (nm != null) nm.notify(INCOMING_NOTIFICATION_ID, b.build());
+    } catch (Exception ignored) {}
+  }
+
   private void emitStatus(String status, String reason) { long now = System.currentTimeMillis(); boolean wake = wakeLock != null && wakeLock.isHeld(), wifi = wifiLock != null && wifiLock.isHeld(), logged = status.equals("registered") || status.equals("protected"); getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_STATUS, status).putString(KEY_REASON, reason).putLong(KEY_UPDATED_AT, now).putBoolean(KEY_WAKE_HELD, wake).putBoolean(KEY_WIFI_HELD, wifi).putBoolean(KEY_LOGGED_IN, logged).apply(); sendBroadcast(new Intent(ACTION_STATUS).setPackage(getPackageName()).putExtra("status", status).putExtra("reason", reason).putExtra("updatedAt", now).putExtra("wakeLockHeld", wake).putExtra("wifiLockHeld", wifi).putExtra("loggedIn", logged)); }
-  private Notification buildNotification(String text) { return new NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle("Planiprêt Mobile").setContentText(text).setSmallIcon(android.R.drawable.ic_menu_call).setPriority(NotificationCompat.PRIORITY_LOW).setOngoing(true).setSilent(true).build(); }
-  private void createChannel() { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ((NotificationManager)getSystemService(NotificationManager.class)).createNotificationChannel(new NotificationChannel(CHANNEL_ID, "Connexion téléphonique", NotificationManager.IMPORTANCE_LOW)); }
+  private Notification buildOngoingNotification(String text) { return new NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle("Planiprêt Mobile").setContentText(text).setSmallIcon(android.R.drawable.ic_menu_call).setPriority(NotificationCompat.PRIORITY_LOW).setOngoing(true).setSilent(true).build(); }
+  private void createChannels() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+    NotificationManager nm = (NotificationManager) getSystemService(NotificationManager.class);
+    if (nm == null) return;
+    nm.createNotificationChannel(new NotificationChannel(CHANNEL_ID, "Connexion téléphonique", NotificationManager.IMPORTANCE_LOW));
+    NotificationChannel incoming = new NotificationChannel(CHANNEL_INCOMING_ID, "Appels entrants", NotificationManager.IMPORTANCE_HIGH);
+    incoming.setDescription("Notifications d'appel entrant Planiprêt");
+    incoming.enableVibration(true);
+    incoming.enableLights(true);
+    AudioAttributes attrs = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
+    incoming.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE), attrs);
+    incoming.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+    nm.createNotificationChannel(incoming);
+  }
+}
+`;
+
+const IOS_PLUGIN = `import Foundation
+import Capacitor
+import UIKit
+import AVFoundation
+import CryptoKit
+import UserNotifications
+
+// Planiprêt-only. DO NOT reuse in Lemtel (Verto stack).
+@objc(PpSipKeepAlive)
+public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate {
+    public let identifier = "PpSipKeepAlive"; public let jsName = "PpSipKeepAlive"
+    public let pluginMethods: [CAPPluginMethod] = [
+      CAPPluginMethod(name: "startSipService", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "stopSipService", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "getSipServiceStatus", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "triggerReregister", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "acknowledgeIncoming", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
+      CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise)
+    ]
+    private var status = "idle"; private var reason = "plugin_loaded"; private var updatedAt = Date().timeIntervalSince1970 * 1000
+    private var bgTask: UIBackgroundTaskIdentifier = .invalid
+    private var host = ""; private var port = 443; private var path = "/"; private var login = ""; private var domain = ""; private var displayName = ""; private var password = ""
+    private var socket: URLSessionWebSocketTask?
+    private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue())
+    private var timer: Timer?
+    private var cseq = 1
+    private let callIdReg = UUID().uuidString + "@planipret-ios"
+    private let fromTag = String(Int(Date().timeIntervalSince1970 * 1000), radix: 16)
+
+    public override func load() {
+      NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+      NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+      // Ask for notification permission so the incoming-call banner can ring.
+      UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+    }
+    deinit { NotificationCenter.default.removeObserver(self); timer?.invalidate(); socket?.cancel(with: .goingAway, reason: nil) }
+
+    @objc func startSipService(_ call: CAPPluginCall) {
+      host = call.getString("host") ?? call.getString("domain") ?? ""; port = call.getInt("port") ?? 443; path = call.getString("path") ?? "/"
+      login = call.getString("login") ?? call.getString("username") ?? call.getString("extension") ?? ""
+      domain = call.getString("domain") ?? ""; displayName = call.getString("displayName") ?? login; password = call.getString("password") ?? ""
+      activateAudioSession(); connect(); scheduleRegister(); call.resolve(snapshot(ok: true))
+    }
+    @objc func stopSipService(_ call: CAPPluginCall) { timer?.invalidate(); socket?.cancel(with: .goingAway, reason: nil); socket = nil; endBackgroundTask(); setStatus("disconnected", "stopped"); call.resolve(snapshot(ok: true)) }
+    @objc func getSipServiceStatus(_ call: CAPPluginCall) { call.resolve(snapshot(ok: true)) }
+    @objc func triggerReregister(_ call: CAPPluginCall) { sendRegister(challenge: nil); notifyListeners("sipReregisterRequested", data: ["reason": "manual"]); call.resolve(snapshot(ok: true)) }
+    @objc func acknowledgeIncoming(_ call: CAPPluginCall) {
+      UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["pp_incoming_call"])
+      call.resolve(["ok": true])
+    }
+
+    @objc private func onBackground() { beginBackgroundTask(); activateAudioSession(); sendRegister(challenge: nil); notifyListeners("sipReregisterRequested", data: ["reason": "enter_background"]); setStatus("protected", "background_register_sent") }
+    @objc private func onForeground() { connect(); sendRegister(challenge: nil); notifyListeners("sipReregisterRequested", data: ["reason": "enter_foreground"]); setStatus("registered", "foreground_refresh"); endBackgroundTask() }
+
+    private func activateAudioSession() { try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]); try? AVAudioSession.sharedInstance().setActive(true) }
+    private func connect() {
+      guard !host.isEmpty else { setStatus("error", "missing_host"); return }
+      if socket != nil { return }
+      var comps = URLComponents(); comps.scheme = port == 80 ? "ws" : "wss"; comps.host = host; comps.port = port; comps.path = path.isEmpty ? "/" : path
+      guard let url = comps.url else { setStatus("error", "bad_ws_url"); return }
+      var req = URLRequest(url: url); req.setValue("sip", forHTTPHeaderField: "Sec-WebSocket-Protocol")
+      socket = session.webSocketTask(with: req); socket?.resume(); setStatus("connecting", "ws_connecting"); receiveLoop()
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.sendRegister(challenge: nil) }
+    }
+    private func scheduleRegister() { timer?.invalidate(); timer = Timer.scheduledTimer(withTimeInterval: 240, repeats: true) { [weak self] _ in self?.sendRegister(challenge: nil) }; RunLoop.main.add(timer!, forMode: .common) }
+    private func receiveLoop() { socket?.receive { [weak self] result in guard let self = self else { return }; switch result { case .success(let message): if case .string(let text) = message { self.handle(text) }; self.receiveLoop(); case .failure: self.socket = nil; self.setStatus("reconnecting", "ws_closed"); DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.connect() } } } }
+
+    private func handle(_ msg: String) {
+      if msg.hasPrefix("SIP/2.0 401") || msg.hasPrefix("SIP/2.0 407") { sendRegister(challenge: headerVal(msg, msg.hasPrefix("SIP/2.0 407") ? "Proxy-Authenticate" : "WWW-Authenticate")); return }
+      if msg.hasPrefix("SIP/2.0 200") && msg.uppercased().contains(" REGISTER") { setStatus("registered", "native_register_200"); return }
+      if msg.hasPrefix("INVITE ") {
+        setStatus("registered", "incoming_invite")
+        let fromHdr = headerVal(msg, "From") ?? ""
+        let toHdr = headerVal(msg, "To") ?? ""
+        let viaHdr = headerVal(msg, "Via") ?? ""
+        let cidHdr = headerVal(msg, "Call-ID") ?? ""
+        let cseqHdr = headerVal(msg, "CSeq") ?? ""
+        let fromDisplay = parseDisplay(fromHdr)
+        let fromUser = parseUser(fromHdr)
+        sendRinging(via: viaHdr, from: fromHdr, to: toHdr, cid: cidHdr, cseq: cseqHdr)
+        notifyListeners("sipIncomingInvite", data: [
+          "callId": cidHdr, "from": fromHdr, "fromUser": fromUser, "fromDisplay": fromDisplay
+        ])
+        showIncomingCallBanner(callId: cidHdr, label: fromDisplay.isEmpty ? (fromUser.isEmpty ? "Appel entrant" : fromUser) : fromDisplay)
+        notifyListeners("sipReregisterRequested", data: ["reason": "incoming_invite"])
+      }
+    }
+
+    private func sendRinging(via: String, from: String, to: String, cid: String, cseq: String) {
+      guard socket != nil, !via.isEmpty, !cid.isEmpty else { return }
+      let toWithTag = to.contains(";tag=") ? to : to + ";tag=" + String(Int(Date().timeIntervalSince1970 * 1000), radix: 16)
+      var r = "SIP/2.0 180 Ringing\\r\\n"
+      r += "Via: " + via + "\\r\\n"
+      r += "From: " + from + "\\r\\n"
+      r += "To: " + toWithTag + "\\r\\n"
+      r += "Call-ID: " + cid + "\\r\\n"
+      r += "CSeq: " + cseq + "\\r\\n"
+      r += "User-Agent: Planipret iOS KeepAlive\\r\\n"
+      r += "Content-Length: 0\\r\\n\\r\\n"
+      socket?.send(.string(r)) { _ in }
+    }
+
+    private func showIncomingCallBanner(callId: String, label: String) {
+      let content = UNMutableNotificationContent()
+      content.title = "Appel entrant"
+      content.body = label
+      content.sound = UNNotificationSound.defaultRingtone
+      if #available(iOS 15.0, *) { content.interruptionLevel = .timeSensitive }
+      content.categoryIdentifier = "PP_INCOMING_CALL"
+      content.userInfo = ["pp_call_id": callId, "pp_incoming_call": true]
+      let req = UNNotificationRequest(identifier: "pp_incoming_call", content: content, trigger: nil)
+      UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
+    }
+
+    private func sendRegister(challenge: String?) {
+      if socket == nil { connect(); return }
+      guard !login.isEmpty, !domain.isEmpty else { setStatus("error", "missing_credentials"); return }
+      let seq = cseq; cseq += 1
+      let branch = "z9hG4bK" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
+      let contact = "<sip:" + login + "@" + UUID().uuidString.replacingOccurrences(of: "-", with: "") + ".invalid;transport=wss>"
+      var sip = "REGISTER sip:" + domain + " SIP/2.0\\r\\n"
+      sip += "Via: SIP/2.0/WSS planipret-ios.invalid;branch=" + branch + "\\r\\nMax-Forwards: 70\\r\\n"
+      sip += "To: <sip:" + login + "@" + domain + ">\\r\\nFrom: \\"" + displayName.replacingOccurrences(of: "\\"", with: "") + "\\" <sip:" + login + "@" + domain + ">;tag=" + fromTag + "\\r\\n"
+      sip += "Call-ID: " + callIdReg + "\\r\\nCSeq: " + String(seq) + " REGISTER\\r\\nContact: " + contact + ";expires=600\\r\\nExpires: 600\\r\\nUser-Agent: Planipret iOS KeepAlive\\r\\nSupported: outbound,path,gruu\\r\\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\\r\\n"
+      if let ch = challenge, !password.isEmpty { sip += "Authorization: " + digest(challenge: ch) + "\\r\\n" }
+      sip += "Content-Length: 0\\r\\n\\r\\n"
+      socket?.send(.string(sip)) { [weak self] err in DispatchQueue.main.async { self?.setStatus(err == nil ? "connecting" : "error", err == nil ? (challenge == nil ? "register_sent" : "register_auth_sent") : "register_send_failed") } }
+    }
+
+    private func digest(challenge: String) -> String { let m = parseDigest(challenge); let realm = m["realm"] ?? domain; let nonce = m["nonce"] ?? ""; let qop = m["qop"] ?? ""; let uri = "sip:" + domain; let nc = "00000001"; let cnonce = String(Int(Date().timeIntervalSince1970 * 1000), radix: 16); let ha1 = md5(login + ":" + realm + ":" + password); let ha2 = md5("REGISTER:" + uri); let response = qop.contains("auth") ? md5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":auth:" + ha2) : md5(ha1 + ":" + nonce + ":" + ha2); var out = "Digest username=\\"" + login + "\\", realm=\\"" + realm + "\\", nonce=\\"" + nonce + "\\", uri=\\"" + uri + "\\", response=\\"" + response + "\\", algorithm=MD5"; if qop.contains("auth") { out += ", qop=auth, nc=" + nc + ", cnonce=\\"" + cnonce + "\\"" }; if let opaque = m["opaque"] { out += ", opaque=\\"" + opaque + "\\"" }; return out }
+    private func parseDigest(_ h: String) -> [String:String] { var out: [String:String] = [:]; let s = h.replacingOccurrences(of: "Digest ", with: "", options: .caseInsensitive); for part in s.split(separator: ",") { let pieces = part.split(separator: "=", maxSplits: 1); if pieces.count == 2 { var v = pieces[1].trimmingCharacters(in: .whitespaces); if v.hasPrefix("\\"") && v.hasSuffix("\\"") { v.removeFirst(); v.removeLast() }; out[pieces[0].trimmingCharacters(in: .whitespaces)] = v } }; return out }
+    private func headerVal(_ msg: String, _ name: String) -> String? { for line in msg.components(separatedBy: .newlines) { if line.lowercased().hasPrefix(name.lowercased() + ":") { return String(line.dropFirst(name.count + 1)).trimmingCharacters(in: .whitespaces) } }; return nil }
+    private func parseDisplay(_ hdr: String) -> String { guard let lt = hdr.firstIndex(of: "<") else { return "" }; var d = String(hdr[..<lt]).trimmingCharacters(in: .whitespaces); if d.hasPrefix("\\"") && d.hasSuffix("\\"") { d.removeFirst(); d.removeLast() }; return d }
+    private func parseUser(_ hdr: String) -> String { var uri = hdr; if let lt = hdr.firstIndex(of: "<"), let gt = hdr[lt...].firstIndex(of: ">") { uri = String(hdr[hdr.index(after: lt)..<gt]) }; if uri.hasPrefix("sip:") { uri = String(uri.dropFirst(4)) } else if uri.hasPrefix("sips:") { uri = String(uri.dropFirst(5)) }; if let at = uri.firstIndex(of: "@") { uri = String(uri[..<at]) }; if let semi = uri.firstIndex(of: ";") { uri = String(uri[..<semi]) }; return uri }
+    private func md5(_ s: String) -> String { let d = Insecure.MD5.hash(data: Data(s.utf8)); return d.map { String(format: "%02hhx", $0) }.joined() }
+    private func beginBackgroundTask() { if bgTask != .invalid { return }; bgTask = UIApplication.shared.beginBackgroundTask(withName: "PlanipretSIPKeepAlive") { [weak self] in self?.endBackgroundTask(); self?.setStatus("protected", "background_task_expired") }; DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in self?.sendRegister(challenge: nil); self?.endBackgroundTask() } }
+    private func endBackgroundTask() { if bgTask != .invalid { UIApplication.shared.endBackgroundTask(bgTask); bgTask = .invalid } }
+    private func setStatus(_ next: String, _ nextReason: String) { status = next; reason = nextReason; updatedAt = Date().timeIntervalSince1970 * 1000; DispatchQueue.main.async { self.notifyListeners("sipServiceStatus", data: self.snapshot(ok: true)) } }
+    private func snapshot(ok: Bool) -> [String: Any] { ["ok": ok, "status": status, "reason": reason, "updatedAt": updatedAt, "backgroundTaskActive": bgTask != .invalid, "loggedIn": status == "registered" || status == "protected"] }
 }
 `;
 
@@ -464,6 +692,12 @@ function patchAndroidManifest() {
 
   if (!xml.includes(".PpSipKeepAliveService")) {
     xml = xml.replace(/\n\s*<\/application>/, `${ANDROID_SERVICE}\n    </application>`);
+  } else if (!xml.includes(".PpIncomingActionReceiver")) {
+    xml = xml.replace(/\n\s*<\/application>/, `        <receiver\n            android:name=".PpIncomingActionReceiver"\n            android:exported="false" />\n    </application>`);
+  }
+  // Ensure MainActivity can be shown over the lockscreen for full-screen intents.
+  if (!xml.includes('android:showWhenLocked')) {
+    xml = xml.replace(/<activity([^>]*android:name="\.MainActivity"[^>]*)>/, `<activity$1\n            android:showWhenLocked="true"\n            android:turnScreenOn="true">`);
   }
   writeIfChanged(file, xml);
   console.log("[native-config] Android deep links + SIP keep-alive service applied.");
@@ -481,6 +715,7 @@ function patchAndroidNativeFiles() {
   const pkgDir = path.join(javaRoot, ...pkg.split("."));
   writeIfChanged(path.join(pkgDir, "PpSipKeepAlivePlugin.java"), ANDROID_PLUGIN_JAVA(pkg));
   writeIfChanged(path.join(pkgDir, "PpSipKeepAliveService.java"), ANDROID_SERVICE_JAVA(pkg));
+  writeIfChanged(path.join(pkgDir, "PpIncomingActionReceiver.java"), ANDROID_RECEIVER_JAVA(pkg));
   for (const stale of ["PpSipKeepAlivePlugin.kt", "PpSipKeepAliveService.kt"]) {
     const staleFile = path.join(pkgDir, stale);
     if (fs.existsSync(staleFile)) fs.rmSync(staleFile);

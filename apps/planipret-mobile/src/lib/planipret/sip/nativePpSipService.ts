@@ -14,13 +14,26 @@ export type PpNativeSipStatus = {
 
 type ListenerHandle = { remove: () => Promise<void> | void };
 
+export type PpIncomingInvite = {
+  callId?: string;
+  from?: string;
+  fromUser?: string;
+  fromDisplay?: string;
+  /** Present only when user tapped Answer / Decline on the native notification. */
+  action?: "answer" | "decline";
+};
+
 type PpSipKeepAlivePlugin = {
   startSipService?: (opts: Record<string, unknown>) => Promise<PpNativeSipStatus>;
   stopSipService?: () => Promise<PpNativeSipStatus>;
   getSipServiceStatus?: () => Promise<PpNativeSipStatus>;
   requestBatteryOptimizationExemption?: () => Promise<PpNativeSipStatus>;
   triggerReregister?: () => Promise<PpNativeSipStatus>;
-  addListener?: (event: "sipServiceStatus" | "sipReregisterRequested", cb: (data: PpNativeSipStatus) => void) => Promise<ListenerHandle>;
+  acknowledgeIncoming?: () => Promise<{ ok: boolean }>;
+  addListener?: (
+    event: "sipServiceStatus" | "sipReregisterRequested" | "sipIncomingInvite",
+    cb: (data: any) => void,
+  ) => Promise<ListenerHandle>;
 };
 
 const isNative = () => {
@@ -115,4 +128,24 @@ export async function onPlanipretNativeReregister(cb: () => void): Promise<() =>
   } catch {
     return () => undefined;
   }
+}
+
+/** Fires whenever the native SIP socket sees an INVITE while the WebView is
+ *  suspended, and again with `action: "answer" | "decline"` when the user taps
+ *  the corresponding button on the Android full-screen notification (iOS uses
+ *  the local notification banner + CallKit). Planiprêt-only. */
+export async function onPlanipretIncomingInvite(cb: (invite: PpIncomingInvite) => void): Promise<() => void> {
+  if (!isNative() || !NativePpSip.addListener) return () => undefined;
+  try {
+    const handle = await NativePpSip.addListener("sipIncomingInvite", (data: PpIncomingInvite) => cb(data ?? {}));
+    return () => { void handle?.remove?.(); };
+  } catch {
+    return () => undefined;
+  }
+}
+
+export async function acknowledgePlanipretIncoming(): Promise<void> {
+  if (!isNative()) return;
+  try { await NativePpSip.acknowledgeIncoming?.(); }
+  catch { /* noop */ }
 }

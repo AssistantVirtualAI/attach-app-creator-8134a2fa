@@ -73,6 +73,7 @@ class SipConnectionService : Service() {
         const val ACTION_NATIVE_VERTO_HANGUP = "com.lemtel.softphone.NATIVE_VERTO_HANGUP"
         const val ACTION_NATIVE_ANSWER_REQUEST = "com.lemtel.softphone.NATIVE_ANSWER_REQUEST"
         const val ACTION_REGISTER_OUTBOUND_CALL = "com.lemtel.softphone.REGISTER_OUTBOUND_CALL"
+        const val ACTION_VERTO_SERVER_MESSAGE = "com.lemtel.softphone.VERTO_SERVER_MESSAGE"
         const val KEY_STATUS = "verto_native_status"
         const val KEY_REASON = "verto_native_reason"
         const val KEY_UPDATED_AT = "verto_native_updated_at"
@@ -530,6 +531,21 @@ class SipConnectionService : Service() {
         }
     }
 
+    /**
+     * Forward server-initiated Verto messages that the native layer cannot fully
+     * handle (SDP negotiation lives in the JS RTCPeerConnection) to the JS layer.
+     */
+    private fun forwardServerMessageToJs(raw: String) {
+        try {
+            sendBroadcast(Intent(ACTION_VERTO_SERVER_MESSAGE).apply {
+                setPackage(packageName)
+                putExtra("raw", raw)
+            })
+        } catch (e: Exception) {
+            Log.w(TAG, "forwardServerMessageToJs failed: ${e.message}")
+        }
+    }
+
     private fun handleVertoMessage(text: String) {
         try {
             val json = JSONObject(text)
@@ -545,7 +561,18 @@ class SipConnectionService : Service() {
                 }.toString())
             }
 
+            // Any message carrying remote SDP (answer/media, including the JSON-RPC
+            // *result* of our verto.answer) or a teardown must reach the JS layer,
+            // otherwise the RTCPeerConnection never gets setRemoteDescription()
+            // and the UI never learns the call ended.
+            val carriesSdp = (result?.optString("sdp")?.isNotEmpty() == true) ||
+                (json.optJSONObject("params")?.optString("sdp")?.isNotEmpty() == true)
+            if (method == "verto.answer" || method == "verto.media" || method == "verto.bye" || carriesSdp) {
+                forwardServerMessageToJs(text)
+            }
+
             when {
+
                 result != null && json.optInt("id") == 1 -> {
                     val sessid = result.optString("sessid")
                     val message = result.optString("message")

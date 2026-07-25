@@ -38,6 +38,7 @@ class CapacitorPjsip : Plugin() {
     private var sipStatusReceiver: BroadcastReceiver? = null
     private var callActionReceiver: BroadcastReceiver? = null
     private var scoReceiver: BroadcastReceiver? = null
+    private var vertoMessageReceiver: BroadcastReceiver? = null
 
     override fun load() {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -69,17 +70,27 @@ class CapacitorPjsip : Plugin() {
                 }
             }
         }
+        vertoMessageReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent?.action != SipConnectionService.ACTION_VERTO_SERVER_MESSAGE) return
+                val raw = intent.getStringExtra("raw") ?: return
+                notifyListeners("vertoServerMessage", JSObject().put("raw", raw), true)
+            }
+        }
         try {
             val filter = IntentFilter(SipConnectionService.ACTION_STATUS)
             val callFilter = IntentFilter(CallActionReceiver.ACTION_CALL_ACTION_EVENT)
             val scoFilter = IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED)
+            val vertoFilter = IntentFilter(SipConnectionService.ACTION_VERTO_SERVER_MESSAGE)
             val receiver = sipStatusReceiver ?: return
             val callRecv = callActionReceiver ?: return
             val scoRecv = scoReceiver ?: return
+            val vertoRecv = vertoMessageReceiver ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
                 context.registerReceiver(callRecv, callFilter, Context.RECEIVER_NOT_EXPORTED)
                 context.registerReceiver(scoRecv, scoFilter, Context.RECEIVER_NOT_EXPORTED)
+                context.registerReceiver(vertoRecv, vertoFilter, Context.RECEIVER_NOT_EXPORTED)
             } else {
                 @Suppress("DEPRECATION")
                 context.registerReceiver(receiver, filter)
@@ -87,17 +98,22 @@ class CapacitorPjsip : Plugin() {
                 context.registerReceiver(callRecv, callFilter)
                 @Suppress("DEPRECATION")
                 context.registerReceiver(scoRecv, scoFilter)
+                @Suppress("DEPRECATION")
+                context.registerReceiver(vertoRecv, vertoFilter)
             }
         } catch (_: Exception) {}
     }
+
 
     override fun handleOnDestroy() {
         try { sipStatusReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         try { callActionReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         try { scoReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
+        try { vertoMessageReceiver?.let { context.unregisterReceiver(it) } } catch (_: Exception) {}
         sipStatusReceiver = null
         callActionReceiver = null
         scoReceiver = null
+        vertoMessageReceiver = null
         try { AudioFocusHelper.releaseCallAudioFocus(context) } catch (_: Exception) {}
         super.handleOnDestroy()
     }

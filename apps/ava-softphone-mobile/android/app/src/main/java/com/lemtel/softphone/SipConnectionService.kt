@@ -283,7 +283,11 @@ class SipConnectionService : Service() {
 
             sslSocket = socket
             outputStream = socket.outputStream
-            sessionUUID = UUID.randomUUID().toString()
+            if (currentCallId.isNullOrEmpty() && pendingAnswerSdp == null && pendingByeCallId == null) {
+                sessionUUID = UUID.randomUUID().toString()
+            } else {
+                Log.i(TAG, "Preserving Verto sessid during active call recovery: callId=$currentCallId")
+            }
             isLoggedIn = false
             lastFrameAt = System.currentTimeMillis()
             connecting = false

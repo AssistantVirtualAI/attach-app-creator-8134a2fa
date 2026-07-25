@@ -120,7 +120,8 @@ Deno.serve(async (req) => {
       const errLog = brokerLogs.find((l) => l.status === "error");
       let state: "ok" | "missing" | "error" | "partial";
       if (nsMobileExists && p.ns_mobile_device_id && p.ns_sip_password_ref_mobile) state = "ok";
-      else if (!ns.ok || errLog) state = "error";
+      // 404 from NS = extension has no devices provisioned → "missing", not "error"
+      else if (!ns.ok && ns.status !== 404) state = "error";
       else if (!nsMobileExists) state = "missing";
       else state = "partial";
       rows[i] = {

@@ -214,6 +214,25 @@ export function useMplanipretSoftphone() {
       try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister")); } catch {}
     }).then((fn) => { cleanupReregister = fn; }).catch(() => undefined);
 
+    // Native incoming INVITE (background/lockscreen). Wake JsSIP + broadcast so
+    // MActiveCall / MHome can pop the ringing sheet even if the WebView slept.
+    let cleanupInvite: (() => void) | undefined;
+    onPlanipretIncomingInvite((invite) => {
+      try { ppSipProvider.forceReregister(); } catch {}
+      try {
+        window.dispatchEvent(new CustomEvent("pp:sip-incoming-invite", { detail: invite }));
+      } catch {}
+      // If the user already tapped Answer on the notification, mark the intent
+      // so the softphone auto-answers the JsSIP-side INVITE as soon as it lands.
+      if (invite?.action === "answer") {
+        try { (window as any).__ppPendingAnswer = { callId: invite.callId, ts: Date.now() }; } catch {}
+      } else if (invite?.action === "decline") {
+        try { ppSipProvider.hangup(); } catch {}
+        void acknowledgePlanipretIncoming();
+      }
+    }).then((fn) => { cleanupInvite = fn; }).catch(() => undefined);
+
+
     const poll = window.setInterval(() => {
       getPlanipretSipKeepAliveStatus().then((s) => { if (s && !cancelled) setNativeStatus(s); }).catch(() => undefined);
     }, 15_000);

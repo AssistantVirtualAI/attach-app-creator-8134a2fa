@@ -125,6 +125,7 @@ interface AndroidSipServiceBridge {
   getSipServiceStatus?: () => Promise<AndroidSipServiceStatus & { ok: boolean }>;
   answerNativeCall?: (opts: { sdp: string; dialogParams: any }) => Promise<{ ok: boolean }>;
   hangupNativeCall?: () => Promise<{ ok: boolean }>;
+  registerOutboundCall?: (opts: { callID: string; destination: string }) => Promise<{ ok: boolean }>;
   requestBatteryOptimizationExemption?: () => Promise<{ ok: boolean; ignored?: boolean; requested?: boolean }>;
   addListener?: (event: 'sipServiceStatus', callback: (data: AndroidSipServiceStatus) => void) => Promise<{ remove: () => Promise<void> }>;
   // Audio routing — real implementation in CapacitorPjsip.kt
@@ -210,6 +211,22 @@ export async function hangupAndroidNativeCall(): Promise<boolean> {
     return true;
   } catch (e) {
     console.warn('[sip] hangupNativeCall failed', e);
+    return false;
+  }
+}
+
+/**
+ * Register an outbound call's callID with the native SipConnectionService so
+ * it can send verto.bye over the reliable Kotlin WebSocket when hangup() is
+ * called — even if the JS WebSocket is disconnected.
+ */
+export async function registerOutboundCallWithNative(callID: string, destination: string): Promise<boolean> {
+  if (__platform !== 'android') return false;
+  try {
+    await AndroidSipServicePlugin.registerOutboundCall?.({ callID, destination });
+    return true;
+  } catch (e) {
+    console.warn('[sip] registerOutboundCall failed', e);
     return false;
   }
 }

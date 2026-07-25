@@ -67,6 +67,9 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   // Tracks calls already answered natively so the JS adoptNativeInboundInvite
   // loop does NOT send a second verto.answer after the native path already did.
   const nativeAnsweredCallIdRef = useRef<string | null>(null);
+  // Mirror of androidSipServiceStatus as a ref so answer() / hangup() can
+  // read the latest native state synchronously without stale closure issues.
+  const androidSipServiceStatusRef = useRef<AndroidSipServiceStatus | null>(null);
   configRef.current = config;
 
   const log = useCallback((event: string, details?: any) => {
@@ -103,6 +106,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const applyNativeStatus = useCallback((native: AndroidSipServiceStatus | null, source = 'event') => {
     if (!native) return;
     setAndroidSipServiceStatus(native);
+    androidSipServiceStatusRef.current = native;
     log(source === 'poll' ? 'verto.native.poll' : 'verto.native.status', {
       status: native.status,
       reason: native.reason,
@@ -146,7 +150,11 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
                   // Only answer via JS if the native path has NOT already answered.
                   // nativeAnsweredCallIdRef is set when the native service emits 'active'.
                   const alreadyAnsweredNatively = nativeAnsweredCallIdRef.current === callID;
-                  if (shouldAnswer && !alreadyAnsweredNatively) {
+                  // Also check if the user already tapped Answer (Path B in answer()):
+                  // nativeAnswerRequestedCallIdRef is set by answer() when the dialog
+                  // was not yet ready, so we must answer now that it is.
+                  const userAlreadyTappedAnswer = nativeAnswerRequestedCallIdRef.current === callID;
+                  if ((shouldAnswer || userAlreadyTappedAnswer) && !alreadyAnsweredNatively) {
                     nativeAnswerRequestedCallIdRef.current = callID;
                     dialog.answer();
                   }
@@ -444,6 +452,13 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
 
   const hangup = useCallback(() => {
     const d = activeDialogRef.current;
+    // On Android, ALWAYS send verto.bye via the native WebSocket first.
+    // The JS WebSocket may be disconnected (screen-off, doze mode, background
+    // throttling), in which case rpc('verto.bye') would be silently dropped.
+    // The native Kotlin WebSocket in SipConnectionService is always alive.
+    if (Capacitor.getPlatform() === 'android') {
+      hangupAndroidNativeCall().catch(() => { /* ignore */ });
+    }
     if (d) { try { d.hangup(); } catch { /* ignore */ } }
     else { getVertoClient().hangupAll(); }
     activeDialogRef.current = null;
@@ -468,19 +483,41 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   }, []);
 
   const answer = useCallback(async () => {
-    const d = activeDialogRef.current as any;
-    if (Capacitor.getPlatform() === 'android' && d) {
-      try {
-        const sdp: string | undefined = d.__pendingAnswer;
-        const dialogParams = d.__params || {};
-        if (sdp) {
-          await answerAndroidNativeCall(sdp, dialogParams);
+    if (Capacitor.getPlatform() === 'android') {
+      const d = activeDialogRef.current as any;
+      // Path A: dialog already adopted — use its pre-gathered SDP.
+      if (d?.__pendingAnswer) {
+        try {
+          await answerAndroidNativeCall(d.__pendingAnswer, d.__params || {});
           setCallState('active');
           return;
+        } catch (e) {
+          console.warn('[verto] native answer (path A) failed:', e);
         }
-      } catch (e) {
-        console.warn('[verto] native answer failed, falling back to dialog.answer()', e);
       }
+      // Path B: dialog not yet adopted (adoptNativeInboundInvite still running).
+      // The native service CANNOT generate a WebRTC answer SDP — only the JS
+      // WebRTC stack can. Set nativeAnswerRequestedCallIdRef so the adoption
+      // loop calls dialog.answer() immediately when __pendingAnswer is ready
+      // (typically within 500ms of ICE gathering completing).
+      const nativeStatus = androidSipServiceStatusRef.current;
+      const rawInvite = nativeStatus?.inviteParams;
+      const inviteParams = typeof rawInvite === 'string'
+        ? (() => { try { return rawInvite ? JSON.parse(rawInvite) : null; } catch { return null; } })()
+        : rawInvite;
+      const pendingCallID = inviteParams?.callID || nativeStatus?.callId;
+      if (pendingCallID) {
+        // Flag this callID so adoptNativeInboundInvite answers immediately
+        // when the WebRTC dialog is ready (avoids the 2-3 s wait).
+        nativeAnswerRequestedCallIdRef.current = pendingCallID;
+        console.log('[verto] answer() Path B: flagged callID for deferred answer:', pendingCallID);
+        // Optimistically show active state — audio connects within ~500ms.
+        setCallState('active');
+        return;
+      }
+      // Path C: last resort — call answer on existing dialog if available.
+      if (d) { try { d.answer(); } catch { /* ignore */ } }
+      return;
     }
     activeDialogRef.current?.answer();
   }, []);

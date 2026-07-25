@@ -175,6 +175,18 @@ class CapacitorPjsip : Plugin() {
         call.resolve(JSObject().apply { put("ok", true) })
     }
 
+    @PluginMethod
+    fun registerOutboundCall(call: PluginCall) {
+        val callID = call.getString("callID") ?: ""
+        val destination = call.getString("destination") ?: ""
+        context.sendBroadcast(Intent(SipConnectionService.ACTION_REGISTER_OUTBOUND_CALL).apply {
+            setPackage(context.packageName)
+            putExtra("callID", callID)
+            putExtra("destination", destination)
+        })
+        call.resolve(JSObject().apply { put("ok", true) })
+    }
+
     @PluginMethod fun setMute(call: PluginCall) { val m = call.getBoolean("muted", false) ?: false; audioManager?.isMicrophoneMute = m; call.resolve(JSObject().apply { put("ok", true); put("muted", m) }) }
     @PluginMethod fun setHold(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }
     @PluginMethod fun sendDTMF(call: PluginCall) { call.resolve(JSObject().apply { put("ok", true) }) }

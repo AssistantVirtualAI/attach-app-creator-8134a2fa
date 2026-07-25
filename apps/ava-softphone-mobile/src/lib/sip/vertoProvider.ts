@@ -12,6 +12,7 @@
 // (audio drop mid-call). TURN relay ensures the media path survives NAT
 // binding expiry and works on all network types.
 import { getActivePcConfig } from './rtcConfig';
+import { registerOutboundCallWithNative } from './nativeSipProvider';
 
 export interface VertoConfig {
   host: string;
@@ -728,6 +729,10 @@ class VertoClient {
       return null;
     }
 
+    // Register the outbound callID with the native SipConnectionService so
+    // hangupAndroidNativeCall() can send verto.bye over the reliable Kotlin
+    // WebSocket even if the JS WebSocket disconnects mid-call.
+    registerOutboundCallWithNative(callID, destination).catch(() => { /* ignore */ });
     this.emit({ type: 'progress', dialog: wrapped });
     return wrapped;
   }

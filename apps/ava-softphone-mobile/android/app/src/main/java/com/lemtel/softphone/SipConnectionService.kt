@@ -72,6 +72,7 @@ class SipConnectionService : Service() {
         const val ACTION_NATIVE_VERTO_ANSWER = "com.lemtel.softphone.NATIVE_VERTO_ANSWER"
         const val ACTION_NATIVE_VERTO_HANGUP = "com.lemtel.softphone.NATIVE_VERTO_HANGUP"
         const val ACTION_NATIVE_ANSWER_REQUEST = "com.lemtel.softphone.NATIVE_ANSWER_REQUEST"
+        const val ACTION_REGISTER_OUTBOUND_CALL = "com.lemtel.softphone.REGISTER_OUTBOUND_CALL"
         const val KEY_STATUS = "verto_native_status"
         const val KEY_REASON = "verto_native_reason"
         const val KEY_UPDATED_AT = "verto_native_updated_at"
@@ -562,6 +563,18 @@ class SipConnectionService : Service() {
                     emitStatus("incoming", "${callerName} <${callerNumber}>")
                     handler.post { showIncomingCallNotification(callerName, callerNumber) }
                 }
+                method == "verto.answer" || method == "verto.media" -> {
+                    // Remote party answered an outbound call (or early media).
+                    val params = json.optJSONObject("params")
+                    val callId = params?.optString("callID") ?: ""
+                    if (callId.isNotEmpty() && currentCallId == null) {
+                        currentCallId = callId
+                    }
+                    Log.i(TAG, "Outbound call answered: method=$method callID=$callId")
+                    handler.post { stopRingtone() }
+                    handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
+                    emitStatus("active", "remote_${method.replace("verto.", "")}")
+                }
                 method == "verto.bye" -> {
                     Log.i(TAG, "Remote hangup (verto.bye)")
                     currentCallId = null
@@ -849,6 +862,7 @@ class SipConnectionService : Service() {
             filter.addAction(ACTION_NATIVE_VERTO_ANSWER)
             filter.addAction(ACTION_NATIVE_VERTO_HANGUP)
             filter.addAction(ACTION_NATIVE_ANSWER_REQUEST)
+            filter.addAction(ACTION_REGISTER_OUTBOUND_CALL)
             val recv = object : android.content.BroadcastReceiver() {
                 override fun onReceive(ctx: Context?, intent: Intent?) {
                     when (intent?.action) {
@@ -862,6 +876,17 @@ class SipConnectionService : Service() {
                         }
                         ACTION_NATIVE_ANSWER_REQUEST -> {
                             handleNativeAnswerRequest()
+                            return
+                        }
+                        ACTION_REGISTER_OUTBOUND_CALL -> {
+                            val callID = intent.getStringExtra("callID") ?: ""
+                            val destination = intent.getStringExtra("destination") ?: ""
+                            if (callID.isNotEmpty()) {
+                                currentCallId = callID
+                                currentCallerNumber = destination
+                                currentCallerName = destination
+                                Log.i(TAG, "Registered outbound call: callID=$callID dest=$destination")
+                            }
                             return
                         }
                     }

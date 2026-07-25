@@ -363,12 +363,32 @@ class VertoClient {
    */
   injectServerMessage(rawJson: string): void {
     try {
-      console.log('[verto] injectServerMessage from native socket');
-      this.handleMessage(rawJson);
+      let msg: any;
+      try { msg = JSON.parse(String(rawJson)); } catch { return; }
+      // The native socket owns the RPC ids — never ACK/resolve them here.
+      if (msg && typeof msg === 'object') delete msg.id;
+
+      // The JSON-RPC *result* of the native verto.answer carries the remote SDP.
+      // Convert it into a synthetic verto.answer notification so the JS
+      // RTCPeerConnection can apply setRemoteDescription().
+      if (!msg.method && msg.result && msg.result.sdp) {
+        msg = {
+          jsonrpc: '2.0',
+          method: 'verto.answer',
+          params: {
+            callID: msg.result.callID || msg.result.callId,
+            sdp: msg.result.sdp,
+          },
+        };
+      }
+      if (!msg.method) return;
+      console.log('[verto] injectServerMessage from native socket:', msg.method);
+      this.handleMessage(JSON.stringify(msg));
     } catch (e) {
       console.warn('[verto] injectServerMessage failed', e);
     }
   }
+
 
   private handleMessage(raw: any) {
     let msg: any;

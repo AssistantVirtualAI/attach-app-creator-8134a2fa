@@ -253,7 +253,7 @@ class SipConnectionService : Service() {
             socket.keepAlive = true
             // Detect dead sockets faster: 30s read timeout + ping every 15s so
             // Doze/network-drop induced silence is caught within ~45s instead of ~95s.
-            socket.soTimeout = 30_000
+            socket.soTimeout = 90_000
             socket.startHandshake()
 
             // WebSocket HTTP Upgrade handshake
@@ -289,20 +289,22 @@ class SipConnectionService : Service() {
             // Send verto.login
             sendVertoLogin(login, password, domain, displayName)
 
-            // Start ping keepalive (tighter cadence so a silently-dead socket
-            // is caught before FreeSWITCH expires the contact).
+            // WebSocket keepalive every 30s: keeps NAT/carrier firewall bindings
+            // open while the app is backgrounded so the socket never has to be
+            // re-established on an incoming call.
             pingFuture?.cancel(false)
             pingFuture = executor.scheduleAtFixedRate({
                 if (isLoggedIn && !isDestroyed) sendPing()
-            }, 15, 15, TimeUnit.SECONDS)
+            }, 30, 30, TimeUnit.SECONDS)
 
-            // Periodic verto.login refresh (every 4 min) so the FS-side session
-            // never times out even if the WS stays open through Doze.
+            // Re-login just before the 1800s expiry so the FS-side registration
+            // never lapses (was every 4 min).
             executor.scheduleAtFixedRate({
                 if (isLoggedIn && !isDestroyed) {
                     try { sendVertoLogin(login, password, domain, displayName) } catch (_: Exception) {}
                 }
-            }, 240, 240, TimeUnit.SECONDS)
+            }, 1_700, 1_700, TimeUnit.SECONDS)
+
 
             // Read loop
             readLoop(socket)
@@ -474,11 +476,19 @@ class SipConnectionService : Service() {
                 put("login", "$login@$domain")
                 put("passwd", password)
                 put("sessid", sessionUUID)
+                // 30 min registration expiry (was 120s) → far fewer re-REGISTERs
+                put("expires", 1800)
+                put("loginParams", JSONObject().apply {
+                    put("expires", 1800)
+                })
                 put("userVariables", JSONObject().apply {
                     put("email", login)
                     put("display_name", displayName)
+                    put("expires", 1800)
+                    put("sip-expires", 1800)
                 })
             })
+
         }
         if (!sendFrame(msg.toString())) scheduleReconnect()
     }

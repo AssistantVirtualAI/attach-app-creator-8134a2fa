@@ -34,8 +34,7 @@ export default function MaestroCallback() {
       return;
     }
     if (!code) {
-      // Stale callback URL on app resume — silently redirect home.
-      navigate("/", { replace: true });
+      if (!navigatedAway) { navigatedAway = true; navigate("/", { replace: true }); }
       return;
     }
 

@@ -103,6 +103,13 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     });
 
     const nativeStatus = String(native.status || '').toLowerCase();
+    if (nativeStatus === 'incoming') {
+      const caller = native.callerNumber || native.callerName || native.reason || '';
+      setStatus('registered');
+      if (caller) setActiveCallNumber(caller);
+      setCallState('ringing-in');
+      return;
+    }
     if (native.loggedIn || nativeStatus === 'registered' || nativeStatus === 'incoming') {
       setStatus('registered');
       return;
@@ -283,11 +290,11 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         case 'incoming':
           activeDialogRef.current = e.dialog;
           setActiveCallNumber(e.from);
-          setCallState('ringing');
+          setCallState('ringing-in');
           log('verto.incoming', { from: e.from });
           break;
         case 'progress':
-          setCallState('ringing');
+          setCallState((prev) => prev === 'ringing-in' ? prev : 'ringing-out');
           break;
         case 'answered':
           activeDialogRef.current = e.dialog;
@@ -336,7 +343,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
         if (d) {
           activeDialogRef.current = d;
           setActiveCallNumber(number);
-          setCallState('ringing');
+          setCallState('ringing-out');
           log('verto.call.out', { to: number, callID: d.callID });
         } else {
           setSipError('Verto refused to place the call');
@@ -369,7 +376,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     // 5s after hangup was requested, force it to idle so the ActiveCallSheet
     // never gets stuck on flaky networks.
     setTimeout(() => {
-      setCallState((prev) => (prev === 'active' || prev === 'ringing') ? 'idle' : prev);
+      setCallState((prev) => (prev === 'active' || prev === 'ringing' || prev === 'ringing-in' || prev === 'ringing-out') ? 'idle' : prev);
     }, 5000);
   }, []);
 

@@ -133,6 +133,9 @@ interface AndroidSipServiceBridge {
 export interface AndroidSipServiceStatus {
   status?: 'idle' | 'connecting' | 'registered' | 'incoming' | 'reconnecting' | 'disconnected' | 'error' | 'unknown' | string;
   reason?: string;
+  callerName?: string;
+  callerNumber?: string;
+  callId?: string;
   updatedAt?: number;
   lastLoginAt?: number;
   lastPingAt?: number;

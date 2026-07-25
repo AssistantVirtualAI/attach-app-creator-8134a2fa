@@ -266,6 +266,7 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
                     var info = pjsua_call_info()
                     pjsua_call_get_info(callId, &info)
                     let remote = String(cString: info.remote_info.ptr)
+                    CallKitManager.shared.reportIncoming(from: remote)
                     plugin.notifyBg("callReceived", ["from": remote])
                 }
 

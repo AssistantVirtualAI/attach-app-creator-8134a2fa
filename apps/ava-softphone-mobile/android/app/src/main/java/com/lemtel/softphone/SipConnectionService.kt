@@ -126,6 +126,8 @@ class SipConnectionService : Service() {
     @Volatile private var lastPingAt = 0L
     @Volatile private var lastReason = ""
     @Volatile private var currentCallId: String? = null
+    @Volatile private var currentCallerName: String? = null
+    @Volatile private var currentCallerNumber: String? = null
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var callActionReceiver: android.content.BroadcastReceiver? = null
@@ -519,6 +521,8 @@ class SipConnectionService : Service() {
                     val callerNumber = params?.optString("caller_id_number") ?: ""
                     val callId = params?.optString("callID") ?: ""
                     if (callId.isNotEmpty()) currentCallId = callId
+                    currentCallerName = callerName
+                    currentCallerNumber = callerNumber
                     Log.i(TAG, "Incoming call: $callerName <$callerNumber> callID=$callId")
                     try { AudioFocusHelper.requestCallAudioFocus(this) } catch (_: Exception) {}
                     emitStatus("incoming", "${callerName} <${callerNumber}>")
@@ -527,6 +531,8 @@ class SipConnectionService : Service() {
                 method == "verto.bye" -> {
                     Log.i(TAG, "Remote hangup (verto.bye)")
                     currentCallId = null
+                    currentCallerName = null
+                    currentCallerNumber = null
                     try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
                     handler.post { clearCallNotifications() }
                     emitStatus("idle", "remote_bye")
@@ -607,6 +613,9 @@ class SipConnectionService : Service() {
             getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().apply {
                 putString(KEY_STATUS, status)
                 putString(KEY_REASON, lastReason)
+                putString("verto_current_call_id", currentCallId ?: "")
+                putString("verto_current_caller_name", currentCallerName ?: "")
+                putString("verto_current_caller_number", currentCallerNumber ?: "")
                 putLong(KEY_UPDATED_AT, now)
                 putLong(KEY_LAST_LOGIN_AT, lastLoginAt)
                 putLong(KEY_LAST_PING_AT, lastPingAt)
@@ -625,6 +634,9 @@ class SipConnectionService : Service() {
                 setPackage(packageName)
                 putExtra("status", status)
                 putExtra("reason", lastReason)
+                putExtra("callId", currentCallId ?: "")
+                putExtra("callerName", currentCallerName ?: "")
+                putExtra("callerNumber", currentCallerNumber ?: "")
                 putExtra("updatedAt", now)
                 putExtra("lastLoginAt", lastLoginAt)
                 putExtra("lastPingAt", lastPingAt)
@@ -766,6 +778,7 @@ class SipConnectionService : Service() {
                 override fun onReceive(ctx: Context?, intent: Intent?) {
                     val action = intent?.getStringExtra(CallActionReceiver.EXTRA_ACTION) ?: return
                     when (action) {
+                        "answer" -> handleNativeAnswerRequest()
                         "hangup", "decline" -> handleNativeHangup(action)
                     }
                 }
@@ -793,9 +806,17 @@ class SipConnectionService : Service() {
             try { sendFrame(buildVertoByeMessage(callId)) } catch (_: Exception) {}
         }
         currentCallId = null
+        currentCallerName = null
+        currentCallerNumber = null
         try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
         handler.post { clearCallNotifications() }
         emitStatus("idle", "native_${reason}")
+    }
+
+    private fun handleNativeAnswerRequest() {
+        try { AudioFocusHelper.requestCallAudioFocus(this) } catch (_: Exception) {}
+        handler.post { updateNotification("Réponse en cours...") }
+        emitStatus("incoming", "answer_requested")
     }
 
     private fun buildVertoByeMessage(callId: String): String {

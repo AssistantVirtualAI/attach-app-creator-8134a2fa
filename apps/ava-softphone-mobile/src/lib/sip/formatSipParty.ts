@@ -23,20 +23,35 @@ export function formatSipParty(raw: string | null | undefined, lang: 'fr' | 'en'
   const s = String(raw).trim();
   if (!s) return empty;
 
-  // Try `"Display Name" <sip:user@domain>` or `<sip:user@domain>` or `sip:user@domain` or bare user.
+  // Try `"Display Name" <sip:user@domain>;tag=x`, `<sip:user@domain>`, `sip:user@domain`, or bare user.
   let name = '';
   let uri = s;
-  const named = s.match(/^"?([^"<]+?)"?\s*<([^>]+)>\s*$/);
-  if (named) {
-    name = named[1].trim().replace(/^["']|["']$/g, '');
-    uri = named[2].trim();
+  const angleUri = s.match(/<\s*(sips?:[^>\s]+)\s*>/i);
+  if (angleUri) {
+    uri = angleUri[1].trim();
+    const beforeUri = s.slice(0, angleUri.index ?? 0).trim();
+    name = beforeUri.replace(/^["']|["']$/g, '').trim();
   }
-  const sipMatch = uri.match(/^sips?:([^@;>]+)(?:@([^;>]+))?/i);
-  const user = sipMatch ? sipMatch[1] : uri.replace(/^sips?:/i, '').split('@')[0].split(';')[0];
+  if (!name) {
+    const quoted = s.match(/^\s*"([^"]+)"/);
+    if (quoted) name = quoted[1].trim();
+  }
+
+  const sipMatch = uri.match(/sips?:([^@;>\s]+)(?:@([^;>\s]+))?/i);
+  const userRaw = sipMatch ? sipMatch[1] : uri.replace(/^sips?:/i, '').split('@')[0].split(';')[0];
+  const user = decodeURIComponent(userRaw).replace(/^"|"$/g, '').trim();
   const domain = sipMatch && sipMatch[2] ? sipMatch[2].split(';')[0] : null;
 
   const isInternal = /^\d{2,6}$/.test(user);
-  if (!name) name = isInternal ? (lang === 'en' ? `Extension ${user}` : `Poste ${user}`) : user;
+  const cleanedName = name
+    .replace(/<\s*sips?:[^>]+>/ig, '')
+    .replace(/^sip:/i, '')
+    .split('@')[0]
+    .split(';')[0]
+    .replace(/^"|"$/g, '')
+    .trim();
+  name = cleanedName && cleanedName !== 'unknown' ? cleanedName : '';
+  if (!name || name === user) name = isInternal ? (lang === 'en' ? `Extension ${user}` : `Poste ${user}`) : user;
 
   const subtitle = isInternal
     ? (lang === 'en' ? `Ext. ${user} · Internal` : `Poste ${user} · Interne`)

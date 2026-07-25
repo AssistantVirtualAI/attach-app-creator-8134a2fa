@@ -38,12 +38,29 @@ import UIKit
         provider.setDelegate(self, queue: nil)
     }
 
+    private func cleanCallerLabel(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let start = trimmed.range(of: "<sip:", options: .caseInsensitive),
+           let end = trimmed[start.upperBound...].firstIndex(of: ">") {
+            let uri = String(trimmed[start.upperBound..<end])
+            return uri.components(separatedBy: "@").first?.trimmingCharacters(in: CharacterSet(charactersIn: "\" ")) ?? trimmed
+        }
+        return trimmed
+            .replacingOccurrences(of: "sip:", with: "", options: .caseInsensitive)
+            .components(separatedBy: "@").first?
+            .components(separatedBy: ";").first?
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\" ")) ?? trimmed
+    }
+
     @objc public func reportIncoming(from: String) {
         let uuid = UUID()
         activeUUID = uuid
         let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .generic, value: from)
+        let displayName = cleanCallerLabel(from)
+        update.remoteHandle = CXHandle(type: .generic, value: displayName)
+        update.localizedCallerName = displayName
         update.hasVideo = false
+        update.supportsHolding = true
         provider.reportNewIncomingCall(with: uuid, update: update) { _ in }
     }
 
@@ -56,13 +73,11 @@ import UIKit
         activeUUID = uuid
         let update = CXCallUpdate()
         // Display the caller ID from the push payload.
-        let displayName = from
-            .replacingOccurrences(of: "sip:", with: "")
-            .components(separatedBy: "@").first ?? from
+        let displayName = cleanCallerLabel(from)
         update.remoteHandle = CXHandle(type: .generic, value: displayName)
         update.localizedCallerName = displayName
         update.hasVideo = false
-        update.supportsHolding = false
+        update.supportsHolding = true
         update.supportsGrouping = false
         update.supportsUngrouping = false
         provider.reportNewIncomingCall(with: uuid, update: update) { error in

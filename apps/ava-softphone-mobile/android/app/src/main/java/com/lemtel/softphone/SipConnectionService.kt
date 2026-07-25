@@ -571,6 +571,11 @@ class SipConnectionService : Service() {
                     try { AudioFocusHelper.requestCallAudioFocus(this) } catch (_: Exception) {}
                     emitStatus("incoming", "${callerName} <${callerNumber}>")
                     handler.post { showIncomingCallNotification(callerName, callerNumber) }
+                    // The WS is currently alive (we just received this frame), so no
+                    // reconnect is needed here. But reset the attempt counter so that
+                    // if the socket dies between now and when the user taps Answer,
+                    // the next scheduleReconnect() will use 0ms delay.
+                    reconnectAttempt = 0
                 }
                 method == "verto.answer" || method == "verto.media" -> {
                     // Remote party answered an outbound call (or early media).
@@ -966,6 +971,9 @@ class SipConnectionService : Service() {
             Log.w(TAG, "verto.answer queued: isLoggedIn=$isLoggedIn outputStream=${outputStream != null}")
             pendingAnswerSdp = sdp
             pendingAnswerParams = dialogParamsJson
+            // Reset attempt counter so reconnect fires with 0ms delay (not 5s).
+            // FreeSWITCH only waits ~15s for verto.answer before hanging up.
+            reconnectAttempt = 0
             if (!connecting) executor.submit { connectVerto() }
             return
         }
@@ -990,7 +998,9 @@ class SipConnectionService : Service() {
                 Log.w(TAG, "sendFrame failed for verto.answer — queuing for reconnect")
                 pendingAnswerSdp = sdp
                 pendingAnswerParams = dialogParamsJson
-                scheduleReconnect()
+                // Reconnect immediately (0ms) — do not use exponential back-off
+                reconnectAttempt = 0
+                scheduleReconnect(0L)
             }
         } catch (e: Exception) {
             Log.w(TAG, "handleNativeAnswer failed: ${e.message}")

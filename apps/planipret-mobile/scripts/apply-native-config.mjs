@@ -464,13 +464,11 @@ function patchAndroidNativeFiles() {
   const mainText = mainActivity && fs.existsSync(mainActivity) ? fs.readFileSync(mainActivity, "utf8") : "";
   const pkg = mainText.match(/^package\s+([\w.]+)/m)?.[1] || "com.planipret.mobile";
   const pkgDir = path.join(javaRoot, ...pkg.split("."));
-  const useJava = mainActivity ? mainActivity.endsWith(".java") : !fs.existsSync(path.join(pkgDir, "MainActivity.kt"));
-  if (useJava) {
-    writeIfChanged(path.join(pkgDir, "PpSipKeepAlivePlugin.java"), ANDROID_PLUGIN_JAVA(pkg));
-    writeIfChanged(path.join(pkgDir, "PpSipKeepAliveService.java"), ANDROID_SERVICE_JAVA(pkg));
-  } else {
-    writeIfChanged(path.join(pkgDir, "PpSipKeepAlivePlugin.kt"), ANDROID_PLUGIN(pkg));
-    writeIfChanged(path.join(pkgDir, "PpSipKeepAliveService.kt"), ANDROID_SERVICE_KT(pkg));
+  writeIfChanged(path.join(pkgDir, "PpSipKeepAlivePlugin.java"), ANDROID_PLUGIN_JAVA(pkg));
+  writeIfChanged(path.join(pkgDir, "PpSipKeepAliveService.java"), ANDROID_SERVICE_JAVA(pkg));
+  for (const stale of ["PpSipKeepAlivePlugin.kt", "PpSipKeepAliveService.kt"]) {
+    const staleFile = path.join(pkgDir, stale);
+    if (fs.existsSync(staleFile)) fs.rmSync(staleFile);
   }
   const pluginAlreadyRegistered = mainText.includes("PpSipKeepAlivePlugin::class.java") || mainText.includes("PpSipKeepAlivePlugin.class");
   if (mainActivity && !pluginAlreadyRegistered) {

@@ -24,6 +24,8 @@ export type CallPhase = 'idle' | 'dialing' | 'ringing' | 'early-media' | 'active
 type NativeCallSnapshot = {
   callState: CallState;
   activeCallNumber: string;
+  callerName: string;
+  callerNumber: string;
   isMuted: boolean;
   isOnHold: boolean;
   isRecording: boolean;
@@ -37,6 +39,8 @@ const nativeCallSubscribers = new Set<(snapshot: NativeCallSnapshot) => void>();
 let nativeCallSnapshot: NativeCallSnapshot = {
   callState: 'idle',
   activeCallNumber: '',
+  callerName: '',
+  callerNumber: '',
   isMuted: false,
   isOnHold: false,
   isRecording: false,

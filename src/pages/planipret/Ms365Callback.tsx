@@ -15,6 +15,26 @@ async function getSessionWithRetry() {
   return null;
 }
 
+function closeNativeBrowserSoon() {
+  void import("@capacitor/browser")
+    .then(({ Browser }) => Browser.close())
+    .catch(() => {});
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timeout`)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // Module-level dedupe: survives StrictMode remounts and any parent re-renders.
 // A Microsoft authorization code is single-use — a second exchange returns invalid_grant.
 const exchangedCodes = new Set<string>();
@@ -30,7 +50,11 @@ export default function Ms365Callback() {
   useEffect(() => {
     if (exchangeStarted.current) return;
     const code = params.get("code");
-    if (code && exchangedCodes.has(code)) { exchangeStarted.current = true; return; }
+    if (code && exchangedCodes.has(code)) {
+      exchangeStarted.current = true;
+      navigate("/mplanipret/home", { replace: true });
+      return;
+    }
     if (exchangeInFlight) return;
     exchangeStarted.current = true;
     exchangeInFlight = true;
@@ -39,6 +63,7 @@ export default function Ms365Callback() {
     try {
 
 
+      closeNativeBrowserSoon();
       clearMs365Pending();
       const code = params.get("code");
       const err = params.get("error_description") ?? params.get("error");
@@ -59,7 +84,11 @@ export default function Ms365Callback() {
       // supabase.functions.invoke returns error=FunctionsHttpError and data=null for non-2xx.
       // We must read the response body from the error context to surface the real message.
       async function invokeAndParse(fn: string, body: unknown): Promise<{ data: any; errMsg: string | null }> {
-        const { data, error: e } = await supabase.functions.invoke(fn, { body: body as any });
+        const { data, error: e } = await withTimeout(
+          supabase.functions.invoke(fn, { body: body as any }),
+          25000,
+          fn,
+        );
         if (!e) return { data, errMsg: null };
         let parsed: any = null;
         try {
@@ -90,6 +119,7 @@ export default function Ms365Callback() {
         await clearMicrosoftSignInIntentAsync();
         try { void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin()); } catch {}
         setStatus("ok");
+        try { window.history.replaceState(null, "", next); } catch {}
         setTimeout(() => navigate(next, { replace: true }), 700);
         return;
       }
@@ -117,11 +147,17 @@ export default function Ms365Callback() {
         void supabase.functions.invoke("ms365-full-import", { body: { mode: "initial" } }).catch(() => {});
       } catch {}
       setStatus("ok");
+      try { window.history.replaceState(null, "", "/mplanipret/home?ms365=ok"); } catch {}
       setTimeout(() => navigate("/mplanipret/home?ms365=ok", { replace: true }), 1200);
     } finally {
       exchangeInFlight = false;
     }
-    })();
+    })().catch((e) => {
+      exchangeInFlight = false;
+      console.error("ms365 callback crashed", e);
+      setStatus("error");
+      setError(String(e?.message ?? e ?? "Échec OAuth"));
+    });
 
   }, [params, navigate]);
 

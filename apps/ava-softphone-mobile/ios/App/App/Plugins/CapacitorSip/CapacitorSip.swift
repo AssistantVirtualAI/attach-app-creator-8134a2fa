@@ -65,6 +65,39 @@ public class CapacitorPjsip: CAPPlugin, CAPBridgedPlugin {
     private var pendingCallKitAnswer = false
     private var pendingCallKitEnd = false
 
+    /// Extracts a friendly (name, number) pair from a raw SIP identity such as
+    /// `"Alice" <sip:1000@pbx>` or `sip:1000@pbx;tag=xyz`. Kept `internal` so
+    /// it can be reached from the C-style on_incoming_call callback via
+    /// `plugin.parseSipParty(...)`.
+    func parseSipParty(_ raw: String) -> (name: String, number: String) {
+        var name = ""
+        var user = ""
+        let s = raw.trimmingCharacters(in: .whitespaces)
+        if let angleRange = s.range(of: #"<sips?:([^@;>\s]+)(?:@[^;>\s]+)?>"#, options: .regularExpression) {
+            let uri = String(s[angleRange])
+            if let userMatch = uri.range(of: #"sips?:([^@;>\s]+)"#, options: .regularExpression) {
+                user = String(uri[userMatch])
+                    .replacingOccurrences(of: #"sips?:"#, with: "", options: .regularExpression)
+                    .components(separatedBy: "@").first ?? ""
+            }
+            let before = String(s[s.startIndex..<angleRange.lowerBound])
+                .trimmingCharacters(in: .whitespaces)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+            if !before.isEmpty && !before.lowercased().hasPrefix("sip") {
+                name = before
+            }
+        } else if s.lowercased().hasPrefix("sip:") {
+            user = s.replacingOccurrences(of: #"sips?:"#, with: "", options: .regularExpression)
+                .components(separatedBy: "@").first?
+                .components(separatedBy: ";").first ?? ""
+        } else {
+            user = s
+        }
+        if name.isEmpty { name = user }
+        return (name: name, number: user)
+    }
+
+
     /// Called by AppDelegate when PushKit delivers a new VoIP token.
     /// If the account is already registered we trigger an immediate
     /// re-REGISTER so the Contact header carries the fresh pn-prid —

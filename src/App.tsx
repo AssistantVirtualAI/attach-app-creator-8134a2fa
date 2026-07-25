@@ -414,6 +414,9 @@ function NativeDeepLinkBridge() {
     const routeFromUrl = (rawUrl?: string | null) => {
       if (!rawUrl) return;
       try {
+        import('@/lib/deepLinkDebug')
+          .then(({ handleIncomingDeepLink }) => handleIncomingDeepLink(rawUrl, 'NativeDeepLinkBridge', navigate))
+          .catch(() => {});
         const url = new URL(rawUrl);
         const pathWithHost = `/${[url.hostname, url.pathname].filter(Boolean).join('/')}`.replace(/\/+/g, '/');
         const isMs365Callback =

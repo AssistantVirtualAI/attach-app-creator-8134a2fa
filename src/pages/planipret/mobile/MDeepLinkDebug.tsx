@@ -222,7 +222,7 @@ export default function MDeepLinkDebug() {
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {checks.length === 0 && (
             <div style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>
-              Clique « Lancer » pour vérifier la config serveur, le scheme natif et les endpoints des deux connexions.
+              Clique « Lancer » pour vérifier la config serveur, le routage callback et les endpoints des deux connexions.
             </div>
           )}
           {checks.map((c, i) => (

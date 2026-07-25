@@ -556,10 +556,12 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     transferCall: transfer,
     addCall: toggleSpeakerFn, // speaker toggle exposed via addCall slot for Android
     androidSipServiceStatus,
+    setNativeStatusDirectly,
   }), [
     sipStatus, sipError, callState, callTimer, isMuted, isOnHold, activeCallNumber,
     call, hangup, answer, mute, unmute, hold, unhold, sendDTMF, setStatusPresence, reconnect,
     lastPersistedError, sipLog, clearSipLog, clearSipState, retryAttempt,
     audioProfile, setAudioProfile, transfer, toggleSpeakerFn, androidSipServiceStatus,
+    setNativeStatusDirectly,
   ]);
 }

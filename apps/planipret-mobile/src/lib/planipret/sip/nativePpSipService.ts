@@ -129,3 +129,23 @@ export async function onPlanipretNativeReregister(cb: () => void): Promise<() =>
     return () => undefined;
   }
 }
+
+/** Fires whenever the native SIP socket sees an INVITE while the WebView is
+ *  suspended, and again with `action: "answer" | "decline"` when the user taps
+ *  the corresponding button on the Android full-screen notification (iOS uses
+ *  the local notification banner + CallKit). Planiprêt-only. */
+export async function onPlanipretIncomingInvite(cb: (invite: PpIncomingInvite) => void): Promise<() => void> {
+  if (!isNative() || !NativePpSip.addListener) return () => undefined;
+  try {
+    const handle = await NativePpSip.addListener("sipIncomingInvite", (data: PpIncomingInvite) => cb(data ?? {}));
+    return () => { void handle?.remove?.(); };
+  } catch {
+    return () => undefined;
+  }
+}
+
+export async function acknowledgePlanipretIncoming(): Promise<void> {
+  if (!isNative()) return;
+  try { await NativePpSip.acknowledgeIncoming?.(); }
+  catch { /* noop */ }
+}

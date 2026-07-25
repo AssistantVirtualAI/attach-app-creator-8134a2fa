@@ -258,11 +258,20 @@ class SipConnectionService : Service() {
             // Send verto.login
             sendVertoLogin(login, password, domain, displayName)
 
-            // Start ping keepalive
+            // Start ping keepalive (tighter cadence so a silently-dead socket
+            // is caught before FreeSWITCH expires the contact).
             pingFuture?.cancel(false)
             pingFuture = executor.scheduleAtFixedRate({
                 if (isLoggedIn && !isDestroyed) sendPing()
-            }, 25, 25, TimeUnit.SECONDS)
+            }, 15, 15, TimeUnit.SECONDS)
+
+            // Periodic verto.login refresh (every 4 min) so the FS-side session
+            // never times out even if the WS stays open through Doze.
+            executor.scheduleAtFixedRate({
+                if (isLoggedIn && !isDestroyed) {
+                    try { sendVertoLogin(login, password, domain, displayName) } catch (_: Exception) {}
+                }
+            }, 240, 240, TimeUnit.SECONDS)
 
             // Read loop
             readLoop(socket)

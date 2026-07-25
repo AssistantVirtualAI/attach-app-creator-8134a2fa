@@ -231,6 +231,14 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
     };
   }, [applyNativeStatus, log]);
 
+  // Ask the OS for battery-optimization exemption as soon as the hook mounts
+  // (not only after a successful JS connect). Without this, Doze can kill the
+  // foreground service before the first REGISTER even completes, and incoming
+  // calls silently go to voicemail.
+  useEffect(() => {
+    requestAndroidBatteryOptimizationExemption().catch(() => {});
+  }, []);
+
   useEffect(() => {
     let cleanup: (() => void) | undefined;
     let cancelled = false;

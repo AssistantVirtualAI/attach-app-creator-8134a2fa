@@ -62,27 +62,31 @@ export default function MDeepLinkDebug() {
       else set(1, { state: "ok", detail: `client_id=${String(d.client_id).slice(0, 8)}… tenant=${d.tenant_id}` });
     } catch (e: any) { set(1, { state: "fail", detail: e?.message }); }
 
-    // helper: invoke that never throws on non-2xx (parses response body)
-    const safeInvoke = async (name: string, body: any) => {
+    // Direct fetch — bypasses supabase-js internal error logging that surfaces as RUNTIME_ERROR.
+    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+    const anon = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+    const { data: { session } } = await supabase.auth.getSession();
+    const authz = session?.access_token ? `Bearer ${session.access_token}` : `Bearer ${anon}`;
+    const rawInvoke = async (name: string, body: any) => {
       try {
-        const { data, error } = await supabase.functions.invoke(name, { body });
-        if (error && (error as any).context?.response) {
-          try { return { data: await (error as any).context.response.json(), error: null }; }
-          catch { return { data: null, error }; }
-        }
-        return { data, error };
+        const res = await fetch(`${fnUrl}/${name}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: anon, Authorization: authz },
+          body: JSON.stringify(body),
+        });
+        const text = await res.text();
+        let data: any = null;
+        try { data = JSON.parse(text); } catch { data = { raw: text }; }
+        return { status: res.status, data };
       } catch (e: any) {
-        if (e?.context?.response) {
-          try { return { data: await e.context.response.json(), error: null }; } catch {}
-        }
-        return { data: null, error: e };
+        return { status: 0, data: null, error: e };
       }
     };
 
     // 3. MS callback ping
     set(2, { state: "running" });
-    try {
-      const { data } = await safeInvoke("pp-ms-auth-callback", {
+    {
+      const { data } = await rawInvoke("pp-ms-auth-callback", {
         code: "PING_DEBUG", redirect_uri: "capacitor://localhost/auth/microsoft/callback", code_verifier: "x",
       });
       const d = data as any;
@@ -90,22 +94,22 @@ export default function MDeepLinkDebug() {
       set(2, upstreamReached
         ? { state: "ok", detail: "Azure a répondu (code rejeté = normal)" }
         : { state: "fail", detail: d?.error || "réponse inattendue" });
-    } catch (e: any) { set(2, { state: "fail", detail: e?.message }); }
+    }
 
     // 4. Maestro start
     set(3, { state: "running" });
-    try {
+    {
       const isNative = Capacitor.isNativePlatform();
-      const { data, error } = await safeInvoke("maestro-oauth-start", {
+      const { status, data } = await rawInvoke("maestro-oauth-start", {
         platform: isNative ? "mobile" : "web",
         redirect_uri: isNative ? "planipret://auth/maestro/callback" : `${window.location.origin}/auth/maestro/callback`,
         origin: window.location.origin,
       });
       const d = data as any;
       if (!d?.authorize_url) {
-        const detail = d?.error === "unauthorized"
+        const detail = status === 401 || d?.error === "unauthorized"
           ? "requiert une session utilisateur (connecte-toi puis relance)"
-          : (error?.message || d?.error || "no authorize_url");
+          : (d?.error || `HTTP ${status}`);
         set(3, { state: "fail", detail });
       } else {
         try {
@@ -113,12 +117,12 @@ export default function MDeepLinkDebug() {
           set(3, { state: "ok", detail: `authorize host=${u.host}` });
         } catch { set(3, { state: "fail", detail: "authorize_url invalide" }); }
       }
-    } catch (e: any) { set(3, { state: "fail", detail: e?.message }); }
+    }
 
     // 5. Maestro callback ping
     set(4, { state: "running" });
-    try {
-      const { data } = await safeInvoke("maestro-oauth-callback", {
+    {
+      const { data } = await rawInvoke("maestro-oauth-callback", {
         code: "PING_DEBUG", state: "debug-ping", redirect_uri: "planipret://auth/maestro/callback",
       });
       const d = data as any;
@@ -126,7 +130,8 @@ export default function MDeepLinkDebug() {
       set(4, upstreamReached
         ? { state: "ok", detail: "Maestro a répondu (code rejeté = normal)" }
         : { state: "fail", detail: d?.error || "réponse inattendue" });
-    } catch (e: any) { set(4, { state: "fail", detail: e?.message }); }
+    }
+
 
 
     setRunning(false);

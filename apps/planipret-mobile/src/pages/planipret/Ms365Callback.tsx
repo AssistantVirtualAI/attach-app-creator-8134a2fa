@@ -104,8 +104,7 @@ export default function Ms365Callback() {
         await clearMicrosoftSignInIntentAsync();
         try { void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin()); } catch {}
         setStatus("ok");
-        try { window.history.replaceState(null, "", next); } catch {}
-        setTimeout(() => navigate(next, { replace: true }), 700);
+        navigate(next, { replace: true });
         return;
       }
       const session = await getSessionWithRetry();

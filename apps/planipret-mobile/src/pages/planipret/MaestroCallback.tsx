@@ -27,7 +27,7 @@ let navigatedAway = false;
 function goHomeOnce(navigate: (p: string, o?: { replace?: boolean }) => void) {
   if (navigatedAway) return;
   navigatedAway = true;
-  goHomeOnce(navigate);
+  navigate("/mplanipret/more", { replace: true });
 }
 
 export default function MaestroCallback() {

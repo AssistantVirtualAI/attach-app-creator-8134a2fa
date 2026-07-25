@@ -77,6 +77,10 @@ export async function handleIncomingDeepLink(
       (url.protocol === 'planipret:' && (url.hostname === 'auth' || rawUrl.includes('/auth/maestro/callback')));
 
     if (!isMs365Callback && !isMaestroCallback) return false;
+    if (url.searchParams.has('probe')) {
+      logDeepLink({ kind: "handler", source, url: rawUrl, detail: "probe callback routed" });
+      return true;
+    }
     try {
       const { Browser } = await import('@capacitor/browser');
       await Browser.close();

@@ -928,16 +928,25 @@ function patchIosNativeFiles() {
     return;
   }
   writeIfChanged(path.join(iosApp, "Plugins", "PpSipKeepAlive", "PpSipKeepAlive.swift"), IOS_PLUGIN);
+  writeIfChanged(path.join(iosApp, "Plugins", "PpSipKeepAlive", IOS_KEEPALIVE_BRIDGE_FILENAME), IOS_KEEPALIVE_BRIDGE);
+  writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.swift"), IOS_VOIP_CALL_PLUGIN);
+  writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.m"), IOS_VOIP_CALL_BRIDGE);
   for (const controllerName of ["AppBridgeViewController.swift", "ViewController.swift"]) {
     const file = path.join(iosApp, controllerName);
     if (!fs.existsSync(file)) continue;
     let swift = fs.readFileSync(file, "utf8");
+    let mutated = false;
     if (!swift.includes("PpSipKeepAlive()") && swift.includes("registerPluginInstance")) {
       swift = swift.replace(/(bridge\?\.registerPluginInstance\([^\n]+\)\n)/, `$1        bridge?.registerPluginInstance(PpSipKeepAlive())\n`);
-      writeIfChanged(file, swift);
+      mutated = true;
     }
+    if (!swift.includes("PpVoipCall()") && swift.includes("registerPluginInstance")) {
+      swift = swift.replace(/(bridge\?\.registerPluginInstance\([^\n]+\)\n)/, `$1        bridge?.registerPluginInstance(PpVoipCall())\n`);
+      mutated = true;
+    }
+    if (mutated) writeIfChanged(file, swift);
   }
-  console.log("[native-config] iOS PpSipKeepAlive plugin applied.");
+  console.log("[native-config] iOS PpSipKeepAlive + PpVoipCall plugins applied.");
 }
 
 patchIosInfoPlist();

@@ -220,7 +220,9 @@ class SipConnectionService : Service() {
             val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
             val socket = factory.createSocket(host, port) as SSLSocket
             socket.keepAlive = true
-            socket.soTimeout = 75_000
+            // Detect dead sockets faster: 30s read timeout + ping every 15s so
+            // Doze/network-drop induced silence is caught within ~45s instead of ~95s.
+            socket.soTimeout = 30_000
             socket.startHandshake()
 
             // WebSocket HTTP Upgrade handshake

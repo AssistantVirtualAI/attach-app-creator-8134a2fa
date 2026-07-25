@@ -64,6 +64,8 @@ class SipConnectionService : Service() {
         const val KEY_DISPLAY_NAME = "verto_display_name"
 
         const val ACTION_STATUS = "com.lemtel.softphone.SIP_SERVICE_STATUS"
+        const val ACTION_NATIVE_VERTO_ANSWER = "com.lemtel.softphone.NATIVE_VERTO_ANSWER"
+        const val ACTION_NATIVE_VERTO_HANGUP = "com.lemtel.softphone.NATIVE_VERTO_HANGUP"
         const val KEY_STATUS = "verto_native_status"
         const val KEY_REASON = "verto_native_reason"
         const val KEY_UPDATED_AT = "verto_native_updated_at"
@@ -128,6 +130,7 @@ class SipConnectionService : Service() {
     @Volatile private var currentCallId: String? = null
     @Volatile private var currentCallerName: String? = null
     @Volatile private var currentCallerNumber: String? = null
+    @Volatile private var currentInviteParams: String? = null
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var callActionReceiver: android.content.BroadcastReceiver? = null
@@ -523,6 +526,7 @@ class SipConnectionService : Service() {
                     if (callId.isNotEmpty()) currentCallId = callId
                     currentCallerName = callerName
                     currentCallerNumber = callerNumber
+                    currentInviteParams = params?.toString()
                     Log.i(TAG, "Incoming call: $callerName <$callerNumber> callID=$callId")
                     try { AudioFocusHelper.requestCallAudioFocus(this) } catch (_: Exception) {}
                     emitStatus("incoming", "${callerName} <${callerNumber}>")
@@ -533,6 +537,7 @@ class SipConnectionService : Service() {
                     currentCallId = null
                     currentCallerName = null
                     currentCallerNumber = null
+                    currentInviteParams = null
                     try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
                     handler.post { clearCallNotifications() }
                     emitStatus("idle", "remote_bye")
@@ -616,6 +621,7 @@ class SipConnectionService : Service() {
                 putString("verto_current_call_id", currentCallId ?: "")
                 putString("verto_current_caller_name", currentCallerName ?: "")
                 putString("verto_current_caller_number", currentCallerNumber ?: "")
+                putString("verto_current_invite_params", currentInviteParams ?: "")
                 putLong(KEY_UPDATED_AT, now)
                 putLong(KEY_LAST_LOGIN_AT, lastLoginAt)
                 putLong(KEY_LAST_PING_AT, lastPingAt)
@@ -637,6 +643,7 @@ class SipConnectionService : Service() {
                 putExtra("callId", currentCallId ?: "")
                 putExtra("callerName", currentCallerName ?: "")
                 putExtra("callerNumber", currentCallerNumber ?: "")
+                putExtra("inviteParams", currentInviteParams ?: "")
                 putExtra("updatedAt", now)
                 putExtra("lastLoginAt", lastLoginAt)
                 putExtra("lastPingAt", lastPingAt)
@@ -774,8 +781,20 @@ class SipConnectionService : Service() {
     private fun registerCallActionReceiver() {
         try {
             val filter = android.content.IntentFilter(CallActionReceiver.ACTION_CALL_ACTION_EVENT)
+            filter.addAction(ACTION_NATIVE_VERTO_ANSWER)
+            filter.addAction(ACTION_NATIVE_VERTO_HANGUP)
             val recv = object : android.content.BroadcastReceiver() {
                 override fun onReceive(ctx: Context?, intent: Intent?) {
+                    when (intent?.action) {
+                        ACTION_NATIVE_VERTO_ANSWER -> {
+                            handleNativeAnswer(intent.getStringExtra("sdp") ?: "", intent.getStringExtra("dialogParams") ?: "")
+                            return
+                        }
+                        ACTION_NATIVE_VERTO_HANGUP -> {
+                            handleNativeHangup("ui_hangup")
+                            return
+                        }
+                    }
                     val action = intent?.getStringExtra(CallActionReceiver.EXTRA_ACTION) ?: return
                     when (action) {
                         "answer" -> handleNativeAnswerRequest()
@@ -808,6 +827,7 @@ class SipConnectionService : Service() {
         currentCallId = null
         currentCallerName = null
         currentCallerNumber = null
+        currentInviteParams = null
         try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
         handler.post { clearCallNotifications() }
         emitStatus("idle", "native_${reason}")
@@ -817,6 +837,29 @@ class SipConnectionService : Service() {
         try { AudioFocusHelper.requestCallAudioFocus(this) } catch (_: Exception) {}
         handler.post { updateNotification("Réponse en cours...") }
         emitStatus("incoming", "answer_requested")
+    }
+
+    private fun handleNativeAnswer(sdp: String, dialogParamsJson: String) {
+        val callId = currentCallId
+        if (callId.isNullOrEmpty() || sdp.isEmpty() || !isLoggedIn) return
+        try {
+            val params = JSONObject().apply {
+                put("sdp", sdp)
+                put("dialogParams", if (dialogParamsJson.isNotEmpty()) JSONObject(dialogParamsJson) else JSONObject().apply { put("callID", callId) })
+            }
+            val msg = JSONObject().apply {
+                put("jsonrpc", "2.0")
+                put("id", System.currentTimeMillis().toInt())
+                put("method", "verto.answer")
+                put("params", params)
+            }
+            sendFrame(msg.toString())
+            handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
+            emitStatus("registered", "native_answer_sent")
+        } catch (e: Exception) {
+            Log.w(TAG, "handleNativeAnswer failed: ${e.message}")
+            emitStatus("error", e.message ?: "native_answer_failed")
+        }
     }
 
     private fun buildVertoByeMessage(callId: String): String {

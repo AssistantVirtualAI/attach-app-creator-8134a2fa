@@ -23,6 +23,8 @@ import { attachNativeAutoReconnect } from '../lib/sip/nativeAutoReconnect';
 import {
   getAndroidSipServiceStatus,
   onAndroidSipServiceStatus,
+  answerAndroidNativeCall,
+  hangupAndroidNativeCall,
   requestAndroidBatteryOptimizationExemption,
   startAndroidSipService,
   type AndroidSipServiceStatus,
@@ -57,6 +59,7 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
   const localStreamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const configRef = useRef<SIPConfig | null>(config);
+  const nativeInviteCallIdRef = useRef<string | null>(null);
   configRef.current = config;
 
   const log = useCallback((event: string, details?: any) => {
@@ -108,8 +111,22 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       setStatus('registered');
       if (caller) setActiveCallNumber(caller);
       setCallState('ringing-in');
+      const rawInvite = native.inviteParams;
+      const inviteParams = typeof rawInvite === 'string'
+        ? (() => { try { return rawInvite ? JSON.parse(rawInvite) : null; } catch { return null; } })()
+        : rawInvite;
+      const callID = inviteParams?.callID || native.callId;
+      if (inviteParams?.sdp && callID && nativeInviteCallIdRef.current !== callID) {
+        nativeInviteCallIdRef.current = callID;
+        getVertoClient().adoptNativeInboundInvite(
+          inviteParams,
+          async (sdp, dialogParams) => { await answerAndroidNativeCall(sdp, dialogParams); },
+          async () => { await hangupAndroidNativeCall(); },
+        ).catch((e) => log('verto.native.adopt.error', { message: e?.message || String(e) }));
+      }
       return;
     }
+    if (nativeStatus !== 'incoming') nativeInviteCallIdRef.current = null;
     if (native.loggedIn || nativeStatus === 'registered' || nativeStatus === 'incoming') {
       setStatus('registered');
       return;

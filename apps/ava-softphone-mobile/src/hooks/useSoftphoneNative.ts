@@ -186,6 +186,8 @@ export function useSoftphoneNative(config: SIPConfig | null): UseSoftphoneReturn
   const [isOnHold, setIsOnHold] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [activeCallNumber, setActiveCallNumber] = useState('');
+  const [callerName, setCallerName] = useState('');
+  const [callerNumber, setCallerNumber] = useState('');
   const [endReason, setEndReason] = useState<string | null>(null);
   const [callPhase, setCallPhase] = useState<CallPhase>('idle');
   const [lastSipCode, setLastSipCode] = useState<string | null>(null);

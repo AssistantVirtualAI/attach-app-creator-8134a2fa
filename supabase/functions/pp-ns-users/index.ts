@@ -61,9 +61,15 @@ Deno.serve(async (req) => {
     if (!NS_API_KEY) return json({ error: "NS_API_KEY missing in secrets" }, 500);
 
     const domain = new URL(req.url).searchParams.get("domain") ?? NS_DEFAULT_DOMAIN;
-    const fetched = await fetchAllUsers(domain);
-    const list = fetched.data;
-    const nsWarning = fetched.warning ?? null;
+    let list: any[] = [];
+    let nsWarning: string | null = null;
+    try {
+      const fetched = await fetchAllUsers(domain);
+      list = fetched.data;
+      nsWarning = fetched.warning ?? null;
+    } catch (e) {
+      nsWarning = `ns_fetch_failed: ${(e as Error).message}`;
+    }
 
     // Merge with local planipret_profiles for app/agent flags
     const { data: profiles } = await admin

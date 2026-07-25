@@ -437,15 +437,27 @@ function patchAndroidNativeFiles() {
     console.log("[native-config] Android source tree not found — run npx cap add android first.");
     return;
   }
-  const mainActivity = findFile(javaRoot, "MainActivity.kt");
+  const mainActivity = findFile(javaRoot, "MainActivity.kt") || findFile(javaRoot, "MainActivity.java");
   const mainText = mainActivity && fs.existsSync(mainActivity) ? fs.readFileSync(mainActivity, "utf8") : "";
   const pkg = mainText.match(/^package\s+([\w.]+)/m)?.[1] || "com.planipret.mobile";
   const pkgDir = path.join(javaRoot, ...pkg.split("."));
-  writeIfChanged(path.join(pkgDir, "PpSipKeepAlivePlugin.kt"), ANDROID_PLUGIN(pkg));
-  writeIfChanged(path.join(pkgDir, "PpSipKeepAliveService.kt"), ANDROID_SERVICE_KT(pkg));
+  const useJava = mainActivity ? mainActivity.endsWith(".java") : !fs.existsSync(path.join(pkgDir, "MainActivity.kt"));
+  if (useJava) {
+    writeIfChanged(path.join(pkgDir, "PpSipKeepAlivePlugin.java"), ANDROID_PLUGIN_JAVA(pkg));
+    writeIfChanged(path.join(pkgDir, "PpSipKeepAliveService.java"), ANDROID_SERVICE_JAVA(pkg));
+  } else {
+    writeIfChanged(path.join(pkgDir, "PpSipKeepAlivePlugin.kt"), ANDROID_PLUGIN(pkg));
+    writeIfChanged(path.join(pkgDir, "PpSipKeepAliveService.kt"), ANDROID_SERVICE_KT(pkg));
+  }
   if (mainActivity && !mainText.includes("PpSipKeepAlivePlugin::class.java")) {
     let next = mainText;
-    if (next.includes("registerPlugin(")) {
+    if (mainActivity.endsWith(".java") && !mainText.includes("PpSipKeepAlivePlugin.class")) {
+      if (next.includes("registerPlugin(")) {
+        next = next.replace(/(registerPlugin\([^\n]+\);\n)/, `$1        registerPlugin(PpSipKeepAlivePlugin.class);\n`);
+      } else if (next.includes("super.onCreate(savedInstanceState);")) {
+        next = next.replace("super.onCreate(savedInstanceState);", "registerPlugin(PpSipKeepAlivePlugin.class);\n        super.onCreate(savedInstanceState);");
+      }
+    } else if (next.includes("registerPlugin(")) {
       next = next.replace(/(registerPlugin\([^\n]+\)\n)/, `$1        registerPlugin(PpSipKeepAlivePlugin::class.java)\n`);
     } else if (next.includes("super.onCreate(savedInstanceState)")) {
       next = next.replace("super.onCreate(savedInstanceState)", "registerPlugin(PpSipKeepAlivePlugin::class.java)\n        super.onCreate(savedInstanceState)");

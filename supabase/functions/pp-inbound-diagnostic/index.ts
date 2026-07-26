@@ -343,7 +343,8 @@ Deno.serve(async (req) => {
       ring_timeout: ringTimeout || null,
       registered_aors: [...registeredAors],
       mobile_registered: mobileRegistered,
-      dids_matching_extension: mine.map((n) => n?.["phonenumber"] ?? n?.number).filter(Boolean),
+      dids_total_read: numbers.length,
+      dids_matching_extension: mine.map(numOf).filter(Boolean),
       inbound_cdrs: cdrSummary,
     },
     raw: {
@@ -351,7 +352,13 @@ Deno.serve(async (req) => {
       answering_rules: { path: rules.path, status: rules.status, data: rules.data },
       devices: { status: devices.status, data: devices.data },
       registrations: { status: registrations.status, probes: registrations.probes, data: registrations.data },
-      phone_numbers: { status: phoneNumbers.status, count: numbers.length, matching: mine },
+      phone_numbers: {
+        status: phoneNumbers.status,
+        probes: phoneNumbers.probes,
+        count: numbers.length,
+        all: numbers.map((n) => ({ number: numOf(n), destination: destOf(n) })),
+        matching: mine,
+      },
       cdrs: { status: cdrs.status, count: cdrRows.length },
     },
   });

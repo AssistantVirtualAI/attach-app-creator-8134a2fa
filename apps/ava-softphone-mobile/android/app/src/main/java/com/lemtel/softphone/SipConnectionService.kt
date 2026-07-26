@@ -182,10 +182,10 @@ class SipConnectionService : Service() {
 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val mode = intent?.getStringExtra("mode") ?: "verto"
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val mode = intent?.getStringExtra("mode") ?: prefs.getString(KEY_MODE, "jssip") ?: "jssip"
         // Persist mode so sticky restarts preserve the correct behaviour.
-        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putString(KEY_MODE, mode).apply()
+        prefs.edit().putString(KEY_MODE, mode).apply()
 
         val notification = buildNotification("Connecté · Prêt à recevoir des appels")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

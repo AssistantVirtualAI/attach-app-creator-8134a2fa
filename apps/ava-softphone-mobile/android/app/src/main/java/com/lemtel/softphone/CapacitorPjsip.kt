@@ -35,6 +35,10 @@ import com.getcapacitor.annotation.PermissionCallback
 )
 class CapacitorPjsip : Plugin() {
 
+    companion object {
+        const val TAG = "CapacitorPjsip"
+    }
+
     private var audioManager: AudioManager? = null
     private var sipStatusReceiver: BroadcastReceiver? = null
     private var callActionReceiver: BroadcastReceiver? = null

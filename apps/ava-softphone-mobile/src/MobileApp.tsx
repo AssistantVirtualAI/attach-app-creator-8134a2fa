@@ -461,8 +461,14 @@ function AuthenticatedShell({
       }, 400);
     }
     // Check for a number stored before this component mounted (cold launch).
+    // IMPORTANT: do NOT auto-dial if an incoming call is already ringing — the
+    // PENDING_CALL_KEY may contain a stale number from a previous outgoing call
+    // or a tel: deep link that arrived at the same time as the incoming INVITE.
     const stored = sessionStorage.getItem(PENDING_CALL_KEY);
-    if (stored) { sessionStorage.removeItem(PENDING_CALL_KEY); tryDial(stored); }
+    const currentCallState = spRef.current?.snap?.callState;
+    const incomingActive = currentCallState === 'ringing-in' || currentCallState === 'active';
+    if (stored && !incomingActive) { sessionStorage.removeItem(PENDING_CALL_KEY); tryDial(stored); }
+    else if (stored && incomingActive) { sessionStorage.removeItem(PENDING_CALL_KEY); }
     // Listen for future tel: deep links while app is running.
     const handler = (e: Event) => {
       const number = (e as CustomEvent<{ number: string }>).detail?.number;

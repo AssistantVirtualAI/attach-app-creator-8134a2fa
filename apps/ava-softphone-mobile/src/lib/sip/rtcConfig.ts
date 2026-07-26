@@ -200,7 +200,11 @@ export function watchCallEstablishment(
     });
     const onIce = () => {
       const s = pc?.iceConnectionState;
+      // Accept 'connected', 'completed', and also 'checking'/'disconnected' when
+      // the session is already confirmed — on Android WebView with forced ICE,
+      // ICE may stay in 'checking' but media flows fine.
       if (s === 'connected' || s === 'completed') { iceOk = true; check(); }
+      else if (s === 'checking' || s === 'disconnected') { if (confirmed) { iceOk = true; check(); } }
       else if (s === 'failed') finish({ ok: false, reason: 'ice-failed', sessionConfirmed: confirmed, iceState: s });
     };
     const cleanup = () => {

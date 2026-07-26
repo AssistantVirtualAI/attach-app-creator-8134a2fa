@@ -82,6 +82,7 @@ export function useSoftphoneJsSip(
   const [sipStatus, setSipStatusState] = useState<SIPStatus>('idle');
   const [sipError, setSipErrorState] = useState('');
   const [callState, setCallState] = useState<CallState>('idle');
+  const callStateRef = useRef<CallState>('idle');
   const [callTimer, setCallTimer] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isOnHold, setIsOnHold] = useState(false);
@@ -341,7 +342,7 @@ export function useSoftphoneJsSip(
             setActiveCallNumber(remoteNumber);
             log('session.new', `${session.direction} ${remoteNumber}`);
             if (session.direction === 'incoming') {
-              setCallState('ringing-in');
+              callStateRef.current = 'ringing-in'; setCallState('ringing-in');
               // Trigger native Android ringing + fullscreen notification
               if (Capacitor.getPlatform() === 'android') {
                 const callerName = session.remote_identity?.display_name || '';
@@ -418,6 +419,14 @@ export function useSoftphoneJsSip(
               log('call.establishment-failed', `${res.reason} ice=${res.iceState}`, 'error');
               try { showMobileToast(msg, 'error'); } catch {}
 
+              // IMPORTANT: ne jamais raccrocher un appel déjà actif.
+              // Sur Android avec ICE forcé, la session peut être confirmée mais ICE
+              // reste en 'checking' — l'audio fonctionne quand même.
+              if (callStateRef.current === 'active') {
+                log('call.establishment-ok-active', 'call already active, ignoring watchCallEstablishment timeout', 'warn');
+                return;
+              }
+
               // Auto-retry en SDP PCMU sécurisé si le 1er essai timeoute
               // (PBX qui refuse silencieusement Opus/DTLS-SRTP en WebRTC).
               if (
@@ -434,7 +443,7 @@ export function useSoftphoneJsSip(
               }
             });
             session.on('confirmed', () => {
-              setCallState('active');
+              callStateRef.current = 'active'; setCallState('active');
               log('session.confirmed', remoteNumber);
               console.log('[SIP][info] session.confirmed — call connected');
               // Force Android into MODE_IN_COMMUNICATION via earpiece route so
@@ -526,7 +535,7 @@ export function useSoftphoneJsSip(
               samplerStateRef.current = {};
             };
             session.on('ended', () => {
-              setCallState('ended');
+              callStateRef.current = 'ended'; setCallState('ended');
               log('session.ended', remoteNumber);
               // Always dismiss the native Android incoming-call notification and
               // ringtone when the session ends (covers the case where the remote
@@ -555,7 +564,7 @@ export function useSoftphoneJsSip(
               // timeout, busy, etc.) so the phone stops ringing.
               dismissIncomingNotif();
               answeringRef.current = false;
-              setCallState('idle');
+              callStateRef.current = 'idle'; setCallState('idle');
               if (timerRef.current) clearInterval(timerRef.current);
               stopStats();
               setActiveCallNumber('');
@@ -771,7 +780,7 @@ export function useSoftphoneJsSip(
   const placeCallInternal = async (number: string, forcePcmu = false): Promise<boolean> => {
     if (!uaRef.current || !config) return false;
     setActiveCallNumber(number);
-    setCallState('ringing');
+    callStateRef.current = 'ringing'; setCallState('ringing');
     setOfferedCodecs([]);
     setNegotiatedCodec(null);
     lastCallNumberRef.current = number;
@@ -788,7 +797,7 @@ export function useSoftphoneJsSip(
       } catch (e: any) {
         console.error('[SIP] microphone permission denied', e);
         setSipError('Microphone permission denied — please allow microphone access');
-        setCallState('idle');
+        callStateRef.current = 'idle'; setCallState('idle');
         setActiveCallNumber('');
         return false;
       }
@@ -824,7 +833,7 @@ export function useSoftphoneJsSip(
       return true;
     } catch (err: any) {
       console.error('[AVA keypad] SIP call exception', err);
-      setCallState('idle');
+      callStateRef.current = 'idle'; setCallState('idle');
       setActiveCallNumber('');
       setSipError(classifySipFailure({ cause: err?.message }));
       return false;
@@ -846,7 +855,7 @@ export function useSoftphoneJsSip(
     dismissIncomingNotif();
     try { sessionRef.current?.terminate(); } catch {}
     sessionRef.current = null;
-    setCallState('idle');
+    callStateRef.current = 'idle'; setCallState('idle');
     if (timerRef.current) clearInterval(timerRef.current);
     setCallTimer(0);
     setActiveCallNumber('');

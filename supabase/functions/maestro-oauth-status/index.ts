@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
   if (status !== "connected") {
     const { data: connected } = await admin
       .from("planipret_integration_secrets")
-      .select("value, updated_at")
+      .select("config, updated_at")
       .eq("provider", "maestro_oauth")
       .order("updated_at", { ascending: false })
       .limit(1);
@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       status = "connected";
       lastConnectedAt = (connected[0] as any).updated_at ?? null;
       try {
-        const parsed = JSON.parse((connected[0] as any).value ?? "{}");
+        const parsed = (connected[0] as any).config ?? {};
         expiresIn = parsed?.expires_in ?? null;
       } catch { /* ignore */ }
     }
@@ -70,20 +70,20 @@ Deno.serve(async (req) => {
 
   const { data: pending } = await admin
     .from("planipret_integration_secrets")
-    .select("key_name")
+    .select("provider")
     .eq("provider", "maestro_oauth_pending")
     .limit(5);
   pendingCount = pending?.length ?? 0;
 
   const { data: errRows } = await admin
     .from("planipret_integration_secrets")
-    .select("value, updated_at")
+    .select("config, updated_at")
     .eq("provider", "maestro_oauth_error")
     .order("updated_at", { ascending: false })
     .limit(1);
   if (errRows && errRows.length > 0) {
     try {
-      const parsed = JSON.parse((errRows[0] as any).value ?? "{}");
+      const parsed = (errRows[0] as any).config ?? {};
       lastError = { message: parsed?.error ?? "Erreur inconnue", at: (errRows[0] as any).updated_at, http_status: parsed?.http_status };
     } catch { lastError = { message: "Erreur inconnue", at: (errRows[0] as any).updated_at }; }
   }

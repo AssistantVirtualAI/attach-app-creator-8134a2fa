@@ -103,7 +103,6 @@ export default function MaestroConnectCard() {
 
       if (isNative) {
         logDeepLink({ kind: "info", source: "MaestroConnect", detail: `opening Maestro with redirect_uri=${redirectUri}` });
-        await Browser.close().catch(() => {});
         await Browser.open({ url, presentationStyle: "fullscreen" });
       } else {
         window.location.href = url;

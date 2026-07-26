@@ -531,7 +531,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       socket = session.webSocketTask(with: req); socket?.resume(); setStatus("connecting", "ws_connecting"); receiveLoop()
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.sendRegister(challenge: nil) }
     }
-    private func scheduleRegister() { timer?.invalidate(); timer = Timer.scheduledTimer(withTimeInterval: 240, repeats: true) { [weak self] _ in self?.sendRegister(challenge: nil) }; RunLoop.main.add(timer!, forMode: .common) }
+    private func scheduleRegister() { timer?.invalidate(); timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.sendRegister(challenge: nil) }; RunLoop.main.add(timer!, forMode: .common) }
     private func receiveLoop() { socket?.receive { [weak self] result in guard let self = self else { return }; switch result { case .success(let message): if case .string(let text) = message { self.handle(text) }; self.receiveLoop(); case .failure: self.socket = nil; self.setStatus("reconnecting", "ws_closed"); DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.connect() } } } }
 
     private func handle(_ msg: String) {
@@ -590,7 +590,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       var sip = "REGISTER sip:" + domain + " SIP/2.0\\r\\n"
       sip += "Via: SIP/2.0/WSS planipret-ios.invalid;branch=" + branch + "\\r\\nMax-Forwards: 70\\r\\n"
       sip += "To: <sip:" + login + "@" + domain + ">\\r\\nFrom: \\"" + displayName.replacingOccurrences(of: "\\"", with: "") + "\\" <sip:" + login + "@" + domain + ">;tag=" + fromTag + "\\r\\n"
-      sip += "Call-ID: " + callIdReg + "\\r\\nCSeq: " + String(seq) + " REGISTER\\r\\nContact: " + contact + ";expires=600\\r\\nExpires: 600\\r\\nUser-Agent: Planipret iOS KeepAlive\\r\\nSupported: outbound,path,gruu\\r\\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\\r\\n"
+      sip += "Call-ID: " + callIdReg + "\\r\\nCSeq: " + String(seq) + " REGISTER\\r\\nContact: " + contact + ";expires=1800\\r\\nExpires: 1800\\r\\nUser-Agent: Planipret iOS KeepAlive\\r\\nSupported: outbound,path,gruu\\r\\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\\r\\n"
       if let ch = challenge, !password.isEmpty { sip += "Authorization: " + digest(challenge: ch) + "\\r\\n" }
       sip += "Content-Length: 0\\r\\n\\r\\n"
       socket?.send(.string(sip)) { [weak self] err in DispatchQueue.main.async { self?.setStatus(err == nil ? "connecting" : "error", err == nil ? (challenge == nil ? "register_sent" : "register_auth_sent") : "register_send_failed") } }

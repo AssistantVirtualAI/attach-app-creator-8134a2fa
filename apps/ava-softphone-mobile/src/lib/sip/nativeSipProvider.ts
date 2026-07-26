@@ -344,22 +344,4 @@ export async function attachNativeSipLogger(): Promise<() => void> {
   });
 }
 
-/** Show native incoming call notification (fullscreen + ringtone) for JsSIP mode on Android */
-export async function showAndroidIncomingCallNotif(callerNumber: string, callerName: string): Promise<void> {
-  if (__platform !== 'android') return;
-  try {
-    await AndroidSipServicePlugin.showIncomingCallNotif?.({ callerNumber, callerName });
-  } catch (e) {
-    console.warn('[nativeSip] showAndroidIncomingCallNotif failed', e);
-  }
-}
 
-/** Dismiss native incoming call notification (JsSIP mode on Android) */
-export async function dismissAndroidIncomingCallNotif(): Promise<void> {
-  if (__platform !== 'android') return;
-  try {
-    await AndroidSipServicePlugin.dismissIncomingCallNotif?.();
-  } catch (e) {
-    console.warn('[nativeSip] dismissAndroidIncomingCallNotif failed', e);
-  }
-}

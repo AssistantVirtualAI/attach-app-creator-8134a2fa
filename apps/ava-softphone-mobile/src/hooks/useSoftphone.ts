@@ -14,7 +14,7 @@ import { showMobileToast } from '../lib/mobileToast';
 import { PC_CONFIG, instrumentPeerConnection, watchCallEstablishment, isSipDebugEnabled, sipDebug } from '../lib/sip/rtcConfig';
 import { fetchIceServers, FALLBACK_ICE_SERVERS } from '../lib/sip/iceServers';
 import type { AndroidSipServiceStatus } from '../lib/sip/nativeSipProvider';
-import { showAndroidIncomingCallNotif, dismissAndroidIncomingCallNotif } from '../lib/sip/nativeSipProvider';
+import { showAndroidIncomingCallNotif, dismissAndroidIncomingCallNotif } from '../lib/sip/androidCallNotif';
 
 export type SIPStatus = 'idle' | 'connecting' | 'registered' | 'retrying' | 'error';
 export type CallState = 'idle' | 'ringing' | 'ringing-in' | 'ringing-out' | 'active' | 'ended';

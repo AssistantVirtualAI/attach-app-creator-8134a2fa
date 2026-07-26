@@ -128,8 +128,10 @@ Deno.serve(async (req) => {
           // tenant it can resolve to a terminating application (SpeakAccount /
           // voicemail) before the registered devices are forked.
           "include-user-extension": "no",
-          "ring-all-user-phones": "yes",
-          "parameters": ["<OwnDevices>"],
+          // Ring ONLY the mobile device AORs (never <OwnDevices>, which would
+          // also fork to {ext}_web and steal the call from the mobile app).
+          "ring-all-user-phones": "no",
+          "parameters": deviceAors,
           "destinations": destinations,
           "list": deviceAors,
         },
@@ -143,12 +145,13 @@ Deno.serve(async (req) => {
         "simultaneous-ring-enabled": "yes",
         "simultaneous-ring-confirm": "no",
         "simultaneous-ring-include-user-extension": "no",
-        "simultaneous-ring-all-user-phones": "yes",
-        "simultaneous-ring-parameters": ["<OwnDevices>"],
+        "simultaneous-ring-all-user-phones": "no",
+        "simultaneous-ring-parameters": deviceAors,
         "sim-ring-include-user-extension": "no",
-        "sim-ring-all-user-phones": "yes",
-        "sim-ring-parameters": ["<OwnDevices>"],
+        "sim-ring-all-user-phones": "no",
+        "sim-ring-parameters": deviceAors,
         "simultaneous-ring-list": deviceAors,
+
         "sim-ring-destinations": destinations,
         "ring-timeout": ring_timeout,
         "timeout": ring_timeout,

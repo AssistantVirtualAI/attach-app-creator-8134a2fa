@@ -793,12 +793,12 @@ export function useSoftphoneJsSip(
         },
         pcConfig: {
           iceServers,
-          // On Android WebView, 'all' is slow (3-10 s) and causes FusionPBX
-          // to cancel outbound calls before ICE completes. Use 'relay' on
-          // Android to go straight to TURN.
-          iceTransportPolicy: Capacitor.getPlatform() === 'android' ? 'relay' : 'all',
+          iceTransportPolicy: 'all',
           bundlePolicy: 'balanced',
         },
+        // On Android WebView, ICE gathering can take 3-10 s. Cap it at 2.5 s
+        // so the INVITE SDP is sent before FusionPBX's session timer fires.
+        ...(Capacitor.getPlatform() === 'android' ? { iceGatheringTimeout: 2500 } : {}),
       };
       if (forcePcmu) log('call.fallback', 'secure PCMU-only SDP rewrite armed');
       sipDebug('placeCallInternal pcConfig', PC_CONFIG);
@@ -856,21 +856,22 @@ export function useSoftphoneJsSip(
     }
     const iceServers = await fetchIceServers().catch(() => FALLBACK_ICE_SERVERS);
     log('answer.iceServers', `count=${iceServers.length}`);
-    // On Android WebView, ICE candidate gathering with policy 'all' is slow
-    // (3-10 s) and FusionPBX cancels the call before ICE completes.
-    // Force 'relay' on Android so we go straight to TURN and skip the slow
-    // host/srflx probing that causes the session.failed → Canceled.
-    const icePolicy: RTCIceTransportPolicy =
-      Capacitor.getPlatform() === 'android' ? 'relay' : 'all';
+    // On Android WebView, ICE gathering with 'relay' only breaks FusionPBX
+    // because the PBX cannot route to TURN relay addresses from its LAN.
+    // Instead, use 'all' (host + srflx + relay) but cap gathering to 2.5 s
+    // via iceGatheringTimeout so JsSIP sends the 200 OK SDP quickly before
+    // FusionPBX's 10 s session timer fires.
+    const isAndroid = Capacitor.getPlatform() === 'android';
     try {
       sessionRef.current?.answer({
         mediaConstraints: HD_AUDIO_CONSTRAINTS,
         sessionDescriptionHandlerModifiers: [sdpModifier],
         pcConfig: {
           iceServers,
-          iceTransportPolicy: icePolicy,
+          iceTransportPolicy: 'all',
           bundlePolicy: 'balanced',
         },
+        ...(isAndroid ? { iceGatheringTimeout: 2500 } : {}),
       });
       log('answer.sent', 'session.answer() called successfully');
     } catch (e: any) {

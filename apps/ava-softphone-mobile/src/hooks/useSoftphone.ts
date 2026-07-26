@@ -875,11 +875,14 @@ export function useSoftphone(
     return useSoftphoneNative(config);
   }
   if (platform === 'android') {
-    // Android → FreeSWITCH Verto (port 8082 WSS JSON-RPC).
-    // Bypasses Bell Canada's TURN DNS block and avoids the WebView
-    // WebRTC limitations that prevent JsSIP 2-way audio on Android.
+    // Android → JsSIP over WSS (port 7443).
+    // Migrated from Verto (port 8082) because the Verto sessid changes on
+    // every WebSocket reconnect, causing FreeSWITCH to reject verto.answer
+    // and leaving the caller ringing with no audio established.
+    // JsSIP uses standard SIP over WSS which handles reconnections correctly
+    // and is confirmed working with FusionPBX wss-binding :7443.
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useSoftphoneVerto(config);
+    return useSoftphoneJsSip(config, opts);
   }
   // Web / dev → JsSIP over WSS.
   // eslint-disable-next-line react-hooks/rules-of-hooks

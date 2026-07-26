@@ -85,9 +85,12 @@ class SipConnectionService : Service() {
         const val KEY_LOGGED_IN = "verto_native_logged_in"
         const val KEY_WAKE_HELD = "verto_native_wake_held"
         const val KEY_WIFI_HELD = "verto_native_wifi_held"
+        const val KEY_MODE = "sip_service_mode"  // "verto" (default) or "jssip"
 
-        fun start(context: Context) {
-            val intent = Intent(context, SipConnectionService::class.java)
+        fun start(context: Context, mode: String = "verto") {
+            val intent = Intent(context, SipConnectionService::class.java).apply {
+                putExtra("mode", mode)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -182,6 +185,11 @@ class SipConnectionService : Service() {
 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val mode = intent?.getStringExtra("mode") ?: "verto"
+        // Persist mode so sticky restarts preserve the correct behaviour.
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putString(KEY_MODE, mode).apply()
+
         val notification = buildNotification("Connecté · Prêt à recevoir des appels")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceCompat.startForeground(
@@ -191,8 +199,18 @@ class SipConnectionService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-        emitStatus(if (isLoggedIn) "registered" else "connecting", "service_start")
-        if (!isLoggedIn && !connecting) executor.submit { connectVerto() }
+
+        if (mode == "jssip") {
+            // JsSIP mode: the WebView handles SIP over WSS itself.
+            // This service only provides WakeLock + WifiLock + foreground notification
+            // so Android does not throttle the WebView WebSocket in background.
+            Log.i(TAG, "SipConnectionService started in JsSIP keepalive mode (no native Verto WS)")
+            emitStatus("registered", "jssip_keepalive")
+        } else {
+            // Verto mode: native Kotlin WebSocket to FreeSWITCH port 8082.
+            emitStatus(if (isLoggedIn) "registered" else "connecting", "service_start")
+            if (!isLoggedIn && !connecting) executor.submit { connectVerto() }
+        }
         return START_STICKY
     }
 
@@ -215,11 +233,17 @@ class SipConnectionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Keep the SIP/Verto foreground registration alive even if Android removes
-        // the WebView task. The stored credentials let the sticky service restore
-        // the connection without opening the UI.
-        emitStatus("reconnecting", "task_removed")
-        scheduleReconnect(1_000L)
+        if (isJsSipMode()) {
+            // In JsSIP mode, the WebView owns the SIP stack. When the task is removed
+            // the WebView is gone too, so there is nothing to reconnect natively.
+            // The service stays alive to hold WakeLock/WifiLock for the next launch.
+            Log.i(TAG, "onTaskRemoved: JsSIP mode — keeping WakeLock, no Verto reconnect")
+            emitStatus("idle", "task_removed_jssip")
+        } else {
+            // Verto mode: keep the native WebSocket alive across task removal.
+            emitStatus("reconnecting", "task_removed")
+            scheduleReconnect(1_000L)
+        }
         super.onTaskRemoved(rootIntent)
     }
 
@@ -718,8 +742,18 @@ class SipConnectionService : Service() {
         scheduleReconnect(null)
     }
 
+    /** Returns true when the service was started in JsSIP keepalive mode. */
+    private fun isJsSipMode(): Boolean =
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_MODE, "verto") == "jssip"
+
     private fun scheduleReconnect(forcedDelayMs: Long?) {
         if (isDestroyed) return
+        // In JsSIP mode the WebView owns the SIP connection — no native reconnect needed.
+        if (isJsSipMode()) {
+            Log.d(TAG, "scheduleReconnect: skipped (JsSIP mode)")
+            return
+        }
         // A forced 0ms reconnect (e.g. answer failure) must supersede any
         // pending back-off. Cancel first, then re-schedule.
         // For any other forced delay or null (exponential back-off), if a

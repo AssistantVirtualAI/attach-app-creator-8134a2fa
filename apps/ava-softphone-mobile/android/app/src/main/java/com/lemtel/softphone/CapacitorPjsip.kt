@@ -243,7 +243,9 @@ class CapacitorPjsip : Plugin() {
             if (login.isNotEmpty() && password.isNotEmpty()) {
                 SipConnectionService.saveCredentials(context, host, port, login, password, domain, displayName)
             }
-            SipConnectionService.start(context)
+            // Start in JsSIP mode: WakeLock + WifiLock only, no native Verto WebSocket.
+            // The WebView handles SIP over WSS 7443 via JsSIP directly.
+            SipConnectionService.start(context, mode = "jssip")
             call.resolve(readSipServiceStatus().apply { put("ok", true) })
         } catch (e: Exception) {
             call.reject(e.message ?: "startSipService failed")

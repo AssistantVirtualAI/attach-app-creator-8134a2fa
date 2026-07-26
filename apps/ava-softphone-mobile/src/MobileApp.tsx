@@ -242,7 +242,7 @@ function AuthenticatedShell({
   // Permissions are requested natively after login (see requestPermissionsAfterLogin).
 
   // Build SIP config from the same backend credentials used by desktop/portal.
-  // iOS uses native PJSIP (CapacitorPjsip). Android uses Verto over WSS 8082,
+  // iOS uses native PJSIP (CapacitorPjsip). Android uses JsSIP over WSS 7443,
   // and SipForegroundService keeps the WebView WebSocket alive in background.
   //
   // All connection parameters are derived from the credentials returned by the
@@ -266,7 +266,7 @@ function AuthenticatedShell({
   const credentialsReady = sipReady && !!(creds.extension && sipPassword && WORKING_WSS.length > 0);
 
   // Extract the server hostname from the primary WSS URL for the native SIP
-  // service (used by Android's Verto WebSocket in the foreground service).
+  // service (used by Android's foreground service for WakeLock/WifiLock).
   const primaryWssHost = (() => {
     try { return WORKING_WSS[0] ? new URL(WORKING_WSS[0]).hostname : ''; } catch { return ''; }
   })();
@@ -277,7 +277,7 @@ function AuthenticatedShell({
         displayName: creds.displayName || creds.email || 'User',
         password: sipPassword,
         domain: sipDomain,
-        // server is the raw hostname used by the native Android Verto service.
+        // server is the raw hostname used by the native Android foreground service.
         server: primaryWssHost,
         port: 7443,
         transport: 'WSS',
@@ -285,13 +285,11 @@ function AuthenticatedShell({
         wssUrls: WORKING_WSS,
         authUsername: creds.authUsername || creds.extension,
         refreshNonce: freshCredentialToken,
-        // vertoHost/vertoPort are derived automatically from wssUrl in
-        // useSoftphoneVerto — no need to set them explicitly here unless the
-        // Verto endpoint is on a different host than the JsSIP WSS endpoint.
+        // No Verto-specific fields needed — Android now uses JsSIP over WSS 7443.
       }
     : null;
 
-  const _sipProvider = Capacitor.getPlatform() === 'ios' ? 'native-pjsip' : Capacitor.getPlatform() === 'android' ? 'verto-8082' : 'jssip-wss';
+  const _sipProvider = Capacitor.getPlatform() === 'ios' ? 'native-pjsip' : 'jssip-wss';
   console.log('[SIP] sipConfig:', sipConfig
     ? `ext=${sipConfig.extension} domain=${sipConfig.domain} wss=${sipConfig.wssUrl} provider=${_sipProvider}`
     : 'NULL - missing: ' + [

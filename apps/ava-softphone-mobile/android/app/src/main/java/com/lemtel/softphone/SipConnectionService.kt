@@ -880,7 +880,7 @@ class SipConnectionService : Service() {
         activeRingtone = null
     }
 
-    private fun showIncomingCallNotification(callerName: String, callerNumber: String) {
+    fun showIncomingCallNotification(callerName: String, callerNumber: String) {
         stopRingtone()
         try {
             val uri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
@@ -925,6 +925,11 @@ class SipConnectionService : Service() {
             .addAction(android.R.drawable.ic_menu_call, "Répondre", answerPI)
             .build()
         nm.notify(INCOMING_CALL_NOTIFICATION_ID, notification)
+    }
+
+    fun dismissIncomingCallNotification() {
+        stopRingtone()
+        try { getSystemService(NotificationManager::class.java).cancel(INCOMING_CALL_NOTIFICATION_ID) } catch (_: Exception) {}
     }
 
     /**

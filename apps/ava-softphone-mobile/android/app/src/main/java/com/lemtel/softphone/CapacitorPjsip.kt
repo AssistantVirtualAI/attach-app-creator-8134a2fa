@@ -415,6 +415,37 @@ class CapacitorPjsip : Plugin() {
         }
     }
 
+    @PluginMethod
+    fun showIncomingCallNotif(call: PluginCall) {
+        try {
+            val callerNumber = call.getString("callerNumber", "") ?: ""
+            val callerName   = call.getString("callerName", "") ?: ""
+            val svc = SipConnectionService.instance
+            if (svc != null) {
+                svc.showIncomingCallNotification(callerName, callerNumber)
+            } else {
+                // Service not running yet — start it in jssip mode then ring
+                SipConnectionService.start(context, mode = "jssip")
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    SipConnectionService.instance?.showIncomingCallNotification(callerName, callerNumber)
+                }, 500)
+            }
+            call.resolve(JSObject().apply { put("ok", true) })
+        } catch (e: Exception) {
+            call.reject(e.message ?: "showIncomingCallNotif failed")
+        }
+    }
+
+    @PluginMethod
+    fun dismissIncomingCallNotif(call: PluginCall) {
+        try {
+            SipConnectionService.instance?.dismissIncomingCallNotification()
+            call.resolve(JSObject().apply { put("ok", true) })
+        } catch (e: Exception) {
+            call.reject(e.message ?: "dismissIncomingCallNotif failed")
+        }
+    }
+
     private fun readSipServiceStatus(): JSObject {
         val p = context.getSharedPreferences(SipConnectionService.PREFS_NAME, Context.MODE_PRIVATE)
         return JSObject().apply {

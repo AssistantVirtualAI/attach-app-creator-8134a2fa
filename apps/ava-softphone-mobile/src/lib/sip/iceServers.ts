@@ -48,15 +48,8 @@ function resolveHostToIp(servers: RTCIceServer[]): RTCIceServer[] {
 }
 
 export async function fetchIceServers(): Promise<RTCIceServer[]> {
-  // Android now uses FreeSWITCH Verto (media proxied server-side), so no
-  // TURN/STUN lookup is required. Bell Canada blocks TURN DNS resolution,
-  // which used to fail the whole call with ice=new timeouts — this skip
-  // removes that failure path entirely.
-  try {
-    const { Capacitor } = await import('@capacitor/core');
-    if (Capacitor.getPlatform() === 'android') return [];
-  } catch { /* not in a Capacitor context — fall through */ }
-
+  // Android uses JsSIP over WSS (migrated from Verto) and requires ICE
+  // servers for NAT traversal — do NOT skip on Android.
   if (cache && Date.now() - cache.at < TTL_MS) return cache.servers;
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/get-turn-credentials`, {

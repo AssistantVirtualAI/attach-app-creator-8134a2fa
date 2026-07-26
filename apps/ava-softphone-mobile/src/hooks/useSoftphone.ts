@@ -339,7 +339,16 @@ export function useSoftphoneJsSip(
             const remoteNumber = session.remote_identity?.uri?.user || 'Unknown';
             setActiveCallNumber(remoteNumber);
             log('session.new', `${session.direction} ${remoteNumber}`);
-            if (session.direction === 'incoming') setCallState('ringing-in');
+            if (session.direction === 'incoming') {
+              setCallState('ringing-in');
+              // Trigger native Android ringing + fullscreen notification
+              if (Capacitor.getPlatform() === 'android') {
+                const callerName = session.remote_identity?.display_name || '';
+                import('../lib/sip/nativeSipProvider').then(({ CapacitorPjsip }) => {
+                  (CapacitorPjsip as any).showIncomingCallNotif?.({ callerNumber: remoteNumber, callerName }).catch?.(() => {});
+                }).catch(() => {});
+              }
+            }
             session.on('peerconnection', (e: any) => {
               const pc: RTCPeerConnection | undefined = e?.peerconnection;
               if (pc) {
@@ -807,7 +816,15 @@ export function useSoftphoneJsSip(
     callAttemptRef.current = 1;
     return placeCallInternal(number, false);
   };
+  const dismissIncomingNotif = () => {
+    if (Capacitor.getPlatform() === 'android') {
+      import('../lib/sip/nativeSipProvider').then(({ CapacitorPjsip }) => {
+        (CapacitorPjsip as any).dismissIncomingCallNotif?.().catch?.(() => {});
+      }).catch(() => {});
+    }
+  };
   const hangup = () => {
+    dismissIncomingNotif();
     try { sessionRef.current?.terminate(); } catch {}
     sessionRef.current = null;
     setCallState('idle');
@@ -818,6 +835,7 @@ export function useSoftphoneJsSip(
     ensureRegisteredThenRestore('hangup');
   };
   const answer = async () => {
+    dismissIncomingNotif();
     const iceServers = await fetchIceServers().catch(() => FALLBACK_ICE_SERVERS);
     sessionRef.current?.answer({
       mediaConstraints: HD_AUDIO_CONSTRAINTS,

@@ -14,6 +14,44 @@ export type DeepLinkEvent = {
 const KEY = "pp_deep_link_debug_log";
 const MAX = 100;
 const listeners = new Set<() => void>();
+const routedRecently = new Map<string, number>();
+const COMPLETED_KEY = "pp_completed_oauth_callbacks";
+
+function callbackKey(kind: "ms365" | "maestro", url: URL): string {
+  const state = url.searchParams.get("state") || "no-state";
+  const code = url.searchParams.get("code") || url.searchParams.get("error") || url.search;
+  return `${kind}:${state}:${String(code).slice(0, 32)}`;
+}
+
+function readCompleted(): string[] {
+  try {
+    const raw = localStorage.getItem(COMPLETED_KEY);
+    return raw ? JSON.parse(raw) as string[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCompleted(keys: string[]) {
+  try { localStorage.setItem(COMPLETED_KEY, JSON.stringify(keys.slice(-40))); } catch {}
+}
+
+function isCompleted(key: string): boolean {
+  return readCompleted().includes(key);
+}
+
+export function markOAuthCallbackCompleted(kind: "ms365" | "maestro", rawUrlOrSearch?: string | null) {
+  if (!rawUrlOrSearch) return;
+  try {
+    const url = rawUrlOrSearch.startsWith("?")
+      ? new URL(`${window.location.origin}/auth/${kind === "ms365" ? "microsoft" : "maestro"}/callback${rawUrlOrSearch}`)
+      : new URL(rawUrlOrSearch);
+    const key = callbackKey(kind, url);
+    const list = readCompleted().filter((k) => k !== key);
+    list.push(key);
+    writeCompleted(list);
+  } catch {}
+}
 
 function read(): DeepLinkEvent[] {
   try {
@@ -81,6 +119,21 @@ export async function handleIncomingDeepLink(
       logDeepLink({ kind: "handler", source, url: rawUrl, detail: "probe callback routed" });
       return true;
     }
+    const kind = isMs365Callback ? "ms365" : "maestro";
+    const key = callbackKey(kind, url);
+    const now = Date.now();
+    const lastRouted = routedRecently.get(key) ?? 0;
+    if (isCompleted(key)) {
+      logDeepLink({ kind: "handler", source, url: rawUrl, detail: `${kind} callback already completed — ignoring stale replay` });
+      try { localStorage.removeItem(kind === "ms365" ? "pp_ms365_callback_url" : "pp_maestro_callback_url"); } catch {}
+      navigate?.("/mplanipret/home", { replace: true });
+      return true;
+    }
+    if (now - lastRouted < 10_000) {
+      logDeepLink({ kind: "handler", source, url: rawUrl, detail: `${kind} callback duplicate delivery — already routed` });
+      return true;
+    }
+    routedRecently.set(key, now);
     void import('@capacitor/browser')
       .then(({ Browser }) => Browser.close())
       .catch(() => {});

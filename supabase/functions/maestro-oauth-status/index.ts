@@ -102,13 +102,19 @@ Deno.serve(async (req) => {
 
   return new Response(JSON.stringify({
     status,
+    connected: status === "connected",
     configured,
+    user_id: userId,
+    reason: status === "connected" ? null : (authReason ?? (configured ? "disconnected" : "not_configured")),
     last_connected_at: lastConnectedAt,
     expires_in: expiresIn,
     pending_count: pendingCount,
     redirect_uri: redirectUri,
+    broker_id: maestroBrokerId,
+    email: maestroEmail,
     maestro_broker_id: maestroBrokerId,
     maestro_email: maestroEmail,
     last_error: lastError,
+
   }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

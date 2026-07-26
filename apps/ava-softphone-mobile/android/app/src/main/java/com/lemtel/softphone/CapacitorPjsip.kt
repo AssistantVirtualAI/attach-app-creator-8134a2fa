@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import com.getcapacitor.JSArray
@@ -102,6 +103,23 @@ class CapacitorPjsip : Plugin() {
                 @Suppress("DEPRECATION")
                 context.registerReceiver(vertoRecv, vertoFilter)
             }
+            flushPendingCallAction()
+        } catch (_: Exception) {}
+    }
+
+    private fun flushPendingCallAction() {
+        try {
+            val prefs = context.getSharedPreferences(CallActionReceiver.PREFS_NAME, Context.MODE_PRIVATE)
+            val action = prefs.getString(CallActionReceiver.KEY_PENDING_ACTION, "") ?: ""
+            val ts = prefs.getLong(CallActionReceiver.KEY_PENDING_ACTION_TS, 0L)
+            if (action.isEmpty()) return
+            prefs.edit()
+                .remove(CallActionReceiver.KEY_PENDING_ACTION)
+                .remove(CallActionReceiver.KEY_PENDING_ACTION_TS)
+                .apply()
+            if (System.currentTimeMillis() - ts > 15_000L) return
+            Log.i(TAG, "Flushing pending notification action to JS: $action")
+            notifyListeners("sipCallAction", JSObject().put("action", action), true)
         } catch (_: Exception) {}
     }
 

@@ -623,8 +623,8 @@ class SipConnectionService : Service() {
                             pendingByeCallId = null
                             try { sendFrame(buildVertoByeMessage(pBye)) } catch (_: Exception) {}
                             // If the bye is for the current call, clear call state now.
-                            // (handleNativeHangup already cleared it, but if the service
-                            // was restarted between hangup and reconnect, re-clear here.)
+                            // If the service was restarted between hangup and reconnect,
+                            // re-clear here.
                             if (pBye == currentCallId) {
                                 currentCallId = null
                                 currentCallerName = null

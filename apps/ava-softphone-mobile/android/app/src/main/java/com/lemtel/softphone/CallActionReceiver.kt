@@ -31,6 +31,9 @@ class CallActionReceiver : BroadcastReceiver() {
 
         const val ACTION_CALL_ACTION_EVENT = "com.lemtel.softphone.CALL_ACTION_EVENT"
         const val EXTRA_ACTION = "action"
+        const val PREFS_NAME = "call_action_bridge"
+        const val KEY_PENDING_ACTION = "pending_action"
+        const val KEY_PENDING_ACTION_TS = "pending_action_ts"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -44,6 +47,13 @@ class CallActionReceiver : BroadcastReceiver() {
             else -> return
         }
         Log.i(TAG, "Notification action tapped: $action — relaying to JS immediately")
+
+        try {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .putString(KEY_PENDING_ACTION, action)
+                .putLong(KEY_PENDING_ACTION_TS, System.currentTimeMillis())
+                .apply()
+        } catch (_: Exception) {}
 
         try {
             context.getSystemService(NotificationManager::class.java)

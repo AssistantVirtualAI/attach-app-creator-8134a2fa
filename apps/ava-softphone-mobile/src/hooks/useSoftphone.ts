@@ -348,6 +348,22 @@ export function useSoftphoneJsSip(
                 showAndroidIncomingCallNotif(remoteNumber, callerName);
               }
             }
+            // Android WebView: ICE gathering can take 3-10 s on outgoing calls.
+            // JsSIP waits for iceGatheringState=complete before sending the INVITE SDP.
+            // FusionPBX cancels the INVITE after ~15 s if no SDP is received.
+            // Fix: force ICE ready() after 2 s so the INVITE SDP is sent immediately
+            // with whatever candidates are already collected.
+            if (session.direction === 'outgoing' && Capacitor.getPlatform() === 'android') {
+              let outIceTimer: ReturnType<typeof setTimeout> | null = null;
+              const outIceCandidateHandler = ({ ready }: { candidate: RTCIceCandidate | null; ready: () => void }) => {
+                if (outIceTimer) return;
+                outIceTimer = setTimeout(() => {
+                  log('call.iceForced', 'forcing ICE ready after 2s timeout on Android (outgoing)');
+                  try { ready(); } catch {}
+                }, 2000);
+              };
+              session.once('icecandidate', outIceCandidateHandler);
+            }
             session.on('peerconnection', (e: any) => {
               const pc: RTCPeerConnection | undefined = e?.peerconnection;
               if (pc) {

@@ -259,6 +259,36 @@ Deno.serve(async (req) => {
         }));
       }
 
+      // 3) Read-after-write: confirm NS actually stored sim-ring + our targets.
+      let verify: any = null;
+      try {
+        const vRes = await nsFetch(base, { method: "GET" }, { functionName: "pp-sync-answering-rules" });
+        const vBody: any = await readBody(vRes);
+        const vArr: any[] = Array.isArray(vBody) ? vBody : (vBody?.data ?? vBody?.items ?? []);
+        const stored = vArr.find((r: any) => {
+          const tf = String(r?.["time-frame"] ?? r?.timeframe ?? r?.time_frame ?? "").toLowerCase();
+          return tf === "default" || tf === "*" || tf === "always";
+        }) ?? vArr[0] ?? null;
+        const sim = stored?.["simultaneous-ring"] ?? null;
+        const list: any[] = Array.isArray(sim?.destinations) ? sim.destinations
+          : (Array.isArray(sim?.list) ? sim.list : (Array.isArray(stored?.["simultaneous-ring-list"]) ? stored["simultaneous-ring-list"] : []));
+        const targets = list.map((x: any) => String(x?.destination ?? x ?? "").toLowerCase()).filter(Boolean);
+        const simOn = ["yes", "true", "1"].includes(String(sim?.enabled ?? stored?.["simultaneous-ring-enabled"] ?? "").toLowerCase());
+        verify = {
+          status: vRes.status,
+          sim_ring_enabled: simOn,
+          stored_targets: targets,
+          covers_mobile: targets.some((t) => t.includes(`${String(ext).toLowerCase()}_mobile`)),
+          ring_timeout: Number(sim?.timeout ?? stored?.["ring-timeout"] ?? stored?.timeout ?? 0) || null,
+          honored: simOn && targets.length > 0,
+        };
+        if (!verify.honored) {
+          console.error("[syncBroker] NS ignored sim-ring keys", JSON.stringify({ extension: ext, domain, verify, sent: devices.aors }));
+        }
+      } catch (e) {
+        verify = { error: (e as Error).message };
+      }
+
       return {
         broker_id: broker.id ?? broker.user_id,
         broker_name: broker.full_name,
@@ -269,11 +299,15 @@ Deno.serve(async (req) => {
         status: opRes.status,
         rule_path: rulePath,
         payload,
+        devices,
+        verify,
         response: opBody,
         list_status: listRes.status,
         user_reset_status: userReset,
       };
     };
+
+
 
     // Single
     if (broker_id && !bulk) {

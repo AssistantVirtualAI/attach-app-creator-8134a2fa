@@ -150,8 +150,10 @@ export default function MaestroConnectCard() {
         window.location.href = url;
       }
       toast.info(L.opening);
+      try { localStorage.setItem("pp_maestro_just_connected", String(Date.now())); } catch {}
       // Refresh status shortly after — the deep-link callback will complete auth
-      setTimeout(() => { load(); }, 3000);
+      pollStatus();
+
     } catch (e: any) {
       toast.error(e?.message || L.error);
     } finally {

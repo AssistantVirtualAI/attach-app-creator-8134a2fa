@@ -777,6 +777,10 @@ class SipConnectionService : Service() {
                 .build()
             val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
+                    if (isJsSipMode()) {
+                        Log.i(TAG, "Network available — JsSIP mode, nativeAutoReconnect will handle re-registration")
+                        return
+                    }
                     Log.i(TAG, "Network available — refreshing Verto registration")
                     if (!isDestroyed) {
                         if (!isLoggedIn && connecting) return
@@ -793,6 +797,10 @@ class SipConnectionService : Service() {
                 }
 
                 override fun onLost(network: Network) {
+                    if (isJsSipMode()) {
+                        Log.i(TAG, "Network lost — JsSIP mode, nativeAutoReconnect will handle reconnection")
+                        return
+                    }
                     Log.i(TAG, "Network lost — marking Verto offline")
                     isLoggedIn = false
                     emitStatus("disconnected", "network_lost")
@@ -881,6 +889,14 @@ class SipConnectionService : Service() {
     }
 
     fun showIncomingCallNotification(callerName: String, callerNumber: String) {
+        // Store caller info so that reEmitIncomingStatus() can re-broadcast the
+        // incoming state when MainActivity is launched from the full-screen intent.
+        // In JsSIP mode currentInviteParams is never set by the Verto path, so we
+        // set a non-null sentinel here so the guard in reEmitIncomingStatus() passes.
+        currentCallerName = callerName
+        currentCallerNumber = callerNumber
+        currentInviteParams = "{\"jssip\":true,\"callerName\":\"${callerName.replace("\"", "'")}\",\"callerNumber\":\"${callerNumber.replace("\"", "'")}\"}"
+        emitStatus("incoming", "$callerName <$callerNumber>")
         stopRingtone()
         try {
             val uri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE)
@@ -930,6 +946,12 @@ class SipConnectionService : Service() {
     fun dismissIncomingCallNotification() {
         stopRingtone()
         try { getSystemService(NotificationManager::class.java).cancel(INCOMING_CALL_NOTIFICATION_ID) } catch (_: Exception) {}
+        // Clear the JsSIP incoming sentinel so reEmitIncomingStatus() no longer
+        // re-broadcasts a stale incoming state after the call has ended.
+        currentInviteParams = null
+        currentCallerName = null
+        currentCallerNumber = null
+        emitStatus("registered", "jssip_call_ended")
     }
 
     /**

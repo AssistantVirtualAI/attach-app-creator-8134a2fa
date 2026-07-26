@@ -296,7 +296,7 @@ public class PpSipKeepAliveService extends Service {
     heartbeat = executor.scheduleAtFixedRate(() -> {
       try { sendRegister(null); } catch (Exception e) { emitStatus("reconnecting", "register_retry"); connectAndRegister(); }
       requestReregister(this, "keepalive");
-    }, 240, 240, TimeUnit.SECONDS);
+    }, 60, 60, TimeUnit.SECONDS);
     return START_STICKY;
   }
 
@@ -330,7 +330,7 @@ public class PpSipKeepAliveService extends Service {
     while (wsSocket != null && wsSocket.isConnected() && !wsSocket.isClosed()) {
       String msg = readFrame(); if (msg == null) break; handleSipMessage(msg);
     }
-  } catch(Exception ignored) {} finally { readerRunning = false; emitStatus("reconnecting", "ws_reader_closed"); if (wsSocket != null && !wsSocket.isClosed()) executor.schedule(this::connectAndRegister, 5, TimeUnit.SECONDS); } }
+  } catch(Exception ignored) {} finally { readerRunning = false; emitStatus("reconnecting", "ws_reader_closed"); closeWs(); executor.schedule(this::connectAndRegister, 2, TimeUnit.SECONDS); } }
 
   private void handleSipMessage(String msg) throws Exception {
     if (msg.startsWith("SIP/2.0 401") || msg.startsWith("SIP/2.0 407")) {
@@ -390,7 +390,7 @@ public class PpSipKeepAliveService extends Service {
     sip.append("From: \"").append(display == null ? login : display.replace("\"", "")).append("\" <sip:").append(login).append("@").append(domain).append(">;tag=").append(fromTag).append("\r\n");
     sip.append("Call-ID: ").append(callId).append("\r\n");
     sip.append("CSeq: ").append(seq).append(" REGISTER\r\n");
-    sip.append("Contact: ").append(contact).append(";expires=600\r\nExpires: 600\r\nUser-Agent: Planipret Native KeepAlive\r\nSupported: outbound,path,gruu\r\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\r\n");
+    sip.append("Contact: ").append(contact).append(";expires=1800\r\nExpires: 1800\r\nUser-Agent: Planipret Native KeepAlive\r\nSupported: outbound,path,gruu\r\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\r\n");
     if (challenge != null && password != null && password.length() > 0) sip.append("Authorization: ").append(digestAuth(challenge, login, password, domain)).append("\r\n");
     sip.append("Content-Length: 0\r\n\r\n");
     sendFrame(sip.toString());

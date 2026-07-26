@@ -793,7 +793,10 @@ export function useSoftphoneJsSip(
         },
         pcConfig: {
           iceServers,
-          iceTransportPolicy: 'all',
+          // On Android WebView, 'all' is slow (3-10 s) and causes FusionPBX
+          // to cancel outbound calls before ICE completes. Use 'relay' on
+          // Android to go straight to TURN.
+          iceTransportPolicy: Capacitor.getPlatform() === 'android' ? 'relay' : 'all',
           bundlePolicy: 'balanced',
         },
       };
@@ -853,13 +856,19 @@ export function useSoftphoneJsSip(
     }
     const iceServers = await fetchIceServers().catch(() => FALLBACK_ICE_SERVERS);
     log('answer.iceServers', `count=${iceServers.length}`);
+    // On Android WebView, ICE candidate gathering with policy 'all' is slow
+    // (3-10 s) and FusionPBX cancels the call before ICE completes.
+    // Force 'relay' on Android so we go straight to TURN and skip the slow
+    // host/srflx probing that causes the session.failed → Canceled.
+    const icePolicy: RTCIceTransportPolicy =
+      Capacitor.getPlatform() === 'android' ? 'relay' : 'all';
     try {
       sessionRef.current?.answer({
         mediaConstraints: HD_AUDIO_CONSTRAINTS,
         sessionDescriptionHandlerModifiers: [sdpModifier],
         pcConfig: {
           iceServers,
-          iceTransportPolicy: 'all',
+          iceTransportPolicy: icePolicy,
           bundlePolicy: 'balanced',
         },
       });

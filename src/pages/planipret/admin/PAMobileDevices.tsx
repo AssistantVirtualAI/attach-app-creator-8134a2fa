@@ -90,6 +90,13 @@ const DICT = {
     testCallLaunched: "Appel test lancé",
     answeredByState: (who?: string) => `Répondu par ${who ?? "?"}`,
     endedState: (reason?: string) => `Terminé (${reason ?? "ok"})`,
+    diag: "Diag",
+    diagTitle: (name?: string | null) => `Diagnostic appels entrants — ${name ?? ""}`,
+    diagVerdict: "Verdict",
+    diagIssues: "Problèmes détectés",
+    diagNoIssue: "Aucun problème détecté côté routage NetSapiens.",
+    diagSummary: "Détails NetSapiens",
+    diagError: "Diagnostic échoué",
   },
   en: {
     pageTitle: "Mobile devices",

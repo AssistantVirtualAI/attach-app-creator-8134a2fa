@@ -160,7 +160,7 @@ export interface AndroidSipServiceStatus {
   wakeLockHeld?: boolean;
   wifiLockHeld?: boolean;
 }
-const AndroidSipServicePlugin: AndroidSipServiceBridge =
+export const AndroidSipServicePlugin: AndroidSipServiceBridge =
   __platform === 'android'
     ? (registerPlugin<AndroidSipServiceBridge>('CapacitorPjsip') as AndroidSipServiceBridge)
     : {};

@@ -512,6 +512,10 @@ export function useSoftphoneJsSip(
             session.on('ended', () => {
               setCallState('ended');
               log('session.ended', remoteNumber);
+              // Always dismiss the native Android incoming-call notification and
+              // ringtone when the session ends (covers the case where the remote
+              // party cancels before we answer).
+              dismissIncomingNotif();
               if (timerRef.current) clearInterval(timerRef.current);
               stopStats();
               setTimeout(() => {
@@ -530,6 +534,9 @@ export function useSoftphoneJsSip(
                 reason_phrase: e?.message?.reason_phrase,
               });
               log('session.failed', `${remoteNumber} code=${code ?? '?'} → ${msg}`, 'error');
+              // Dismiss native Android notification/ringtone on failure (CANCEL,
+              // timeout, busy, etc.) so the phone stops ringing.
+              dismissIncomingNotif();
               setCallState('idle');
               if (timerRef.current) clearInterval(timerRef.current);
               stopStats();

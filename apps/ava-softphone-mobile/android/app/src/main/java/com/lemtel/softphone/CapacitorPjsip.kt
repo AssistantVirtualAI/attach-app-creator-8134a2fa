@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import com.getcapacitor.JSArray
@@ -33,6 +34,10 @@ import com.getcapacitor.annotation.PermissionCallback
     ]
 )
 class CapacitorPjsip : Plugin() {
+
+    companion object {
+        const val TAG = "CapacitorPjsip"
+    }
 
     private var audioManager: AudioManager? = null
     private var sipStatusReceiver: BroadcastReceiver? = null
@@ -102,6 +107,23 @@ class CapacitorPjsip : Plugin() {
                 @Suppress("DEPRECATION")
                 context.registerReceiver(vertoRecv, vertoFilter)
             }
+            flushPendingCallAction()
+        } catch (_: Exception) {}
+    }
+
+    private fun flushPendingCallAction() {
+        try {
+            val prefs = context.getSharedPreferences(CallActionReceiver.PREFS_NAME, Context.MODE_PRIVATE)
+            val action = prefs.getString(CallActionReceiver.KEY_PENDING_ACTION, "") ?: ""
+            val ts = prefs.getLong(CallActionReceiver.KEY_PENDING_ACTION_TS, 0L)
+            if (action.isEmpty()) return
+            prefs.edit()
+                .remove(CallActionReceiver.KEY_PENDING_ACTION)
+                .remove(CallActionReceiver.KEY_PENDING_ACTION_TS)
+                .apply()
+            if (System.currentTimeMillis() - ts > 15_000L) return
+            Log.i(TAG, "Flushing pending notification action to JS: $action")
+            notifyListeners("sipCallAction", JSObject().put("action", action), true)
         } catch (_: Exception) {}
     }
 
@@ -175,21 +197,13 @@ class CapacitorPjsip : Plugin() {
 
     @PluginMethod
     fun answerNativeCall(call: PluginCall) {
-        val sdp = call.getString("sdp") ?: ""
-        val dialogParams = call.getObject("dialogParams")?.toString() ?: ""
-        context.sendBroadcast(Intent(SipConnectionService.ACTION_NATIVE_VERTO_ANSWER).apply {
-            setPackage(context.packageName)
-            putExtra("sdp", sdp)
-            putExtra("dialogParams", dialogParams)
-        })
+        Log.i(TAG, "answerNativeCall ignored in JsSIP mode — JS owns session.answer()")
         call.resolve(JSObject().apply { put("ok", true) })
     }
 
     @PluginMethod
     fun hangupNativeCall(call: PluginCall) {
-        context.sendBroadcast(Intent(SipConnectionService.ACTION_NATIVE_VERTO_HANGUP).apply {
-            setPackage(context.packageName)
-        })
+        Log.i(TAG, "hangupNativeCall ignored in JsSIP mode — JS owns session.terminate()")
         call.resolve(JSObject().apply { put("ok", true) })
     }
 

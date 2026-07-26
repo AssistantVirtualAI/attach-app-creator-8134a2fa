@@ -70,9 +70,6 @@ class SipConnectionService : Service() {
 
         const val ACTION_STATUS = "com.lemtel.softphone.SIP_SERVICE_STATUS"
         const val ACTION_VERTO_SERVER_MESSAGE = "com.lemtel.softphone.VERTO_SERVER_MESSAGE"
-        const val ACTION_NATIVE_VERTO_ANSWER = "com.lemtel.softphone.NATIVE_VERTO_ANSWER"
-        const val ACTION_NATIVE_VERTO_HANGUP = "com.lemtel.softphone.NATIVE_VERTO_HANGUP"
-        const val ACTION_NATIVE_ANSWER_REQUEST = "com.lemtel.softphone.NATIVE_ANSWER_REQUEST"
         const val ACTION_REGISTER_OUTBOUND_CALL = "com.lemtel.softphone.REGISTER_OUTBOUND_CALL"
         const val KEY_STATUS = "verto_native_status"
         const val KEY_REASON = "verto_native_reason"
@@ -185,10 +182,10 @@ class SipConnectionService : Service() {
 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val mode = intent?.getStringExtra("mode") ?: "verto"
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val mode = intent?.getStringExtra("mode") ?: prefs.getString(KEY_MODE, "jssip") ?: "jssip"
         // Persist mode so sticky restarts preserve the correct behaviour.
-        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putString(KEY_MODE, mode).apply()
+        prefs.edit().putString(KEY_MODE, mode).apply()
 
         val notification = buildNotification("Connecté · Prêt à recevoir des appels")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -626,8 +623,8 @@ class SipConnectionService : Service() {
                             pendingByeCallId = null
                             try { sendFrame(buildVertoByeMessage(pBye)) } catch (_: Exception) {}
                             // If the bye is for the current call, clear call state now.
-                            // (handleNativeHangup already cleared it, but if the service
-                            // was restarted between hangup and reconnect, re-clear here.)
+                            // If the service was restarted between hangup and reconnect,
+                            // re-clear here.
                             if (pBye == currentCallId) {
                                 currentCallId = null
                                 currentCallerName = null
@@ -777,6 +774,11 @@ class SipConnectionService : Service() {
                 .build()
             val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
+                    if (isJsSipMode()) {
+                        Log.i(TAG, "Network available — JsSIP mode, no native Verto reconnect")
+                        emitStatus("registered", "jssip_keepalive")
+                        return
+                    }
                     Log.i(TAG, "Network available — refreshing Verto registration")
                     if (!isDestroyed) {
                         if (!isLoggedIn && connecting) return
@@ -793,6 +795,11 @@ class SipConnectionService : Service() {
                 }
 
                 override fun onLost(network: Network) {
+                    if (isJsSipMode()) {
+                        Log.i(TAG, "Network lost — JsSIP mode, keeping service alive")
+                        emitStatus("disconnected", "network_lost_jssip")
+                        return
+                    }
                     Log.i(TAG, "Network lost — marking Verto offline")
                     isLoggedIn = false
                     emitStatus("disconnected", "network_lost")
@@ -1015,16 +1022,13 @@ class SipConnectionService : Service() {
         }
     }
 
-    // ── Notification-action → native hangup fallback ─────────────────────────
-    // When the user taps "Raccrocher" from the lockscreen notification while
-    // the WebView is not running (app killed/suspended), the JS bridge is
-    // unavailable and verto.bye would never reach FreeSWITCH. Send it from
-    // the native WebSocket directly so the PBX-side leg is torn down.
+    // ── Notification-action → JsSIP relay ────────────────────────────────────
+    // Android notification actions must never answer/hang up through the old
+    // native Verto path. JsSIP owns all SIP signalling.
 
     private fun registerCallActionReceiver() {
         try {
             val filter = android.content.IntentFilter(CallActionReceiver.ACTION_CALL_ACTION_EVENT)
-            filter.addAction(ACTION_NATIVE_VERTO_ANSWER)
             filter.addAction(ACTION_REGISTER_OUTBOUND_CALL)
             val recv = object : android.content.BroadcastReceiver() {
                 override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -1032,14 +1036,7 @@ class SipConnectionService : Service() {
                     // exclusively by JsSIP in JavaScript. The native layer only
                     // keeps the WakeLock, plays the ringtone, shows notifications
                     // and relays button taps to JS.
-                    val jsSipMode = isJsSipMode()
-
                     when (intent?.action) {
-                        ACTION_NATIVE_VERTO_ANSWER -> {
-                            if (!jsSipMode) handleNativeAnswer(intent.getStringExtra("sdp") ?: "", intent.getStringExtra("dialogParams") ?: "")
-                            else Log.i(TAG, "JsSIP mode: ignoring ACTION_NATIVE_VERTO_ANSWER")
-                            return
-                        }
                         ACTION_REGISTER_OUTBOUND_CALL -> {
                             val callID = intent.getStringExtra("callID") ?: ""
                             val destination = intent.getStringExtra("destination") ?: ""

@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import android.app.NotificationManager
 
 /**
  * Receives notification action button taps (Answer / Decline / Hold / Resume)
@@ -30,6 +31,9 @@ class CallActionReceiver : BroadcastReceiver() {
 
         const val ACTION_CALL_ACTION_EVENT = "com.lemtel.softphone.CALL_ACTION_EVENT"
         const val EXTRA_ACTION = "action"
+        const val PREFS_NAME = "call_action_bridge"
+        const val KEY_PENDING_ACTION = "pending_action"
+        const val KEY_PENDING_ACTION_TS = "pending_action_ts"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -44,10 +48,22 @@ class CallActionReceiver : BroadcastReceiver() {
         }
         Log.i(TAG, "Notification action tapped: $action — relaying to JS immediately")
 
-        if (action == "answer") {
+        try {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+                .putString(KEY_PENDING_ACTION, action)
+                .putLong(KEY_PENDING_ACTION_TS, System.currentTimeMillis())
+                .apply()
+        } catch (_: Exception) {}
+
+        try {
+            context.getSystemService(NotificationManager::class.java)
+                ?.cancel(SipConnectionService.INCOMING_CALL_NOTIFICATION_ID)
+        } catch (_: Exception) {}
+
+        if (action == "answer" || action == "decline" || action == "hangup") {
             val launch = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("incoming_call_action", "answer")
+                putExtra("incoming_call_action", action)
             }
             try { context.startActivity(launch) } catch (_: Exception) {}
         }

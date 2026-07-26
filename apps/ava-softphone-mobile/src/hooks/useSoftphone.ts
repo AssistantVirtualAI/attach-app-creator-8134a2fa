@@ -826,7 +826,7 @@ export function useSoftphoneJsSip(
     ensureRegisteredThenRestore('hangup');
   };
   const answer = async () => {
-    log('answer.called', `sessionRef=${sessionRef.current ? 'ok' : 'NULL'} callState=${callStateRef?.current ?? 'unknown'}`);
+    log('answer.called', `sessionRef=${sessionRef.current ? 'ok' : 'NULL'} callState=${callState}`);
     dismissIncomingNotif();
     if (!sessionRef.current) {
       log('answer.failed', 'sessionRef is null — cannot answer', 'error');

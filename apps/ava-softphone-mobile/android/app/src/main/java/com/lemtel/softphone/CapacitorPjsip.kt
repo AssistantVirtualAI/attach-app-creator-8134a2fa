@@ -175,21 +175,13 @@ class CapacitorPjsip : Plugin() {
 
     @PluginMethod
     fun answerNativeCall(call: PluginCall) {
-        val sdp = call.getString("sdp") ?: ""
-        val dialogParams = call.getObject("dialogParams")?.toString() ?: ""
-        context.sendBroadcast(Intent(SipConnectionService.ACTION_NATIVE_VERTO_ANSWER).apply {
-            setPackage(context.packageName)
-            putExtra("sdp", sdp)
-            putExtra("dialogParams", dialogParams)
-        })
+        Log.i(TAG, "answerNativeCall ignored in JsSIP mode — JS owns session.answer()")
         call.resolve(JSObject().apply { put("ok", true) })
     }
 
     @PluginMethod
     fun hangupNativeCall(call: PluginCall) {
-        context.sendBroadcast(Intent(SipConnectionService.ACTION_NATIVE_VERTO_HANGUP).apply {
-            setPackage(context.packageName)
-        })
+        Log.i(TAG, "hangupNativeCall ignored in JsSIP mode — JS owns session.terminate()")
         call.resolve(JSObject().apply { put("ok", true) })
     }
 

@@ -107,6 +107,7 @@ export function useSoftphoneJsSip(
   const currentBitrateRef = useRef<number>(PROFILE_OPUS.auto.hardCapBitrate);
   const reRegisterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const registrationWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const answeringRef = useRef(false);
   /** Last quality alert level shown, and when — used to throttle toasts. */
   const lastAlertRef = useRef<{ level: number; at: number }>({ level: 4, at: 0 });
 
@@ -337,6 +338,7 @@ export function useSoftphoneJsSip(
           ua.on('newRTCSession', (data: any) => {
             const session = data.session;
             sessionRef.current = session;
+            answeringRef.current = false;
             const remoteNumber = session.remote_identity?.uri?.user || 'Unknown';
             setActiveCallNumber(remoteNumber);
             log('session.new', `${session.direction} ${remoteNumber}`);
@@ -418,6 +420,7 @@ export function useSoftphoneJsSip(
               }
             });
             session.on('confirmed', () => {
+              answeringRef.current = false;
               setCallState('active');
               log('session.confirmed', remoteNumber);
               console.log('[SIP][info] session.confirmed — call connected');
@@ -510,6 +513,7 @@ export function useSoftphoneJsSip(
               samplerStateRef.current = {};
             };
             session.on('ended', () => {
+              answeringRef.current = false;
               setCallState('ended');
               log('session.ended', remoteNumber);
               // Always dismiss the native Android incoming-call notification and
@@ -527,6 +531,7 @@ export function useSoftphoneJsSip(
               }, 2000);
             });
             session.on('failed', (e: any) => {
+              answeringRef.current = false;
               const code = e?.message?.status_code;
               const msg = classifySipFailure({
                 cause: e?.cause,
@@ -823,8 +828,20 @@ export function useSoftphoneJsSip(
   };
   const hangup = () => {
     dismissIncomingNotif();
-    try { sessionRef.current?.terminate(); } catch {}
+    const session = sessionRef.current;
+    try {
+      if (session && callState === 'ringing-in' && session.direction === 'incoming') {
+        // Reject an unanswered inbound leg as a global decline so the PBX does
+        // not treat it as a busy/no-answer path and send the caller to voicemail.
+        session.terminate({ status_code: 603, reason_phrase: 'Decline' });
+      } else {
+        session?.terminate();
+      }
+    } catch (e: any) {
+      log('hangup.error', e?.message || String(e), 'warn');
+    }
     sessionRef.current = null;
+    answeringRef.current = false;
     setCallState('idle');
     if (timerRef.current) clearInterval(timerRef.current);
     setCallTimer(0);
@@ -834,11 +851,20 @@ export function useSoftphoneJsSip(
   };
   const answer = async () => {
     log('answer.called', `sessionRef=${sessionRef.current ? 'ok' : 'NULL'} callState=${callState}`);
-    dismissIncomingNotif();
+    if (answeringRef.current) {
+      log('answer.ignored', 'answer already in progress');
+      return;
+    }
+    if (callState !== 'ringing-in') {
+      log('answer.ignored', `not ringing-in (state=${callState})`);
+      return;
+    }
     if (!sessionRef.current) {
       log('answer.failed', 'sessionRef is null — cannot answer', 'error');
       return;
     }
+    answeringRef.current = true;
+    dismissIncomingNotif();
     const iceServers = await fetchIceServers().catch(() => FALLBACK_ICE_SERVERS);
     log('answer.iceServers', `count=${iceServers.length}`);
     try {
@@ -853,6 +879,7 @@ export function useSoftphoneJsSip(
     });
     log('answer.sent', 'session.answer() called successfully');
     } catch (e: any) {
+      answeringRef.current = false;
       log('answer.error', e?.message || String(e), 'error');
     }
   };
@@ -888,9 +915,8 @@ export function useSoftphoneJsSip(
 // the JsSIP UA must never be instantiated (it would steal the mic and
 // trigger WebRTC restarts that fight the native socket).
 // ---------------------------------------------------------------------------
-import { NATIVE_SIP_ENABLED, startAndroidSipService, stopAndroidSipService } from '../lib/sip/nativeSipProvider';
+import { NATIVE_SIP_ENABLED, startAndroidSipService } from '../lib/sip/nativeSipProvider';
 import { useSoftphoneNative } from './useSoftphoneNative';
-import { useSoftphoneVerto } from './useSoftphoneVerto';
 import { notifySipDispatcherLoaded } from '../lib/sip/bootSipGuard';
 export function useSoftphone(
   config: SIPConfig | null,

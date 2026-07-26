@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import android.app.NotificationManager
 
 /**
  * Receives notification action button taps (Answer / Decline / Hold / Resume)
@@ -43,6 +44,11 @@ class CallActionReceiver : BroadcastReceiver() {
             else -> return
         }
         Log.i(TAG, "Notification action tapped: $action — relaying to JS immediately")
+
+        try {
+            context.getSystemService(NotificationManager::class.java)
+                ?.cancel(SipConnectionService.INCOMING_CALL_NOTIFICATION_ID)
+        } catch (_: Exception) {}
 
         if (action == "answer") {
             val launch = Intent(context, MainActivity::class.java).apply {

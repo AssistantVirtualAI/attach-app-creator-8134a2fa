@@ -129,6 +129,7 @@ Deno.serve(async (req) => {
           // voicemail) before the registered devices are forked.
           "include-user-extension": "no",
           "ring-all-user-phones": "yes",
+          "parameters": ["<OwnDevices>"],
           "destinations": destinations,
           "list": deviceAors,
         },
@@ -143,8 +144,10 @@ Deno.serve(async (req) => {
         "simultaneous-ring-confirm": "no",
         "simultaneous-ring-include-user-extension": "no",
         "simultaneous-ring-all-user-phones": "yes",
+        "simultaneous-ring-parameters": ["<OwnDevices>"],
         "sim-ring-include-user-extension": "no",
         "sim-ring-all-user-phones": "yes",
+        "sim-ring-parameters": ["<OwnDevices>"],
         "simultaneous-ring-list": deviceAors,
         "sim-ring-destinations": destinations,
         "ring-timeout": ring_timeout,

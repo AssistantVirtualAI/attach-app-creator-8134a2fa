@@ -346,7 +346,7 @@ export default function PAMobileDevices() {
     }
     setRows((report.data as any).rows ?? []);
     setStats((report.data as any).stats ?? { total: 0, ok: 0, missing: 0, error: 0, partial: 0 });
-    const provision = await supabase.functions.invoke("ns-provision-broker-devices", { body: { bulk: true, batch_size: 8 } });
+    const provision = await supabase.functions.invoke("ns-provision-broker-devices", { body: { bulk: true, batch_size: 8, force: true } });
     setSyncingDevices(false);
     if (provision.error || !(provision.data as any)?.success) {
       toast.error(t.toastProvisionDevicesError, { description: (provision.data as any)?.error || provision.error?.message });

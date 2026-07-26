@@ -826,8 +826,15 @@ export function useSoftphoneJsSip(
     ensureRegisteredThenRestore('hangup');
   };
   const answer = async () => {
+    log('answer.called', `sessionRef=${sessionRef.current ? 'ok' : 'NULL'} callState=${callStateRef?.current ?? 'unknown'}`);
     dismissIncomingNotif();
+    if (!sessionRef.current) {
+      log('answer.failed', 'sessionRef is null — cannot answer', 'error');
+      return;
+    }
     const iceServers = await fetchIceServers().catch(() => FALLBACK_ICE_SERVERS);
+    log('answer.iceServers', `count=${iceServers.length}`);
+    try {
     sessionRef.current?.answer({
       mediaConstraints: HD_AUDIO_CONSTRAINTS,
       sessionDescriptionHandlerModifiers: [sdpModifier],
@@ -837,6 +844,10 @@ export function useSoftphoneJsSip(
         bundlePolicy: 'balanced',
       },
     });
+    log('answer.sent', 'session.answer() called successfully');
+    } catch (e: any) {
+      log('answer.error', e?.message || String(e), 'error');
+    }
   };
   const mute = () => { sessionRef.current?.mute({ audio: true }); setIsMuted(true); };
   const unmute = () => { sessionRef.current?.unmute({ audio: true }); setIsMuted(false); };

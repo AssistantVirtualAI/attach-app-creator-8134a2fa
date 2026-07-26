@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     const bulk: boolean = !!body?.bulk;
     const dry_run: boolean = !!body?.dry_run;
     const batch_size: number = Math.max(1, Math.min(20, Number(body?.batch_size ?? 10)));
-    const ring_timeout: number = Math.max(5, Math.min(120, Number(body?.ring_timeout ?? 25)));
+    const ring_timeout: number = Math.max(10, Math.min(120, Number(body?.ring_timeout ?? 35)));
 
     // Auth: admin only
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -104,7 +104,18 @@ Deno.serve(async (req) => {
         "time-frame": "*",
         "enabled": "yes",                    // voicemail fallback ON after no-answer
         "do-not-disturb": "no",
+        "do-not-disturb-enabled": "no",
+        "forward-always-enabled": "no",
+        "forward-on-active-enabled": "no",
+        "forward-on-busy-enabled": "no",
+        "forward-on-dnd-enabled": "no",
+        "forward-when-unregistered-enabled": "no",
         // --- nested v2 form ---
+        "forward-always": { "enabled": "no" },
+        "forward-on-active": { "enabled": "no" },
+        "forward-on-busy": { "enabled": "no" },
+        "forward-on-dnd": { "enabled": "no" },
+        "forward-when-unregistered": { "enabled": "no" },
         "simultaneous-ring": {
           "enabled": "yes",
           "confirm": "no",

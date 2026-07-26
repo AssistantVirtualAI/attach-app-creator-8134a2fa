@@ -1135,9 +1135,12 @@ class SipConnectionService : Service() {
                 Log.i(TAG, "verto.answer sent successfully for callId=$callId")
                 pendingAnswerSdp = null
                 pendingAnswerParams = null
-                currentCallActive = true
-                handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
-                emitStatus("active", "native_answer_sent")
+                // Do NOT mark the call active just because the frame was written.
+                // On forked/sim-ring calls FreeSWITCH may reject or ignore an
+                // answer sent after a socket reconnect. Wait for the server ACK
+                // (handled by pendingNativeAnswerRpcId) or verto.answer/media so
+                // JS does not suppress its immediate fallback answer path.
+                emitStatus("incoming", "native_answer_sent")
             } else {
                 Log.w(TAG, "sendFrame failed for verto.answer — queuing for reconnect")
                 pendingAnswerSdp = sdp

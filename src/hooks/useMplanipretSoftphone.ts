@@ -247,6 +247,10 @@ export function useMplanipretSoftphone() {
         clearTimers();
         return;
       }
+      // Give the initial WebSocket + REGISTER handshake room to finish. Killing
+      // the UA while it is still "connecting" was the cause of the endless
+      // "registration failed: Connection Error" loop.
+      if (st === "connecting") return;
       if (!disconnectedSince) disconnectedSince = Date.now();
       clearTimers();
       softTimer = setTimeout(() => {
@@ -254,13 +258,13 @@ export function useMplanipretSoftphone() {
         if (s !== "registered" && s !== "connected") {
           try { ppSipProvider.forceReregister(); } catch {}
         }
-      }, 10_000);
+      }, 15_000);
       hardTimer = setTimeout(() => {
         const s = ppSipProvider.getSnapshot().status;
         if (s !== "registered" && s !== "connected") {
           try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister")); } catch {}
         }
-      }, 20_000);
+      }, 45_000);
     };
     const un = ppSipProvider.subscribe(() => evaluate());
     const onResume = () => {

@@ -165,7 +165,7 @@ async function processEvent(event: any) {
       }).catch(() => {});
 
       // Maestro pipeline: resolve uuid by ns_call_id, then push CDR → transcript → AI.
-      admin.from("planipret_phone_calls").select("id").eq("ns_call_id", String(callId)).maybeSingle()
+      void admin.from("planipret_phone_calls").select("id").eq("ns_call_id", String(callId)).maybeSingle()
         .then(({ data: row }) => {
           if (row?.id) {
             void fetch(`${SUPABASE_URL}/functions/v1/maestro-cdr`, {

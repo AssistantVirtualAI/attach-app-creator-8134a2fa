@@ -241,7 +241,7 @@ export async function nsFetch(path: string, init: RequestInit = {}, opts: { func
  */
 export async function requirePlanipretBroker(
   req: Request,
-): Promise<{ ctx: NsContext; supabase: ReturnType<typeof createClient>; userClient: ReturnType<typeof createClient> } | Response> {
+): Promise<{ ctx: NsContext; supabase: any; userClient: any } | Response> {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {

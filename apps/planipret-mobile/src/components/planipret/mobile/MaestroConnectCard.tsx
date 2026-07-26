@@ -216,7 +216,9 @@ export default function MaestroConnectCard() {
         )}
 
         {status === "disconnected" && (
-          <div style={{ fontSize: 11, color: "var(--pp-text-secondary)" }}>{L.disconnected}</div>
+          <div style={{ fontSize: 11, color: "var(--pp-text-secondary)" }}>
+            {L.disconnected}{data.reason ? ` (${data.reason})` : ""}
+          </div>
         )}
 
         {status === "error" && (
@@ -225,6 +227,27 @@ export default function MaestroConnectCard() {
             <div>{data.configured === false ? L.notConfigured : errorMessage}</div>
           </div>
         )}
+
+        <div className="flex items-center justify-between mt-2" style={{ fontSize: 10, color: "var(--pp-text-muted)" }}>
+          <button onClick={() => load()} className="flex items-center gap-1" style={{ background: "transparent", color: "var(--pp-text-muted)" }}>
+            <RefreshCw className="w-3 h-3" /> {L.refresh}
+          </button>
+          {lastFetch && <span>{L.checkedAt} {lastFetch.toLocaleTimeString()}</span>}
+        </div>
+
+        <button
+          onClick={() => setShowDetails((v) => !v)}
+          className="flex items-center gap-1 mt-1"
+          style={{ background: "transparent", fontSize: 10, color: "var(--pp-text-muted)" }}
+        >
+          <ChevronDown className="w-3 h-3" style={{ transform: showDetails ? "rotate(180deg)" : "none" }} /> {L.details}
+        </button>
+        {showDetails && (
+          <pre style={{ marginTop: 6, padding: 8, background: "var(--pp-bg-base)", border: "1px solid var(--pp-bg-border-2)", borderRadius: 6, fontSize: 9, overflowX: "auto", color: "var(--pp-text-secondary)" }}>
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        )}
+
 
         <div className="flex gap-2 mt-3">
           {status !== "connected" ? (

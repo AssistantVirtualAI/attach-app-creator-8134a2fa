@@ -60,10 +60,10 @@ class CallActionReceiver : BroadcastReceiver() {
                 ?.cancel(SipConnectionService.INCOMING_CALL_NOTIFICATION_ID)
         } catch (_: Exception) {}
 
-        if (action == "answer") {
+        if (action == "answer" || action == "decline" || action == "hangup") {
             val launch = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("incoming_call_action", "answer")
+                putExtra("incoming_call_action", action)
             }
             try { context.startActivity(launch) } catch (_: Exception) {}
         }

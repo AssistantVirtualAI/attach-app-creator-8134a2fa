@@ -856,12 +856,23 @@ export function useSoftphoneJsSip(
     }
     const iceServers = await fetchIceServers().catch(() => FALLBACK_ICE_SERVERS);
     log('answer.iceServers', `count=${iceServers.length}`);
-    // On Android WebView, ICE gathering with 'relay' only breaks FusionPBX
-    // because the PBX cannot route to TURN relay addresses from its LAN.
-    // Instead, use 'all' (host + srflx + relay) but cap gathering to 2.5 s
-    // via iceGatheringTimeout so JsSIP sends the 200 OK SDP quickly before
-    // FusionPBX's 10 s session timer fires.
+    // On Android WebView, ICE gathering can take 3-10 s. JsSIP has no built-in
+    // timeout — it waits for iceGatheringState=complete or a null candidate.
+    // FusionPBX cancels the call after ~4 s if it hasn't received the 200 OK SDP.
+    // Fix: listen to session 'icecandidate' events and call ready() after 2 s
+    // so JsSIP sends the 200 OK with whatever candidates are available.
     const isAndroid = Capacitor.getPlatform() === 'android';
+    if (isAndroid && sessionRef.current) {
+      let iceTimer: ReturnType<typeof setTimeout> | null = null;
+      const iceCandidateHandler = ({ ready }: { candidate: RTCIceCandidate | null; ready: () => void }) => {
+        if (iceTimer) return; // already armed
+        iceTimer = setTimeout(() => {
+          log('answer.iceForced', 'forcing ICE ready after 2s timeout on Android');
+          ready();
+        }, 2000);
+      };
+      sessionRef.current.once('icecandidate', iceCandidateHandler);
+    }
     try {
       sessionRef.current?.answer({
         mediaConstraints: HD_AUDIO_CONSTRAINTS,
@@ -871,7 +882,6 @@ export function useSoftphoneJsSip(
           iceTransportPolicy: 'all',
           bundlePolicy: 'balanced',
         },
-        ...(isAndroid ? { iceGatheringTimeout: 2500 } : {}),
       });
       log('answer.sent', 'session.answer() called successfully');
     } catch (e: any) {

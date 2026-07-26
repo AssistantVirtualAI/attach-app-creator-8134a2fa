@@ -194,12 +194,24 @@ Deno.serve(async (req) => {
 
     // Bulk mode
     if (bulk) {
-      const { data: brokers } = await admin.from("planipret_profiles")
+      // force:true re-provisions every broker with an extension (repairs devices
+      // that exist in the DB but are broken/missing in NetSapiens). Otherwise we
+      // only touch brokers that have never been provisioned.
+      const force: boolean = !!body?.force;
+      let q = admin.from("planipret_profiles")
         .select("id, user_id, full_name, email, extension, ns_extension, ns_domain, ns_mobile_device_id, ns_widget_device_id, ns_sip_password_ref_mobile")
-        .not("ns_extension", "is", null)
-        .or("ns_mobile_device_id.is.null,ns_widget_device_id.is.null,ns_sip_password_ref_mobile.is.null");
+        .not("ns_extension", "is", null);
+      if (!force) q = q.or("ns_mobile_device_id.is.null,ns_widget_device_id.is.null,ns_sip_password_ref_mobile.is.null");
+      const { data: brokers } = await q;
       const list = brokers ?? [];
-      if (list.length === 0) return json({ success: true, message: "Aucun courtier à provisionner", count: 0 });
+      if (list.length === 0) {
+        return json({
+          success: true,
+          message: "Aucun courtier à provisionner (tous déjà provisionnés — utilisez force:true pour re-provisionner)",
+          count: 0, total: 0, processed: 0, succeeded: 0, failed: 0, forced: force,
+        });
+      }
+
 
       const all: any[] = [];
       let succeeded = 0, failed = 0;

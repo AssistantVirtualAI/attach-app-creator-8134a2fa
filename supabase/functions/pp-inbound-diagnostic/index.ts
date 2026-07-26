@@ -378,10 +378,29 @@ Deno.serve(async (req) => {
         status: phoneNumbers.status,
         probes: phoneNumbers.probes,
         count: numbers.length,
-        all: numbers.map((n) => ({ number: numOf(n), destination: destOf(n) })),
+        all: numbers.map((n) => ({
+          number: numOf(n),
+          destination: destOf(n),
+          application: n?.["dial-rule-application"] ?? n?.["dialrule-application"] ?? n?.application ?? null,
+          translation_destination:
+            n?.["dial-rule-translation-destination"] ?? n?.["dialrule-translation-destination"] ?? null,
+        })),
         matching: mine,
       },
       cdrs: { status: cdrs.status, count: cdrRows.length },
     },
+    // raw=1 → unfiltered NS payloads (admin only) for escalation evidence.
+    ns_raw: rawMode
+      ? {
+          user: user.data,
+          answering_rules: rules.data,
+          answering_rules_path: rules.path,
+          devices: devices.data,
+          registration_probes: regProbes.map((p) => ({ path: p.path, status: p.status, data: p.data })),
+          phonenumber_probes: didProbes.map((p) => ({ path: p.path, status: p.status, data: p.data })),
+          cdrs: cdrRows,
+        }
+      : undefined,
+
   });
 });

@@ -180,10 +180,12 @@ Deno.serve(async (req) => {
       const domain = broker.ns_domain || NS_DEFAULT_DOMAIN;
       if (!ext) return { broker_id: broker.id ?? broker.user_id, success: false, error: "no_extension" };
 
-      const payload = buildRulePayload(ext, domain);
+      const devices = await fetchDeviceAors(ext, domain);
+      const payload = buildRulePayload(ext, domain, devices.aors);
       if (dry_run) {
-        return { broker_id: broker.id ?? broker.user_id, extension: ext, domain, dry_run: true, payload, success: true };
+        return { broker_id: broker.id ?? broker.user_id, extension: ext, domain, dry_run: true, payload, devices, success: true };
       }
+
 
       // Clear any user-level DND / forward that overrides answering rules and
       // sends inbound calls straight to voicemail.

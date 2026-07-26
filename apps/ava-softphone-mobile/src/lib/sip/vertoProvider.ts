@@ -585,11 +585,13 @@ class VertoClient {
       await pc.setRemoteDescription({ type: 'offer', sdp: params.sdp });
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      // 500 ms is sufficient for inbound: iceCandidatePoolSize=10 pre-gathers
-      // candidates while the phone is ringing, so gathering is already complete
-      // by the time the user taps Answer. Keeping this short eliminates the
-      // ~1.5 s delay between tap and audio connection.
-      await this.waitForIce(pc, 500);
+      // 2000 ms timeout for inbound ICE gathering.
+      // pbxnode.lemtel.tel:3478 STUN is unreachable externally (UDP blocked);
+      // we rely on Google/Cloudflare STUN. iceCandidatePoolSize=10 pre-gathers
+      // but WebRTC still needs time to gather srflx candidates. 500ms was too
+      // short — no srflx candidates were generated, leaving only host candidates
+      // which FreeSWITCH cannot reach from its network (private IP unreachable).
+      await this.waitForIce(pc, 2000);
       // Wrap dialog only once callID is known
       const wrapped = this.wrap(callID);
       rec.wrapped = wrapped;
@@ -610,12 +612,12 @@ class VertoClient {
     }
   }
 
-  private waitForIce(pc: RTCPeerConnection, timeoutMs = 1500): Promise<void> {
-    // 1.5 s timeout: iceCandidatePoolSize=10 pre-gathers candidates so
-    // gathering completes well before the timeout on most networks.
-    // The previous 5 s timeout caused a 3-5 s delay before verto.invite
-    // was sent. FreeSWITCH Verto does not support trickle ICE, so we must
-    // wait for gathering to complete, but 1.5 s is sufficient in practice.
+  private waitForIce(pc: RTCPeerConnection, timeoutMs = 2000): Promise<void> {
+    // Default 2 s timeout. FreeSWITCH Verto does not support trickle ICE,
+    // so we must wait for ICE gathering to complete before sending the SDP.
+    // iceCandidatePoolSize=10 pre-gathers candidates but Google/Cloudflare
+    // STUN still needs ~200-500ms to return srflx candidates. Without srflx
+    // candidates, FreeSWITCH cannot reach the device (private IP unreachable).
     return new Promise((resolve) => {
       if (pc.iceGatheringState === 'complete') { resolve(); return; }
       const t = setTimeout(() => {
@@ -816,7 +818,7 @@ class VertoClient {
           await freshPc.setRemoteDescription({ type: 'offer', sdp: origParams.sdp });
           const freshAnswer = await freshPc.createAnswer();
           await freshPc.setLocalDescription(freshAnswer);
-          await this.waitForIce(freshPc, 800);
+          await this.waitForIce(freshPc, 2000);
           // Update the dialog record with the fresh PeerConnection
           rec.pc = freshPc;
           rec.remoteStream = freshRemoteStream;

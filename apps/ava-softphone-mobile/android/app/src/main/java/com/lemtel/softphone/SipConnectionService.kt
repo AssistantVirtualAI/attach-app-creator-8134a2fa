@@ -409,6 +409,9 @@ class SipConnectionService : Service() {
 
     @Synchronized
     private fun sendFrame(text: String): Boolean {
+        // @Synchronized (on `this`) prevents the race condition where outputStream
+        // is set to null by closeSocket() between the null-check and the write.
+        // closeSocket() is also @Synchronized so both operations are serialized.
         try {
             val payload = text.toByteArray(Charsets.UTF_8)
             val out = outputStream ?: return false
@@ -458,7 +461,10 @@ class SipConnectionService : Service() {
         } catch (e: Exception) { /* ignore */ }
     }
 
+    @Synchronized
     private fun closeSocket() {
+        // @Synchronized matches sendFrame's lock so closeSocket() cannot null
+        // out outputStream while sendFrame is mid-write on another thread.
         try { sslSocket?.close() } catch (e: Exception) { /* ignore */ }
         sslSocket = null
         outputStream = null

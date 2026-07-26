@@ -87,6 +87,7 @@ Deno.serve(async (req) => {
       lastError = { message: parsed?.error ?? "Erreur inconnue", at: (errRows[0] as any).updated_at, http_status: parsed?.http_status };
     } catch { lastError = { message: "Erreur inconnue", at: (errRows[0] as any).updated_at }; }
   }
+  if (status === "connected") lastError = null;
   if (status !== "connected" && lastError) status = "error";
   else if (status !== "connected" && !configured) status = "not_configured";
   else if (status !== "connected" && pendingCount > 0) status = "pending";

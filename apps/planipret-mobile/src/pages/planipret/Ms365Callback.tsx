@@ -9,7 +9,11 @@ import { markOAuthCallbackCompleted } from "@/lib/deepLinkDebug";
 
 async function getSessionWithRetry() {
   for (let i = 0; i < 8; i += 1) {
-    const { data: { session } } = await supabase.auth.getSession();
+    const sessionResult = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 900)),
+    ]);
+    const session = sessionResult && "data" in sessionResult ? sessionResult.data.session : null;
     if (session) return session;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
@@ -100,6 +104,8 @@ export default function Ms365Callback() {
         }
         const verify = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: (data as any).token_hash });
         if (verify.error) { setStatus("error"); setError(verify.error.message); return; }
+        const hydratedSession = verify.data?.session ?? await getSessionWithRetry();
+        if (!hydratedSession?.access_token) { setStatus("error"); setError("Session Microsoft non finalisée — reconnectez-vous"); return; }
         clearRememberedMs365RedirectUri();
         markOAuthCallbackCompleted("ms365", window.location.search);
         try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}
@@ -112,7 +118,15 @@ export default function Ms365Callback() {
       }
       const session = await getSessionWithRetry();
       if (!session) { setStatus("error"); setError("Session expirée — reconnectez-vous"); return; }
-      const { data, errMsg } = await invokeAndParse("ms365-oauth-exchange", { code, redirect_uri, code_verifier });
+      const { data, error: exchangeError } = await withTimeout(
+        supabase.functions.invoke("ms365-oauth-exchange", {
+          body: { code, redirect_uri, code_verifier },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }),
+        25000,
+        "ms365-oauth-exchange",
+      );
+      const errMsg = exchangeError?.message ?? null;
       if (errMsg || !(data as any)?.success) {
         console.error("ms365 exchange failed", { data, errMsg });
         setStatus("error"); setError(errMsg ?? (data as any)?.error ?? "Échec OAuth");

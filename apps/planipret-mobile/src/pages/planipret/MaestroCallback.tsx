@@ -125,6 +125,7 @@ export default function MaestroCallback() {
         logDeepLink({ kind: "handler", source: "MaestroCallback", detail: "token exchange OK" });
         markOAuthCallbackCompleted("maestro", storedUrl ?? window.location.href ?? window.location.search);
         try { localStorage.removeItem("pp_maestro_callback_url"); } catch {}
+        try { localStorage.setItem("pp_maestro_just_connected", String(Date.now())); } catch {}
         try { window.dispatchEvent(new CustomEvent("maestro:connected")); } catch {}
         setMessage("Maestro connecté. Retour à l’accueil…");
         toast.success("Maestro connecté avec succès !");

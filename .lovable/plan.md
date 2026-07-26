@@ -1,48 +1,34 @@
-## Objectif
+## Ce que la base dit (vérifié)
 
-Trouver la vraie cause du renvoi immédiat en boîte vocale (ext. 113, domaine planipret.ca) alors que `113_web` et `113_mobile` sont bien enregistrés, puis corriger.
+Le token Maestro **est bien enregistré** : `planipret_profiles` du compte utilisé contient `maestro_broker_token`, `maestro_connected = true`, `maestro_broker_id = 67`, `maestro_email`, expiration au 2026-07-29, `maestro_oauth_client = mobile` (dernier sync aujourd'hui 05:24 UTC). Aucune ligne `maestro_oauth_error` ni `maestro_oauth_pending` n'existe.
 
-## État vérifié maintenant
+Donc l'échange de code fonctionne : le problème est **côté lecture du statut / rafraîchissement de l'écran**, pas côté connexion. La cause exacte n'est pas encore confirmée (les logs de `maestro-oauth-status` ne sont pas récupérables) — le plan commence donc par rendre le statut réel visible.
 
-- `pp-sync-answering-rules` écrit une règle "Default" avec sim-ring vers `sip:113@`, `sip:113_mobile@`, `sip:113_web@` + `forward-no-answer → vmail:113`, timeout 35s par défaut.
-- Aucune fonction ne vérifie aujourd'hui la **route entrante du DID** ni la **cause de libération SIP** des appels. `pp-call-diagnostic` ne regarde que CDR/enregistrement/transcription, pas le routage entrant.
-- Diagnostic non confirmé : la cause exacte n'est pas encore identifiable sans lire l'état réel côté NetSapiens. Première étape = mesurer, pas patcher.
+## Étape 1 — Rendre le statut brut visible (diagnostic dans l'app)
 
-## Étape 1 — Diagnostic inbound (nouvelle fonction `pp-inbound-diagnostic`)
+Dans `MaestroConnectCard.tsx` (affichée dans `MMore.tsx`, page Réglages) :
+- Bouton « Rafraîchir » explicite + horodatage du dernier fetch.
+- Bloc dépliable « Détails » affichant la réponse JSON brute de `maestro-oauth-status` (status, configured, broker_id, email, expires_in, last_error) — pour voir immédiatement si le serveur répond `connected`, `disconnected`, une erreur d'auth, ou rien.
 
-Lecture seule, admin only. Pour une extension donnée, retourne l'état brut NS :
+## Étape 2 — Corriger la résolution d'utilisateur dans `maestro-oauth-status`
 
-1. `GET /domains/{d}/users/{ext}` → champs `do-not-disturb`, `call-forward-*`, `voicemail-*`, `presence`.
-2. `GET .../users/{ext}/answerrules` (chemin déjà auto-détecté) → règle Default telle que **NS la voit** (timeframe réellement matché, sim-ring list, timeout, no-answer target).
-3. `GET .../users/{ext}/devices` (ou `/subscriptions`) → registrations réelles : `expires`, IP/port publics, NAT, user-agent.
-4. `GET /domains/{d}/phonenumbers` (inventaire DID) → destination du/des DID entrants : est-ce `113`, une file, un AA, ou directement `vmail:113`.
-5. Derniers CDR entrants (`/cdrs?...`) avec `release-code` / `disconnect-reason` / `term-user` / durée de sonnerie : distingue
-   - 0s de sonnerie + term = `vmail` → problème de **routage** (DID/règle/timeframe),
-   - sonnerie mais 480/408/486 sur les devices → problème **SIP/NAT/device**,
-   - 302/DND → renvoi caché sur l'utilisateur.
+La fonction identifie le courtier via un client créé avec `SUPABASE_ANON_KEY` + header Authorization puis `auth.getUser()`. C'est exactement le schéma qui a déjà échoué en 401 dans ce projet (corrigé récemment dans `pp-ns-users`). Si `userId` reste `null`, la fonction retombe sur les secrets globaux (vides) et renvoie `disconnected` — statut « Non connecté » alors que le token existe.
 
-Sortie : un verdict lisible (`ROUTING_TO_VOICEMAIL`, `TIMEFRAME_NOT_MATCHED`, `DEVICES_UNREACHABLE`, `HIDDEN_FORWARD`, `DID_NOT_POINTING_TO_EXT`) + payloads bruts.
+Correctif :
+- Valider le JWT avec le client service-role : `admin.auth.getUser(token)`.
+- Considérer connecté si `maestro_broker_token` **ou** `maestro_connected = true`.
+- Renvoyer aussi `connected: true`, `broker_id`, `email` (noms que la carte lit déjà) et un champ `reason` quand non connecté (`no_session`, `no_token`, `not_configured`).
+- Redéployer la fonction.
 
-## Étape 2 — Page admin de diagnostic
+## Étape 3 — Rafraîchissement fiable au retour du deep link
 
-Bouton "Diagnostic appels entrants" dans le portail admin Planiprêt (page appareils mobiles / SIP) : sélection du courtier, affichage du verdict + détails NS bruts, en FR/EN.
-
-## Étape 3 — Correction selon le verdict
-
-Appliquée seulement après lecture du verdict :
-
-- **DID → mauvaise destination** : corriger la destination d'inventaire vers l'extension (via NS-API) et l'inclure dans le sync.
-- **Timeframe non matché** : la règle est inerte → recréer avec le timeframe réellement retourné par NS au lieu de `*`.
-- **Sim-ring invalide** : NS refuse parfois des AOR de devices dans la sim-ring list → basculer sur "ring user's extension + ring all user's phones" (flags) plutôt qu'une liste d'AOR.
-- **Devices injoignables (NAT/registration fantôme)** : renforcer keep-alive/re-REGISTER natif et le push VoIP de réveil avant l'INVITE.
-- **Renvoi/DND caché sur l'utilisateur** : forcer la remise à zéro des champs utilisateur, pas seulement de la règle.
-
-## Étape 4 — Validation
-
-Appel test via `pp-mobile-testcall` puis re-run du diagnostic : confirmer sonnerie sur `113_mobile` et CDR avec sonnerie > 0s avant tout renvoi en boîte vocale.
+- `MaestroCallback.tsx` : après un échange réussi, écrire un flag court (`pp_maestro_just_connected`) avant de naviguer vers `/mplanipret/more`.
+- `MaestroConnectCard` : si le flag est présent (ou après l'événement `maestro:connected`), lancer un court polling du statut (par ex. 0s / 1.5s / 4s / 8s) puis effacer le flag — évite d'afficher « Non connecté » si la lecture arrive avant l'écriture serveur.
+- Ajouter un listener Capacitor `appStateChange` (resume) en plus de `visibilitychange`/`focus`, car sur iOS le retour du `Browser` plein écran ne déclenche pas toujours `visibilitychange`.
+- Bandeau d'état clair : Connecté (vert, avec email + ID courtier) / En attente / Non connecté / Erreur avec message serveur.
 
 ## Détails techniques
 
-- Nouvelle fonction : `supabase/functions/pp-inbound-diagnostic/index.ts`, utilise `nsFetch` + garde admin (`is_planipret_admin` / `is_super_admin`) comme `pp-sync-answering-rules`.
-- Aucun secret exposé ; les réponses NS sont tronquées et loguées dans `planipret_edge_function_runs`.
-- Modifications potentielles ensuite : `pp-sync-answering-rules` (timeframe réel + flags de sonnerie), `ns-webhook-receiver` (push avant INVITE), config natif keep-alive.
+- Fichiers touchés : `apps/planipret-mobile/src/components/planipret/mobile/MaestroConnectCard.tsx`, `apps/planipret-mobile/src/pages/planipret/MaestroCallback.tsx`, `supabase/functions/maestro-oauth-status/index.ts`.
+- Aucune migration DB nécessaire ; les colonnes utilisées existent déjà.
+- Après implémentation : `git pull`, `cd apps/planipret-mobile && npm run ios:build-sync`, rebuild Xcode pour tester le retour OAuth réel.

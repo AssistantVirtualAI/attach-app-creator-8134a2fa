@@ -784,12 +784,16 @@ class VertoClient {
     if (!rec || rec.direction !== 'inbound') return;
     const sdp = (rec.wrapped as any).__pendingAnswer;
     if (!sdp) return;
+    const originalDialogParams = { ...((rec.wrapped as any).__params || {}) };
+    delete (originalDialogParams as any).sdp;
     const dialogParams = {
+      ...originalDialogParams,
       callID,
-      caller_id_name: this.cfg?.caller_id_name || '',
-      caller_id_number: this.cfg?.caller_id_number || '',
-      useVideo: false, useStereo: false,
-      tag: this.audioTagId,
+      caller_id_name: originalDialogParams.caller_id_name || rec.callerIdName || this.cfg?.caller_id_name || '',
+      caller_id_number: originalDialogParams.caller_id_number || rec.callerIdNumber || this.cfg?.caller_id_number || '',
+      useVideo: originalDialogParams.useVideo ?? false,
+      useStereo: originalDialogParams.useStereo ?? false,
+      tag: originalDialogParams.tag || this.audioTagId,
     };
     try {
       if (rec.nativeAnswerSender) {

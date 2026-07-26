@@ -242,27 +242,45 @@ Deno.serve(async (req) => {
     issues.push(`La sonnerie simultanée ne cible pas ${ext}_mobile: ${simTargets.join(", ")}`);
   }
 
-  // DIDs pointing at this extension
-  const numbers = arrOf(phoneNumbers.data).filter((x) => x && typeof x === "object");
+  // DIDs pointing at this extension — dedupe by number, match on ANY destination-ish field
+  const numbersRaw = arrOf(phoneNumbers.data).filter((x) => x && typeof x === "object");
+  const numOf = (n: any) => String(
+    n?.["phonenumber"] ?? n?.["phone-number"] ?? n?.number ?? n?.did ?? "",
+  ).trim();
+  const seenNum = new Set<string>();
+  const numbers = numbersRaw.filter((n) => {
+    const k = numOf(n) || JSON.stringify(n);
+    if (seenNum.has(k)) return false;
+    seenNum.add(k);
+    return true;
+  });
+  const destFields = [
+    "destination", "dialrule-application", "dial-rule-application",
+    "dialrule-destination", "dial-rule-destination", "application",
+    "to-user", "users", "user", "dest-user", "destination-user",
+    "dialrule-translation-destination", "dial-rule-translation-destination",
+    "forward-destination", "owner",
+  ];
+  const extRe = new RegExp(`(^|[^0-9])${ext}([^0-9]|$)`);
+  const destOf = (n: any) =>
+    destFields.map((f) => String(n?.[f] ?? "")).filter(Boolean).join(" ");
   const mine = numbers.filter((n) => {
-    const t = String(
-      n?.["destination"] ?? n?.["dialrule-application"] ?? n?.["dial-rule-application"] ??
-      n?.["to-user"] ?? n?.["users"] ?? n?.user ?? "",
-    );
-    return t.includes(ext);
+    const t = destOf(n);
+    return extRe.test(t) || t.toLowerCase().includes(`${ext.toLowerCase()}@`);
   });
   const didsToVoicemail = mine.filter((n) => {
-    const t = String(n?.["destination"] ?? n?.["to-user"] ?? n?.user ?? "").toLowerCase();
+    const t = destOf(n).toLowerCase();
     return t.includes("vmail") || t.includes("voicemail");
   });
   if (didsToVoicemail.length) {
     verdicts.push("DID_ROUTED_TO_VOICEMAIL");
-    issues.push(`DID routé directement vers la messagerie: ${didsToVoicemail.map((n) => n?.["phonenumber"] ?? n?.number).join(", ")}`);
+    issues.push(`DID routé directement vers la messagerie: ${didsToVoicemail.map(numOf).join(", ")}`);
   }
   if (phoneNumbers.ok && numbers.length && !mine.length) {
     verdicts.push("NO_DID_POINTING_TO_EXT");
-    issues.push(`Aucun DID de l'inventaire ne pointe vers l'extension ${ext} (routage possible via file/AA).`);
+    issues.push(`Aucun DID de l'inventaire ne pointe vers l'extension ${ext} (routage possible via file/AA). DIDs lus: ${numbers.length}`);
   }
+
 
   // CDR analysis
   const cdrRows = arrOf(cdrs.data).filter((x) => x && typeof x === "object");

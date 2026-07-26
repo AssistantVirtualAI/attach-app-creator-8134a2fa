@@ -20,6 +20,7 @@ import { callQualitySampler, type CallQualitySnapshot } from "@/lib/planipret/au
 import { getAudioConstraints, type NCMode } from "@/lib/planipret/audio/audioConstraints";
 import { ensureMicPermission, type MicPermissionState } from "@/lib/planipret/audio/micPermission";
 import {
+  getPlanipretVoipPushToken,
   getPlanipretSipKeepAliveStatus,
   onPlanipretNativeReregister,
   onPlanipretSipKeepAliveStatus,
@@ -42,6 +43,22 @@ import { maestroTelecom } from "@/lib/planipret/maestroTelecom";
 const maestroLog = (fn: () => Promise<unknown>) => {
   fn().catch((e) => console.warn("[maestro-telecom]", (e as Error)?.message ?? e));
 };
+
+async function uploadPlanipretVoipToken(token: string, bundleId?: string, extension?: string | null, environment?: string) {
+  if (!token) return;
+  try {
+    const { error } = await supabase.functions.invoke("pp-voip-push-token", {
+      body: {
+        deviceToken: token,
+        platform: "ios",
+        bundleId,
+        extension: extension ?? (ppSipProvider.getConfig?.() as any)?.extension ?? null,
+        environment: environment || undefined,
+      },
+    });
+    if (error) console.warn("[pp-voip] token upload failed", error);
+  } catch (e) { console.warn("[pp-voip] token upload failed", e); }
+}
 
 
 
@@ -176,6 +193,9 @@ export function useMplanipretSoftphone() {
         };
         void startPlanipretSipKeepAlive(sipConfig).then((s) => { if (s && !cancelled) setNativeStatus(s); });
         await ppSipProvider.init(sipConfig);
+        void getPlanipretVoipPushToken().then((t) => {
+          if (t?.token) void uploadPlanipretVoipToken(t.token, t.bundleId, sipConfig.extension, t.environment);
+        });
         // Broadcast our registered device id so any UI can highlight it.
         try {
           window.dispatchEvent(new CustomEvent("pp:sip-registered", {

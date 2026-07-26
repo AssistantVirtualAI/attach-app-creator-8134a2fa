@@ -1,34 +1,27 @@
-## Ce que la base dit (vérifié)
+## Plan
 
-Le token Maestro **est bien enregistré** : `planipret_profiles` du compte utilisé contient `maestro_broker_token`, `maestro_connected = true`, `maestro_broker_id = 67`, `maestro_email`, expiration au 2026-07-29, `maestro_oauth_client = mobile` (dernier sync aujourd'hui 05:24 UTC). Aucune ligne `maestro_oauth_error` ni `maestro_oauth_pending` n'existe.
+1. **Fix the real iOS issue**
+   - The log shows `native plugin unavailable in this build`, so the app is falling back to WebView/JsSIP only.
+   - iOS suspends the WebView when the phone is locked/closed, so SIP drops and inbound calls go straight to voicemail.
 
-Donc l'échange de code fonctionne : le problème est **côté lecture du statut / rafraîchissement de l'écran**, pas côté connexion. La cause exacte n'est pas encore confirmée (les logs de `maestro-oauth-status` ne sont pas récupérables) — le plan commence donc par rendre le statut réel visible.
+2. **Make native SIP/VoIP compile reliably**
+   - Update the Planiprêt mobile native config script so `PpSipKeepAlive` and `PpVoipCall` are always registered/compiled correctly in the iOS app.
+   - Keep `audio`, `voip`, `remote-notification`, and `fetch` background modes in iOS config.
+   - Ensure PushKit/CallKit plugin methods are available instead of returning `UNIMPLEMENTED`.
 
-## Étape 1 — Rendre le statut brut visible (diagnostic dans l'app)
+3. **Fix VoIP push token registration**
+   - Verify/patch the mobile hook so the iOS VoIP token is uploaded after SIP credentials are loaded.
+   - Ensure the token stores the correct extension, bundle id, platform, and environment.
+   - Add safe debug output on the mobile SIP screen so we can see: native SIP available, VoIP token uploaded, background guard active.
 
-Dans `MaestroConnectCard.tsx` (affichée dans `MMore.tsx`, page Réglages) :
-- Bouton « Rafraîchir » explicite + horodatage du dernier fetch.
-- Bloc dépliable « Détails » affichant la réponse JSON brute de `maestro-oauth-status` (status, configured, broker_id, email, expires_in, last_error) — pour voir immédiatement si le serveur répond `connected`, `disconnected`, une erreur d'auth, ou rien.
+4. **Fix reconnect behavior**
+   - Prevent the JS softphone from fighting the native keep-alive during background/foreground transitions.
+   - On foreground return, show a protected/registered state immediately while re-registration refreshes instead of showing disconnected first.
 
-## Étape 2 — Corriger la résolution d'utilisateur dans `maestro-oauth-status`
+5. **Backend inbound-call wake path**
+   - Confirm the inbound webhook sends VoIP push to the broker’s stored iOS token.
+   - Add clearer backend logging for “no token”, “APNs not configured”, or “APNs delivery failed”.
 
-La fonction identifie le courtier via un client créé avec `SUPABASE_ANON_KEY` + header Authorization puis `auth.getUser()`. C'est exactement le schéma qui a déjà échoué en 401 dans ce projet (corrigé récemment dans `pp-ns-users`). Si `userId` reste `null`, la fonction retombe sur les secrets globaux (vides) et renvoie `disconnected` — statut « Non connecté » alors que le token existe.
-
-Correctif :
-- Valider le JWT avec le client service-role : `admin.auth.getUser(token)`.
-- Considérer connecté si `maestro_broker_token` **ou** `maestro_connected = true`.
-- Renvoyer aussi `connected: true`, `broker_id`, `email` (noms que la carte lit déjà) et un champ `reason` quand non connecté (`no_session`, `no_token`, `not_configured`).
-- Redéployer la fonction.
-
-## Étape 3 — Rafraîchissement fiable au retour du deep link
-
-- `MaestroCallback.tsx` : après un échange réussi, écrire un flag court (`pp_maestro_just_connected`) avant de naviguer vers `/mplanipret/more`.
-- `MaestroConnectCard` : si le flag est présent (ou après l'événement `maestro:connected`), lancer un court polling du statut (par ex. 0s / 1.5s / 4s / 8s) puis effacer le flag — évite d'afficher « Non connecté » si la lecture arrive avant l'écriture serveur.
-- Ajouter un listener Capacitor `appStateChange` (resume) en plus de `visibilitychange`/`focus`, car sur iOS le retour du `Browser` plein écran ne déclenche pas toujours `visibilitychange`.
-- Bandeau d'état clair : Connecté (vert, avec email + ID courtier) / En attente / Non connecté / Erreur avec message serveur.
-
-## Détails techniques
-
-- Fichiers touchés : `apps/planipret-mobile/src/components/planipret/mobile/MaestroConnectCard.tsx`, `apps/planipret-mobile/src/pages/planipret/MaestroCallback.tsx`, `supabase/functions/maestro-oauth-status/index.ts`.
-- Aucune migration DB nécessaire ; les colonnes utilisées existent déjà.
-- Après implémentation : `git pull`, `cd apps/planipret-mobile && npm run ios:build-sync`, rebuild Xcode pour tester le retour OAuth réel.
+6. **Deploy/verify**
+   - Deploy changed backend functions.
+   - After implementation, you’ll need to pull the project and run `npx cap sync`, then rebuild the iOS app in Xcode so the native plugin is actually inside the app binary.

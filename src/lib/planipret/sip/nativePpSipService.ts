@@ -23,6 +23,10 @@ type PpSipKeepAlivePlugin = {
   addListener?: (event: "sipServiceStatus" | "sipReregisterRequested", cb: (data: PpNativeSipStatus) => void) => Promise<ListenerHandle>;
 };
 
+type PpVoipCallPlugin = {
+  getVoipPushToken?: () => Promise<{ token: string | null; platform: string; bundleId?: string; environment?: string }>;
+};
+
 const isNative = () => {
   try { return Capacitor.isNativePlatform(); } catch { return false; }
 };
@@ -54,6 +58,19 @@ export function isPlanipretNativeSipAvailable(): boolean { return isNative() && 
 const NativePpSip: PpSipKeepAlivePlugin = isNative()
   ? registerPlugin<PpSipKeepAlivePlugin>("PpSipKeepAlive")
   : {};
+
+const NativePpVoipCall: PpVoipCallPlugin = isNative()
+  ? registerPlugin<PpVoipCallPlugin>("PpVoipCall")
+  : {};
+
+export async function getPlanipretVoipPushToken(): Promise<{ token: string | null; platform: string; bundleId?: string; environment?: string } | null> {
+  if (platform() !== "ios" || unavailable.voip) return null;
+  try { return (await NativePpVoipCall.getVoipPushToken?.()) ?? null; }
+  catch (e) {
+    if (!markUnavailable("voip", e, "pp-voip-call")) console.warn("[pp-voip-call] getVoipPushToken failed", e);
+    return null;
+  }
+}
 
 function parseWss(cfg: PpSipConfig) {
   try {

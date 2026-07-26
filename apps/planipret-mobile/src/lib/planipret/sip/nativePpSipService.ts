@@ -37,7 +37,7 @@ type PpSipKeepAlivePlugin = {
 };
 
 type PpVoipCallPlugin = {
-  getVoipPushToken?: () => Promise<{ token: string | null; platform: string; bundleId?: string }>;
+  getVoipPushToken?: () => Promise<{ token: string | null; platform: string; bundleId?: string; environment?: string }>;
   reportCallEnded?: (opts: { callId?: string; reason?: string }) => Promise<{ ok: boolean }>;
   addListener?: (
     event:
@@ -86,7 +86,7 @@ const NativePpVoipCall: PpVoipCallPlugin = isNative()
   : {};
 
 // ---------- CallKit + PushKit bridge (iOS only) ----------
-export async function getPlanipretVoipPushToken(): Promise<{ token: string | null; platform: string; bundleId?: string } | null> {
+export async function getPlanipretVoipPushToken(): Promise<{ token: string | null; platform: string; bundleId?: string; environment?: string } | null> {
   if (platform() !== "ios" || unavailable.voip) return null;
   try { return (await NativePpVoipCall.getVoipPushToken?.()) ?? null; }
   catch (e) {
@@ -95,7 +95,7 @@ export async function getPlanipretVoipPushToken(): Promise<{ token: string | nul
   }
 }
 
-export async function onPlanipretVoipPushToken(cb: (data: { token: string; bundleId?: string }) => void): Promise<() => void> {
+export async function onPlanipretVoipPushToken(cb: (data: { token: string; bundleId?: string; environment?: string }) => void): Promise<() => void> {
   if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
   try {
     const handle = await NativePpVoipCall.addListener("voipPushToken", (data: any) => cb(data ?? {}));

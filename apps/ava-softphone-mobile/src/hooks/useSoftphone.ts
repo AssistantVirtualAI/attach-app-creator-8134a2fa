@@ -516,6 +516,7 @@ export function useSoftphoneJsSip(
               // ringtone when the session ends (covers the case where the remote
               // party cancels before we answer).
               dismissIncomingNotif();
+              answeringRef.current = false;
               if (timerRef.current) clearInterval(timerRef.current);
               stopStats();
               setTimeout(() => {
@@ -537,6 +538,7 @@ export function useSoftphoneJsSip(
               // Dismiss native Android notification/ringtone on failure (CANCEL,
               // timeout, busy, etc.) so the phone stops ringing.
               dismissIncomingNotif();
+              answeringRef.current = false;
               setCallState('idle');
               if (timerRef.current) clearInterval(timerRef.current);
               stopStats();
@@ -832,28 +834,39 @@ export function useSoftphoneJsSip(
     // Après un raccroché manuel, vérifier l'UA (re-REGISTER si besoin).
     ensureRegisteredThenRestore('hangup');
   };
+  // Guard: prevents answer() from being called more than once per incoming session.
+  // Without this, the sipCallAction listener fires multiple times (Android re-broadcasts
+  // the event on each MainActivity resume) causing JsSIP "Invalid status: 5" errors.
+  const answeringRef = useRef(false);
   const answer = async () => {
-    log('answer.called', `sessionRef=${sessionRef.current ? 'ok' : 'NULL'} callState=${callState}`);
+    log('answer.called', `sessionRef=${sessionRef.current ? 'ok' : 'NULL'} callState=${callState} answering=${answeringRef.current}`);
+    if (answeringRef.current) {
+      log('answer.skipped', 'already answering — ignoring duplicate call', 'warn');
+      return;
+    }
+    answeringRef.current = true;
     dismissIncomingNotif();
     if (!sessionRef.current) {
       log('answer.failed', 'sessionRef is null — cannot answer', 'error');
+      answeringRef.current = false;
       return;
     }
     const iceServers = await fetchIceServers().catch(() => FALLBACK_ICE_SERVERS);
     log('answer.iceServers', `count=${iceServers.length}`);
     try {
-    sessionRef.current?.answer({
-      mediaConstraints: HD_AUDIO_CONSTRAINTS,
-      sessionDescriptionHandlerModifiers: [sdpModifier],
-      pcConfig: {
-        iceServers,
-        iceTransportPolicy: 'all',
-        bundlePolicy: 'balanced',
-      },
-    });
-    log('answer.sent', 'session.answer() called successfully');
+      sessionRef.current?.answer({
+        mediaConstraints: HD_AUDIO_CONSTRAINTS,
+        sessionDescriptionHandlerModifiers: [sdpModifier],
+        pcConfig: {
+          iceServers,
+          iceTransportPolicy: 'all',
+          bundlePolicy: 'balanced',
+        },
+      });
+      log('answer.sent', 'session.answer() called successfully');
     } catch (e: any) {
       log('answer.error', e?.message || String(e), 'error');
+      answeringRef.current = false;
     }
   };
   const mute = () => { sessionRef.current?.mute({ audio: true }); setIsMuted(true); };

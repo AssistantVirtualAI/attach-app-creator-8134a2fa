@@ -217,10 +217,10 @@ const mobileDevicesCache: {
   inFlight: null,
 };
 
-async function loadMobileDeviceStatus() {
-  if (mobileDevicesCache.inFlight) return mobileDevicesCache.inFlight;
+async function loadMobileDeviceStatus(sync = false) {
+  if (mobileDevicesCache.inFlight && !sync) return mobileDevicesCache.inFlight;
   mobileDevicesCache.inFlight = supabase.functions
-    .invoke("pp-mobile-device-status", { body: {} })
+    .invoke("pp-mobile-device-status", { body: sync ? { sync: true } : {} })
     .then(({ data, error }) => {
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || "Invalid report");
@@ -275,10 +275,10 @@ export default function PAMobileDevices() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (sync = false) => {
     setLoading(true);
     try {
-      const next = await loadMobileDeviceStatus();
+      const next = await loadMobileDeviceStatus(sync);
       setRows(next.rows);
       setStats(next.stats);
     } catch (error: any) {
@@ -333,7 +333,7 @@ export default function PAMobileDevices() {
       return;
     }
     toast.success(t.toastDevicesCreated(broker.full_name));
-    refresh();
+    refresh(true);
   }, [refresh, t]);
 
   const syncDevices = useCallback(async () => {
@@ -353,7 +353,7 @@ export default function PAMobileDevices() {
       return;
     }
     toast.success(t.toastSyncDone((provision.data as any)?.succeeded ?? 0, (provision.data as any)?.total ?? 0));
-    refresh();
+    await refresh(true);
   }, [refresh, t]);
 
   const syncAnsweringRules = useCallback(async () => {

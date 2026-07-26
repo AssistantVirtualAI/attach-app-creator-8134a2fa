@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { clearRememberedMs365RedirectUri, getRememberedMs365CodeVerifier, getRememberedMs365RedirectUri } from "@/lib/ms365OAuth";
 import { clearMs365Pending } from "@/lib/ms365Pending";
 import { clearMicrosoftSignInIntentAsync, getMicrosoftSignInIntentAsync, getMicrosoftSignInNextAsync } from "@/lib/ms365AuthLogin";
+import { markOAuthCallbackCompleted } from "@/lib/deepLinkDebug";
 
 async function getSessionWithRetry() {
   for (let i = 0; i < 8; i += 1) {
@@ -100,6 +101,8 @@ export default function Ms365Callback() {
         const verify = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: (data as any).token_hash });
         if (verify.error) { setStatus("error"); setError(verify.error.message); return; }
         clearRememberedMs365RedirectUri();
+        markOAuthCallbackCompleted("ms365", window.location.search);
+        try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}
         const next = await getMicrosoftSignInNextAsync("/mplanipret/home");
         await clearMicrosoftSignInIntentAsync();
         try { void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin()); } catch {}
@@ -116,6 +119,7 @@ export default function Ms365Callback() {
         return;
       }
       clearRememberedMs365RedirectUri();
+      markOAuthCallbackCompleted("ms365", window.location.search);
       try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}
       // Active automatiquement l'abonnement AVA aux nouveaux courriels (non-bloquant)
       supabase.functions.invoke("ms365-mail-webhook-setup", { body: {} }).then(({ error }) => {

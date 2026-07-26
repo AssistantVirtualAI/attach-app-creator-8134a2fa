@@ -343,6 +343,9 @@ export function useSoftphoneJsSip(
             log('session.new', `${session.direction} ${remoteNumber}`);
             if (session.direction === 'incoming') {
               callStateRef.current = 'ringing-in'; setCallState('ringing-in');
+              // Pre-warm ICE servers immediately on incoming so answer() has
+              // them cached and doesn't block on a network fetch (2-4 s delay).
+              fetchIceServers().catch(() => {});
               // Trigger native Android ringing + fullscreen notification
               if (Capacitor.getPlatform() === 'android') {
                 const callerName = session.remote_identity?.display_name || '';
@@ -853,6 +856,9 @@ export function useSoftphoneJsSip(
   };
   const hangup = () => {
     dismissIncomingNotif();
+    // Disable auto-retry so watchCallEstablishment does not re-dial after
+    // a manual hangup (callAttemptRef === 1 would trigger placeCallInternal retry).
+    callAttemptRef.current = 0;
     try { sessionRef.current?.terminate(); } catch {}
     sessionRef.current = null;
     callStateRef.current = 'idle'; setCallState('idle');

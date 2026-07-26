@@ -91,7 +91,7 @@ export default function MSipDebug() {
 
         <div className="flex items-center gap-1">
           {STAGES.map((s, i) => (
-            <StageDot key={s} label={s} active={!isError && currentIdx === i && s !== "registered"} done={!isError && currentIdx >= i && snap.status === "registered" || (!isError && currentIdx > i)} error={isError && i === Math.min(currentIdx, STAGES.length - 1)} />
+            <StageDot key={s} label={s} active={!isError && currentIdx === i && s !== "registered"} done={!isError && ((snap.status === "registered" && currentIdx >= i) || currentIdx > i)} error={isError && i === Math.min(currentIdx, STAGES.length - 1)} />
           ))}
         </div>
 

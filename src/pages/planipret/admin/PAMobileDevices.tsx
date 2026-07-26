@@ -344,11 +344,23 @@ export default function PAMobileDevices() {
 
   const syncAnsweringRules = useCallback(async () => {
     setSyncingRules(true);
-    const { data, error } = await supabase.functions.invoke("pp-sync-answering-rules", { body: { bulk: true } });
+    let offset = 0;
+    let ok = 0;
+    let total = 0;
+    let lastError: string | null = null;
+    for (let page = 0; page < 20; page += 1) {
+      const { data, error } = await supabase.functions.invoke("pp-sync-answering-rules", {
+        body: { bulk: true, offset, limit: 50, batch_size: 10, include_results: false },
+      });
+      if (error) { lastError = error.message; break; }
+      ok += Number((data as any)?.succeeded ?? 0);
+      total += Number((data as any)?.processed ?? 0);
+      const next = (data as any)?.next_offset;
+      if (next === null || next === undefined) break;
+      offset = Number(next);
+    }
     setSyncingRules(false);
-    if (error) { toast.error(t.toastSyncRulesError, { description: error.message }); return; }
-    const ok = (data as any)?.succeeded ?? 0;
-    const total = (data as any)?.total ?? 0;
+    if (lastError && total === 0) { toast.error(t.toastSyncRulesError, { description: lastError }); return; }
     toast.success(t.toastSyncRulesSuccess(ok, total));
     refresh();
   }, [refresh, t]);

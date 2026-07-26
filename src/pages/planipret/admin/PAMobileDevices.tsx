@@ -172,6 +172,13 @@ const DICT = {
     testCallLaunched: "Test call launched",
     answeredByState: (who?: string) => `Answered by ${who ?? "?"}`,
     endedState: (reason?: string) => `Ended (${reason ?? "ok"})`,
+    diag: "Diag",
+    diagTitle: (name?: string | null) => `Inbound call diagnostic — ${name ?? ""}`,
+    diagVerdict: "Verdict",
+    diagIssues: "Detected issues",
+    diagNoIssue: "No NetSapiens routing issue detected.",
+    diagSummary: "NetSapiens details",
+    diagError: "Diagnostic failed",
   },
 };
 

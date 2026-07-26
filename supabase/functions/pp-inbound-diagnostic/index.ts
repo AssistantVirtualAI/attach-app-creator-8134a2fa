@@ -105,8 +105,31 @@ Deno.serve(async (req) => {
   }
 
   // 3) Devices / registrations
+  // NOTE: /users/{ext}/subscriptions returns SIP SUBSCRIBE (presence), NOT
+  // REGISTER bindings. Real registrations live under the device sub-resource
+  // and at domain level — probe all of them.
   const devices = await get(`/domains/${d}/users/${e}/devices`);
-  const registrations = await get(`/domains/${d}/users/${e}/subscriptions`);
+  const deviceIds = arrOf(devices.data)
+    .map((x: any) => String(x?.device ?? x?.aor ?? x?.name ?? "").replace(/^sip:/, "").split("@")[0])
+    .filter(Boolean);
+  const regProbes = [
+    await get(`/domains/${d}/users/${e}/registrations`),
+    await get(`/domains/${d}/registrations?user=${e}`),
+    ...(await Promise.all(
+      deviceIds.slice(0, 6).map((id) =>
+        get(`/domains/${d}/users/${e}/devices/${encodeURIComponent(id)}/registrations`)
+      ),
+    )),
+    await get(`/domains/${d}/users/${e}/subscriptions`),
+  ];
+  const registrations = {
+    path: regProbes.find((p) => p.ok && arrOf(p.data).length)?.path ?? regProbes[0].path,
+    status: regProbes.find((p) => p.ok && arrOf(p.data).length)?.status ?? regProbes[0].status,
+    ok: regProbes.some((p) => p.ok),
+    data: regProbes.flatMap((p) => (p.ok ? arrOf(p.data) : [])),
+    probes: regProbes.map((p) => ({ path: p.path, status: p.status, count: p.ok ? arrOf(p.data).length : 0 })),
+  } as any;
+
 
   // 4) DID inventory
   const phoneNumbers = await get(`/domains/${d}/phonenumbers`);

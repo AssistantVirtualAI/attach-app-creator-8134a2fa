@@ -22,7 +22,11 @@ const completedCodes = new Set<string>();
 
 async function getSessionWithRetry() {
   for (let i = 0; i < 8; i += 1) {
-    const { data: { session } } = await supabase.auth.getSession();
+    const sessionResult = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 900)),
+    ]);
+    const session = sessionResult && "data" in sessionResult ? sessionResult.data.session : null;
     if (session) return session;
     await new Promise((resolve) => window.setTimeout(resolve, 250));
   }
@@ -107,6 +111,7 @@ export default function MaestroCallback() {
 
         const callbackPromise = supabase.functions.invoke("maestro-oauth-callback", {
           body: { code, state, redirect_uri: redirectUri },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         });
         const timeoutPromise = new Promise<never>((_, reject) => {
           window.setTimeout(() => reject(new Error("timeout_maestro_callback")), 18_000);

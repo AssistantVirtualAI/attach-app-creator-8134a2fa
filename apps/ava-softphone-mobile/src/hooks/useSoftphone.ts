@@ -14,6 +14,7 @@ import { showMobileToast } from '../lib/mobileToast';
 import { PC_CONFIG, instrumentPeerConnection, watchCallEstablishment, isSipDebugEnabled, sipDebug } from '../lib/sip/rtcConfig';
 import { fetchIceServers, FALLBACK_ICE_SERVERS } from '../lib/sip/iceServers';
 import type { AndroidSipServiceStatus } from '../lib/sip/nativeSipProvider';
+import { showAndroidIncomingCallNotif, dismissAndroidIncomingCallNotif } from '../lib/sip/nativeSipProvider';
 
 export type SIPStatus = 'idle' | 'connecting' | 'registered' | 'retrying' | 'error';
 export type CallState = 'idle' | 'ringing' | 'ringing-in' | 'ringing-out' | 'active' | 'ended';
@@ -344,9 +345,7 @@ export function useSoftphoneJsSip(
               // Trigger native Android ringing + fullscreen notification
               if (Capacitor.getPlatform() === 'android') {
                 const callerName = session.remote_identity?.display_name || '';
-                import('../lib/sip/nativeSipProvider').then(({ CapacitorPjsip }) => {
-                  (CapacitorPjsip as any).showIncomingCallNotif?.({ callerNumber: remoteNumber, callerName }).catch?.(() => {});
-                }).catch(() => {});
+                showAndroidIncomingCallNotif(remoteNumber, callerName);
               }
             }
             session.on('peerconnection', (e: any) => {
@@ -793,12 +792,6 @@ export function useSoftphoneJsSip(
       sipDebug('placeCallInternal pcConfig', PC_CONFIG);
       // Android: switch audio mode to MODE_IN_COMMUNICATION before INVITE so
       // the earpiece / speaker routing is armed when the remote track arrives.
-      if (Capacitor.getPlatform() === 'android') {
-        try {
-          const { CapacitorPjsip } = await import('../lib/sip/nativeSipProvider');
-          await (CapacitorPjsip as any).startCall?.();
-        } catch {}
-      }
       uaRef.current.call(`sip:${number}@${config.domain}`, callOpts);
       return true;
     } catch (err: any) {
@@ -818,9 +811,7 @@ export function useSoftphoneJsSip(
   };
   const dismissIncomingNotif = () => {
     if (Capacitor.getPlatform() === 'android') {
-      import('../lib/sip/nativeSipProvider').then(({ CapacitorPjsip }) => {
-        (CapacitorPjsip as any).dismissIncomingCallNotif?.().catch?.(() => {});
-      }).catch(() => {});
+      dismissAndroidIncomingCallNotif();
     }
   };
   const hangup = () => {

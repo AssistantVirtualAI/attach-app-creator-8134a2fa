@@ -138,6 +138,9 @@ interface AndroidSipServiceBridge {
   // Audio routing — real implementation in CapacitorPjsip.kt
   setAudioRoute?: (opts: { route: string }) => Promise<{ ok: boolean; route?: string }>;
   getAudioRoute?: () => Promise<{ route?: string; outputs?: any; inputs?: any }>;
+  // Incoming call notification (JsSIP mode)
+  showIncomingCallNotif?: (opts: { callerNumber: string; callerName: string }) => Promise<{ ok: boolean }>;
+  dismissIncomingCallNotif?: () => Promise<{ ok: boolean }>;
 }
 
 export interface AndroidSipServiceStatus {
@@ -339,4 +342,24 @@ export async function attachNativeSipLogger(): Promise<() => void> {
     // eslint-disable-next-line no-console
     (console as any)[fn](tag, e?.message);
   });
+}
+
+/** Show native incoming call notification (fullscreen + ringtone) for JsSIP mode on Android */
+export async function showAndroidIncomingCallNotif(callerNumber: string, callerName: string): Promise<void> {
+  if (__platform !== 'android') return;
+  try {
+    await AndroidSipServicePlugin.showIncomingCallNotif?.({ callerNumber, callerName });
+  } catch (e) {
+    console.warn('[nativeSip] showAndroidIncomingCallNotif failed', e);
+  }
+}
+
+/** Dismiss native incoming call notification (JsSIP mode on Android) */
+export async function dismissAndroidIncomingCallNotif(): Promise<void> {
+  if (__platform !== 'android') return;
+  try {
+    await AndroidSipServicePlugin.dismissIncomingCallNotif?.();
+  } catch (e) {
+    console.warn('[nativeSip] dismissAndroidIncomingCallNotif failed', e);
+  }
 }

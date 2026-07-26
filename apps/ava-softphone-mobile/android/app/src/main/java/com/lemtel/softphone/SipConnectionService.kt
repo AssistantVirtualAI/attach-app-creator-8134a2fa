@@ -1030,17 +1030,25 @@ class SipConnectionService : Service() {
             filter.addAction(ACTION_REGISTER_OUTBOUND_CALL)
             val recv = object : android.content.BroadcastReceiver() {
                 override fun onReceive(ctx: Context?, intent: Intent?) {
+                    // In JsSIP mode, all call control is handled by JavaScript.
+                    // The Verto native answer/hangup intents are ignored so they
+                    // don't interfere with the JsSIP session.
+                    val jsSipMode = isJsSipMode()
+
                     when (intent?.action) {
                         ACTION_NATIVE_VERTO_ANSWER -> {
-                            handleNativeAnswer(intent.getStringExtra("sdp") ?: "", intent.getStringExtra("dialogParams") ?: "")
+                            if (!jsSipMode) handleNativeAnswer(intent.getStringExtra("sdp") ?: "", intent.getStringExtra("dialogParams") ?: "")
+                            else Log.i(TAG, "JsSIP mode: ignoring ACTION_NATIVE_VERTO_ANSWER")
                             return
                         }
                         ACTION_NATIVE_VERTO_HANGUP -> {
-                            handleNativeHangup("ui_hangup")
+                            if (!jsSipMode) handleNativeHangup("ui_hangup")
+                            else Log.i(TAG, "JsSIP mode: ignoring ACTION_NATIVE_VERTO_HANGUP")
                             return
                         }
                         ACTION_NATIVE_ANSWER_REQUEST -> {
-                            handleNativeAnswerRequest()
+                            if (!jsSipMode) handleNativeAnswerRequest()
+                            else Log.i(TAG, "JsSIP mode: ignoring ACTION_NATIVE_ANSWER_REQUEST")
                             return
                         }
                         ACTION_REGISTER_OUTBOUND_CALL -> {
@@ -1055,6 +1063,11 @@ class SipConnectionService : Service() {
                             return
                         }
                     }
+                    // In JsSIP mode, ACTION_CALL_ACTION_EVENT is handled entirely
+                    // by JavaScript (via CapacitorPjsip event relay). No native
+                    // Verto answer/hangup needed here.
+                    if (jsSipMode) return
+
                     val action = intent?.getStringExtra(CallActionReceiver.EXTRA_ACTION) ?: return
                     when (action) {
                         "answer" -> handleNativeAnswerRequest()

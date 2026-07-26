@@ -45,16 +45,14 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
     const token = authHeader.replace(/^Bearer\s+/i, "");
-    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
-    const userId = claimsData?.claims?.sub as string | undefined;
-    if (claimsErr || !userId) return json({ error: "Unauthorized" }, 401);
+    if (token === SUPABASE_ANON_KEY) return json({ error: "Unauthorized" }, 401);
+    const { data: userData, error: userErr } = await admin.auth.getUser(token);
+    const userId = userData?.user?.id;
+    if (userErr || !userId) return json({ error: "Unauthorized", detail: userErr?.message }, 401);
     const { data: isMember } = await admin.rpc("is_planipret_member", { _user_id: userId });
     if (isMember !== true) return json({ error: "Forbidden" }, 403);
 

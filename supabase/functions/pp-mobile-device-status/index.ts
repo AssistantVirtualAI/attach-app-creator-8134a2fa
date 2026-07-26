@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
         .from("planipret_ns_migration_log")
         .select("broker_id,action,status,details,created_at")
         .in("broker_id", brokerIds)
-        .eq("action", "create_mobile_device")
+        .in("action", ["create_mobile_device", "provision_devices", "create_devices"])
         .order("created_at", { ascending: false })
     : { data: [] as any[] };
   const logsByBroker = new Map<string, any[]>();
@@ -111,9 +111,7 @@ Deno.serve(async (req) => {
         const patch: Record<string, unknown> = { ns_linked: true, ns_linked_at: new Date().toISOString(), ns_domain: domain, ns_extension: ext };
         if (mobileFromNs && p.ns_mobile_device_id !== mobileFromNs) patch.ns_mobile_device_id = mobileFromNs;
         if (widgetFromNs && p.ns_widget_device_id !== widgetFromNs) patch.ns_widget_device_id = widgetFromNs;
-        if (Object.keys(patch).length > 4) {
-          await admin.from("planipret_profiles").update(patch).eq("id", p.id);
-        }
+        await admin.from("planipret_profiles").update(patch).eq("id", p.id);
       }
       const brokerLogs = logsByBroker.get(p.id) ?? [];
       const okLog = brokerLogs.find((l) => l.status === "ok");
@@ -134,7 +132,7 @@ Deno.serve(async (req) => {
         ns_widget_exists: nsWidgetExists,
         ns_reachable: ns.ok, ns_status: ns.status,
         has_vault_secret: !!p.ns_sip_password_ref_mobile,
-        provisioned_at: okLog?.created_at ?? null,
+        provisioned_at: okLog?.created_at ?? (p.ns_linked ? p.ns_linked_at : null) ?? null,
         last_error: errLog ? { at: errLog.created_at, details: errLog.details } : null,
         state,
       };

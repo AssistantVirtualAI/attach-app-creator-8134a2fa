@@ -32,7 +32,6 @@ import {
   reportPlanipretCallEnded,
   requestPlanipretBatteryOptimizationExemption,
   startPlanipretSipKeepAlive,
-  triggerPlanipretNativeReregister,
   type PpNativeSipStatus,
 } from "@/lib/planipret/sip/nativePpSipService";
 import {

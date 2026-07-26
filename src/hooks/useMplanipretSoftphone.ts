@@ -26,7 +26,6 @@ import {
   onPlanipretSipKeepAliveStatus,
   requestPlanipretBatteryOptimizationExemption,
   startPlanipretSipKeepAlive,
-  triggerPlanipretNativeReregister,
   type PpNativeSipStatus,
 } from "@/lib/planipret/sip/nativePpSipService";
 import {

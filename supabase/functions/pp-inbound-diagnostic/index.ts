@@ -59,6 +59,9 @@ Deno.serve(async (req) => {
 
   const input: any = await req.json().catch(() => ({}));
   const limit = Math.max(1, Math.min(20, Number(input?.limit ?? 5)));
+  const url = new URL(req.url);
+  const rawMode = isAdmin && (input?.raw === true || input?.raw === 1 || url.searchParams.get("raw") === "1");
+
 
   // Resolve target extension/domain
   let ext = input?.extension ? String(input.extension) : "";

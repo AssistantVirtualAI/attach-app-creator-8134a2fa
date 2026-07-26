@@ -282,7 +282,7 @@ Deno.serve(async (req) => {
       const devices = await fetchDeviceAors(ext, domain);
       const payload = buildRulePayload(ext, domain, devices.aors);
       if (dry_run) {
-        const did_repair = await repairDidRoutes(ext, domain);
+        const did_repair = { skipped: true, reason: "dry_run" };
         return { broker_id: broker.id ?? broker.user_id, extension: ext, domain, dry_run: true, payload, devices, did_repair, success: true };
       }
 

@@ -599,6 +599,7 @@ class VertoClient {
       });
       // Note: answer is deferred until user calls .answer()
       (wrapped as any).__pendingAnswer = pc.localDescription?.sdp;
+      (wrapped as any).__pendingAnswerTs = Date.now(); // timestamp for staleness check
       (wrapped as any).__params = params;
       return wrapped;
     } catch (e) {
@@ -782,6 +783,53 @@ class VertoClient {
   private async answerInbound(callID: string) {
     const rec = this.dialogs.get(callID);
     if (!rec || rec.direction !== 'inbound') return;
+
+    // If the cached SDP is older than 3 seconds, the ICE candidates it contains
+    // may have expired (NAT bindings are short-lived on mobile networks).
+    // Regenerate a fresh SDP from the original verto.invite offer before sending.
+    const sdpAge = Date.now() - ((rec.wrapped as any).__pendingAnswerTs || 0);
+    if (sdpAge > 3000) {
+      console.log('[verto] answerInbound: SDP is', sdpAge, 'ms old — regenerating fresh ICE candidates for callID', callID);
+      const origParams = (rec.wrapped as any).__params;
+      if (origParams?.sdp) {
+        try {
+          // Close the stale PeerConnection
+          try { rec.pc.close(); } catch { /* ignore */ }
+          // Create a fresh PeerConnection with new ICE candidates
+          const freshPc = new RTCPeerConnection({ ...getActivePcConfig(), iceCandidatePoolSize: 10 });
+          const freshRemoteStream = new MediaStream();
+          freshPc.ontrack = (ev) => {
+            ev.streams[0]?.getTracks().forEach((t) => freshRemoteStream.addTrack(t));
+            this.emit({ type: 'media', dialog: rec.wrapped, stream: freshRemoteStream });
+          };
+          // Re-acquire microphone
+          let freshLocal: MediaStream | null = null;
+          try {
+            freshLocal = await navigator.mediaDevices.getUserMedia({
+              audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 16000 },
+              video: false,
+            });
+            freshLocal.getTracks().forEach((t) => freshPc.addTrack(t, freshLocal!));
+          } catch (micErr) {
+            console.warn('[verto] mic re-acquire failed on SDP refresh:', micErr);
+          }
+          await freshPc.setRemoteDescription({ type: 'offer', sdp: origParams.sdp });
+          const freshAnswer = await freshPc.createAnswer();
+          await freshPc.setLocalDescription(freshAnswer);
+          await this.waitForIce(freshPc, 800);
+          // Update the dialog record with the fresh PeerConnection
+          rec.pc = freshPc;
+          rec.remoteStream = freshRemoteStream;
+          if (freshLocal) rec.localStream = freshLocal;
+          (rec.wrapped as any).__pendingAnswer = freshPc.localDescription?.sdp;
+          (rec.wrapped as any).__pendingAnswerTs = Date.now();
+          console.log('[verto] answerInbound: fresh SDP generated, sdpLen=', freshPc.localDescription?.sdp?.length);
+        } catch (refreshErr) {
+          console.warn('[verto] answerInbound: SDP refresh failed, using stale SDP:', refreshErr);
+        }
+      }
+    }
+
     const sdp = (rec.wrapped as any).__pendingAnswer;
     if (!sdp) return;
     const dialogParams = {

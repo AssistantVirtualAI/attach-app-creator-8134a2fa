@@ -216,6 +216,29 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       if (native.callId) nativeAnsweredCallIdRef.current = native.callId;
       return;
     }
+    if (nativeStatus === 'sdp_refresh_needed') {
+      // The Kotlin service detected that the cached SDP is stale (> 3s old).
+      // Force the JS vertoProvider to regenerate fresh ICE candidates by
+      // resetting the __pendingAnswerTs timestamp to 0 on the active dialog.
+      const callID = native.reason || native.callId;
+      console.log('[verto] sdp_refresh_needed received for callID:', callID, '— resetting SDP timestamp');
+      try {
+        const client = getVertoClient();
+        if (client && callID) {
+          // Access the internal dialog record and reset the timestamp
+          // so answerInbound() will regenerate the SDP
+          (client as any).dialogs?.forEach?.((rec: any, id: string) => {
+            if (id === callID && rec.wrapped) {
+              (rec.wrapped as any).__pendingAnswerTs = 0;
+              console.log('[verto] SDP timestamp reset for callID:', callID);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('[verto] sdp_refresh_needed handler error:', e);
+      }
+      return;
+    }
     if (nativeStatus === 'idle') {
       nativeAnsweredCallIdRef.current = null;
       nativeInviteCallIdRef.current = null;

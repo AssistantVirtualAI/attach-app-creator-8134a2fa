@@ -575,7 +575,18 @@ class SipConnectionService : Service() {
                         val pSdp = pendingAnswerSdp
                         val pParams = pendingAnswerParams ?: ""
                         if (pSdp != null && currentCallId != null) {
-                            Log.i(TAG, "Flushing queued verto.answer after login")
+                            val sdpAgeMs = System.currentTimeMillis() - pendingAnswerSdpTs
+                            Log.i(TAG, "Flushing queued verto.answer after login — SDP age: ${sdpAgeMs}ms")
+                            // If SDP is older than 3s, notify JS to regenerate fresh ICE candidates
+                            // before sending. The JS vertoProvider.answerInbound() will detect
+                            // the stale SDP via __pendingAnswerTs and regenerate automatically.
+                            if (sdpAgeMs > 3000) {
+                                Log.w(TAG, "SDP is stale (${sdpAgeMs}ms) — JS will regenerate fresh ICE candidates")
+                                // Emit a special status to trigger JS SDP refresh
+                                emitStatus("sdp_refresh_needed", currentCallId ?: "")
+                                // Give JS 800ms to regenerate SDP before sending verto.answer
+                                Thread.sleep(800)
+                            }
                             handleNativeAnswer(pSdp, pParams)
                         }
                         // Flush pending bye if user tapped Hangup while WS was reconnecting
@@ -1072,6 +1083,7 @@ class SipConnectionService : Service() {
 
     @Volatile private var pendingAnswerSdp: String? = null
     @Volatile private var pendingAnswerParams: String? = null
+    @Volatile private var pendingAnswerSdpTs: Long = 0L
     @Volatile private var pendingByeCallId: String? = null
 
     private fun handleNativeAnswer(sdp: String, dialogParamsJson: String) {
@@ -1087,6 +1099,7 @@ class SipConnectionService : Service() {
             Log.w(TAG, "verto.answer queued: isLoggedIn=$isLoggedIn outputStream=${outputStream != null}")
             pendingAnswerSdp = sdp
             pendingAnswerParams = dialogParamsJson
+            pendingAnswerSdpTs = System.currentTimeMillis()
             // Reset attempt counter so reconnect fires with 0ms delay (not 5s).
             // FreeSWITCH only waits ~15s for verto.answer before hanging up.
             reconnectAttempt = 0
@@ -1124,6 +1137,7 @@ class SipConnectionService : Service() {
                 Log.w(TAG, "sendFrame failed for verto.answer — queuing for reconnect")
                 pendingAnswerSdp = sdp
                 pendingAnswerParams = dialogParamsJson
+                pendingAnswerSdpTs = System.currentTimeMillis()
                 // Reconnect immediately (0ms) — do not use exponential back-off
                 reconnectAttempt = 0
                 scheduleReconnect(0L)

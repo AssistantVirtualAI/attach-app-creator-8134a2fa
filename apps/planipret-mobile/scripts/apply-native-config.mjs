@@ -313,7 +313,8 @@ public class PpSipKeepAliveService extends Service {
     String host = p.getString("host", ""); int port = p.getInt("port", 443); String path = p.getString("path", "/");
     if (host == null || host.length() == 0) { emitStatus("error", "missing_host"); return; }
     Socket raw = port == 443 ? SSLSocketFactory.getDefault().createSocket(host, port) : new Socket(host, port);
-    raw.setSoTimeout(65000);
+    raw.setKeepAlive(true);
+    raw.setSoTimeout(90000);
     wsSocket = raw; wsIn = raw.getInputStream(); wsOut = raw.getOutputStream();
     String key = websocketKey();
     String req = "GET " + (path == null || path.length() == 0 ? "/" : path) + " HTTP/1.1\r\nHost: " + host + ":" + port + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + key + "\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: sip\r\nOrigin: https://" + host + "\r\n\r\n";

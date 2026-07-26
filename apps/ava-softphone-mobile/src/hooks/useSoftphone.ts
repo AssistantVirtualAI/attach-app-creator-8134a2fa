@@ -339,7 +339,7 @@ export function useSoftphoneJsSip(
             const remoteNumber = session.remote_identity?.uri?.user || 'Unknown';
             setActiveCallNumber(remoteNumber);
             log('session.new', `${session.direction} ${remoteNumber}`);
-            if (session.direction === 'incoming') setCallState('ringing');
+            if (session.direction === 'incoming') setCallState('ringing-in');
             session.on('peerconnection', (e: any) => {
               const pc: RTCPeerConnection | undefined = e?.peerconnection;
               if (pc) {

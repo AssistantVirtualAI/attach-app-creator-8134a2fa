@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const bulk: boolean = !!body?.bulk;
     const dry_run: boolean = !!body?.dry_run;
     const batch_size: number = Math.max(1, Math.min(20, Number(body?.batch_size ?? 10)));
-    const ring_timeout: number = Math.max(10, Math.min(120, Number(body?.ring_timeout ?? 35)));
+    const ring_timeout: number = Math.max(20, Math.min(120, Number(body?.ring_timeout ?? 35)));
 
     // Auth: admin only
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -230,6 +230,7 @@ Deno.serve(async (req) => {
           mode,
           status: opRes.status,
           list_status: listRes.status,
+        user_reset_status: userReset,
           response: typeof opBody === "string" ? opBody.substring(0, 300) : opBody,
           payload,
         }));
@@ -247,6 +248,7 @@ Deno.serve(async (req) => {
         payload,
         response: opBody,
         list_status: listRes.status,
+        user_reset_status: userReset,
       };
     };
 

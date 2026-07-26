@@ -14,13 +14,16 @@ Deno.serve(async (req) => {
 
   const authHeader = req.headers.get("Authorization") ?? "";
   let userId: string | null = null;
+  let authReason: string | null = null;
   if (authHeader.startsWith("Bearer ")) {
-    const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: u } = await userClient.auth.getUser();
+    const token = authHeader.slice(7);
+    const { data: u, error: uErr } = await admin.auth.getUser(token);
     userId = u?.user?.id ?? null;
+    if (!userId) authReason = uErr?.message ?? "invalid_token";
+  } else {
+    authReason = "no_authorization_header";
   }
+
 
   const origin = req.headers.get("origin") ?? "https://avastatistic.ca";
   const redirectUri = `${origin}/auth/maestro/callback`;

@@ -784,16 +784,23 @@ class VertoClient {
     if (!rec || rec.direction !== 'inbound') return;
     const sdp = (rec.wrapped as any).__pendingAnswer;
     if (!sdp) return;
+    const originalDialogParams = { ...((rec.wrapped as any).__params || {}) };
+    delete (originalDialogParams as any).sdp;
     const dialogParams = {
+      ...originalDialogParams,
       callID,
-      caller_id_name: this.cfg?.caller_id_name || '',
-      caller_id_number: this.cfg?.caller_id_number || '',
-      useVideo: false, useStereo: false,
-      tag: this.audioTagId,
+      caller_id_name: originalDialogParams.caller_id_name || rec.callerIdName || this.cfg?.caller_id_name || '',
+      caller_id_number: originalDialogParams.caller_id_number || rec.callerIdNumber || this.cfg?.caller_id_number || '',
+      useVideo: originalDialogParams.useVideo ?? false,
+      useStereo: originalDialogParams.useStereo ?? false,
+      tag: originalDialogParams.tag || this.audioTagId,
     };
     try {
       if (rec.nativeAnswerSender) {
-        const nativeOk = await rec.nativeAnswerSender(sdp, dialogParams);
+        const nativePromise = rec.nativeAnswerSender(sdp, dialogParams).catch((e) => {
+          console.warn('[verto] native answer failed; JS fallback already sent', e);
+          return false;
+        });
         // Android native WS can be half-closed exactly when the user taps
         // Answer. The Capacitor bridge only confirms the broadcast was sent,
         // not that FreeSWITCH accepted the frame. Always send a JS Verto
@@ -801,6 +808,7 @@ class VertoClient {
         this.rpc('verto.answer', { callID, sdp, dialogParams }).catch((e) => {
           console.warn('[verto] JS fallback answer failed', e);
         });
+        const nativeOk = await nativePromise;
         if (nativeOk === false) {
           console.warn('[verto] native answer reported false; JS fallback already sent');
         }
@@ -943,6 +951,17 @@ class VertoClient {
   injectServerMessage(rawJson: string): void {
     try {
       console.log('[verto] injectServerMessage from native relay:', rawJson.substring(0, 120));
+      const parsed = JSON.parse(rawJson);
+      const result = parsed?.result;
+      if (!parsed?.method && result?.sdp) {
+        const callID = result.callID || result.dialogParams?.callID || (this.dialogs.size === 1 ? Array.from(this.dialogs.keys())[0] : undefined);
+        this.handleMessage(JSON.stringify({
+          jsonrpc: '2.0',
+          method: result.method || 'verto.answer',
+          params: { ...result, callID, dialogParams: { ...(result.dialogParams || {}), callID } },
+        }));
+        return;
+      }
       this.handleMessage(rawJson);
     } catch (e) {
       console.warn('[verto] injectServerMessage failed:', e);

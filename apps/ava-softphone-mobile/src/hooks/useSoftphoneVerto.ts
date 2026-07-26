@@ -563,11 +563,15 @@ export function useSoftphoneVerto(config: SIPConfig | null): UseSoftphoneReturn 
       // Path A: dialog already adopted — use its pre-gathered SDP.
       if (d?.__pendingAnswer) {
         try {
-          await answerAndroidNativeCall(d.__pendingAnswer, d.__params || {});
+          // Important: route through VertoClient.answerInbound(), not directly
+          // to the native bridge. answerInbound sends BOTH paths immediately:
+          // native Kotlin WS + JS Verto fallback. If the native WS is half-closed
+          // at tap time, the JS fallback cancels the other ringing legs right away.
+          d.answer();
           setCallState('active');
           return;
         } catch (e) {
-          console.warn('[verto] native answer (path A) failed:', e);
+          console.warn('[verto] answer (path A) failed:', e);
         }
       }
       // Path B: dialog not yet adopted (adoptNativeInboundInvite still running).

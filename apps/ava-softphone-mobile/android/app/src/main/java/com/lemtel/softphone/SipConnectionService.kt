@@ -141,6 +141,7 @@ class SipConnectionService : Service() {
     @Volatile private var currentCallerNumber: String? = null
     @Volatile private var currentInviteParams: String? = null
     @Volatile private var currentCallActive = false
+    @Volatile private var pendingNativeAnswerRpcId: Int? = null
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var callActionReceiver: android.content.BroadcastReceiver? = null
@@ -595,6 +596,32 @@ class SipConnectionService : Service() {
                         closeSocket()
                         scheduleReconnect()
                     }
+                }
+                id != null && id == pendingNativeAnswerRpcId -> {
+                    pendingNativeAnswerRpcId = null
+                    if (json.has("error")) {
+                        Log.e(TAG, "verto.answer rejected by server: ${json.optJSONObject("error") ?: json.optString("error")}")
+                        emitStatus("incoming", "native_answer_rejected")
+                    } else {
+                        Log.i(TAG, "verto.answer acknowledged by server: ${result?.toString()?.take(240) ?: "ok"}")
+                        currentCallActive = true
+                        handler.post { stopRingtone() }
+                        handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
+                        emitStatus("active", "native_answer_ack")
+                    }
+                    if (text.contains("sdp", ignoreCase = true)) {
+                        sendBroadcast(Intent(ACTION_VERTO_SERVER_MESSAGE).apply {
+                            setPackage(packageName)
+                            putExtra("raw", text)
+                        })
+                    }
+                }
+                result != null && text.contains("sdp", ignoreCase = true) -> {
+                    Log.i(TAG, "Relaying Verto RPC result with SDP to JS layer")
+                    sendBroadcast(Intent(ACTION_VERTO_SERVER_MESSAGE).apply {
+                        setPackage(packageName)
+                        putExtra("raw", text)
+                    })
                 }
                 method == "verto.invite" -> {
                     val params = json.optJSONObject("params")
@@ -1096,9 +1123,11 @@ class SipConnectionService : Service() {
                 put("sdp", sdp)
                 put("dialogParams", dialogParams)
             }
+            val rpcId = System.currentTimeMillis().toInt()
+            pendingNativeAnswerRpcId = rpcId
             val msg = JSONObject().apply {
                 put("jsonrpc", "2.0")
-                put("id", System.currentTimeMillis().toInt())
+                put("id", rpcId)
                 put("method", "verto.answer")
                 put("params", params)
             }
@@ -1106,9 +1135,12 @@ class SipConnectionService : Service() {
                 Log.i(TAG, "verto.answer sent successfully for callId=$callId")
                 pendingAnswerSdp = null
                 pendingAnswerParams = null
-                currentCallActive = true
-                handler.post { showOngoingCallNotification(currentCallerNumber ?: currentCallerName ?: "Lemtel", false) }
-                emitStatus("active", "native_answer_sent")
+                // Do NOT mark the call active just because the frame was written.
+                // On forked/sim-ring calls FreeSWITCH may reject or ignore an
+                // answer sent after a socket reconnect. Wait for the server ACK
+                // (handled by pendingNativeAnswerRpcId) or verto.answer/media so
+                // JS does not suppress its immediate fallback answer path.
+                emitStatus("incoming", "native_answer_sent")
             } else {
                 Log.w(TAG, "sendFrame failed for verto.answer — queuing for reconnect")
                 pendingAnswerSdp = sdp

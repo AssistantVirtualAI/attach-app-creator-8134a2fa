@@ -93,17 +93,15 @@ Deno.serve(async (req) => {
     // that exact name exists on the account, otherwise NS silently
     // creates an inert rule that never matches inbound calls.
     // IMPORTANT (root cause of "straight to voicemail"):
-    // NetSapiens sim-ring destinations must be dialable targets (extensions or
-    // phone numbers) — NOT device AORs like sip:113_mobile@domain. When device
-    // AORs are used, the domain cannot route them, the fork fails instantly and
-    // NS jumps to voicemail with 0s of ringing (observed CDR:
-    // call-answer-datetime == call-start-datetime, call-term-to-uri = "VMail").
-    // The correct rule is: ring the user's extension + ring ALL of the user's
-    // phones (which forks to 113_web / 113_mobile automatically), then fall to
-    // voicemail after the ring timeout.
-    const buildRulePayload = (ext: string, domain: string) => {
-      const userAor = `sip:${ext}@${domain}`;
-      const destinations = [{ destination: userAor, timeout: ring_timeout }];
+    // The previous payload put the user's OWN AOR (sip:{ext}@{domain}) in the
+    // sim-ring destination list. That is a self-reference: on NS builds that do
+    // not honor `ring-all-user-phones`, the fork cannot be routed, NS answers
+    // instantly with a terminating application (VMail / SpeakAccount) and no
+    // device ever rings (observed CDR: answer == start, 2 SIP participants).
+    // The rule now rings the user's REAL device AORs, read from NS
+    // (/users/{ext}/devices), and keeps the ring-all flags as a hint only.
+    const buildRulePayload = (ext: string, domain: string, deviceAors: string[]) => {
+      const destinations = deviceAors.map((aor) => ({ destination: aor, timeout: ring_timeout }));
       return {
         "time-frame": "*",
         "enabled": "yes",                    // voicemail fallback ON after no-answer
@@ -128,7 +126,7 @@ Deno.serve(async (req) => {
           "include-user-extension": "yes",
           "ring-all-user-phones": "yes",
           "destinations": destinations,
-          "list": [userAor],
+          "list": deviceAors,
         },
         "forward-no-answer": {
           "enabled": "yes",
@@ -143,7 +141,7 @@ Deno.serve(async (req) => {
         "simultaneous-ring-all-user-phones": "yes",
         "sim-ring-include-user-extension": "yes",
         "sim-ring-all-user-phones": "yes",
-        "simultaneous-ring-list": [userAor],
+        "simultaneous-ring-list": deviceAors,
         "sim-ring-destinations": destinations,
         "ring-timeout": ring_timeout,
         "timeout": ring_timeout,
@@ -152,6 +150,29 @@ Deno.serve(async (req) => {
         "forward-no-answer-destination": `vmail:${ext}`,
       };
     };
+
+    // Read the broker's real device AORs from NS. Falls back to the conventional
+    // {ext}_mobile / {ext}_web names when the device endpoint is unavailable.
+    const fetchDeviceAors = async (ext: string, domain: string): Promise<{ aors: string[]; source: string; status: number }> => {
+      try {
+        const res = await nsFetch(
+          `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`,
+          { method: "GET" },
+          { functionName: "pp-sync-answering-rules" },
+        );
+        const data: any = await readBody(res);
+        const rows: any[] = Array.isArray(data) ? data : (data?.data ?? data?.items ?? []);
+        const aors = rows
+          .map((r: any) => String(r?.device ?? r?.aor ?? r?.name ?? "").replace(/^sip:/, "").split("@")[0])
+          .filter((id: string) => id && id.startsWith(ext))
+          .map((id: string) => `sip:${id}@${domain}`);
+        if (aors.length) return { aors: [...new Set(aors)], source: "ns_devices", status: res.status };
+        return { aors: [`sip:${ext}_mobile@${domain}`, `sip:${ext}_web@${domain}`], source: "convention_fallback", status: res.status };
+      } catch {
+        return { aors: [`sip:${ext}_mobile@${domain}`, `sip:${ext}_web@${domain}`], source: "convention_fallback", status: 0 };
+      }
+    };
+
 
 
     const applyRule = async (broker: any) => {

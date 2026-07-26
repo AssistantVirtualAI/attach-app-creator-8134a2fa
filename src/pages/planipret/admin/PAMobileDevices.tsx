@@ -467,7 +467,7 @@ export default function PAMobileDevices() {
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={refresh} disabled={loading} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)", opacity: loading ? 0.65 : 1 }}>
+          <button onClick={() => refresh(true)} disabled={loading} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)", opacity: loading ? 0.65 : 1 }}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} {t.refresh}
           </button>
           <button onClick={syncDevices} disabled={syncingDevices} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)", opacity: syncingDevices ? 0.65 : 1 }}>

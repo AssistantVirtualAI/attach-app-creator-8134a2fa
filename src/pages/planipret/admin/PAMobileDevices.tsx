@@ -549,6 +549,10 @@ export default function PAMobileDevices() {
                       <button onClick={() => { setTestBroker(r); setTestSessionId(null); setTestState(null); setAnsweredBy(null); }} disabled={!r.ns_extension} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
                         <PhoneCall className="h-3.5 w-3.5" /> {t.test}
                       </button>
+                      <button onClick={() => runDiagnostic(r)} disabled={!r.ns_extension || diagLoading} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium" style={{ background: `${WARNING}16`, border: `1px solid ${WARNING}33`, color: WARNING, opacity: diagLoading ? 0.65 : 1 }}>
+                        {diagLoading && diagBroker?.broker_id === r.broker_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Stethoscope className="h-3.5 w-3.5" />} {t.diag}
+                      </button>
+
                     </div>
                   </td>
                 </tr>

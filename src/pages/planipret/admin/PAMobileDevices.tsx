@@ -674,14 +674,38 @@ export default function PAMobileDevices() {
                 </pre>
               </div>
             )}
+            {diagResult?.ns_raw && (
+              <div>
+                <div className="mb-1 font-medium">NS-API raw</div>
+                <pre className="overflow-x-auto rounded-md bg-muted/40 p-3 text-[10px] leading-relaxed">
+                  {JSON.stringify(diagResult.ns_raw, null, 2)}
+                </pre>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => { setDiagBroker(null); setDiagResult(null); }}>{t.close}</Button>
+            {diagResult?.ns_raw && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(JSON.stringify(diagResult.ns_raw, null, 2));
+                  toast.success("NS-API raw copié");
+                }}
+              >
+                Copier NS raw
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => diagBroker && runDiagnostic(diagBroker, true)} disabled={diagLoading}>
+              {diagLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Stethoscope className="mr-2 h-4 w-4" />}
+              Diag brut (NS raw)
+            </Button>
             <Button onClick={() => diagBroker && runDiagnostic(diagBroker)} disabled={diagLoading}>
               {diagLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Stethoscope className="mr-2 h-4 w-4" />}
               {t.diag}
             </Button>
           </DialogFooter>
+
         </DialogContent>
       </Dialog>
 

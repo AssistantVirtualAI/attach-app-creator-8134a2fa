@@ -24,6 +24,10 @@ interface StatusData {
   error?: string | null;
   last_error?: { message?: string | null } | null;
   configured?: boolean;
+  reason?: string | null;
+  user_id?: string | null;
+  expires_in?: number | null;
+
 }
 
 /**

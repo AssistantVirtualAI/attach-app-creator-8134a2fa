@@ -237,10 +237,12 @@ Deno.serve(async (req) => {
         failed += res.filter((r: any) => !r.success).length;
         if (i + batch_size < list.length) await new Promise((r) => setTimeout(r, 200));
       }
+      const include_results = body?.include_results !== false;
       return json({
         success: failed === 0,
         offset,
         limit,
+        total: all.length,
         processed: all.length,
         succeeded,
         failed,
@@ -248,7 +250,12 @@ Deno.serve(async (req) => {
         ring_timeout,
         rule_path: cachedRulePath,
         next_offset: list.length === limit ? offset + limit : null,
-        results: all,
+        results: include_results
+          ? all.map((r: any) => ({ ...r, payload: undefined, response: undefined }))
+          : undefined,
+        errors: all.filter((r: any) => !r.success).slice(0, 20).map((r: any) => ({
+          extension: r.extension, status: r.status, error: r.error,
+        })),
       });
     }
 

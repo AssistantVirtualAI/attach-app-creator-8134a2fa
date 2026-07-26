@@ -644,6 +644,47 @@ export default function PAMobileDevices() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!diagBroker} onOpenChange={(o) => { if (!o) { setDiagBroker(null); setDiagResult(null); } }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t.diagTitle(diagBroker?.full_name)}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[65vh] space-y-3 overflow-y-auto text-sm">
+            {diagLoading && <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> …</div>}
+            {diagResult?.verdict && (
+              <div className="rounded-md border bg-muted/40 p-3">
+                <div className="font-medium">{t.diagVerdict}: <code>{diagResult.verdict}</code></div>
+                <div className="mt-1 text-xs text-muted-foreground">ext {diagResult.extension} · {diagResult.domain}</div>
+              </div>
+            )}
+            {diagResult?.issues && (
+              <div>
+                <div className="mb-1 font-medium">{t.diagIssues}</div>
+                {diagResult.issues.length === 0
+                  ? <div className="text-xs text-muted-foreground">{t.diagNoIssue}</div>
+                  : <ul className="list-disc space-y-1 pl-5 text-xs">{diagResult.issues.map((i: string, k: number) => <li key={k}>{i}</li>)}</ul>}
+              </div>
+            )}
+            {diagResult && (
+              <div>
+                <div className="mb-1 font-medium">{t.diagSummary}</div>
+                <pre className="overflow-x-auto rounded-md bg-muted/40 p-3 text-[10px] leading-relaxed">
+                  {JSON.stringify(diagResult.summary ?? diagResult, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setDiagBroker(null); setDiagResult(null); }}>{t.close}</Button>
+            <Button onClick={() => diagBroker && runDiagnostic(diagBroker)} disabled={diagLoading}>
+              {diagLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Stethoscope className="mr-2 h-4 w-4" />}
+              {t.diag}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

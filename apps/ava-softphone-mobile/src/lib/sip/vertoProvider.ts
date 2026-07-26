@@ -943,6 +943,28 @@ class VertoClient {
   injectServerMessage(rawJson: string): void {
     try {
       console.log('[verto] injectServerMessage from native relay:', rawJson.substring(0, 120));
+      let msg: any;
+      try { msg = JSON.parse(rawJson); } catch { return; }
+
+      // FreeSWITCH responds to our verto.answer with a JSON-RPC *result*
+      // (not a notification), e.g.:
+      //   {"jsonrpc":"2.0","id":1234,"result":{"callID":"...","sdp":"..."}}
+      // handleMessage() silently discards this because the id is not in the
+      // JS pending-RPC map (it was sent by the Kotlin socket, not the JS
+      // socket). Convert it to a synthetic verto.answer notification so
+      // handleServerMethod() can call setRemoteDescription correctly.
+      if (msg.result && msg.result.sdp) {
+        const callID = msg.result.callID || msg.result.callId || '';
+        const synthetic = JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'verto.answer',
+          params: { callID, sdp: msg.result.sdp },
+        });
+        console.log('[verto] injectServerMessage: converting result+SDP to synthetic verto.answer, callID:', callID);
+        this.handleMessage(synthetic);
+        return;
+      }
+
       this.handleMessage(rawJson);
     } catch (e) {
       console.warn('[verto] injectServerMessage failed:', e);

@@ -546,6 +546,17 @@ class SipConnectionService : Service() {
                 }.toString())
             }
 
+            // If this is a JSON-RPC result (not a notification) that carries a
+            // SDP — which is how FreeSWITCH acknowledges our verto.answer on the
+            // same Kotlin socket — relay it to the JS layer so the RTCPeerConnection
+            // can call setRemoteDescription.
+            if (result != null && result.has("sdp")) {
+                Log.i(TAG, "Relaying JSON-RPC result with SDP to JS layer (sdpLen=${result.optString("sdp").length})")
+                sendBroadcast(Intent(ACTION_VERTO_SERVER_MESSAGE).apply {
+                    setPackage(packageName)
+                    putExtra("raw", text)
+                })
+            }
             when {
                 result != null && json.optInt("id") == 1 -> {
                     val sessid = result.optString("sessid")

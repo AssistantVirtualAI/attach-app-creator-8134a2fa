@@ -164,6 +164,31 @@ Deno.serve(async (req) => {
         return { broker_id: broker.id ?? broker.user_id, extension: ext, domain, dry_run: true, payload, success: true };
       }
 
+      // Clear any user-level DND / forward that overrides answering rules and
+      // sends inbound calls straight to voicemail.
+      let userReset: number | null = null;
+      try {
+        const uRes = await nsFetch(
+          `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              "do-not-disturb": "no",
+              "do-not-disturb-enabled": "no",
+              "forward-always-enabled": "no",
+              "forward-on-busy-enabled": "no",
+              "forward-when-unregistered-enabled": "no",
+              "call-forward-always": "",
+              "call-forward-busy": "",
+              "call-forward-no-answer": "",
+            }),
+          },
+          { functionName: "pp-sync-answering-rules" },
+        );
+        userReset = uRes.status;
+        await uRes.text().catch(() => {});
+      } catch { /* best-effort */ }
+
       const rulePath = await resolveRulePath(domain, ext, "pp-sync-answering-rules");
       if (!rulePath) {
         return {

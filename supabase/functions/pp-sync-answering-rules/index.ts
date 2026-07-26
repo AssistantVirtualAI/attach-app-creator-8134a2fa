@@ -260,7 +260,7 @@ Deno.serve(async (req) => {
         failed,
         dry_run,
         ring_timeout,
-        rule_path: cachedRulePath,
+        rule_paths: Object.fromEntries(cachedRulePathByDomain.entries()),
         next_offset: list.length === limit ? offset + limit : null,
         results: include_results
           ? all.map((r: any) => ({ ...r, payload: undefined, response: undefined }))

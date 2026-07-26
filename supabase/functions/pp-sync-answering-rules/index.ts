@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const bulk: boolean = !!body?.bulk;
     const dry_run: boolean = !!body?.dry_run;
     const batch_size: number = Math.max(1, Math.min(20, Number(body?.batch_size ?? 10)));
-    const ring_timeout: number = Math.max(10, Math.min(120, Number(body?.ring_timeout ?? 35)));
+    const ring_timeout: number = Math.max(20, Math.min(120, Number(body?.ring_timeout ?? 35)));
 
     // Auth: admin only
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -92,20 +92,24 @@ Deno.serve(async (req) => {
     // using the literal string "Default" only works if a timeframe with
     // that exact name exists on the account, otherwise NS silently
     // creates an inert rule that never matches inbound calls.
+    // IMPORTANT (root cause of "straight to voicemail"):
+    // NetSapiens sim-ring destinations must be dialable targets (extensions or
+    // phone numbers) — NOT device AORs like sip:113_mobile@domain. When device
+    // AORs are used, the domain cannot route them, the fork fails instantly and
+    // NS jumps to voicemail with 0s of ringing (observed CDR:
+    // call-answer-datetime == call-start-datetime, call-term-to-uri = "VMail").
+    // The correct rule is: ring the user's extension + ring ALL of the user's
+    // phones (which forks to 113_web / 113_mobile automatically), then fall to
+    // voicemail after the ring timeout.
     const buildRulePayload = (ext: string, domain: string) => {
-      const mobileAor = `sip:${ext}_mobile@${domain}`;
-      const webAor = `sip:${ext}_web@${domain}`;
       const userAor = `sip:${ext}@${domain}`;
-      const destinations = [
-        { destination: userAor,   timeout: ring_timeout },
-        { destination: mobileAor, timeout: ring_timeout },
-        { destination: webAor,    timeout: ring_timeout },
-      ];
+      const destinations = [{ destination: userAor, timeout: ring_timeout }];
       return {
         "time-frame": "*",
         "enabled": "yes",                    // voicemail fallback ON after no-answer
         "do-not-disturb": "no",
         "do-not-disturb-enabled": "no",
+        "call-screening": "no",
         "forward-always-enabled": "no",
         "forward-on-active-enabled": "no",
         "forward-on-busy-enabled": "no",
@@ -121,8 +125,10 @@ Deno.serve(async (req) => {
           "enabled": "yes",
           "confirm": "no",
           "timeout": ring_timeout,
+          "include-user-extension": "yes",
+          "ring-all-user-phones": "yes",
           "destinations": destinations,
-          "list": [userAor, mobileAor, webAor],
+          "list": [userAor],
         },
         "forward-no-answer": {
           "enabled": "yes",
@@ -133,14 +139,20 @@ Deno.serve(async (req) => {
         // --- flat-key aliases (legacy NS builds) ---
         "simultaneous-ring-enabled": "yes",
         "simultaneous-ring-confirm": "no",
-        "simultaneous-ring-list": [userAor, mobileAor, webAor],
+        "simultaneous-ring-include-user-extension": "yes",
+        "simultaneous-ring-all-user-phones": "yes",
+        "sim-ring-include-user-extension": "yes",
+        "sim-ring-all-user-phones": "yes",
+        "simultaneous-ring-list": [userAor],
         "sim-ring-destinations": destinations,
         "ring-timeout": ring_timeout,
+        "timeout": ring_timeout,
         "forward-no-answer-enabled": "yes",
         "forward-no-answer-target": `vmail:${ext}`,
         "forward-no-answer-destination": `vmail:${ext}`,
       };
     };
+
 
     const applyRule = async (broker: any) => {
       const ext = broker.ns_extension ?? broker.extension;
@@ -151,6 +163,31 @@ Deno.serve(async (req) => {
       if (dry_run) {
         return { broker_id: broker.id ?? broker.user_id, extension: ext, domain, dry_run: true, payload, success: true };
       }
+
+      // Clear any user-level DND / forward that overrides answering rules and
+      // sends inbound calls straight to voicemail.
+      let userReset: number | null = null;
+      try {
+        const uRes = await nsFetch(
+          `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              "do-not-disturb": "no",
+              "do-not-disturb-enabled": "no",
+              "forward-always-enabled": "no",
+              "forward-on-busy-enabled": "no",
+              "forward-when-unregistered-enabled": "no",
+              "call-forward-always": "",
+              "call-forward-busy": "",
+              "call-forward-no-answer": "",
+            }),
+          },
+          { functionName: "pp-sync-answering-rules" },
+        );
+        userReset = uRes.status;
+        await uRes.text().catch(() => {});
+      } catch { /* best-effort */ }
 
       const rulePath = await resolveRulePath(domain, ext, "pp-sync-answering-rules");
       if (!rulePath) {
@@ -193,6 +230,7 @@ Deno.serve(async (req) => {
           mode,
           status: opRes.status,
           list_status: listRes.status,
+        user_reset_status: userReset,
           response: typeof opBody === "string" ? opBody.substring(0, 300) : opBody,
           payload,
         }));
@@ -210,6 +248,7 @@ Deno.serve(async (req) => {
         payload,
         response: opBody,
         list_status: listRes.status,
+        user_reset_status: userReset,
       };
     };
 

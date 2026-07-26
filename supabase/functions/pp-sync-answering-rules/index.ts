@@ -93,17 +93,15 @@ Deno.serve(async (req) => {
     // that exact name exists on the account, otherwise NS silently
     // creates an inert rule that never matches inbound calls.
     // IMPORTANT (root cause of "straight to voicemail"):
-    // NetSapiens sim-ring destinations must be dialable targets (extensions or
-    // phone numbers) — NOT device AORs like sip:113_mobile@domain. When device
-    // AORs are used, the domain cannot route them, the fork fails instantly and
-    // NS jumps to voicemail with 0s of ringing (observed CDR:
-    // call-answer-datetime == call-start-datetime, call-term-to-uri = "VMail").
-    // The correct rule is: ring the user's extension + ring ALL of the user's
-    // phones (which forks to 113_web / 113_mobile automatically), then fall to
-    // voicemail after the ring timeout.
-    const buildRulePayload = (ext: string, domain: string) => {
-      const userAor = `sip:${ext}@${domain}`;
-      const destinations = [{ destination: userAor, timeout: ring_timeout }];
+    // The previous payload put the user's OWN AOR (sip:{ext}@{domain}) in the
+    // sim-ring destination list. That is a self-reference: on NS builds that do
+    // not honor `ring-all-user-phones`, the fork cannot be routed, NS answers
+    // instantly with a terminating application (VMail / SpeakAccount) and no
+    // device ever rings (observed CDR: answer == start, 2 SIP participants).
+    // The rule now rings the user's REAL device AORs, read from NS
+    // (/users/{ext}/devices), and keeps the ring-all flags as a hint only.
+    const buildRulePayload = (ext: string, domain: string, deviceAors: string[]) => {
+      const destinations = deviceAors.map((aor) => ({ destination: aor, timeout: ring_timeout }));
       return {
         "time-frame": "*",
         "enabled": "yes",                    // voicemail fallback ON after no-answer
@@ -128,7 +126,7 @@ Deno.serve(async (req) => {
           "include-user-extension": "yes",
           "ring-all-user-phones": "yes",
           "destinations": destinations,
-          "list": [userAor],
+          "list": deviceAors,
         },
         "forward-no-answer": {
           "enabled": "yes",
@@ -143,7 +141,7 @@ Deno.serve(async (req) => {
         "simultaneous-ring-all-user-phones": "yes",
         "sim-ring-include-user-extension": "yes",
         "sim-ring-all-user-phones": "yes",
-        "simultaneous-ring-list": [userAor],
+        "simultaneous-ring-list": deviceAors,
         "sim-ring-destinations": destinations,
         "ring-timeout": ring_timeout,
         "timeout": ring_timeout,
@@ -153,16 +151,41 @@ Deno.serve(async (req) => {
       };
     };
 
+    // Read the broker's real device AORs from NS. Falls back to the conventional
+    // {ext}_mobile / {ext}_web names when the device endpoint is unavailable.
+    const fetchDeviceAors = async (ext: string, domain: string): Promise<{ aors: string[]; source: string; status: number }> => {
+      try {
+        const res = await nsFetch(
+          `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`,
+          { method: "GET" },
+          { functionName: "pp-sync-answering-rules" },
+        );
+        const data: any = await readBody(res);
+        const rows: any[] = Array.isArray(data) ? data : (data?.data ?? data?.items ?? []);
+        const aors = rows
+          .map((r: any) => String(r?.device ?? r?.aor ?? r?.name ?? "").replace(/^sip:/, "").split("@")[0])
+          .filter((id: string) => id && id.startsWith(ext))
+          .map((id: string) => `sip:${id}@${domain}`);
+        if (aors.length) return { aors: [...new Set(aors)], source: "ns_devices", status: res.status };
+        return { aors: [`sip:${ext}_mobile@${domain}`, `sip:${ext}_web@${domain}`], source: "convention_fallback", status: res.status };
+      } catch {
+        return { aors: [`sip:${ext}_mobile@${domain}`, `sip:${ext}_web@${domain}`], source: "convention_fallback", status: 0 };
+      }
+    };
+
+
 
     const applyRule = async (broker: any) => {
       const ext = broker.ns_extension ?? broker.extension;
       const domain = broker.ns_domain || NS_DEFAULT_DOMAIN;
       if (!ext) return { broker_id: broker.id ?? broker.user_id, success: false, error: "no_extension" };
 
-      const payload = buildRulePayload(ext, domain);
+      const devices = await fetchDeviceAors(ext, domain);
+      const payload = buildRulePayload(ext, domain, devices.aors);
       if (dry_run) {
-        return { broker_id: broker.id ?? broker.user_id, extension: ext, domain, dry_run: true, payload, success: true };
+        return { broker_id: broker.id ?? broker.user_id, extension: ext, domain, dry_run: true, payload, devices, success: true };
       }
+
 
       // Clear any user-level DND / forward that overrides answering rules and
       // sends inbound calls straight to voicemail.
@@ -236,6 +259,36 @@ Deno.serve(async (req) => {
         }));
       }
 
+      // 3) Read-after-write: confirm NS actually stored sim-ring + our targets.
+      let verify: any = null;
+      try {
+        const vRes = await nsFetch(base, { method: "GET" }, { functionName: "pp-sync-answering-rules" });
+        const vBody: any = await readBody(vRes);
+        const vArr: any[] = Array.isArray(vBody) ? vBody : (vBody?.data ?? vBody?.items ?? []);
+        const stored = vArr.find((r: any) => {
+          const tf = String(r?.["time-frame"] ?? r?.timeframe ?? r?.time_frame ?? "").toLowerCase();
+          return tf === "default" || tf === "*" || tf === "always";
+        }) ?? vArr[0] ?? null;
+        const sim = stored?.["simultaneous-ring"] ?? null;
+        const list: any[] = Array.isArray(sim?.destinations) ? sim.destinations
+          : (Array.isArray(sim?.list) ? sim.list : (Array.isArray(stored?.["simultaneous-ring-list"]) ? stored["simultaneous-ring-list"] : []));
+        const targets = list.map((x: any) => String(x?.destination ?? x ?? "").toLowerCase()).filter(Boolean);
+        const simOn = ["yes", "true", "1"].includes(String(sim?.enabled ?? stored?.["simultaneous-ring-enabled"] ?? "").toLowerCase());
+        verify = {
+          status: vRes.status,
+          sim_ring_enabled: simOn,
+          stored_targets: targets,
+          covers_mobile: targets.some((t) => t.includes(`${String(ext).toLowerCase()}_mobile`)),
+          ring_timeout: Number(sim?.timeout ?? stored?.["ring-timeout"] ?? stored?.timeout ?? 0) || null,
+          honored: simOn && targets.length > 0,
+        };
+        if (!verify.honored) {
+          console.error("[syncBroker] NS ignored sim-ring keys", JSON.stringify({ extension: ext, domain, verify, sent: devices.aors }));
+        }
+      } catch (e) {
+        verify = { error: (e as Error).message };
+      }
+
       return {
         broker_id: broker.id ?? broker.user_id,
         broker_name: broker.full_name,
@@ -246,11 +299,15 @@ Deno.serve(async (req) => {
         status: opRes.status,
         rule_path: rulePath,
         payload,
+        devices,
+        verify,
         response: opBody,
         list_status: listRes.status,
         user_reset_status: userReset,
       };
     };
+
+
 
     // Single
     if (broker_id && !bulk) {

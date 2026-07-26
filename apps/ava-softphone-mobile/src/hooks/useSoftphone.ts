@@ -227,6 +227,7 @@ export function useSoftphoneJsSip(
 
   // SIP/TLS transport does not require WebRTC, mDNS or TURN.
   useEffect(() => {
+    console.log('[SIP][android] JsSIP useEffect fired — config:', config ? `ext=${config.extension} wss=${config.wssUrl}` : 'NULL');
     if (!config) return;
     let cancelled = false;
 
@@ -573,6 +574,7 @@ export function useSoftphoneJsSip(
       }
 
       // Reachability probe for WSS only. SIP/TLS relies on the SIP registration itself.
+      console.log('[SIP][android] JsSIP scheduleRetry — about to probe WSS:', config.wssUrl);
       if (config.wssUrl?.startsWith('wss://')) {
         log('probe.start', config.wssUrl);
         const probe = await probeWss(config.wssUrl, 3500);

@@ -8,15 +8,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { logDeepLink } from "@/lib/deepLinkDebug";
 
-type Status = "loading" | "disconnected" | "connected" | "error";
+type Status = "loading" | "disconnected" | "pending" | "connected" | "error";
 
 interface StatusData {
+  status?: "connected" | "pending" | "not_configured" | "disconnected" | "error";
   connected?: boolean;
   broker_id?: string | null;
+  maestro_broker_id?: string | null;
   email?: string | null;
+  maestro_email?: string | null;
   scope?: string | null;
   expires_at?: string | null;
   error?: string | null;
+  last_error?: { message?: string | null } | null;
   configured?: boolean;
 }
 
@@ -41,6 +45,7 @@ export default function MaestroConnectCard() {
     opening: isFr ? "Ouverture de Maestro…" : "Opening Maestro…",
     error: isFr ? "Erreur" : "Error",
     disconnected: isFr ? "Non connecté" : "Not connected",
+    pending: isFr ? "Connexion en attente" : "Connection pending",
     notConfigured: isFr ? "Maestro n'est pas configuré côté serveur" : "Maestro is not configured on the server",
     disconnectOk: isFr ? "Déconnecté de Maestro" : "Disconnected from Maestro",
   };
@@ -52,8 +57,9 @@ export default function MaestroConnectCard() {
       const d = (res ?? {}) as StatusData;
       setData(d);
       if (d.configured === false) setStatus("error");
-      else if (d.connected) setStatus("connected");
-      else if (d.error) setStatus("error");
+      else if (d.status === "connected" || d.connected) setStatus("connected");
+      else if (d.status === "pending") setStatus("pending");
+      else if (d.status === "error" || d.error || d.last_error) setStatus("error");
       else setStatus("disconnected");
     } catch (e: any) {
       setData({ error: e?.message || "status_failed" });
@@ -129,7 +135,11 @@ export default function MaestroConnectCard() {
   const dot =
     status === "connected" ? "#22c55e" :
     status === "error" ? "#ef4444" :
+    status === "pending" ? "#f59e0b" :
     status === "loading" ? "#64748b" : "#f59e0b";
+  const email = data.email ?? data.maestro_email;
+  const brokerId = data.broker_id ?? data.maestro_broker_id;
+  const errorMessage = data.error ?? data.last_error?.message ?? L.error;
 
   return (
     <div style={{ padding: "0 12px 8px" }}>
@@ -152,10 +162,14 @@ export default function MaestroConnectCard() {
         {status === "connected" && (
           <div style={{ fontSize: 11, color: "var(--pp-text-secondary)", fontFamily: "monospace", lineHeight: 1.6 }}>
             <div className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3" style={{ color: "#22c55e" }} /> {L.connected}</div>
-            {data.email && <div>✉ {data.email}</div>}
-            {data.broker_id && <div>ID: {data.broker_id}</div>}
+            {email && <div>✉ {email}</div>}
+            {brokerId && <div>ID: {brokerId}</div>}
             {data.scope && <div>Scope: {data.scope}</div>}
           </div>
+        )}
+
+        {status === "pending" && (
+          <div style={{ fontSize: 11, color: "var(--pp-text-secondary)" }}>{L.pending}</div>
         )}
 
         {status === "disconnected" && (
@@ -165,7 +179,7 @@ export default function MaestroConnectCard() {
         {status === "error" && (
           <div className="flex items-start gap-1" style={{ fontSize: 11, color: "#ef4444" }}>
             <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-            <div>{data.configured === false ? L.notConfigured : (data.error || L.error)}</div>
+            <div>{data.configured === false ? L.notConfigured : errorMessage}</div>
           </div>
         )}
 

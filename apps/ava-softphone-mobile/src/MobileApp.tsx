@@ -546,8 +546,16 @@ function AuthenticatedShell({
     })();
 
     // Re-register SIP when app comes back to foreground.
+    // NOTE: JsSIP manages its own reconnection via connection_recovery_min/max_interval
+    // and nativeAutoReconnect. Calling sp.reconnect() here destroys and recreates the
+    // JsSIP UA on every app foreground event, causing a perpetual connecting→registered
+    // loop. Only trigger a manual reconnect if SIP is in a terminal error state.
     let unsub: () => void = () => {};
-    onAppStateChange((active) => { if (active) sp.reconnect?.(); }).then((u) => { unsub = u; });
+    onAppStateChange((active) => {
+      if (active && sp.snap?.status === 'error') {
+        sp.reconnect?.();
+      }
+    }).then((u) => { unsub = u; });
 
     return () => { cancelled = true; unsub(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -11,7 +11,7 @@ import { Browser } from "@capacitor/browser";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
-import { logDeepLink } from "@/lib/deepLinkDebug";
+import { logDeepLink, markOAuthCallbackCompleted } from "@/lib/deepLinkDebug";
 
 // Module-level dedupe: the OS may deliver the same deep link via BOTH
 // getLaunchUrl() (cold start) and appUrlOpen, which remounts this route
@@ -19,6 +19,16 @@ import { logDeepLink } from "@/lib/deepLinkDebug";
 // then returns invalid_grant on the second call.
 const inflightCodes = new Set<string>();
 const completedCodes = new Set<string>();
+
+async function getSessionWithRetry() {
+  for (let i = 0; i < 8; i += 1) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) return session;
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+  }
+  return null;
+}
+
 export default function MaestroCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -88,6 +98,9 @@ export default function MaestroCallback() {
 
     (async () => {
       try {
+        const session = await getSessionWithRetry();
+        if (!session?.access_token) throw new Error("Session expirée — reconnectez-vous");
+
         const redirectUri = Capacitor.isNativePlatform()
           ? "planipret://auth/maestro/callback"
           : `${window.location.origin}/auth/maestro/callback`;
@@ -105,6 +118,7 @@ export default function MaestroCallback() {
 
         completedCodes.add(code);
         logDeepLink({ kind: "handler", source: "MaestroCallback", detail: "token exchange OK" });
+        markOAuthCallbackCompleted("maestro", storedUrl ?? window.location.search);
         try { localStorage.removeItem("pp_maestro_callback_url"); } catch {}
         try { window.dispatchEvent(new CustomEvent("maestro:connected")); } catch {}
         setMessage("Maestro connecté. Retour à l’accueil…");

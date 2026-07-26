@@ -42,6 +42,16 @@ export interface MaestroTokenSet {
   [k: string]: unknown;
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 10_000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Web: includes client_secret
 async function exchangeWeb(
   env: MaestroOAuthEnv,
@@ -52,7 +62,7 @@ async function exchangeWeb(
     client_secret: env.clientSecret,
     ...params,
   });
-  const r = await fetch(env.tokenUrl, {
+  const r = await fetchWithTimeout(env.tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body: body.toString(),
@@ -71,7 +81,7 @@ async function exchangeMobile(
   params: Record<string, string>,
 ): Promise<{ ok: boolean; status: number; data: MaestroTokenSet | null; error?: string }> {
   const body = new URLSearchParams({ client_id: env.mobileClientId, ...params });
-  const r = await fetch(env.tokenUrl, {
+  const r = await fetchWithTimeout(env.tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
     body: body.toString(),
@@ -164,9 +174,9 @@ export async function fetchMaestroUserProfile(env: MaestroOAuthEnv, accessToken:
   const candidates = [`${root}/user`, `${root}/users/me`, `${root}/me`];
   for (const url of candidates) {
     try {
-      const r = await fetch(url, {
+      const r = await fetchWithTimeout(url, {
         headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-      });
+      }, 4_000);
       if (r.ok) return await r.json();
     } catch (e) {
       console.warn(`[maestro-oauth] fetch ${url} failed`, (e as Error).message);

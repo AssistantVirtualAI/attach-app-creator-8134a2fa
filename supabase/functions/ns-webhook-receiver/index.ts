@@ -208,9 +208,10 @@ async function processEvent(event: any) {
         payload: { type: "inbound_call", call_id: callId, from_number: data.from_number ?? data.from, to_number: data.to_number ?? data.to },
       });
       if (brokerProfile?.notif_calls !== false) {
+        const inboundCallId = callId ? String(callId) : crypto.randomUUID();
         await sendVoipPush(userId, {
-          call_id: callId ? String(callId) : crypto.randomUUID(),
-          callId: callId ? String(callId) : crypto.randomUUID(),
+          call_id: inboundCallId,
+          callId: inboundCallId,
           from_number: data.from_number ?? data.from ?? "Inconnu",
           callerName: data.from_name ?? data.caller_name ?? data.from_number ?? data.from ?? "Appel entrant",
           callerNumber: data.from_number ?? data.from ?? "",

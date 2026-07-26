@@ -1025,30 +1025,19 @@ class SipConnectionService : Service() {
         try {
             val filter = android.content.IntentFilter(CallActionReceiver.ACTION_CALL_ACTION_EVENT)
             filter.addAction(ACTION_NATIVE_VERTO_ANSWER)
-            filter.addAction(ACTION_NATIVE_VERTO_HANGUP)
-            filter.addAction(ACTION_NATIVE_ANSWER_REQUEST)
             filter.addAction(ACTION_REGISTER_OUTBOUND_CALL)
             val recv = object : android.content.BroadcastReceiver() {
                 override fun onReceive(ctx: Context?, intent: Intent?) {
-                    // In JsSIP mode, all call control is handled by JavaScript.
-                    // The Verto native answer/hangup intents are ignored so they
-                    // don't interfere with the JsSIP session.
+                    // All call control (answer / decline / hangup) is handled
+                    // exclusively by JsSIP in JavaScript. The native layer only
+                    // keeps the WakeLock, plays the ringtone, shows notifications
+                    // and relays button taps to JS.
                     val jsSipMode = isJsSipMode()
 
                     when (intent?.action) {
                         ACTION_NATIVE_VERTO_ANSWER -> {
                             if (!jsSipMode) handleNativeAnswer(intent.getStringExtra("sdp") ?: "", intent.getStringExtra("dialogParams") ?: "")
                             else Log.i(TAG, "JsSIP mode: ignoring ACTION_NATIVE_VERTO_ANSWER")
-                            return
-                        }
-                        ACTION_NATIVE_VERTO_HANGUP -> {
-                            if (!jsSipMode) handleNativeHangup("ui_hangup")
-                            else Log.i(TAG, "JsSIP mode: ignoring ACTION_NATIVE_VERTO_HANGUP")
-                            return
-                        }
-                        ACTION_NATIVE_ANSWER_REQUEST -> {
-                            if (!jsSipMode) handleNativeAnswerRequest()
-                            else Log.i(TAG, "JsSIP mode: ignoring ACTION_NATIVE_ANSWER_REQUEST")
                             return
                         }
                         ACTION_REGISTER_OUTBOUND_CALL -> {
@@ -1063,15 +1052,14 @@ class SipConnectionService : Service() {
                             return
                         }
                     }
-                    // In JsSIP mode, ACTION_CALL_ACTION_EVENT is handled entirely
-                    // by JavaScript (via CapacitorPjsip event relay). No native
-                    // Verto answer/hangup needed here.
-                    if (jsSipMode) return
 
+                    // ACTION_CALL_ACTION_EVENT: notification button taps. JS owns
+                    // the SIP signalling; natively we only stop the ringtone so the
+                    // device goes quiet as soon as the user taps a button.
                     val action = intent?.getStringExtra(CallActionReceiver.EXTRA_ACTION) ?: return
-                    when (action) {
-                        "answer" -> handleNativeAnswerRequest()
-                        "hangup", "decline" -> handleNativeHangup(action)
+                    Log.i(TAG, "Call action relayed to JS (no native signalling): $action")
+                    if (action == "answer" || action == "decline" || action == "hangup") {
+                        handler.post { stopRingtone() }
                     }
                 }
             }
@@ -1092,52 +1080,6 @@ class SipConnectionService : Service() {
         callActionReceiver = null
     }
 
-    private fun handleNativeHangup(reason: String) {
-        val callId = currentCallId
-        Log.i(TAG, "handleNativeHangup: reason=$reason callId=$callId isLoggedIn=$isLoggedIn")
-        // Cancel any pending answer — if we're hanging up, we don't want to
-        // accidentally send verto.answer after reconnect.
-        pendingAnswerSdp = null
-        pendingAnswerParams = null
-        if (callId != null) {
-            // Always attempt to send verto.bye regardless of isLoggedIn state.
-            // If the WebSocket is alive, sendFrame succeeds immediately.
-            // If not, queue the bye and reconnect so it is sent after login.
-            val sent = try { sendFrame(buildVertoByeMessage(callId)) } catch (_: Exception) { false }
-            if (sent) {
-                Log.i(TAG, "handleNativeHangup: verto.bye sent immediately for callId=$callId")
-            } else {
-                Log.w(TAG, "handleNativeHangup: sendFrame failed, queuing bye for callId=$callId")
-                pendingByeCallId = callId
-                // Reconnect immediately (0ms) so the bye is delivered before
-                // FreeSWITCH gives up and the remote phone keeps ringing.
-                scheduleReconnect(0L)
-            }
-        } else {
-            Log.w(TAG, "handleNativeHangup: no currentCallId — bye not sent")
-        }
-        currentCallId = null
-        currentCallerName = null
-        currentCallerNumber = null
-        currentInviteParams = null
-        currentCallActive = false
-        if (pendingByeCallId == callId) {
-            Log.i(TAG, "handleNativeHangup: keeping queued bye for reconnect callId=$callId")
-        } else {
-            pendingByeCallId = null
-        }
-        handler.post { stopRingtone() }
-        try { AudioFocusHelper.releaseCallAudioFocus(this) } catch (_: Exception) {}
-        handler.post { clearCallNotifications() }
-        emitStatus("idle", "native_${reason}")
-    }
-
-    private fun handleNativeAnswerRequest() {
-        try { AudioFocusHelper.requestCallAudioFocus(this) } catch (_: Exception) {}
-        handler.post { updateNotification("Réponse en cours...") }
-        Log.i(TAG, "handleNativeAnswerRequest: callId=${currentCallId} inviteLen=${currentInviteParams?.length}")
-        emitStatus("incoming", "answer_requested")
-    }
 
     @Volatile private var pendingAnswerSdp: String? = null
     @Volatile private var pendingAnswerParams: String? = null

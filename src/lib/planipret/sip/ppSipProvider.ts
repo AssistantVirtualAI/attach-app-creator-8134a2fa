@@ -159,11 +159,9 @@ class PpSipProvider {
         contact_uri: `sip:${cleanCfg.sipUsername}@${cleanCfg.sipDomain};transport=wss`,
         register: true,
         session_timers: false,
-        // Longer expiry keeps the registration alive between the JsSIP
-        // auto re-REGISTER (fires around expiry/2). 120s caused visible
-        // dropouts on the diagnostic page whenever the network hiccuped
-        // between two re-REGISTERs.
-        register_expires: 600,
+        // Match the native keep-alive REGISTER expiry so NetSapiens does not
+        // expire one contact while the other still shows "registered" locally.
+        register_expires: 1800,
         connection_recovery_min_interval: 2,
         connection_recovery_max_interval: 30,
         user_agent: "Planipret Softphone 1.0",

@@ -35,6 +35,9 @@ export default function MaestroConnectCard() {
   const [status, setStatus] = useState<Status>("loading");
   const [data, setData] = useState<StatusData>({});
   const [busy, setBusy] = useState(false);
+  const [lastFetch, setLastFetch] = useState<Date | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const pollTimers = useRef<number[]>([]);
 
   const isFr = lang === "fr";
   const L = {
@@ -50,41 +53,78 @@ export default function MaestroConnectCard() {
     pending: isFr ? "Connexion en attente" : "Connection pending",
     notConfigured: isFr ? "Maestro n'est pas configuré côté serveur" : "Maestro is not configured on the server",
     disconnectOk: isFr ? "Déconnecté de Maestro" : "Disconnected from Maestro",
+    refresh: isFr ? "Rafraîchir" : "Refresh",
+    details: isFr ? "Détails techniques" : "Technical details",
+    checkedAt: isFr ? "Vérifié à" : "Checked at",
   };
 
   const load = useCallback(async () => {
     try {
-      const { data: res, error } = await supabase.functions.invoke("maestro-oauth-status", { body: {} });
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data: res, error } = await supabase.functions.invoke("maestro-oauth-status", {
+        body: {},
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+      });
       if (error) throw error;
       const d = (res ?? {}) as StatusData;
       setData(d);
-      if (d.configured === false) setStatus("error");
-      else if (d.status === "connected" || d.connected) setStatus("connected");
+      setLastFetch(new Date());
+      if (d.status === "connected" || d.connected) setStatus("connected");
+      else if (d.configured === false) setStatus("error");
       else if (d.status === "pending") setStatus("pending");
       else if (d.status === "error" || d.error || d.last_error) setStatus("error");
       else setStatus("disconnected");
+      return d;
     } catch (e: any) {
       setData({ error: e?.message || "status_failed" });
+      setLastFetch(new Date());
       setStatus("error");
+      return null;
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Poll a few times so the UI catches up with the server write after OAuth.
+  const pollStatus = useCallback(() => {
+    pollTimers.current.forEach((t) => window.clearTimeout(t));
+    pollTimers.current = [0, 1500, 4000, 8000].map((delay) =>
+      window.setTimeout(async () => {
+        const d = await load();
+        if (d?.status === "connected" || d?.connected) {
+          try { localStorage.removeItem("pp_maestro_just_connected"); } catch {}
+        }
+      }, delay),
+    );
+  }, [load]);
+
+  useEffect(() => {
+    let justConnected = false;
+    try { justConnected = !!localStorage.getItem("pp_maestro_just_connected"); } catch {}
+    if (justConnected) pollStatus(); else load();
+    return () => pollTimers.current.forEach((t) => window.clearTimeout(t));
+  }, [load, pollStatus]);
 
   // Refresh whenever the OAuth callback finishes, the app resumes from the
   // in-app browser, or the tab becomes visible again.
   useEffect(() => {
-    const onConnected = () => load();
+    const onConnected = () => pollStatus();
     const onVisible = () => { if (document.visibilityState === "visible") load(); };
     window.addEventListener("maestro:connected", onConnected);
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onConnected);
+    window.addEventListener("focus", onVisible);
+    let remove: (() => void) | undefined;
+    if (Capacitor.isNativePlatform()) {
+      CapApp.addListener("appStateChange", ({ isActive }) => { if (isActive) load(); })
+        .then((h) => { remove = () => h.remove(); })
+        .catch(() => {});
+    }
     return () => {
       window.removeEventListener("maestro:connected", onConnected);
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onConnected);
+      window.removeEventListener("focus", onVisible);
+      remove?.();
     };
-  }, [load]);
+  }, [load, pollStatus]);
+
 
   const startAuth = async () => {
     setBusy(true);

@@ -320,7 +320,7 @@ Deno.serve(async (req) => {
       user: { status: user.status, data: u ?? null },
       answering_rules: { path: rules.path, status: rules.status, data: rules.data },
       devices: { status: devices.status, data: devices.data },
-      registrations: { status: registrations.status, data: registrations.data },
+      registrations: { status: registrations.status, probes: registrations.probes, data: registrations.data },
       phone_numbers: { status: phoneNumbers.status, count: numbers.length, matching: mine },
       cdrs: { status: cdrs.status, count: cdrRows.length },
     },

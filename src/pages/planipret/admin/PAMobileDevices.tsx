@@ -383,13 +383,14 @@ export default function PAMobileDevices() {
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagResult, setDiagResult] = useState<any>(null);
 
-  const runDiagnostic = useCallback(async (broker: Row) => {
+  const runDiagnostic = useCallback(async (broker: Row, raw = false) => {
     setDiagBroker(broker);
     setDiagResult(null);
     setDiagLoading(true);
     const { data, error } = await supabase.functions.invoke("pp-inbound-diagnostic", {
-      body: { broker_id: broker.broker_id, limit: 8 },
+      body: { broker_id: broker.broker_id, limit: 8, raw },
     });
+
     setDiagLoading(false);
     if (error || !(data as any)?.ok) {
       toast.error(t.diagError, { description: (data as any)?.error || error?.message });

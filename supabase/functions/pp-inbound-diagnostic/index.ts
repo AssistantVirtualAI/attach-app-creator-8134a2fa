@@ -195,11 +195,22 @@ Deno.serve(async (req) => {
   const regList = arrOf(registrations.data).filter((x) => x && typeof x === "object");
   const registeredAors = new Set<string>();
   for (const r of [...deviceList, ...regList]) {
-    const aor = String(r?.aor ?? r?.["device"] ?? r?.["user"] ?? r?.name ?? "");
-    const exp = Number(r?.expires ?? r?.["registration-expires"] ?? 0);
-    const isReg = !!(r?.["registration-time"] ?? r?.["reg-time"] ?? r?.contact ?? r?.["registration-contact"]) || exp > 0;
+    const aor = String(
+      r?.aor ?? r?.["device"] ?? r?.["aor-user"] ?? r?.["sub-user"] ?? r?.["user"] ?? r?.name ?? "",
+    ).replace(/^sip:/, "");
+    const exp = Number(r?.expires ?? r?.["registration-expires"] ?? r?.["expires-seconds"] ?? 0);
+    const statusStr = String(
+      r?.["registration-status"] ?? r?.["device-registration-status"] ?? r?.status ?? "",
+    ).toLowerCase();
+    const isReg =
+      !!(r?.["registration-time"] ?? r?.["reg-time"] ?? r?.contact ?? r?.["registration-contact"] ??
+         r?.["contact-uri"] ?? r?.["device-sip-registration-uri"] ?? r?.["registration-ip"] ??
+         r?.["ip-address"] ?? r?.["user-agent"]) ||
+      exp > 0 ||
+      statusStr.includes("register") || statusStr.includes("online") || statusStr === "active";
     if (aor && isReg) registeredAors.add(aor.toLowerCase());
   }
+
   if (!registeredAors.size) {
     verdicts.push("NO_REGISTRATION_VISIBLE");
     issues.push("NS-API ne montre aucune registration active pour cette extension (endpoint devices/subscriptions).");

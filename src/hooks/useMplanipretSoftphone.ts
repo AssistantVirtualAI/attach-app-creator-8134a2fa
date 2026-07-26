@@ -306,7 +306,9 @@ export function useMplanipretSoftphone() {
         if (AppPlugin?.addListener) {
           const p = AppPlugin.addListener("appStateChange", (state: { isActive: boolean }) => {
             if (state?.isActive) {
-              void triggerPlanipretNativeReregister();
+              // Foreground: JsSIP owns the single SIP registration. Triggering the
+              // native REGISTER here made the PBX close the JsSIP socket (1001) and
+              // caused an endless disconnect/reconnect loop.
               try { ppSipProvider.forceReregister(); } catch {}
               evaluate();
             } else {

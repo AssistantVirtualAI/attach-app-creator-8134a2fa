@@ -171,11 +171,27 @@ Deno.serve(async (req) => {
         ns_linked_at: new Date().toISOString(),
       }).eq("id", broker.id ?? broker.user_id);
 
+      const ok = !uErr && (mobile.created || mobile.existed) && (widget.created || widget.existed);
+
+      // Audit trail so the admin "Provisioning" column shows the real last run.
+      await admin.from("planipret_ns_migration_log").insert({
+        broker_id: broker.id ?? broker.user_id,
+        action: "create_mobile_device",
+        status: ok ? "ok" : "error",
+        details: {
+          extension: ext,
+          domain,
+          mobile: { id: mobileId, created: !!mobile.created, existed: !!mobile.existed, status: (mobile as any).status ?? null },
+          widget: { id: widgetId, created: !!widget.created, existed: !!widget.existed, status: (widget as any).status ?? null },
+          db_error: uErr?.message ?? null,
+        },
+      }).then(() => {}, () => {});
+
       return {
         broker_id: broker.id ?? broker.user_id,
         broker_name: broker.full_name,
         extension: ext,
-        success: !uErr && (mobile.created || mobile.existed) && (widget.created || widget.existed),
+        success: ok,
         db_error: uErr?.message,
         ns_user: nsUser, mobile, widget,
         sip_credentials: { mobile_device_id: mobileId, widget_device_id: widgetId, password: sipPassword },

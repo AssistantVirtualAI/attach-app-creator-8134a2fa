@@ -131,8 +131,20 @@ Deno.serve(async (req) => {
   } as any;
 
 
-  // 4) DID inventory
-  const phoneNumbers = await get(`/domains/${d}/phonenumbers`);
+  // 4) DID inventory — probe domain-wide AND user-scoped endpoints (NS v1/v2 variants)
+  const didProbes = [
+    await get(`/domains/${d}/phonenumbers`),
+    await get(`/domains/${d}/users/${e}/phonenumbers`),
+    await get(`/domains/${d}/phonenumbers?user=${e}`),
+  ];
+  const didRows = didProbes.flatMap((p) => (p.ok ? arrOf(p.data) : []));
+  const phoneNumbers = {
+    path: didProbes.find((p) => p.ok && arrOf(p.data).length)?.path ?? didProbes[0].path,
+    status: didProbes.find((p) => p.ok && arrOf(p.data).length)?.status ?? didProbes[0].status,
+    ok: didProbes.some((p) => p.ok),
+    data: didRows,
+    probes: didProbes.map((p) => ({ path: p.path, status: p.status, count: p.ok ? arrOf(p.data).length : 0 })),
+  } as any;
 
   // 5) Recent inbound CDRs
   const cdrs = await get(`/domains/${d}/users/${e}/cdrs?limit=${limit}`);

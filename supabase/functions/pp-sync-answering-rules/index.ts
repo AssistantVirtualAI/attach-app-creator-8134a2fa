@@ -27,10 +27,11 @@ async function readBody(res: Response) {
 // because NetSapiens deployments differ ("answerrules" vs "answeringrules"
 // vs "answering-rules"). The first path that returns HTTP 200 on GET wins.
 const RULE_PATH_CANDIDATES = ["answerrules", "answeringrules", "answering-rules"];
-let cachedRulePath: string | null = null;
+const cachedRulePathByDomain = new Map<string, string>();
 
 async function resolveRulePath(domain: string, ext: string, fn: string): Promise<string | null> {
-  if (cachedRulePath) return cachedRulePath;
+  const cached = cachedRulePathByDomain.get(domain);
+  if (cached) return cached;
   for (const p of RULE_PATH_CANDIDATES) {
     const res = await nsFetch(
       `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/${p}`,
@@ -38,7 +39,7 @@ async function resolveRulePath(domain: string, ext: string, fn: string): Promise
       { functionName: fn },
     );
     if (res.status >= 200 && res.status < 300) {
-      cachedRulePath = p;
+      cachedRulePathByDomain.set(domain, p);
       return p;
     }
     // consume body to avoid leak

@@ -91,6 +91,10 @@ class PpSipProvider {
 
   audioEl: HTMLAudioElement | null = null;
   private lastSig = "";
+  private lastStartAt = 0;
+  private connectingSince = 0;
+  private regRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private regFailures = 0;
 
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);
@@ -139,9 +143,24 @@ class PpSipProvider {
     if (this.ua && sig === this.lastSig && (this.snap.status === "registered" || this.snap.status === "connected")) {
       return;
     }
+    // Never tear down a UA that is still in its initial connect/REGISTER
+    // handshake — doing so closed the WebSocket (code 1001) before NetSapiens
+    // could answer, which surfaced as an endless "registration failed:
+    // Connection Error" loop on iOS.
+    if (this.ua && sig === this.lastSig) {
+      const busyConnecting = this.snap.status === "connecting" && Date.now() - this.connectingSince < 20_000;
+      const tooSoon = Date.now() - this.lastStartAt < 15_000;
+      if (busyConnecting || tooSoon) {
+        try { this.ua.register(); } catch {}
+        return;
+      }
+    }
     if (this.ua) this.stop();
     this.cfg = cleanCfg;
     this.lastSig = sig;
+    this.connectingSince = Date.now();
+    this.lastStartAt = Date.now();
+    this.regFailures = 0;
     this.update({ status: "connecting", errorCause: undefined });
 
     try {
@@ -167,14 +186,18 @@ class PpSipProvider {
         user_agent: "Planipret Softphone 1.0",
       });
 
-      ua.on("connecting", () => this.update({ status: "connecting" }));
+      ua.on("connecting", () => { this.connectingSince = Date.now(); this.update({ status: "connecting" }); });
       ua.on("connected", () => this.update({ status: "connected" }));
       ua.on("disconnected", (e: any) => {
         this.log("warn", "ws disconnected", e);
         this.update({ status: "disconnected", errorCause: e?.reason || "ws_disconnected" });
         // JsSIP retries the socket via connection_recovery_*; no manual work needed.
       });
-      ua.on("registered", () => this.update({ status: "registered", errorCause: undefined, lastRegistrationAt: Date.now() }));
+      ua.on("registered", () => {
+        this.regFailures = 0;
+        if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }
+        return this.update({ status: "registered", errorCause: undefined, lastRegistrationAt: Date.now() });
+      });
       ua.on("unregistered", () => {
         this.log("warn", "unregistered - forcing re-register");
         this.update({ status: "connected", errorCause: "re_registering" });
@@ -186,9 +209,14 @@ class PpSipProvider {
         const cause = e?.cause || e?.response?.reason_phrase || "registration_failed";
         this.log("error", `registration failed: ${cause}`);
         this.update({ status: "error", errorCause: cause });
-        // Retry once after a short backoff — most NS failures here are transient
-        // (429, 503, nonce reuse) and recover on a second attempt.
-        setTimeout(() => { try { this.ua?.register(); } catch {} }, 8000);
+        // Retry with exponential backoff and a single pending timer — stacking
+        // retries hammered NetSapiens and kept the socket in a failed state.
+        this.regFailures = Math.min(this.regFailures + 1, 6);
+        if (this.regRetryTimer) clearTimeout(this.regRetryTimer);
+        this.regRetryTimer = setTimeout(() => {
+          this.regRetryTimer = null;
+          try { this.ua?.register(); } catch {}
+        }, Math.min(60_000, 5_000 * this.regFailures));
       });
       ua.on("newRTCSession", (e: any) => this.attachSession(e.session, e.originator));
 
@@ -330,12 +358,21 @@ class PpSipProvider {
   async forceReregister() {
     try {
       if (!this.ua) return;
-      try { this.ua.unregister({ all: true }); } catch {}
-      setTimeout(() => { try { this.ua?.register(); } catch {} }, 250);
+      // Only cycle the registration when we actually hold one. Calling
+      // unregister({all:true}) while the UA is still connecting aborted the
+      // in-flight REGISTER and produced "Connection Error".
+      if (this.snap.status === "registered") {
+        try { this.ua.unregister({ all: true }); } catch {}
+        setTimeout(() => { try { this.ua?.register(); } catch {} }, 250);
+        return;
+      }
+      if (this.snap.status === "connecting" && Date.now() - this.connectingSince < 20_000) return;
+      try { this.ua.register(); } catch {}
     } catch {}
   }
 
   stop() {
+    if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }
     try { this.ua?.stop(); } catch {}
     this.ua = null;
     this.session = null;

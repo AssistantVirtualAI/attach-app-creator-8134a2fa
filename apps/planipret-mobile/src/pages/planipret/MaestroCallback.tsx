@@ -43,7 +43,7 @@ export default function MaestroCallback() {
   const goBackToApp = (delayMs = 0) => {
     if (navigated.current) return;
     navigated.current = true;
-    window.setTimeout(() => navigate("/mplanipret/home", { replace: true }), delayMs);
+    window.setTimeout(() => navigate("/mplanipret/more", { replace: true }), delayMs);
   };
 
   useEffect(() => {
@@ -69,7 +69,7 @@ export default function MaestroCallback() {
       detail: `code=${code ? code.slice(0, 8) + "…" : "null"} state=${state ?? "null"} error=${error ?? "none"}`,
     });
 
-    if (Capacitor.isNativePlatform()) {
+    if (Capacitor.isNativePlatform() && document.visibilityState === "hidden") {
       Browser.close().catch(() => {});
     }
 
@@ -123,13 +123,15 @@ export default function MaestroCallback() {
 
         completedCodes.add(code);
         logDeepLink({ kind: "handler", source: "MaestroCallback", detail: "token exchange OK" });
-        markOAuthCallbackCompleted("maestro", storedUrl ?? window.location.search);
+        markOAuthCallbackCompleted("maestro", storedUrl ?? window.location.href ?? window.location.search);
         try { localStorage.removeItem("pp_maestro_callback_url"); } catch {}
         try { window.dispatchEvent(new CustomEvent("maestro:connected")); } catch {}
         setMessage("Maestro connecté. Retour à l’accueil…");
         toast.success("Maestro connecté avec succès !");
       } catch (e: any) {
         logDeepLink({ kind: "error", source: "MaestroCallback", detail: e?.message || "exchange failed" });
+        markOAuthCallbackCompleted("maestro", storedUrl ?? window.location.href ?? window.location.search);
+        try { localStorage.removeItem("pp_maestro_callback_url"); } catch {}
         setMessage("Connexion Maestro interrompue. Retour à l’accueil…");
         toast.error(`Maestro: ${e?.message || "Erreur de connexion"}`);
       } finally {

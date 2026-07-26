@@ -813,6 +813,48 @@ function findFile(root, name) {
   return walk(root).find((file) => path.basename(file) === name);
 }
 
+function ensureSwiftImports(swift, imports) {
+  let next = swift;
+  for (const name of imports) {
+    if (!new RegExp(`^import\\s+${name}\\b`, "m").test(next)) {
+      next = `import ${name}\n${next}`;
+    }
+  }
+  return next;
+}
+
+function stripSwiftImports(swift) {
+  return swift.replace(/^import\s+[^\n]+\n/gm, "").trim();
+}
+
+function hasProjectReference(iosRoot, fileName) {
+  const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
+  if (!fs.existsSync(pbx)) return false;
+  return fs.readFileSync(pbx, "utf8").includes(fileName);
+}
+
+function ensurePluginRegistration(swift) {
+  let next = swift;
+  const sipLine = "        bridge?.registerPluginInstance(PpSipKeepAlive())\n";
+  const voipLine = "        bridge?.registerPluginInstance(PpVoipCall())\n";
+  const needsSip = !next.includes("PpSipKeepAlive()");
+  const needsVoip = !next.includes("PpVoipCall()");
+  if (!needsSip && !needsVoip) return next;
+  const lines = `${needsSip ? sipLine : ""}${needsVoip ? voipLine : ""}`;
+  if (next.includes("registerPluginInstance")) {
+    return next.replace(/(bridge\?\.registerPluginInstance\([^\n]+\)\n)/, `$1${lines}`);
+  }
+  if (next.includes("override func capacitorDidLoad()")) {
+    return next.replace(/(override func capacitorDidLoad\(\)\s*\{\n)/, `$1${lines}`);
+  }
+  if (next.includes("CAPBridgeViewController")) {
+    const insert = `\n    override func capacitorDidLoad() {\n${lines}    }\n`;
+    const lastBrace = next.lastIndexOf("}");
+    if (lastBrace > -1) return `${next.slice(0, lastBrace)}${insert}${next.slice(lastBrace)}`;
+  }
+  return next;
+}
+
 function patchIosInfoPlist() {
   const file = path.join(appDir, "ios", "App", "App", "Info.plist");
   if (!fs.existsSync(file)) {
@@ -932,20 +974,20 @@ function patchIosNativeFiles() {
   writeIfChanged(path.join(iosApp, "Plugins", "PpSipKeepAlive", IOS_KEEPALIVE_BRIDGE_FILENAME), IOS_KEEPALIVE_BRIDGE);
   writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.swift"), IOS_VOIP_CALL_PLUGIN);
   writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.m"), IOS_VOIP_CALL_BRIDGE);
+  const iosRoot = path.join(appDir, "ios", "App");
+  const pluginFilesAreInProject = hasProjectReference(iosRoot, "PpSipKeepAlive.swift") || hasProjectReference(iosRoot, "PpVoipCall.swift");
   for (const controllerName of ["AppBridgeViewController.swift", "ViewController.swift"]) {
     const file = path.join(iosApp, controllerName);
     if (!fs.existsSync(file)) continue;
     let swift = fs.readFileSync(file, "utf8");
-    let mutated = false;
-    if (!swift.includes("PpSipKeepAlive()") && swift.includes("registerPluginInstance")) {
-      swift = swift.replace(/(bridge\?\.registerPluginInstance\([^\n]+\)\n)/, `$1        bridge?.registerPluginInstance(PpSipKeepAlive())\n`);
-      mutated = true;
+    const before = swift;
+    swift = ensurePluginRegistration(swift);
+    if (!pluginFilesAreInProject && !swift.includes("@objc(PpSipKeepAlive)")) {
+      swift = ensureSwiftImports(swift, ["Foundation", "Capacitor", "UIKit", "AVFoundation", "CryptoKit", "UserNotifications", "PushKit", "CallKit"]);
+      swift = `${swift.trim()}\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n`;
+      console.log("[native-config] iOS native plugins embedded into existing ViewController target.");
     }
-    if (!swift.includes("PpVoipCall()") && swift.includes("registerPluginInstance")) {
-      swift = swift.replace(/(bridge\?\.registerPluginInstance\([^\n]+\)\n)/, `$1        bridge?.registerPluginInstance(PpVoipCall())\n`);
-      mutated = true;
-    }
-    if (mutated) writeIfChanged(file, swift);
+    if (swift !== before) writeIfChanged(file, swift);
   }
   console.log("[native-config] iOS PpSipKeepAlive + PpVoipCall plugins applied.");
 }

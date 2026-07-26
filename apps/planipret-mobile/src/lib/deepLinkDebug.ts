@@ -16,6 +16,8 @@ const MAX = 100;
 const listeners = new Set<() => void>();
 const routedRecently = new Map<string, number>();
 const COMPLETED_KEY = "pp_completed_oauth_callbacks";
+const ROUTED_KEY = "pp_routed_oauth_callbacks";
+const ROUTED_TTL_MS = 120_000;
 
 function callbackKey(kind: "ms365" | "maestro", url: URL): string {
   const state = url.searchParams.get("state") || "no-state";
@@ -34,6 +36,28 @@ function readCompleted(): string[] {
 
 function writeCompleted(keys: string[]) {
   try { localStorage.setItem(COMPLETED_KEY, JSON.stringify(keys.slice(-40))); } catch {}
+}
+
+function readRouted(): Array<{ key: string; ts: number }> {
+  try {
+    const raw = localStorage.getItem(ROUTED_KEY);
+    const list = raw ? JSON.parse(raw) as Array<{ key: string; ts: number }> : [];
+    const now = Date.now();
+    return list.filter((x) => x?.key && now - Number(x.ts || 0) < ROUTED_TTL_MS);
+  } catch {
+    return [];
+  }
+}
+
+function markRouted(key: string) {
+  const now = Date.now();
+  const list = readRouted().filter((x) => x.key !== key);
+  list.push({ key, ts: now });
+  try { localStorage.setItem(ROUTED_KEY, JSON.stringify(list.slice(-40))); } catch {}
+}
+
+function wasRoutedRecently(key: string): boolean {
+  return readRouted().some((x) => x.key === key);
 }
 
 function isCompleted(key: string): boolean {
@@ -126,14 +150,15 @@ export async function handleIncomingDeepLink(
     if (isCompleted(key)) {
       logDeepLink({ kind: "handler", source, url: rawUrl, detail: `${kind} callback already completed — ignoring stale replay` });
       try { localStorage.removeItem(kind === "ms365" ? "pp_ms365_callback_url" : "pp_maestro_callback_url"); } catch {}
-      navigate?.("/mplanipret/home", { replace: true });
+      navigate?.(kind === "maestro" ? "/mplanipret/more" : "/mplanipret/home", { replace: true });
       return true;
     }
-    if (now - lastRouted < 10_000) {
+    if (now - lastRouted < 10_000 || wasRoutedRecently(key)) {
       logDeepLink({ kind: "handler", source, url: rawUrl, detail: `${kind} callback duplicate delivery — already routed` });
       return true;
     }
     routedRecently.set(key, now);
+    markRouted(key);
     void import('@capacitor/browser')
       .then(({ Browser }) => Browser.close())
       .catch(() => {});

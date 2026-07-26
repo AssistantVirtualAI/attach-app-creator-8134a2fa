@@ -11,7 +11,7 @@
 // after ~30 s, causing ICE to transition to 'disconnected' and RTP to stop
 // (audio drop mid-call). TURN relay ensures the media path survives NAT
 // binding expiry and works on all network types.
-import { getActivePcConfig } from './rtcConfig';
+import { getActivePcConfig, ensureActivePcConfig } from './rtcConfig';
 import { registerOutboundCallWithNative } from './nativeSipProvider';
 
 export interface VertoConfig {
@@ -542,7 +542,18 @@ class VertoClient {
     nativeAnswerSender?: (sdp: string, dialogParams: any) => Promise<boolean | void>,
     nativeHangupSender?: () => Promise<void>,
   ): Promise<VertoDialog | null> {
-    const pc = new RTCPeerConnection({ ...getActivePcConfig(), iceCandidatePoolSize: 10 });
+    // Ensure the TURN/STUN probe has completed before creating the PC.
+    // getActivePcConfig() returns PC_CONFIG (Metered defaults) if the probe
+    // hasn't finished yet. On Android WebView the probe may not have completed
+    // when the first inbound call arrives, causing ICE to use wrong servers.
+    await ensureActivePcConfig().catch(() => {});
+    const pcConfig = getActivePcConfig();
+    // Log which ICE servers are actually being used — critical for debugging
+    const iceUrls = pcConfig.iceServers?.map((s: RTCIceServer) =>
+      Array.isArray(s.urls) ? s.urls[0] : s.urls
+    ) ?? [];
+    console.log('[verto][DIAG] prepareInboundDialog: ICE servers =', JSON.stringify(iceUrls));
+    const pc = new RTCPeerConnection({ ...pcConfig, iceCandidatePoolSize: 10 });
     const remoteStream = new MediaStream();
     pc.ontrack = (ev) => {
       ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
@@ -592,6 +603,13 @@ class VertoClient {
       // short — no srflx candidates were generated, leaving only host candidates
       // which FreeSWITCH cannot reach from its network (private IP unreachable).
       await this.waitForIce(pc, 2000);
+      // Log ICE candidates in the final SDP for diagnosis
+      const localSdp = pc.localDescription?.sdp || '';
+      const candidateLines = localSdp.split('\r\n').filter(l => l.startsWith('a=candidate:'));
+      const srflxCount = candidateLines.filter(l => l.includes('typ srflx')).length;
+      const hostCount = candidateLines.filter(l => l.includes('typ host')).length;
+      console.log('[verto][DIAG] SDP candidates: total=' + candidateLines.length + ' srflx=' + srflxCount + ' host=' + hostCount);
+      if (srflxCount === 0) console.warn('[verto][DIAG] WARNING: no srflx candidates — FreeSWITCH may not reach this device (check STUN servers)');
       // Wrap dialog only once callID is known
       const wrapped = this.wrap(callID);
       rec.wrapped = wrapped;
@@ -663,7 +681,13 @@ class VertoClient {
   async call(destination: string, callerIdName: string, callerIdNumber: string): Promise<VertoDialog | null> {
     if (!this.loggedIn || !this.cfg) throw new Error('Verto not registered');
     const callID = uuid();
-    const pc = new RTCPeerConnection({ ...getActivePcConfig(), iceCandidatePoolSize: 10, sdpSemantics: 'unified-plan' } as any);
+    await ensureActivePcConfig().catch(() => {});
+    const callPcConfig = getActivePcConfig();
+    const callIceUrls = callPcConfig.iceServers?.map((s: RTCIceServer) =>
+      Array.isArray(s.urls) ? s.urls[0] : s.urls
+    ) ?? [];
+    console.log('[verto][DIAG] call: ICE servers =', JSON.stringify(callIceUrls));
+    const pc = new RTCPeerConnection({ ...callPcConfig, iceCandidatePoolSize: 10, sdpSemantics: 'unified-plan' } as any);
     const remoteStream = new MediaStream();
     pc.ontrack = (ev) => {
       ev.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
@@ -798,7 +822,11 @@ class VertoClient {
           // Close the stale PeerConnection
           try { rec.pc.close(); } catch { /* ignore */ }
           // Create a fresh PeerConnection with new ICE candidates
-          const freshPc = new RTCPeerConnection({ ...getActivePcConfig(), iceCandidatePoolSize: 10 });
+          const freshConfig = getActivePcConfig();
+          console.log('[verto][DIAG] answerInbound freshPc: ICE servers =', JSON.stringify(
+            freshConfig.iceServers?.map((s: RTCIceServer) => Array.isArray(s.urls) ? s.urls[0] : s.urls) ?? []
+          ));
+          const freshPc = new RTCPeerConnection({ ...freshConfig, iceCandidatePoolSize: 10 });
           const freshRemoteStream = new MediaStream();
           freshPc.ontrack = (ev) => {
             ev.streams[0]?.getTracks().forEach((t) => freshRemoteStream.addTrack(t));

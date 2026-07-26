@@ -10,6 +10,7 @@
 // ------------------------------------------------------------------
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -637,6 +638,14 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var activeCallUUID: UUID?
     private var activeCallId: String?
 
+    private func apnsEnvironment() -> String {
+        #if DEBUG
+        return "sandbox"
+        #else
+        return "production"
+        #endif
+    }
+
     public override func load() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
@@ -671,7 +680,8 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         call.resolve([
             "token": voipToken ?? "",
             "platform": "ios",
-            "bundleId": Bundle.main.bundleIdentifier ?? ""
+            "bundleId": Bundle.main.bundleIdentifier ?? "",
+            "environment": apnsEnvironment()
         ])
     }
 
@@ -692,7 +702,8 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         self.voipToken = token
         notifyListeners("voipPushToken", data: [
             "token": token,
-            "bundleId": Bundle.main.bundleIdentifier ?? ""
+            "bundleId": Bundle.main.bundleIdentifier ?? "",
+            "environment": apnsEnvironment()
         ])
     }
 
@@ -704,8 +715,8 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         guard type == .voIP else { completion(); return }
         let dict = payload.dictionaryPayload
         let callId = (dict["callId"] as? String) ?? (dict["call_id"] as? String) ?? UUID().uuidString
-        let callerName = (dict["callerName"] as? String) ?? (dict["from"] as? String) ?? "Appel entrant"
-        let callerNumber = (dict["callerNumber"] as? String) ?? (dict["from_user"] as? String) ?? ""
+        let callerName = (dict["callerName"] as? String) ?? (dict["from_number"] as? String) ?? (dict["from"] as? String) ?? "Appel entrant"
+        let callerNumber = (dict["callerNumber"] as? String) ?? (dict["from_number"] as? String) ?? (dict["from_user"] as? String) ?? ""
 
         let uuid = UUID()
         activeCallUUID = uuid
@@ -831,6 +842,46 @@ function hasProjectReference(iosRoot, fileName) {
   const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
   if (!fs.existsSync(pbx)) return false;
   return fs.readFileSync(pbx, "utf8").includes(fileName);
+}
+
+function xcodeId(seed) {
+  return crypto.createHash("sha1").update(`planipret:${seed}`).digest("hex").slice(0, 24).toUpperCase();
+}
+
+function ensureXcodeSourceFiles(iosRoot, relativeFiles) {
+  const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
+  if (!fs.existsSync(pbx)) return false;
+  let text = fs.readFileSync(pbx, "utf8");
+  const before = text;
+
+  for (const rel of relativeFiles) {
+    const fileName = path.basename(rel);
+    const buildName = `${fileName} in Sources`;
+    const fileRef = xcodeId(`file:${rel}`);
+    const buildRef = xcodeId(`build:${rel}`);
+    const fileType = rel.endsWith(".swift") ? "sourcecode.swift" : "sourcecode.c.objc";
+    const quotedRel = rel.includes(" ") ? `\"${rel}\"` : rel;
+
+    if (!text.includes(`${fileRef} /* ${fileName} */`)) {
+      const fileLine = `\t\t${fileRef} /* ${fileName} */ = {isa = PBXFileReference; lastKnownFileType = ${fileType}; path = ${quotedRel}; sourceTree = SOURCE_ROOT; };\n`;
+      text = text.replace(/(\/\* End PBXFileReference section \*\/)/, `${fileLine}$1`);
+    }
+    if (!text.includes(`${buildRef} /* ${buildName} */`)) {
+      const buildLine = `\t\t${buildRef} /* ${buildName} */ = {isa = PBXBuildFile; fileRef = ${fileRef} /* ${fileName} */; };\n`;
+      text = text.replace(/(\/\* End PBXBuildFile section \*\/)/, `${buildLine}$1`);
+    }
+    text = text.replace(/(isa = PBXSourcesBuildPhase;[\s\S]*?files = \(\n)([\s\S]*?)(\s*\);)/g, (match, start, files, end) => {
+      if (files.includes(buildRef) || files.includes(buildName)) return match;
+      return `${start}${files}\t\t\t\t${buildRef} /* ${buildName} */,\n${end}`;
+    });
+  }
+
+  if (text !== before) {
+    fs.writeFileSync(pbx, text);
+    console.log("[native-config] iOS Xcode project source build phase patched for Planiprêt plugins.");
+    return true;
+  }
+  return false;
 }
 
 function ensurePluginRegistration(swift) {
@@ -975,7 +1026,13 @@ function patchIosNativeFiles() {
   writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.swift"), IOS_VOIP_CALL_PLUGIN);
   writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.m"), IOS_VOIP_CALL_BRIDGE);
   const iosRoot = path.join(appDir, "ios", "App");
-  const pluginFilesAreInProject = hasProjectReference(iosRoot, "PpSipKeepAlive.swift") || hasProjectReference(iosRoot, "PpVoipCall.swift");
+  ensureXcodeSourceFiles(iosRoot, [
+    "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.swift",
+    "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.m",
+    "App/Plugins/PpVoipCall/PpVoipCall.swift",
+    "App/Plugins/PpVoipCall/PpVoipCall.m",
+  ]);
+  const pluginFilesAreInProject = hasProjectReference(iosRoot, "PpSipKeepAlive.swift") && hasProjectReference(iosRoot, "PpVoipCall.swift");
   for (const controllerName of ["AppBridgeViewController.swift", "ViewController.swift"]) {
     const file = path.join(iosApp, controllerName);
     if (!fs.existsSync(file)) continue;

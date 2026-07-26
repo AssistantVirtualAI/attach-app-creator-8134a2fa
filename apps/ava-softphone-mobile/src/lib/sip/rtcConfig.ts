@@ -28,11 +28,18 @@ function buildIceServers(opts: {
   defaults: RTCIceServer[];
 }): RTCIceServer[] {
   const turnUrls = readEnv(opts.turnEnv)?.split(',').map(s => s.trim()).filter(Boolean);
-  if (!turnUrls?.length) return opts.defaults;
+  const stunUrlsEnv = readEnv(opts.stunEnv)?.split(',').map(s => s.trim()).filter(Boolean);
+  // If neither TURN nor STUN env vars are set, use the defaults (which include Metered TURN).
+  // If STUN env is set (even without TURN), use the env-provided STUN servers only —
+  // this allows disabling Metered TURN when it is unreachable from mobile networks.
+  if (!turnUrls?.length && !stunUrlsEnv?.length) return opts.defaults;
+  const stunUrls = stunUrlsEnv ?? ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'];
+  if (!turnUrls?.length) {
+    // STUN only — no TURN configured
+    return stunUrls.map((urls) => ({ urls }));
+  }
   const username = readEnv(opts.userEnv) ?? '';
   const credential = readEnv(opts.credEnv) ?? '';
-  const stunUrls = readEnv(opts.stunEnv)?.split(',').map(s => s.trim()).filter(Boolean)
-    ?? ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'];
   return [
     ...stunUrls.map((urls) => ({ urls })),
     ...turnUrls.map((urls) => ({ urls, username, credential })),

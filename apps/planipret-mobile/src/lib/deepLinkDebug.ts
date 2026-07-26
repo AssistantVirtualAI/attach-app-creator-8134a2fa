@@ -159,9 +159,11 @@ export async function handleIncomingDeepLink(
     }
     routedRecently.set(key, now);
     markRouted(key);
-    void import('@capacitor/browser')
-      .then(({ Browser }) => Browser.close())
-      .catch(() => {});
+    if (document.visibilityState === "hidden") {
+      void import('@capacitor/browser')
+        .then(({ Browser }) => Browser.close())
+        .catch(() => {});
+    }
     if (isMs365Callback) {
       try { localStorage.setItem('pp_ms365_callback_url', rawUrl); } catch {}
       navigate?.(`/auth/microsoft/callback${url.search}`, { replace: true });

@@ -43,14 +43,19 @@ Deno.serve(async (req) => {
       .select("maestro_broker_id, maestro_email, maestro_broker_token, maestro_token_expires_at, maestro_last_sync_at, maestro_connected")
       .eq("user_id", userId)
       .maybeSingle();
-    if (prof?.maestro_broker_token) {
+    if (prof?.maestro_broker_token || (prof as any)?.maestro_connected) {
       status = "connected";
       lastConnectedAt = (prof as any).maestro_last_sync_at ?? null;
       const expAt = (prof as any).maestro_token_expires_at ? Date.parse((prof as any).maestro_token_expires_at) : 0;
       expiresIn = expAt ? Math.max(0, Math.floor((expAt - Date.now()) / 1000)) : null;
       maestroBrokerId = (prof as any).maestro_broker_id ?? null;
       maestroEmail = (prof as any).maestro_email ?? null;
+    } else if (!prof) {
+      authReason = "no_profile_row";
+    } else {
+      authReason = "no_token";
     }
+
   }
 
   // Fallback to global legacy tokens if nothing per-user

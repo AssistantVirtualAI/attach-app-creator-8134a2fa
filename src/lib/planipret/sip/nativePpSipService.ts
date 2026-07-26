@@ -31,6 +31,26 @@ const platform = () => {
   try { return Capacitor.getPlatform(); } catch { return "web"; }
 };
 
+
+// Some builds ship without the native SIP/VoIP plugins compiled in. Capacitor
+// then rejects every call with `UNIMPLEMENTED`, which used to spam the console
+// on every 15s poll. Latch the unavailability once and no-op afterwards.
+const unavailable = { sip: false, voip: false };
+function isUnimplemented(e: unknown): boolean {
+  const anyE = e as any;
+  return String(anyE?.code ?? "") === "UNIMPLEMENTED"
+    || /unimplemented|not implemented/i.test(String(anyE?.message ?? ""));
+}
+function markUnavailable(kind: "sip" | "voip", e: unknown, label: string): boolean {
+  if (!isUnimplemented(e)) return false;
+  if (!unavailable[kind]) {
+    unavailable[kind] = true;
+    console.warn(`[${label}] native plugin unavailable in this build — disabling native SIP guard`);
+  }
+  return true;
+}
+export function isPlanipretNativeSipAvailable(): boolean { return isNative() && !unavailable.sip; }
+
 const NativePpSip: PpSipKeepAlivePlugin = isNative()
   ? registerPlugin<PpSipKeepAlivePlugin>("PpSipKeepAlive")
   : {};
@@ -49,7 +69,7 @@ function parseWss(cfg: PpSipConfig) {
 }
 
 export async function startPlanipretSipKeepAlive(cfg: PpSipConfig): Promise<PpNativeSipStatus | null> {
-  if (!isNative()) return null;
+  if (!isPlanipretNativeSipAvailable()) return null;
   const wss = parseWss(cfg);
   try {
     const result = await NativePpSip.startSipService?.({
@@ -68,33 +88,38 @@ export async function startPlanipretSipKeepAlive(cfg: PpSipConfig): Promise<PpNa
     }
     return result ?? null;
   } catch (e) {
-    console.warn("[pp-sip-native] start failed", e);
+    if (!markUnavailable("sip", e, "pp-sip-native")) console.warn("[pp-sip-native] start failed", e);
     return null;
   }
 }
 
 export async function getPlanipretSipKeepAliveStatus(): Promise<PpNativeSipStatus | null> {
-  if (!isNative()) return null;
+  if (!isPlanipretNativeSipAvailable()) return null;
   try { return await NativePpSip.getSipServiceStatus?.() ?? null; }
-  catch (e) { console.warn("[pp-sip-native] status failed", e); return null; }
+  catch (e) {
+    if (!markUnavailable("sip", e, "pp-sip-native")) console.warn("[pp-sip-native] status failed", e);
+    return null;
+  }
 }
 
 export async function stopPlanipretSipKeepAlive(): Promise<void> {
-  if (!isNative()) return;
+  if (!isPlanipretNativeSipAvailable()) return;
   try { await NativePpSip.stopSipService?.(); }
   catch (e) { console.warn("[pp-sip-native] stop failed", e); }
 }
 
 export async function requestPlanipretBatteryOptimizationExemption(): Promise<void> {
-  if (platform() !== "android") return;
+  if (platform() !== "android" || unavailable.sip) return;
   try { await NativePpSip.requestBatteryOptimizationExemption?.(); }
   catch (e) { console.warn("[pp-sip-native] battery exemption failed", e); }
 }
 
 export async function triggerPlanipretNativeReregister(): Promise<void> {
-  if (!isNative()) return;
+  if (!isPlanipretNativeSipAvailable()) return;
   try { await NativePpSip.triggerReregister?.(); }
-  catch (e) { console.warn("[pp-sip-native] native reregister failed", e); }
+  catch (e) {
+    if (!markUnavailable("sip", e, "pp-sip-native")) console.warn("[pp-sip-native] native reregister failed", e);
+  }
 }
 
 export async function onPlanipretSipKeepAliveStatus(cb: (status: PpNativeSipStatus) => void): Promise<() => void> {

@@ -35,6 +35,7 @@ import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
+import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 
 const ACCENT = "#2E9BDC";
@@ -714,7 +715,7 @@ export default function PlanipretMobile() {
         sessionStorage.setItem("pp_ms_captured", session.access_token);
       }
     } catch (_) { /* non-blocking */ }
-    const { data, error } = await supabase.from("planipret_profiles").select("*").eq("user_id", user.id).maybeSingle();
+    const { data, error } = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_SAFE_COLUMNS).eq("user_id", user.id).maybeSingle();
     if (error) {
       recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "profile load failed");
       setAccessError("load_failed");

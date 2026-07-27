@@ -38,6 +38,7 @@ import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts } from "@/lib/ppContactsCache";
 import { prefetchTeams365Data } from "@/lib/teams365Cache";
+import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 
 const ACCENT = "#2E9BDC";
@@ -824,7 +825,7 @@ export default function PlanipretMobile() {
       }
 
       const { data, error } = await withTimeout(
-        supabase.from("planipret_profiles").select("*").eq("user_id", user.id).maybeSingle(),
+        supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_SAFE_COLUMNS).eq("user_id", user.id).maybeSingle(),
         PROFILE_BOOT_TIMEOUT_MS,
         "pp_profile",
       );

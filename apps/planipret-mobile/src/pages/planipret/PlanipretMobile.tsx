@@ -864,6 +864,7 @@ export default function PlanipretMobile() {
         .then(({ data: full }) => { if (full) setProfile(full); });
 
       setAccessError(null);
+      setProfileErrorDetail("");
       setProfile(data);
       setLoading(false);
       // Hydrate FR/EN from DB (source of truth across devices)

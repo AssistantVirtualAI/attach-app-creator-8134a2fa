@@ -373,7 +373,7 @@ export default function PlanipretAdminLayout() {
       </aside>
 
       {/* Main */}
-      <div className="hidden md:flex flex-1 flex-col ml-[248px]">
+      <div className="hidden md:flex flex-1 min-w-0 flex-col ml-[248px]">
         <header className="pp-app-header sticky top-0 flex items-center justify-between gap-4 px-5 xl:px-7 z-30 overflow-hidden" style={{ height: 64 }}>
           <div className="flex items-center gap-2 min-w-0">
             <span className="pp-eyebrow">{sectionLabel}</span>
@@ -383,7 +383,7 @@ export default function PlanipretAdminLayout() {
 
           <div className="flex items-center gap-2 min-w-0 shrink">
             <button onClick={() => setPaletteOpen(true)}
-              className="pp-search-bar hidden xl:flex items-center gap-2 px-3 h-9 text-xs shrink"
+              className="pp-search-bar hidden 2xl:flex items-center gap-2 px-3 h-9 text-xs shrink"
               style={{ minWidth: 200, fontFamily: "'Epilogue', sans-serif" }}>
               <Search className="w-3.5 h-3.5" />
               <span className="flex-1 text-left">Rechercher courtiers, appels, intégrations…</span>

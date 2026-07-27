@@ -716,8 +716,15 @@ export default function PlanipretMobile() {
         sessionStorage.setItem("pp_ms_captured", session.access_token);
       }
     } catch (_) { /* non-blocking */ }
-    const { data, error } = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_SAFE_COLUMNS).eq("user_id", user.id).maybeSingle();
+    let { data, error } = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle();
     if (error) {
+      const retry = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle();
+      data = retry.data as any;
+      error = retry.error;
+    }
+    if (error) {
+      console.error("[PlanipretMobile] profile query error", error);
+      setProfileErrorDetail(error.message || "");
       recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "profile load failed");
       setAccessError("load_failed");
       setLoading(false);
@@ -730,8 +737,16 @@ export default function PlanipretMobile() {
       return;
     }
     setAccessError(null);
+    setProfileErrorDetail("");
     setProfile(data);
     setLoading(false);
+    void supabase
+      .from("planipret_profiles")
+      .select(PLANIPRET_PROFILE_SAFE_COLUMNS)
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data: full }) => { if (full) setProfile(full); });
+
     // Hydrate FR/EN from DB (source of truth across devices)
     if (data.language === "fr" || data.language === "en") {
       if (data.language !== lang) setLang(data.language);

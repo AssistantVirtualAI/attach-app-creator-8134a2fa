@@ -230,7 +230,7 @@ export default function PAMaestroStatus() {
 
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className="pa-page space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{t.title}</h1>

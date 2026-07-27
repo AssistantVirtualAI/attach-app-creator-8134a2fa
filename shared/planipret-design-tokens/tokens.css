@@ -1148,3 +1148,98 @@
 /* Hide scrollbar (used by horizontal tab bars) */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ==========================================================================
+   Admin portal — page shell normalization (visual only)
+   Ensures every admin page shares the same width, rhythm and never
+   overflows horizontally past the layout.
+   ========================================================================== */
+.planipret-admin-scope .pa-main {
+  min-width: 0;
+  overflow-x: hidden;
+}
+.planipret-admin-scope .pa-page {
+  width: 100%;
+  max-width: 1400px;
+  margin-inline: auto;
+  min-width: 0;
+}
+.planipret-admin-scope .pa-page > * { min-width: 0; max-width: 100%; }
+.planipret-admin-scope .pa-page table { width: 100%; max-width: 100%; }
+.planipret-admin-scope .pa-page pre,
+.planipret-admin-scope .pa-page code { max-width: 100%; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+.planipret-admin-scope .pa-page img { max-width: 100%; height: auto; }
+
+/* Horizontal scroll container for wide tables */
+.planipret-admin-scope .pa-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.planipret-admin-scope .pa-scroll::-webkit-scrollbar { height: 8px; }
+.planipret-admin-scope .pa-scroll::-webkit-scrollbar-track { background: transparent; }
+.planipret-admin-scope .pa-scroll::-webkit-scrollbar-thumb {
+  background: var(--pp-bg-border-2);
+  border-radius: 999px;
+}
+.planipret-admin-scope .pa-scroll::-webkit-scrollbar-thumb:hover { background: var(--pp-text-faint); }
+
+/* Unified page header */
+.planipret-admin-scope .pa-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--pp-bg-border);
+}
+.planipret-admin-scope .pa-header-title {
+  font-family: 'Urbanist', 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 21px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--pp-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.planipret-admin-scope .pa-header-sub {
+  font-size: 12px;
+  color: var(--pp-text-faint);
+  margin-top: 4px;
+  max-width: 70ch;
+}
+.planipret-admin-scope .pa-header-icon {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none;
+  background: rgba(59,111,160,0.10);
+  color: var(--pp-brand-accent-2);
+  border: 1px solid rgba(59,111,160,0.22);
+}
+.planipret-admin-scope .pa-header-actions {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
+/* Consistent card padding rhythm across pages */
+.planipret-admin-scope .pa-page .pp-card { max-width: 100%; }
+
+/* Uniform page titles across all admin pages (overrides legacy inline sizes) */
+.planipret-admin-scope .pa-page > * h1,
+.planipret-admin-scope .pa-page > h1,
+.planipret-admin-scope .pa-page .pa-title {
+  font-family: 'Urbanist', 'Inter', system-ui, sans-serif !important;
+  font-size: 21px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--pp-text-primary) !important;
+}
+/* Section headings inside cards stay secondary to the page title */
+.planipret-admin-scope .pa-page .pp-card h2 {
+  font-family: 'Urbanist', 'Inter', system-ui, sans-serif;
+}

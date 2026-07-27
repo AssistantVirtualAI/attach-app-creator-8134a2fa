@@ -1,49 +1,33 @@
 ## Objectif
 
-Ajouter dans le portail admin Planiprêt une page dédiée **Musique d'attente (MOH)** permettant de :
-- écrire/corriger un texte d'annonce avec l'IA (Claude),
-- générer l'audio voix + musique via ElevenLabs,
-- écouter, conserver une bibliothèque,
-- pousser la MOH au domaine et/ou à **tous les courtiers** d'un coup sur NetSapiens.
+Uniformiser visuellement les 23 pages du portail admin Planiprêt et supprimer les débordements horizontaux. Aucune logique métier, requête, edge function ou state ne sera modifié — uniquement JSX de présentation, classes et styles.
 
-## Ce que dit la doc NetSapiens (vérifié)
+## Constat
 
-NS-API v2 expose la musique d'attente sous `Media/Music on Hold` :
-- `GET/POST /domains/{domain}/moh` — liste / création (upload multipart) au niveau domaine
-- `DELETE /domains/{domain}/moh/{index}` — suppression
-- `GET/POST /domains/{domain}/users/{user}/moh` — MOH par utilisateur (upload multipart)
-- L'upload se fait en `multipart/mixed` avec le fichier audio (WAV/MP3) + métadonnées (index, description).
+- `PlanipretAdminLayout.tsx` : `<main className="flex-1 p-7 overflow-y-auto">` — pas de largeur max, pas de confinement horizontal, donc toute page large pousse le layout.
+- Chaque page définit son propre en-tête (titre/sous-titre) avec des tailles, marges et couleurs légèrement différentes (ex. `PAAvaAgent` en `fontSize: 22` inline, d'autres en classes Tailwind).
+- 8 pages seulement utilisent `overflow-x-auto` sur leurs tableaux ; les autres (`PAUsers`, `PARecordings`, `PACalls`, `PAMessages`, `PAVoicemails`, `PACompliance`, `PAAvaLogs`, `PAAvaToolsAudit`, `PAAuditChecklist`…) débordent avec des tableaux larges. `PAMobileDevices` force `min-w-[980px]`.
+- Espacements verticaux inconsistants : `space-y-4`, `space-y-5`, `space-y-6` selon la page.
 
-La page utilisera le helper existant `nsFetch` (`supabase/functions/_shared/planipret-ns.ts`), qui gère déjà JWT NS, domaine par défaut et circuit breaker.
+## Plan
 
-## Ce qu'on construit
+### 1. Coquille de page partagée (nouveau composant présentiel)
+Créer `src/components/planipret/admin/PAPageShell.tsx` :
+- `PAPage` : conteneur `w-full max-w-[1400px] mx-auto space-y-5 min-w-0`
+- `PAPageHeader` : titre + sous-titre + zone d'actions, typographie unique (titre 20-22px, `--pp-text-primary`, sous-titre 12px `--pp-text-faint`), icône optionnelle dans une pastille colorée
+- `PATableWrap` : `w-full overflow-x-auto rounded-xl border` + scrollbar discrète, à envelopper autour de chaque `<table>`
 
-### 1. Base de données
-Table `planipret_hold_music` : nom, texte source, texte corrigé, `voice_id`, style musical, `storage_path`, `audio_url`, `status` (queued / generating / ready / failed), `is_default`, `pushed_at`, `push_scope` (domain | all_brokers), `created_by`, timestamps. RLS + GRANT : lecture/écriture réservées aux admins Planiprêt (via `is_planipret_admin`).
-Bucket privé Storage `planipret-hold-music`.
+### 2. Layout
+Dans `PlanipretAdminLayout.tsx`, `<main>` devient `flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-5 md:p-7` — empêche définitivement toute page de pousser la sidebar.
 
-### 2. Edge functions
-- **`pp-moh-improve`** — corrige/réécrit le texte d'annonce avec **Claude** via Lovable AI Gateway (prompt FR/EN, ton professionnel, durée cible), calqué sur `pp-greeting-improve`.
-- **`pp-moh-generate`** — TTS ElevenLabs (`eleven_multilingual_v2`, voix sélectionnable via `pp-greeting-voices`) + génération d'un lit musical via l'API ElevenLabs Music, mixage voix/musique (voix par-dessus, boucle musicale), upload dans Storage, MAJ de la ligne DB.
-- **`pp-moh-push`** — pousse le fichier vers NetSapiens :
-  - scope `domain` → `POST /domains/{domain}/moh` (multipart)
-  - scope `all_brokers` → itère sur les courtiers actifs (`planipret_profiles` avec extension) et `POST /domains/{domain}/users/{ext}/moh`, avec compteur succès/échecs et journalisation dans `planipret_audit_log`.
-- **`pp-moh-list`** — liste les MOH déjà présentes côté NS (domaine) pour affichage/suppression.
+### 3. Passage page par page (les 23, sans exception)
+Pour chacune : remplacer le wrapper racine par `PAPage`, l'en-tête maison par `PAPageHeader` (mêmes textes/clés i18n existantes), envelopper chaque tableau dans `PATableWrap`, normaliser les cartes sur la classe `pp-card` existante, uniformiser les espacements sur `space-y-5` / `gap-4`, et rendre les grilles de KPI responsives (`grid-cols-1 sm:grid-cols-2 xl:grid-cols-4`).
 
-### 3. Page admin
-`src/pages/planipret/admin/PAHoldMusic.tsx`, route `/planipret/admin/hold-music`, entrée de menu (icône `Music`) dans la section **Système** de `PlanipretAdminLayout.tsx` (nav + `PAGE_KEY_BY_PATH` + clés i18n FR/EN dans `src/lib/i18n/mplanipret.ts`).
+Ordre : PAOverview, PAUsers, PAMobileDevices, PARecordings, PAReports, PAMaestroSync, PACalls, PAMessages, PAVoicemails, PALeads, PAAva, PAAvaAgent, PAAvaLogs, PAAvaToolsAudit, PAHoldMusic, PATemplates, PAMaestroStatus, PADiagnostics, PASipDiagnostic, PACompliance, PAAuditLog, PAAuditChecklist, PADebug.
 
-Contenu :
-- Éditeur de texte avec bouton **« Corriger avec l'IA »** (Claude) et aperçu avant/après.
-- Sélecteur de voix ElevenLabs + réglages (stabilité, style) + choix d'ambiance musicale et volume de la musique.
-- Bouton **Générer** → lecteur audio intégré.
-- Bibliothèque des MOH générées (rejouer, renommer, supprimer, définir par défaut).
-- Bouton **Pousser** avec choix du périmètre (domaine / tous les courtiers) + dialogue de confirmation et rapport de résultat (X/Y programmés).
-- Liste des MOH déjà en place côté NetSapiens.
+### 4. Vérification
+Capture Playwright de chaque route admin en 1280px et 1024px, contrôle que `document.body.scrollWidth === clientWidth` (zéro débordement) sur toutes les pages, plus un typecheck complet.
 
-## Détails techniques
-
-- Réutilisation de `nsFetch`, `jsonResponse`, `corsHeaders` de `_shared/planipret-ns.ts`; toutes les fonctions valident le JWT et exigent le rôle admin Planiprêt.
-- Le push utilise `FormData` (multipart) — NS accepte WAV/MP3 ; conversion en MP3 44.1 kHz côté ElevenLabs (`output_format=mp3_44100_128`).
-- Le push « tous les courtiers » est traité par lots (concurrence limitée) pour éviter les timeouts, avec reprise possible.
-- Aucun fichier `/mplanipret*` ni route mobile n'est modifié.
+## Notes techniques
+- Aucun hook, fetch, handler ou clé i18n n'est modifié ; uniquement le balisage de présentation.
+- Les tokens `--pp-*` existants sont réutilisés, aucune nouvelle palette.

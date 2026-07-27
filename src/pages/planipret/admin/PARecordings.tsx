@@ -590,7 +590,7 @@ export default function PARecordings() {
   const localeStr = lang === "en" ? "en-CA" : "fr-CA";
 
   return (
-    <div className="space-y-4">
+    <div className="pa-page space-y-5">
       <div className="flex gap-1 border-b" style={{ borderColor: "var(--pp-bg-border-2)" }}>
         {([
           ["pbx", t.tabPbx],
@@ -679,7 +679,7 @@ export default function PARecordings() {
       </div>
 
 
-      <div className="pp-card overflow-hidden">
+      <div className="pp-card pa-scroll">
         {loadError && <TableErrorState message={loadError} onRetry={() => load(page, pageSize)} />}
         <table className="w-full text-sm">
           <thead style={{ background: "var(--pp-bg-elevated)" }}>

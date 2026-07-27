@@ -144,9 +144,10 @@ export default function MaestroTab({ call, onUpdated }: { call: MaestroCall; onU
     setConfirmOpen(false);
     setPushing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("maestro-pipeline-orchestrator", {
-        body: { call_id: call.id, actions: nextActions },
+      const { data, error } = await supabase.functions.invoke("maestro-sync-call", {
+        body: { call_id: call.id, force: true },
       });
+
       if (error || (data as any)?.success === false) {
         toast.error(t("maestro.pushFailed"), { description: (data as any)?.error ?? error?.message });
       } else {

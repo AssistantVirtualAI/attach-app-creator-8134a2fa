@@ -29,13 +29,13 @@ Deno.serve(async (req) => {
 
     const { data: msg } = await admin
       .from("planipret_phone_messages")
-      .select("id, user_id, direction, from_number, to_number, body, sent_at, created_at, ns_message_id, metadata")
+      .select("id, user_id, direction, from_number, to_number, body, sent_at, created_at, ns_message_id, maestro_synced, metadata")
       .eq("id", message_id)
       .maybeSingle();
     if (!msg) return json({ success: false, error: "message_not_found" }, 404);
 
     const meta = (msg.metadata ?? {}) as Record<string, unknown>;
-    if (meta.maestro_synced_at && !force) {
+    if ((msg.maestro_synced || meta.maestro_synced_at) && !force) {
       return json({ success: true, skipped: "already_synced" });
     }
 
@@ -79,6 +79,7 @@ Deno.serve(async (req) => {
       await admin
         .from("planipret_phone_messages")
         .update({
+          maestro_synced: true,
           metadata: {
             ...meta,
             maestro_synced_at: new Date().toISOString(),

@@ -20,6 +20,7 @@ import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { toast } from "sonner";
+import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
 type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist" | "diagnostics" | "maestroSync";
@@ -143,7 +144,7 @@ export default function PlanipretAdminLayout() {
   useEffect(() => {
     let cancelled = false;
     const loadProfile = async (user: any) => {
-      const { data } = await supabase.from("planipret_profiles").select("*").eq("user_id", user.id).maybeSingle();
+      const { data } = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_SAFE_COLUMNS).eq("user_id", user.id).maybeSingle();
       if (cancelled) return;
       if (data && data.role && data.role !== "admin") { navigate("/mplanipret", { replace: true }); return; }
       setProfile(data ?? { full_name: user.email, role: "admin" });

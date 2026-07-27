@@ -65,6 +65,19 @@ Deno.serve(async (req) => {
 
   const authHeader = `Bearer ${SERVICE_ROLE}`;
 
+  // Fire-and-forget: push everything we know about this call into Maestro.
+  // Idempotent on the Maestro side, so it's safe to call on every pass.
+  const syncMaestro = () => {
+    try {
+      fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-call`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: authHeader },
+        body: JSON.stringify({ call_id: callId }),
+      }).catch(() => {});
+    } catch { /* best-effort */ }
+  };
+
+
   // Step 1 — ensure transcript exists. pp-admin-transcribe backs off if the
   // recording isn't fetchable yet (returns { pending: true }) — trigger will
   // fire again on the next recording_url / transcript update.

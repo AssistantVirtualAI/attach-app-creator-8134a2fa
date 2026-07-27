@@ -38,11 +38,11 @@ import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts } from "@/lib/ppContactsCache";
 import { prefetchTeams365Data } from "@/lib/teams365Cache";
-import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
+import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "@/lib/planipret/profileColumns";
 
 
 const ACCENT = "#2E9BDC";
-const PROFILE_BOOT_TIMEOUT_MS = 4500;
+const PROFILE_BOOT_TIMEOUT_MS = 15000;
 
 function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -567,6 +567,7 @@ export default function PlanipretMobile() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState<"unauthenticated" | "missing_profile" | "load_failed" | null>(null);
+  const [profileErrorDetail, setProfileErrorDetail] = useState<string>("");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -824,12 +825,26 @@ export default function PlanipretMobile() {
         sessionStorage.setItem("pp_ms_captured", session.access_token);
       }
 
-      const { data, error } = await withTimeout(
-        supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_SAFE_COLUMNS).eq("user_id", user.id).maybeSingle(),
+      // Boot with a small column set (fast on mobile networks), then refresh
+      // the full safe set in the background.
+      let { data, error } = await withTimeout(
+        supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle(),
         PROFILE_BOOT_TIMEOUT_MS,
         "pp_profile",
       );
       if (error) {
+        // One immediate retry before showing the error screen.
+        const retry = await withTimeout(
+          supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle(),
+          PROFILE_BOOT_TIMEOUT_MS,
+          "pp_profile_retry",
+        );
+        data = retry.data as any;
+        error = retry.error;
+      }
+      if (error) {
+        console.error("[PlanipretMobile] profile query error", error);
+        setProfileErrorDetail(error.message || "");
         recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "profile load failed");
         setAccessError("load_failed");
         setLoading(false);
@@ -841,7 +856,15 @@ export default function PlanipretMobile() {
         setLoading(false);
         return;
       }
+      void supabase
+        .from("planipret_profiles")
+        .select(PLANIPRET_PROFILE_SAFE_COLUMNS)
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(({ data: full }) => { if (full) setProfile(full); });
+
       setAccessError(null);
+      setProfileErrorDetail("");
       setProfile(data);
       setLoading(false);
       // Hydrate FR/EN from DB (source of truth across devices)
@@ -857,6 +880,7 @@ export default function PlanipretMobile() {
       }
     } catch (error) {
       console.error("[PlanipretMobile] loadProfile failed", error);
+      setProfileErrorDetail((error as any)?.message || String(error));
       recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "profile boot timeout/failure");
       setAccessError("load_failed");
       setLoading(false);
@@ -927,7 +951,10 @@ export default function PlanipretMobile() {
                 ? t("access.missingProfile")
                 : t("access.loadFailed")}
             </p>
-            <button onClick={loadProfile} className="pp-btn-primary inline-block">{t("common.retry")}</button>
+            {profileErrorDetail && accessError !== "missing_profile" && (
+              <p style={{ fontSize: 11, opacity: 0.7, color: "var(--pp-text-secondary)", marginBottom: 12, wordBreak: "break-word" }}>{profileErrorDetail}</p>
+            )}
+            <button onClick={() => { setProfileErrorDetail(""); setAccessError(null); setLoading(true); void loadProfile(); }} className="pp-btn-primary inline-block">{t("common.retry")}</button>
           </div>
         </div>
       </Frame>

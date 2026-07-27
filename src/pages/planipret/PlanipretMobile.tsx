@@ -690,7 +690,11 @@ export default function PlanipretMobile() {
     return () => { supabase.removeChannel(ch); };
   }, [profile?.user_id, location.pathname, navigate, t]);
 
-  const loadProfile = async () => {
+  const loadProfile = async (attempt = 0) => {
+    if (attempt === 0) {
+      setLoading(true);
+      setAccessError(null);
+    }
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user ?? null;
     if (!user) {

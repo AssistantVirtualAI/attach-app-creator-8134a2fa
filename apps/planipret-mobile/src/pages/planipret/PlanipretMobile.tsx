@@ -824,12 +824,26 @@ export default function PlanipretMobile() {
         sessionStorage.setItem("pp_ms_captured", session.access_token);
       }
 
-      const { data, error } = await withTimeout(
-        supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_SAFE_COLUMNS).eq("user_id", user.id).maybeSingle(),
+      // Boot with a small column set (fast on mobile networks), then refresh
+      // the full safe set in the background.
+      let { data, error } = await withTimeout(
+        supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle(),
         PROFILE_BOOT_TIMEOUT_MS,
         "pp_profile",
       );
       if (error) {
+        // One immediate retry before showing the error screen.
+        const retry = await withTimeout(
+          supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle(),
+          PROFILE_BOOT_TIMEOUT_MS,
+          "pp_profile_retry",
+        );
+        data = retry.data as any;
+        error = retry.error;
+      }
+      if (error) {
+        console.error("[PlanipretMobile] profile query error", error);
+        setProfileErrorDetail(error.message || "");
         recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "profile load failed");
         setAccessError("load_failed");
         setLoading(false);
@@ -841,6 +855,13 @@ export default function PlanipretMobile() {
         setLoading(false);
         return;
       }
+      void supabase
+        .from("planipret_profiles")
+        .select(PLANIPRET_PROFILE_SAFE_COLUMNS)
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(({ data: full }) => { if (full) setProfile(full); });
+
       setAccessError(null);
       setProfile(data);
       setLoading(false);

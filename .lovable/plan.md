@@ -1,37 +1,49 @@
-## Mon avis sur l'analyse de Manus
+## Objectif
 
-Point factuel d'abord: j'ai cherché `SpeakAccount`, `speak_account`, `speak-account` dans **tout le dépôt** (frontend, `apps/planipret-mobile`, `apps/ava-softphone-*`, toutes les edge functions, toutes les migrations). **Zéro occurrence.** Aucune de nos fonctions d'appels sortants (`pp-ns-calls`, `ava-tool-executor`) n'écrit ni ne lit ce champ. `call_term_to_uri: SpeakAccount` est donc une valeur renvoyée par NetSapiens, pas quelque chose que j'ai hardcodé.
+Pour chaque appel d'un courtier Planiprêt (mobile iOS et Android), pousser automatiquement vers Maestro, sans action manuelle :
+1. l'enregistrement audio (fichier uploadé directement),
+2. la transcription,
+3. le résumé IA + coaching + analytics (score de lead, sentiment, points clés, actions).
 
-Là où je ne suis pas d'accord avec la conclusion « 100% côté AVA Telecom »: notre `pp-sync-answering-rules` écrit dans NS une règle qui peut produire exactement ce CDR (200 OK en 37 ms, aucun 3e participant). Deux éléments suspects, tous les deux dans notre code:
+## État actuel (vérifié)
 
-1. **Sim-ring qui boucle sur l'utilisateur lui-même.** Le payload envoie `destinations: [sip:113@planipret.ca]` et `list: [sip:113@planipret.ca]` — c'est-à-dire l'extension appelée renvoyée vers elle-même. Sur les builds NS qui n'honorent pas `ring-all-user-phones`, ce fork ne peut pas être routé et NS termine immédiatement dans une application (VMail / SpeakAccount) sans jamais forker vers `113_web` / `113_mobile`.
-2. **Le PUT sur `/users/{ext}`** envoie une dizaine de clés (`call-forward-always: ""`, etc.). Si NS rejette la requête partiellement, on ne le voit pas: le statut est stocké mais pas interprété.
+- Le trigger `trg_pp_auto_process_call` sur `planipret_phone_calls` appelle `pp-auto-process-call`, qui fait transcription (`pp-admin-transcribe`) + analyse (`pp-coach-call`) — **et ne pousse rien vers Maestro**.
+- La chaîne Maestro existe (`maestro-cdr` → `maestro-transcript` → `maestro-ai-analysis`) mais n'est déclenchée que depuis `ns-webhook-receiver` sur l'événement d'enregistrement, et elle relance une 2e analyse Claude (double coût).
+- `maestro-recording` ne fait que **lire** un enregistrement depuis Maestro. Aucun upload de l'audio vers Maestro n'existe.
+- L'audio est déjà mis en cache dans le bucket privé `call-recordings` par `ns-get-recording` (`recording_storage_path` sur la ligne d'appel).
 
-Avant de contacter AVA Telecom, il faut donc lire le vrai enregistrement NS. Ce diagnostic n'a pas encore été fait: notre `pp-inbound-diagnostic` interprète les champs mais ne renvoie pas le JSON brut de l'utilisateur, du DID et de la règle active.
+## Ce qui sera construit
 
-## Plan
+### 1. Nouvelle fonction `maestro-recording-upload`
+- Entrée : `{ call_id }`.
+- Récupère les octets audio : `recording_storage_path` du bucket `call-recordings` sinon `ns-get-recording` (qui met aussi en cache).
+- Upload direct multipart `POST /api/v1/calls/{maestro_call_id}/recording` avec le token OAuth du courtier (`getBrokerAuth`), fallback clé de compte.
+- Idempotent : `metadata.maestro_recording_uploaded_at` sur la ligne d'appel; skip si déjà fait sauf `force`.
+- Journalise via `pipelineLog` / `maestroSyncLog` / `setPipelineStep(..., 'recording', ...)`.
 
-### 1. Mode « raw » dans `pp-inbound-diagnostic` (lecture seule)
-- Ajouter `?raw=1` qui renvoie le JSON NS **non filtré** de:
-  - `GET /domains/planipret.ca/users/113` (tous les champs — on cherche `speak_account*`, `voicemail_rings`, `call_limit`, `dial_rule*`, `application`)
-  - la règle active `answerrules` telle que NS l'a réellement enregistrée après notre dernier sync (et non le payload qu'on a envoyé)
-  - le DID `4388427217` avec son champ `dial-rule-application` / `dial-rule-translation-destination`
-  - les `registrations` par device
-- Ajouter un verdict `TERMINATED_BY_APPLICATION` quand un CDR récent a `call-term-to-uri` non-SIP (SpeakAccount, VMail, AA…) avec 0 s de sonnerie, et afficher le nom de l'application dans l'UI.
+### 2. Nouvelle fonction `maestro-sync-call` (orchestrateur par appel)
+Séquence unique, idempotente, appelée une fois par appel :
+1. `maestro-cdr` (lookup client + CDR, si pas déjà `maestro_synced`)
+2. `maestro-recording-upload`
+3. push de la **transcription déjà stockée** (`transcript` produit par `pp-admin-transcribe`) vers `/api/v1/calls/{id}/transcript` — appel de `maestro-transcript` seulement si aucune transcription n'existe encore
+4. push du **résumé/coaching existant** (`ai_summary`, `ai_coaching`, `ai_key_points`, `ai_sentiment`, `ai_client_insights`, `lead_score`, `lead_temperature`, `ai_tasks`) vers `/api/v1/calls/{id}/ai_summary` — pas de nouvel appel Claude
+5. création des tâches Maestro pour les actions `high` (logique existante réutilisée)
+6. marque `pipeline_state.maestro = done`, diffuse l'événement temps réel au mobile.
 
-### 2. Corriger le payload de sim-ring
-- Retirer l'auto-référence `sip:113@planipret.ca` des `destinations` / `list`.
-- Ne conserver que `ring-all-user-phones: yes` + `include-user-extension: yes`, et si NS ne renvoie pas ces clés dans sa réponse, retomber sur les **AOR de devices réels lus depuis `/users/{ext}/devices`** (`113_mobile`, `113_web`) au lieu de valeurs devinées.
-- Vérifier le résultat en relisant la règle après écriture (read-after-write) et remonter un échec explicite si NS a ignoré les clés.
+### 3. Branchement automatique
+- `pp-auto-process-call` : à la fin (transcription et/ou analyse terminée), appelle `maestro-sync-call` en fire-and-forget.
+- `pp-coach-call` : après écriture de l'analyse, appelle aussi `maestro-sync-call` (couvre le chemin où l'analyse se termine hors de `pp-auto-process-call`).
+- `ns-webhook-receiver` : remplace l'appel direct `maestro-cdr` par `maestro-sync-call`.
+- Résultat : identique sur iOS et Android, puisque tout se passe côté serveur à partir du CDR NetSapiens.
 
-### 3. Vérifier le DID côté application
-- Si `dial-rule-application` du DID `(438) 842-7217` n'est pas `to-user` / `sip`, c'est la preuve que l'interception est au niveau du DID → là seulement l'escalade AVA Telecom est justifiée, avec le JSON brut comme pièce jointe.
-
-### 4. Exécution et validation
-- Déployer les deux fonctions, lancer le diagnostic `raw` sur l'extension 113, relancer le sync de règle sur 113 uniquement, puis un appel test et relecture du CDR (`call-term-to-uri` doit devenir un AOR SIP de device, `call-answer-datetime` > `call-start-datetime`).
+### 4. Rattrapage + visibilité
+- Fonction `maestro-backfill-sync` : réexécute `maestro-sync-call` pour les appels des N derniers jours dont `maestro_synced` est faux ou dont l'upload/transcript/AI n'a pas été poussé (par lots, avec limite).
+- Onglet Maestro existant du mobile (`MaestroTab.tsx`) : afficher 4 lignes d'état (CDR / Enregistrement / Transcription / Analyse IA) lues depuis `pipeline_state`, avec un bouton « Resynchroniser » appelant `maestro-sync-call` en `force`.
 
 ## Détails techniques
 
-- Fichiers touchés: `supabase/functions/pp-inbound-diagnostic/index.ts`, `supabase/functions/pp-sync-answering-rules/index.ts`, plus l'écran admin de diagnostic pour afficher le JSON brut.
-- Aucun changement dans l'app mobile: je suis d'accord avec Manus que les correctifs JS/iOS (`contact_uri` retiré, `forceReregister()` sans `unregister({all:true})`, background modes) sont bons et à conserver.
-- Sur les identifiants NS-API collés dans le message: ils sont déjà utilisés côté serveur via `nsFetch` (secrets backend). Le mot de passe admin ayant été écrit en clair dans le chat, il faut le changer dans NetSapiens puis mettre à jour le secret — je peux ouvrir le formulaire sécurisé pour ça.
+- Auth : toutes les fonctions valident le JWT et utilisent `service_role` en interne; les appels internes fonction→fonction utilisent la clé service.
+- Token Maestro par courtier via `getBrokerAuth(admin, call.user_id)`, avec repli sur la clé de compte si le courtier n'est pas connecté à Maestro; l'échec est journalisé et l'appel reste en `pending` pour un rattrapage ultérieur.
+- Idempotence : `maestro_synced`, `metadata.maestro_recording_uploaded_at`, `pipeline_state.{cdr,recording,transcript,ai,maestro}` — un ré-appel ne duplique rien et ne rappelle jamais Claude.
+- Aucune modification de schéma requise (les colonnes `pipeline_state`, `metadata`, `maestro_*` existent déjà).
+- Coût IA inchangé : réutilisation de l'analyse `pp-coach-call` existante.

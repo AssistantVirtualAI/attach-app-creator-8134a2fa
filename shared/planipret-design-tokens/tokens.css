@@ -1227,3 +1227,19 @@
 
 /* Consistent card padding rhythm across pages */
 .planipret-admin-scope .pa-page .pp-card { max-width: 100%; }
+
+/* Uniform page titles across all admin pages (overrides legacy inline sizes) */
+.planipret-admin-scope .pa-page > * h1,
+.planipret-admin-scope .pa-page > h1,
+.planipret-admin-scope .pa-page .pa-title {
+  font-family: 'Urbanist', 'Inter', system-ui, sans-serif !important;
+  font-size: 21px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--pp-text-primary) !important;
+}
+/* Section headings inside cards stay secondary to the page title */
+.planipret-admin-scope .pa-page .pp-card h2 {
+  font-family: 'Urbanist', 'Inter', system-ui, sans-serif;
+}

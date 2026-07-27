@@ -40,9 +40,18 @@ type MaestroCall = {
   ai_analysis_json?: any;
   next_actions?: any;
   metadata?: any;
+  pipeline_state?: any;
   transcript?: string | null;
   transcript_segments?: any;
 };
+
+const PIPELINE_ROWS: { key: string; fr: string; en: string }[] = [
+  { key: "cdr", fr: "CDR", en: "CDR" },
+  { key: "recording", fr: "Enregistrement", en: "Recording" },
+  { key: "transcript", fr: "Transcription", en: "Transcript" },
+  { key: "ai", fr: "Analyse IA", en: "AI analysis" },
+];
+
 
 function extractNextActions(call: MaestroCall): NextAction[] {
   const na = call.next_actions;

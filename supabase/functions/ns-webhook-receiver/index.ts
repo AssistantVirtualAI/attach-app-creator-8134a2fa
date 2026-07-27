@@ -235,13 +235,23 @@ async function processEvent(event: any) {
       });
     }
   } else if (type === "message.inbound") {
-    await admin.from("planipret_phone_messages").insert({
+    const { data: inboundMsg } = await admin.from("planipret_phone_messages").insert({
       user_id: userId, direction: "inbound",
       from_number: data.from_number ?? data.from ?? null,
       to_number: data.to_number ?? data.to ?? null,
       body: data.body ?? data.message ?? "",
       type: "sms",
-    });
+    }).select("id").maybeSingle();
+    if (inboundMsg?.id) {
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-sync-message`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({ message_id: inboundMsg.id }),
+      }).catch(() => {});
+    }
     if (userId) {
       await admin.channel(`messages:${userId}`).send({
         type: "broadcast", event: "inbound_message",

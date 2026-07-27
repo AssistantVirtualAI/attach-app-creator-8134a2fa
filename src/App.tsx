@@ -70,6 +70,7 @@ const PAAvaAgent = lazyWithRetry(() => import("./pages/planipret/admin/PAAvaAgen
 const PAAvaLogs = lazyWithRetry(() => import("./pages/planipret/admin/PAAvaLogs"));
 const PAAvaToolsAudit = lazyWithRetry(() => import("./pages/planipret/admin/PAAvaToolsAudit"));
 const PAMobileDevices = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileDevices"));
+const PAHoldMusic = lazyWithRetry(() => import("./pages/planipret/admin/PAHoldMusic"));
 const PASipDiagnostic = lazyWithRetry(() => import("./pages/planipret/admin/PASipDiagnostic"));
 const PADiagnostics = lazyWithRetry(() => import("./pages/planipret/admin/PADiagnostics"));
 const PAMaestroSync = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroSync"));
@@ -600,6 +601,7 @@ const App = () => (
                   <Route path="ava-logs" element={<Suspense fallback={<AdminPageSkeleton />}><PAAvaLogs /></Suspense>} />
                   <Route path="ava-tools-audit" element={<Suspense fallback={<AdminPageSkeleton />}><PAAvaToolsAudit /></Suspense>} />
                   <Route path="mobile-devices" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileDevices /></Suspense>} />
+                  <Route path="hold-music" element={<Suspense fallback={<AdminPageSkeleton />}><PAHoldMusic /></Suspense>} />
                   <Route path="sip-diagnostic" element={<Suspense fallback={<AdminPageSkeleton />}><PASipDiagnostic /></Suspense>} />
                   <Route path="diagnostics" element={<Suspense fallback={<AdminPageSkeleton />}><PADiagnostics /></Suspense>} />
                   <Route path="maestro-sync" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroSync /></Suspense>} />

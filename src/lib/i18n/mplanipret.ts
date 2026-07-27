@@ -762,6 +762,7 @@ export const MP_DICT = {
         recordings: "Enregistrements",
         integrations: "Intégrations",
         mobileDevices: "Devices mobiles",
+        holdMusic: "Musique d'attente",
         sipDiagnostic: "Diagnostic SIP",
         compliance: "Conformité",
         auditChecklist: "Audit",
@@ -786,6 +787,7 @@ export const MP_DICT = {
         avaAgent: "Agent AVA — Configuration",
         avaLogs: "Journal AVA — Exécutions d'outils",
         mobileDevices: "Vérification devices mobiles",
+        holdMusic: "Musique d'attente",
         sipDiagnostic: "Diagnostic SIP — 113_web",
       },
       ava: {
@@ -1760,6 +1762,7 @@ export const MP_DICT = {
         recordings: "Recordings",
         integrations: "Integrations",
         mobileDevices: "Mobile devices",
+        holdMusic: "Hold music",
         sipDiagnostic: "SIP diagnostic",
         compliance: "Compliance",
         auditChecklist: "Audit",
@@ -1784,6 +1787,7 @@ export const MP_DICT = {
         avaAgent: "AVA Agent — Configuration",
         avaLogs: "AVA Logs — Tool executions",
         mobileDevices: "Mobile device verification",
+        holdMusic: "Hold music",
         sipDiagnostic: "SIP diagnostic — 113_web",
       },
       ava: {

@@ -727,7 +727,7 @@ export default function PlanipretMobile() {
       error = retry.error;
     }
     if (error) {
-      console.error("[PlanipretMobile] profile query error", error);
+      console.error("[PlanipretMobile] profile query error:", error.message, (error as any).code);
       setProfileErrorDetail(error.message || "");
       recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "profile load failed");
       setAccessError("load_failed");

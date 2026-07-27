@@ -239,7 +239,7 @@ export default function PAAvaToolsAudit() {
           </button>
         </div>
         {readEmailsResult && (
-          <table className="w-full text-xs">
+          <div className="pa-scroll"><table className="w-full text-xs">
             <thead>
               <tr style={{ color: "var(--pp-text-faint)" }}>
                 <th className="text-left py-1">Dossier</th>

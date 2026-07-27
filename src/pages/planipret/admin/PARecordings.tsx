@@ -679,7 +679,7 @@ export default function PARecordings() {
       </div>
 
 
-      <div className="pp-card overflow-hidden">
+      <div className="pp-card pa-scroll">
         {loadError && <TableErrorState message={loadError} onRetry={() => load(page, pageSize)} />}
         <table className="w-full text-sm">
           <thead style={{ background: "var(--pp-bg-elevated)" }}>

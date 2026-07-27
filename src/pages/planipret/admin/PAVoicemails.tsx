@@ -157,7 +157,7 @@ export default function PAVoicemails() {
         <input type="date" value={to} onChange={(e) => setFilterValue("to", e.target.value)} className="px-3 py-2 rounded-lg text-sm" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />
         {hasFilters && <button onClick={resetFilters} className="px-2 py-1.5 text-xs underline" style={{ color: "var(--pp-text-muted)" }}>{t.reset}</button>}
       </div>
-      <div className="pp-card overflow-hidden">
+      <div className="pp-card pa-scroll">
         {loadError && <TableErrorState message={loadError} onRetry={() => load(page, pageSize)} />}
         <table className="w-full text-sm">
           <thead style={{ background: "var(--pp-bg-elevated)" }}>

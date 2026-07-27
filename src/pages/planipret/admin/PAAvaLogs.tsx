@@ -225,7 +225,7 @@ export default function PAAvaLogs() {
         <Select value={toolF} onChange={setToolF} options={[["", t.allTools], ...toolNames.map((n) => [n, n] as [string, string])]} />
       </div>
 
-      <div className="rounded-md border overflow-hidden" style={{ borderColor: "var(--pp-border)" }}>
+      <div className="rounded-md border pa-scroll" style={{ borderColor: "var(--pp-border)" }}>
         <table className="w-full text-xs">
           <thead style={{ background: "var(--pp-surface-alt)" }}>
             <tr>

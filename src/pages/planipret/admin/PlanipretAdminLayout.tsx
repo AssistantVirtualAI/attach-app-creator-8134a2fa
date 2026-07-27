@@ -23,9 +23,9 @@ import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "sipDiagnostic" | "compliance" | "auditChecklist" | "diagnostics" | "maestroSync";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "diagnostics" | "maestroSync";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "sipDiagnostic" | "diagnostics" | "maestroSync";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -58,6 +58,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
     items: [
       { to: "/planipret/admin/integrations",    key: "integrations",    Icon: Plug,        badge: "integrations" },
       { to: "/planipret/admin/mobile-devices",  key: "mobileDevices",   Icon: Smartphone },
+      { to: "/planipret/admin/hold-music",      key: "holdMusic",       Icon: Music },
       { to: "/planipret/admin/sip-diagnostic",  key: "sipDiagnostic",   Icon: PlugZap },
       { to: "/planipret/admin/diagnostics",     key: "diagnostics",     Icon: Gauge },
       { to: "/planipret/admin/maestro-sync",    key: "maestroSync",     Icon: Zap },
@@ -82,6 +83,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/ava-logs": "avaLogs",
   "/planipret/admin/ava-tools-audit": "avaToolsAudit",
   "/planipret/admin/mobile-devices": "mobileDevices",
+  "/planipret/admin/hold-music": "holdMusic",
   "/planipret/admin/sip-diagnostic": "sipDiagnostic",
   "/planipret/admin/diagnostics": "diagnostics",
   "/planipret/admin/maestro-sync": "maestroSync",

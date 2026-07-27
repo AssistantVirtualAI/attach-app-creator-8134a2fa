@@ -825,22 +825,47 @@ export default function PlanipretMobile() {
         sessionStorage.setItem("pp_ms_captured", session.access_token);
       }
 
-      // Boot with a small column set (fast on mobile networks), then refresh
-      // the full safe set in the background.
-      let { data, error } = await withTimeout(
-        supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle(),
-        PROFILE_BOOT_TIMEOUT_MS,
-        "pp_profile",
-      );
-      if (error) {
-        // One immediate retry before showing the error screen.
-        const retry = await withTimeout(
+      const invokeMobileProfile = async (accessToken: string) => {
+        const { data: fallbackData, error: fallbackError } = await withTimeout(
+          supabase.functions.invoke("pp-mobile-profile", {
+            body: { fields: "safe" },
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }),
+          PROFILE_BOOT_TIMEOUT_MS,
+          "pp_mobile_profile",
+        );
+        if (fallbackError) throw fallbackError;
+        return (fallbackData as any)?.profile ?? null;
+      };
+
+      const loadViaBackend = async () => {
+        if (!session.access_token) return null;
+        try {
+          return await invokeMobileProfile(session.access_token);
+        } catch (firstError: any) {
+          const status = firstError?.context?.status;
+          const message = String(firstError?.message || "");
+          if (status !== 401 && !/unauthori[sz]ed|401/i.test(message)) throw firstError;
+          const { data: refreshed } = await supabase.auth.refreshSession();
+          const token = refreshed.session?.access_token;
+          return token ? invokeMobileProfile(token) : null;
+        }
+      };
+
+      // Native mobile must not depend on browser column-level grants. The secure
+      // backend profile loader filters credentials server-side and auto-links by
+      // the signed-in email when needed.
+      let data: any = await loadViaBackend();
+      let error: any = null;
+
+      if (!data) {
+        const direct = await withTimeout(
           supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle(),
           PROFILE_BOOT_TIMEOUT_MS,
-          "pp_profile_retry",
+          "pp_profile_direct_fallback",
         );
-        data = retry.data as any;
-        error = retry.error;
+        data = direct.data as any;
+        error = direct.error;
       }
       if (error) {
         console.error("[PlanipretMobile] profile query error", error);
@@ -861,7 +886,15 @@ export default function PlanipretMobile() {
         .select(PLANIPRET_PROFILE_SAFE_COLUMNS)
         .eq("user_id", user.id)
         .maybeSingle()
-        .then(({ data: full }) => { if (full) setProfile(full); });
+        .then(async ({ data: full, error: fullError }) => {
+          if (full) setProfile(full);
+          else if (fullError) {
+            try {
+              const fullViaBackend = await loadViaBackend();
+              if (fullViaBackend) setProfile(fullViaBackend);
+            } catch { /* non-blocking */ }
+          }
+        });
 
       setAccessError(null);
       setProfileErrorDetail("");

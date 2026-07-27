@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
       }
       // pp-admin-transcribe already re-invokes pp-coach-call when it produced
       // the transcript itself, so nothing more to do here.
-      if (j?.ok && !row.analyzed_at) return json({ ok: true, stage: "transcribed" });
+      if (j?.ok && !row.analyzed_at) { syncMaestro(); return json({ ok: true, stage: "transcribed" }); }
     } catch (e: any) {
       return json({ ok: false, stage: "transcribe", error: e?.message }, 500);
     }
@@ -113,7 +113,9 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ call_id: callId }),
       });
       const j = await r.json().catch(() => ({}));
+      syncMaestro();
       return json({ ok: true, stage: "analyze", result: j });
+
     } catch (e: any) {
       return json({ ok: false, stage: "analyze", error: e?.message }, 500);
     }

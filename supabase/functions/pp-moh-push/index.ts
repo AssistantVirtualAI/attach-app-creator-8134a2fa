@@ -115,8 +115,9 @@ Deno.serve(async (req) => {
     try {
       await admin.from("planipret_audit_log").insert({
         action: "hold_music_push",
-        entity_type: "hold_music",
-        entity_id: id,
+        resource_type: "hold_music",
+        resource_id: id,
+        admin_id: userId,
         user_id: userId,
         metadata: { scope, ok, total: results.length, domain },
       });

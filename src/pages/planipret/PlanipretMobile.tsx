@@ -690,7 +690,11 @@ export default function PlanipretMobile() {
     return () => { supabase.removeChannel(ch); };
   }, [profile?.user_id, location.pathname, navigate, t]);
 
-  const loadProfile = async () => {
+  const loadProfile = async (attempt = 0) => {
+    if (attempt === 0) {
+      setLoading(true);
+      setAccessError(null);
+    }
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user ?? null;
     if (!user) {
@@ -723,7 +727,7 @@ export default function PlanipretMobile() {
       error = retry.error;
     }
     if (error) {
-      console.error("[PlanipretMobile] profile query error", error);
+      console.error("[PlanipretMobile] profile query error:", error.message, (error as any).code);
       setProfileErrorDetail(error.message || "");
       recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "profile load failed");
       setAccessError("load_failed");

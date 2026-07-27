@@ -83,7 +83,21 @@ interface CallOpts {
   body?: unknown;
   idempotencyKey?: string;
   accountId?: string;
+  brokerId?: string | null;
 }
+
+/**
+ * Rewrite `/api/v1/<rest>` into `/api/v1/users/<brokerId>/<rest>` so every
+ * push lands under the broker's own Maestro account.
+ */
+export function brokerScopedPath(brokerId: string | null | undefined, path: string): string {
+  if (!brokerId) return path;
+  if (path.includes("/users/")) return path;
+  const m = path.match(/^\/api\/v1\/(.*)$/);
+  if (!m) return path;
+  return `/api/v1/users/${encodeURIComponent(String(brokerId))}/${m[1]}`;
+}
+
 
 export async function maestroFetch(cfg: MaestroConfig, opts: CallOpts) {
   if (!cfg.url) throw new Error("MAESTRO_API_URL missing");

@@ -42,7 +42,15 @@ Deno.serve(async (req) => {
 
   // Idempotency short-circuits — cheap and avoids any downstream cost.
   const hasCompleteAnalysis = !!row.analyzed_at && !!row.ai_summary && !!row.ai_coaching && row.coaching_score != null;
-  if (hasCompleteAnalysis) return json({ ok: true, skipped: "already_analyzed" });
+  if (hasCompleteAnalysis) {
+    // Analysis already done — still make sure Maestro has it (idempotent).
+    fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-call`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
+      body: JSON.stringify({ call_id: callId }),
+    }).catch(() => {});
+    return json({ ok: true, skipped: "already_analyzed", maestro_sync: "queued" });
+  }
   if (row.analysis_in_progress) {
     const lockedAt = new Date(row.analysis_locked_at || 0).getTime();
     if (Date.now() - lockedAt < 5 * 60_000) {

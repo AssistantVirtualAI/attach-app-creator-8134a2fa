@@ -270,7 +270,7 @@ export default function PAAvaToolsAudit() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>

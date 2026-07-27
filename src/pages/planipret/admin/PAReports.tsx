@@ -458,7 +458,7 @@ export default function PAReports() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {/* ───────── Financier — même source que Vue d'ensemble ───────── */}

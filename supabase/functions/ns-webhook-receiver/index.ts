@@ -181,11 +181,12 @@ async function processEvent(event: any) {
         body: JSON.stringify({ call_id: callId }),
       }).catch(() => {});
 
-      // Maestro pipeline: resolve uuid by ns_call_id, then push CDR → transcript → AI.
+      // Maestro pipeline: resolve uuid by ns_call_id, then push CDR + recording
+      // + transcript + AI analytics in one idempotent orchestrator call.
       void admin.from("planipret_phone_calls").select("id").eq("ns_call_id", String(callId)).maybeSingle()
         .then(({ data: row }) => {
           if (row?.id) {
-            void fetch(`${SUPABASE_URL}/functions/v1/maestro-cdr`, {
+            void fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-call`, {
               method: "POST", headers: { Authorization: authH, "Content-Type": "application/json" },
               body: JSON.stringify({ call_id: row.id }),
             }).catch(() => {});

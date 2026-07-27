@@ -200,3 +200,6 @@ verify_jwt = true
 
 [functions.ms365-mail-webhook-receiver]
 verify_jwt = false
+
+[functions.pp-mobile-profile]
+verify_jwt = false

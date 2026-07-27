@@ -839,24 +839,44 @@ export default function PlanipretMobile() {
       };
 
       const loadViaBackend = async () => {
-        if (!session.access_token) return null;
+        let token = session.access_token;
+        if (!token) {
+          const { data: refreshed } = await supabase.auth.refreshSession();
+          token = refreshed.session?.access_token ?? "";
+        }
+        if (!token) throw new Error("no_session");
         try {
-          return await invokeMobileProfile(session.access_token);
+          return await invokeMobileProfile(token);
         } catch (firstError: any) {
           const status = firstError?.context?.status;
           const message = String(firstError?.message || "");
           if (status !== 401 && !/unauthori[sz]ed|401/i.test(message)) throw firstError;
           const { data: refreshed } = await supabase.auth.refreshSession();
-          const token = refreshed.session?.access_token;
-          return token ? invokeMobileProfile(token) : null;
+          const retryToken = refreshed.session?.access_token;
+          if (!retryToken) throw new Error("no_session");
+          return await invokeMobileProfile(retryToken);
         }
       };
 
       // Native mobile must not depend on browser column-level grants. The secure
       // backend profile loader filters credentials server-side and auto-links by
       // the signed-in email when needed.
-      let data: any = await loadViaBackend();
+      let data: any = null;
       let error: any = null;
+
+      try {
+        data = await loadViaBackend();
+      } catch (backendError: any) {
+        const msg = backendError?.message ?? String(backendError);
+        if (msg === "no_session") {
+          recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "no session for pp-mobile-profile");
+          setProfile(null);
+          setAccessError("unauthenticated");
+          setLoading(false);
+          return;
+        }
+        console.error("[PlanipretMobile] pp-mobile-profile failed", msg);
+      }
 
       if (!data) {
         const direct = await withTimeout(
@@ -867,6 +887,7 @@ export default function PlanipretMobile() {
         data = direct.data as any;
         error = direct.error;
       }
+
       if (error) {
         console.error("[PlanipretMobile] profile query error", error);
         setProfileErrorDetail(error.message || "");

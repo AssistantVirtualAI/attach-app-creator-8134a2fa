@@ -237,6 +237,43 @@ export default function MaestroTab({ call, onUpdated }: { call: MaestroCall; onU
           <div className="text-xs mt-2" style={{ color: "var(--pp-text-muted)" }}>{t("maestro.noLinkedClient")}</div>
         )}
 
+        {/* Auto-sync pipeline state */}
+        <div className="mt-3 rounded-lg p-2.5 space-y-1.5" style={{ background: "var(--pp-bg-elevated)" }}>
+          {PIPELINE_ROWS.map((row) => {
+            const st = (call.pipeline_state ?? {})[row.key]?.state as string | undefined;
+            const done = st === "done";
+            const failed = st === "error";
+            return (
+              <div key={row.key} className="flex items-center justify-between text-[11px]">
+                <span style={{ color: "var(--pp-text-secondary)" }}>{lang === "en" ? row.en : row.fr}</span>
+                <span
+                  className="inline-flex items-center gap-1 font-semibold"
+                  style={{ color: done ? "var(--pp-success)" : failed ? "var(--pp-danger)" : "var(--pp-text-muted)" }}
+                >
+                  {done ? <CheckCircle2 className="w-3 h-3" /> : failed ? <XCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                  {done
+                    ? (lang === "en" ? "Synced" : "Synchronisé")
+                    : failed
+                      ? (lang === "en" ? "Failed" : "Échec")
+                      : (lang === "en" ? "Pending" : "En attente")}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Manual resync (auto-sync already runs server-side after each call) */}
+        <button
+          onClick={doPush}
+          disabled={pushing}
+          className="mt-2 w-full py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50"
+          style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", border: "1px solid var(--pp-border)" }}
+        >
+          {pushing
+            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("maestro.pushing")}</>
+            : <><RefreshCw className="w-3.5 h-3.5" /> {lang === "en" ? "Resync with Maestro" : "Resynchroniser avec Maestro"}</>}
+        </button>
+
         {/* AI generation CTA */}
         {!hasAiContent && (
           <button

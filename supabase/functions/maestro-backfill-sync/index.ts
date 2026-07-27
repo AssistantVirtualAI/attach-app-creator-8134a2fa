@@ -72,8 +72,38 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── SMS backfill ────────────────────────────────────────────
+  let msgQ = admin
+    .from("planipret_phone_messages")
+    .select("id, user_id, metadata, created_at")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(limit * 3);
+  if (body?.user_id) msgQ = msgQ.eq("user_id", body.user_id);
+  const { data: msgRows } = await msgQ;
+  const pendingMsgs = (msgRows ?? [])
+    .filter((m: any) => force || !(m.metadata ?? {}).maestro_synced_at)
+    .slice(0, limit);
+
+  const messageResults: any[] = [];
+  for (const m of pendingMsgs) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
+        body: JSON.stringify({ message_id: m.id, force }),
+      });
+      const data = await res.json().catch(() => ({}));
+      messageResults.push({ message_id: m.id, success: !!data?.success });
+    } catch (e: any) {
+      messageResults.push({ message_id: m.id, success: false, error: e?.message });
+    }
+  }
+
   return json({
     success: true,
+    messages_processed: messageResults.length,
+    messages_succeeded: messageResults.filter((r) => r.success).length,
     scanned: rows?.length ?? 0,
     processed: results.length,
     succeeded: results.filter((r) => r.success).length,

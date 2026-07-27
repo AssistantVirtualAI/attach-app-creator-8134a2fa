@@ -17,6 +17,7 @@ import {
   json,
   maestroAudit,
   maestroFetch,
+  maestroFetchScoped,
   pipelineLog,
   setPipelineStep,
   updateCallPipeline,
@@ -114,10 +115,11 @@ Deno.serve(async (req) => {
       if (fresh) call = fresh;
     } else {
       // Push the already-stored transcript (no re-transcription cost).
-      const res = await maestroFetch(cfg, {
+      const res = await maestroFetchScoped(cfg, {
         method: "POST",
         path: `/api/v1/calls/${encodeURIComponent(String(mId))}/transcript`,
         token: auth.token,
+        brokerId: auth.brokerId,
         body: {
           language: call.transcript_language ?? "fr-CA",
           text: transcript,
@@ -150,10 +152,11 @@ Deno.serve(async (req) => {
           ? asArray(aij.key_points)
           : asArray(call.ai_topics);
 
-      const res = await maestroFetch(cfg, {
+      const res = await maestroFetchScoped(cfg, {
         method: "POST",
         path: `/api/v1/calls/${encodeURIComponent(String(mId))}/ai_summary`,
         token: auth.token,
+        brokerId: auth.brokerId,
         body: {
           summary_text: summary,
           key_points: keyPoints,

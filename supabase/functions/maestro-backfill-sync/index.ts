@@ -75,14 +75,15 @@ Deno.serve(async (req) => {
   // ── SMS backfill ────────────────────────────────────────────
   let msgQ = admin
     .from("planipret_phone_messages")
-    .select("id, user_id, metadata, created_at")
+    .select("id, user_id, maestro_synced, metadata, created_at")
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(limit * 3);
   if (body?.user_id) msgQ = msgQ.eq("user_id", body.user_id);
+  if (!force) msgQ = msgQ.eq("maestro_synced", false);
   const { data: msgRows } = await msgQ;
   const pendingMsgs = (msgRows ?? [])
-    .filter((m: any) => force || !(m.metadata ?? {}).maestro_synced_at)
+    .filter((m: any) => force || (!m.maestro_synced && !(m.metadata ?? {}).maestro_synced_at))
     .slice(0, limit);
 
   const messageResults: any[] = [];

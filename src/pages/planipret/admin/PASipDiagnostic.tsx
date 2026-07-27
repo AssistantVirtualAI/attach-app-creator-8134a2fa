@@ -206,7 +206,7 @@ export default function PASipDiagnostic() {
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--pp-text-primary)" }}>{t.title}</h2>
+          <h1 className="pa-title" style={{ fontSize: 18, fontWeight: 600, color: "var(--pp-text-primary)" }}>{t.title}</h1>
           <p className="mt-1" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
             {t.subtitle}
           </p>

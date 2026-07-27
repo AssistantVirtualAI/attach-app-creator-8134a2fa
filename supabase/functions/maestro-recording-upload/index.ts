@@ -121,11 +121,21 @@ Deno.serve(async (req) => {
     form.append("call_id", String(mId));
     if (call.duration_seconds != null) form.append("duration_sec", String(call.duration_seconds));
 
-    const endpoint = `${cfg.url}/api/v1/calls/${encodeURIComponent(String(mId))}/recording`;
+    const relPath = `/api/v1/calls/${encodeURIComponent(String(mId))}/recording`;
+    const scoped = auth.brokerId
+      ? `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls/${encodeURIComponent(String(mId))}/recording`
+      : relPath;
     const headers: Record<string, string> = { Authorization: `Bearer ${auth.token}` };
     if (cfg.accountId) headers["X-Account-Id"] = cfg.accountId;
+    if (auth.brokerId) headers["X-Broker-Id"] = String(auth.brokerId);
 
-    const res = await fetch(endpoint, { method: "POST", headers, body: form });
+    let endpoint = `${cfg.url}${scoped}`;
+    let res = await fetch(endpoint, { method: "POST", headers, body: form });
+    if (!res.ok && (res.status === 404 || res.status === 405) && scoped !== relPath) {
+      endpoint = `${cfg.url}${relPath}`;
+      res = await fetch(endpoint, { method: "POST", headers, body: form });
+    }
+
     const text = await res.text();
     let data: any = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text.slice(0, 500) }; }

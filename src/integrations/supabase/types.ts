@@ -9522,6 +9522,7 @@ export type Database = {
           direction: string
           from_number: string | null
           id: string
+          maestro_synced: boolean
           media_urls: Json
           metadata: Json
           ns_message_id: string | null
@@ -9540,6 +9541,7 @@ export type Database = {
           direction: string
           from_number?: string | null
           id?: string
+          maestro_synced?: boolean
           media_urls?: Json
           metadata?: Json
           ns_message_id?: string | null
@@ -9558,6 +9560,7 @@ export type Database = {
           direction?: string
           from_number?: string | null
           id?: string
+          maestro_synced?: boolean
           media_urls?: Json
           metadata?: Json
           ns_message_id?: string | null

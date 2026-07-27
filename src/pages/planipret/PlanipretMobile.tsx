@@ -720,11 +720,30 @@ export default function PlanipretMobile() {
         sessionStorage.setItem("pp_ms_captured", session.access_token);
       }
     } catch (_) { /* non-blocking */ }
+    const loadProfileViaFunction = async () => {
+      const { data: fallbackData, error: fallbackError } = await supabase.functions.invoke("pp-mobile-profile", {
+        body: { fields: "safe" },
+      });
+      if (fallbackError) throw fallbackError;
+      return (fallbackData as any)?.profile ?? null;
+    };
+
     let { data, error } = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle();
     if (error) {
       const retry = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle();
       data = retry.data as any;
       error = retry.error;
+    }
+    if (error || !data) {
+      try {
+        const fallbackProfile = await loadProfileViaFunction();
+        if (fallbackProfile) {
+          data = fallbackProfile;
+          error = null;
+        }
+      } catch (fallbackError: any) {
+        if (error) console.error("[PlanipretMobile] profile fallback error:", fallbackError?.message ?? fallbackError);
+      }
     }
     if (error) {
       console.error("[PlanipretMobile] profile query error:", error.message, (error as any).code);
@@ -749,7 +768,15 @@ export default function PlanipretMobile() {
       .select(PLANIPRET_PROFILE_SAFE_COLUMNS)
       .eq("user_id", user.id)
       .maybeSingle()
-      .then(({ data: full }) => { if (full) setProfile(full); });
+      .then(async ({ data: full, error: fullError }) => {
+        if (full) setProfile(full);
+        else if (fullError) {
+          try {
+            const fallbackFull = await loadProfileViaFunction();
+            if (fallbackFull) setProfile(fallbackFull);
+          } catch { /* non-blocking */ }
+        }
+      });
 
     // Hydrate FR/EN from DB (source of truth across devices)
     if (data.language === "fr" || data.language === "en") {

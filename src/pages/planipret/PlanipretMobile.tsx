@@ -35,7 +35,7 @@ import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
-import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
+import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "@/lib/planipret/profileColumns";
 
 
 const ACCENT = "#2E9BDC";
@@ -473,6 +473,7 @@ export default function PlanipretMobile() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState<"unauthenticated" | "missing_profile" | "load_failed" | null>(null);
+  const [profileErrorDetail, setProfileErrorDetail] = useState<string>("");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -808,7 +809,10 @@ export default function PlanipretMobile() {
                 ? t("access.missingProfile")
                 : t("access.loadFailed")}
             </p>
-            <button onClick={loadProfile} className="pp-btn-primary inline-block">{t("common.retry")}</button>
+            {profileErrorDetail && accessError !== "missing_profile" && (
+              <p style={{ fontSize: 11, opacity: 0.7, color: "var(--pp-text-secondary)", marginBottom: 12, wordBreak: "break-word" }}>{profileErrorDetail}</p>
+            )}
+            <button onClick={() => { setProfileErrorDetail(""); setAccessError(null); setLoading(true); void loadProfile(); }} className="pp-btn-primary inline-block">{t("common.retry")}</button>
           </div>
         </div>
       </Frame>

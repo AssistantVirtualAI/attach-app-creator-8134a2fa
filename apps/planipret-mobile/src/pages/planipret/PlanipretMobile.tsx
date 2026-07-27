@@ -38,11 +38,11 @@ import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts } from "@/lib/ppContactsCache";
 import { prefetchTeams365Data } from "@/lib/teams365Cache";
-import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
+import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "@/lib/planipret/profileColumns";
 
 
 const ACCENT = "#2E9BDC";
-const PROFILE_BOOT_TIMEOUT_MS = 4500;
+const PROFILE_BOOT_TIMEOUT_MS = 15000;
 
 function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -567,6 +567,7 @@ export default function PlanipretMobile() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState<"unauthenticated" | "missing_profile" | "load_failed" | null>(null);
+  const [profileErrorDetail, setProfileErrorDetail] = useState<string>("");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -878,6 +879,7 @@ export default function PlanipretMobile() {
       }
     } catch (error) {
       console.error("[PlanipretMobile] loadProfile failed", error);
+      setProfileErrorDetail((error as any)?.message || String(error));
       recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "profile boot timeout/failure");
       setAccessError("load_failed");
       setLoading(false);
@@ -948,7 +950,10 @@ export default function PlanipretMobile() {
                 ? t("access.missingProfile")
                 : t("access.loadFailed")}
             </p>
-            <button onClick={loadProfile} className="pp-btn-primary inline-block">{t("common.retry")}</button>
+            {profileErrorDetail && accessError !== "missing_profile" && (
+              <p style={{ fontSize: 11, opacity: 0.7, color: "var(--pp-text-secondary)", marginBottom: 12, wordBreak: "break-word" }}>{profileErrorDetail}</p>
+            )}
+            <button onClick={() => { setProfileErrorDetail(""); setAccessError(null); setLoading(true); void loadProfile(); }} className="pp-btn-primary inline-block">{t("common.retry")}</button>
           </div>
         </div>
       </Frame>

@@ -456,7 +456,7 @@ export default function PAMobileDevices() {
 
 
   return (
-    <div className="space-y-4">
+    <div className="pa-page space-y-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
           <h2 style={{ fontSize: 18, fontWeight: 600, color: "var(--pp-text-primary)" }}>{t.pageTitle}</h2>

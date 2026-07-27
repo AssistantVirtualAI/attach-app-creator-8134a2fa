@@ -125,7 +125,7 @@ export default function PACalls() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="pa-page space-y-5">
       <DebugPanel entries={debug} />
 
       <NsSyncBar features={["cdrs", "recordings"]} onReload={() => load(page, pageSize)} />

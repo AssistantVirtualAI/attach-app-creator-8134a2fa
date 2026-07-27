@@ -590,7 +590,7 @@ export default function PARecordings() {
   const localeStr = lang === "en" ? "en-CA" : "fr-CA";
 
   return (
-    <div className="space-y-4">
+    <div className="pa-page space-y-5">
       <div className="flex gap-1 border-b" style={{ borderColor: "var(--pp-bg-border-2)" }}>
         {([
           ["pbx", t.tabPbx],

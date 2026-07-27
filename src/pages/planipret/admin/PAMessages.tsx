@@ -185,7 +185,7 @@ export default function PAMessages() {
   const inputStyle = { background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" };
 
   return (
-    <div className="space-y-4">
+    <div className="pa-page space-y-5">
       <DebugPanel entries={debug} />
 
       <NsSyncBar features={["messages", "cdrs"]} onReload={() => load(page, pageSize)} />

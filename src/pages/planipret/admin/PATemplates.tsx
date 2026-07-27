@@ -98,7 +98,7 @@ export default function PATemplates() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="pa-page space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h2 style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 18, color: "var(--pp-text-primary)" }}>

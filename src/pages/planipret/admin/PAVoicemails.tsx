@@ -144,7 +144,7 @@ export default function PAVoicemails() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="pa-page space-y-5">
       <DebugPanel entries={debug} />
       <div className="pp-card p-4 flex items-center gap-2 flex-wrap">
         <input value={search} onChange={(e) => setFilterValue("search", e.target.value)} placeholder={t.searchPlaceholder} className="px-3 py-2 rounded-lg text-sm w-64" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />

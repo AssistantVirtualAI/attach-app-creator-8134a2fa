@@ -201,7 +201,7 @@ export default function PASipDiagnostic() {
   const showProvisionCta = resolved && !resolved.ok && (resolved.error === "device_not_found" || resolved.error === "no_extension");
 
   return (
-    <div className="space-y-4">
+    <div className="pa-page space-y-5">
       <audio ref={audioRef} autoPlay hidden />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

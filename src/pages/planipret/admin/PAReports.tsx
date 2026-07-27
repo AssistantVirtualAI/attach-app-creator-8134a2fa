@@ -269,7 +269,7 @@ export default function PAReports() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="pa-page space-y-5">
       <NsSyncBar features={["cdrs", "messages", "recordings"]} onReload={() => setRefreshTick((t) => t + 1)} />
       <div className="flex flex-wrap items-center justify-between gap-2">
 

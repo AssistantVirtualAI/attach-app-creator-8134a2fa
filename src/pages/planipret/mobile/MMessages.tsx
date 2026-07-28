@@ -250,15 +250,15 @@ const looksLikePhone = (value: string) => /^[+]?[-() .\d]{3,}$/.test(value.trim(
 
 function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   const { t } = useMplanipretLang();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const myExt = profile?.extension ?? "";
   const [threads, setThreads] = useState<NsThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeThread, setActiveThread] = useState<{ id: string; number: string } | null>(null);
+  const [activeThread, setActiveThread] = useState<{ id: string; number: string; body?: string; autoSend?: boolean } | null>(null);
   const [newOpen, setNewOpen] = useState(false);
 
-  const openSmsThread = (thread: { id: string; number: string }, focusComposer = true) => {
+  const openSmsThread = (thread: { id: string; number: string; body?: string; autoSend?: boolean }, focusComposer = true) => {
     flushSync(() => {
       setNewOpen(false);
       setActiveThread(thread);
@@ -297,8 +297,17 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   useEffect(() => { registerRefresh(load); return () => registerRefresh(null); /* eslint-disable-next-line */ }, [profile?.user_id]);
   useEffect(() => {
     const to = searchParams.get("to")?.trim();
-    if (to) openSmsThread({ id: "", number: to }, false);
-  }, [searchParams]);
+    const body = searchParams.get("body")?.trim() ?? "";
+    const autoSend = searchParams.get("autosend") === "1";
+    if (!to) return;
+    openSmsThread({ id: "", number: to, body, autoSend }, false);
+    const clean = new URLSearchParams(searchParams);
+    clean.delete("to");
+    clean.delete("name");
+    clean.delete("body");
+    clean.delete("autosend");
+    setSearchParams(clean, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   if (activeThread) {
     return (
@@ -306,6 +315,8 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
         <ThreadView
           threadId={activeThread.id}
           number={activeThread.number}
+          initialText={activeThread.body}
+          autoSend={activeThread.autoSend}
           myExt={myExt}
           userId={profile.user_id}
           onBack={() => { setActiveThread(null); load(); }}

@@ -139,8 +139,8 @@ Deno.serve(async (req) => {
     // ── 4. AI summary + analytics (reuse existing analysis) ─
     const aij = (call.ai_analysis_json ?? {}) as any;
     const summary = call.ai_summary ?? call.ai_summary_short ?? aij?.summary?.text ?? null;
-    const nextActions = asArray(call.ai_tasks).length
-      ? asArray(call.ai_tasks)
+    const nextActions = asArray((call as any).ai_tasks).length
+      ? asArray((call as any).ai_tasks)
       : asArray(call.next_actions).length
         ? asArray(call.next_actions)
         : asArray(call.ai_action_items);
@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
           summary_text: summary,
           key_points: keyPoints,
           next_actions: nextActions.map(actionTitle).filter(Boolean),
-          sentiment: call.ai_sentiment ?? aij?.sentiment ?? null,
+          sentiment: (call as any).ai_sentiment ?? aij?.sentiment ?? null,
           analytics: {
             coaching: call.ai_coaching ?? aij?.coaching ?? null,
             coaching_score: call.coaching_score ?? null,

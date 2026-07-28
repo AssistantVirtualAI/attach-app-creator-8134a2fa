@@ -244,8 +244,8 @@ export default function RecordingsList({
         const who = otherLabel(call);
 
         // 1) Audio : cache signé côté serveur, silencieux.
-        const alreadyBlob = !!call.recording_url && /^blob:/i.test(String(call.recording_url));
-        if (!audioBlobCacheRef.current.has(call.id) && !alreadyBlob) {
+        const alreadyResolved = !!call.recording_url && (call.stream_via_proxy === false || /^(blob:|data:|https?:)/i.test(String(call.recording_url)));
+        if (!audioBlobCacheRef.current.has(call.id) && !alreadyResolved) {
           setStatus(call.id, "uploading");
           try {
             const url = await fetchAudioUrl(call, { signal: controller.signal });
@@ -259,7 +259,7 @@ export default function RecordingsList({
               console.warn("[RecordingsList] auto-upload failed", who, e?.message);
             }
           }
-        } else if (alreadyBlob || audioBlobCacheRef.current.has(call.id)) {
+        } else if (alreadyResolved || audioBlobCacheRef.current.has(call.id)) {
           setStatus(call.id, "uploaded");
         }
 

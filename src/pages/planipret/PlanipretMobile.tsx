@@ -517,6 +517,23 @@ export default function PlanipretMobile() {
   const handlePull = async () => { if (refreshFn.current) await refreshFn.current(); };
   const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull);
 
+  // Keep Microsoft 365 + Maestro OAuth sessions alive: refresh on boot, on
+  // foreground, and every 20 minutes so connections never silently drop.
+  useEffect(() => {
+    if (!profile?.user_id) return;
+    let last = 0;
+    const ping = () => {
+      if (Date.now() - last < 60_000) return;
+      last = Date.now();
+      supabase.functions.invoke("pp-connections-keepalive", { body: {} }).catch(() => {});
+    };
+    ping();
+    const onVis = () => { if (document.visibilityState === "visible") ping(); };
+    document.addEventListener("visibilitychange", onVis);
+    const iv = setInterval(ping, 20 * 60 * 1000);
+    return () => { document.removeEventListener("visibilitychange", onVis); clearInterval(iv); };
+  }, [profile?.user_id]);
+
   const isDismissed = (id?: string | null) => {
     if (!id) return false;
     const ts = endedCallIds.current.get(id);

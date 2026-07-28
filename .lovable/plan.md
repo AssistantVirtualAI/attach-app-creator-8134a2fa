@@ -1,37 +1,26 @@
-Plan de correction ciblé pour Planiprêt Mobile :
+## Objectif
 
-1. Header mobile
-   - Remettre le logo Planiprêt visible dans le header.
-   - Afficher les deux logos AVA + Planiprêt côte à côte.
-   - Garder Settings + Bell + Avatar.
-   - Réajouter les boutons Langue FR/EN et Thème directement dans le header, sans créer de doublon.
-   - Appliquer la même correction dans l’app mobile standalone et dans la version principale.
+Auditer l'application mobile Planiprêt écran par écran et fonction par fonction, corriger ce qui casse, et livrer un rapport complet en français.
 
-2. Connexion Microsoft depuis Settings
-   - Corriger `Ms365Callback` pour arrêter la boucle `history.replaceState` visible dans ton screenshot.
-   - Ajouter une protection anti double-exchange du code OAuth.
-   - Remplacer les redirections répétées par une seule navigation contrôlée vers `/mplanipret/home` ou `/mplanipret/more`.
-   - Garder le fallback si le deep link Microsoft ne revient pas proprement.
+## Périmètre (15 écrans)
 
-3. Recordings qui se re-upload à chaque clic
-   - Ne plus traiter le chargement audio comme un nouvel upload à chaque ouverture.
-   - Lire et afficher l’état réel déjà sauvegardé : audio, transcript, IA, CRM.
-   - Utiliser `pipeline_state`, `maestro_synced`, `recording_url`, transcript et résumé IA pour mémoriser le statut.
-   - Afficher un statut clair par appel : En attente, Uploadé, Transcrit, Analysé, Synchronisé CRM, Erreur.
+Home, Calls, Messages (SMS + Emails), Voicemail, Contacts, Pipeline, Search, Stats, AVA Chat, AVA Notifications, More/Settings, Extension Sync, SIP Debug, MS365 Diagnostics, Deep Link Debug — plus le shell (auth, header, bottom nav, dialpad FAB, safe-areas).
 
-4. Sync CRM automatique
-   - Déclencher automatiquement la synchronisation Maestro quand un enregistrement/transcription/résumé IA est prêt.
-   - Garder le bouton Sync CRM seulement comme retry manuel si une erreur arrive.
-   - Mettre à jour l’UI en temps réel après `maestro-sync-call`.
+## Méthode
 
-5. AVA chatbot actions réelles
-   - Corriger l’action SMS pour qu’AVA ne dise plus “envoyé” si rien n’a été envoyé.
-   - Sur confirmation, AVA ouvrira la page Texto avec numéro + message et déclenchera l’envoi réel.
-   - Pour les appels, AVA ouvrira le dialer, préremplira le numéro, puis déclenchera l’appel si `autoDial` est demandé.
-   - Garder l’accès AVA aux outils téléphone, SMS, Microsoft et Maestro.
+1. **Audit statique** — comparer `src/pages/planipret/mobile/**` et `apps/planipret-mobile/src/pages/planipret/mobile/**` (les deux arbres ont divergé : `MDiagnostics`, `MKpiAudit`, `MLayoutQA`, `MStyleDiagnostics` n'existent que côté app). Repérer imports manquants, `any` risqués, appels edge functions non gérés en erreur.
+2. **Test E2E automatisé** — script Playwright en viewport iPhone (390×844) qui, pour chaque route : charge la page, attend le rendu, capture les erreurs console/réseau, prend une capture d'écran, et teste les interactions principales (onglets, recherche, ouverture d'un détail, boutons d'action).
+3. **Vérification backend** — pour chaque écran, vérifier que les edge functions et tables qu'il consomme répondent (pp-mobile-profile, pp-ns-calls, pp-ns-sms, ms365-actions, ava-tool-executor, maestro-*), et relever les 4xx/5xx.
+4. **Contrôles transverses** — safe-areas iOS/Android, absence de zoom-out, header unique, bilinguisme FR/EN, états de chargement/erreur, comportement hors-ligne.
+5. **Corrections** — corriger au fil de l'eau les bugs bloquants trouvés, en synchronisant les deux arbres de code.
+6. **Re-test** — relancer le script complet après corrections.
 
-6. Validation
-   - Vérifier par code les deux projets (`apps/planipret-mobile` et `src`) pour éviter de revenir à un ancien build.
-   - Vérifier que le dialpad reste seulement sur Home + Calls.
-   - Vérifier que Microsoft callback ne peut plus déclencher le crash `replaceState()`.
-   - Vérifier que recordings + CRM sync affichent un statut persistant.
+## Livrable
+
+Un rapport par écran avec : statut (OK / dégradé / cassé), fonctions testées, erreurs console/réseau observées, capture d'écran, et correctif appliqué ou recommandation. Suivi d'une synthèse : bloquants, risques, et points nécessitant un test sur appareil réel (SIP, CallKit, push, OAuth natif — non testables en navigateur).
+
+## Détails techniques
+
+- Scripts sous `/tmp/browser/pp-audit/` ; captures dans le même dossier.
+- Session authentifiée restaurée via les variables Supabase du sandbox avant navigation.
+- Les fonctions natives (registre SIP, appels, notifications push, deep links OAuth) seront validées par revue de code et logs, pas par navigateur — je les signalerai comme « à valider sur appareil ».

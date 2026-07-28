@@ -619,7 +619,7 @@ export default function PlanipretMobile() {
     };
     refreshActive();
     const ch = supabase
-      .channel("mplanipret-active-call")
+      .channel(`mplanipret-active-call-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_calls" }, refreshActive)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -699,7 +699,7 @@ export default function PlanipretMobile() {
     };
 
     const ch = supabase
-      .channel("mplanipret-badges")
+      .channel(`mplanipret-badges-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_messages", filter: `user_id=eq.${profile.user_id}` }, (p: any) => { if (p.eventType === "INSERT") onNewSms(p); refreshCounts(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_voicemails", filter: `user_id=eq.${profile.user_id}` }, (p: any) => { if (p.eventType === "INSERT") onNewVm(p); refreshCounts(); })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "planipret_phone_calls", filter: `user_id=eq.${profile.user_id}` }, onNewMissed)

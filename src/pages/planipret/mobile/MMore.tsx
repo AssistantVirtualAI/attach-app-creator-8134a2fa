@@ -70,7 +70,7 @@ export default function MMore() {
       const callsRes: any = await sb
         .from("planipret_phone_calls")
         .select("id, duration_seconds")
-        .eq("broker_id", profile.id)
+        .eq("user_id", profile.id)
         .gte("started_at", start.toISOString());
       const callsArr: any[] = callsRes?.data ?? [];
       const total = callsArr.length;
@@ -79,7 +79,7 @@ export default function MMore() {
       const leadsRes: any = await sb
         .from("planipret_contacts")
         .select("id")
-        .eq("broker_id", profile.id)
+        .eq("user_id", profile.id)
         .gte("created_at", start.toISOString());
       const leadsCount: number = (leadsRes?.data ?? []).length;
       setMonthStats({ calls: total, leads: leadsCount, rate });
@@ -388,7 +388,7 @@ export default function MMore() {
             const { data: lastCall } = await sb
               .from("planipret_phone_calls")
               .select("id, ns_call_id")
-              .eq("broker_id", profile.id)
+              .eq("user_id", profile.id)
               .order("started_at", { ascending: false })
               .limit(1)
               .maybeSingle();

@@ -46,6 +46,13 @@ export default function Ms365Callback() {
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const ranRef = useRef(false);
+  const lastCodeRef = useRef<string | null>(null);
+  // Reset ranRef when a new OAuth code arrives so the exchange always runs
+  const currentCode = params.get("code");
+  if (currentCode && currentCode !== lastCodeRef.current) {
+    ranRef.current = false;
+    lastCodeRef.current = currentCode;
+  }
 
   async function invokeAndParse(fn: string, body: unknown): Promise<{ data: any; errMsg: string | null }> {
     const { data, error: e } = await withTimeout(
@@ -90,8 +97,9 @@ export default function Ms365Callback() {
       const state = params.get("state");
       const code_verifier = await getRememberedMs365CodeVerifier(state);
       if (!code_verifier) {
-        // Verifier already consumed (successful previous exchange) or app resumed on stale URL.
-        navigate("/mplanipret/home", { replace: true });
+        // Verifier not found — show a clear error so the user can retry instead of silently failing
+        setStatus("error");
+        setError("Session expirée — veuillez réessayer la connexion Microsoft depuis Paramètres");
         return;
       }
       const isMicrosoftLogin = (await getMicrosoftSignInIntentAsync()) === "login" || Boolean(state?.startsWith("login:"));

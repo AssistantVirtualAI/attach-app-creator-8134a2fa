@@ -23,6 +23,7 @@ import { ppSipProvider, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProv
 import { Radio, ShieldCheck } from "lucide-react";
 import { openAppSettings } from "@/lib/native/permissions/platform";
 import { markPrimerSkipped } from "@/lib/native/permissions/orchestrator";
+import { ms365Connected } from "@/lib/planipret/ms365Connected";
 
 const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
@@ -91,7 +92,7 @@ export default function MMore() {
 
   const { sipConnected, reregister } = useMplanipretSoftphone();
   const nsConnected = !!(profile?.ns_extension ?? profile?.extension) && sipConnected;
-  const ms365Connected = !!profile?.ms365_access_token;
+  const ms365Connected = ms365Connected(profile);
 
   const [sipSnap, setSipSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
   useEffect(() => ppSipProvider.subscribe(setSipSnap), []);

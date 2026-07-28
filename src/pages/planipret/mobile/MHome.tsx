@@ -16,6 +16,7 @@ import PermissionBanners from "@/components/planipret/mobile/PermissionBanners";
 import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { ms365Connected } from "@/lib/planipret/ms365Connected";
 
 
 type Period = "day" | "week" | "month" | "shift";
@@ -184,7 +185,7 @@ export default function MHome() {
 
     let microsoftEvents: any[] = [];
     setMsCalendarError(null);
-    if (profile?.ms365_access_token) {
+    if (ms365Connected(profile)) {
       setMsCalendarLoading(true);
       try {
         const calStart = new Date(); calStart.setDate(1); calStart.setHours(0,0,0,0);
@@ -658,7 +659,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
         </h2>
         <div className="flex items-center gap-2">
           <span className="pp-eyebrow">{events.length}</span>
-          {profile?.ms365_access_token && (
+          {ms365Connected(profile) && (
             <button
               onClick={() => setShowCreate(true)}
               className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-95"
@@ -679,7 +680,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
         />
       )}
 
-      {!profile?.ms365_access_token ? (
+      {!ms365Connected(profile) ? (
         <p className="text-xs text-center py-4" style={{ color: "var(--pp-text-muted)" }}>
           Connectez Microsoft 365 dans « Plus » pour afficher votre calendrier ici.
         </p>

@@ -39,6 +39,7 @@ import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts } from "@/lib/ppContactsCache";
 import { prefetchTeams365Data } from "@/lib/teams365Cache";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "@/lib/planipret/profileColumns";
+import { ms365Connected } from "@/lib/planipret/ms365Connected";
 
 
 const ACCENT = "#2E9BDC";
@@ -1053,9 +1054,9 @@ export default function PlanipretMobile() {
     // Warm the directory/personal/shared caches in parallel so Directory,
     // Teams and the dialer render from memory instead of blocking on network.
     prefetchPpContacts(["list", "shared", "directory"]);
-    if (profile?.ms365_access_token) prefetchTeams365Data();
+    if (ms365Connected(profile)) prefetchTeams365Data();
     window.setTimeout(() => prefetchAllMobileTabs(), 900);
-  }, [profile?.user_id, profile?.ns_extension, profile?.extension, profile?.ms365_access_token]);
+  }, [profile?.user_id, profile?.ns_extension, profile?.extension, ms365Connected(profile)]);
 
 
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1425", color: "#2E9BDC", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;

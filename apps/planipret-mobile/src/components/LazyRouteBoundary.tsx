@@ -46,7 +46,7 @@ export class LazyRouteBoundary extends React.Component<
     if (isEmptyNativeArtifact(error)) {
       // Force a remount of the Suspense subtree so the app actually shows
       // instead of leaving a blank white/black screen.
-      this.setState((s) => ({ error: null, retryKey: Math.min(s.retryKey + 1, 3) }));
+      this.setState((s) => ({ error: null, retryKey: s.retryKey + 1 }));
       return;
     }
     console.error("[LazyRouteBoundary]", error, info);

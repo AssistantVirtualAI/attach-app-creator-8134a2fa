@@ -46,10 +46,18 @@ export default function Ms365Callback() {
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const exchangeStarted = useRef(false);
+  const lastCodeRef = useRef<string | null>(null);
+  const currentCode = params.get("code");
 
   useEffect(() => {
+    if (currentCode && currentCode !== lastCodeRef.current) {
+      lastCodeRef.current = currentCode;
+      exchangeStarted.current = false;
+      setStatus("loading");
+      setError(null);
+    }
     if (exchangeStarted.current) return;
-    const code = params.get("code");
+    const code = currentCode;
     if (code && exchangedCodes.has(code)) {
       exchangeStarted.current = true;
       navigate("/mplanipret/home", { replace: true });
@@ -157,7 +165,7 @@ export default function Ms365Callback() {
       setError(String(e?.message ?? e ?? "Échec OAuth"));
     });
 
-  }, [params, navigate]);
+  }, [currentCode, params, navigate]);
 
 
   return (

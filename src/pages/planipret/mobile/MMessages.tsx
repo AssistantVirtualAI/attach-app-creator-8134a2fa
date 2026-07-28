@@ -663,6 +663,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       const newThreadId = result?.messagesession_id ?? result?.["messagesession-id"] ?? result?.session_id ?? result?.id;
       if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);
       // Refresh from server to reconcile optimistic message
+      window.dispatchEvent(new CustomEvent("ava:sms-sent", { detail: { number, body } }));
       setTimeout(() => loadMessages(), 600);
 
     } catch (e: any) {

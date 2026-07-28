@@ -37,13 +37,16 @@ export async function getMaestroConfig(admin: SupabaseClient): Promise<MaestroCo
   const telecom = rows.find((r: any) => r.provider === "maestro_telecom")?.config ?? {};
   const legacy = rows.find((r: any) => r.provider === "maestro")?.config ?? {};
   const c = { ...(legacy as Record<string, string>), ...(telecom as Record<string, string>) };
-  return {
-    url: (c.api_url
+  const rawUrl = (c.api_url
       ?? c.base_url
       ?? Deno.env.get("MAESTRO_TELECOM_BASE_URL")
       ?? Deno.env.get("MAESTRO_TELECOM_API_URL")
       ?? Deno.env.get("MAESTRO_API_URL")
-      ?? "").replace(/\/$/, ""),
+      ?? "").replace(/\/$/, "");
+  return {
+    // Shared maestro-* functions pass paths beginning with /api/v1. Scott's
+    // configured Telecom base may already include /api/v1, so normalize once.
+    url: rawUrl.replace(/\/api\/v1$/i, ""),
     key: c.api_key
       ?? Deno.env.get("MAESTRO_MACHINE_API_KEY")
       ?? Deno.env.get("MAESTRO_TELECOM_API_KEY")

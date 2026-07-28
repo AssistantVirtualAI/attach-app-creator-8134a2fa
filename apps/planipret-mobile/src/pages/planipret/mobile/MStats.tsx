@@ -87,7 +87,7 @@ export default function MStats() {
       return { label: d.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "short", day: "2-digit" }), out: 0, in: 0, missed: 0, date: d.toDateString() };
     });
     for (const c of calls) {
-      const dStr = new Date(c.created_at).toDateString();
+      const dStr = new Date(c.started_at ?? c.created_at).toDateString();
       const b = buckets.find((x) => x.date === dStr); if (!b) continue;
       if (c.status === "missed" || (c.duration_seconds ?? 0) === 0) b.missed++;
       else if (c.direction === "outbound") b.out++; else b.in++;

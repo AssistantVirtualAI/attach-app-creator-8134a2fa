@@ -352,7 +352,10 @@ export function useMplanipretSoftphone(enabled = true) {
     // Heartbeat: SIP transport can go silent without emitting a status event
     // (background tab, radio switch, NS keepalive drop). Poll every 15s so the
     // watchdog escalates to forceReregister even without a subscribe callback.
-    const heartbeat = window.setInterval(evaluate, 15_000);
+    const heartbeat = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") { void handoffToNative(); return; }
+      evaluate();
+    }, 15_000);
     // Initial evaluation — don't wait for the first SIP event.
     evaluate();
     return () => {

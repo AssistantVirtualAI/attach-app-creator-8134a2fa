@@ -47,12 +47,7 @@ export default function Ms365Callback() {
   const [error, setError] = useState<string | null>(null);
   const ranRef = useRef(false);
   const lastCodeRef = useRef<string | null>(null);
-  // Reset ranRef when a new OAuth code arrives so the exchange always runs
   const currentCode = params.get("code");
-  if (currentCode && currentCode !== lastCodeRef.current) {
-    ranRef.current = false;
-    lastCodeRef.current = currentCode;
-  }
 
   async function invokeAndParse(fn: string, body: unknown): Promise<{ data: any; errMsg: string | null }> {
     const { data, error: e } = await withTimeout(
@@ -81,6 +76,12 @@ export default function Ms365Callback() {
   };
 
   useEffect(() => {
+    if (currentCode && currentCode !== lastCodeRef.current) {
+      lastCodeRef.current = currentCode;
+      ranRef.current = false;
+      setStatus("loading");
+      setError(null);
+    }
     if (ranRef.current) return;
     ranRef.current = true;
     (async () => {
@@ -155,7 +156,7 @@ export default function Ms365Callback() {
       setStatus("error");
       setError(String(e?.message ?? e ?? "Échec OAuth"));
     });
-  }, [params, navigate]);
+  }, [currentCode, params, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">

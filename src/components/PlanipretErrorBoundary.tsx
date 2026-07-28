@@ -32,7 +32,7 @@ export class PlanipretErrorBoundary extends React.Component<{ children: React.Re
   }
   componentDidCatch(error: Error, info: any) {
     if (isEmptyNativeArtifact(error)) {
-      this.setState((s) => ({ error: null, retryKey: Math.min(s.retryKey + 1, 3) }));
+      this.setState((s) => ({ error: null, retryKey: s.retryKey + 1 }));
       return;
     }
     console.error("[PlanipretErrorBoundary]", error, info);
@@ -44,8 +44,8 @@ export class PlanipretErrorBoundary extends React.Component<{ children: React.Re
         <div className="max-w-md bg-white rounded-xl shadow-md p-6 text-center">
           <div className="text-3xl mb-2">⚠️</div>
           <h2 className="font-semibold text-lg mb-2">Une erreur est survenue</h2>
-          <p className="text-sm text-slate-600 mb-4">{this.state.error.message}</p>
-          <button onClick={() => { this.setState({ error: null }); location.reload(); }}
+          <p className="text-sm text-slate-600 mb-4">{this.state.error.message || "Le démarrage a été interrompu."}</p>
+          <button onClick={() => { this.setState((s) => ({ error: null, retryKey: s.retryKey + 1 })); location.reload(); }}
             className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">Recharger</button>
         </div>
       </div>

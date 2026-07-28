@@ -5,7 +5,8 @@
 export type AudioRoute = "earpiece" | "speaker" | "bluetooth";
 
 function bridge(): any {
-  return (window as any)?.Capacitor?.Plugins?.CapacitorSip ?? null;
+  const plugins = (window as any)?.Capacitor?.Plugins;
+  return plugins?.PpSipKeepAlive ?? plugins?.CapacitorSip ?? null;
 }
 
 export const audioRouter = {

@@ -13,6 +13,7 @@ import { Ms365ScopesCard } from "@/components/planipret/Ms365ScopesCard";
 import { SiriShortcutsCard } from "@/components/planipret/SiriShortcutsCard";
 import { safeEdgeFunction } from "@/lib/safeEdgeFunction";
 import MNetworkSection from "@/components/planipret/mobile/MNetworkSection";
+import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
 import MCallAudioSettings from "@/components/planipret/mobile/MCallAudioSettings";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
@@ -322,6 +323,9 @@ export default function MMore() {
             <Ms365ScopesCard profile={profile} onReconnect={connectMs365} />
           </div>
         )}
+        <div style={{ padding: 8 }}>
+          <MaestroConnectCard />
+        </div>
       </Section>
 
       <div className="pp-card" style={{ padding: 4 }}>

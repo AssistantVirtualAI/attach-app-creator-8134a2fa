@@ -2,6 +2,7 @@ import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync, createPortal } from "react-dom";
 import { useOutletContext, useSearchParams } from "react-router-dom";
+import { retryWithBackoff } from "@/lib/planipret/retryBackoff";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -717,10 +718,22 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       }
       // --- NS-API (fallback si Maestro échoue) ---
       if (!sentViaMaestro) {
-        const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
-          body: { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) },
+        // Retry automatique avec backoff exponentiel (2s → 6s → 18s).
+        const data = await retryWithBackoff(async () => {
+          const { data: d, error: err } = await supabase.functions.invoke("pp-ns-sms", {
+            body: { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) },
+          });
+          if (err) throw err;
+          if ((d as any)?.status && Number((d as any).status) >= 500) {
+            throw new Error(`SMS temporairement indisponible (HTTP ${(d as any).status})`);
+          }
+          return d;
+        }, {
+          attempts: 3,
+          baseDelayMs: 2000,
+          maxDelayMs: 20_000,
+          onRetry: ({ attempt, delayMs }) => console.warn(`[pp-ns-sms] retry ${attempt} dans ${delayMs}ms`),
         });
-        if (err) throw err;
         if ((data as any)?.ok === false || (data as any)?.error) {
           // Strip HTML tags from error body (NS-API sometimes returns HTML error pages)
           const rawDetail = (data as any)?.error || (data as any)?.body || t("messages.sendFailed");

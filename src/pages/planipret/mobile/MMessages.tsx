@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "@/hooks/useSafeAreaInsets";
 import { flushSync, createPortal } from "react-dom";
 import { useOutletContext, useSearchParams } from "react-router-dom";
+import { retryWithBackoff } from "@/lib/planipret/retryBackoff";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -642,12 +643,23 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
     try {
       const payload = { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) };
       console.info("[pp-ns-sms] send →", { to: number, len: body.length, thread_id: currentThreadId ?? null });
-      const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", { body: payload });
-      if (err) {
-        console.error("[pp-ns-sms] invoke error", err);
-        throw new Error(err.message || t("messages.sendFailed"));
-      }
-      const d: any = data ?? {};
+      // Retry automatique avec backoff exponentiel (2s → 6s → 18s).
+      const d: any = await retryWithBackoff(async () => {
+        const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", { body: payload });
+        if (err) {
+          console.error("[pp-ns-sms] invoke error", err);
+          throw new Error(err.message || t("messages.sendFailed"));
+        }
+        const res: any = data ?? {};
+        // Erreurs transitoires (réseau / 5xx) → retry ; refus métier → échec immédiat.
+        if (res?.status && Number(res.status) >= 500) throw new Error(`SMS temporairement indisponible (HTTP ${res.status})`);
+        return res;
+      }, {
+        attempts: 3,
+        baseDelayMs: 2000,
+        maxDelayMs: 20_000,
+        onRetry: ({ attempt, delayMs }) => console.warn(`[pp-ns-sms] retry ${attempt} dans ${delayMs}ms`),
+      });
       if (d.ok === false || d.error) {
         const status = d.status ? ` (HTTP ${d.status})` : "";
         const bodyDetail =

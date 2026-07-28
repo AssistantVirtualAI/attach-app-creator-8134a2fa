@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { retryWithBackoff } from "@/lib/planipret/retryBackoff";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -187,6 +188,9 @@ export default function RecordingsList({
     return () => { cancelled = true; };
   }, [ledgerKey]);
 
+  const setLedger = (id: string, status: string) =>
+    setUploadLedger((prev) => (prev[id] === status ? prev : { ...prev, [id]: status }));
+
   const setStatus = (id: string, s: AudioStatus) =>
     setAudioStatus((prev) => (prev[id] === s ? prev : { ...prev, [id]: s }));
 
@@ -300,18 +304,33 @@ export default function RecordingsList({
         // 4) CRM Maestro : sync automatique et idempotent (CDR + recording + transcript + AI).
         if (!call.maestro_synced && !autoCrmSyncDoneRef.current.has(call.id)) {
           autoCrmSyncDoneRef.current.add(call.id);
-          try {
+          setLedger(call.id, "uploading");
+          // Retry automatique avec backoff exponentiel (3s → 9s → 27s → 81s).
+          retryWithBackoff(async () => {
             const { data, error } = await supabase.functions.invoke("maestro-sync-call", {
               body: { call_id: call.id, force: false },
             });
             if (error) throw error;
-            const ok = (data as any)?.success !== false;
-            if (ok && !cancelled) onUpdated({ ...call, maestro_synced: true });
-            if (!ok) autoCrmSyncDoneRef.current.delete(call.id);
-          } catch (e: any) {
-            autoCrmSyncDoneRef.current.delete(call.id);
-            console.warn("[RecordingsList] auto Maestro sync failed", who, e?.message);
-          }
+            if ((data as any)?.success === false) throw new Error((data as any)?.error ?? "sync_failed");
+            return data;
+          }, {
+            attempts: 4,
+            baseDelayMs: 3000,
+            signal: controller.signal,
+            onRetry: ({ attempt, delayMs }) =>
+              console.warn(`[RecordingsList] Maestro sync retry ${attempt} dans ${delayMs}ms`, who),
+          })
+            .then(() => {
+              if (cancelled) return;
+              setLedger(call.id, "uploaded");
+              onUpdated({ ...call, maestro_synced: true });
+            })
+            .catch((e: any) => {
+              autoCrmSyncDoneRef.current.delete(call.id);
+              if (cancelled) return;
+              setLedger(call.id, "failed");
+              console.warn("[RecordingsList] auto Maestro sync failed", who, e?.message);
+            });
         }
 
         await sleep(400);
@@ -374,6 +393,33 @@ export default function RecordingsList({
     );
   }
 
+  const retrySync = async (call: RecordingCall) => {
+    setLedger(call.id, "uploading");
+    autoCrmSyncDoneRef.current.add(call.id);
+    try {
+      await retryWithBackoff(async () => {
+        const { data, error } = await supabase.functions.invoke("maestro-sync-call", {
+          body: { call_id: call.id, force: true },
+        });
+        if (error) throw error;
+        if ((data as any)?.success === false) throw new Error((data as any)?.error ?? "sync_failed");
+        return data;
+      }, { attempts: 3, baseDelayMs: 2000, maxDelayMs: 20_000 });
+      setLedger(call.id, "uploaded");
+      onUpdated({ ...call, maestro_synced: true });
+      toast.success("Synchronisation relancée avec succès");
+    } catch (e: any) {
+      autoCrmSyncDoneRef.current.delete(call.id);
+      setLedger(call.id, "failed");
+      toast.error("Échec de la synchronisation", { description: e?.message });
+    }
+  };
+
+  const retryAll = async (call: RecordingCall) => {
+    if ((audioStatus[call.id] ?? "idle") === "error") await retryAudio(call);
+    await retrySync(call);
+  };
+
   const retryAudio = async (call: RecordingCall) => {
     setStatus(call.id, "uploading");
     try {
@@ -402,7 +448,7 @@ export default function RecordingsList({
           audioStatus={audioStatus[c.id] ?? "idle"}
           ledgerStatus={uploadLedger[c.id] ?? null}
           cachedAudioUrl={audioBlobCacheRef.current.get(c.id) ?? null}
-          onRetryAudio={() => retryAudio(c)}
+          onRetryAudio={() => retryAll(c)}
         />
       ))}
     </ul>

@@ -959,6 +959,24 @@ function patchIosInfoPlist() {
       : xml.replace(/\n<\/dict>\s*\n<\/plist>\s*$/, `${modes}\n</dict>\n</plist>\n`);
   }
 
+  // App Review compliance keys: purpose strings + encryption export declaration.
+  const REQUIRED_PLIST_STRINGS = [
+    ["NSMicrophoneUsageDescription", "Planipret uses the microphone to place and receive VoIP business calls."],
+    ["NSContactsUsageDescription", "Planipret accesses your contacts so you can call and message your clients."],
+    ["NSCameraUsageDescription", "Planipret uses the camera so you can set a profile photo."],
+    ["NSPhotoLibraryUsageDescription", "Planipret accesses your photo library so you can pick a profile photo."],
+    ["NSLocalNetworkUsageDescription", "Planipret uses the local network to establish VoIP call audio."],
+    ["NSSpeechRecognitionUsageDescription", "Planipret transcribes your recorded calls when you enable transcription."],
+  ];
+  for (const [key, value] of REQUIRED_PLIST_STRINGS) {
+    if (!xml.includes(`<key>${key}</key>`)) {
+      xml = xml.replace(/\n<\/dict>\s*\n<\/plist>\s*$/, `\n\t<key>${key}</key>\n\t<string>${value}</string>\n</dict>\n</plist>\n`);
+    }
+  }
+  if (!xml.includes("<key>ITSAppUsesNonExemptEncryption</key>")) {
+    xml = xml.replace(/\n<\/dict>\s*\n<\/plist>\s*$/, "\n\t<key>ITSAppUsesNonExemptEncryption</key>\n\t<false/>\n</dict>\n</plist>\n");
+  }
+
   writeIfChanged(file, xml);
   console.log("[native-config] iOS URL schemes + background modes applied.");
 }

@@ -31,13 +31,24 @@ export interface MaestroConfig {
 export async function getMaestroConfig(admin: SupabaseClient): Promise<MaestroConfig> {
   const { data } = await admin
     .from("planipret_integration_secrets")
-    .select("config")
-    .eq("provider", "maestro")
-    .maybeSingle();
-  const c = (data?.config ?? {}) as Record<string, string>;
+    .select("provider, config")
+    .in("provider", ["maestro_telecom", "maestro"]);
+  const rows = Array.isArray(data) ? data : [];
+  const telecom = rows.find((r: any) => r.provider === "maestro_telecom")?.config ?? {};
+  const legacy = rows.find((r: any) => r.provider === "maestro")?.config ?? {};
+  const c = { ...(legacy as Record<string, string>), ...(telecom as Record<string, string>) };
   return {
-    url: (c.api_url ?? Deno.env.get("MAESTRO_API_URL") ?? "").replace(/\/$/, ""),
-    key: c.api_key ?? Deno.env.get("MAESTRO_API_KEY") ?? "",
+    url: (c.api_url
+      ?? c.base_url
+      ?? Deno.env.get("MAESTRO_TELECOM_BASE_URL")
+      ?? Deno.env.get("MAESTRO_TELECOM_API_URL")
+      ?? Deno.env.get("MAESTRO_API_URL")
+      ?? "").replace(/\/$/, ""),
+    key: c.api_key
+      ?? Deno.env.get("MAESTRO_MACHINE_API_KEY")
+      ?? Deno.env.get("MAESTRO_TELECOM_API_KEY")
+      ?? Deno.env.get("MAESTRO_API_KEY")
+      ?? "",
     accountId: c.account_id ?? Deno.env.get("MAESTRO_ACCOUNT_ID") ?? "",
     webhookSecret: c.webhook_secret ?? Deno.env.get("MAESTRO_WEBHOOK_SECRET") ?? "",
   };
@@ -111,7 +122,9 @@ export async function maestroFetch(cfg: MaestroConfig, opts: CallOpts) {
   if (opts.brokerId) headers["X-Broker-Id"] = String(opts.brokerId);
   if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
 
-  const res = await fetch(`${cfg.url}${opts.path}`, {
+  const useMachine = opts.token === cfg.key || !opts.brokerId;
+  const suffix = useMachine ? `${opts.path.includes("?") ? "&" : "?"}machine=1` : "";
+  const res = await fetch(`${cfg.url}${opts.path}${suffix}`, {
     method: opts.method ?? "GET",
     headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,

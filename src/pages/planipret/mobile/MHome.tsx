@@ -17,6 +17,8 @@ import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
+import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365ConnectionNotice";
+import { useMs365Status } from "@/hooks/useMs365Status";
 
 
 type Period = "day" | "week" | "month" | "shift";
@@ -617,6 +619,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
   const [cursor, setCursor] = useState(() => { const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; });
   const [selected, setSelected] = useState<Date>(today);
   const [showCreate, setShowCreate] = useState(false);
+  const { state: ms365Status, errorMessage: ms365StatusError } = useMs365Status(profile);
 
   const locale = lang === "en" ? "en-CA" : "fr-CA";
 
@@ -680,10 +683,8 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
         />
       )}
 
-      {!ms365Connected(profile) ? (
-        <p className="text-xs text-center py-4" style={{ color: "var(--pp-text-muted)" }}>
-          Connectez Microsoft 365 dans « Plus » pour afficher votre calendrier ici.
-        </p>
+      {ms365Status !== "connected" ? (
+        <Ms365ConnectionNotice state={ms365Status} errorMessage={ms365StatusError} compact />
       ) : (
         <>
           {/* Month header */}

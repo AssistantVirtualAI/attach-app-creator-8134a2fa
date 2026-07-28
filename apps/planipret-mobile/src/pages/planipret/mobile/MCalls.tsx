@@ -531,7 +531,7 @@ export default function MCalls() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {tab === "recordings" ? (
 
           <>
@@ -1947,7 +1947,7 @@ function VoicemailsTab({
     <div className="px-3 pt-3 pb-4">
       {/* ElevenLabs Greeting Studio — text → voice → push to voicemail box */}
       {profile && (
-        <div className="mb-3 rounded-2xl overflow-hidden"
+        <div className={`mb-3 rounded-2xl ${studioOpen ? "overflow-visible" : "overflow-hidden"}`}
           style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
           <button
             onClick={() => setStudioOpen((v) => !v)}
@@ -1968,7 +1968,7 @@ function VoicemailsTab({
             <div style={{ color: "var(--pp-text-muted)", fontSize: 18 }}>{studioOpen ? "−" : "+"}</div>
           </button>
           {studioOpen && (
-            <div style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+            <div className="min-h-0 overflow-visible" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
               <GreetingStudio profile={profile} onProfileChange={reloadProfile as any} />
             </div>
           )}

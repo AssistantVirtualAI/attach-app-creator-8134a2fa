@@ -594,6 +594,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
   const [currentThreadId, setCurrentThreadId] = useState<string>(thId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const autoSentRef = useRef(false);
 
   const loadMessages = async () => {
     if (!currentThreadId) { setLoading(false); return; }
@@ -624,8 +625,8 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
     return () => { window.cancelAnimationFrame(raf); window.clearTimeout(id); };
   }, [number]);
 
-  const send = async () => {
-    const body = text.trim();
+  const send = async (overrideText?: string) => {
+    const body = (overrideText ?? text).trim();
     if (!body) return;
     setSending(true);
     const optimistic: NsMessage = {
@@ -672,6 +673,16 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       setSending(false);
     }
   };
+
+  useEffect(() => {
+    if (!initialText) return;
+    setText(initialText);
+    if (!autoSend || autoSentRef.current) return;
+    autoSentRef.current = true;
+    const id = window.setTimeout(() => { void send(initialText); }, 450);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialText, autoSend]);
 
 
   return (

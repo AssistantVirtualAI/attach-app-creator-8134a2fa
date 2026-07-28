@@ -552,6 +552,8 @@ const App = () => (
                   <Route path="notifications" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaNotifications /></Suspense>} />
                   <Route path="extension-sync" element={<Suspense fallback={<MobilePageSkeleton />}><MExtensionSync /></Suspense>} />
                   <Route path="sip-debug" element={<Suspense fallback={<MobilePageSkeleton />}><MSipDebug /></Suspense>} />
+                  <Route path="connections" element={<Suspense fallback={<MobilePageSkeleton />}><MConnections /></Suspense>} />
+                  <Route path="maestro-sync" element={<Suspense fallback={<MobilePageSkeleton />}><MMaestroSync /></Suspense>} />
                 </Route>
                 <Route path="/planipret/dashboard" element={<Navigate to="/planipret/admin/overview" replace />} />
                 <Route path="/planipret/integrations" element={<Navigate to="/planipret/admin/integrations" replace />} />

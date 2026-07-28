@@ -299,9 +299,11 @@ Deno.serve(async (req) => {
       steps,
     });
 
-    return json({ success: allOk, call_id, maestro_call_id: mId, steps });
+    log("done", { allOk, steps });
+    return json({ success: allOk, call_id, maestro_call_id: mId, steps, request_id: rid });
   } catch (e: any) {
-    console.error("maestro-sync-call error", e);
-    return json({ success: false, error: e?.message ?? "server_error" }, 500);
+    console.error(`[maestro-sync-call][${rid}] fatal`, e?.stack ?? e);
+    return json({ success: false, error: e?.message ?? "server_error", request_id: rid }, 500);
   }
+
 });

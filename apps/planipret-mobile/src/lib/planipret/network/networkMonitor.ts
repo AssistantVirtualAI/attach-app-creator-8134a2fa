@@ -53,7 +53,7 @@ async function probeRtt(url: string, n = 3): Promise<{ rtt: number | null; loss:
     const t = performance.now();
     try {
       const res = await fetch(`${url}?t=${Date.now()}`, {
-        method: "HEAD",
+        method: "GET",
         cache: "no-store",
         headers: apikey ? { apikey, Authorization: `Bearer ${apikey}` } : undefined,
       });

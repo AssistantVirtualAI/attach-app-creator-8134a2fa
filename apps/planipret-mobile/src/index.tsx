@@ -18,13 +18,15 @@ type BootWindow = Window & {
 };
 
 function isIgnorableNativeStartupError(raw: unknown): boolean {
+  if (typeof raw === 'string') return /multi_header\.length|multi_header/i.test(raw);
   const rawText = String(raw instanceof Error ? raw.message : raw ?? '');
   if (/multi_header\.length|multi_header/i.test(rawText)) return true;
-  if (!raw || typeof raw !== 'object') return !raw;
+  if (!raw || typeof raw !== 'object') return false;
   const obj = raw as Record<string, unknown>;
   const message = String(obj.message ?? obj.errorMessage ?? '').trim();
   const code = String(obj.code ?? '').trim();
   if (/multi_header\.length|multi_header/i.test(message)) return true;
+  if (!message && !code && Object.keys(obj).length === 0) return true;
   return code === 'UNIMPLEMENTED' && /not implemented/i.test(message);
 }
 

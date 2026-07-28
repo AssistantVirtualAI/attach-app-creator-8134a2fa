@@ -44,6 +44,7 @@ export default function MAvaChat() {
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const avaContext = useAvaContext();
+  const outlet = useOutletContext<PlanipretMobileContext>() as any;
 
   const switchMode = (m: "chat" | "voice") => { setMode(m); localStorage.setItem("ava_mode", m); };
 

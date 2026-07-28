@@ -860,7 +860,7 @@ export default function PlanipretMobile() {
 
   const loadProfile = async () => {
     try {
-      const { data: { session } } = await withTimeout(supabase.auth.getSession(), PROFILE_BOOT_TIMEOUT_MS, "pp_session");
+      let session = await getPlanipretBootSession();
       const user = session?.user ?? null;
       if (!user) {
         recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "no auth session — stay inside mobile app");
@@ -884,36 +884,52 @@ export default function PlanipretMobile() {
         sessionStorage.setItem("pp_ms_captured", session.access_token);
       }
 
-      const invokeMobileProfile = async (accessToken: string) => {
-        const { data: fallbackData, error: fallbackError } = await withTimeout(
-          supabase.functions.invoke("pp-mobile-profile", {
-            body: { fields: "safe" },
-            headers: { Authorization: `Bearer ${accessToken}` },
+      const invokeMobileProfile = async (accessToken: string, source: string) => {
+        const response = await withTimeout(
+          fetch(`${SUPABASE_FUNCTIONS_URL}/pp-mobile-profile`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${accessToken}`,
+              "x-pp-profile-source": source,
+            },
+            body: JSON.stringify({ fields: "safe" }),
           }),
           PROFILE_BOOT_TIMEOUT_MS,
           "pp_mobile_profile",
         );
-        if (fallbackError) throw fallbackError;
-        return (fallbackData as any)?.profile ?? null;
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const err = new Error(String((payload as any)?.error || `pp_mobile_profile_${response.status}`));
+          (err as any).context = { status: response.status, payload };
+          throw err;
+        }
+        const loadedProfile = (payload as any)?.profile ?? null;
+        if (!loadedProfile) throw new Error(String((payload as any)?.error || "missing_profile"));
+        return loadedProfile;
       };
 
       const loadViaBackend = async () => {
-        let token = session.access_token;
-        if (!token) {
-          const { data: refreshed } = await supabase.auth.refreshSession();
-          token = refreshed.session?.access_token ?? "";
+        let currentSession: any = session;
+        if (!isTokenFresh(currentSession)) {
+          const { data: refreshed } = await withTimeout(supabase.auth.refreshSession(), PROFILE_REFRESH_TIMEOUT_MS, "pp_refresh_before_profile");
+          currentSession = refreshed.session ?? currentSession ?? readStoredAuthSession();
+          session = currentSession;
         }
+        let token = currentSession?.access_token ?? readStoredAuthSession()?.access_token ?? "";
         if (!token) throw new Error("no_session");
         try {
-          return await invokeMobileProfile(token);
+          return await invokeMobileProfile(token, "initial");
         } catch (firstError: any) {
           const status = firstError?.context?.status;
           const message = String(firstError?.message || "");
           if (status !== 401 && !/unauthori[sz]ed|401/i.test(message)) throw firstError;
-          const { data: refreshed } = await supabase.auth.refreshSession();
+          const { data: refreshed } = await withTimeout(supabase.auth.refreshSession(), PROFILE_REFRESH_TIMEOUT_MS, "pp_refresh_after_401");
           const retryToken = refreshed.session?.access_token;
           if (!retryToken) throw new Error("no_session");
-          return await invokeMobileProfile(retryToken);
+          session = refreshed.session;
+          return await invokeMobileProfile(retryToken, "retry_after_401");
         }
       };
 
@@ -934,7 +950,8 @@ export default function PlanipretMobile() {
           setLoading(false);
           return;
         }
-        console.error("[PlanipretMobile] pp-mobile-profile failed", msg);
+        console.error("[PlanipretMobile] pp-mobile-profile failed", msg, backendError?.context ?? "");
+        setProfileErrorDetail(msg);
       }
 
       if (!data) {

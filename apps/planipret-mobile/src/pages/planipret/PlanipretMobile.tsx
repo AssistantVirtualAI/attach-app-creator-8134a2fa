@@ -43,6 +43,10 @@ import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "
 
 const ACCENT = "#2E9BDC";
 const PROFILE_BOOT_TIMEOUT_MS = 15000;
+const PROFILE_SESSION_TIMEOUT_MS = 4000;
+const PROFILE_REFRESH_TIMEOUT_MS = 9000;
+const SUPABASE_FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -52,6 +56,61 @@ function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Pro
       (error) => { window.clearTimeout(timer); reject(error); },
     );
   });
+}
+
+function parseStoredAuthSession(raw: string | null): any | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const session = parsed?.access_token ? parsed : parsed?.currentSession;
+    return session?.access_token && session?.user ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredAuthSession(): any | null {
+  if (typeof window === "undefined") return null;
+  const storages = [window.localStorage, window.sessionStorage].filter(Boolean);
+  for (const storage of storages) {
+    try {
+      for (let i = 0; i < storage.length; i += 1) {
+        const key = storage.key(i);
+        if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+        const session = parseStoredAuthSession(storage.getItem(key));
+        if (session) return session;
+      }
+    } catch {
+      // Ignore blocked storage reads and continue with SDK refresh.
+    }
+  }
+  return null;
+}
+
+function isTokenFresh(session: any | null, marginSeconds = 60) {
+  const expiresAt = Number(session?.expires_at ?? 0);
+  return !!session?.access_token && (!expiresAt || expiresAt - Math.floor(Date.now() / 1000) > marginSeconds);
+}
+
+async function getPlanipretBootSession(): Promise<any | null> {
+  try {
+    const { data: { session } } = await withTimeout(supabase.auth.getSession(), PROFILE_SESSION_TIMEOUT_MS, "pp_session");
+    if (session?.access_token && session?.user) return session;
+  } catch (error) {
+    console.warn("[PlanipretMobile] getSession delayed; checking stored session", error);
+  }
+
+  const stored = readStoredAuthSession();
+  if (stored?.access_token && stored?.user) return stored;
+
+  try {
+    const { data: refreshed } = await withTimeout(supabase.auth.refreshSession(), PROFILE_REFRESH_TIMEOUT_MS, "pp_refresh_session");
+    if (refreshed?.session?.access_token && refreshed.session.user) return refreshed.session;
+  } catch (error) {
+    console.warn("[PlanipretMobile] refreshSession failed during profile boot", error);
+  }
+
+  return readStoredAuthSession();
 }
 
 const AvaBadge = ({ compact = false, circle = false }: { compact?: boolean; circle?: boolean }) => {

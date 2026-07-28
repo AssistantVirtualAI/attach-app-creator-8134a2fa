@@ -928,6 +928,79 @@ function ensurePluginRegistration(swift) {
   return next;
 }
 
+// Force portrait at the AppDelegate level (Info.plist alone is overridden by
+// a `.all` Swift override in some Capacitor templates).
+function patchIosAppDelegate(iosApp) {
+  const file = path.join(iosApp, "AppDelegate.swift");
+  if (!fs.existsSync(file)) return;
+  let swift = fs.readFileSync(file, "utf8");
+  const before = swift;
+  if (/supportedInterfaceOrientationsFor/.test(swift)) {
+    swift = swift.replace(
+      /(func application\(\s*_ application: UIApplication,\s*supportedInterfaceOrientationsFor[^)]*\)\s*->\s*UIInterfaceOrientationMask\s*\{)[\s\S]*?\n\s*\}/,
+      "$1\n        return .portrait\n    }",
+    );
+  } else {
+    const insert = `\n    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {\n        return .portrait\n    }\n`;
+    const lastBrace = swift.lastIndexOf("}");
+    if (lastBrace > -1) swift = `${swift.slice(0, lastBrace)}${insert}${swift.slice(lastBrace)}`;
+  }
+  if (swift !== before) {
+    writeIfChanged(file, swift);
+    console.log("[native-config] iOS AppDelegate locked to portrait.");
+  }
+}
+
+// The default Capacitor template ships no ViewController subclass, so the
+// plugin-registration fallback had nothing to attach to and both native
+// plugins reported UNIMPLEMENTED. Create a bridge controller and point the
+// storyboard at it so registration always happens.
+function ensureIosBridgeController(iosApp, pluginFilesAreInProject) {
+  const existing = ["AppBridgeViewController.swift", "ViewController.swift"]
+    .map((n) => path.join(iosApp, n))
+    .filter((f) => fs.existsSync(f));
+  if (existing.length) return existing;
+
+  const file = path.join(iosApp, "AppBridgeViewController.swift");
+  const inline = pluginFilesAreInProject
+    ? ""
+    : `\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n`;
+  const source = `import Foundation
+import UIKit
+import Capacitor
+import AVFoundation
+import CryptoKit
+import UserNotifications
+import PushKit
+import CallKit
+
+class AppBridgeViewController: CAPBridgeViewController {
+    override func capacitorDidLoad() {
+        bridge?.registerPluginInstance(PpSipKeepAlive())
+        bridge?.registerPluginInstance(PpVoipCall())
+    }
+
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
+}${inline}`;
+  writeIfChanged(file, source);
+  ensureXcodeSourceFiles(path.join(appDir, "ios", "App"), ["App/AppBridgeViewController.swift"]);
+
+  // Point Main.storyboard at the subclass.
+  const storyboard = path.join(iosApp, "Base.lproj", "Main.storyboard");
+  if (fs.existsSync(storyboard)) {
+    let xml = fs.readFileSync(storyboard, "utf8");
+    if (!xml.includes('customClass="AppBridgeViewController"')) {
+      xml = xml.replace(
+        /customClass="CAPBridgeViewController"\s*customModule="Capacitor"(\s*customModuleProvider="target")?/,
+        'customClass="AppBridgeViewController" customModule="App" customModuleProvider="target"',
+      );
+      writeIfChanged(storyboard, xml);
+    }
+  }
+  console.log("[native-config] iOS AppBridgeViewController created and wired to Main.storyboard.");
+  return [file];
+}
+
 function patchIosInfoPlist() {
   const file = path.join(appDir, "ios", "App", "App", "Info.plist");
   if (!fs.existsSync(file)) {
@@ -973,6 +1046,11 @@ function patchIosInfoPlist() {
       xml = xml.replace(/\n<\/dict>\s*\n<\/plist>\s*$/, `\n\t<key>${key}</key>\n\t<string>${value}</string>\n</dict>\n</plist>\n`);
     }
   }
+  // Portrait-only (matches the AppDelegate override below).
+  const portraitArray = "\n\t<key>UISupportedInterfaceOrientations</key>\n\t<array>\n\t\t<string>UIInterfaceOrientationPortrait</string>\n\t</array>\n\t<key>UISupportedInterfaceOrientations~ipad</key>\n\t<array>\n\t\t<string>UIInterfaceOrientationPortrait</string>\n\t</array>\n";
+  xml = xml.replace(/\n\t?<key>UISupportedInterfaceOrientations(~ipad)?<\/key>\s*<array>[\s\S]*?<\/array>/g, "");
+  xml = xml.replace(/\n<\/dict>\s*\n<\/plist>\s*$/, `${portraitArray}</dict>\n</plist>\n`);
+
   if (!xml.includes("<key>ITSAppUsesNonExemptEncryption</key>")) {
     xml = xml.replace(/\n<\/dict>\s*\n<\/plist>\s*$/, "\n\t<key>ITSAppUsesNonExemptEncryption</key>\n\t<false/>\n</dict>\n</plist>\n");
   }
@@ -1073,6 +1151,8 @@ function patchIosNativeFiles() {
     "App/Plugins/PpVoipCall/PpVoipCall.m",
   ]);
   const pluginFilesAreInProject = hasProjectReference(iosRoot, "PpSipKeepAlive.swift") && hasProjectReference(iosRoot, "PpVoipCall.swift");
+  patchIosAppDelegate(iosApp);
+  ensureIosBridgeController(iosApp, pluginFilesAreInProject);
   for (const controllerName of ["AppBridgeViewController.swift", "ViewController.swift"]) {
     const file = path.join(iosApp, controllerName);
     if (!fs.existsSync(file)) continue;

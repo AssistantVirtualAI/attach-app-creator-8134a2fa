@@ -95,6 +95,7 @@ class PpSipProvider {
   private lastStartAt = 0;
   private connectingSince = 0;
   private regRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
   private regFailures = 0;
 
   subscribe(fn: Listener): () => void {
@@ -176,7 +177,7 @@ class PpSipProvider {
         session_timers: false,
         // Match the native keep-alive REGISTER expiry so NetSapiens does not
         // expire one contact while the other still shows "registered" locally.
-        register_expires: 1800,
+        register_expires: 300,
         connection_recovery_min_interval: 2,
         connection_recovery_max_interval: 30,
         user_agent: "Planipret Softphone 1.0",
@@ -186,11 +187,13 @@ class PpSipProvider {
       ua.on("connected", () => this.update({ status: "connected" }));
       ua.on("disconnected", (e: any) => {
         this.log("warn", "ws disconnected", e);
+        this.stopKeepAlive();
         this.update({ status: "disconnected", errorCause: e?.reason || "ws_disconnected" });
         // JsSIP retries the socket via connection_recovery_*; no manual work needed.
       });
       ua.on("registered", () => {
         this.regFailures = 0;
+        this.startKeepAlive();
         if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }
         return this.update({ status: "registered", errorCause: undefined, lastRegistrationAt: Date.now() });
       });
@@ -381,7 +384,26 @@ class PpSipProvider {
     } catch {}
   }
 
+  /** NetSapiens closes idle WebSockets with code 1001 after ~60s.
+   *  A periodic in-dialog OPTIONS ping keeps the socket alive. */
+  private startKeepAlive() {
+    this.stopKeepAlive();
+    this.keepAliveTimer = setInterval(() => {
+      const ua = this.ua;
+      if (!ua) return;
+      try {
+        if (!ua.isConnected?.()) { try { ua.start(); } catch {} return; }
+        ua.sendRequest((JsSIP as any).C.OPTIONS, `sip:${ua.configuration?.uri?.host ?? ""}`, {});
+      } catch { /* ping failures are non-fatal */ }
+    }, 25000);
+  }
+
+  private stopKeepAlive() {
+    if (this.keepAliveTimer) { clearInterval(this.keepAliveTimer); this.keepAliveTimer = null; }
+  }
+
   stop() {
+    this.stopKeepAlive();
     if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }
     try { this.ua?.stop(); } catch {}
     this.ua = null;

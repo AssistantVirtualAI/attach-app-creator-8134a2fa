@@ -23,6 +23,8 @@ import RecipientAutocomplete from "@/components/planipret/mobile/RecipientAutoco
 import EmailHistoryList from "@/components/planipret/mobile/EmailHistoryList";
 import EmailBodyFrame from "@/components/planipret/mobile/EmailBodyFrame";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
+import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365ConnectionNotice";
+import { useMs365Status } from "@/hooks/useMs365Status";
 
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "history" | "roster";
@@ -938,6 +940,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
   const PAGE_SIZE = 25;
   const [emails, setEmails] = useState<any[] | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "no_m365" | "error">("loading");
+  const { state: ms365State, errorMessage: ms365ErrorMessage } = useMs365Status(profile);
   const [active, setActive] = useState<any | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeInit, setComposeInit] = useState<{ to?: string; subject?: string; body?: string }>({});
@@ -1046,23 +1049,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
       )}
 
       {state === "no_m365" && (
-        <div
-          className="rounded-2xl p-6 text-center mt-6"
-          style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}
-        >
-          <Mail className="w-10 h-10 mx-auto mb-3" style={{ color: "var(--pp-brand-accent)" }} />
-          <p className="font-semibold" style={{ color: "var(--pp-text-primary)" }}>{t("messages.m365NotConnected")}</p>
-          <p className="text-xs mt-1 mb-3" style={{ color: "var(--pp-text-muted)" }}>
-            {t("messages.m365ConnectDesc")}
-          </p>
-          <a
-            href="/mplanipret/more"
-            className="inline-block text-xs px-4 py-2 rounded-full text-white font-semibold"
-            style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}
-          >
-            {t("messages.connectM365")}
-          </a>
-        </div>
+        <Ms365ConnectionNotice state={ms365State} errorMessage={ms365ErrorMessage} />
       )}
 
       {state === "error" && (
@@ -2022,6 +2009,7 @@ function Teams365Panel({ profile }: { profile: any }) {
   const [loading, setLoading] = useState(!cached);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const { state: teamsMs365State, errorMessage: teamsMs365Error } = useMs365Status(profile);
   const [diag, setDiag] = useState<any>(cached?.diagnostics ?? {});
   const [chats, setChats] = useState<any[]>(cached?.chats ?? []);
   const [teams, setTeams] = useState<any[]>(cached?.teams ?? []);
@@ -2138,20 +2126,9 @@ function Teams365Panel({ profile }: { profile: any }) {
       </div>
 
       {err === "ms365_not_connected" && (
-        <div className="rounded-2xl p-6 text-center mt-4" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
-          <Users className="w-10 h-10 mx-auto mb-3" style={{ color: "var(--pp-brand-accent)" }} />
-          <p className="font-semibold" style={{ color: "var(--pp-text-primary)" }}>Microsoft 365 non connecté</p>
-          <p className="text-xs mt-1 mb-3" style={{ color: "var(--pp-text-muted)" }}>
-            Connectez votre compte Microsoft pour voir vos discussions Teams et coéquipiers.
-          </p>
-          <button
-            onClick={() => { void connectMs365(); }}
-            className="inline-block text-xs px-4 py-2 rounded-full text-white font-semibold"
-            style={{ background: "linear-gradient(135deg, var(--pp-brand-accent), var(--pp-brand-accent-2))" }}>
-            Connecter Microsoft 365
-          </button>
-        </div>
+        <Ms365ConnectionNotice state={teamsMs365State} errorMessage={teamsMs365Error} />
       )}
+
       {err && err !== "ms365_not_connected" && (
         <div className="text-xs p-3 rounded-lg" style={{ background: "rgba(220,38,38,0.08)", color: "#dc2626" }}>{err}</div>
       )}

@@ -29,12 +29,21 @@ async function invokeJson<T = any>(
           .map(([k, v]) => [k, String(v)]),
       ).toString()
     : "";
-  const { data, error } = await supabase.functions.invoke(`${fn}${qs}`, {
-    method: opts.method ?? "GET",
-    body: opts.body,
-  });
-  if (error) throw new Error(error.message || `${fn} failed`);
-  return data as T;
+  // Transport-level failures (suspended WebView, route change aborting the
+  // request) are transient — retry once before surfacing an error.
+  const transient = /failed to send a request|failed to fetch|networkerror|aborted|load failed/i;
+  let lastErr: Error | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await supabase.functions.invoke(`${fn}${qs}`, {
+      method: opts.method ?? "GET",
+      body: opts.body,
+    });
+    if (!error) return data as T;
+    lastErr = new Error(error.message || `${fn} failed`);
+    if (!transient.test(lastErr.message)) break;
+    await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+  }
+  throw lastErr ?? new Error(`${fn} failed`);
 }
 
 /* ============================================================

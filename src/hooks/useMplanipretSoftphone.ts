@@ -289,13 +289,36 @@ export function useMplanipretSoftphone(enabled = true) {
         }
       }, 45_000);
     };
+    // Background handoff: hand the registration to the native keep-alive service
+    // and retry a few times — a single failed start was leaving the extension
+    // unregistered as soon as the app left the foreground.
+    let handoffSeq = 0;
+    const handoffToNative = async () => {
+      const cfg = ppSipProvider.getConfig();
+      if (!cfg) return;
+      const seq = ++handoffSeq;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (seq !== handoffSeq) return;
+        try {
+          const s = await startPlanipretSipKeepAlive(cfg);
+          if (s) setNativeStatus(s);
+          const st = String(s?.status ?? "");
+          if (s?.ok !== false && (st === "registered" || st === "protected" || st === "connecting" || st === "reconnecting")) return;
+        } catch { /* retry */ }
+        await new Promise((r) => setTimeout(r, 2_000 * (attempt + 1)));
+      }
+    };
     const un = ppSipProvider.subscribe(() => evaluate());
     const onResume = () => {
       try { ppSipProvider.forceReregister(); } catch {}
       evaluate();
     };
-    const onVis = () => { if (document.visibilityState === "visible") onResume(); };
+    const onVis = () => { if (document.visibilityState === "visible") onResume(); else void handoffToNative(); };
     document.addEventListener("visibilitychange", onVis);
+    const onBackgrounded = () => { void handoffToNative(); };
+    window.addEventListener("pagehide", onBackgrounded);
+    window.addEventListener("freeze", onBackgrounded as EventListener);
+
     window.addEventListener("focus", onResume);
     window.addEventListener("online", onResume);
     // Native app foreground/background → refresh registration and keep the OS-level
@@ -315,8 +338,7 @@ export function useMplanipretSoftphone(enabled = true) {
               try { ppSipProvider.forceReregister(); } catch {}
               evaluate();
             } else {
-              const cfg = ppSipProvider.getConfig();
-              if (cfg) void startPlanipretSipKeepAlive(cfg).then((s) => { if (s) setNativeStatus(s); });
+              void handoffToNative();
             }
           });
           if (p && typeof p.then === "function") {
@@ -340,6 +362,8 @@ export function useMplanipretSoftphone(enabled = true) {
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("focus", onResume);
       window.removeEventListener("online", onResume);
+      window.removeEventListener("pagehide", onBackgrounded);
+      window.removeEventListener("freeze", onBackgrounded as EventListener);
       try { appStateHandle?.remove?.(); } catch {}
     };
 

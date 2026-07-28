@@ -59,7 +59,7 @@ function NativeBootErrorFallback({ message, onRetry }: { message?: string; onRet
 }
 
 class NativeRootRecoveryBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null; retryKey: number }> {
-  state = { error: null, retryKey: 0 };
+  state: { error: Error | null; retryKey: number } = { error: null, retryKey: 0 };
 
   static getDerivedStateFromError(error: Error) {
     if (isIgnorableNativeStartupError(error)) return { error: null };

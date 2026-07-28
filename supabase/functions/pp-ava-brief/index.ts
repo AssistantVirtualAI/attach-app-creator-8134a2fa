@@ -235,7 +235,7 @@ Deno.serve(async (req) => {
     const periodLabel = period === "day" ? "la journée" : period === "week" ? "la semaine" : period === "month" ? "le mois" : "votre quart";
     const system = `Tu es AVA, l'assistante d'un courtier hypothécaire au Québec. Tu reçois les statistiques réelles du courtier ${profile.full_name ?? ""} pour ${periodLabel}.
 Génère un brief court, professionnel, en français du Québec.
-- headline: 1 phrase percutante avec les chiffres clés.
+- headline: 1 phrase percutante citant les chiffres clés réels (appels, manqués, minutes, textos, leads chauds, rendez-vous).
 - priorities: 3 actions concrètes ordonnées par urgence (max 12 mots chacune).
 - risks: jusqu'à 2 risques ou points d'attention.
 - suggestions: jusqu'à 3 actions cliquables (call/sms/reminder) avec si pertinent un numéro extrait des données.`;
@@ -245,7 +245,7 @@ Génère un brief court, professionnel, en français du Québec.
       const r = await generateText({
         model: gateway("google/gemini-3-flash-preview"),
         system,
-        prompt: `Données:\n${JSON.stringify(stats).slice(0, 6000)}`,
+        prompt: `Statistiques réelles (JSON):\n${JSON.stringify(stats).slice(0, 12000)}\n\nUtilise ces chiffres exacts (appels, manqués, minutes, textos, boîtes vocales, leads chauds, rendez-vous, contacts actifs). N'invente rien.`,
         experimental_output: Output.object({ schema: BriefSchema }),
       });
       const out = (r as any).experimental_output ?? (r as any).output;

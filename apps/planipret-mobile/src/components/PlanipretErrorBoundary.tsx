@@ -26,7 +26,9 @@ export class PlanipretErrorBoundary extends React.Component<{ children: React.Re
     if (isEmptyNativeArtifact(error)) {
       // Empty native startup artifact — swallow AND remount subtree so the
       // app doesn't stay blank after React unmounts the failing tree.
-      this.setState((s) => ({ error: null, retryKey: Math.min(s.retryKey + 1, 3) }));
+      // No cap on retryKey — iOS can fire multiple empty artifacts in a row
+      // (AppleAVD, ProResHW) and we must keep remounting the subtree each time.
+      this.setState((s) => ({ error: null, retryKey: s.retryKey + 1 }));
       return;
     }
     console.error("[PlanipretErrorBoundary]", error, info);

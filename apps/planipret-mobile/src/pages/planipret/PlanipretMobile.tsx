@@ -1148,7 +1148,7 @@ export default function PlanipretMobile() {
         <UniversalSearchBar />
         <div ref={scrollRef} className="flex-1 overflow-y-auto pb-[130px]">
           <PullIndicator pullDist={pullDist} refreshing={refreshing} threshold={threshold} color={ACCENT} />
-          <PlanipretErrorBoundary key={location.pathname}>
+          <PlanipretErrorBoundary key={location.pathname.startsWith('/auth/') ? '/auth/callback' : location.pathname}>
             <LazyRouteBoundary>
               <Outlet context={{ profile, reloadProfile: loadProfile, openDialer, openAva, registerRefresh, softphone } satisfies PlanipretMobileContext} />
             </LazyRouteBoundary>

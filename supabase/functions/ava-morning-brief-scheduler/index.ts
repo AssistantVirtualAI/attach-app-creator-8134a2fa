@@ -43,11 +43,13 @@ Deno.serve(async (req) => {
     const { data: profiles, error } = await admin
       .from("planipret_profiles")
       .select("id, user_id, full_name, metadata, last_morning_brief_at, last_eod_summary_at, notif_morning_brief, notif_eod_summary, status")
-      .eq("status", "active");
+      .not("user_id", "is", null);
     if (error) return j({ error: error.message }, 500);
 
     const targets: any[] = [];
     for (const p of profiles ?? []) {
+      if (!p.user_id) continue;
+      if (String(p.status ?? "").toLowerCase() === "inactive") continue;
       if (forceUser && p.user_id !== forceUser) continue;
       const tz = (p.metadata as any)?.timezone || DEFAULT_TZ;
       const { date, hour, minute } = localParts(tz);

@@ -7,6 +7,9 @@ import { clearMs365Pending } from "@/lib/ms365Pending";
 import { clearMicrosoftSignInIntentAsync, getMicrosoftSignInIntentAsync, getMicrosoftSignInNextAsync } from "@/lib/ms365AuthLogin";
 import { markOAuthCallbackCompleted } from "@/lib/deepLinkDebug";
 
+const exchangedCodes = new Set<string>();
+let exchangeInFlight = false;
+
 async function getSessionWithRetry() {
   for (let i = 0; i < 8; i += 1) {
     const sessionResult = await Promise.race([
@@ -45,7 +48,7 @@ export default function Ms365Callback() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
-  const ranRef = useRef(false);
+  const exchangeStarted = useRef(false);
   const lastCodeRef = useRef<string | null>(null);
   const currentCode = params.get("code");
 
@@ -71,87 +74,94 @@ export default function Ms365Callback() {
   }
 
   const goBack = () => {
-    try { window.history.replaceState(null, "", "/mplanipret/more"); } catch {}
     navigate("/mplanipret/more", { replace: true });
   };
 
   useEffect(() => {
     if (currentCode && currentCode !== lastCodeRef.current) {
       lastCodeRef.current = currentCode;
-      ranRef.current = false;
+      exchangeStarted.current = false;
       setStatus("loading");
       setError(null);
     }
-    if (ranRef.current) return;
-    ranRef.current = true;
+    if (exchangeStarted.current) return;
+    const freshCode = currentCode;
+    if (freshCode && exchangedCodes.has(freshCode)) {
+      exchangeStarted.current = true;
+      navigate("/mplanipret/home", { replace: true });
+      return;
+    }
+    if (exchangeInFlight) return;
+    exchangeStarted.current = true;
+    exchangeInFlight = true;
+    if (freshCode) exchangedCodes.add(freshCode);
     (async () => {
-      closeNativeBrowserSoon();
-      clearMs365Pending();
-      const code = params.get("code");
-      const err = params.get("error_description") ?? params.get("error");
-      if (err) { setStatus("error"); setError(err); return; }
-      // If user re-opens the app and lands on the callback route without a fresh code,
-      // silently redirect to home instead of showing an error.
-      if (!code) { navigate("/mplanipret/home", { replace: true }); return; }
-      // Must match the redirect URI registered in Azure App Registration.
-      const redirect_uri = await getRememberedMs365RedirectUri();
-      const state = params.get("state");
-      const code_verifier = await getRememberedMs365CodeVerifier(state);
-      if (!code_verifier) {
-        // Verifier not found — show a clear error so the user can retry instead of silently failing
-        setStatus("error");
-        setError("Session expirée — veuillez réessayer la connexion Microsoft depuis Paramètres");
-        return;
-      }
-      const isMicrosoftLogin = (await getMicrosoftSignInIntentAsync()) === "login" || Boolean(state?.startsWith("login:"));
-      if (isMicrosoftLogin) {
-        const { data, errMsg } = await invokeAndParse("pp-ms-auth-callback", { code, redirect_uri, code_verifier });
+      try {
+        closeNativeBrowserSoon();
+        clearMs365Pending();
+        const code = params.get("code");
+        const err = params.get("error_description") ?? params.get("error");
+        if (err) { setStatus("error"); setError(err); return; }
+        if (!code) { navigate("/mplanipret/home", { replace: true }); return; }
+        const redirect_uri = await getRememberedMs365RedirectUri();
+        const state = params.get("state");
+        const code_verifier = await getRememberedMs365CodeVerifier(state);
+        if (!code_verifier) {
+          navigate("/mplanipret/home", { replace: true });
+          return;
+        }
+        const isMicrosoftLogin = (await getMicrosoftSignInIntentAsync()) === "login" || Boolean(state?.startsWith("login:"));
+        if (isMicrosoftLogin) {
+          const { data, errMsg } = await invokeAndParse("pp-ms-auth-callback", { code, redirect_uri, code_verifier });
+          if (errMsg || !(data as any)?.success) {
+            console.error("ms365 auth failed", { data, errMsg, redirect_uri });
+            setStatus("error"); setError(errMsg ?? (data as any)?.error ?? "Échec OAuth");
+            return;
+          }
+          const verify = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: (data as any).token_hash });
+          if (verify.error) { setStatus("error"); setError(verify.error.message); return; }
+          const hydratedSession = verify.data?.session ?? await getSessionWithRetry();
+          if (!hydratedSession?.access_token) { setStatus("error"); setError("Session Microsoft non finalisée — reconnectez-vous"); return; }
+          clearRememberedMs365RedirectUri();
+          markOAuthCallbackCompleted("ms365", window.location.search);
+          try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}
+          const next = await getMicrosoftSignInNextAsync("/mplanipret/home");
+          await clearMicrosoftSignInIntentAsync();
+          try { void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin()); } catch {}
+          setStatus("ok");
+          navigate(next, { replace: true });
+          return;
+        }
+        const session = await getSessionWithRetry();
+        if (!session) { setStatus("error"); setError("Session expirée — reconnectez-vous"); return; }
+        const { data, error: exchangeError } = await withTimeout(
+          supabase.functions.invoke("ms365-oauth-exchange", {
+            body: { code, redirect_uri, code_verifier },
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          }),
+          25000,
+          "ms365-oauth-exchange",
+        );
+        const errMsg = exchangeError?.message ?? null;
         if (errMsg || !(data as any)?.success) {
-          console.error("ms365 auth failed", { data, errMsg, redirect_uri });
+          console.error("ms365 exchange failed", { data, errMsg });
           setStatus("error"); setError(errMsg ?? (data as any)?.error ?? "Échec OAuth");
           return;
         }
-        const verify = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: (data as any).token_hash });
-        if (verify.error) { setStatus("error"); setError(verify.error.message); return; }
-        const hydratedSession = verify.data?.session ?? await getSessionWithRetry();
-        if (!hydratedSession?.access_token) { setStatus("error"); setError("Session Microsoft non finalisée — reconnectez-vous"); return; }
         clearRememberedMs365RedirectUri();
         markOAuthCallbackCompleted("ms365", window.location.search);
         try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}
-        const next = await getMicrosoftSignInNextAsync("/mplanipret/home");
-        await clearMicrosoftSignInIntentAsync();
-        try { void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin()); } catch {}
+        supabase.functions.invoke("ms365-mail-webhook-setup", { body: {} }).then(({ error }) => {
+          if (error) console.warn("ms365 webhook setup skipped", error.message);
+        }).catch((err) => console.warn("ms365 webhook setup skipped", err?.message ?? err));
+        try { void supabase.functions.invoke("ms365-full-import", { body: { mode: "initial" } }).catch(() => {}); } catch {}
         setStatus("ok");
-        navigate(next, { replace: true });
-        return;
+        navigate("/mplanipret/home?ms365=ok", { replace: true });
+      } finally {
+        exchangeInFlight = false;
       }
-      const session = await getSessionWithRetry();
-      if (!session) { setStatus("error"); setError("Session expirée — reconnectez-vous"); return; }
-      const { data, error: exchangeError } = await withTimeout(
-        supabase.functions.invoke("ms365-oauth-exchange", {
-          body: { code, redirect_uri, code_verifier },
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }),
-        25000,
-        "ms365-oauth-exchange",
-      );
-      const errMsg = exchangeError?.message ?? null;
-      if (errMsg || !(data as any)?.success) {
-        console.error("ms365 exchange failed", { data, errMsg });
-        setStatus("error"); setError(errMsg ?? (data as any)?.error ?? "Échec OAuth");
-        return;
-      }
-      clearRememberedMs365RedirectUri();
-      markOAuthCallbackCompleted("ms365", window.location.search);
-      try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}
-      // Active automatiquement l'abonnement AVA aux nouveaux courriels (non-bloquant)
-      supabase.functions.invoke("ms365-mail-webhook-setup", { body: {} }).then(({ error }) => {
-        if (error) console.warn("ms365 webhook setup skipped", error.message);
-      }).catch((err) => console.warn("ms365 webhook setup skipped", err?.message ?? err));
-      try { void supabase.functions.invoke("ms365-full-import", { body: { mode: "initial" } }).catch(() => {}); } catch {}
-      setStatus("ok");
-      navigate("/mplanipret/home?ms365=ok", { replace: true });
     })().catch((e) => {
+      exchangeInFlight = false;
       console.error("ms365 callback crashed", e);
       setStatus("error");
       setError(String(e?.message ?? e ?? "Échec OAuth"));

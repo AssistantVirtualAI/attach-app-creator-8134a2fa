@@ -163,9 +163,20 @@ export default function MAvaChat() {
       if (suggestion.kind === "call") {
         const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
         if (!number) throw new Error("Numéro manquant");
-        window.dispatchEvent(new CustomEvent("ava:open-dialer", { detail: { number, autoDial: true } }));
-        setMessages((m) => [...m, { id: `dial-${Date.now()}`, role: "assistant", message: `J’ouvre le dialer avec ${number}.`, created_at: new Date().toISOString() }]);
-        toast.success("Dialer ouvert");
+        // 1) Ouvre le dialer avec le numéro déjà rempli (auto-dial)
+        if (typeof outlet?.openDialer === "function") outlet.openDialer(number, true);
+        else window.dispatchEvent(new CustomEvent("ava:open-dialer", { detail: { number, autoDial: true } }));
+        // 2) Filet de sécurité : déclenche l'appel via l'API native si le dialer n'a pas composé
+        window.setTimeout(() => {
+          try {
+            const sp: any = outlet?.softphone;
+            const st = String(sp?.snap?.status ?? "");
+            const inCall = ["dialing", "ringing-out", "ringing", "active", "connected", "in-call", "held"].includes(st);
+            if (!inCall && typeof sp?.placeCall === "function") void sp.placeCall(number);
+          } catch { /* noop */ }
+        }, 2200);
+        setMessages((m) => [...m, { id: `dial-${Date.now()}`, role: "assistant", message: `J’ouvre le dialer avec ${number} et je lance l’appel.`, created_at: new Date().toISOString() }]);
+        toast.success("Appel en cours…");
         return;
       }
 
@@ -173,9 +184,28 @@ export default function MAvaChat() {
         const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
         const body = String(suggestion.payload?.message ?? suggestion.payload?.text ?? suggestion.payload?.body ?? "").trim();
         if (!number) throw new Error("Numéro manquant");
+        // 1) Ouvre la page Texto avec le message pré-rempli et envoi automatique
         window.dispatchEvent(new CustomEvent("ava:open-sms-composer", { detail: { number, body, autoSend: true } }));
-        setMessages((m) => [...m, { id: `sms-${Date.now()}`, role: "assistant", message: `J’envoie le texto à ${number} depuis la page Texto.`, created_at: new Date().toISOString() }]);
-        toast.success("Texto préparé");
+        // 2) Filet de sécurité : si aucun accusé d'envoi, envoyer directement via pp-ns-sms
+        if (body) {
+          let acked = false;
+          const onSent = () => { acked = true; };
+          window.addEventListener("ava:sms-sent", onSent, { once: true });
+          window.setTimeout(async () => {
+            window.removeEventListener("ava:sms-sent", onSent);
+            if (acked) return;
+            try {
+              const { data, error } = await supabase.functions.invoke("pp-ns-sms", { body: { action: "send", to: number, message: body } });
+              if (error) throw error;
+              if ((data as any)?.ok === false || (data as any)?.error) throw new Error(String((data as any)?.error ?? "SMS refusé"));
+              toast.success("Texto envoyé");
+            } catch (err: any) {
+              toast.error(err?.message ?? "Envoi du texto impossible");
+            }
+          }, 4000);
+        }
+        setMessages((m) => [...m, { id: `sms-${Date.now()}`, role: "assistant", message: `J’envoie le texto à ${number}.`, created_at: new Date().toISOString() }]);
+        toast.success("Envoi du texto…");
         return;
       }
 

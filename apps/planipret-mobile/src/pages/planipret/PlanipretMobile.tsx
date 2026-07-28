@@ -39,6 +39,7 @@ import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts } from "@/lib/ppContactsCache";
 import { prefetchTeams365Data } from "@/lib/teams365Cache";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "@/lib/planipret/profileColumns";
+import { ms365Connected } from "@/lib/planipret/ms365Connected";
 
 
 const ACCENT = "#2E9BDC";
@@ -812,7 +813,7 @@ export default function PlanipretMobile() {
     };
     refreshActive();
     const ch = supabase
-      .channel("mplanipret-active-call")
+      .channel(`mplanipret-active-call-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_calls" }, refreshActive)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -851,7 +852,7 @@ export default function PlanipretMobile() {
     };
     refreshCounts();
     const ch = supabase
-      .channel("mplanipret-badges")
+      .channel(`mplanipret-badges-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_messages", filter: `user_id=eq.${profile.user_id}` }, refreshCounts)
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_voicemails", filter: `user_id=eq.${profile.user_id}` }, refreshCounts)
       .subscribe();
@@ -1053,9 +1054,9 @@ export default function PlanipretMobile() {
     // Warm the directory/personal/shared caches in parallel so Directory,
     // Teams and the dialer render from memory instead of blocking on network.
     prefetchPpContacts(["list", "shared", "directory"]);
-    if (profile?.ms365_access_token) prefetchTeams365Data();
+    if (ms365Connected(profile)) prefetchTeams365Data();
     window.setTimeout(() => prefetchAllMobileTabs(), 900);
-  }, [profile?.user_id, profile?.ns_extension, profile?.extension, profile?.ms365_access_token]);
+  }, [profile?.user_id, profile?.ns_extension, profile?.extension, ms365Connected(profile)]);
 
 
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1425", color: "#2E9BDC", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;

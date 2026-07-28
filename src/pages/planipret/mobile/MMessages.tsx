@@ -22,6 +22,7 @@ import { getPpContacts } from "@/lib/ppContactsCache";
 import RecipientAutocomplete from "@/components/planipret/mobile/RecipientAutocomplete";
 import EmailHistoryList from "@/components/planipret/mobile/EmailHistoryList";
 import EmailBodyFrame from "@/components/planipret/mobile/EmailBodyFrame";
+import { ms365Connected } from "@/lib/planipret/ms365Connected";
 
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "history" | "roster";
@@ -72,7 +73,7 @@ export default function MMessages() {
 
   // Warm the Teams cache on mount so switching to the Teams tab is instant.
   useEffect(() => {
-    if (!profile?.ms365_access_token) return;
+    if (!ms365Connected(profile)) return;
     const cacheKey = "planipret.teams365.cache.v1";
     const hasCache = (() => { try { return !!localStorage.getItem(cacheKey); } catch { return false; } })();
     if (hasCache) return; // already warm
@@ -84,7 +85,7 @@ export default function MMessages() {
     };
     const ric: any = (globalThis as any).requestIdleCallback;
     if (typeof ric === "function") ric(run, { timeout: 2000 }); else setTimeout(run, 300);
-  }, [profile?.ms365_access_token]);
+  }, [profile?.ms365_email, profile?.ms365_token_expiry]);
 
 
   return (
@@ -954,7 +955,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const load = async () => {
-    if (!profile?.ms365_access_token) { setState("no_m365"); return; }
+    if (!ms365Connected(profile)) { setState("no_m365"); return; }
     setState((s) => (s === "ready" ? s : "loading"));
     const { data, error } = await supabase.functions.invoke("ms365-actions", {
       body: { action: "read_emails", payload: { top: PAGE_SIZE, skip: 0 } },
@@ -990,13 +991,13 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) return;
       load();
-      if (!profile?.ms365_access_token) return;
+      if (!ms365Connected(profile)) return;
       const id = window.setInterval(() => { load(); }, 60_000);
       const onVis = () => { if (document.visibilityState === "visible") load(); };
       document.addEventListener("visibilitychange", onVis);
       // Note: cleanup not possible here due to async; intervals are short-lived anyway.
     }); /* eslint-disable-next-line */
-  }, [profile?.ms365_access_token]);
+  }, [profile?.ms365_email, profile?.ms365_token_expiry]);
 
   // Auto-prefetch next page when the sentinel scrolls into view (200px margin).
   useEffect(() => {
@@ -1944,7 +1945,7 @@ function TeamRoster({ profile, openDialer, onSwitchTab }: { profile: any; openDi
                   <ActionPill
                     Icon={Mail}
                     label="Email"
-                    disabled={!m.email || !profile?.ms365_access_token}
+                    disabled={!m.email || !ms365Connected(profile)}
                     onClick={() => { setComposeInit({ to: m.email ?? "" }); setComposeOpen(true); }}
                   />
                   <ActionPill Icon={Users} label="@Mention" onClick={() => sendMention(m)} />
@@ -2039,7 +2040,7 @@ function Teams365Panel({ profile }: { profile: any }) {
     | null
   >(null);
 
-  const connected = !!profile?.ms365_access_token;
+  const connected = ms365Connected(profile);
 
   const load = async () => {
     if (!connected) { setLoading(false); setRefreshing(false); setErr("ms365_not_connected"); return; }

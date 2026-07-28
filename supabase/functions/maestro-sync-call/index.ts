@@ -146,7 +146,14 @@ Deno.serve(async (req) => {
     }
 
     const auth = await getBrokerAuth(admin, call.user_id);
+    log("broker_auth", {
+      user_id: call.user_id,
+      broker_id: auth.brokerId,
+      using_service_key_fallback: auth.usingFallback,
+      token_len: auth.token ? auth.token.length : 0,
+    });
     const mId = call.maestro_call_id ?? call.ns_call_id ?? call.id;
+
 
     // ── 2. Recording upload ────────────────────────────────
     const rec = await invoke("maestro-recording-upload", { call_id, force });

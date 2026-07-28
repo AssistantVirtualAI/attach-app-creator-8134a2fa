@@ -1,7 +1,6 @@
 import { FormEvent, useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { useNavigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { Home, Phone, MessageSquare, Users, Bot, Phone as PhoneIcon, X, Delete, Plus, Lock, PhoneOff, Settings as SettingsIcon, Search as SearchIcon, MessageCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -46,8 +45,6 @@ const ACCENT = "#2E9BDC";
 const PROFILE_BOOT_TIMEOUT_MS = 15000;
 const PROFILE_SESSION_TIMEOUT_MS = 4000;
 const PROFILE_REFRESH_TIMEOUT_MS = 9000;
-const SUPABASE_FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -91,10 +88,6 @@ function readStoredAuthSession(): any | null {
 function isTokenFresh(session: any | null, marginSeconds = 60) {
   const expiresAt = Number(session?.expires_at ?? 0);
   return !!session?.access_token && (!expiresAt || expiresAt - Math.floor(Date.now() / 1000) > marginSeconds);
-}
-
-function isNativeRuntime() {
-  return Capacitor.isNativePlatform() || window.location.protocol === "capacitor:";
 }
 
 async function getPlanipretBootSession(): Promise<any | null> {
@@ -626,7 +619,9 @@ export default function PlanipretMobile() {
   const location = useLocation();
   const { t, lang, setLang } = useMplanipretLang();
   // REST-only call control: outbound calls ring the broker's registered mobile device.
-  const softphone = useMplanipretSoftphone();
+  // Do not initialize SIP until the mobile profile has loaded; this prevents SIP
+  // credential resolution from racing the auth/profile boot on cold native starts.
+  const softphone = useMplanipretSoftphone(Boolean(profile?.user_id));
   const attachRestCall = (softphone as any).attachRestCall as ((a: any) => void) | undefined;
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -889,43 +884,6 @@ export default function PlanipretMobile() {
         sessionStorage.setItem("pp_ms_captured", session.access_token);
       }
 
-      const invokeMobileProfile = async (accessToken: string, source: string) => {
-        const url = `${SUPABASE_FUNCTIONS_URL}/pp-mobile-profile`;
-        const headers = {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${accessToken}`,
-          "x-pp-profile-source": source,
-        };
-        let status = 0;
-        let payload: any = {};
-        if (isNativeRuntime()) {
-          const nativeResponse = await withTimeout(
-            CapacitorHttp.request({ method: "POST", url, headers, data: { fields: "safe" } }),
-            PROFILE_BOOT_TIMEOUT_MS,
-            "pp_mobile_profile_native",
-          );
-          status = nativeResponse.status;
-          payload = typeof nativeResponse.data === "string" ? JSON.parse(nativeResponse.data || "{}") : nativeResponse.data ?? {};
-        } else {
-          const response = await withTimeout(
-            fetch(url, { method: "POST", headers, body: JSON.stringify({ fields: "safe" }) }),
-            PROFILE_BOOT_TIMEOUT_MS,
-            "pp_mobile_profile",
-          );
-          status = response.status;
-          payload = await response.json().catch(() => ({}));
-        }
-        if (status < 200 || status >= 300) {
-          const err = new Error(String(payload?.error || `pp_mobile_profile_${status}`));
-          (err as any).context = { status, payload };
-          throw err;
-        }
-        const loadedProfile = (payload as any)?.profile ?? null;
-        if (!loadedProfile) throw new Error(String((payload as any)?.error || "missing_profile"));
-        return loadedProfile;
-      };
-
       const loadViaBackend = async () => {
         let currentSession: any = session;
         if (!isTokenFresh(currentSession)) {
@@ -936,7 +894,18 @@ export default function PlanipretMobile() {
         let token = currentSession?.access_token ?? readStoredAuthSession()?.access_token ?? "";
         if (!token) throw new Error("no_session");
         try {
-          return await invokeMobileProfile(token, "initial");
+          const { data: fnData, error: fnError } = await withTimeout(
+            supabase.functions.invoke("pp-mobile-profile", {
+              body: { fields: "safe" },
+              headers: { Authorization: `Bearer ${token}`, "x-pp-profile-source": "fallback_initial" },
+            }),
+            PROFILE_BOOT_TIMEOUT_MS,
+            "pp_mobile_profile_fallback",
+          );
+          if (fnError) throw fnError;
+          const loadedProfile = (fnData as any)?.profile ?? null;
+          if (!loadedProfile) throw new Error(String((fnData as any)?.error || "missing_profile"));
+          return loadedProfile;
         } catch (firstError: any) {
           const status = firstError?.context?.status;
           const message = String(firstError?.message || "");
@@ -945,32 +914,25 @@ export default function PlanipretMobile() {
           const retryToken = refreshed.session?.access_token;
           if (!retryToken) throw new Error("no_session");
           session = refreshed.session;
-          return await invokeMobileProfile(retryToken, "retry_after_401");
+          const { data: retryData, error: retryError } = await withTimeout(
+            supabase.functions.invoke("pp-mobile-profile", {
+              body: { fields: "safe" },
+              headers: { Authorization: `Bearer ${retryToken}`, "x-pp-profile-source": "fallback_retry_after_401" },
+            }),
+            PROFILE_BOOT_TIMEOUT_MS,
+            "pp_mobile_profile_retry",
+          );
+          if (retryError) throw retryError;
+          const retryProfile = (retryData as any)?.profile ?? null;
+          if (!retryProfile) throw new Error(String((retryData as any)?.error || "missing_profile"));
+          return retryProfile;
         }
       };
 
-      // Native mobile must not depend on browser column-level grants. The secure
-      // backend profile loader filters credentials server-side and auto-links by
-      // the signed-in email when needed.
       let data: any = null;
       let error: any = null;
 
       try {
-        data = await loadViaBackend();
-      } catch (backendError: any) {
-        const msg = backendError?.message ?? String(backendError);
-        if (msg === "no_session") {
-          recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "no session for pp-mobile-profile");
-          setProfile(null);
-          setAccessError("unauthenticated");
-          setLoading(false);
-          return;
-        }
-        console.error("[PlanipretMobile] pp-mobile-profile failed", msg, backendError?.context ?? "");
-        setProfileErrorDetail(msg);
-      }
-
-      if (!data) {
         const direct = await withTimeout(
           supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle(),
           PROFILE_BOOT_TIMEOUT_MS,
@@ -978,6 +940,31 @@ export default function PlanipretMobile() {
         );
         data = direct.data as any;
         error = direct.error;
+      } catch (directError: any) {
+        error = directError;
+      }
+
+      if (error || !data) {
+        const directMsg = error?.message ?? (data ? "" : "missing_profile");
+        try {
+          const backendProfile = await loadViaBackend();
+          if (backendProfile) {
+            data = backendProfile;
+            error = null;
+          }
+        } catch (backendError: any) {
+          const msg = backendError?.message ?? String(backendError);
+          if (msg === "no_session") {
+            recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "no session for profile boot");
+            setProfile(null);
+            setAccessError("unauthenticated");
+            setLoading(false);
+            return;
+          }
+          console.error("[PlanipretMobile] profile fallback failed", { direct: directMsg, backend: msg, context: backendError?.context ?? "" });
+          if (!error) error = backendError;
+          setProfileErrorDetail(directMsg && directMsg !== "missing_profile" ? directMsg : msg);
+        }
       }
 
       if (error) {

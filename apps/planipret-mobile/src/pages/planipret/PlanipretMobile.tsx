@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { useNavigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { Home, Phone, MessageSquare, Users, Bot, Phone as PhoneIcon, X, Delete, Plus, Lock, PhoneOff, Settings as SettingsIcon, Search as SearchIcon, MessageCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -43,6 +44,10 @@ import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "
 
 const ACCENT = "#2E9BDC";
 const PROFILE_BOOT_TIMEOUT_MS = 15000;
+const PROFILE_SESSION_TIMEOUT_MS = 4000;
+const PROFILE_REFRESH_TIMEOUT_MS = 9000;
+const SUPABASE_FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -52,6 +57,65 @@ function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Pro
       (error) => { window.clearTimeout(timer); reject(error); },
     );
   });
+}
+
+function parseStoredAuthSession(raw: string | null): any | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const session = parsed?.access_token ? parsed : parsed?.currentSession;
+    return session?.access_token && session?.user ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredAuthSession(): any | null {
+  if (typeof window === "undefined") return null;
+  const storages = [window.localStorage, window.sessionStorage].filter(Boolean);
+  for (const storage of storages) {
+    try {
+      for (let i = 0; i < storage.length; i += 1) {
+        const key = storage.key(i);
+        if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+        const session = parseStoredAuthSession(storage.getItem(key));
+        if (session) return session;
+      }
+    } catch {
+      // Ignore blocked storage reads and continue with SDK refresh.
+    }
+  }
+  return null;
+}
+
+function isTokenFresh(session: any | null, marginSeconds = 60) {
+  const expiresAt = Number(session?.expires_at ?? 0);
+  return !!session?.access_token && (!expiresAt || expiresAt - Math.floor(Date.now() / 1000) > marginSeconds);
+}
+
+function isNativeRuntime() {
+  return Capacitor.isNativePlatform() || window.location.protocol === "capacitor:";
+}
+
+async function getPlanipretBootSession(): Promise<any | null> {
+  try {
+    const { data: { session } } = await withTimeout(supabase.auth.getSession(), PROFILE_SESSION_TIMEOUT_MS, "pp_session");
+    if (session?.access_token && session?.user) return session;
+  } catch (error) {
+    console.warn("[PlanipretMobile] getSession delayed; checking stored session", error);
+  }
+
+  const stored = readStoredAuthSession();
+  if (stored?.access_token && stored?.user) return stored;
+
+  try {
+    const { data: refreshed } = await withTimeout(supabase.auth.refreshSession(), PROFILE_REFRESH_TIMEOUT_MS, "pp_refresh_session");
+    if (refreshed?.session?.access_token && refreshed.session.user) return refreshed.session;
+  } catch (error) {
+    console.warn("[PlanipretMobile] refreshSession failed during profile boot", error);
+  }
+
+  return readStoredAuthSession();
 }
 
 const AvaBadge = ({ compact = false, circle = false }: { compact?: boolean; circle?: boolean }) => {
@@ -801,7 +865,7 @@ export default function PlanipretMobile() {
 
   const loadProfile = async () => {
     try {
-      const { data: { session } } = await withTimeout(supabase.auth.getSession(), PROFILE_BOOT_TIMEOUT_MS, "pp_session");
+      let session = await getPlanipretBootSession();
       const user = session?.user ?? null;
       if (!user) {
         recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "no auth session — stay inside mobile app");
@@ -825,36 +889,63 @@ export default function PlanipretMobile() {
         sessionStorage.setItem("pp_ms_captured", session.access_token);
       }
 
-      const invokeMobileProfile = async (accessToken: string) => {
-        const { data: fallbackData, error: fallbackError } = await withTimeout(
-          supabase.functions.invoke("pp-mobile-profile", {
-            body: { fields: "safe" },
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }),
-          PROFILE_BOOT_TIMEOUT_MS,
-          "pp_mobile_profile",
-        );
-        if (fallbackError) throw fallbackError;
-        return (fallbackData as any)?.profile ?? null;
+      const invokeMobileProfile = async (accessToken: string, source: string) => {
+        const url = `${SUPABASE_FUNCTIONS_URL}/pp-mobile-profile`;
+        const headers = {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          "x-pp-profile-source": source,
+        };
+        let status = 0;
+        let payload: any = {};
+        if (isNativeRuntime()) {
+          const nativeResponse = await withTimeout(
+            CapacitorHttp.request({ method: "POST", url, headers, data: { fields: "safe" } }),
+            PROFILE_BOOT_TIMEOUT_MS,
+            "pp_mobile_profile_native",
+          );
+          status = nativeResponse.status;
+          payload = typeof nativeResponse.data === "string" ? JSON.parse(nativeResponse.data || "{}") : nativeResponse.data ?? {};
+        } else {
+          const response = await withTimeout(
+            fetch(url, { method: "POST", headers, body: JSON.stringify({ fields: "safe" }) }),
+            PROFILE_BOOT_TIMEOUT_MS,
+            "pp_mobile_profile",
+          );
+          status = response.status;
+          payload = await response.json().catch(() => ({}));
+        }
+        if (status < 200 || status >= 300) {
+          const err = new Error(String(payload?.error || `pp_mobile_profile_${status}`));
+          (err as any).context = { status, payload };
+          throw err;
+        }
+        const loadedProfile = (payload as any)?.profile ?? null;
+        if (!loadedProfile) throw new Error(String((payload as any)?.error || "missing_profile"));
+        return loadedProfile;
       };
 
       const loadViaBackend = async () => {
-        let token = session.access_token;
-        if (!token) {
-          const { data: refreshed } = await supabase.auth.refreshSession();
-          token = refreshed.session?.access_token ?? "";
+        let currentSession: any = session;
+        if (!isTokenFresh(currentSession)) {
+          const { data: refreshed } = await withTimeout(supabase.auth.refreshSession(), PROFILE_REFRESH_TIMEOUT_MS, "pp_refresh_before_profile");
+          currentSession = refreshed.session ?? currentSession ?? readStoredAuthSession();
+          session = currentSession;
         }
+        let token = currentSession?.access_token ?? readStoredAuthSession()?.access_token ?? "";
         if (!token) throw new Error("no_session");
         try {
-          return await invokeMobileProfile(token);
+          return await invokeMobileProfile(token, "initial");
         } catch (firstError: any) {
           const status = firstError?.context?.status;
           const message = String(firstError?.message || "");
           if (status !== 401 && !/unauthori[sz]ed|401/i.test(message)) throw firstError;
-          const { data: refreshed } = await supabase.auth.refreshSession();
+          const { data: refreshed } = await withTimeout(supabase.auth.refreshSession(), PROFILE_REFRESH_TIMEOUT_MS, "pp_refresh_after_401");
           const retryToken = refreshed.session?.access_token;
           if (!retryToken) throw new Error("no_session");
-          return await invokeMobileProfile(retryToken);
+          session = refreshed.session;
+          return await invokeMobileProfile(retryToken, "retry_after_401");
         }
       };
 
@@ -875,7 +966,8 @@ export default function PlanipretMobile() {
           setLoading(false);
           return;
         }
-        console.error("[PlanipretMobile] pp-mobile-profile failed", msg);
+        console.error("[PlanipretMobile] pp-mobile-profile failed", msg, backendError?.context ?? "");
+        setProfileErrorDetail(msg);
       }
 
       if (!data) {

@@ -52,12 +52,20 @@ function buildFallbackBrief(stats: any, period: Period) {
     stats.missed_recent?.[0]?.from_number ? { label: "Rappeler l’appel manqué", kind: "call", number: stats.missed_recent[0].from_number } : null,
     stats.hot_leads?.[0]?.from_number ? { label: "Texter le lead chaud", kind: "sms", number: stats.hot_leads[0].from_number } : null,
   ].filter(Boolean).slice(0, 3);
+  const parts = [
+    `${stats.calls_total} appel${stats.calls_total > 1 ? "s" : ""} (${stats.calls_answered} répondus, ${stats.missed_count} manqués)`,
+    `${stats.talk_minutes} min au téléphone`,
+    `${stats.sms_total} texto${stats.sms_total > 1 ? "s" : ""}`,
+    `${stats.hot_leads.length} lead${stats.hot_leads.length > 1 ? "s" : ""} chaud${stats.hot_leads.length > 1 ? "s" : ""}`,
+    `${stats.meetings.length} rendez-vous`,
+  ];
   return {
-    headline: `${periodLabel}: ${stats.calls_total} appels, ${stats.hot_leads.length} leads chauds, ${stats.tasks_pending.length} tâches et ${stats.meetings.length} rendez-vous.`,
+    headline: `${periodLabel}: ${parts.join(" · ")}.`,
     priorities: priorities.length ? priorities : ["Aucune urgence détectée — garder le suivi client à jour."],
     risks,
     suggestions,
   };
+
 }
 
 function periodRange(period: Period): { since: Date; until: Date; label: string } {

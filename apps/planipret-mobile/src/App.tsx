@@ -95,9 +95,13 @@ function NativeDeepLinkBridge() {
 
 function NativeBootMarker() {
   useEffect(() => {
-    (window as any).__PP_REACT_BOOTED__ = true;
-    const fallback = document.getElementById('pp-native-boot-fallback');
-    if (fallback) fallback.style.display = 'none';
+    const markReady = (window as any).__PP_MARK_BOOT_READY__;
+    if (typeof markReady === 'function') markReady();
+    else {
+      (window as any).__PP_REACT_BOOTED__ = true;
+      const fallback = document.getElementById('pp-native-boot-fallback');
+      if (fallback) fallback.style.display = 'none';
+    }
   }, []);
   return null;
 }

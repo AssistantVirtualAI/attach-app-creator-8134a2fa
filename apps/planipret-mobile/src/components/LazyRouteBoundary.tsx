@@ -4,11 +4,13 @@ import MobileScreenSkeleton from "@/components/planipret/mobile/MobileScreenSkel
 type State = { error: Error | null; retryKey: number };
 
 function isEmptyNativeArtifact(raw: unknown): boolean {
-  if (!raw || typeof raw !== 'object') return !raw;
+  if (typeof raw === 'string') return /multi_header\.length|multi_header/i.test(raw);
+  if (!raw || typeof raw !== 'object') return false;
   const obj = raw as Record<string, unknown>;
   const message = String(obj.message ?? Object.getOwnPropertyDescriptor(obj, 'message')?.value ?? '').trim();
   const errorMessage = String(obj.errorMessage ?? Object.getOwnPropertyDescriptor(obj, 'errorMessage')?.value ?? '').trim();
   const code = String(obj.code ?? Object.getOwnPropertyDescriptor(obj, 'code')?.value ?? '').trim();
+  if (/multi_header\.length|multi_header/i.test(message || errorMessage)) return true;
   if (!message && !errorMessage && !code && Object.keys(obj).length === 0) return true;
   if (code === 'UNIMPLEMENTED' && /not implemented/i.test(message || errorMessage)) return true;
   return false;

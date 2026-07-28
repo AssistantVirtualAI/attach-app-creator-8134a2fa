@@ -26,9 +26,12 @@
     <script>
       (function () {
         function isIgnorableNativeStartupError(raw) {
-          if (!raw || typeof raw !== 'object') return !raw;
+          if (typeof raw === 'string') return /multi_header\.length|multi_header/i.test(raw);
+          if (!raw || typeof raw !== 'object') return false;
           var message = String(raw.message || raw.errorMessage || '').trim();
           var code = String(raw.code || '').trim();
+          if (/multi_header\.length|multi_header/i.test(message)) return true;
+          if (!message && !code && Object.keys(raw).length === 0) return true;
           return code === 'UNIMPLEMENTED' && /not implemented/i.test(message);
         }
         window.__PP_REACT_BOOTED__ = false;
@@ -41,7 +44,7 @@
           fallback.style.display = 'flex';
         }
         window.addEventListener('error', function (event) {
-          if (!isIgnorableNativeStartupError(event.error)) return;
+          if (!isIgnorableNativeStartupError(event.error) && !isIgnorableNativeStartupError(event.message)) return;
           event.preventDefault();
           event.stopImmediatePropagation();
         }, true);

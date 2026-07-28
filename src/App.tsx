@@ -476,7 +476,6 @@ function NativeDeepLinkBridge() {
 }
 
 const RootErrorBoundary = ({ children }: { children: React.ReactNode }) => {
-  if (Capacitor.isNativePlatform()) return <>{children}</>;
   return <AppErrorBoundary>{children}</AppErrorBoundary>;
 };
 

@@ -3,7 +3,8 @@ import React from "react";
 type State = { error: Error | null };
 
 function isEmptyNativeArtifact(raw: unknown): boolean {
-  if (!raw || typeof raw !== 'object') return !raw;
+  if (typeof raw === 'string') return /multi_header\.length|multi_header/i.test(raw);
+  if (!raw || typeof raw !== 'object') return false;
 
   // Capacitor iOS sometimes reports an internal React/router artifact as
   // `Error {}` with only a generated stack. No message means no actionable
@@ -17,23 +18,27 @@ function isEmptyNativeArtifact(raw: unknown): boolean {
   );
   for (const key of ['message', 'errorMessage', 'code', 'details', 'hint', 'error']) {
     const value = obj[key] ?? Object.getOwnPropertyDescriptor(obj, key)?.value;
+    if (/multi_header\.length|multi_header/i.test(String(value ?? ''))) return true;
     if (value != null && String(value).trim()) return false;
   }
   return keys.size === 0 || hasOnlyGeneratedErrorFields;
 }
 
-export class PlanipretErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
-  state: State = { error: null };
+export class PlanipretErrorBoundary extends React.Component<{ children: React.ReactNode }, State & { retryKey: number }> {
+  state: State & { retryKey: number } = { error: null, retryKey: 0 };
   static getDerivedStateFromError(error: Error) {
-    if (isEmptyNativeArtifact(error)) return null;
+    if (isEmptyNativeArtifact(error)) return { error: null };
     return { error };
   }
   componentDidCatch(error: Error, info: any) {
-    if (isEmptyNativeArtifact(error)) return;
+    if (isEmptyNativeArtifact(error)) {
+      this.setState((s) => ({ error: null, retryKey: Math.min(s.retryKey + 1, 3) }));
+      return;
+    }
     console.error("[PlanipretErrorBoundary]", error, info);
   }
   render() {
-    if (!this.state.error) return this.props.children;
+    if (!this.state.error) return <React.Fragment key={this.state.retryKey}>{this.props.children}</React.Fragment>;
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
         <div className="max-w-md bg-white rounded-xl shadow-md p-6 text-center">

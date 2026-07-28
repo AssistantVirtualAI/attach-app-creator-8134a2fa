@@ -11,6 +11,7 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  retryKey: number;
 }
 
 /**
@@ -56,7 +57,8 @@ function normaliseError(raw: unknown): Error {
 }
 
 function isEmptyNativeArtifact(raw: unknown): boolean {
-  if (!raw || typeof raw !== 'object') return !raw;
+  if (typeof raw === 'string') return /multi_header\.length|multi_header/i.test(raw);
+  if (!raw || typeof raw !== 'object') return false;
 
   // iOS WKWebView/Capacitor can surface a React/router artifact as `Error {}`:
   // it has a generated stack, but no real message/name/code/details. Treat it
@@ -73,6 +75,7 @@ function isEmptyNativeArtifact(raw: unknown): boolean {
   );
   for (const key of ['message', 'errorMessage', 'code', 'details', 'hint', 'error']) {
     const value = obj[key] ?? Object.getOwnPropertyDescriptor(obj, key)?.value;
+    if (/multi_header\.length|multi_header/i.test(String(value ?? ''))) return true;
     if (value != null && String(value).trim()) return false;
   }
   return keys.size === 0 || hasOnlyGeneratedErrorFields;
@@ -83,16 +86,18 @@ export class AppErrorBoundary extends Component<Props, State> {
     hasError: false,
     error: null,
     errorInfo: null,
+    retryKey: 0,
   };
 
   public static getDerivedStateFromError(raw: unknown): Partial<State> | null {
-    if (isEmptyNativeArtifact(raw)) return null;
+    if (isEmptyNativeArtifact(raw)) return { hasError: false, error: null, errorInfo: null };
     return { hasError: true, error: normaliseError(raw) };
   }
 
   public componentDidCatch(raw: unknown, errorInfo: ErrorInfo) {
     if (isEmptyNativeArtifact(raw)) {
       console.warn('[ErrorBoundary] Ignored empty native React artifact');
+      this.setState((state) => ({ hasError: false, error: null, errorInfo: null, retryKey: Math.min(state.retryKey + 1, 3) }));
       return;
     }
     const error = normaliseError(raw);
@@ -109,7 +114,7 @@ export class AppErrorBoundary extends Component<Props, State> {
   };
 
   private handleReset = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    this.setState((state) => ({ hasError: false, error: null, errorInfo: null, retryKey: state.retryKey + 1 }));
   };
 
   public render() {
@@ -168,6 +173,6 @@ export class AppErrorBoundary extends Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return <React.Fragment key={this.state.retryKey}>{this.props.children}</React.Fragment>;
   }
 }

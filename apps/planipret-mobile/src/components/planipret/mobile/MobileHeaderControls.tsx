@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { Bell, Settings as SettingsIcon } from "lucide-react";
+import { Bell, Languages, Moon, Settings as SettingsIcon, Sun } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import { supabase } from "@/integrations/supabase/client";
 import MobileProfileSheet from "./MobileProfileSheet";
@@ -13,7 +14,8 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export default function MobileHeaderControls({ profile, reloadProfile }: { profile: any; reloadProfile: () => Promise<void> | void }) {
-  const { theme } = useMplanipretTheme();
+  const { lang, toggle: toggleLang } = useMplanipretLang();
+  const { theme, toggle: toggleTheme } = useMplanipretTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
@@ -48,7 +50,7 @@ export default function MobileHeaderControls({ profile, reloadProfile }: { profi
   const status = profile?.status ?? "available";
 
   const btn: CSSProperties = {
-    width: 34, height: 34,
+    width: 32, height: 32,
     background: "var(--pp-bg-elevated)",
     border: "1px solid var(--pp-bg-border-2)",
     color: "var(--pp-text-secondary)",
@@ -61,8 +63,26 @@ export default function MobileHeaderControls({ profile, reloadProfile }: { profi
 
   return (
     <>
-      <div className="ml-auto flex items-center gap-2">
-        {/* Settings */}
+      <div className="ml-auto flex items-center gap-1.5">
+        <button
+          onClick={toggleLang}
+          style={btn}
+          aria-label="Changer la langue"
+          title={lang === "fr" ? "English" : "Français"}
+        >
+          <Languages className="w-3.5 h-3.5" />
+          <span className="sr-only">{lang === "fr" ? "EN" : "FR"}</span>
+        </button>
+
+        <button
+          onClick={toggleTheme}
+          style={btn}
+          aria-label="Changer le thème"
+          title={theme === "dark" ? "Mode clair" : "Mode sombre"}
+        >
+          {theme === "dark" ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+        </button>
+
         <button
           onClick={() => navigate("/mplanipret/more")}
           style={btn}
@@ -94,7 +114,7 @@ export default function MobileHeaderControls({ profile, reloadProfile }: { profi
           onClick={() => setOpen(true)}
           className="relative flex items-center justify-center rounded-full font-bold text-white"
           style={{
-            width: 34, height: 34,
+            width: 32, height: 32,
             background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)",
             border: "1px solid var(--pp-bg-border-2)",
             fontSize: 12,

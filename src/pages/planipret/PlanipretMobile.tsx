@@ -468,7 +468,8 @@ export default function PlanipretMobile() {
   const location = useLocation();
   const { t, lang, setLang } = useMplanipretLang();
   // REST-only call control: outbound calls ring the broker's registered mobile device.
-  const softphone = useMplanipretSoftphone();
+  // Wait for the profile before SIP init so cold starts do not race auth/profile boot.
+  const softphone = useMplanipretSoftphone(Boolean(profile?.user_id));
   const attachRestCall = (softphone as any).attachRestCall as ((a: any) => void) | undefined;
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -741,23 +742,47 @@ export default function PlanipretMobile() {
     let data: any = null;
     let error: any = null;
 
-    // 1) Backend-first: always works on native mobile even if direct grants are blocked.
+    // 1) Stable path: direct RLS-backed profile read. Backend function is fallback only.
     try {
-      data = await loadProfileViaFunction();
-    } catch (fnErr: any) {
-      const msg = fnErr?.message ?? String(fnErr);
-      if (msg === "no_session") {
-        recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "no session for pp-mobile-profile");
+      const direct = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle();
+      data = direct.data as any;
+      error = direct.error;
+    } catch (directErr: any) {
+      error = directErr;
+    }
+
+    if (error || !data) {
+      const directMsg = error?.message ?? "missing_profile";
+      try {
+        data = await loadProfileViaFunction();
+        error = null;
+      } catch (fnErr: any) {
+        const msg = fnErr?.message ?? String(fnErr);
+        if (msg === "no_session") {
+          recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "no session for profile boot");
+          setProfile(null);
+          setAccessError("unauthenticated");
+          setLoading(false);
+          return;
+        }
+        console.error("[PlanipretMobile] profile fallback failed:", { direct: directMsg, backend: msg });
+        error = { message: directMsg !== "missing_profile" ? directMsg : msg, code: "profile_boot_failed" };
+      }
+    }
+
+    if (!data && !error) {
+      recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "missing planipret_profiles row");
+      setAccessError("missing_profile");
+      setLoading(false);
+      return;
+    }
+
+    if (!data && error?.message === "no_session") {
+        recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "no session for profile boot");
         setProfile(null);
         setAccessError("unauthenticated");
         setLoading(false);
         return;
-      }
-      console.error("[PlanipretMobile] pp-mobile-profile failed:", msg);
-      // 2) Fallback: direct select
-      const direct = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle();
-      data = direct.data as any;
-      error = direct.error ?? (direct.data ? null : { message: msg, code: "fn_failed" });
     }
 
     if (error) {

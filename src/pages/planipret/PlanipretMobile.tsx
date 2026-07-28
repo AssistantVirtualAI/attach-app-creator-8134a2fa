@@ -986,6 +986,7 @@ export default function PlanipretMobile() {
           aria-label={activeCallId ? t("dialer.hangup") : t("dialer.dialNumber")}>
           {activeCallId ? <PhoneOff className="w-5 h-5" /> : <PhoneIcon className="w-5 h-5" />}
         </button>
+        )}
 
 
         {/* Tab bar (5 tabs) */}

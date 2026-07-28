@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { useNavigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { Home, Phone, MessageSquare, Users, Bot, Phone as PhoneIcon, X, Delete, Plus, Lock, PhoneOff, Settings as SettingsIcon, Search as SearchIcon, MessageCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -90,6 +91,10 @@ function readStoredAuthSession(): any | null {
 function isTokenFresh(session: any | null, marginSeconds = 60) {
   const expiresAt = Number(session?.expires_at ?? 0);
   return !!session?.access_token && (!expiresAt || expiresAt - Math.floor(Date.now() / 1000) > marginSeconds);
+}
+
+function isNativeRuntime() {
+  return Capacitor.isNativePlatform() || window.location.protocol === "capacitor:";
 }
 
 async function getPlanipretBootSession(): Promise<any | null> {
@@ -885,24 +890,35 @@ export default function PlanipretMobile() {
       }
 
       const invokeMobileProfile = async (accessToken: string, source: string) => {
-        const response = await withTimeout(
-          fetch(`${SUPABASE_FUNCTIONS_URL}/pp-mobile-profile`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: SUPABASE_PUBLISHABLE_KEY,
-              Authorization: `Bearer ${accessToken}`,
-              "x-pp-profile-source": source,
-            },
-            body: JSON.stringify({ fields: "safe" }),
-          }),
-          PROFILE_BOOT_TIMEOUT_MS,
-          "pp_mobile_profile",
-        );
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          const err = new Error(String((payload as any)?.error || `pp_mobile_profile_${response.status}`));
-          (err as any).context = { status: response.status, payload };
+        const url = `${SUPABASE_FUNCTIONS_URL}/pp-mobile-profile`;
+        const headers = {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${accessToken}`,
+          "x-pp-profile-source": source,
+        };
+        let status = 0;
+        let payload: any = {};
+        if (isNativeRuntime()) {
+          const nativeResponse = await withTimeout(
+            CapacitorHttp.request({ method: "POST", url, headers, data: { fields: "safe" } }),
+            PROFILE_BOOT_TIMEOUT_MS,
+            "pp_mobile_profile_native",
+          );
+          status = nativeResponse.status;
+          payload = typeof nativeResponse.data === "string" ? JSON.parse(nativeResponse.data || "{}") : nativeResponse.data ?? {};
+        } else {
+          const response = await withTimeout(
+            fetch(url, { method: "POST", headers, body: JSON.stringify({ fields: "safe" }) }),
+            PROFILE_BOOT_TIMEOUT_MS,
+            "pp_mobile_profile",
+          );
+          status = response.status;
+          payload = await response.json().catch(() => ({}));
+        }
+        if (status < 200 || status >= 300) {
+          const err = new Error(String(payload?.error || `pp_mobile_profile_${status}`));
+          (err as any).context = { status, payload };
           throw err;
         }
         const loadedProfile = (payload as any)?.profile ?? null;

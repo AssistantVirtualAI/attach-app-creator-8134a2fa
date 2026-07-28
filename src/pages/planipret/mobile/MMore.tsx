@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   User, Lock, Phone, Info, Mail, Bell, Moon, HelpCircle, MessageCircle,
-  LogOut, ChevronRight, Bot, Sparkles, X, Download, Shield, BellOff, Settings as SettingsIcon, BarChart3, Voicemail, Edit3, Languages,
+  LogOut, Trash2, ChevronRight, Bot, Sparkles, X, Download, Shield, BellOff, Settings as SettingsIcon, BarChart3, Voicemail, Edit3, Languages,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
@@ -155,6 +155,9 @@ export default function MMore() {
     setNotifEnabled(on);
     localStorage.setItem("planipret_notif", on ? "1" : "0");
   };
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const logout = async () => {
     if (!confirm(t("more.logoutConfirm"))) return;
@@ -420,7 +423,69 @@ export default function MMore() {
         <LogOut className="w-4 h-4" /> {t("common.logout")}
       </button>
 
+      {/* App Store guideline 5.1.1(v) / Play data-deletion policy: in-app account deletion. */}
+      <button
+        onClick={() => setDeleteOpen(true)}
+        className="w-full flex items-center justify-center gap-2 active:scale-[0.99] transition"
+        style={{
+          padding: "12px 16px", borderRadius: 14, background: "transparent",
+          border: "1px solid rgba(232,76,76,0.18)",
+          color: "var(--pp-color-danger)", fontFamily: "Inter,sans-serif", fontWeight: 600, fontSize: 13,
+        }}
+      >
+        <Trash2 className="w-4 h-4" /> {t("more.deleteAccount")}
+      </button>
+
+      {deleteOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.55)" }}
+          onClick={() => !deleting && setDeleteOpen(false)}
+        >
+          <div
+            className="w-full pp-card"
+            style={{ margin: 12, padding: 18, maxWidth: 520 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>{t("more.deleteAccount")}</h3>
+            <p style={{ fontSize: 13, color: "var(--pp-text-faint)", marginBottom: 16 }}>
+              {t("more.deleteAccountWarning")}
+            </p>
+            <div className="flex gap-8">
+              <button
+                onClick={() => setDeleteOpen(false)}
+                disabled={deleting}
+                className="flex-1"
+                style={{ padding: "12px", borderRadius: 12, border: "1px solid var(--pp-border)", fontWeight: 600, fontSize: 14 }}
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                onClick={async () => {
+                  setDeleting(true);
+                  const { error } = await supabase.functions.invoke("mobile-delete-account", { body: {} });
+                  setDeleting(false);
+                  if (error) { toast.error(error.message ?? t("more.deleteAccountFailed")); return; }
+                  toast.success(t("more.deleteAccountDone"));
+                  await supabase.auth.signOut();
+                  navigate("/login", { replace: true });
+                }}
+                disabled={deleting}
+                className="flex-1"
+                style={{
+                  padding: "12px", borderRadius: 12, border: "1px solid rgba(232,76,76,0.35)",
+                  background: "rgba(232,76,76,0.12)", color: "var(--pp-color-danger)", fontWeight: 700, fontSize: 14,
+                }}
+              >
+                {deleting ? "…" : t("more.deleteAccountConfirm")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ height: 16 }} />
+
 
       {editOpen && <EditProfileSheet profile={profile} onClose={() => setEditOpen(false)} onSaved={reloadProfile} />}
       {helpOpen && <HelpSheet onClose={() => setHelpOpen(false)} />}

@@ -152,6 +152,10 @@ Deno.serve(async (req) => {
         call_id, user_id: call.user_id, step: "recording_upload", status: "skipped",
         duration_ms: Date.now() - t0, payload: { reason: "no_audio_available" },
       });
+      await admin.from("planipret_recording_uploads").upsert({
+        call_id, user_id: call.user_id, status: "failed",
+        error_message: "no_audio_available", updated_at: new Date().toISOString(),
+      }, { onConflict: "call_id" });
       return json({ success: false, error: "no_audio_available" }, 200);
     }
 
@@ -202,6 +206,10 @@ Deno.serve(async (req) => {
         call_id, user_id: call.user_id, step: "recording_upload", status: "error",
         duration_ms: ms, error_message: `status_${res.status}`,
       });
+      await admin.from("planipret_recording_uploads").upsert({
+        call_id, user_id: call.user_id, status: "failed",
+        error_message: `status_${res.status}`, updated_at: new Date().toISOString(),
+      }, { onConflict: "call_id" });
       return json({ success: false, status: res.status, details: data }, 200);
     }
 
@@ -216,6 +224,18 @@ Deno.serve(async (req) => {
         },
       })
       .eq("id", call_id);
+
+    await admin.from("planipret_recording_uploads").upsert({
+      call_id,
+      user_id: call.user_id,
+      status: "uploaded",
+      maestro_call_id: String(mId),
+      bytes: audio.bytes.byteLength,
+      media_id: data?.id ?? data?.media_id ?? null,
+      uploaded_at: new Date().toISOString(),
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "call_id" });
 
     await setPipelineStep(admin, call_id, "recording" as any, "done", { bytes: audio.bytes.byteLength });
     await pipelineLog(admin, {

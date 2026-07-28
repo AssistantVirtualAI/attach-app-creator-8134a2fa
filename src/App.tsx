@@ -42,6 +42,8 @@ const MAvaChat = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaChat")
 const MAvaNotifications = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaNotifications"));
 const MExtensionSync = lazyWithRetry(() => import("./pages/planipret/mobile/MExtensionSync"));
 const MSipDebug = lazyWithRetry(() => import("./pages/planipret/mobile/MSipDebug"));
+const MConnections = lazyWithRetry(() => import("./pages/planipret/mobile/MConnections"));
+const MMaestroSync = lazyWithRetry(() => import("./pages/planipret/mobile/MMaestroSync"));
 const MDeepLinkDebug = lazyWithRetry(() => import("./pages/planipret/mobile/MDeepLinkDebug"));
 const PlanipretAudit = lazyWithRetry(() => import("./pages/planipret/PlanipretAudit"));
 const Ms365Callback = lazyWithRetry(() => import("./pages/planipret/Ms365Callback"));
@@ -550,6 +552,8 @@ const App = () => (
                   <Route path="notifications" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaNotifications /></Suspense>} />
                   <Route path="extension-sync" element={<Suspense fallback={<MobilePageSkeleton />}><MExtensionSync /></Suspense>} />
                   <Route path="sip-debug" element={<Suspense fallback={<MobilePageSkeleton />}><MSipDebug /></Suspense>} />
+                  <Route path="connections" element={<Suspense fallback={<MobilePageSkeleton />}><MConnections /></Suspense>} />
+                  <Route path="maestro-sync" element={<Suspense fallback={<MobilePageSkeleton />}><MMaestroSync /></Suspense>} />
                 </Route>
                 <Route path="/planipret/dashboard" element={<Navigate to="/planipret/admin/overview" replace />} />
                 <Route path="/planipret/integrations" element={<Navigate to="/planipret/admin/integrations" replace />} />

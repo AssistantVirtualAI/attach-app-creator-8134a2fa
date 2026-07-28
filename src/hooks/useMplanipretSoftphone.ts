@@ -112,7 +112,7 @@ type RestCallAttachment = {
   startedAt?: number;
 };
 
-export function useMplanipretSoftphone() {
+export function useMplanipretSoftphone(enabled = true) {
   const { user } = useAuth();
   const [snap, setSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
   const [loading, setLoading] = useState(false);
@@ -137,7 +137,7 @@ export function useMplanipretSoftphone() {
 
   // Load broker id (planipret_profiles.id) once.
   useEffect(() => {
-    if (!user) { setBrokerId(null); return; }
+    if (!enabled || !user) { setBrokerId(null); return; }
     let cancelled = false;
     (async () => {
       try {
@@ -150,14 +150,14 @@ export function useMplanipretSoftphone() {
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [enabled, user?.id]);
 
   // Resolve NS-API SIP credentials and register the softphone per user.
   // Re-runs whenever the ExtensionSync page dispatches `pp:sip-ready`, so a
   // freshly-created `{ext}_mobile` device actually REGISTERs and shows up in
   // NetSapiens with IP/User-Agent instead of empty columns.
   useEffect(() => {
-    if (!user) return;
+    if (!enabled || !user) { setLoading(false); return; }
     let cancelled = false;
     const doInit = async (opts?: { force?: boolean }) => {
       setLoading(true);
@@ -215,12 +215,12 @@ export function useMplanipretSoftphone() {
       window.removeEventListener("pp:sip-ready", onReady as any);
       window.removeEventListener("pp:sip-force-reregister", onForce as any);
     };
-  }, [user?.id]);
+  }, [enabled, user?.id]);
 
   // Native guard: Android keeps a foreground keep-alive service with WakeLock / WifiLock;
   // iOS receives native background refresh requests and re-registers as soon as execution resumes.
   useEffect(() => {
-    if (!user) return;
+    if (!enabled || !user) return;
     let cleanupStatus: (() => void) | undefined;
     let cleanupReregister: (() => void) | undefined;
     let cancelled = false;
@@ -243,7 +243,7 @@ export function useMplanipretSoftphone() {
       cleanupStatus?.();
       cleanupReregister?.();
     };
-  }, [user?.id]);
+  }, [enabled, user?.id]);
 
   // Watchdog: keep the SIP registration alive. If we drift into
   // `disconnected` / `error` for more than 10s, force a re-REGISTER. If still
@@ -251,7 +251,7 @@ export function useMplanipretSoftphone() {
   // trigger an immediate re-register on visibility/online/focus resume so the
   // user never sees "Offline" while a call is ringing.
   useEffect(() => {
-    if (!user) return;
+    if (!enabled || !user) return;
     let disconnectedSince = 0;
     let softTimer: ReturnType<typeof setTimeout> | null = null;
     let hardTimer: ReturnType<typeof setTimeout> | null = null;
@@ -339,7 +339,7 @@ export function useMplanipretSoftphone() {
       try { appStateHandle?.remove?.(); } catch {}
     };
 
-  }, [user?.id]);
+  }, [enabled, user?.id]);
 
 
   // Live call quality only while a call is active.

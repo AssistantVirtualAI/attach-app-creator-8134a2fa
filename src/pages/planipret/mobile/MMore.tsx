@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   User, Lock, Phone, Info, Mail, Bell, Moon, HelpCircle, MessageCircle,
-  LogOut, ChevronRight, Bot, Sparkles, X, Download, Shield, BellOff, Settings as SettingsIcon, BarChart3, Voicemail, Edit3, Languages,
+  LogOut, Trash2, ChevronRight, Bot, Sparkles, X, Download, Shield, BellOff, Settings as SettingsIcon, BarChart3, Voicemail, Edit3, Languages,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
@@ -155,6 +155,9 @@ export default function MMore() {
     setNotifEnabled(on);
     localStorage.setItem("planipret_notif", on ? "1" : "0");
   };
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const logout = async () => {
     if (!confirm(t("more.logoutConfirm"))) return;

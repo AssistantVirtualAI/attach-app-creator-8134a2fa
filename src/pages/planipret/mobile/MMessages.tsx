@@ -579,8 +579,8 @@ function ThreadRow({ id, peer, unread, preview, time, onOpen, emptyLabel }: {
 }
 
 
-function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
-  threadId: string; number: string; myExt: string; userId: string;
+function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, userId, onBack, onCall }: {
+  threadId: string; number: string; initialText?: string; autoSend?: boolean; myExt: string; userId: string;
   onBack: () => void; onCall: (n: string) => void;
 }) {
   const { t, lang } = useMplanipretLang();

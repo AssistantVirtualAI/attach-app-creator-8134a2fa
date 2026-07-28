@@ -28,6 +28,7 @@ export default function MStats() {
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
   const [coachOpen, setCoachOpen] = useState(false);
   const [coachLoading, setCoachLoading] = useState(false);
   const [coachReply, setCoachReply] = useState("");
@@ -66,7 +67,7 @@ export default function MStats() {
       }
     })();
     return () => { cancelled = true; };
-  }, [profile?.user_id, profile?.id, period]);
+  }, [profile?.user_id, profile?.id, period, refreshTick]);
 
   const kpi = useMemo(() => {
     const total = calls.length;
@@ -121,7 +122,7 @@ export default function MStats() {
           <h1 className="text-xl font-bold" style={{ color: "var(--pp-text-primary)" }}>{t("stats.title")}</h1>
           <p className="text-xs text-slate-400">{profile?.full_name ?? ""} · {profile?.extension ? `Ext. ${profile.extension}` : new Date().toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { month: "long", year: "numeric" })}</p>
         </div>
-        <button onClick={() => setPeriod((p) => p)} className="ml-auto p-2 rounded-full" style={{ background: "var(--pp-bg-elevated)", color: PRIMARY }} aria-label="Refresh">
+        <button onClick={() => setRefreshTick((n) => n + 1)} className="ml-auto p-2 rounded-full" style={{ background: "var(--pp-bg-elevated)", color: PRIMARY }} aria-label="Refresh">
           <RefreshCw className="w-4 h-4" />
         </button>
       </header>

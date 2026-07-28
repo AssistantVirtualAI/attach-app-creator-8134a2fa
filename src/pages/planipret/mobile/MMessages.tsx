@@ -250,15 +250,15 @@ const looksLikePhone = (value: string) => /^[+]?[-() .\d]{3,}$/.test(value.trim(
 
 function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   const { t } = useMplanipretLang();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const myExt = profile?.extension ?? "";
   const [threads, setThreads] = useState<NsThread[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeThread, setActiveThread] = useState<{ id: string; number: string } | null>(null);
+  const [activeThread, setActiveThread] = useState<{ id: string; number: string; body?: string; autoSend?: boolean } | null>(null);
   const [newOpen, setNewOpen] = useState(false);
 
-  const openSmsThread = (thread: { id: string; number: string }, focusComposer = true) => {
+  const openSmsThread = (thread: { id: string; number: string; body?: string; autoSend?: boolean }, focusComposer = true) => {
     flushSync(() => {
       setNewOpen(false);
       setActiveThread(thread);
@@ -297,8 +297,17 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
   useEffect(() => { registerRefresh(load); return () => registerRefresh(null); /* eslint-disable-next-line */ }, [profile?.user_id]);
   useEffect(() => {
     const to = searchParams.get("to")?.trim();
-    if (to) openSmsThread({ id: "", number: to }, false);
-  }, [searchParams]);
+    const body = searchParams.get("body")?.trim() ?? "";
+    const autoSend = searchParams.get("autosend") === "1";
+    if (!to) return;
+    openSmsThread({ id: "", number: to, body, autoSend }, false);
+    const clean = new URLSearchParams(searchParams);
+    clean.delete("to");
+    clean.delete("name");
+    clean.delete("body");
+    clean.delete("autosend");
+    setSearchParams(clean, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   if (activeThread) {
     return (
@@ -306,6 +315,8 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
         <ThreadView
           threadId={activeThread.id}
           number={activeThread.number}
+          initialText={activeThread.body}
+          autoSend={activeThread.autoSend}
           myExt={myExt}
           userId={profile.user_id}
           onBack={() => { setActiveThread(null); load(); }}
@@ -568,8 +579,8 @@ function ThreadRow({ id, peer, unread, preview, time, onOpen, emptyLabel }: {
 }
 
 
-function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
-  threadId: string; number: string; myExt: string; userId: string;
+function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, userId, onBack, onCall }: {
+  threadId: string; number: string; initialText?: string; autoSend?: boolean; myExt: string; userId: string;
   onBack: () => void; onCall: (n: string) => void;
 }) {
   const { t, lang } = useMplanipretLang();
@@ -583,6 +594,7 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
   const [currentThreadId, setCurrentThreadId] = useState<string>(thId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const autoSentRef = useRef(false);
 
   const loadMessages = async () => {
     if (!currentThreadId) { setLoading(false); return; }
@@ -613,8 +625,8 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
     return () => { window.cancelAnimationFrame(raf); window.clearTimeout(id); };
   }, [number]);
 
-  const send = async () => {
-    const body = text.trim();
+  const send = async (overrideText?: string) => {
+    const body = (overrideText ?? text).trim();
     if (!body) return;
     setSending(true);
     const optimistic: NsMessage = {
@@ -661,6 +673,16 @@ function ThreadView({ threadId: thId, number, myExt, userId, onBack, onCall }: {
       setSending(false);
     }
   };
+
+  useEffect(() => {
+    if (!initialText) return;
+    setText(initialText);
+    if (!autoSend || autoSentRef.current) return;
+    autoSentRef.current = true;
+    const id = window.setTimeout(() => { void send(initialText); }, 450);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialText, autoSend]);
 
 
   return (

@@ -1,27 +1,37 @@
-Plan proposé :
+Plan de correction ciblé pour Planiprêt Mobile :
 
-1. **Restaurer l’accès DB qui fonctionnait avant**
-   - Réappliquer proprement les droits `authenticated` sur `planipret_profiles` pour les colonnes sécuritaires seulement.
-   - Garder les credentials/tokens/SIP secrets bloqués côté client.
-   - Vérification confirmée : actuellement `authenticated` n’a plus de droit direct sur `planipret_profiles`, donc le fallback direct ne peut pas fonctionner.
+1. Header mobile
+   - Remettre le logo Planiprêt visible dans le header.
+   - Afficher les deux logos AVA + Planiprêt côte à côte.
+   - Garder Settings + Bell + Avatar.
+   - Réajouter les boutons Langue FR/EN et Thème directement dans le header, sans créer de doublon.
+   - Appliquer la même correction dans l’app mobile standalone et dans la version principale.
 
-2. **Remettre le boot profil comme avant le crash**
-   - Dans l’app native Planiprêt, remettre un chargement simple et stable : session → profil direct sécurisé → backend seulement en fallback.
-   - Retirer la dépendance obligatoire à `CapacitorHttp` / `pp-mobile-profile` au démarrage, parce que les logs backend montrent que `pp-mobile-profile` n’est même pas atteint.
-   - Garder `pp-mobile-profile` disponible comme secours, mais il ne doit plus bloquer l’ouverture de l’app.
+2. Connexion Microsoft depuis Settings
+   - Corriger `Ms365Callback` pour arrêter la boucle `history.replaceState` visible dans ton screenshot.
+   - Ajouter une protection anti double-exchange du code OAuth.
+   - Remplacer les redirections répétées par une seule navigation contrôlée vers `/mplanipret/home` ou `/mplanipret/more`.
+   - Garder le fallback si le deep link Microsoft ne revient pas proprement.
 
-3. **Corriger la source native du problème session/profile**
-   - Ajouter un helper de session robuste pour iOS/Android, mais sans boucle agressive ni refresh qui bloque le rendu.
-   - Si session absente : montrer login.
-   - Si session présente : charger le profil directement avec colonnes safe.
+3. Recordings qui se re-upload à chaque clic
+   - Ne plus traiter le chargement audio comme un nouvel upload à chaque ouverture.
+   - Lire et afficher l’état réel déjà sauvegardé : audio, transcript, IA, CRM.
+   - Utiliser `pipeline_state`, `maestro_synced`, `recording_url`, transcript et résumé IA pour mémoriser le statut.
+   - Afficher un statut clair par appel : En attente, Uploadé, Transcrit, Analysé, Synchronisé CRM, Erreur.
 
-4. **Empêcher le softphone de partir avant le profil**
-   - Le log montre `ns-resolve-sip-credentials` pendant que le profil échoue.
-   - Je vais m’assurer que l’initialisation SIP attend un user/profil valide au lieu de compétitionner avec le boot.
+4. Sync CRM automatique
+   - Déclencher automatiquement la synchronisation Maestro quand un enregistrement/transcription/résumé IA est prêt.
+   - Garder le bouton Sync CRM seulement comme retry manuel si une erreur arrive.
+   - Mettre à jour l’UI en temps réel après `maestro-sync-call`.
 
-5. **Validation**
-   - Vérifier les grants/policies après migration.
-   - Vérifier que `loadProfile` ne peut plus tomber sur l’écran “Unable to load profile” si le user a un profil.
-   - Vérifier que les secrets ne sont toujours pas exposés au frontend.
+5. AVA chatbot actions réelles
+   - Corriger l’action SMS pour qu’AVA ne dise plus “envoyé” si rien n’a été envoyé.
+   - Sur confirmation, AVA ouvrira la page Texto avec numéro + message et déclenchera l’envoi réel.
+   - Pour les appels, AVA ouvrira le dialer, préremplira le numéro, puis déclenchera l’appel si `autoDial` est demandé.
+   - Garder l’accès AVA aux outils téléphone, SMS, Microsoft et Maestro.
 
-Résultat attendu : l’application revient au comportement stable d’avant, charge le profil directement, et utilise le backend seulement comme filet de sécurité.
+6. Validation
+   - Vérifier par code les deux projets (`apps/planipret-mobile` et `src`) pour éviter de revenir à un ancien build.
+   - Vérifier que le dialpad reste seulement sur Home + Calls.
+   - Vérifier que Microsoft callback ne peut plus déclencher le crash `replaceState()`.
+   - Vérifier que recordings + CRM sync affichent un statut persistant.

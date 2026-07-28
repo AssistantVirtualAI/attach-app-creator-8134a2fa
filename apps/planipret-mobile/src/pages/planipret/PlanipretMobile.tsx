@@ -1124,16 +1124,10 @@ export default function PlanipretMobile() {
         >
 
 
-          {/* Left group: Planiprêt logo (big, flush left) + status dot */}
-          <div className="flex items-center gap-2">
-            <span aria-label="Planiprêt" style={{
-              width: 56, height: 56, borderRadius: 14, overflow: "hidden",
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              background: "#fff", border: "1px solid var(--pp-bg-border-2)",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.12)", flexShrink: 0,
-            }}>
-              <img src={planipretLogoAsset.url} alt="Planiprêt" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-            </span>
+          {/* Left group: AVA + Planiprêt logos */}
+          <div className="flex items-center gap-2 min-w-0">
+            <AvaBadge />
+            <PlanipretBadge />
             <div className="flex flex-col" style={{ lineHeight: 1.1 }}>
               <span className="pp-live-dot" style={{ marginBottom: 2 }} />
               <span style={{ fontSize: 9, color: "var(--pp-success)", fontWeight: 700, letterSpacing: "0.05em" }}>REST</span>

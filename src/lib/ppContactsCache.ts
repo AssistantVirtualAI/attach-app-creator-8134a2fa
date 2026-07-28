@@ -44,14 +44,28 @@ function keyFor(payload: any): any[] {
   return payload?.directory ?? payload?.contacts ?? [];
 }
 
+const isTransient = (msg: string) =>
+  /failed to send a request|failed to fetch|networkerror|aborted|load failed/i.test(msg);
+
 async function fetchNs(action: Exclude<Action, "maestro">, limit: number): Promise<any[]> {
-  const { data, error } = await supabase.functions.invoke("pp-ns-contacts", {
-    body: { action, limit },
-  });
-  const payload: any = data ?? {};
-  if (error || payload?.error) throw new Error(payload?.error || error?.message || action);
-  return keyFor(payload);
+  // The directory payload is large; a suspended WebView or a route change can
+  // abort the request mid-flight. Retry transient transport failures once
+  // before surfacing an error so screens don't log false negatives.
+  let lastErr: Error | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await supabase.functions.invoke("pp-ns-contacts", {
+      body: { action, limit },
+    });
+    const payload: any = data ?? {};
+    if (!error && !payload?.error) return keyFor(payload);
+    const msg = payload?.error || error?.message || action;
+    lastErr = new Error(msg);
+    if (!isTransient(String(msg))) break;
+    await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+  }
+  throw lastErr ?? new Error(action);
 }
+
 
 async function fetchMaestro(): Promise<any[]> {
   const { data, error } = await supabase.functions.invoke("maestro-actions", {

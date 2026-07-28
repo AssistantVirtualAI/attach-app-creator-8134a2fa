@@ -92,7 +92,7 @@ export default function MMore() {
 
   const { sipConnected, reregister } = useMplanipretSoftphone();
   const nsConnected = !!(profile?.ns_extension ?? profile?.extension) && sipConnected;
-  const ms365Connected = ms365Connected(profile);
+  const isMs365Connected = ms365Connected(profile);
 
   const [sipSnap, setSipSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
   useEffect(() => ppSipProvider.subscribe(setSipSnap), []);
@@ -317,11 +317,11 @@ export default function MMore() {
             ms365Detection.loading
               ? "Vérification de la configuration…"
               : ms365Detection.tenant_id || ms365Detection.client_id
-                ? `Tenant ${ms365Detection.tenant_id ? "✓" : "✗"} · Client ${ms365Detection.client_id ? "✓" : "✗"}${ms365Connected ? " · Authentifié" : " · Non authentifié"}`
+                ? `Tenant ${ms365Detection.tenant_id ? "✓" : "✗"} · Client ${ms365Detection.client_id ? "✓" : "✗"}${isMs365Connected ? " · Authentifié" : " · Non authentifié"}`
                 : "Configuration backend introuvable"
           }
-          onClick={ms365Connected ? disconnectMs365 : connectMs365}
-          right={<StatusPill ok={ms365Connected} label={ms365Connected ? t("more.connected") : "—"} />} chevron />
+          onClick={isMs365Connected ? disconnectMs365 : connectMs365}
+          right={<StatusPill ok={isMs365Connected} label={isMs365Connected ? t("more.connected") : "—"} />} chevron />
         <div style={{ padding: "0 12px 8px" }}>
           <div className="rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", padding: 10 }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: "var(--pp-text-muted)", letterSpacing: "0.06em", marginBottom: 6 }}>
@@ -330,11 +330,11 @@ export default function MMore() {
             <div style={{ fontSize: 11, color: "var(--pp-text-secondary)", fontFamily: "monospace", lineHeight: 1.5 }}>
               <div>Tenant: {ms365Detection.loading ? "…" : (ms365Detection.tenant_id ?? "—")}</div>
               <div>Client: {ms365Detection.loading ? "…" : (ms365Detection.client_id ?? "—")}</div>
-              <div>Auth  : {ms365Connected ? "✅ token courtier actif" : "⚠️ compte non lié"}</div>
+              <div>Auth  : {isMs365Connected ? "✅ token courtier actif" : "⚠️ compte non lié"}</div>
             </div>
           </div>
         </div>
-        {ms365Connected && (
+        {isMs365Connected && (
           <div style={{ padding: 8 }}>
             <Ms365ScopesCard profile={profile} onReconnect={connectMs365} />
           </div>

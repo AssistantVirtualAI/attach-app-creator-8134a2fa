@@ -1127,7 +1127,7 @@ function EmailsList({ profile }: { profile: any }) {
     };
     document.addEventListener("visibilitychange", onVis);
     return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
-  }, [ms365Connected(profile)]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile?.ms365_email, profile?.ms365_token_expiry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="relative flex flex-col" style={{ height: "calc(100dvh - 242px)", minHeight: 400 }}>

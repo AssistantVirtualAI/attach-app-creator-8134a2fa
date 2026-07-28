@@ -85,7 +85,7 @@ export default function MMessages() {
     };
     const ric: any = (globalThis as any).requestIdleCallback;
     if (typeof ric === "function") ric(run, { timeout: 2000 }); else setTimeout(run, 300);
-  }, [ms365Connected(profile)]);
+  }, [profile?.ms365_email, profile?.ms365_token_expiry]);
 
 
   return (
@@ -997,7 +997,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
       document.addEventListener("visibilitychange", onVis);
       // Note: cleanup not possible here due to async; intervals are short-lived anyway.
     }); /* eslint-disable-next-line */
-  }, [ms365Connected(profile)]);
+  }, [profile?.ms365_email, profile?.ms365_token_expiry]);
 
   // Auto-prefetch next page when the sentinel scrolls into view (200px margin).
   useEffect(() => {

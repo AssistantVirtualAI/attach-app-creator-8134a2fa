@@ -170,6 +170,26 @@ export default function RecordingsList({
   const autoCrmSyncDoneRef = useRef<Set<string>>(new Set());
   const audioBlobCacheRef = useRef<Map<string, string>>(new Map());
   const [audioStatus, setAudioStatus] = useState<Record<string, AudioStatus>>({});
+  const [uploadLedger, setUploadLedger] = useState<Record<string, string>>({});
+
+  // Statut d'upload persistant (déduplication par call_id) — source de vérité serveur.
+  const ledgerKey = useMemo(() => withRec.map((c) => c.id).join(","), [withRec]);
+  useEffect(() => {
+    const ids = ledgerKey ? ledgerKey.split(",") : [];
+    if (!ids.length) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("planipret_recording_uploads")
+        .select("call_id, status")
+        .in("call_id", ids.slice(0, 200));
+      if (cancelled || !data) return;
+      const next: Record<string, string> = {};
+      for (const r of data as any[]) next[r.call_id] = r.status;
+      setUploadLedger((prev) => ({ ...prev, ...next }));
+    })();
+    return () => { cancelled = true; };
+  }, [ledgerKey]);
 
   const setStatus = (id: string, s: AudioStatus) =>
     setAudioStatus((prev) => (prev[id] === s ? prev : { ...prev, [id]: s }));
@@ -384,6 +404,7 @@ export default function RecordingsList({
           call={c}
           onUpdated={onUpdated}
           audioStatus={audioStatus[c.id] ?? "idle"}
+          ledgerStatus={uploadLedger[c.id] ?? null}
           cachedAudioUrl={audioBlobCacheRef.current.get(c.id) ?? null}
           onRetryAudio={() => retryAudio(c)}
         />
@@ -396,11 +417,12 @@ export default function RecordingsList({
 
 // ===================== Card =====================
 function RecordingCard({
-  call, onUpdated, audioStatus, cachedAudioUrl, onRetryAudio,
+  call, onUpdated, audioStatus, ledgerStatus, cachedAudioUrl, onRetryAudio,
 }: {
   call: RecordingCall;
   onUpdated: (c: RecordingCall) => void;
   audioStatus: AudioStatus;
+  ledgerStatus?: string | null;
   cachedAudioUrl: string | null;
   onRetryAudio: () => void;
 }) {
@@ -461,7 +483,11 @@ function RecordingCard({
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <AudioStatusBadge status={audioStatus} onRetry={onRetryAudio} />
+          <SyncStatusBadge
+            stage={computeSyncStage(call, audioStatus, ledgerStatus)}
+            busy={audioStatus === "uploading" || ledgerStatus === "uploading"}
+            onRetry={onRetryAudio}
+          />
           {temp && (
             <span
               className="text-[10px] font-semibold px-2 py-1 rounded-full flex items-center gap-1"
@@ -552,6 +578,46 @@ function Pill({
       {icon}
       <span>{label}</span>
       {hasData && !active && <Check className="w-3 h-3" style={{ color: "var(--pp-success)" }} />}
+    </button>
+  );
+}
+
+
+type SyncStage = "pending" | "uploaded" | "synced" | "failed";
+
+function computeSyncStage(
+  call: RecordingCall,
+  audioStatus: AudioStatus,
+  ledger?: string | null,
+): SyncStage {
+  if (call.maestro_synced) return "synced";
+  if (ledger === "uploaded") return "uploaded";
+  if (ledger === "failed" || audioStatus === "error") return "failed";
+  if (audioStatus === "uploaded") return "uploaded";
+  return "pending";
+}
+
+function SyncStatusBadge({
+  stage, busy, onRetry,
+}: { stage: SyncStage; busy: boolean; onRetry: () => void }) {
+  const map: Record<SyncStage, { label: string; bg: string; color: string; Icon: any }> = {
+    pending: { label: "En attente", bg: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)", Icon: Loader2 },
+    uploaded: { label: "Uploadé", bg: "rgba(46,155,220,0.14)", color: "var(--pp-brand-accent)", Icon: CheckCircle2 },
+    synced: { label: "Transmis à Maestro", bg: "rgba(34,197,94,0.14)", color: "var(--pp-success)", Icon: CheckCircle2 },
+    failed: { label: "En échec", bg: "rgba(239,68,68,0.14)", color: "var(--pp-danger)", Icon: CloudOff },
+  };
+  const s = map[stage];
+  const Icon = busy ? Loader2 : s.Icon;
+  return (
+    <button
+      onClick={stage === "failed" ? onRetry : undefined}
+      disabled={stage !== "failed"}
+      title={stage === "failed" ? "Réessayer la synchronisation" : s.label}
+      className="text-[10px] font-semibold px-2 py-1 rounded-full flex items-center gap-1 max-w-[132px]"
+      style={{ background: s.bg, color: s.color }}
+    >
+      <Icon className={`w-3 h-3 ${busy || (stage === "pending" && !busy) ? "" : ""} ${busy ? "animate-spin" : ""}`} />
+      <span className="truncate">{busy ? "En cours…" : s.label}</span>
     </button>
   );
 }

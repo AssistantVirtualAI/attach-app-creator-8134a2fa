@@ -27,6 +27,39 @@ const BriefSchema = z.object({
 
 type Period = "day" | "week" | "month" | "shift";
 
+function buildFallbackBrief(stats: any, period: Period) {
+  const periodLabel = period === "day" ? "aujourd’hui" : period === "week" ? "cette semaine" : period === "month" ? "ce mois-ci" : "ce quart";
+  const priorities = [
+    stats.missed_recent?.[0]
+      ? `Rappeler ${stats.missed_recent[0].from_name || stats.missed_recent[0].from_number || "l’appel manqué"}`
+      : null,
+    stats.tasks_pending?.[0]
+      ? `Compléter: ${stats.tasks_pending[0].note || stats.tasks_pending[0].contact_name || "rappel client"}`
+      : null,
+    stats.hot_leads?.[0]
+      ? `Relancer ${stats.hot_leads[0].from_name || stats.hot_leads[0].from_number || "le lead chaud"}`
+      : null,
+    stats.meetings?.[0]
+      ? `Préparer le rendez-vous ${stats.meetings[0].title || stats.meetings[0].attendee_name || "à venir"}`
+      : null,
+  ].filter(Boolean).slice(0, 5) as string[];
+  const risks = [
+    stats.missed_count > 0 ? `${stats.missed_count} appel${stats.missed_count > 1 ? "s" : ""} manqué${stats.missed_count > 1 ? "s" : ""}` : null,
+    stats.sms_unread > 0 ? `${stats.sms_unread} texto${stats.sms_unread > 1 ? "s" : ""} non lu${stats.sms_unread > 1 ? "s" : ""}` : null,
+    stats.voicemails_unread > 0 ? `${stats.voicemails_unread} boîte${stats.voicemails_unread > 1 ? "s" : ""} vocale${stats.voicemails_unread > 1 ? "s" : ""} à traiter` : null,
+  ].filter(Boolean).slice(0, 3) as string[];
+  const suggestions = [
+    stats.missed_recent?.[0]?.from_number ? { label: "Rappeler l’appel manqué", kind: "call", number: stats.missed_recent[0].from_number } : null,
+    stats.hot_leads?.[0]?.from_number ? { label: "Texter le lead chaud", kind: "sms", number: stats.hot_leads[0].from_number } : null,
+  ].filter(Boolean).slice(0, 3);
+  return {
+    headline: `${periodLabel}: ${stats.calls_total} appels, ${stats.hot_leads.length} leads chauds, ${stats.tasks_pending.length} tâches et ${stats.meetings.length} rendez-vous.`,
+    priorities: priorities.length ? priorities : ["Aucune urgence détectée — garder le suivi client à jour."],
+    risks,
+    suggestions,
+  };
+}
+
 function periodRange(period: Period): { since: Date; until: Date; label: string } {
   const now = new Date();
   const until = new Date(now);
@@ -115,17 +148,7 @@ Deno.serve(async (req) => {
 
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
     if (!lovableKey) {
-      // Graceful fallback
-      const fallback = {
-        headline: `${stats.calls_total} appels · ${stats.hot_leads.length} leads chauds · ${stats.tasks_pending.length} tâches`,
-        priorities: [
-          stats.tasks_pending[0] ? `Rappeler ${stats.tasks_pending[0].contact_name || stats.tasks_pending[0].contact_number}` : null,
-          stats.hot_leads[0] ? `Recontacter ${stats.hot_leads[0].from_name || stats.hot_leads[0].from_number} (score ${stats.hot_leads[0].lead_score})` : null,
-          stats.meetings[0] ? `Préparer RDV: ${stats.meetings[0].title}` : null,
-        ].filter(Boolean) as string[],
-        risks: stats.missed_count > 0 ? [`${stats.missed_count} appels manqués à traiter`] : [],
-        suggestions: [],
-      };
+      const fallback = buildFallbackBrief(stats, period);
       return json({ ...fallback, stats, cached: false, degraded: true });
     }
 
@@ -150,12 +173,7 @@ Génère un brief court, professionnel, en français du Québec.
       result = BriefSchema.parse(out);
     } catch (e) {
       console.error("pp-ava-brief AI failed", e);
-      result = {
-        headline: `${stats.calls_total} appels · ${stats.hot_leads.length} leads chauds`,
-        priorities: [],
-        risks: [],
-        suggestions: [],
-      };
+      result = buildFallbackBrief(stats, period);
     }
 
 

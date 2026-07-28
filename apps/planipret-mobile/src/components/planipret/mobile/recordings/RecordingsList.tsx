@@ -163,6 +163,7 @@ export default function RecordingsList({
     [calls]
   );
   const autoPipelineDoneRef = useRef<Set<string>>(new Set());
+  const autoCrmSyncDoneRef = useRef<Set<string>>(new Set());
   const audioBlobCacheRef = useRef<Map<string, string>>(new Map());
   const [audioStatus, setAudioStatus] = useState<Record<string, AudioStatus>>({});
 
@@ -273,6 +274,23 @@ export default function RecordingsList({
             // Autorise un futur retry si erreur transitoire.
             autoPipelineDoneRef.current.delete(call.id);
             console.warn("[RecordingsList] background pipeline failed", who, e?.message);
+          }
+        }
+
+        // 4) CRM Maestro : sync automatique et idempotent (CDR + recording + transcript + AI).
+        if (!call.maestro_synced && !autoCrmSyncDoneRef.current.has(call.id)) {
+          autoCrmSyncDoneRef.current.add(call.id);
+          try {
+            const { data, error } = await supabase.functions.invoke("maestro-sync-call", {
+              body: { call_id: call.id, force: false },
+            });
+            if (error) throw error;
+            const ok = (data as any)?.success !== false;
+            if (ok && !cancelled) onUpdated({ ...call, maestro_synced: true });
+            if (!ok) autoCrmSyncDoneRef.current.delete(call.id);
+          } catch (e: any) {
+            autoCrmSyncDoneRef.current.delete(call.id);
+            console.warn("[RecordingsList] auto Maestro sync failed", who, e?.message);
           }
         }
 
@@ -1135,32 +1153,12 @@ function MaestroSyncSection({ call, onUpdated }: { call: RecordingCall; onUpdate
   const sync = async () => {
     setBusy("sync");
     try {
-      // Step 1: push CDR (call record)
-      const { error } = await supabase.functions.invoke("maestro-cdr", { body: { call_id: call.id } });
+      const { data, error } = await supabase.functions.invoke("maestro-sync-call", { body: { call_id: call.id, force: true } });
       if (error) throw error;
-
-      // Step 2: push AI summary + coaching notes if available
-      if (call.ai_summary || call.ai_coaching) {
-        const aiPayload: Record<string, unknown> = { call_id: call.id };
-        if (call.ai_summary) aiPayload.ai_summary = call.ai_summary;
-        if (call.ai_coaching) {
-          // Build coaching notes text from coaching object
-          const coachingText = typeof call.ai_coaching === "string"
-            ? call.ai_coaching
-            : [
-                call.ai_coaching?.strengths?.length ? `Strengths: ${call.ai_coaching.strengths.join(", ")}` : null,
-                call.ai_coaching?.improvements?.length ? `Improvements: ${call.ai_coaching.improvements.join(", ")}` : null,
-                call.ai_coaching?.overall ? `Overall: ${call.ai_coaching.overall}` : null,
-              ].filter(Boolean).join("\n");
-          if (coachingText) aiPayload.notes = coachingText;
-        }
-        // Fire and forget — don't block the UI if AI sync fails
-        supabase.functions.invoke("maestro-ai-analysis", { body: aiPayload }).catch(() => {});
-      }
-
+      if ((data as any)?.success === false) throw new Error((data as any)?.error || "Sync Maestro partielle");
       onUpdated({ ...call, maestro_synced: true });
       toast.success("Synchronisé avec Maestro", {
-        description: call.ai_summary ? "CDR + résumé AI envoyés" : "CDR envoyé",
+        description: "CDR + enregistrement + transcription + résumé AI envoyés",
       });
     } catch (e: any) {
       toast.error("Sync échouée", { description: e?.message });

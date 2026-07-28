@@ -138,9 +138,9 @@ const PlanipretBadge = () => (
   <div
     aria-label="Planiprêt"
     style={{
-      width: 28,
-      height: 28,
-      borderRadius: 8,
+      width: 44,
+      height: 44,
+      borderRadius: 10,
       overflow: "hidden",
       display: "inline-flex",
       alignItems: "center",
@@ -1127,7 +1127,6 @@ export default function PlanipretMobile() {
 
           {/* Left group: AVA + Planiprêt logos */}
           <div className="flex items-center gap-2 min-w-0">
-            <AvaBadge />
             <PlanipretBadge />
             <div className="flex flex-col" style={{ lineHeight: 1.1 }}>
               <span className="pp-live-dot" style={{ marginBottom: 2 }} />

@@ -734,6 +734,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
         if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);
       }
       // Rafraîchir depuis le serveur pour réconcilier le message optimiste
+      window.dispatchEvent(new CustomEvent("ava:sms-sent", { detail: { number, body } }));
       setTimeout(() => loadMessages(), 800);
     } catch (e: any) {
       toast.error(e?.message ?? t("messages.sendFailed"));

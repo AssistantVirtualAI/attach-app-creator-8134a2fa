@@ -73,6 +73,7 @@ const PAHoldMusic = lazyWithRetry(() => import("./pages/planipret/admin/PAHoldMu
 const PASipDiagnostic = lazyWithRetry(() => import("./pages/planipret/admin/PASipDiagnostic"));
 const PADiagnostics = lazyWithRetry(() => import("./pages/planipret/admin/PADiagnostics"));
 const PAMaestroSync = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroSync"));
+const PASyncedCalls = lazyWithRetry(() => import("./pages/planipret/admin/PASyncedCalls"));
 const PAMaestroStatus = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroStatus"));
 const PlanipretPrivacy = lazyWithRetry(() => import("./pages/planipret/PlanipretPrivacy"));
 const PlanipretIntegrationsLazy = lazyWithRetry(() => import("./pages/planipret/PlanipretIntegrations"));

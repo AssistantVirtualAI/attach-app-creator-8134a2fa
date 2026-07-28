@@ -118,7 +118,7 @@ export default function MConnections() {
                   </div>
                   <p className="text-xs mt-0.5 break-words" style={{ color: "#8FA8C0" }}>{s.detail}</p>
                   {s.expires_at && (
-                    <p className="text-[10px] mt-0.5" style={{ color: "#5E7territory" as any }}>
+                    <p className="text-[10px] mt-0.5" style={{ color: "#5E7A96" }}>
                       Expire: {new Date(s.expires_at).toLocaleString("fr-CA")}
                     </p>
                   )}

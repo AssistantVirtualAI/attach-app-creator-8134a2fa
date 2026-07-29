@@ -127,6 +127,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
 
     private func activateAudioSession() { try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]); try? AVAudioSession.sharedInstance().setActive(true) }
     private func connect() {
+      // A new socket means a new AoR binding: clear the 200 OK debounce.
+      lastRegisterOkTime = nil
       guard !host.isEmpty else { setStatus("error", "missing_host"); return }
       startPathMonitor()
       if isForeground() { return }

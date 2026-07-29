@@ -1191,6 +1191,43 @@ function stripSwiftImports(swift) {
   return swift.replace(/^import\s+[^\n]+\n/gm, "").trim();
 }
 
+// Remove plugin class bodies that older versions of this script inlined into
+// the launch view controller (they now live in App/Plugins/*.swift).
+function stripInlinePlugins(swift) {
+  let next = swift;
+  const marker = "// MARK: - Inline Planiprêt native plugins";
+  const idx = next.indexOf(marker);
+  if (idx > -1) {
+    next = `${next.slice(0, idx).trimEnd()}\n`;
+    console.log("[native-config] Removed inline duplicate plugin classes from iOS view controller.");
+  }
+  // Defensive: drop any leftover @objc(PpSipKeepAlive)/@objc(PpVoipCall) class
+  // declarations still present in the controller file.
+  for (const name of ["PpSipKeepAlive", "PpVoipCall"]) {
+    const re = new RegExp(`@objc\\(${name}\\)\\s*\\n(public\\s+)?class\\s+${name}\\b`);
+    const m = re.exec(next);
+    if (!m) continue;
+    const start = m.index;
+    const braceStart = next.indexOf("{", start);
+    if (braceStart === -1) continue;
+    let depth = 0;
+    let end = -1;
+    for (let i = braceStart; i < next.length; i += 1) {
+      const ch = next[i];
+      if (ch === "{") depth += 1;
+      else if (ch === "}") {
+        depth -= 1;
+        if (depth === 0) { end = i + 1; break; }
+      }
+    }
+    if (end === -1) continue;
+    next = `${next.slice(0, start).trimEnd()}\n${next.slice(end).trimStart()}`;
+    console.log(`[native-config] Removed duplicate inline ${name} class from iOS view controller.`);
+  }
+  return next.trimEnd() + "\n";
+}
+
+
 function hasProjectReference(iosRoot, fileName) {
   const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
   if (!fs.existsSync(pbx)) return false;
@@ -1568,13 +1605,19 @@ function patchIosNativeFiles() {
     let swift = fs.readFileSync(file, "utf8");
     const before = swift;
     swift = ensurePluginRegistrationOrThrow(swift, file);
-    if (!pluginFilesAreInProject && !swift.includes("@objc(PpSipKeepAlive)")) {
+    if (pluginFilesAreInProject) {
+      // Older runs inlined the plugin classes into the controller. Now that the
+      // standalone Plugins/*.swift files are in the Xcode target, keeping the
+      // inline copy causes "Invalid redeclaration of 'PpSipKeepAlive'".
+      swift = stripInlinePlugins(swift);
+    } else if (!swift.includes("@objc(PpSipKeepAlive)")) {
       swift = ensureSwiftImports(swift, ["Foundation", "Capacitor", "UIKit", "AVFoundation", "CryptoKit", "UserNotifications", "PushKit", "CallKit"]);
       swift = `${swift.trim()}\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n`;
       console.log("[native-config] iOS native plugins embedded into existing ViewController target.");
     }
     if (swift !== before) writeIfChanged(file, swift);
   }
+
   const bridge = path.join(iosApp, "AppBridgeViewController.swift");
   const storyboard = path.join(iosApp, "Base.lproj", "Main.storyboard");
   const storyboardText = fs.existsSync(storyboard) ? fs.readFileSync(storyboard, "utf8") : "";

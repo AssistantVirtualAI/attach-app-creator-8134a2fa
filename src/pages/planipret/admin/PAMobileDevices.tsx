@@ -408,6 +408,10 @@ export default function PAMobileDevices() {
       }
       if (Array.isArray(d?.raw_pbx_responses)) agg.raw.push(...d.raw_pbx_responses.slice(0, 10));
       if (Array.isArray(d?.dry_run_report)) agg.dry.push(...d.dry_run_report);
+      if (Array.isArray(d?.did_failures)) agg.did_failures.push(...d.did_failures.slice(0, 10));
+      for (const [k, v] of Object.entries(d?.did_failure_reasons ?? {})) {
+        agg.did_failure_reasons[k] = (agg.did_failure_reasons[k] ?? 0) + Number(v ?? 0);
+      }
       const next = d?.next_offset;
       if (next === null || next === undefined) break;
       offset = Number(next);

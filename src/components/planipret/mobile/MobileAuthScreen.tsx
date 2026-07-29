@@ -159,11 +159,17 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
               className="w-full rounded-xl px-4 py-3 outline-none"
               style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)", fontSize: 14, marginTop: 0 }} />
           </div>
-          <button type="submit" disabled={loading}
+          {formError && (
+            <div style={{ background: "rgba(220,38,38,0.12)", border: "1px solid rgba(220,38,38,0.4)", color: "#F87171", borderRadius: 12, padding: "10px 12px", fontSize: 12.5 }}>
+              {formError}
+            </div>
+          )}
+          <button type="submit" disabled={loading} onClick={(e) => { e.preventDefault(); void submit(); }}
             className="w-full rounded-xl py-3 font-bold text-white disabled:opacity-60"
             style={{ background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)", boxShadow: "0 6px 22px rgba(46,155,220,0.40)", fontSize: 14 }}>
             {loading ? t("auth.signingIn") : t("auth.signIn")}
           </button>
+
           <button type="button" onClick={forgot}
             className="w-full text-center py-1 text-[12px] font-semibold"
             style={{ color: "var(--pp-brand-accent)" }}>

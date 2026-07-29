@@ -206,9 +206,12 @@ Deno.serve(async (req) => {
       }, 200);
     }
 
+    const existingMaestroCallId = (call as any).maestro_call_id ?? null;
     const res = await maestroFetch(cfg, {
-      method: "POST",
-      path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls`,
+      method: force && existingMaestroCallId ? "PUT" : "POST",
+      path: force && existingMaestroCallId
+        ? `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls/${encodeURIComponent(String(existingMaestroCallId))}`
+        : `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls`,
       token: auth.token,
       machine: auth.machine,
       body,
@@ -228,7 +231,7 @@ Deno.serve(async (req) => {
     });
 
     if (res.ok || res.status === 409) {
-      const maestroCallId = res.data?.call?.id ?? res.data?.id ?? res.data?.call_id ?? null;
+      const maestroCallId = existingMaestroCallId ?? res.data?.call?.id ?? res.data?.id ?? res.data?.call_id ?? null;
       if (!maestroCallId) {
         const summary = summarizeMaestroFailure(res.status, res.data);
         await setPipelineStep(admin, call_id, "cdr", "error", { reason: "maestro_call_id_missing", response_status: res.status });

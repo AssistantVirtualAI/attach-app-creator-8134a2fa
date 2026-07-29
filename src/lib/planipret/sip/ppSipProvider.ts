@@ -40,6 +40,30 @@ export interface PpSipSnapshot {
 
 type Listener = (s: PpSipSnapshot) => void;
 
+/** Reconnect instrumentation: lets us prove the backoff never falls back to 1000ms. */
+export interface PpSipReconnectMetrics {
+  /** Current consecutive-failure counter used for the exponential backoff. */
+  attempt: number;
+  /** Delay actually scheduled for the next reconnect (ms). */
+  currentDelayMs: number;
+  /** Delay computed by the backoff formula before the floor is applied (ms). */
+  rawBackoffMs: number;
+  /** Where currentDelayMs came from: the backoff curve, the hard floor, or the max cap. */
+  delaySource: "none" | "backoff" | "floor" | "cap";
+  /** Hard floor applied on top of the configured backoff (ms). */
+  floorMs: number;
+  /** Smallest delay ever scheduled in this session — must stay >= floorMs. */
+  minDelayObservedMs: number | null;
+  /** Reason reported for the last disconnect / failed reconnect. */
+  lastFailureReason: string | null;
+  lastScheduledAt: number | null;
+  lastAttemptAt: number | null;
+  totalAttempts: number;
+  /** Count of attempts that would have been scheduled below the floor (source of a 1000ms). */
+  subThresholdHits: number;
+}
+
+
 let sipParserGuardInstalled = false;
 let ppSipInitInFlight = false;
 

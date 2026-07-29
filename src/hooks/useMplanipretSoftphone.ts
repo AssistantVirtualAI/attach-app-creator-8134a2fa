@@ -446,7 +446,11 @@ export function useMplanipretSoftphone(enabled = true) {
     const onResume = () => {
       try {
         const cfg = ppSipProvider.getConfig();
-        if (cfg) void ppSipProvider.init(cfg);
+        if (cfg) {
+          if (sipInitInProgress.current) return;
+          sipInitInProgress.current = true;
+          void ppSipProvider.init(cfg).finally(() => { sipInitInProgress.current = false; });
+        }
         else ppSipProvider.forceReregister();
       } catch { /* noop */ }
       evaluate();
@@ -474,7 +478,11 @@ export function useMplanipretSoftphone(enabled = true) {
               // (forceReregister is a no-op once the UA has been stopped).
               try {
                 const cfg = ppSipProvider.getConfig();
-                if (cfg) void ppSipProvider.init(cfg);
+                if (cfg) {
+                  if (sipInitInProgress.current) return;
+                  sipInitInProgress.current = true;
+                  void ppSipProvider.init(cfg).finally(() => { sipInitInProgress.current = false; });
+                }
                 else ppSipProvider.forceReregister();
               } catch { /* noop */ }
               evaluate();

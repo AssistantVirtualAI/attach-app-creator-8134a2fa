@@ -57,6 +57,15 @@ export default defineConfig({
     },
   },
   base: './',
+  // The mobile app has its own package.json, so postcss-load-config never
+  // reaches the repo root. Wire Tailwind/Autoprefixer explicitly, otherwise
+  // the built CSS ships without any utility class (blank/broken screens).
+  css: {
+    postcss: {
+      plugins: [tailwindcss({ config: path.resolve(__dirname, 'tailwind.config.ts') }), autoprefixer],
+    },
+  },
+
   server: {
     port: 5175,
     strictPort: true,

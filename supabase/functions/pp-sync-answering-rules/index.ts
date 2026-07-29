@@ -259,6 +259,45 @@ Deno.serve(async (req) => {
       enabled: "yes",
     });
 
+    // Read a DID back from NS and decide whether it really routes to the user.
+    const DID_DEST_FIELDS = [
+      "destination", "dest", "user", "to-user", "dest-user", "destination-user",
+      "dial-rule-destination", "dialrule-destination",
+      "dial-rule-translation-destination", "dialrule-translation-destination",
+    ];
+    const DID_APP_FIELDS = [
+      "dest-application", "destination-application",
+      "dial-rule-application", "dialrule-application", "application",
+    ];
+
+    const readDidRoute = async (pn: string, domain: string) => {
+      const endpoints = [
+        `/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`,
+        `/domains/${encodeURIComponent(domain)}/phone-numbers/${encodeURIComponent(pn)}`,
+        `/domains/${encodeURIComponent(domain)}/numbers/${encodeURIComponent(pn)}`,
+      ];
+      for (const endpoint of endpoints) {
+        const res = await nsFetch(endpoint, { method: "GET" }, { functionName: "pp-sync-answering-rules" });
+        const data: any = await readBody(res);
+        if (!res.ok) continue;
+        const row = Array.isArray(data) ? data[0] : (data?.data?.[0] ?? data?.items?.[0] ?? data);
+        if (row && typeof row === "object") return { endpoint, status: res.status, row };
+      }
+      return { endpoint: null as string | null, status: 0, row: null as any };
+    };
+
+    const didRoutesToUser = (row: any, ext: string, domain: string) => {
+      if (!row) return false;
+      const app = DID_APP_FIELDS.map((f) => String(row?.[f] ?? "").toLowerCase()).find(Boolean) ?? "";
+      const dest = DID_DEST_FIELDS.map((f) => String(row?.[f] ?? "")).filter(Boolean).join(" ").toLowerCase();
+      const badApp = /vmail|voicemail|speakaccount|speakeraccount|auto-?attendant|conference|queue/.test(`${app} ${dest}`);
+      if (badApp) return false;
+      const appOk = !app || ["to-user", "user", "sip", "to_user"].includes(app);
+      const extRe = new RegExp(`(^|[^0-9])${ext}([^0-9]|$)`);
+      const destOk = extRe.test(dest) || dest.includes(`${ext.toLowerCase()}@${domain.toLowerCase()}`);
+      return appOk && destOk;
+    };
+
     const repairDidRoutes = async (ext: string, domain: string) => {
       if (!repair_dids) return { skipped: true, reason: "disabled" };
       const { data: rows, error } = await admin
@@ -268,30 +307,76 @@ Deno.serve(async (req) => {
         .eq("extension", ext);
       if (error) return { success: false, error: error.message, attempted: 0, repaired: 0 };
       const numbers = [...new Set((rows ?? []).map((r: any) => normalizeDigits(r.phone_number_digits ?? r.phone_number_e164)).filter(Boolean))];
-      if (!numbers.length) return { success: true, attempted: 0, repaired: 0, source: "no_local_did_assignment" };
+      if (!numbers.length) return { success: true, attempted: 0, repaired: 0, verified: 0, source: "no_local_did_assignment" };
 
       const payload = buildDidPayload(ext, domain);
       let repaired = 0;
+      let verified = 0;
       const failures: any[] = [];
+      const details: any[] = [];
+
       for (const pn of numbers) {
+        // 1) Read current state — skip the write when NS already routes correctly.
+        const before = await readDidRoute(pn, domain);
+        if (before.row && didRoutesToUser(before.row, ext, domain)) {
+          verified += 1;
+          repaired += 1;
+          details.push({ phone_number: pn, state: "already_correct", endpoint: before.endpoint });
+          continue;
+        }
+        if (!before.row) {
+          failures.push({ phone_number: pn, reason: "not_found_on_pbx", status: before.status });
+          details.push({ phone_number: pn, state: "not_found_on_pbx" });
+          continue;
+        }
+
+        // 2) Write.
         const endpoints = [
+          before.endpoint,
           `/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`,
           `/domains/${encodeURIComponent(domain)}/phone-numbers/${encodeURIComponent(pn)}`,
           `/domains/${encodeURIComponent(domain)}/numbers/${encodeURIComponent(pn)}`,
-        ];
+        ].filter(Boolean) as string[];
         let lastStatus = 0;
         let ok = false;
-        for (const endpoint of endpoints) {
+        for (const endpoint of [...new Set(endpoints)]) {
           const res = await nsFetch(endpoint, { method: "PUT", body: JSON.stringify(payload) }, { functionName: "pp-sync-answering-rules" });
           lastStatus = res.status;
           await res.text().catch(() => {});
           if (res.ok) { ok = true; break; }
         }
-        if (ok) repaired += 1;
-        else failures.push({ phone_number: pn, status: lastStatus });
+        if (!ok) {
+          failures.push({ phone_number: pn, reason: "write_rejected", status: lastStatus });
+          details.push({ phone_number: pn, state: "write_rejected", status: lastStatus });
+          continue;
+        }
+        repaired += 1;
+
+        // 3) Read-after-write — a 200 from NS does NOT mean the route changed.
+        const after = await readDidRoute(pn, domain);
+        if (after.row && didRoutesToUser(after.row, ext, domain)) {
+          verified += 1;
+          details.push({ phone_number: pn, state: "repaired_and_verified" });
+        } else {
+          const app = DID_APP_FIELDS.map((f) => after.row?.[f]).find(Boolean) ?? null;
+          const dest = DID_DEST_FIELDS.map((f) => after.row?.[f]).find(Boolean) ?? null;
+          failures.push({ phone_number: pn, reason: "write_not_honored", stored_application: app, stored_destination: dest });
+          details.push({ phone_number: pn, state: "write_not_honored", stored_application: app, stored_destination: dest });
+          console.error("[didRepair] NS ignored DID route write", JSON.stringify({ extension: ext, domain, phone_number: pn, stored_application: app, stored_destination: dest }));
+        }
       }
-      return { success: failures.length === 0, attempted: numbers.length, repaired, failures: failures.slice(0, 10), payload };
+
+      return {
+        success: failures.length === 0,
+        attempted: numbers.length,
+        repaired,
+        verified,
+        failures: failures.slice(0, 10),
+        details: details.slice(0, 20),
+        payload,
+      };
     };
+
 
 
 

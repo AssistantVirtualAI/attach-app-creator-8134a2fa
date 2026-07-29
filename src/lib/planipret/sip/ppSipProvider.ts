@@ -288,6 +288,9 @@ class PpSipProvider {
 
   private deferTransportRecovery(reason: string, delayMs?: number) {
     if (this.wsWatchdogTimer || this.wsRetryTimer) return;
+    // JsSIP's own connection_recovery owns this window; our watchdog only
+    // arms a verification timer behind the same exclusive lease.
+    if (!this.acquireRecovery("jssip", `defer:${reason}`)) return;
     const rc = getPpSipReconnectConfig();
     const delay = Math.max(PP_SIP_RECONNECT_FLOOR_MS, delayMs ?? rc.socketVerifyDelayMs);
     this.reconnectMetrics.lastFailureReason = reason;
@@ -299,15 +302,21 @@ class PpSipProvider {
       ? delay
       : Math.min(this.reconnectMetrics.minDelayObservedMs, delay);
     this.reconnectMetrics.lastScheduledAt = Date.now();
+    this.pushHistory("defer", reason, delay);
     this.emitMetrics();
     this.log("warn", `sip transport recovery deferred ${delay}ms (reason=${reason})`);
     this.wsWatchdogTimer = setTimeout(() => {
       this.wsWatchdogTimer = null;
       if (this.ua && this.snap.status !== "registered" && this.snap.status !== "connected") {
+        // Hand the lease over from JsSIP to our watchdog.
+        this.recoveryOwner = "none";
         this.scheduleSocketReconnect(reason);
+      } else {
+        this.releaseRecovery("jssip_recovered");
       }
     }, delay);
   }
+
 
   async init(cfg: PpSipConfig) {
     if (ppSipInitInFlight) return;

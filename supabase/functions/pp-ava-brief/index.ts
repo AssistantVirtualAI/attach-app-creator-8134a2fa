@@ -295,7 +295,7 @@ Deno.serve(async (req) => {
         { global: { headers: { Authorization: authHeader } } },
       );
       const { data: u } = await sb.auth.getUser(token);
-      if (!u?.user) return json({ error: "unauthorized" }, 401);
+      if (!u?.user) return json(degradedBrief(requestedLang ?? "fr", "unauthorized"), 401);
       effectiveUserId = u.user.id;
     }
     if (!effectiveUserId) return json(degradedBrief(requestedLang ?? "fr", "no_user"));

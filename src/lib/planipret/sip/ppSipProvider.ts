@@ -266,10 +266,19 @@ class PpSipProvider {
         this.lastWsDisconnectedAt = Date.now();
         this.stopKeepAlive();
         this.update({ status: "disconnected", errorCause: e?.reason || "ws_disconnected" });
-        // JsSIP retries the socket via connection_recovery_*, but on mobile the
-        // OS often kills the socket while the recovery timer is suspended, so we
-        // drive our own exponential-backoff reconnect + re-REGISTER loop.
-        this.scheduleSocketReconnect(String(e?.reason || "ws_disconnected"));
+        // JsSIP already owns the first retry via connection_recovery_* (>= 3s).
+        // Scheduling our own reconnect here opened a SECOND WebSocket for the
+        // same AoR: NetSapiens then closed the older socket with code 1001,
+        // which restarted the whole cycle forever. We only act as a watchdog if
+        // JsSIP has not recovered after socketVerifyDelayMs.
+        const rc = getPpSipReconnectConfig();
+        if (this.wsWatchdogTimer) clearTimeout(this.wsWatchdogTimer);
+        this.wsWatchdogTimer = setTimeout(() => {
+          this.wsWatchdogTimer = null;
+          if (this.ua && this.snap.status !== "registered" && this.snap.status !== "connected") {
+            this.scheduleSocketReconnect(String(e?.reason || "ws_disconnected"));
+          }
+        }, Math.max(PP_SIP_RECONNECT_FLOOR_MS, rc.socketVerifyDelayMs));
       });
       ua.on("registered", () => {
         this.regFailures = 0;

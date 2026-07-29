@@ -546,18 +546,18 @@ export default function PlanipretMobile() {
       if (res.missing.includes("maestro")) {
         const rec = await recoverConnection("maestro");
         if (!cancelled && !rec.ok && rec.needsReauth) {
-          toast.error("Maestro déconnecté", {
-            description: "Reconnectez votre compte pour reprendre la synchronisation.",
-            action: { label: "Connexions", onClick: () => navigate("/mplanipret/connections") },
+          toast.error(t("screens.shell.maestroDisconnected"), {
+            description: t("screens.shell.reconnectAccount"),
+            action: { label: t("screens.shell.connectionsLabel"), onClick: () => navigate("/mplanipret/connections") },
           });
           return;
         }
         if (rec.ok) return;
       }
       if (!cancelled) {
-        toast.warning(`AVA: ${res.missing.length} liaison(s) manquante(s)`, {
-          description: "Ouvrir le diagnostic des connexions.",
-          action: { label: "Voir", onClick: () => navigate("/mplanipret/connections") },
+        toast.warning(`AVA: ${res.missing.length} ${t("screens.shell.avaMissingLinks")}`, {
+          description: t("screens.shell.openDiagnostics"),
+          action: { label: t("common.view"), onClick: () => navigate("/mplanipret/connections") },
         });
       }
     })();

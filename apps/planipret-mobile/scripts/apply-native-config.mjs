@@ -1468,6 +1468,7 @@ function patchIosNativeFiles() {
 
 patchCopiedWebBundles();
 patchIosInfoPlist();
+patchIosEntitlements();
 patchAndroidManifest();
 patchAndroidNativeFiles();
 patchIosNativeFiles();

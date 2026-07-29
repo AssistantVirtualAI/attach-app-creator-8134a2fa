@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { getPpSipReconnectConfig } from "./ppSipReconnectConfig";
+import { addDedupedCapListener } from "./capListeners";
 import type { PpSipConfig } from "./ppSipProvider";
 
 export type PpNativeSipStatus = {

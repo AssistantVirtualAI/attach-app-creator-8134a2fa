@@ -763,8 +763,11 @@ class PpSipProvider {
       this.log("info", "network online → sip reconnect");
       this.wsFailures = 0;
       if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
+      if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
+      this.releaseRecovery("network_online");
       this.scheduleSocketReconnect("network_online");
     });
+
     window.addEventListener("offline", () => this.log("warn", "network offline"));
   }
 

@@ -109,15 +109,23 @@ export default function Ms365Callback() {
 
       closeNativeBrowserSoon();
       clearMs365Pending();
-      const code = params.get("code");
-      const err = params.get("error_description") ?? params.get("error");
+      // Recover code/state from the persisted deep-link URL when the app was
+      // cold-started by the custom scheme and the router lost the query.
+      const recovered = await recoverMs365CallbackParams(params);
+      const code = recovered.code;
+      const err = recovered.error;
       if (err) { await failWithGuard(err); return; }
       // If user re-opens the app and lands on the callback route without a fresh code,
       // silently redirect to home instead of showing an error.
       if (!code) { navigate("/mplanipret/home", { replace: true }); return; }
+      if (code !== currentCode && exchangedCodes.has(code)) {
+        navigate("/mplanipret/home", { replace: true });
+        return;
+      }
+      exchangedCodes.add(code);
       // Must match the redirect URI registered in Azure App Registration.
       const redirect_uri = await getRememberedMs365RedirectUriAsync();
-      const state = params.get("state");
+      const state = recovered.state;
       const code_verifier = await getRememberedMs365CodeVerifierAsync(state);
       if (!code_verifier) {
         // Verifier already consumed or app resumed on stale callback URL.

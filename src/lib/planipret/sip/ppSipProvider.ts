@@ -220,7 +220,7 @@ class PpSipProvider {
     }
     const cleanCfg = { ...cfg, wssUrl };
     const sig = `${cleanCfg.extension}|${cleanCfg.sipDomain}|${cleanCfg.wssUrl}|${cleanCfg.password}`;
-    if (this.ua && sig === this.lastSig && (this.snap.status === "registered" || this.snap.status === "connected")) {
+    if (this.ua && sig === this.lastSig && this.snap.status === "registered") {
       return;
     }
     // Never tear down a UA that is still in its initial connect/REGISTER
@@ -232,6 +232,13 @@ class PpSipProvider {
       const tooSoon = Date.now() - this.lastStartAt < 15_000;
       if (busyConnecting || tooSoon) {
         this.log("warn", `duplicate init ignored while SIP is ${this.snap.status || "starting"}`);
+        return;
+      }
+      if (this.snap.status === "connected") {
+        if (Date.now() - this.lastRegisterAttemptAt >= PP_SIP_RECONNECT_FLOOR_MS) {
+          this.lastRegisterAttemptAt = Date.now();
+          try { this.ua.register(); } catch {}
+        }
         return;
       }
     }

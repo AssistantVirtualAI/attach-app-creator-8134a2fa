@@ -125,8 +125,9 @@ export async function maestroFetch(cfg: MaestroConfig, opts: CallOpts) {
   if (opts.brokerId) headers["X-Broker-Id"] = String(opts.brokerId);
   if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
 
-  const useMachine = opts.token === cfg.key || !opts.brokerId;
-  const suffix = useMachine ? `${opts.path.includes("?") ? "&" : "?"}machine=1` : "";
+  // Scott's Telecom REST API authenticates the machine API key only when
+  // `?machine=1` is present — always append it.
+  const suffix = `${opts.path.includes("?") ? "&" : "?"}machine=1`;
   const endpoint = `${cfg.url}${opts.path}${suffix}`;
   const res = await fetch(endpoint, {
     method: opts.method ?? "GET",

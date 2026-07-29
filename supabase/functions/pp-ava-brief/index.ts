@@ -511,6 +511,7 @@ You must cover TWO sources: telephony (calls, texts, voicemails, leads) AND Micr
 
   } catch (e) {
     console.error("pp-ava-brief error", e);
-    return json({ error: String(e) }, 500);
+    // Never surface a non-2xx to the mobile app: return a degraded but valid brief.
+    return json(degradedBrief("fr", String(e).slice(0, 300)));
   }
 });

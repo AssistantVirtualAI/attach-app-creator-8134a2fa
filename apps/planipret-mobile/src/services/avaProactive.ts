@@ -30,6 +30,7 @@ export async function callAva(args: AvaArgs): Promise<AvaResponse> {
       history: args.history ?? [],
       context: args.context ?? {},
       level: args.level ?? "standard",
+      language: (typeof localStorage !== "undefined" && (localStorage.getItem("mplanipret-lang") || localStorage.getItem("ava-language")) === "en") ? "en" : "fr",
     },
   });
   if (error) {
@@ -96,7 +97,7 @@ export async function applyAvaSuggestion(s: AvaSuggestion, ctx: AvaActionContext
         const unsafe = ["send_email", "create_calendar_event", "send_teams_message", "reply_teams_message"].includes(action);
         if (unsafe && !confirm(`Confirmer: ${s.label}`)) return { ok: false, message: "Action annulée" };
         const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
-          body: { mode: "chat", confirm_action: s, approved: true },
+          body: { mode: "chat", confirm_action: s, approved: true, language: (typeof localStorage !== "undefined" && (localStorage.getItem("mplanipret-lang") || localStorage.getItem("ava-language")) === "en") ? "en" : "fr" },
         });
         if (error) return { ok: false, message: error.message };
         return { ok: !!(data as any)?.reply, message: (data as any)?.reply ?? "Action Microsoft exécutée" };

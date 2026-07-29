@@ -47,7 +47,7 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
-        body: { messages: next, user_id: userId, context: avaContext },
+        body: { messages: next, user_id: userId, context: avaContext, language: lang },
       });
       if (error) throw error;
       const reply = (data as any)?.reply ?? (data as any)?.message ?? "Désolée, je n'ai pas de réponse pour le moment.";

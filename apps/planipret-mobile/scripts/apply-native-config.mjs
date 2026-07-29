@@ -346,17 +346,15 @@ public class PpSipKeepAliveService extends Service {
     if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
     else startForeground(NOTIFICATION_ID, n);
     emitStatus("connecting", "native_register_start");
-    requestReregister(this, "service_start");
     executor.execute(this::connectAndRegister);
     if (heartbeat != null) heartbeat.cancel(false);
     heartbeat = executor.scheduleAtFixedRate(() -> {
       try { sendRegister(null); } catch (Exception e) { scheduleReconnect("register_retry"); }
-      requestReregister(this, "keepalive");
     }, heartbeatSec, heartbeatSec, TimeUnit.SECONDS);
     return START_STICKY;
   }
 
-  @Override public void onTaskRemoved(Intent rootIntent) { emitStatus("registered", "task_removed_keepalive"); requestReregister(this, "task_removed"); super.onTaskRemoved(rootIntent); }
+  @Override public void onTaskRemoved(Intent rootIntent) { emitStatus("registered", "task_removed_keepalive"); super.onTaskRemoved(rootIntent); }
   @Override public void onDestroy() { if (heartbeat != null) heartbeat.cancel(true); unregisterNetworkWatchdog(); closeWs(); try { if (wakeLock != null && wakeLock.isHeld()) wakeLock.release(); } catch (Exception ignored) {} try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch (Exception ignored) {} executor.shutdownNow(); emitStatus("disconnected", "service_destroyed"); super.onDestroy(); }
   @Override public IBinder onBind(Intent intent) { return null; }
 

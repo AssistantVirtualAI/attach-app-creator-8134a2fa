@@ -56,19 +56,6 @@ function watchFirstPaint(container: HTMLElement) {
 }
 
 
-function NativeBootErrorFallback({ message, onRetry }: { message?: string; onRetry: () => void }) {
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0A1425', color: '#E2E8F0', fontFamily: 'system-ui,-apple-system,BlinkMacSystemFont,sans-serif', padding: 24, textAlign: 'center' }}>
-      <div style={{ maxWidth: 340 }}>
-        <div style={{ width: 58, height: 58, borderRadius: 18, background: '#fff', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1A4A8A', fontWeight: 800, fontSize: 20 }}>PP</div>
-        <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 8 }}>Planiprêt Mobile</div>
-        <div style={{ fontSize: 13, lineHeight: 1.45, opacity: 0.82, marginBottom: 18, wordBreak: 'break-word' }}>{message || "Le démarrage a été interrompu. Relancez l’application."}</div>
-        <button onClick={onRetry} style={{ border: 0, borderRadius: 12, background: '#2E9BDC', color: 'white', fontWeight: 800, padding: '12px 18px' }}>Relancer</button>
-      </div>
-    </div>
-  );
-}
-
 class NativeRootRecoveryBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null; retryKey: number }> {
   state: { error: Error | null; retryKey: number } = { error: null, retryKey: 0 };
 
@@ -98,8 +85,7 @@ class NativeRootRecoveryBoundary extends React.Component<{ children: React.React
 
   render() {
     if (this.state.error) {
-      const message = this.state.error.message || 'Erreur de démarrage inconnue.';
-      return <NativeBootErrorFallback message={message} onRetry={this.retry} />;
+      return null;
     }
     return <React.Fragment key={this.state.retryKey}>{this.props.children}</React.Fragment>;
   }

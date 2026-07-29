@@ -197,7 +197,7 @@ export default function MStats() {
         {bestDay && (
           <div className="bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm">
             <Award className="w-6 h-6 text-amber-500" />
-            <div className="text-sm">🏆 {t("stats.bestDay")}: <strong>{bestDay.count} {t("stats.calls")}</strong> {lang === "fr" ? "le" : "on"} {bestDay.label}</div>
+            <div className="text-sm">🏆 {t("stats.bestDay")}: <strong>{bestDay.count} {t("stats.calls")}</strong> {t("screens.stats.onDatePrefix")} {bestDay.label}</div>
           </div>
         )}
         <div className="bg-white rounded-xl p-3 flex items-center gap-3 shadow-sm">

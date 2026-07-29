@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, CheckCircle2, XCircle, Loader2, RotateCcw, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 type LogRow = {
   id: string;
@@ -19,15 +20,6 @@ type LogRow = {
   success: boolean | null;
   created_at: string;
 };
-
-const FILTERS = [
-  { id: "all", label: "Tout" },
-  { id: "call", label: "Appels" },
-  { id: "recording", label: "Enregistrements" },
-  { id: "summary", label: "Résumés / Coaching" },
-  { id: "sms", label: "SMS" },
-  { id: "failed", label: "Échecs" },
-] as const;
 
 function matchesFilter(row: LogRow, filter: string) {
   const a = (row.action ?? "").toLowerCase();
@@ -48,11 +40,21 @@ function retryErrorMessage(data: any, fallback: string) {
 
 export default function MMaestroSync() {
   const nav = useNavigate();
+  const { t, lang } = useMplanipretLang();
   const [rows, setRows] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
   const [retrying, setRetrying] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+
+  const FILTERS = [
+    { id: "all", label: t("screens.maestroSync.filterAll") },
+    { id: "call", label: t("screens.maestroSync.filterCall") },
+    { id: "recording", label: t("screens.maestroSync.filterRecording") },
+    { id: "summary", label: t("screens.maestroSync.filterSummary") },
+    { id: "sms", label: t("screens.maestroSync.filterSms") },
+    { id: "failed", label: t("screens.maestroSync.filterFailed") },
+  ] as const;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,10 +63,10 @@ export default function MMaestroSync() {
       .select("id, action, maestro_endpoint, response_status, response_body, request_body, duration_ms, success, created_at")
       .order("created_at", { ascending: false })
       .limit(100);
-    if (error) toast.error("Historique indisponible", { description: error.message });
+    if (error) toast.error(t("screens.maestroSync.historyUnavailableToast"), { description: error.message });
     setRows((data ?? []) as LogRow[]);
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -78,12 +80,12 @@ export default function MMaestroSync() {
       });
       if (error) throw error;
       if ((data as any)?.success === false || (data as any)?.error) {
-        throw new Error(retryErrorMessage(data, "Relance refusée"));
+        throw new Error(retryErrorMessage(data, t("screens.maestroSync.retryDeniedFallback")));
       }
-      toast.success(`Relancé via ${(data as any)?.invoked ?? "Maestro"}`);
+      toast.success(`${t("screens.maestroSync.retriedViaToast")} ${(data as any)?.invoked ?? "Maestro"}`);
       await load();
     } catch (e: any) {
-      toast.error("Relance impossible", { description: e?.message ?? String(e) });
+      toast.error(t("screens.maestroSync.retryFailedToast"), { description: e?.message ?? String(e) });
     } finally {
       setRetrying(null);
     }
@@ -95,11 +97,11 @@ export default function MMaestroSync() {
     <div className="min-h-screen p-4" style={{ background: "var(--pp-bg-base, #060D1A)", color: "var(--pp-text-primary, #E8EDF5)" }}>
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-4">
-          <button onClick={() => nav(-1)} className="p-2 rounded-lg" style={{ background: "#0A1628", border: "1px solid #0E2A45" }} aria-label="Retour">
+          <button onClick={() => nav(-1)} className="p-2 rounded-lg" style={{ background: "#0A1628", border: "1px solid #0E2A45" }} aria-label={t("screens.maestroSync.back")}>
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <h1 className="text-lg font-bold flex-1">Historique Maestro Sync</h1>
-          <button onClick={load} className="p-2 rounded-lg" style={{ background: "#0A1628", border: "1px solid #0E2A45" }} aria-label="Rafraîchir">
+          <h1 className="text-lg font-bold flex-1">{t("screens.maestroSync.title")}</h1>
+          <button onClick={load} className="p-2 rounded-lg" style={{ background: "#0A1628", border: "1px solid #0E2A45" }} aria-label={t("screens.maestroSync.refresh")}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
@@ -119,8 +121,8 @@ export default function MMaestroSync() {
           ))}
         </div>
 
-        {loading && <p className="text-xs" style={{ color: "#8FA8C0" }}>Chargement…</p>}
-        {!loading && visible.length === 0 && <p className="text-xs" style={{ color: "#8FA8C0" }}>Aucun job de synchronisation.</p>}
+        {loading && <p className="text-xs" style={{ color: "#8FA8C0" }}>{t("screens.maestroSync.loading")}</p>}
+        {!loading && visible.length === 0 && <p className="text-xs" style={{ color: "#8FA8C0" }}>{t("screens.maestroSync.noJobs")}</p>}
 
         <ul className="space-y-2">
           {visible.map((r) => {
@@ -132,10 +134,10 @@ export default function MMaestroSync() {
                   {ok ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#2EDC78" }} />
                       : <XCircle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#E84C4C" }} />}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{r.action ?? "sync"}</p>
+                    <p className="text-sm font-semibold truncate">{r.action ?? t("screens.maestroSync.sync")}</p>
                     <p className="text-[11px] font-mono truncate" style={{ color: "#8FA8C0" }}>{r.maestro_endpoint ?? "—"}</p>
                     <p className="text-[10px] mt-0.5" style={{ color: "#5E7A96" }}>
-                      {new Date(r.created_at).toLocaleString("fr-CA")}
+                      {new Date(r.created_at).toLocaleString(lang === "fr" ? "fr-CA" : "en-CA")}
                       {r.response_status != null ? ` · HTTP ${r.response_status}` : ""}
                       {r.duration_ms != null ? ` · ${r.duration_ms} ms` : ""}
                     </p>
@@ -149,10 +151,10 @@ export default function MMaestroSync() {
                         style={{ background: "rgba(245,166,35,0.14)", border: "1px solid #4A3000", color: "#F5A623" }}
                       >
                         {retrying === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
-                        Relancer
+                        {t("screens.maestroSync.retry")}
                       </button>
                     )}
-                    <button onClick={() => setOpen(expanded ? null : r.id)} className="p-1" aria-label="Détails">
+                    <button onClick={() => setOpen(expanded ? null : r.id)} className="p-1" aria-label={t("screens.maestroSync.details")}>
                       <ChevronDown className="w-4 h-4" style={{ color: "#8FA8C0", transform: expanded ? "rotate(180deg)" : undefined }} />
                     </button>
                   </div>

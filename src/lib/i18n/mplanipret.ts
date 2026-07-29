@@ -1,11 +1,14 @@
 // Self-contained bilingual dictionary for the Planiprêt mobile app (/mplanipret).
 // Does not touch the global LanguageProvider so it can be toggled independently.
+import { SCREENS_FR, SCREENS_EN } from "./mp-screens";
 
 export type MpLang = "fr" | "en";
 
 export const MP_DICT = {
   fr: {
+    screens: SCREENS_FR,
     common: {
+
       loading: "Chargement…",
       retry: "Réessayer",
       close: "Fermer",
@@ -1042,6 +1045,8 @@ export const MP_DICT = {
     },
   },
   en: {
+    screens: SCREENS_EN,
+
     common: {
       loading: "Loading…",
       retry: "Retry",

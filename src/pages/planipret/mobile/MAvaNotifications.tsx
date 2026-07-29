@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, Bell, Mail, PhoneCall, Sparkles, Calendar, Voicemail, RefreshCw, CheckCheck, Trash2, Check, Circle } from "lucide-react";
 import { toast } from "sonner";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 type Notif = {
   id: string;
@@ -26,19 +27,20 @@ const iconFor = (cat?: string | null) => {
   return Bell;
 };
 
-const fmtWhen = (iso: string) => {
+const fmtWhen = (iso: string, t: (k: string) => string, lang: string) => {
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "à l'instant";
-  if (min < 60) return `il y a ${min} min`;
+  if (min < 1) return t("avaNotifications.justNow");
+  if (min < 60) return t("avaNotifications.minutesAgo").replace("{n}", String(min));
   const h = Math.floor(min / 60);
-  if (h < 24) return `il y a ${h} h`;
-  return d.toLocaleDateString("fr-CA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  if (h < 24) return t("avaNotifications.hoursAgo").replace("{n}", String(h));
+  return d.toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 };
 
 export default function MAvaNotifications() {
   const navigate = useNavigate();
+  const { t, lang } = useMplanipretLang();
   const [items, setItems] = useState<Notif[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "unread">("all");
@@ -106,11 +108,11 @@ export default function MAvaNotifications() {
     setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? now })));
     const sb: any = supabase;
     await sb.from("planipret_ava_notifications").update({ read_at: now }).eq("user_id", u.user.id).is("read_at", null);
-    toast.success("Tout marqué comme lu");
+    toast.success(t("avaNotifications.toastAllRead"));
   };
 
   const clearAll = async () => {
-    if (!confirm("Effacer toutes les notifications ?")) return;
+    if (!confirm(t("avaNotifications.confirmClearAll"))) return;
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
     const sb: any = supabase;
@@ -136,38 +138,38 @@ export default function MAvaNotifications() {
       <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
         <button onClick={() => navigate(-1)} className="p-1"><ArrowLeft className="w-5 h-5" style={{ color: "var(--pp-text-primary)" }} /></button>
         <div className="flex-1">
-          <div className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>Notifications AVA</div>
-          <div className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{unread > 0 ? `${unread} non lue${unread > 1 ? "s" : ""}` : "Tout est à jour"}</div>
+          <div className="text-sm font-semibold" style={{ color: "var(--pp-text-primary)" }}>{t("avaNotifications.title")}</div>
+          <div className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{unread > 0 ? (unread > 1 ? t("avaNotifications.unreadCountMany").replace("{n}", String(unread)) : t("avaNotifications.unreadCountOne")) : t("avaNotifications.allCaughtUp")}</div>
         </div>
-        <button onClick={load} className="p-2 rounded-full" style={{ background: "var(--pp-bg-elevated)" }} title="Recharger">
+        <button onClick={load} className="p-2 rounded-full" style={{ background: "var(--pp-bg-elevated)" }} title={t("avaNotifications.reload")}>
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} style={{ color: "var(--pp-text-muted)" }} />
         </button>
       </div>
 
       <div className="px-4 py-2 flex items-center gap-2" style={{ borderBottom: "1px solid var(--pp-bg-border)" }}>
-        <button onClick={() => setFilter("all")} className="text-xs px-3 py-1 rounded-full" style={{ background: filter === "all" ? "var(--pp-brand-accent)" : "var(--pp-bg-elevated)", color: filter === "all" ? "white" : "var(--pp-text-muted)" }}>Toutes</button>
-        <button onClick={() => setFilter("unread")} className="text-xs px-3 py-1 rounded-full" style={{ background: filter === "unread" ? "var(--pp-brand-accent)" : "var(--pp-bg-elevated)", color: filter === "unread" ? "white" : "var(--pp-text-muted)" }}>Non lues</button>
+        <button onClick={() => setFilter("all")} className="text-xs px-3 py-1 rounded-full" style={{ background: filter === "all" ? "var(--pp-brand-accent)" : "var(--pp-bg-elevated)", color: filter === "all" ? "white" : "var(--pp-text-muted)" }}>{t("avaNotifications.filterAll")}</button>
+        <button onClick={() => setFilter("unread")} className="text-xs px-3 py-1 rounded-full" style={{ background: filter === "unread" ? "var(--pp-brand-accent)" : "var(--pp-bg-elevated)", color: filter === "unread" ? "white" : "var(--pp-text-muted)" }}>{t("avaNotifications.filterUnread")}</button>
         <div className="flex-1" />
         {unread > 0 && (
           <button onClick={markAllRead} className="text-xs px-2 py-1 rounded-full flex items-center gap-1" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
-            <CheckCheck className="w-3 h-3" /> Tout lire
+            <CheckCheck className="w-3 h-3" /> {t("avaNotifications.markAllRead")}
           </button>
         )}
         {items.length > 0 && (
           <button onClick={clearAll} className="text-xs px-2 py-1 rounded-full flex items-center gap-1" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-muted)" }}>
-            <Trash2 className="w-3 h-3" /> Vider
+            <Trash2 className="w-3 h-3" /> {t("avaNotifications.clearAll")}
           </button>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {loading && visible.length === 0 ? (
-          <div className="text-center text-xs py-10" style={{ color: "var(--pp-text-muted)" }}>Chargement…</div>
+          <div className="text-center text-xs py-10" style={{ color: "var(--pp-text-muted)" }}>{t("avaNotifications.loading")}</div>
         ) : visible.length === 0 ? (
           <div className="text-center py-16 px-6">
             <Bell className="w-10 h-10 mx-auto mb-2 opacity-30" style={{ color: "var(--pp-text-muted)" }} />
-            <div className="text-sm font-medium" style={{ color: "var(--pp-text-primary)" }}>Aucune notification</div>
-            <div className="text-xs mt-1" style={{ color: "var(--pp-text-muted)" }}>AVA vous alertera dès qu'un lead, courriel ou événement important arrivera.</div>
+            <div className="text-sm font-medium" style={{ color: "var(--pp-text-primary)" }}>{t("avaNotifications.emptyTitle")}</div>
+            <div className="text-xs mt-1" style={{ color: "var(--pp-text-muted)" }}>{t("avaNotifications.emptySub")}</div>
           </div>
         ) : (
           <div className="divide-y" style={{ borderColor: "var(--pp-bg-border)" }}>
@@ -192,15 +194,15 @@ export default function MAvaNotifications() {
                       </div>
                       {n.body && <div className="text-xs mt-0.5 line-clamp-2" style={{ color: "var(--pp-text-muted)" }}>{n.body}</div>}
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--pp-text-muted)" }}>{n.category || "info"}</span>
-                        <span className="text-[10px]" style={{ color: "var(--pp-text-muted)" }}>· {fmtWhen(n.created_at)}</span>
+                        <span className="text-[10px] uppercase tracking-wide" style={{ color: "var(--pp-text-muted)" }}>{n.category || t("avaNotifications.categoryDefault")}</span>
+                        <span className="text-[10px]" style={{ color: "var(--pp-text-muted)" }}>· {fmtWhen(n.created_at, t, lang)}</span>
                       </div>
                     </div>
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleRead(n); }}
-                    title={unreadItem ? "Marquer comme lu" : "Marquer comme non lu"}
-                    aria-label={unreadItem ? "Marquer comme lu" : "Marquer comme non lu"}
+                    title={unreadItem ? t("avaNotifications.markRead") : t("avaNotifications.markUnread")}
+                    aria-label={unreadItem ? t("avaNotifications.markRead") : t("avaNotifications.markUnread")}
                     className="p-2 rounded-full flex-shrink-0"
                     style={{ background: "var(--pp-bg-deep)" }}
                   >

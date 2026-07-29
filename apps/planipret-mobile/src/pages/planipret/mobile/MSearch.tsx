@@ -129,7 +129,7 @@ export default function MSearch() {
     } catch (e: any) {
       if (id !== reqIdRef.current) return;
       console.error("[pp-search]", e);
-      setError(e?.message || "Erreur inconnue");
+      setError(e?.message || t("screens.search.unknownError"));
       setData(null);
     } finally {
       if (id === reqIdRef.current) setLoading(false);
@@ -157,7 +157,7 @@ export default function MSearch() {
       } as Result);
     } catch (e: any) {
       console.error("[pp-search] loadMore", key, e);
-      setError(e?.message || "Erreur de chargement");
+      setError(e?.message || t("screens.search.loadError"));
     } finally {
       setLoadingMore(null);
     }
@@ -244,14 +244,14 @@ export default function MSearch() {
 
       {error && !loading && (
         <div className="rounded-2xl p-4 text-sm flex flex-col items-start gap-2" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)", color: "#dc2626" }}>
-          <div className="flex items-center gap-2 font-semibold"><AlertCircle className="w-4 h-4" /> Recherche impossible</div>
+          <div className="flex items-center gap-2 font-semibold"><AlertCircle className="w-4 h-4" /> {t("screens.search.searchImpossible")}</div>
           <div className="text-xs opacity-80 break-all">{error}</div>
-          <div className="text-[11px] opacity-70">Requête : « {q} » · Filtre : {scope}</div>
+          <div className="text-[11px] opacity-70">{t("screens.search.queryFilter").replace("{q}", q).replace("{scope}", scope)}</div>
           <button onClick={() => void run()} disabled={loading}
             className="mt-1 flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-semibold disabled:opacity-60"
             style={{ background: "rgba(239,68,68,0.15)", color: "#dc2626" }}>
             {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-            {loading ? "Réessai…" : "Réessayer"}
+            {loading ? t("screens.search.retrying") : t("screens.search.retry")}
           </button>
         </div>
       )}

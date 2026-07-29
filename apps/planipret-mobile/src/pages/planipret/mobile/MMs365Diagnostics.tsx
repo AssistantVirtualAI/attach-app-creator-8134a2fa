@@ -8,18 +8,34 @@ import { useMs365Status } from "@/components/planipret/Ms365StatusBadge";
 import { ArrowLeft, RefreshCw, LogIn, Copy, Loader2, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { buildMs365AuthorizeUrl, getMs365RedirectUri } from "@/lib/ms365OAuth";
-
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 export default function MMs365Diagnostics() {
   const nav = useNavigate();
+  const { t } = useMplanipretLang();
   const { data, loading, refresh } = useMs365Status(30_000);
   const [teamsCheck, setTeamsCheck] = useState<{ loading: boolean; ok: boolean | null; message: string; sample?: any[] }>({ loading: false, ok: null, message: "" });
+  const [importState, setImportState] = useState<{ loading: boolean; ok: boolean | null; message: string }>({ loading: false, ok: null, message: "" });
+
+  async function runImport(mode: "initial" | "delta" | "manual") {
+    setImportState({ loading: true, ok: null, message: "" });
+    try {
+      const { data: res, error } = await supabase.functions.invoke("ms365-full-import", { body: { mode } });
+      if (error) throw error;
+      const summary = (res as any)?.summary ?? res;
+      setImportState({ loading: false, ok: true, message: `${t("screens.ms365Diag.importDoneLabel")} ${mode} ${t("screens.ms365Diag.importDoneSuffix")} (${JSON.stringify(summary)})` });
+      toast.success(t("screens.ms365Diag.syncStartedToast"));
+    } catch (e: any) {
+      setImportState({ loading: false, ok: false, message: e?.message ?? String(e) });
+      toast.error(t("screens.ms365Diag.syncFailedToast"));
+    }
+  }
 
   const callbackUrl = getMs365RedirectUri();
 
   async function startLogin() {
     if (!data?.detection.tenant_id || !data?.detection.client_id) {
-      toast.error("Configuration Microsoft manquante");
+      toast.error(t("screens.ms365Diag.missingConfigToast"));
       return;
     }
     window.location.href = await buildMs365AuthorizeUrl({
@@ -37,10 +53,10 @@ export default function MMs365Diagnostics() {
       const teams = (res as any)?.teams ?? [];
       const chats = (res as any)?.chats ?? [];
       if ((res as any)?.connected === false) {
-        setTeamsCheck({ loading: false, ok: false, message: "Microsoft 365 non connecté — se connecter d'abord" });
+        setTeamsCheck({ loading: false, ok: false, message: t("screens.ms365Diag.notConnectedFirst") });
         return;
       }
-      setTeamsCheck({ loading: false, ok: true, message: `${teams.length} équipe(s), ${chats.length} chat(s) lisibles`, sample: teams.slice(0, 3) });
+      setTeamsCheck({ loading: false, ok: true, message: `${teams.length} ${t("screens.ms365Diag.teamsResultLabel")}, ${chats.length} ${t("screens.ms365Diag.chatsResultLabel")}`, sample: teams.slice(0, 3) });
     } catch (e: any) {
       setTeamsCheck({ loading: false, ok: false, message: e?.message ?? String(e) });
     }
@@ -57,10 +73,9 @@ export default function MMs365Diagnostics() {
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1">
-            <h1 className="text-lg font-bold">Diagnostics Microsoft 365</h1>
-            <p className="text-xs" style={{ color: "#8FA8C0" }}>Triage rapide des erreurs de connexion</p>
+            <h1 className="text-lg font-bold">{t("screens.ms365Diag.title")}</h1>
+            <p className="text-xs" style={{ color: "#8FA8C0" }}>{t("screens.ms365Diag.subtitle")}</p>
           </div>
-          
           <button onClick={refresh} className="p-2 rounded-lg" style={{ background: "#0A1628", border: "1px solid #0E2A45" }}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
@@ -71,57 +86,57 @@ export default function MMs365Diagnostics() {
             <StatusIcon className="w-8 h-8" style={{ color: statusColor }} />
             <div className="flex-1">
               <div className="text-base font-bold" style={{ color: statusColor }}>
-                {loading ? "Analyse…" : data?.status === "ok" ? "Connexion Microsoft OK" : data?.status === "limited" ? "Connexion limitée" : "Panne de connexion"}
+                {loading ? t("screens.ms365Diag.analyzing") : data?.status === "ok" ? t("screens.ms365Diag.connectionOk") : data?.status === "limited" ? t("screens.ms365Diag.connectionLimited") : t("screens.ms365Diag.connectionDown")}
               </div>
               <div className="text-xs" style={{ color: "#8FA8C0" }}>
-                {data?.user.connected ? `Compte: ${data.user.email ?? "?"}` : "Aucun compte utilisateur connecté"}
-                {data?.user.expired && " · Token expiré"}
+                {data?.user.connected ? `${t("screens.ms365Diag.account")}: ${data.user.email ?? "?"}` : t("screens.ms365Diag.noAccountConnected")}
+                {data?.user.expired && ` · ${t("screens.ms365Diag.tokenExpired")}`}
               </div>
             </div>
             <button onClick={startLogin} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: "#0078D4", color: "white" }}>
               <LogIn className="w-3.5 h-3.5" />
-              {data?.user.connected ? "Reconnecter" : "Se connecter"}
+              {data?.user.connected ? t("screens.ms365Diag.reconnect") : t("screens.ms365Diag.login")}
             </button>
           </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-3 mb-3">
-          <Card title="Configuration admin détectée">
-            <Row ok={!!data?.detection.tenant_id} label="Tenant ID" value={data?.detection.tenant_id ?? "Non détecté"} mono />
-            <Row ok={!!data?.detection.client_id} label="Client ID" value={data?.detection.client_id ?? "Non détecté"} mono />
-            <Row ok={true} label="Mode OAuth" value={data?.detection.auth_mode ?? "auto"} />
-            <Row ok={!!data?.detection.has_secret || data?.detection.auth_mode !== "confidential"} label="Client Secret" value={data?.detection.has_secret ? "Enregistré" : "Non requis si client public"} />
+          <Card title={t("screens.ms365Diag.adminConfigTitle")}>
+            <Row ok={!!data?.detection.tenant_id} label={t("screens.ms365Diag.tenantId")} value={data?.detection.tenant_id ?? t("screens.ms365Diag.notDetected")} mono />
+            <Row ok={!!data?.detection.client_id} label={t("screens.ms365Diag.clientId")} value={data?.detection.client_id ?? t("screens.ms365Diag.notDetected")} mono />
+            <Row ok={true} label={t("screens.ms365Diag.oauthMode")} value={data?.detection.auth_mode ?? "auto"} />
+            <Row ok={!!data?.detection.has_secret || data?.detection.auth_mode !== "confidential"} label={t("screens.ms365Diag.clientSecret")} value={data?.detection.has_secret ? t("screens.ms365Diag.secretRegistered") : t("screens.ms365Diag.secretNotRequired")} />
           </Card>
-          <Card title="Session utilisateur">
-            <Row ok={!!data?.user.connected} label="Compte connecté" value={data?.user.email ?? "—"} />
-            <Row ok={!!data?.user.has_refresh} label="Refresh token" value={data?.user.has_refresh ? "Présent" : "Absent"} />
-            <Row ok={!!data?.user.connected && !data?.user.expired} label="Access token"
-              value={data?.user.expires_in_sec == null ? "—" : data.user.expires_in_sec > 0 ? `Valide (${Math.floor(data.user.expires_in_sec / 60)} min restantes)` : `Expiré depuis ${Math.abs(Math.floor(data.user.expires_in_sec / 60))} min`} />
-            <Row ok={!!data?.user.scopes.length} label="Scopes accordés" value={`${data?.user.scopes.length ?? 0} scopes`} />
+          <Card title={t("screens.ms365Diag.userSessionTitle")}>
+            <Row ok={!!data?.user.connected} label={t("screens.ms365Diag.accountConnected")} value={data?.user.email ?? "—"} />
+            <Row ok={!!data?.user.has_refresh} label={t("screens.ms365Diag.refreshToken")} value={data?.user.has_refresh ? t("screens.ms365Diag.present") : t("screens.ms365Diag.absent")} />
+            <Row ok={!!data?.user.connected && !data?.user.expired} label={t("screens.ms365Diag.accessToken")}
+              value={data?.user.expires_in_sec == null ? "—" : data.user.expires_in_sec > 0 ? `${t("screens.ms365Diag.validRemaining")} (${Math.floor(data.user.expires_in_sec / 60)} ${t("screens.ms365Diag.minRemaining")})` : `${t("screens.ms365Diag.expiredSince")} ${Math.abs(Math.floor(data.user.expires_in_sec / 60))} ${t("screens.ms365Diag.minAgo")}`} />
+            <Row ok={!!data?.user.scopes.length} label={t("screens.ms365Diag.scopesGranted")} value={`${data?.user.scopes.length ?? 0} ${t("screens.ms365Diag.scopes")}`} />
           </Card>
         </div>
 
-        <Card title="URL de callback OAuth">
+        <Card title={t("screens.ms365Diag.callbackUrlTitle")}>
           <div className="flex items-center gap-2 flex-wrap">
             <code style={{ background: "#040B16", padding: "6px 10px", borderRadius: 6, fontSize: 11, color: "#E8EDF5", border: "1px solid #0E2A45" }}>{callbackUrl}</code>
-            <button onClick={() => { navigator.clipboard.writeText(callbackUrl); toast.success("URI copiée"); }}
+            <button onClick={() => { navigator.clipboard.writeText(callbackUrl); toast.success(t("screens.ms365Diag.copiedToast")); }}
               className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs"
               style={{ background: "#0D1F35", border: "1px solid #0E2A45", color: "#2E9BDC" }}>
-              <Copy className="w-3 h-3" /> Copier
+              <Copy className="w-3 h-3" /> {t("screens.ms365Diag.copy")}
             </button>
           </div>
           <p className="text-[11px] mt-2" style={{ color: "#8FA8C0" }}>
-            Web: {callbackUrl} · Native: {data?.detection.redirect_uris?.native?.[0] ?? "capacitor://localhost/auth/microsoft/callback"}
+            {t("screens.ms365Diag.webLabel")}: {callbackUrl} · {t("screens.ms365Diag.nativeLabel")}: {data?.detection.redirect_uris?.native?.[0] ?? "capacitor://localhost/auth/microsoft/callback"}
           </p>
         </Card>
 
-        <Card title="Lecture Teams (channels + chats)">
+        <Card title={t("screens.ms365Diag.teamsTitle")}>
           <div className="flex items-center gap-2 mb-2">
             <button onClick={testTeams} disabled={teamsCheck.loading}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-60"
               style={{ background: "#0078D4", color: "white" }}>
               {teamsCheck.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-              Tester la lecture Teams
+              {t("screens.ms365Diag.testTeams")}
             </button>
             {teamsCheck.ok !== null && (
               <span className="text-xs" style={{ color: teamsCheck.ok ? "#2EDC78" : "#E84C4C" }}>
@@ -129,6 +144,30 @@ export default function MMs365Diagnostics() {
               </span>
             )}
           </div>
+        </Card>
+
+        <Card title={t("screens.ms365Diag.fullSyncTitle")}>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <button onClick={() => runImport("initial")} disabled={importState.loading}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-60"
+              style={{ background: "#0078D4", color: "white" }}>
+              {importState.loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              {t("screens.ms365Diag.initialImport")}
+            </button>
+            <button onClick={() => runImport("delta")} disabled={importState.loading}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold disabled:opacity-60"
+              style={{ background: "#0D1F35", border: "1px solid #0E2A45", color: "#2E9BDC" }}>
+              {t("screens.ms365Diag.deltaImport")}
+            </button>
+            {importState.ok !== null && (
+              <span className="text-xs" style={{ color: importState.ok ? "#2EDC78" : "#E84C4C" }}>
+                {importState.ok ? "✅" : "❌"} {importState.message}
+              </span>
+            )}
+          </div>
+          <p className="text-[11px]" style={{ color: "#8FA8C0" }}>
+            {t("screens.ms365Diag.fullSyncDesc")}
+          </p>
         </Card>
       </div>
     </div>

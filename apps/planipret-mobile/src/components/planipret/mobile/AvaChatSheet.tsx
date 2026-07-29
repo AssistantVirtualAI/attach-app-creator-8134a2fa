@@ -4,18 +4,27 @@ import { X, Send, Sparkles, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import ReactMarkdown from "react-markdown";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
+import { useAvaContext } from "@/hooks/useAvaContext";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
 export default function AvaChatSheet({ userId, onClose }: { userId: string; onClose: () => void }) {
+  const { lang } = useMplanipretLang();
   const [messages, setMessages] = useState<Msg[]>([
-    { role: "assistant", content: "Bonjour 👋 Je suis **AVA**, votre assistante Planiprêt. Comment puis-je vous aider aujourd'hui ?" },
+    {
+      role: "assistant",
+      content: lang === "fr"
+        ? "Bonjour 👋 Je suis **AVA**, votre assistante Planiprêt. Comment puis-je vous aider aujourd'hui ?"
+        : "Hello 👋 I'm **AVA**, your Planiprêt assistant. How can I help you today?",
+    },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [lockedHeight, setLockedHeight] = useState<number | null>(null);
+  const avaContext = useAvaContext();
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -45,13 +54,13 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
-        body: { messages: next, user_id: userId },
+        body: { messages: next, user_id: userId, context: avaContext, language: lang },
       });
       if (error) throw error;
-      const reply = (data as any)?.reply ?? (data as any)?.message ?? "Désolée, je n'ai pas de réponse pour le moment.";
+      const reply = (data as any)?.reply ?? (data as any)?.message ?? (lang === "fr" ? "Désolée, je n'ai pas de réponse pour le moment." : "Sorry, I don't have an answer right now.");
       setMessages((m) => [...m, { role: "assistant", content: reply }]);
     } catch (e: any) {
-      setMessages((m) => [...m, { role: "assistant", content: `⚠️ Erreur: ${e?.message ?? "indisponible"}` }]);
+      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${lang === "fr" ? "Erreur" : "Error"}: ${e?.message ?? (lang === "fr" ? "indisponible" : "unavailable")}` }]);
     } finally {
       setLoading(false);
     }
@@ -166,7 +175,7 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Demandez à AVA…"
+            placeholder={lang === "fr" ? "Demandez à AVA…" : "Ask AVA…"}
             rows={1}
             className="flex-1 min-h-[38px] max-h-24 resize-none bg-transparent py-2 outline-none"
             style={{ fontSize: 16, color: "var(--pp-text-primary)", caretColor: "var(--pp-brand-accent)", fontFamily: "Inter,sans-serif" }}

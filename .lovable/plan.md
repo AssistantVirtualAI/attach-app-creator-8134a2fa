@@ -1,32 +1,39 @@
-Plan de correction ciblé — sans toucher à autre chose.
+## Objectif
+Garantir qu'en basculant FR/EN, **100 %** des textes changent — écran par écran — et que le **brief AVA** et le **chatbot AVA** répondent dans la langue choisie.
 
-1. Settings → Performance
-   - Garder le bouton Settings, mais rendre la page Performance réellement utile.
-   - Remplacer les requêtes directes fragiles de `MStats.tsx` par la même logique robuste que Home: scope `profile.id` + `profile.user_id` + extension, fallback live NetSapiens, états loading/error/empty.
-   - Afficher des données exploitables: appels, manqués, SMS, voicemails, meetings, leads chauds, taux de réponse, graphiques jour/semaine/mois.
+## Constat vérifié
+- Les pages mobiles utilisent déjà `useMplanipretLang().t(...)`, mais l'usage est très inégal : `MConnections` (4 clés), `MExtensionSync` (2), `MMs365Diagnostics` (5), `MMaestroSync` (7), `MSipDebug` (10) → quasi tout est encore en dur, alors que `MMessages` (185) ou `MCalls` (119) sont largement traduits.
+- `pp-ava-brief` : prompt figé « Génère un brief court, professionnel, **en français du Québec** » — aucun paramètre de langue.
+- `pp-ava-chat` : prompts système figés « Réponds **en français** », et appel interne à `pp-ava-report` avec `language: "fr"` codé en dur.
 
-2. Brief AVA quotidien / hebdo / mensuel
-   - Corriger `pp-ava-brief` pour qu’il ne retourne jamais un brief vide: si IA ou tables manquantes échouent, générer un rapport structuré fallback avec les stats réelles disponibles.
-   - Dans `MHome.tsx`, afficher clairement le rapport par période sélectionnée et forcer le refresh quand l’utilisateur change Day/Week/Month.
-   - Ajouter dans AVA les actions correspondantes pour demander “rapport journalier”, “weekly report”, “monthly report” et retourner le même brief.
+## Plan
 
-3. Maestro connecté mais recordings “not configured”
-   - Unifier la configuration Maestro: les pages de statut utilisent `maestro_telecom`, mais `maestro-sync-call` / `maestro-recording-upload` lisent encore l’ancienne config `maestro`, ce qui cause `maestro_not_configured`.
-   - Mettre à jour `_shared/maestro.ts` pour lire aussi `MAESTRO_TELECOM_BASE_URL`, `MAESTRO_MACHINE_API_KEY` et la config `maestro_telecom`.
-   - Adapter `maestro-sync-call` et `maestro-recording-upload` aux endpoints Maestro Telecom déjà configurés, puis conserver la déduplication persistante par `call_id`.
-   - Faire remonter dans `RecordingsList` un statut exact: En attente / Uploadé / Transmis à Maestro / En échec avec la vraie erreur.
+### 1. Audit page par page (mobile Planiprêt)
+Passer chaque écran et extraire tout littéral visible vers le dictionnaire :
+MHome, MCalls, MMessages, MContacts, MVoicemail, MStats, MPipeline, MSearch, MAvaChat, MAvaNotifications, MMore, MConnections, MMaestroSync, MMs365Diagnostics, MExtensionSync, MSipDebug, MDeepLinkDebug + composants partagés (header, nav, sheets d'appel, dialogues, toasts, états vides, messages d'erreur, placeholders, libellés `aria-label`, formats de date/heure).
 
-4. SIP registration en arrière-plan
-   - Corriger le cycle foreground/background dans `useMplanipretSoftphone.ts`: au background, le service natif doit prendre le relais; au foreground, JsSIP doit reprendre sans tuer la registration en cours.
-   - Renforcer `nativePpSipService.ts` pour ne pas désactiver définitivement le garde SIP après un seul `UNIMPLEMENTED` transitoire, et exposer un statut natif clair.
-   - Ajouter un heartbeat plus strict: si WebView suspendue ou réseau change, relancer proprement la registration mobile sans double registration destructrice.
+### 2. Dictionnaire
+Compléter `src/lib/i18n/mplanipret.ts` (et le miroir `apps/planipret-mobile`) avec les clés manquantes en **fr** et **en**, structurées par écran. Ajouter un script de contrôle qui échoue si une clé existe dans une langue et pas dans l'autre.
 
-5. Voicemail “personnaliser” freeze / scroll bloqué
-   - Fixer `MVoicemail.tsx` et `GreetingStudio.tsx` pour que la personnalisation reste dans un conteneur scrollable mobile, sans bloquer le scroll parent.
-   - Retirer les hauteurs internes qui piègent le scroll (`max-h-72 overflow-y-auto` non borné dans une page déjà scrollable) et rendre les boutons/voice cards accessibles sans nested interactive conflicts.
-   - Ajouter des timeouts et états erreur sur le chargement des voix ElevenLabs pour éviter un freeze visuel.
+### 3. Brief AVA — plus détaillé + bilingue
+- `pp-ava-brief` : accepter `language: 'fr' | 'en'` (envoyé par le client depuis la langue active), prompt et libellés de sections générés dans cette langue.
+- Enrichir le contenu : appels (entrants/sortants/manqués/durée moy.), SMS envoyés/reçus, courriels non lus, voicemails, rendez-vous du jour, dossiers du pipeline à relancer, comparaison vs la veille/semaine, top 3 actions prioritaires nommées.
+- Même traitement pour `pp-ava-report` et les schedulers (matin/soir) : utiliser la langue du profil courtier.
 
-6. Validation complète après correction
-   - Vérifier dans le preview mobile: Settings → Performance, Home → brief Day/Week/Month, Recordings → sync Maestro, Calls/Voicemail → personnaliser et scroll.
-   - Exécuter la suite E2E mobile existante ciblée Planiprêt et ajouter/mettre à jour les tests de non-régression pour ces 5 bugs.
-   - Vérifier les logs edge functions pour confirmer que Maestro ne retourne plus `maestro_not_configured`.
+### 4. Chatbot AVA bilingue
+- `pp-ava-chat` : recevoir `language` et remplacer les prompts figés par une consigne dynamique (« Réponds en français » / « Reply in English »), y compris le prompt de résumé et l'appel à `pp-ava-report`.
+- Traduire aussi les libellés des suggestions/actions rendus côté client.
+- Messages d'accueil, placeholders et erreurs du chat via `t(...)`.
+
+### 5. Validation
+- Parcours Playwright automatisé : pour chaque route mobile, capture en FR puis en EN, et détection heuristique de texte resté dans la mauvaise langue (accents/mots-clés FR visibles en mode EN, et liste de mots EN en mode FR).
+- Test manuel du brief et d'une conversation AVA dans les deux langues.
+- Rapport final : tableau écran par écran ✅/❌.
+
+## Détails techniques
+- Source de vérité : `useMplanipretLang` (clé `mplanipret-lang` + `ava-language`, synchronisée sur `planipret_profiles.language`).
+- La langue est transmise aux Edge Functions dans le body (`language`), avec repli sur `planipret_profiles.language` côté serveur pour les envois planifiés (push 08:30 / 17:30).
+- Aucun changement de logique métier : uniquement présentation + paramètre de langue des prompts.
+
+## Question de portée
+Ce plan couvre **l'app mobile Planiprêt + le brief/chat AVA**. Si tu veux aussi repasser le **portail admin Planiprêt** (pages `PA*`) dans le même lot, dis-le et je l'ajoute.

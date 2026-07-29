@@ -19,6 +19,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
 import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365ConnectionNotice";
 import { useMs365Status } from "@/hooks/useMs365Status";
+import BriefListenButton from "@/components/planipret/mobile/BriefListenButton";
 
 
 type Period = "day" | "week" | "month" | "shift";
@@ -196,17 +197,17 @@ export default function MHome() {
           body: { action: "list_calendar_events", payload: { start: calStart.toISOString(), end: calEnd.toISOString(), top: 200 } },
         });
         if (msError || (msData as any)?.success === false) {
-          const errMsg = (msData as any)?.error ?? msError?.message ?? "Calendrier Microsoft indisponible";
+          const errMsg = (msData as any)?.error ?? msError?.message ?? t("screens.home.calendarUnavailable");
           setMsCalendarError(errMsg);
           if (/token|expir|unauthor|401|invalid_grant/i.test(errMsg)) {
             const { startMs365Reconnect } = await import("@/lib/ms365E2E");
-            startMs365Reconnect("Erreur d'authentification sur le calendrier");
+            startMs365Reconnect(t("screens.home.calendarAuthError"));
           }
         } else {
           microsoftEvents = (msData as any)?.events ?? [];
         }
       } catch (e: any) {
-        setMsCalendarError(e?.message ?? "Calendrier Microsoft indisponible");
+        setMsCalendarError(e?.message ?? t("screens.home.calendarUnavailable"));
       } finally {
         setMsCalendarLoading(false);
       }
@@ -240,7 +241,7 @@ export default function MHome() {
   const loadBrief = async (force = false) => {
     setBriefLoading(true);
     setBriefErr(null);
-    const { data, error } = await supabase.functions.invoke("pp-ava-brief", { body: { period, force } });
+    const { data, error } = await supabase.functions.invoke("pp-ava-brief", { body: { period, force, language: lang } });
     setBriefLoading(false);
     if (error || (data as any)?.error) {
       setBriefErr((data as any)?.error || error?.message || "brief unavailable");
@@ -425,9 +426,20 @@ export default function MHome() {
             <p className="text-xs" style={{ color: "var(--pp-text-muted)" }}>{t("home.preparingBrief")}</p>
           )}
 
+          {brief && (
+            <BriefListenButton
+              language={lang}
+              text={[
+                brief.headline,
+                ...(brief.priorities ?? []).map((p: string, i: number) => `${i + 1}. ${p}`),
+                ...(brief.risks ?? []).map((r: string) => (lang === "en" ? `Risk: ${r}` : `Risque : ${r}`)),
+              ].filter(Boolean).join(". ")}
+            />
+          )}
+
           {profile?.voice_agent_enabled && (
             <button onClick={openAva}
-              className="mt-3 w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"
+              className="mt-2 w-full py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"
               style={{
                 background: "rgba(108,92,231,0.10)",
                 border: "1px solid rgba(108,92,231,0.30)",
@@ -476,8 +488,8 @@ export default function MHome() {
         style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
       >
         <span className="w-2 h-2 rounded-full" style={{ background: "#10B981" }} />
-        <span className="text-[12px] font-semibold flex-1 text-left">SIP Debug — état & derniers événements</span>
-        <span className="text-[10px] opacity-70">Ouvrir →</span>
+        <span className="text-[12px] font-semibold flex-1 text-left">{t("screens.home.sipDebugTitle")}</span>
+        <span className="text-[10px] opacity-70">{t("screens.home.open")}</span>
       </button>
 
 
@@ -615,6 +627,7 @@ function Kpi({ icon, value, label, accent, pulse, onClick }: {
 function MsCalendarSection({ profile, events, loading, error, lang }: {
   profile: any; events: any[]; loading: boolean; error: string | null; lang: string;
 }) {
+  const { t } = useMplanipretLang();
   const today = new Date(); today.setHours(0,0,0,0);
   const [cursor, setCursor] = useState(() => { const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; });
   const [selected, setSelected] = useState<Date>(today);
@@ -658,7 +671,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold flex items-center gap-1.5 pp-heading">
           <Calendar className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />
-          Calendrier Microsoft
+          {t("screens.home.msCalendarTitle")}
         </h2>
         <div className="flex items-center gap-2">
           <span className="pp-eyebrow">{events.length}</span>
@@ -667,8 +680,8 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
               onClick={() => setShowCreate(true)}
               className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-95"
               style={{ background: "var(--pp-brand-accent)", color: "#fff" }}
-              aria-label="Créer une réunion"
-              title="Créer une réunion"
+              aria-label={t("screens.home.createMeeting")}
+              title={t("screens.home.createMeeting")}
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -679,7 +692,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
         <NewMeetingSheet
           initialDate={selected}
           onClose={() => setShowCreate(false)}
-          onCreated={() => { setShowCreate(false); toast.success(lang === "en" ? "Meeting created" : "Réunion créée"); }}
+          onCreated={() => { setShowCreate(false); toast.success(t("screens.home.meetingCreated")); }}
         />
       )}
 
@@ -760,7 +773,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
               <div className="space-y-2"><Shimmer className="h-12" /><Shimmer className="h-12" /></div>
             ) : selectedEvents.length === 0 ? (
               <p className="text-xs text-center py-3" style={{ color: "var(--pp-text-muted)" }}>
-                Aucun rendez-vous ce jour-là.
+                {t("screens.home.noMeetingsToday")}
               </p>
             ) : (
               <ul className="space-y-1.5">
@@ -786,7 +799,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm truncate font-medium flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
                           {isTeams && <Video className="w-3 h-3 flex-shrink-0" style={{ color: "var(--pp-brand-accent)" }} />}
-                          {m.subject ?? "Sans titre"}
+                          {m.subject ?? t("screens.home.untitled")}
                         </p>
                         {(m.location?.displayName || m.bodyPreview) && (
                           <p className="text-[11px] truncate" style={{ color: "var(--pp-text-muted)" }}>
@@ -826,6 +839,7 @@ function NewMeetingSheet({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const { t } = useMplanipretLang();
   const pad = (n: number) => String(n).padStart(2, "0");
   const toLocalInput = (d: Date) =>
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -847,7 +861,7 @@ function NewMeetingSheet({
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Toronto";
 
   const submit = async () => {
-    if (!subject.trim()) { toast.error("Titre requis"); return; }
+    if (!subject.trim()) { toast.error(t("screens.home.titleRequired")); return; }
     setSaving(true);
     try {
       const { data, error } = await supabase.functions.invoke("ms365-actions", {
@@ -866,11 +880,11 @@ function NewMeetingSheet({
         },
       });
       if (error || (data as any)?.success === false) {
-        throw new Error((data as any)?.error || error?.message || "Échec");
+        throw new Error((data as any)?.error || error?.message || t("screens.home.genericFailed"));
       }
       onCreated();
     } catch (e: any) {
-      toast.error(e?.message || "Échec de création");
+      toast.error(e?.message || t("screens.home.creationFailed"));
     } finally {
       setSaving(false);
     }
@@ -894,40 +908,40 @@ function NewMeetingSheet({
         }}
       >
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-semibold pp-heading">Nouvelle réunion</h3>
+          <h3 className="text-base font-semibold pp-heading">{t("screens.home.newMeeting")}</h3>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center"
             style={{ background: "rgba(0,0,0,0.06)" }}>
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="space-y-3">
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Titre"
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t("screens.home.titlePh")}
             className="pp-input w-full" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs" style={{ color: "var(--pp-text-muted)" }}>
-              Début
+              {t("screens.home.start")}
               <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)}
                 className="w-full mt-1" style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
             </label>
             <label className="text-xs" style={{ color: "var(--pp-text-muted)" }}>
-              Fin
+              {t("screens.home.end")}
               <input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)}
                 className="w-full mt-1" style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
             </label>
           </div>
           <input value={attendees} onChange={(e) => setAttendees(e.target.value)}
-            placeholder="Participants (courriels, séparés par des virgules)"
+            placeholder={t("screens.home.attendeesPh")}
             className="w-full" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
           <input value={location} onChange={(e) => setLocation(e.target.value)}
-            placeholder="Lieu (optionnel)"
+            placeholder={t("screens.home.locationPh")}
             className="w-full" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
           <textarea value={body} onChange={(e) => setBody(e.target.value)}
-            placeholder="Notes / ordre du jour"
+            placeholder={t("screens.home.notesPh")}
             rows={3}
             className="w-full" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--pp-bg-border)" }} />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={teams} onChange={(e) => setTeams(e.target.checked)} />
-            Créer une réunion Teams
+            {t("screens.home.teamsMeeting")}
           </label>
           <button
             onClick={submit}
@@ -935,7 +949,7 @@ function NewMeetingSheet({
             className="w-full h-11 rounded-xl font-semibold active:scale-[0.98]"
             style={{ background: "var(--pp-brand-accent)", color: "#fff", opacity: saving ? 0.6 : 1 }}
           >
-            {saving ? "Création…" : "Créer la réunion"}
+            {saving ? t("screens.home.creating") : t("screens.home.createMeetingBtn")}
           </button>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { ArrowLeft, RefreshCw, Trash2, Copy, CheckCircle2, XCircle, AlertTriangl
 import { toast } from "sonner";
 import { ppSipProvider, type PpSipEvent, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
 import { exportSipStability, getSipStabilityReport, resetSipStability } from "@/lib/planipret/sip/sipStabilityMonitor";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 const STAGES = ["idle", "connecting", "connected", "registered"] as const;
 
@@ -30,6 +31,7 @@ function StageDot({ label, active, done, error }: { label: string; active: boole
 
 export default function MSipDebug() {
   const navigate = useNavigate();
+  const { t, lang } = useMplanipretLang();
   const [snap, setSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
   const [events, setEvents] = useState<PpSipEvent[]>(() => ppSipProvider.getEvents());
 
@@ -46,37 +48,37 @@ export default function MSipDebug() {
 
   const copy = async () => {
     const payload = [
-      `Status: ${snap.status}`,
-      `Error: ${snap.errorCause ?? "-"}`,
-      `Ext: ${cfg?.sipUsername ?? "-"}@${cfg?.sipDomain ?? "-"}`,
-      `WSS: ${cfg?.wssUrl ?? "-"}`,
-      `Last register: ${snap.lastRegistrationAt ? new Date(snap.lastRegistrationAt).toISOString() : "-"}`,
+      `${t("screens.sipDebug.statusLabel")}: ${snap.status}`,
+      `${t("screens.sipDebug.errorLabel")}: ${snap.errorCause ?? "-"}`,
+      `${t("screens.sipDebug.extLabel")}: ${cfg?.sipUsername ?? "-"}@${cfg?.sipDomain ?? "-"}`,
+      `${t("screens.sipDebug.wssLabel")}: ${cfg?.wssUrl ?? "-"}`,
+      `${t("screens.sipDebug.lastRegisterLabel")}: ${snap.lastRegistrationAt ? new Date(snap.lastRegistrationAt).toISOString() : "-"}`,
       "",
       ...events.map((e) => `${new Date(e.time).toISOString()} [${e.level}] ${e.event}${e.detail ? " — " + e.detail : ""}`),
     ].join("\n");
-    try { await navigator.clipboard.writeText(payload); toast.success("Copié"); }
-    catch { toast.error("Copie impossible"); }
+    try { await navigator.clipboard.writeText(payload); toast.success(t("screens.sipDebug.copied")); }
+    catch { toast.error(t("screens.sipDebug.copyFailed")); }
   };
 
   return (
     <div className="p-4 pb-24 space-y-4" style={{ background: "var(--pp-bg-deep)", minHeight: "100%" }}>
       <header className="flex items-center gap-2">
         <button onClick={() => navigate(-1)} className="flex items-center justify-center rounded-full active:scale-95"
-          style={{ width: 32, height: 32, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }} aria-label="Retour">
+          style={{ width: 32, height: 32, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }} aria-label={t("screens.sipDebug.back")}>
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <h1 className="flex-1 font-bold" style={{ fontSize: 18, color: "var(--pp-text-primary)" }}>SIP Debug</h1>
+        <h1 className="flex-1 font-bold" style={{ fontSize: 18, color: "var(--pp-text-primary)" }}>{t("screens.sipDebug.title")}</h1>
         <button onClick={copy} className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold"
           style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
-          <Copy className="w-3 h-3" /> Copier
+          <Copy className="w-3 h-3" /> {t("screens.sipDebug.copy")}
         </button>
         <button onClick={() => { ppSipProvider.clearEvents(); }} className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold"
           style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
-          <Trash2 className="w-3 h-3" /> Vider
+          <Trash2 className="w-3 h-3" /> {t("screens.sipDebug.clear")}
         </button>
-        <button onClick={() => { ppSipProvider.forceReregister?.(); toast("Re-REGISTER envoyé"); }} className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold"
+        <button onClick={() => { ppSipProvider.forceReregister?.(); toast(t("screens.sipDebug.reregisterSent")); }} className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold"
           style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>
-          <RefreshCw className="w-3 h-3" /> Re-register
+          <RefreshCw className="w-3 h-3" /> {t("screens.sipDebug.reregister")}
         </button>
       </header>
 
@@ -84,7 +86,7 @@ export default function MSipDebug() {
       <section className="pp-card p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Radio className="w-4 h-4" style={{ color: STATUS_COLOR[snap.status] }} />
-          <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>État SIP</span>
+          <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>{t("screens.sipDebug.stateTitle")}</span>
           <span className="ml-auto px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ background: STATUS_COLOR[snap.status], color: "#fff" }}>
             {snap.status.toUpperCase()}
           </span>
@@ -104,10 +106,10 @@ export default function MSipDebug() {
         )}
 
         <div className="grid grid-cols-2 gap-2 text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
-          <div><span className="opacity-60">Ext:</span> {cfg?.sipUsername ?? "—"}</div>
-          <div><span className="opacity-60">Domain:</span> {cfg?.sipDomain ?? "—"}</div>
-          <div className="col-span-2 truncate"><span className="opacity-60">WSS:</span> {cfg?.wssUrl ?? "—"}</div>
-          <div className="col-span-2"><span className="opacity-60">Dernière registration:</span> {snap.lastRegistrationAt ? new Date(snap.lastRegistrationAt).toLocaleTimeString() : "—"}</div>
+          <div><span className="opacity-60">{t("screens.sipDebug.extShort")}</span> {cfg?.sipUsername ?? "—"}</div>
+          <div><span className="opacity-60">{t("screens.sipDebug.domainShort")}</span> {cfg?.sipDomain ?? "—"}</div>
+          <div className="col-span-2 truncate"><span className="opacity-60">{t("screens.sipDebug.wssShort")}</span> {cfg?.wssUrl ?? "—"}</div>
+          <div className="col-span-2"><span className="opacity-60">{t("screens.sipDebug.lastRegistration")}</span> {snap.lastRegistrationAt ? new Date(snap.lastRegistrationAt).toLocaleTimeString(lang === "fr" ? "fr-CA" : "en-CA") : "—"}</div>
         </div>
       </section>
 
@@ -118,18 +120,18 @@ export default function MSipDebug() {
       {/* Event log */}
       <section className="pp-card p-3">
         <div className="flex items-center justify-between mb-2">
-          <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>Événements SIP / JsSIP</span>
+          <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>{t("screens.sipDebug.eventsTitle")}</span>
           <span className="text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>{events.length}</span>
         </div>
         {events.length === 0 ? (
-          <p className="text-[12px] py-4 text-center" style={{ color: "var(--pp-text-secondary)" }}>Aucun événement pour le moment.</p>
+          <p className="text-[12px] py-4 text-center" style={{ color: "var(--pp-text-secondary)" }}>{t("screens.sipDebug.noEvents")}</p>
         ) : (
           <ul className="space-y-1 max-h-[60vh] overflow-y-auto">
             {events.map((e, i) => {
               const color = e.level === "error" ? "#EF4444" : e.level === "warn" ? "#F59E0B" : "var(--pp-text-secondary)";
               return (
                 <li key={i} className="text-[11px] font-mono py-1 px-2 rounded" style={{ background: "var(--pp-bg-elevated)", color }}>
-                  <span className="opacity-60">{new Date(e.time).toLocaleTimeString()}</span>{" "}
+                  <span className="opacity-60">{new Date(e.time).toLocaleTimeString(lang === "fr" ? "fr-CA" : "en-CA")}</span>{" "}
                   <span className="font-bold">{e.event}</span>
                   {e.detail ? <span className="opacity-80"> — {e.detail}</span> : null}
                 </li>
@@ -143,6 +145,7 @@ export default function MSipDebug() {
 }
 
 function StabilityCard() {
+  const { t } = useMplanipretLang();
   const [report, setReport] = useState(() => getSipStabilityReport());
   useEffect(() => {
     const t = setInterval(() => setReport(getSipStabilityReport()), 15000);
@@ -153,26 +156,26 @@ function StabilityCard() {
     <section className="pp-card p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Radio className="w-4 h-4" style={{ color: V[report.verdict] }} />
-        <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>Stabilité SIP (24 h)</span>
+        <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>{t("screens.sipDebug.stabilityTitle")}</span>
         <span className="ml-auto px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ background: V[report.verdict], color: "#fff" }}>
           {report.verdict.toUpperCase()}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2 text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
-        <div><span className="opacity-60">Fenêtre:</span> {report.windowHours.toFixed(1)} h</div>
-        <div><span className="opacity-60">Registers OK:</span> {report.counts.registered}</div>
-        <div><span className="opacity-60">WS 1001 / déco:</span> {report.counts.ws_disconnect}</div>
-        <div><span className="opacity-60">Registration failed:</span> {report.counts.registration_failed}</div>
-        <div className="col-span-2"><span className="opacity-60">Plus long trou sans REGISTER:</span> {(report.longestGapMs / 60000).toFixed(1)} min</div>
+        <div><span className="opacity-60">{t("screens.sipDebug.windowLabel")}</span> {report.windowHours.toFixed(1)} h</div>
+        <div><span className="opacity-60">{t("screens.sipDebug.registersOkLabel")}</span> {report.counts.registered}</div>
+        <div><span className="opacity-60">{t("screens.sipDebug.wsDisconnectLabel")}</span> {report.counts.ws_disconnect}</div>
+        <div><span className="opacity-60">{t("screens.sipDebug.registrationFailedLabel")}</span> {report.counts.registration_failed}</div>
+        <div className="col-span-2"><span className="opacity-60">{t("screens.sipDebug.longestGapLabel")}</span> {(report.longestGapMs / 60000).toFixed(1)} {t("screens.sipDebug.minutesShort")}</div>
       </div>
       <div className="flex gap-2">
-        <button onClick={async () => { try { await navigator.clipboard.writeText(exportSipStability()); toast.success("Rapport 24 h copié"); } catch { toast.error("Copie impossible"); } }}
+        <button onClick={async () => { try { await navigator.clipboard.writeText(exportSipStability()); toast.success(t("screens.sipDebug.reportCopied")); } catch { toast.error(t("screens.sipDebug.copyFailed")); } }}
           className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
-          Exporter le rapport
+          {t("screens.sipDebug.exportReport")}
         </button>
-        <button onClick={() => { resetSipStability(); setReport(getSipStabilityReport()); toast("Test 24 h redémarré"); }}
+        <button onClick={() => { resetSipStability(); setReport(getSipStabilityReport()); toast(t("screens.sipDebug.testRestarted")); }}
           className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold" style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>
-          Démarrer un nouveau test
+          {t("screens.sipDebug.startNewTest")}
         </button>
       </div>
     </section>

@@ -252,10 +252,6 @@ export function useMplanipretSoftphone(enabled = true) {
       } finally {
         if (!cancelled) setLoading(false);
       }
-      // Native keep-alive unavailable (plugin missing / start refused):
-      // keep the WebView registration alive instead of leaving the extension
-      // unregistered, otherwise every inbound call drops to voicemail.
-      try { ppSipProvider.forceReregister(); } catch { /* noop */ }
     };
     void doInit();
     const onReady = (e: any) => { void doInit({ force: !!e?.detail?.force }); };
@@ -434,6 +430,10 @@ export function useMplanipretSoftphone(enabled = true) {
         } catch { /* retry */ }
         await new Promise((r) => setTimeout(r, 2_000 * (attempt + 1)));
       }
+      // Native keep-alive unavailable (plugin missing / start refused):
+      // keep the WebView registration alive instead of leaving the extension
+      // unregistered, otherwise every inbound call drops to voicemail.
+      try { ppSipProvider.forceReregister(); } catch { /* noop */ }
     };
     const un = ppSipProvider.subscribe(() => evaluate());
     const onResume = () => {

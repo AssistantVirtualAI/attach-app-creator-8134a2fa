@@ -582,6 +582,13 @@ Deno.serve(async (req) => {
         processed: all.length,
         succeeded,
         failed,
+        routing_ok_count: all.filter((r: any) => r.routing_ok).length,
+        routing_ko: all.filter((r: any) => r.success && !r.routing_ok).slice(0, 50).map((r: any) => ({
+          extension: r.extension,
+          blockers: r.routing_blockers,
+          did: r.did_repair ? { attempted: r.did_repair.attempted, verified: r.did_repair.verified, failures: r.did_repair.failures } : null,
+          targets: r.verify?.stored_targets,
+        })),
         dry_run,
         repair_dids,
         ring_timeout,
@@ -593,6 +600,7 @@ Deno.serve(async (req) => {
         errors: all.filter((r: any) => !r.success).slice(0, 20).map((r: any) => ({
           extension: r.extension, status: r.status, error: r.error,
         })),
+
       });
     }
 

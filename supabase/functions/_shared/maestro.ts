@@ -335,6 +335,7 @@ export async function maestroFetch(cfg: MaestroConfig, opts: CallOpts) {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${opts.token}`,
     "Content-Type": "application/json",
+    Accept: "application/json",
   };
   if (opts.accountId || cfg.accountId) {
     headers["X-Account-Id"] = opts.accountId ?? cfg.accountId;

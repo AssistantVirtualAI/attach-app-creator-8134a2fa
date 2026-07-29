@@ -713,8 +713,9 @@ class PpSipProvider {
     this.wsRetryTimer = setTimeout(() => {
       this.wsRetryTimer = null;
       const ua = this.ua;
-      if (!ua) return;
+      if (!ua) { this.releaseRecovery("no_ua"); return; }
       this.reconnectMetrics.lastAttemptAt = Date.now();
+      this.pushHistory("attempt", reason, delay);
       const online = typeof navigator === "undefined" || navigator.onLine !== false;
       if (!online) {
         this.log("warn", "sip reconnect deferred: offline");
@@ -733,6 +734,8 @@ class PpSipProvider {
             try { ua.stop(); } catch {}
             this.ua = null;
             this.session = null;
+            this.reconnectMetrics.uaRebuilds += 1;
+            this.pushHistory("socket", "ua_rebuild");
             void this.init(cfg);
           } else {
             ua.start();
@@ -749,6 +752,7 @@ class PpSipProvider {
       }, rc.socketVerifyDelayMs);
     }, delay);
   }
+
 
 
   /** Reconnect immediately when the device regains connectivity. */

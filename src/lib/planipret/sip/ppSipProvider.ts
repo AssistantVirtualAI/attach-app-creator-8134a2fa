@@ -301,7 +301,13 @@ class PpSipProvider {
         // recovery — re-registering here only yields "Connection Error".
         if (!this.ua?.isConnected?.() || recentlyDisconnected || this.snap.status === "disconnected") {
           this.log("warn", "unregistered ignored; transport recovery owns reconnect");
-          this.scheduleSocketReconnect("unregistered_transport_down");
+          // Deferred: never open a competing socket while JsSIP recovery runs.
+          if (!this.wsWatchdogTimer && !this.wsRetryTimer) {
+            this.wsWatchdogTimer = setTimeout(() => {
+              this.wsWatchdogTimer = null;
+              if (this.ua && this.snap.status !== "registered") this.scheduleSocketReconnect("unregistered_transport_down");
+            }, Math.max(PP_SIP_RECONNECT_FLOOR_MS, rc.socketVerifyDelayMs));
+          }
           return;
         }
         this.log("warn", "unregistered on live transport - scheduling guarded re-register");

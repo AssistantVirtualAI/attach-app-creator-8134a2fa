@@ -422,9 +422,11 @@ class PpSipProvider {
         this.reconnectMetrics.attempt = 0;
         this.reconnectMetrics.currentDelayMs = 0;
         this.reconnectMetrics.delaySource = "none";
-        this.emitMetrics();
         if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
         if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
+        this.releaseRecovery("registered");
+        this.emitMetrics();
+
         this.startKeepAlive();
         if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }
         return this.update({ status: "registered", errorCause: undefined, lastRegistrationAt: Date.now() });

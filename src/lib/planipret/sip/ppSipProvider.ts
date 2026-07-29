@@ -335,6 +335,21 @@ class PpSipProvider {
   }
 
 
+  private guardedRegister(reason: string): boolean {
+    const ua = this.ua;
+    if (!ua?.isConnected?.()) {
+      this.scheduleSocketReconnect(`${reason}_transport_down`);
+      return false;
+    }
+    try {
+      ua.register();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+
   async init(cfg: PpSipConfig) {
     if (ppSipInitInFlight) return;
     installSipParserGuard();

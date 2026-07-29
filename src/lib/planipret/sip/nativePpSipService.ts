@@ -115,36 +115,25 @@ export async function refreshPlanipretVoipPushToken(): Promise<boolean> {
 }
 
 export async function onPlanipretVoipPushTokenInvalidated(cb: () => void): Promise<() => void> {
-  if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
-  try {
-    const handle = await NativePpVoipCall.addListener("voipPushTokenInvalidated", () => cb());
-    return () => { void handle?.remove?.(); };
-  } catch { return () => undefined; }
+  if (platform() !== "ios") return () => undefined;
+  return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "voipPushTokenInvalidated", () => cb());
 }
 
 export async function onPlanipretVoipPushToken(cb: (data: { token: string; bundleId?: string; environment?: string; changed?: boolean; source?: string }) => void): Promise<() => void> {
-  if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
-  try {
-    const handle = await NativePpVoipCall.addListener("voipPushToken", (data: any) => cb(data ?? {}));
-    return () => { void handle?.remove?.(); };
-  } catch { return () => undefined; }
+  if (platform() !== "ios") return () => undefined;
+  return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "voipPushToken", (data: any) => cb(data ?? {}));
 }
 
 export async function onPlanipretIncomingCallAnswered(cb: (data: { callUUID: string; callId?: string }) => void): Promise<() => void> {
-  if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
-  try {
-    const handle = await NativePpVoipCall.addListener("incomingCallAnswered", (data: any) => cb(data ?? {}));
-    return () => { void handle?.remove?.(); };
-  } catch { return () => undefined; }
+  if (platform() !== "ios") return () => undefined;
+  return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "incomingCallAnswered", (data: any) => cb(data ?? {}));
 }
 
 export async function onPlanipretIncomingCallRejected(cb: (data: { callUUID: string; callId?: string }) => void): Promise<() => void> {
-  if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
-  try {
-    const handle = await NativePpVoipCall.addListener("incomingCallRejected", (data: any) => cb(data ?? {}));
-    return () => { void handle?.remove?.(); };
-  } catch { return () => undefined; }
+  if (platform() !== "ios") return () => undefined;
+  return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "incomingCallRejected", (data: any) => cb(data ?? {}));
 }
+
 
 export async function reportPlanipretCallEnded(callId?: string, reason?: string): Promise<void> {
   if (platform() !== "ios") return;

@@ -272,6 +272,7 @@ export default function PAMobileDevices() {
   const [backfilling, setBackfilling] = useState(false);
   const [syncingDevices, setSyncingDevices] = useState(false);
   const [syncingRules, setSyncingRules] = useState(false);
+  const [rulesDiag, setRulesDiag] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
@@ -527,7 +528,7 @@ export default function PAMobileDevices() {
           <button onClick={backfill} disabled={backfilling} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)", opacity: backfilling ? 0.65 : 1 }}>
             {backfilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} {t.missingBtn}
           </button>
-          <button onClick={syncAnsweringRules} disabled={syncingRules} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "#0D2540", border: "1px solid #2E9BDC44", color: "#2E9BDC", opacity: syncingRules ? 0.65 : 1 }}>
+          <button onClick={() => syncAnsweringRules(false)} disabled={syncingRules} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "#0D2540", border: "1px solid #2E9BDC44", color: "#2E9BDC", opacity: syncingRules ? 0.65 : 1 }}>
             {syncingRules ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />} {t.syncAnsweringRules}
           </button>
           <button onClick={provisionAppReview} className="rounded-lg px-3 py-2 text-sm font-medium" style={{ background: ACCENT, color: "#fff" }}>

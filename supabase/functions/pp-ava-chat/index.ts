@@ -178,6 +178,8 @@ Deno.serve(async (req) => {
     const context: Record<string, unknown> = (body?.context && typeof body.context === "object") ? body.context : {};
     const confirmAction = (body?.confirm_action && typeof body.confirm_action === "object") ? body.confirm_action : null;
     const level: string = String(body?.level ?? "standard"); // short | standard | detailed
+    const requestedLang: "fr" | "en" | null =
+      body?.language === "en" || body?.language === "fr" ? body.language : null;
 
     const sb = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -192,8 +194,12 @@ Deno.serve(async (req) => {
     // Light Planipret context
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { data: profile } = await admin.from("planipret_profiles")
-      .select("id, user_id, full_name, role, extension, ms365_access_token, ms365_scopes, ms365_email")
+      .select("id, user_id, full_name, role, extension, ms365_access_token, ms365_scopes, ms365_email, language")
       .eq("user_id", u.user.id).maybeSingle();
+
+    // Active UI language wins; fall back to the broker profile preference.
+    const lang: "fr" | "en" = requestedLang ?? ((profile as any)?.language === "en" ? "en" : "fr");
+
 
     if (confirmAction) {
       const kind = String(confirmAction.kind ?? "");

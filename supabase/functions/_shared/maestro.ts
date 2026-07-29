@@ -140,12 +140,27 @@ export async function resolveBrokerIdFromTelecom(
     const ids = Array.from({ length: Math.min(25, maxId - start + 1) }, (_, i) => start + i);
     const found = (await Promise.all(ids.map(match))).find(Boolean);
     if (found) {
-      await admin.from("planipret_profiles").update({ maestro_broker_id: found }).eq("user_id", userId);
+      await admin.from("planipret_profiles").update({ maestro_broker_id: found }).eq("id", profile!.id);
       console.log(`[maestro] resolved broker id ${found} for user ${userId}`);
       return found;
     }
   }
   return null;
+}
+
+/**
+ * `planipret_phone_calls.user_id` sometimes holds the auth user id and
+ * sometimes the `planipret_profiles.id` — resolve both.
+ */
+export async function loadBrokerProfile(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<{ id: string; maestro_broker_id: string | null; extension: string | null; phone: string | null } | null> {
+  const cols = "id, user_id, maestro_broker_id, extension, phone";
+  const byUser = await admin.from("planipret_profiles").select(cols).eq("user_id", userId).maybeSingle();
+  if (byUser.data) return byUser.data as any;
+  const byId = await admin.from("planipret_profiles").select(cols).eq("id", userId).maybeSingle();
+  return (byId.data as any) ?? null;
 }
 
 /**
@@ -160,12 +175,9 @@ export async function getBrokerAuth(
   const cfg = await getMaestroConfig(admin);
   let brokerId: string | null = null;
   if (userId) {
-    const { data: profile } = await admin
-      .from("planipret_profiles")
-      .select("maestro_broker_id")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const profile = await loadBrokerProfile(admin, userId);
     brokerId = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
+
     // A stored id that no longer exists upstream must not silently break sync.
     if (brokerId && !(await verifyTelecomUserId(cfg, brokerId))) {
       console.warn(`[maestro] stored broker id ${brokerId} invalid — re-resolving`);

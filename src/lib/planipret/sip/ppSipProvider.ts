@@ -259,6 +259,10 @@ class PpSipProvider {
       ua.on("registered", () => {
         this.regFailures = 0;
         this.wsFailures = 0;
+        this.reconnectMetrics.attempt = 0;
+        this.reconnectMetrics.currentDelayMs = 0;
+        this.reconnectMetrics.delaySource = "none";
+        this.emitMetrics();
         if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
         this.startKeepAlive();
         if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }

@@ -331,26 +331,37 @@ Deno.serve(async (req) => {
       ext ? `extension.eq.${ext}` : null,
     ].filter(Boolean).join(",");
 
+    // Each query is isolated: a single failing table can never break the brief.
+    const safeQ = async (q: any) => {
+      try {
+        const r = await q;
+        return { data: r?.data ?? [], error: r?.error ?? null };
+      } catch (e) {
+        console.error("pp-ava-brief query failed:", (e as Error)?.message);
+        return { data: [], error: e };
+      }
+    };
     const [callRows, smsRows, voicemails, meetings, tasks] = await Promise.all([
-      admin.from("planipret_phone_calls")
+      safeQ(admin.from("planipret_phone_calls")
         .select("id, direction, status, from_number, from_name, to_number, to_name, started_at, duration_seconds, lead_score, lead_temperature, ai_summary, ai_coaching")
         .or(callScope).gte("started_at", sinceIso).lte("started_at", untilIso)
-        .order("started_at", { ascending: false }).limit(500),
-      admin.from("planipret_phone_messages")
+        .order("started_at", { ascending: false }).limit(500)),
+      safeQ(admin.from("planipret_phone_messages")
         .select("id, direction, from_number, to_number, body, read_at, created_at")
         .in("user_id", ids).gte("created_at", sinceIso).lte("created_at", untilIso)
-        .order("created_at", { ascending: false }).limit(300),
-      admin.from("planipret_voicemails").select("id, from_number, from_name, received_at, is_read, transcript")
-        .in("user_id", ids).eq("folder", "inbox").order("received_at", { ascending: false }).limit(20),
-      admin.from("appointments").select("title, start_time, attendee_name")
+        .order("created_at", { ascending: false }).limit(300)),
+      safeQ(admin.from("planipret_voicemails").select("id, from_number, from_name, received_at, is_read, transcript")
+        .in("user_id", ids).eq("folder", "inbox").order("received_at", { ascending: false }).limit(20)),
+      safeQ(admin.from("appointments").select("title, start_time, attendee_name")
         .eq("host_user_id", effectiveUserId).gte("start_time", sinceIso).lte("start_time", until.toISOString())
-        .order("start_time", { ascending: true }).limit(10),
-      admin.from("planipret_reminders").select("note, contact_name, contact_number, scheduled_at")
+        .order("start_time", { ascending: true }).limit(10)),
+      safeQ(admin.from("planipret_reminders").select("note, contact_name, contact_number, scheduled_at")
         .in("user_id", ids).eq("status", "pending")
-        .order("scheduled_at", { ascending: true }).limit(10),
+        .order("scheduled_at", { ascending: true }).limit(10)),
     ]);
 
     const allCalls = callRows.data || [];
+
     const isMissed = (c: any) =>
       c.status === "missed" || c.status === "no-answer" || c.status === "cancelled" ||
       (c.direction === "inbound" && !c.duration_seconds);

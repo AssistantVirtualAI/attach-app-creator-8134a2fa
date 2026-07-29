@@ -688,6 +688,20 @@ Deno.serve(async (req) => {
         if (i + batch_size < list.length) await new Promise((r) => setTimeout(r, 200));
       }
       const include_results = body?.include_results !== false;
+
+      // ── Diagnostics summary ────────────────────────────────────────────
+      const blockerBuckets: Record<string, string[]> = {
+        no_extension: [], no_did: [], pbx_auth_failed: [], pbx_returned_html: [],
+        rule_write_failed: [], did_route_not_verified: [], sim_ring_not_honored: [],
+        no_registered_device: [],
+      };
+      for (const r of all as any[]) {
+        for (const b of (r.routing_blockers ?? [])) {
+          (blockerBuckets[b] ??= []).push(String(r.extension ?? r.email ?? r.broker_id));
+        }
+      }
+      const raw_pbx_responses = (all as any[]).flatMap((r) => r.raw_pbx ?? []).slice(0, 50);
+
       return json({
         success: failed === 0,
         offset,
@@ -696,7 +710,27 @@ Deno.serve(async (req) => {
         processed: all.length,
         succeeded,
         failed,
+        brokers_found: all.length,
+        brokers_with_extension: (all as any[]).filter((r) => !!r.extension).length,
+        brokers_with_did: (all as any[]).filter((r) => (r.dids?.length ?? 0) > 0).length,
+        routing_ok: (all as any[]).filter((r) => r.routing_ok).length,
+        routing_blockers: Object.fromEntries(
+          Object.entries(blockerBuckets).map(([k, v]) => [k, v.slice(0, 25)]),
+        ),
+        routing_blocker_counts: Object.fromEntries(
+          Object.entries(blockerBuckets).map(([k, v]) => [k, v.length]),
+        ),
+        raw_pbx_responses,
+        dry_run_report: dry_run
+          ? (all as any[]).map((r) => ({
+              extension: r.extension, email: r.email,
+              action: r.action ?? (r.extension ? "would_configure" : "would_skip"),
+              reason: r.reason ?? r.error ?? null,
+              dids: r.dids ?? [],
+            })).slice(0, 200)
+          : undefined,
         routing_ok_count: all.filter((r: any) => r.routing_ok).length,
+
         routing_ko: all.filter((r: any) => r.success && !r.routing_ok).slice(0, 50).map((r: any) => ({
           extension: r.extension,
           blockers: r.routing_blockers,

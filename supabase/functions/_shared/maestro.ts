@@ -228,7 +228,7 @@ export async function getBrokerAuth(
   let brokerId: string | null = null;
   if (!userId) diag.reason = "no_user_id_on_record";
 
-  if (preferOAuth && userId) {
+  if (userId) {
     const profile = await loadBrokerProfile(admin, userId, diag);
     if (!profile) {
       diag.reason = "no_planipret_profile_matches_user_id_or_profile_id";

@@ -108,7 +108,13 @@ const cors = {
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
 
-const BriefSchema = z.object({
+const stripNulls = (v: any): any =>
+  Array.isArray(v) ? v.map(stripNulls)
+    : v && typeof v === "object"
+      ? Object.fromEntries(Object.entries(v).filter(([, x]) => x !== null).map(([k, x]) => [k, stripNulls(x)]))
+      : v;
+
+const BriefSchema = z.preprocess(stripNulls, z.object({
   headline: z.string(),
   overview: z.string().optional(),
   priorities: z.array(z.string()).optional().default([]),
@@ -120,9 +126,9 @@ const BriefSchema = z.object({
   suggestions: z.array(z.object({
     label: z.string(),
     kind: z.string().optional(),
-    number: z.string().optional(),
+    number: z.coerce.string().optional(),
   })).optional().default([]),
-}).passthrough();
+}).passthrough()) as any;
 
 type Period = "day" | "week" | "month" | "shift";
 type Lang = "fr" | "en";

@@ -201,40 +201,54 @@ Deno.serve(async (req) => {
     const lang: "fr" | "en" = requestedLang ?? ((profile as any)?.language === "en" ? "en" : "fr");
 
 
+    const L = (fr: string, en: string) => (lang === "fr" ? fr : en);
+
     if (confirmAction) {
       const kind = String(confirmAction.kind ?? "");
       const payload = (confirmAction.payload && typeof confirmAction.payload === "object") ? confirmAction.payload : {};
       if (kind === "ms365_action") {
         const action = String(payload.action ?? "");
-        if (!MS365_ACTIONS.has(action)) return json({ reply: "Action Microsoft inconnue.", suggestions: [] }, 400);
+        if (!MS365_ACTIONS.has(action)) return json({ reply: L("Action Microsoft inconnue.", "Unknown Microsoft action."), suggestions: [] }, 400);
         if (MUTATING_MS365.has(action) && body?.approved !== true) {
-          return json({ reply: "Cette action nécessite votre confirmation avant l'envoi.", suggestions: [confirmAction] });
+          return json({ reply: L("Cette action nécessite votre confirmation avant l'envoi.", "This action requires your confirmation before sending."), suggestions: [confirmAction] });
         }
         const exec = await invokeFunction("ms365-actions", authHeader, { action, payload });
         const ok = !!exec.data?.success && exec.ok;
         await logAvaAction(admin, profile, u.user.id, `ms365_${action}`, payload, ok, exec.data, ok ? null : (exec.data?.error ?? `HTTP ${exec.status}`));
-        return json({ reply: ok ? "Action Microsoft 365 exécutée." : `Action Microsoft 365 échouée: ${exec.data?.error ?? exec.data?.message ?? exec.status}`, result: exec.data, suggestions: [] }, ok ? 200 : 200);
+        return json({
+          reply: ok
+            ? L("Action Microsoft 365 exécutée.", "Microsoft 365 action completed.")
+            : `${L("Action Microsoft 365 échouée", "Microsoft 365 action failed")}: ${exec.data?.error ?? exec.data?.message ?? exec.status}`,
+          result: exec.data, suggestions: [],
+        }, ok ? 200 : 200);
       }
       if (kind === "sms") {
         const to = String(payload.number ?? payload.to ?? "");
         const message = String(payload.text ?? payload.message ?? "");
-        if (!to || !message) return json({ reply: "Numéro ou message SMS manquant.", suggestions: [] }, 400);
-        if (body?.approved !== true) return json({ reply: "Confirmez avant l'envoi du SMS.", suggestions: [confirmAction] });
+        if (!to || !message) return json({ reply: L("Numéro ou message SMS manquant.", "Missing SMS number or message."), suggestions: [] }, 400);
+        if (body?.approved !== true) return json({ reply: L("Confirmez avant l'envoi du SMS.", "Please confirm before sending the text."), suggestions: [confirmAction] });
         const exec = await invokeFunction("pp-ns-sms", authHeader, { action: "send", to, message });
         const ok = !!(exec.data?.ok ?? exec.data?.success) && exec.ok;
         await logAvaAction(admin, profile, u.user.id, "sms_send", { to, message }, ok, exec.data, ok ? null : (exec.data?.error ?? `HTTP ${exec.status}`));
-        return json({ reply: ok ? "SMS envoyé." : `SMS non envoyé: ${exec.data?.error ?? exec.status}`, result: exec.data, suggestions: [] });
+        return json({
+          reply: ok ? L("SMS envoyé.", "Text message sent.") : `${L("SMS non envoyé", "Text message not sent")}: ${exec.data?.error ?? exec.status}`,
+          result: exec.data, suggestions: [],
+        });
       }
       if (kind === "call") {
         const to = String(payload.number ?? payload.to ?? "");
-        if (!to) return json({ reply: "Numéro d'appel manquant.", suggestions: [] }, 400);
-        if (body?.approved !== true) return json({ reply: "Confirmez avant de lancer l'appel.", suggestions: [confirmAction] });
+        if (!to) return json({ reply: L("Numéro d'appel manquant.", "Missing phone number."), suggestions: [] }, 400);
+        if (body?.approved !== true) return json({ reply: L("Confirmez avant de lancer l'appel.", "Please confirm before starting the call."), suggestions: [confirmAction] });
         const exec = await invokeFunction("ns-make-call", authHeader, { to_number: to });
         const ok = !!exec.data?.success && exec.ok;
         await logAvaAction(admin, profile, u.user.id, "call_start", { to }, ok, exec.data, ok ? null : (exec.data?.error ?? `HTTP ${exec.status}`));
-        return json({ reply: ok ? "Appel lancé." : `Appel non lancé: ${exec.data?.error ?? exec.status}`, result: exec.data, suggestions: [] });
+        return json({
+          reply: ok ? L("Appel lancé.", "Call started.") : `${L("Appel non lancé", "Call not started")}: ${exec.data?.error ?? exec.status}`,
+          result: exec.data, suggestions: [],
+        });
       }
     }
+
 
     let appContext = "";
     const integrations: string[] = [

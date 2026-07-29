@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,21 +64,39 @@ function scan(label, files, { requireMarkers = false } = {}) {
   }
 }
 
-function scanNativeGuards() {
+function nativeHits() {
   const files = [
     resolve(ROOT, "scripts/apply-native-config.mjs"),
     resolve(ROOT, "ios/App/App/Plugins/PpSipKeepAlive/PpSipKeepAlive.swift"),
   ].filter((f) => existsSync(f));
   const corpus = files.map((f) => readFileSync(f, "utf8")).join("\n");
-  const hits = NATIVE_FORBIDDEN_MARKERS.filter((m) => corpus.includes(m.value)).map((m) => m.label);
+  return NATIVE_FORBIDDEN_MARKERS.filter((m) => corpus.includes(m.value)).map((m) => m.label);
+}
+
+function scanNativeGuards() {
+  let hits = nativeHits();
+  if (!hits.length) return;
+
+  // Most of the time the generator is up to date but the *generated* native
+  // sources on disk are stale (old `cap sync` output). Regenerate once, re-scan.
+  const generator = resolve(ROOT, "scripts/apply-native-config.mjs");
+  if (existsSync(generator)) {
+    console.warn(`⚠️  native SIP: marqueurs obsolètes détectés (${hits.join(", ")}) — régénération native…`);
+    const res = spawnSync(process.execPath, [generator], { stdio: "inherit", cwd: ROOT });
+    if (res.status === 0) hits = nativeHits();
+  }
+
   if (hits.length) {
     console.error(`❌ native SIP: régression détectée (${hits.join(", ")}).`);
+    console.error("   → Le code source local est périmé. Fais `git pull`, puis `npm run sync:ios` (ou `sync:android`).");
     process.exit(1);
   }
+  console.log("✅ native SIP: sources natives régénérées, régression corrigée.");
 }
 
 scan("source", [resolve(ROOT, "src/lib/planipret/sip/ppSipProvider.ts")], { requireMarkers: true });
 scanNativeGuards();
+
 
 const distFiles = walk(resolve(ROOT, "dist/assets"));
 if (distFiles.length) scan("dist", distFiles);

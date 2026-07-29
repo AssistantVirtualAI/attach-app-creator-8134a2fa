@@ -152,11 +152,13 @@ export default function Ms365Callback() {
         const { data, errMsg } = await invokeAndParse("pp-ms-auth-callback", { code, redirect_uri, code_verifier });
         if (errMsg || !(data as any)?.success) {
           console.error("ms365 auth failed", { data, errMsg, redirect_uri });
-          setStatus("error"); setError(errMsg ?? (data as any)?.error ?? "Échec OAuth");
+          await failWithGuard(errMsg ?? (data as any)?.error ?? "Échec OAuth");
           return;
         }
         const verify = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: (data as any).token_hash });
         if (verify.error) { await failWithGuard(verify.error.message); return; }
+        const hydrated = verify.data?.session ?? await getSessionWithRetry();
+        if (!hydrated?.access_token) { await failWithGuard("Session Microsoft non finalisée — reconnectez-vous"); return; }
         clearRememberedMs365RedirectUri();
         const next = await getMicrosoftSignInNextAsync("/mplanipret/home");
         await clearMicrosoftSignInIntentAsync();

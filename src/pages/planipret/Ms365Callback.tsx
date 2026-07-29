@@ -49,6 +49,41 @@ export default function Ms365Callback() {
   const lastCodeRef = useRef<string | null>(null);
   const currentCode = params.get("code");
 
+  const homeIfSignedIn = async (): Promise<boolean> => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) {
+        clearRememberedMs365RedirectUri();
+        await clearMicrosoftSignInIntentAsync();
+        setStatus("ok");
+        navigate("/mplanipret/home", { replace: true });
+        return true;
+      }
+    } catch {}
+    return false;
+  };
+
+  const failWithGuard = async (message: string) => {
+    if (await homeIfSignedIn()) return;
+    setStatus("error");
+    setError(message);
+  };
+
+  const retrySignIn = () => {
+    void (async () => {
+      try {
+        setStatus("loading");
+        setError(null);
+        clearRememberedMs365RedirectUri();
+        const { startMicrosoftSignIn } = await import("@/lib/ms365AuthLogin");
+        await startMicrosoftSignIn("/mplanipret/home");
+      } catch (e) {
+        setStatus("error");
+        setError(String((e as Error)?.message ?? e));
+      }
+    })();
+  };
+
   useEffect(() => {
     if (currentCode && currentCode !== lastCodeRef.current) {
       lastCodeRef.current = currentCode;
@@ -75,7 +110,7 @@ export default function Ms365Callback() {
       clearMs365Pending();
       const code = params.get("code");
       const err = params.get("error_description") ?? params.get("error");
-      if (err) { setStatus("error"); setError(err); return; }
+      if (err) { await failWithGuard(err); return; }
       // If user re-opens the app and lands on the callback route without a fresh code,
       // silently redirect to home instead of showing an error.
       if (!code) { navigate("/mplanipret/home", { replace: true }); return; }
@@ -121,7 +156,7 @@ export default function Ms365Callback() {
           return;
         }
         const verify = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: (data as any).token_hash });
-        if (verify.error) { setStatus("error"); setError(verify.error.message); return; }
+        if (verify.error) { await failWithGuard(verify.error.message); return; }
         clearRememberedMs365RedirectUri();
         const next = await getMicrosoftSignInNextAsync("/mplanipret/home");
         await clearMicrosoftSignInIntentAsync();
@@ -131,11 +166,11 @@ export default function Ms365Callback() {
         return;
       }
       const session = await getSessionWithRetry();
-      if (!session) { setStatus("error"); setError("Session expirée — reconnectez-vous"); return; }
+      if (!session) { await failWithGuard("Session expirée — reconnectez-vous"); return; }
       const { data, errMsg } = await invokeAndParse("ms365-oauth-exchange", { code, redirect_uri, code_verifier });
       if (errMsg || !(data as any)?.success) {
         console.error("ms365 exchange failed", { data, errMsg });
-        setStatus("error"); setError(errMsg ?? (data as any)?.error ?? "Échec OAuth");
+        await failWithGuard(errMsg ?? (data as any)?.error ?? "Échec OAuth");
         return;
       }
       clearRememberedMs365RedirectUri();
@@ -158,11 +193,10 @@ export default function Ms365Callback() {
     } finally {
       exchangeInFlight = false;
     }
-    })().catch((e) => {
+    })().catch(async (e) => {
       exchangeInFlight = false;
       console.error("ms365 callback crashed", e);
-      setStatus("error");
-      setError(String(e?.message ?? e ?? "Échec OAuth"));
+      await failWithGuard(String(e?.message ?? e ?? "Échec OAuth"));
     });
 
   }, [currentCode, params, navigate]);
@@ -173,7 +207,7 @@ export default function Ms365Callback() {
       <div className="bg-white rounded-xl shadow p-6 max-w-md w-full text-center">
         {status === "loading" && (<><Loader2 className="w-8 h-8 mx-auto animate-spin text-blue-600 mb-3" /><p className="text-slate-700">Connexion à Microsoft 365…</p></>)}
         {status === "ok" && (<><CheckCircle2 className="w-10 h-10 mx-auto text-emerald-600 mb-3" /><p className="font-semibold text-slate-800">Microsoft 365 connecté avec succès ✅</p><p className="text-xs text-slate-500 mt-2">Redirection…</p></>)}
-        {status === "error" && (<><AlertCircle className="w-10 h-10 mx-auto text-red-600 mb-3" /><p className="font-semibold text-slate-800">Erreur de connexion</p><p className="text-xs text-slate-500 mt-2">{error}</p><button onClick={() => navigate("/mplanipret/home", { replace: true })} className="mt-4 px-4 py-2 text-sm bg-slate-100 rounded-lg">Retour à l'accueil</button></>)}
+        {status === "error" && (<><AlertCircle className="w-10 h-10 mx-auto text-red-600 mb-3" /><p className="font-semibold text-slate-800">Erreur de connexion</p><p className="text-xs text-slate-500 mt-2">{error}</p><div className="mt-4 flex gap-2 justify-center"><button type="button" onClick={retrySignIn} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg">Réessayer</button><button type="button" onClick={() => navigate("/mplanipret/home", { replace: true })} className="px-4 py-2 text-sm bg-slate-100 rounded-lg">Accueil</button></div></>)}
       </div>
     </div>
   );

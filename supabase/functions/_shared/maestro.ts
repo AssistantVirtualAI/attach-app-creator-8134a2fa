@@ -273,7 +273,7 @@ export async function getBrokerAuth(
   }
   let token = cfg.key;
   let machine = true;
-  if (userId) {
+  if (preferOAuth && userId) {
     const oauthToken = await getUserMaestroAccessToken(admin, userId).catch((e) => {
       console.warn("[maestro.auth] OAuth token unavailable", (e as Error).message);
       return null;

@@ -12,9 +12,11 @@ import {
   maestroAudit,
   maestroFetch,
   maestroFetchScoped,
+  maestroSyncLog,
   normalizePhone,
   pipelineLog,
   setPipelineStep,
+  summarizeMaestroFailure,
   updateCallPipeline,
 } from "../_shared/maestro.ts";
 
@@ -160,6 +162,17 @@ Deno.serve(async (req) => {
     });
     const ms = Date.now() - t0;
 
+    await maestroSyncLog(admin, {
+      user_id: call.user_id,
+      action: "call.cdr",
+      endpoint: res.path ?? "/api/v1/calls/cdr",
+      request_body: { call_id, ns_call_id: call.ns_call_id ?? null, has_contact_phone: !!contactPhone, has_broker_id: !!auth.brokerId },
+      response_status: res.status,
+      response_body: res.data,
+      duration_ms: ms,
+      success: res.ok || res.status === 409,
+    });
+
     if (res.ok || res.status === 409) {
       await admin
         .from("planipret_phone_calls")
@@ -201,12 +214,13 @@ Deno.serve(async (req) => {
       return json({ success: true, maestro_call_id: res.data?.id ?? null, client_id: maestroClientId });
     }
 
-    await updateCallPipeline(admin, call_id, { step: "error", error: `cdr_${res.status}` });
+    const failure = summarizeMaestroFailure(res.status, res.data);
+    await updateCallPipeline(admin, call_id, { step: "error", error: `${failure.error}_${res.status}` });
     await setPipelineStep(admin, call_id, "cdr", "error", { status: res.status });
-    await pipelineLog(admin, { call_id, user_id: call.user_id, step: "cdr_sync", status: "error", duration_ms: ms, error_message: `status_${res.status}` });
-    await maestroAudit(admin, "cdr_failed", { call_id, status: res.status, data: res.data });
-    await broadcastPipeline(admin, call.user_id, "pipeline_error", { call_id, step: "cdr_sync", error: `HTTP ${res.status}` });
-    return json({ success: false, status: res.status, details: res.data }, 200);
+    await pipelineLog(admin, { call_id, user_id: call.user_id, step: "cdr_sync", status: "error", duration_ms: ms, error_message: failure.error });
+    await maestroAudit(admin, "cdr_failed", { call_id, status: res.status, error: failure.error, detail: failure.detail });
+    await broadcastPipeline(admin, call.user_id, "pipeline_error", { call_id, step: "cdr_sync", error: `${failure.error} (${res.status})` });
+    return json({ success: false, status: res.status, error: failure.error, detail: failure.detail, permanent: failure.permanent, details: res.data }, 200);
   } catch (e: any) {
     console.error("maestro-cdr error", e);
     return json({ success: false, error: e?.message ?? "server_error" }, 500);

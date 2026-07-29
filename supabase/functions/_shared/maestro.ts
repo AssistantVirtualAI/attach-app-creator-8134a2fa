@@ -127,7 +127,8 @@ export async function maestroFetch(cfg: MaestroConfig, opts: CallOpts) {
 
   const useMachine = opts.token === cfg.key || !opts.brokerId;
   const suffix = useMachine ? `${opts.path.includes("?") ? "&" : "?"}machine=1` : "";
-  const res = await fetch(`${cfg.url}${opts.path}${suffix}`, {
+  const endpoint = `${cfg.url}${opts.path}${suffix}`;
+  const res = await fetch(endpoint, {
     method: opts.method ?? "GET",
     headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
@@ -139,7 +140,7 @@ export async function maestroFetch(cfg: MaestroConfig, opts: CallOpts) {
   } catch {
     data = { raw: text };
   }
-  return { ok: res.ok, status: res.status, data };
+  return { ok: res.ok, status: res.status, data, endpoint };
 }
 
 /**
@@ -158,6 +159,28 @@ export async function maestroFetchScoped(
   }
   const r = await maestroFetch(cfg, opts);
   return { ...r, path: opts.path };
+}
+
+export function summarizeMaestroFailure(status: number, data: any): { error: string; detail: string; permanent: boolean } {
+  const raw = typeof data?.raw === "string" ? data.raw : JSON.stringify(data ?? {}).slice(0, 500);
+  const lower = raw.toLowerCase();
+  if (status === 404) {
+    const html = lower.includes("<html") || lower.includes("<title>");
+    return {
+      error: "maestro_endpoint_not_found",
+      detail: html
+        ? "Configured Maestro URL returns an HTML 404 page; the telecom API prefix is not being served."
+        : "Maestro returned 404 for this endpoint.",
+      permanent: true,
+    };
+  }
+  if (status === 401 || status === 403) {
+    return { error: "maestro_auth_failed", detail: `Maestro rejected the token with HTTP ${status}.`, permanent: true };
+  }
+  if (status === 0) {
+    return { error: "maestro_unreachable", detail: "Maestro could not be reached from the backend.", permanent: false };
+  }
+  return { error: "maestro_error", detail: `Maestro returned HTTP ${status}.`, permanent: status >= 400 && status < 500 };
 }
 
 

@@ -18,7 +18,7 @@ type Health = {
 };
 
 const SELECT =
-  "id, user_id, ms365_email, ms365_refresh_token, ms365_token_expiry, maestro_refresh_token, maestro_token_expires_at";
+  "id, user_id, ms365_email, ms365_refresh_token, ms365_token_expiry, maestro_refresh_token, maestro_token_expires_at, maestro_broker_id";
 
 async function elevenLabsHealth(): Promise<Health> {
   const key = Deno.env.get("ELEVENLABS_API_KEY");
@@ -94,6 +94,8 @@ Deno.serve(async (req) => {
     // ---- Maestro -----------------------------------------------------------
     if (!p.maestro_refresh_token) {
       services.push({ service: "maestro", state: "not_configured", detail: "maestro_not_configured", can_reconnect: true });
+    } else if (!p.maestro_broker_id) {
+      services.push({ service: "maestro", state: "error", detail: "missing_maestro_broker_id — reconnect Maestro so sync can attach calls to the broker account", can_reconnect: true });
     } else {
       try {
         const t = await getUserMaestroAccessToken(admin as any, u.user.id);

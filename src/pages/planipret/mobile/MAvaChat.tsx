@@ -110,12 +110,12 @@ export default function MAvaChat() {
       }
       if (pendingConfirm && CANCEL_RE.test(text)) {
         setPendingConfirm(null);
-        setMessages((m) => [...m, { id: `cancel-${Date.now()}`, role: "assistant", message: "Action annulée.", created_at: new Date().toISOString() }]);
+        setMessages((m) => [...m, { id: `cancel-${Date.now()}`, role: "assistant", message: t("avaChat.actionCancelled"), created_at: new Date().toISOString() }]);
         return;
       }
       const history = messages.slice(-8).map((m) => ({ role: m.role, content: m.message }));
       const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
-        body: { mode: "chat", user_message: text, session_id: sessionId, history, context: avaContext },
+        body: { mode: "chat", user_message: text, session_id: sessionId, history, context: avaContext, language: lang },
       });
       if (error) throw error;
       const d = data as any;
@@ -132,16 +132,16 @@ export default function MAvaChat() {
         return s.kind === "call" || s.kind === "sms" || MUTATING_ACTIONS.has(action);
       });
       const replyText = immediate?.kind === "call"
-        ? `Je peux lancer l’appel vers ${String(immediate.payload?.number ?? immediate.payload?.to ?? immediate.payload?.phone ?? "ce numéro")}. Réponds « Oui » pour confirmer.`
+        ? t("avaChat.callConfirmPrompt").replace("{number}", String(immediate.payload?.number ?? immediate.payload?.to ?? immediate.payload?.phone ?? t("avaChat.thisNumber")))
         : immediate?.kind === "sms"
-          ? `Je peux envoyer ce texto à ${String(immediate.payload?.number ?? immediate.payload?.to ?? immediate.payload?.phone ?? "ce contact")}. Réponds « Oui » pour confirmer.`
+          ? t("avaChat.smsConfirmPrompt").replace("{contact}", String(immediate.payload?.number ?? immediate.payload?.to ?? immediate.payload?.phone ?? t("avaChat.thisContact")))
           : parsedReply.text;
       const replyId = `a-${Date.now()}`;
       setMessages((m) => [...m, { id: replyId, role: "assistant", message: replyText, suggestions: parsedReply.suggestions, created_at: new Date().toISOString() }]);
       if (immediate) setPendingConfirm(immediate);
       if (speakReplies) speak(replyId, replyText);
     } catch (e: any) {
-      toast.error(e?.message ?? "Erreur AVA");
+      toast.error(e?.message ?? t("avaChat.chatError"));
     } finally { setBusy(false); }
   };
 
@@ -153,7 +153,7 @@ export default function MAvaChat() {
       setMessages((m) => [...m, {
         id: `confirm-${Date.now()}`,
         role: "assistant",
-        message: `Confirmation requise: ${suggestion.label}\nRéponds simplement « Oui » ou « Confirmé » pour exécuter, ou « Annuler » pour arrêter.`,
+        message: `${t("avaChat.confirmRequired")}: ${suggestion.label}\n${t("avaChat.confirmInstructions")}`,
         created_at: new Date().toISOString(),
       }]);
       return;
@@ -167,7 +167,7 @@ export default function MAvaChat() {
     try {
       if (suggestion.kind === "call") {
         const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
-        if (!number) throw new Error("Numéro manquant");
+        if (!number) throw new Error(t("avaChat.callMissingNumber"));
         // 1) Ouvre le dialer avec le numéro déjà rempli (auto-dial)
         if (typeof outlet?.openDialer === "function") outlet.openDialer(number, true);
         else window.dispatchEvent(new CustomEvent("ava:open-dialer", { detail: { number, autoDial: true } }));
@@ -180,15 +180,15 @@ export default function MAvaChat() {
             if (!inCall && typeof sp?.placeCall === "function") void sp.placeCall(number);
           } catch { /* noop */ }
         }, 2200);
-        setMessages((m) => [...m, { id: `dial-${Date.now()}`, role: "assistant", message: `J’ouvre le dialer avec ${number} et je lance l’appel.`, created_at: new Date().toISOString() }]);
-        toast.success("Appel en cours…");
+        setMessages((m) => [...m, { id: `dial-${Date.now()}`, role: "assistant", message: t("avaChat.dialerOpening").replace("{number}", number), created_at: new Date().toISOString() }]);
+        toast.success(t("avaChat.callInProgress"));
         return;
       }
 
       if (suggestion.kind === "sms") {
         const number = String(suggestion.payload?.number ?? suggestion.payload?.to ?? suggestion.payload?.phone ?? "").trim();
         const body = String(suggestion.payload?.message ?? suggestion.payload?.text ?? suggestion.payload?.body ?? "").trim();
-        if (!number) throw new Error("Numéro manquant");
+        if (!number) throw new Error(t("avaChat.callMissingNumber"));
         // 1) Ouvre la page Texto avec le message pré-rempli et envoi automatique
         window.dispatchEvent(new CustomEvent("ava:open-sms-composer", { detail: { number, body, autoSend: true } }));
         // 2) Filet de sécurité : si aucun accusé d'envoi, envoyer directement via pp-ns-sms
@@ -200,33 +200,33 @@ export default function MAvaChat() {
             window.removeEventListener("ava:sms-sent", onSent);
             if (acked) return;
             try {
-              const { data, error } = await supabase.functions.invoke("pp-ns-sms", { body: { action: "send", to: number, message: body } });
+              const { data, error } = await supabase.functions.invoke("pp-ns-sms", { body: { action: "send", to: number, message: body, language: lang } });
               if (error) throw error;
-              if ((data as any)?.ok === false || (data as any)?.error) throw new Error(String((data as any)?.error ?? "SMS refusé"));
-              toast.success("Texto envoyé");
+              if ((data as any)?.ok === false || (data as any)?.error) throw new Error(String((data as any)?.error ?? t("avaChat.smsRefused")));
+              toast.success(t("avaChat.smsSent"));
             } catch (err: any) {
-              toast.error(err?.message ?? "Envoi du texto impossible");
+              toast.error(err?.message ?? t("avaChat.smsSendFailed"));
             }
           }, 4000);
         }
-        setMessages((m) => [...m, { id: `sms-${Date.now()}`, role: "assistant", message: `J’envoie le texto à ${number}.`, created_at: new Date().toISOString() }]);
-        toast.success("Envoi du texto…");
+        setMessages((m) => [...m, { id: `sms-${Date.now()}`, role: "assistant", message: t("avaChat.smsOpening").replace("{number}", number), created_at: new Date().toISOString() }]);
+        toast.success(t("avaChat.smsSending"));
         return;
       }
 
       const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
-        body: { mode: "chat", confirm_action: suggestion, approved: true, session_id: sessionId, context: avaContext },
+        body: { mode: "chat", confirm_action: suggestion, approved: true, session_id: sessionId, context: avaContext, language: lang },
       });
       if (error) throw error;
-      const replyText = String((data as any)?.reply ?? "Action terminée.");
+      const replyText = String((data as any)?.reply ?? t("avaChat.actionDone"));
       setMessages((m) => [...m, { id: `act-${Date.now()}`, role: "assistant", message: replyText, created_at: new Date().toISOString() }]);
       if ((data as any)?.result?.ok === false || (data as any)?.result?.success === false) {
-        toast.error("Action échouée : " + ((data as any)?.result?.error ?? "Erreur inconnue"));
+        toast.error(t("avaChat.actionFailedPrefix") + ((data as any)?.result?.error ?? t("avaChat.actionUnknownError")));
       } else {
-        toast.success("Action AVA traitée");
+        toast.success(t("avaChat.actionSuccess"));
       }
     } catch (e: any) {
-      toast.error(e?.message ?? "Action AVA impossible");
+      toast.error(e?.message ?? t("avaChat.actionImpossible"));
     } finally {
       setRunningSuggestion(null);
       if (opts.keepBusy) setBusy(false);
@@ -237,7 +237,7 @@ export default function MAvaChat() {
     try {
       audioRef.current?.pause();
       setSpeakingId(id);
-      const { data, error } = await supabase.functions.invoke("pp-ava-tts", { body: { text, language: "fr" } });
+      const { data, error } = await supabase.functions.invoke("pp-ava-tts", { body: { text, language: lang === "fr" ? "fr" : "en" } });
       if (error) throw error;
       const d = data as any;
       if (!d?.audioContent) throw new Error("no_audio");
@@ -248,7 +248,7 @@ export default function MAvaChat() {
       await audio.play();
     } catch (e: any) {
       setSpeakingId(null);
-      toast.error("Lecture vocale indisponible");
+      toast.error(t("avaChat.ttsUnavailable"));
     }
   };
 
@@ -275,20 +275,20 @@ export default function MAvaChat() {
           let bin = ""; const bytes = new Uint8Array(buf);
           for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
           const b64 = btoa(bin);
-          const { data, error } = await supabase.functions.invoke("pp-ava-stt", { body: { audio: b64, mime } });
+          const { data, error } = await supabase.functions.invoke("pp-ava-stt", { body: { audio: b64, mime, language: lang === "fr" ? "fr-CA" : "en-US" } });
           if (error) throw error;
           const text = String((data as any)?.text ?? "").trim();
           if (text) setInput((v) => (v ? `${v} ${text}` : text));
-          else toast.info("Rien détecté");
+          else toast.info(t("avaChat.sttNothingDetected"));
         } catch (e: any) {
-          toast.error("Transcription indisponible");
+          toast.error(t("avaChat.sttUnavailable"));
         } finally { setTranscribing(false); }
       };
       mr.start();
       mediaRef.current = mr;
       setRecording(true);
     } catch {
-      toast.error("Micro non autorisé");
+      toast.error(t("avaChat.micNotAllowed"));
     }
   };
 
@@ -298,7 +298,7 @@ export default function MAvaChat() {
     setRecording(false);
   };
 
-  const currentTitle = useMemo(() => sessions.find((s) => s.id === sessionId)?.title ?? "AVA", [sessions, sessionId]);
+  const currentTitle = useMemo(() => sessions.find((s) => s.id === sessionId)?.title ?? t("avaChat.newChatShort"), [sessions, sessionId]);
 
   if (mode === "voice" && voiceAgentAllowed && userId) {
     return (
@@ -307,7 +307,7 @@ export default function MAvaChat() {
         <button
           onClick={() => setVoiceSettingsOpen(true)}
           className="absolute top-4 right-16 z-[70] w-9 h-9 rounded-full bg-white/5 text-white/80 flex items-center justify-center"
-          title="Voix"
+          title={t("avaChat.voiceSettingsTitle")}
         ><Radio className="w-4 h-4" /></button>
         {voiceSettingsOpen && (
           <VoiceSettingsSheet userId={userId} onClose={() => setVoiceSettingsOpen(false)} />
@@ -324,17 +324,17 @@ export default function MAvaChat() {
             <Button variant="ghost" size="icon" className="rounded-full"><Menu className="w-5 h-5" /></Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-80">
-            <SheetHeader><SheetTitle>Conversations AVA</SheetTitle></SheetHeader>
+            <SheetHeader><SheetTitle>{t("avaChat.conversationsTitle")}</SheetTitle></SheetHeader>
             <div className="mt-4 space-y-2">
               <Button size="sm" variant="secondary" className="w-full" onClick={startNew}>
-                <Plus className="w-4 h-4 mr-1" /> Nouvelle conversation
+                <Plus className="w-4 h-4 mr-1" /> {t("avaChat.newConversation")}
               </Button>
               {sessions.map((s) => (
                 <button
                   key={s.id}
                   onClick={() => setSessionId(s.id)}
                   className={`w-full text-left rounded-md px-3 py-2 text-sm truncate ${s.id === sessionId ? "bg-primary/10 text-primary" : "hover:bg-muted"}`}
-                >{s.title || "Sans titre"}</button>
+                >{s.title || t("avaChat.untitled")}</button>
               ))}
             </div>
           </SheetContent>
@@ -347,7 +347,7 @@ export default function MAvaChat() {
           </div>
           <div className="flex flex-col min-w-0">
             <div className="font-semibold truncate leading-tight" style={{ color: "var(--pp-text-primary)", fontFamily: "Urbanist,sans-serif" }}>{currentTitle}</div>
-            <div className="text-[10px] leading-tight" style={{ color: "var(--pp-text-muted)", letterSpacing: "0.08em" }}>Assistant Planiprêt</div>
+            <div className="text-[10px] leading-tight" style={{ color: "var(--pp-text-muted)", letterSpacing: "0.08em" }}>{t("avaChat.assistantLabel")}</div>
           </div>
         </div>
         {voiceAgentAllowed && (
@@ -357,14 +357,14 @@ export default function MAvaChat() {
               style={{ width: "calc(50% - 2px)", left: mode === "chat" ? 2 : "calc(50%)", background: "linear-gradient(135deg,#2E9BDC,#7C3AED)", boxShadow: "0 4px 12px rgba(124,58,237,0.35)" }}
             />
             <button onClick={() => switchMode("chat")} className="relative z-10 px-3 py-1 text-[11px] flex items-center gap-1 rounded-full transition-colors" style={{ color: mode === "chat" ? "#fff" : "var(--pp-text-secondary)", fontWeight: 600 }}>
-              <MessageSquare className="w-3 h-3" /> Chat
+              <MessageSquare className="w-3 h-3" /> {t("avaChat.chatTab")}
             </button>
             <button onClick={() => switchMode("voice")} className="relative z-10 px-3 py-1 text-[11px] flex items-center gap-1 rounded-full transition-colors" style={{ color: mode === "voice" ? "#fff" : "var(--pp-text-secondary)", fontWeight: 600 }}>
-              <Radio className="w-3 h-3" /> Vocal
+              <Radio className="w-3 h-3" /> {t("avaChat.voiceTab")}
             </button>
           </div>
         )}
-        <Button size="icon" variant="ghost" className="rounded-full" onClick={toggleTts} title={speakReplies ? "Voix activée" : "Voix désactivée"}>
+        <Button size="icon" variant="ghost" className="rounded-full" onClick={toggleTts} title={speakReplies ? t("avaChat.voiceOn") : t("avaChat.voiceOff")}>
           {speakReplies ? <Volume2 className="w-5 h-5" style={{ color: "var(--pp-brand-accent)" }} /> : <VolumeX className="w-5 h-5" />}
         </Button>
         <Button size="icon" variant="ghost" className="rounded-full" onClick={startNew}><Plus className="w-5 h-5" /></Button>
@@ -378,11 +378,11 @@ export default function MAvaChat() {
             <div className="flex flex-col items-center justify-center py-14 gap-4 text-center">
               <AvaOrb state="idle" size={140} />
               <div className="space-y-1">
-                <div className="text-[16px] font-semibold" style={{ color: "var(--pp-text-primary)", fontFamily: "Urbanist,sans-serif" }}>Bonjour, je suis AVA</div>
-                <div className="text-[12px] max-w-xs" style={{ color: "var(--pp-text-muted)" }}>J'ai accès à tes leads, appels, courriels et calendrier Microsoft.</div>
+                <div className="text-[16px] font-semibold" style={{ color: "var(--pp-text-primary)", fontFamily: "Urbanist,sans-serif" }}>{t("avaChat.greeting")}</div>
+                <div className="text-[12px] max-w-xs" style={{ color: "var(--pp-text-muted)" }}>{t("avaChat.greetingSub")}</div>
               </div>
               <div className="flex flex-wrap justify-center gap-1.5 max-w-md">
-                {["Résumé de ma journée", "Prochains rendez-vous", "Leads chauds à rappeler"].map((q) => (
+                {[t("avaChat.suggestion1"), t("avaChat.suggestion2"), t("avaChat.suggestion3")].map((q) => (
                   <button
                     key={q}
                     onClick={() => { setInput(q); setTimeout(() => send(), 50); }}
@@ -412,9 +412,9 @@ export default function MAvaChat() {
                           onClick={() => (speakingId === m.id ? (audioRef.current?.pause(), setSpeakingId(null)) : speak(m.id, cleaned))}
                           className="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold opacity-75 hover:opacity-100"
                           style={{ color: "var(--pp-text-muted)" }}
-                          title="Écouter"
+                          title={t("avaChat.listen")}
                         >
-                          {speakingId === m.id ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />} Écouter
+                          {speakingId === m.id ? <Square className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />} {t("avaChat.listen")}
                         </button>
                       </div>
                     </div>
@@ -452,7 +452,7 @@ export default function MAvaChat() {
               <div className="w-8 h-8 rounded-xl flex items-center justify-center overflow-hidden" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
                 <img src={avaLogo.url} alt="AVA" className="w-full h-full object-contain" />
               </div>
-              <Loader2 className="w-3 h-3 animate-spin" /> AVA réfléchit…
+              <Loader2 className="w-3 h-3 animate-spin" /> {t("avaChat.thinking")}
             </div>
           )}
         </div>
@@ -465,14 +465,14 @@ export default function MAvaChat() {
           disabled={busy || transcribing || !userId}
           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 disabled:opacity-50 transition-transform active:scale-95"
           style={{ background: recording ? "linear-gradient(135deg,#E84C4C,#F5A623)" : "color-mix(in srgb, var(--pp-agent) 12%, transparent)", color: recording ? "#fff" : "var(--pp-agent)" }}
-          title={recording ? "Arrêter" : "Dicter"}
-          aria-label={recording ? "Arrêter la dictée" : "Dicter à AVA"}
+          title={recording ? t("avaChat.micStopShort") : t("avaChat.micDictateShort")}
+          aria-label={recording ? t("avaChat.micStop") : t("avaChat.micDictate")}
         >
           {transcribing ? <Loader2 className="w-4 h-4 animate-spin" /> : recording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
         </button>
         <textarea
           ref={inputRef}
-          placeholder={recording ? "Enregistrement…" : "Message à AVA…"}
+          placeholder={recording ? t("avaChat.recording") : t("avaChat.inputPlaceholder")}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
@@ -486,7 +486,7 @@ export default function MAvaChat() {
           disabled={busy || !input.trim()}
           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white disabled:opacity-40 transition-transform active:scale-95"
           style={{ background: "linear-gradient(135deg,#2E9BDC,#7C3AED)", boxShadow: "0 6px 18px rgba(124,58,237,0.45)" }}
-          aria-label="Envoyer à AVA"
+          aria-label={t("avaChat.sendAria")}
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </button>
@@ -495,10 +495,10 @@ export default function MAvaChat() {
 
       {pendingConfirm && (
         <div className="sticky bottom-0 left-0 right-0 z-20 px-3 py-2 flex flex-col gap-2 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 92%, transparent)", borderTop: "1px solid var(--pp-bg-border)" }}>
-          <div className="text-sm" style={{ color: "var(--pp-text-primary)" }}>Confirmer : {pendingConfirm.label}</div>
+          <div className="text-sm" style={{ color: "var(--pp-text-primary)" }}>{t("avaChat.confirmPrefix")} : {pendingConfirm.label}</div>
           <div className="flex gap-2">
-            <Button variant="ghost" className="flex-1" onClick={() => setPendingConfirm(null)}>Annuler</Button>
-            <Button className="flex-1" onClick={() => { const s = pendingConfirm; setPendingConfirm(null); runSuggestion(s, { skipConfirm: true }); }}>Confirmer</Button>
+            <Button variant="ghost" className="flex-1" onClick={() => setPendingConfirm(null)}>{t("avaChat.cancel")}</Button>
+            <Button className="flex-1" onClick={() => { const s = pendingConfirm; setPendingConfirm(null); runSuggestion(s, { skipConfirm: true }); }}>{t("avaChat.confirm")}</Button>
           </div>
         </div>
       )}

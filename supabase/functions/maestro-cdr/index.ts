@@ -156,8 +156,21 @@ Deno.serve(async (req) => {
     const t0 = Date.now();
     if (!auth.brokerId) {
       await setPipelineStep(admin, call_id, "cdr", "error", { reason: "maestro_broker_id_missing" });
-      return json({ success: false, error: "maestro_broker_id_missing", detail: "Le profil n'a pas d'identifiant utilisateur Maestro (telecom user id).", permanent: true }, 200);
+      await pipelineLog(admin, {
+        call_id,
+        user_id: call.user_id,
+        step: "cdr",
+        status: "error",
+        error_message: "maestro_broker_id_missing",
+      });
+      return json({
+        success: false,
+        error: "maestro_broker_id_missing",
+        hint: "Set maestro_broker_id (numeric broker ID from Scott, e.g. 67 or 93135) on planipret_profiles for this user.",
+        permanent: true,
+      }, 200);
     }
+
     const res = await maestroFetch(cfg, {
       method: "POST",
       path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls`,

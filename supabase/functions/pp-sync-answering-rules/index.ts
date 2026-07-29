@@ -68,7 +68,10 @@ Deno.serve(async (req) => {
     const dry_run: boolean = !!body?.dry_run;
     const batch_size: number = Math.max(1, Math.min(20, Number(body?.batch_size ?? 10)));
     const ring_timeout: number = Math.max(20, Math.min(120, Number(body?.ring_timeout ?? 35)));
-    const repair_dids: boolean = body?.repair_dids !== false;
+    // Opt-in only: planipret_did_assignments is NOT the source of truth for DID
+    // routes on NetSapiens, so the repair step used to block routing_ok for
+    // ~all brokers (did_route_not_verified). Pass repair_dids:true explicitly.
+    const repair_dids: boolean = body?.repair_dids === true;
 
     // Auth: admin only
     const authHeader = req.headers.get("Authorization") ?? "";

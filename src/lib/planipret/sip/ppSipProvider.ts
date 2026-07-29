@@ -7,7 +7,7 @@
 // stats sampling, and ICE-restart support for Wi-Fi ↔ LTE handover.
 
 import JsSIP from "jssip";
-import { getPpSipReconnectConfig, ppSipBackoffDelay } from "./ppSipReconnectConfig";
+import { getPpSipReconnectConfig, ppSipBackoffDelay, PP_SIP_RECONNECT_FLOOR_MS } from "./ppSipReconnectConfig";
 
 export type PpSipStatus = "idle" | "connecting" | "connected" | "registered" | "disconnected" | "error";
 export type PpCallState = "idle" | "ringing-out" | "ringing-in" | "active" | "held" | "ended";

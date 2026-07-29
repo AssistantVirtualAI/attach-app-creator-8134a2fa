@@ -501,12 +501,26 @@ Deno.serve(async (req) => {
         verify = { error: (e as Error).message };
       }
 
+      // A 200 on the rule write is not enough: the call only rings if the DID
+      // reaches the user AND the stored rule forks to a real device.
+      const didOk = (did_repair as any)?.skipped === true
+        || (did_repair as any)?.attempted === 0
+        || ((did_repair as any)?.verified ?? 0) >= ((did_repair as any)?.attempted ?? 0);
+      const routing_ok = !!opRes.ok && !!verify?.honored && didOk;
+
       return {
         broker_id: broker.id ?? broker.user_id,
         broker_name: broker.full_name,
         extension: ext,
         domain,
         success: opRes.ok,
+        routing_ok,
+        routing_blockers: [
+          ...(opRes.ok ? [] : ["rule_write_failed"]),
+          ...(verify?.honored ? [] : ["sim_ring_not_honored"]),
+          ...(didOk ? [] : ["did_route_not_verified"]),
+          ...(devices.registered_aors?.length ? [] : ["no_registered_device"]),
+        ],
         mode,
         status: opRes.status,
         rule_path: rulePath,
@@ -518,6 +532,7 @@ Deno.serve(async (req) => {
         list_status: listRes.status,
         user_reset_status: userReset,
       };
+
     };
 
 

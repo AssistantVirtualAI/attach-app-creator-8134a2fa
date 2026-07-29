@@ -17,6 +17,7 @@ import {
   pipelineLog,
   setPipelineStep,
   summarizeMaestroFailure,
+  telecomAuth,
   updateCallPipeline,
 } from "../_shared/maestro.ts";
 
@@ -52,7 +53,7 @@ Deno.serve(async (req) => {
     await updateCallPipeline(admin, call_id, { step: "client_lookup", started: true, error: null });
     await pipelineLog(admin, { call_id, user_id: call.user_id, step: "client_lookup", status: "started" });
 
-    const auth = await getBrokerAuth(admin, call.user_id);
+    const auth = await telecomAuth(admin, call.user_id);
 
     // ── STEP 1: client lookup (cache-first) ─────────────────────
     let maestroClientId = call.maestro_client_id ?? null;
@@ -80,12 +81,14 @@ Deno.serve(async (req) => {
         await pipelineLog(admin, { call_id, user_id: call.user_id, step: "client_lookup", status: "success", payload: { source: "cache", client_id: maestroClientId } });
       } else {
         const t0 = Date.now();
-        const lookup = await maestroFetchScoped(cfg, {
-          method: "GET",
-          path: `/api/v1/clients/lookup?phone=${encodeURIComponent(contactPhone)}`,
-          token: auth.token,
-          brokerId: auth.brokerId,
-        });
+        const lookup = auth.brokerId
+          ? await maestroFetch(cfg, {
+              method: "POST",
+              path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/lookup-by-phone`,
+              token: auth.token,
+              body: { phone: contactPhone },
+            })
+          : { ok: false, status: 0, data: null, path: "lookup_skipped_no_broker_id" } as any;
         await pipelineLog(admin, {
           call_id,
           user_id: call.user_id,
@@ -95,7 +98,7 @@ Deno.serve(async (req) => {
           payload: { source: "maestro", status: lookup.status },
         });
         if (lookup.ok && lookup.data) {
-          const c = lookup.data?.client ?? lookup.data;
+          const c = lookup.data?.user ?? lookup.data?.client ?? lookup.data;
           maestroClientId = c?.id ?? c?.client_id ?? null;
           clientName = c?.full_name ?? c?.name ?? ([c?.first_name, c?.last_name].filter(Boolean).join(" ") || null);
           clientCompany = c?.company ?? null;
@@ -139,33 +142,35 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     const body = {
-      call_id: call.ns_call_id ?? call.id,
+      provider_call_id: call.ns_call_id ?? call.id,
+      to_user_number: call.direction === "inbound" ? call.from_number : call.to_number,
+      from_user_number: call.direction === "inbound" ? call.to_number : call.from_number,
+      status: "ended",
       direction: call.direction,
-      caller_number: call.from_number,
-      callee_number: call.to_number,
       started_at: call.started_at,
       ended_at: call.ended_at,
       duration_sec: call.duration_seconds ?? 0,
-      recording_url: call.recording_url,
       broker_ext: profile?.ns_extension ?? null,
-      maestro_client_id: maestroClientId,
     };
 
     const t0 = Date.now();
-    const res = await maestroFetchScoped(cfg, {
+    if (!auth.brokerId) {
+      await setPipelineStep(admin, call_id, "cdr", "error", { reason: "maestro_broker_id_missing" });
+      return json({ success: false, error: "maestro_broker_id_missing", detail: "Le profil n'a pas d'identifiant utilisateur Maestro (telecom user id).", permanent: true }, 200);
+    }
+    const res = await maestroFetch(cfg, {
       method: "POST",
-      path: "/api/v1/calls/cdr",
+      path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls`,
       token: auth.token,
-      brokerId: auth.brokerId,
-      body: { ...body, maestro_broker_id: auth.brokerId },
+      body,
       idempotencyKey: call.id,
-    });
+    }) as any;
     const ms = Date.now() - t0;
 
     await maestroSyncLog(admin, {
       user_id: call.user_id,
       action: "call.cdr",
-      endpoint: res.path ?? "/api/v1/calls/cdr",
+      endpoint: res.endpoint ?? "/api/v1/users/{id}/calls",
       request_body: { call_id, ns_call_id: call.ns_call_id ?? null, has_contact_phone: !!contactPhone, has_broker_id: !!auth.brokerId },
       response_status: res.status,
       response_body: res.data,
@@ -178,7 +183,7 @@ Deno.serve(async (req) => {
         .from("planipret_phone_calls")
         .update({
           maestro_synced: true,
-          maestro_call_id: res.data?.id ?? res.data?.call_id ?? null,
+          maestro_call_id: res.data?.call?.id ?? res.data?.id ?? res.data?.call_id ?? null,
         })
         .eq("id", call.id);
       await updateCallPipeline(admin, call_id, { step: "cdr_sent" });
@@ -189,7 +194,7 @@ Deno.serve(async (req) => {
         step: "cdr_sync",
         status: "success",
         duration_ms: ms,
-        payload: { maestro_call_id: res.data?.id ?? null, conflict: res.status === 409 },
+        payload: { maestro_call_id: res.data?.call?.id ?? res.data?.id ?? null, conflict: res.status === 409 },
       });
       await maestroAudit(admin, "cdr_pushed", { call_id, status: res.status, client_id: maestroClientId });
       await broadcastPipeline(admin, call.user_id, "pipeline_step", {
@@ -211,7 +216,7 @@ Deno.serve(async (req) => {
         }).catch(() => {});
       } catch {}
 
-      return json({ success: true, maestro_call_id: res.data?.id ?? null, client_id: maestroClientId });
+      return json({ success: true, maestro_call_id: res.data?.call?.id ?? res.data?.id ?? null, client_id: maestroClientId });
     }
 
     const failure = summarizeMaestroFailure(res.status, res.data);

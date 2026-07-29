@@ -90,6 +90,27 @@ export async function getBrokerAuth(
   };
 }
 
+/**
+ * Telecom REST API auth (Scott's spec): the machine API key + the broker's
+ * numeric Maestro telecom user id. Broker OAuth tokens are NOT accepted by
+ * `/telecom/api/v1` — it only authenticates `Bearer <machine key>&machine=1`.
+ */
+export async function telecomAuth(
+  admin: SupabaseClient,
+  userId: string | null | undefined,
+): Promise<{ token: string; brokerId: string | null }> {
+  const cfg = await getMaestroConfig(admin);
+  if (!userId) return { token: cfg.key, brokerId: null };
+  const { data: profile } = await admin
+    .from("planipret_profiles")
+    .select("maestro_broker_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return { token: cfg.key, brokerId: profile?.maestro_broker_id ?? null };
+}
+
+
+
 interface CallOpts {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string;
@@ -125,8 +146,9 @@ export async function maestroFetch(cfg: MaestroConfig, opts: CallOpts) {
   if (opts.brokerId) headers["X-Broker-Id"] = String(opts.brokerId);
   if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
 
-  const useMachine = opts.token === cfg.key || !opts.brokerId;
-  const suffix = useMachine ? `${opts.path.includes("?") ? "&" : "?"}machine=1` : "";
+  // Scott's Telecom REST API authenticates the machine API key only when
+  // `?machine=1` is present — always append it.
+  const suffix = `${opts.path.includes("?") ? "&" : "?"}machine=1`;
   const endpoint = `${cfg.url}${opts.path}${suffix}`;
   const res = await fetch(endpoint, {
     method: opts.method ?? "GET",

@@ -43,6 +43,18 @@ const IOS_URL_TYPES_DICT = `
 \t\t</dict>
 `;
 
+const IOS_ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>aps-environment</key>
+	<string>development</string>
+	<key>com.apple.developer.pushkit.unrestricted-voip</key>
+	<true/>
+</dict>
+</plist>
+`;
+
 const ANDROID_INTENT_FILTERS = `
             <!-- Planiprêt OAuth deep links: Maestro + Microsoft mobile callbacks -->
             <intent-filter>

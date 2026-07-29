@@ -854,7 +854,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     // MARK: - JS ↔ Native
     @objc func getVoipPushToken(_ call: CAPPluginCall) {
         // If PushKit has not handed us a token yet, re-arm the registry: after a
-        // restore/reinstall the first `didUpdate` can be missed entirely.
+        // restore/reinstall the first didUpdate can be missed entirely.
         if (voipToken ?? "").isEmpty {
             NSLog("[PpVoipCall] no VoIP token cached, re-arming PushKit")
             DispatchQueue.main.async { [weak self] in self?.setupPushKit() }
@@ -1168,7 +1168,7 @@ function ensurePluginRegistrationOrThrow(swift, file) {
 }
 
 // Force portrait at the AppDelegate level (Info.plist alone is overridden by
-// a `.all` Swift override in some Capacitor templates).
+// a .all Swift override in some Capacitor templates).
 function patchIosAppDelegate(iosApp) {
   const file = path.join(iosApp, "AppDelegate.swift");
   if (!fs.existsSync(file)) return;

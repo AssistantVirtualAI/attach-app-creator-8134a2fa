@@ -20,6 +20,8 @@ import {
   telecomAuth,
   updateCallPipeline,
 } from "../_shared/maestro.ts";
+import { markCdrRetrySucceeded, scheduleCdrRetry } from "../_shared/maestro-cdr-retry.ts";
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

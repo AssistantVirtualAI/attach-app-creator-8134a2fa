@@ -186,9 +186,14 @@ Deno.serve(async (req) => {
     if (!effectiveUserId) return json({ error: "no_user" }, 400);
 
     const { data: profile } = await admin.from("planipret_profiles")
-      .select("id, user_id, full_name, extension, organization_id")
+      .select("id, user_id, full_name, extension, organization_id, language")
       .eq("user_id", effectiveUserId).maybeSingle();
     if (!profile) return json({ error: "no_profile" }, 404);
+
+    // Language: explicit request wins (mobile app sends the active UI language),
+    // otherwise fall back to the broker profile (used by the 08:30 / 17:30 schedulers).
+    const lang: Lang = requestedLang ?? ((profile as any).language === "en" ? "en" : "fr");
+
 
     // Caching is handled by React Query on the client; force flag is accepted for future use.
     void force;

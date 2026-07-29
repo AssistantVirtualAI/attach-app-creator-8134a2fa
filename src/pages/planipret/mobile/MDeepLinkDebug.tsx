@@ -11,6 +11,7 @@ import {
   logDeepLink,
   type DeepLinkEvent,
 } from "@/lib/deepLinkDebug";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 type CheckState = "idle" | "running" | "ok" | "fail";
 interface Check { label: string; state: CheckState; detail?: string }
@@ -21,6 +22,7 @@ export default function MDeepLinkDebug() {
   const [schemeOk, setSchemeOk] = useState<null | boolean>(null);
   const [checks, setChecks] = useState<Check[]>([]);
   const [running, setRunning] = useState(false);
+  const { t, lang } = useMplanipretLang();
 
   useEffect(() => subscribeDeepLinkLog(() => setEvents(getDeepLinkLog())), []);
 
@@ -30,17 +32,17 @@ export default function MDeepLinkDebug() {
     const ok = await probePlanipretScheme(1800);
     setSchemeOk(ok);
     setProbing(false);
-    ok ? toast.success("Scheme planipret:// OK") : toast.error("Scheme planipret:// non enregistré");
+    ok ? toast.success(t("screens.deepLinkDebug.schemeOk")) : toast.error(t("screens.deepLinkDebug.schemeFail"));
   };
 
   const runFullValidation = async () => {
     setRunning(true);
     const list: Check[] = [
-      { label: "Scheme planipret:// enregistré", state: "running" },
-      { label: "Microsoft: config serveur (pp-ms-auth-start)", state: "idle" },
-      { label: "Microsoft: callback route disponible", state: "idle" },
-      { label: "Maestro: session + route start", state: "idle" },
-      { label: "Maestro: callback route disponible", state: "idle" },
+      { label: t("screens.deepLinkDebug.check1Label"), state: "running" },
+      { label: t("screens.deepLinkDebug.check2Label"), state: "idle" },
+      { label: t("screens.deepLinkDebug.check3Label"), state: "idle" },
+      { label: t("screens.deepLinkDebug.check4Label"), state: "idle" },
+      { label: t("screens.deepLinkDebug.check5Label"), state: "idle" },
     ];
     setChecks([...list]);
     const set = (i: number, patch: Partial<Check>) => setChecks((prev) => prev.map((c, idx) => idx === i ? { ...c, ...patch } : c));
@@ -48,9 +50,9 @@ export default function MDeepLinkDebug() {
     // 1. Scheme
     if (Capacitor.isNativePlatform()) {
       const ok = await probePlanipretScheme(1500);
-      set(0, { state: ok ? "ok" : "fail", detail: ok ? "OS a routé planipret:// vers l'app" : "OS n'a pas routé — rebuild avec npx cap sync" });
+      set(0, { state: ok ? "ok" : "fail", detail: ok ? t("screens.deepLinkDebug.check1OkDetail") : t("screens.deepLinkDebug.check1FailDetail") });
     } else {
-      set(0, { state: "ok", detail: "web preview (non applicable)" });
+      set(0, { state: "ok", detail: t("screens.deepLinkDebug.check1WebDetail") });
     }
 
     // 2. MS start
@@ -58,7 +60,7 @@ export default function MDeepLinkDebug() {
     try {
       const { data, error } = await supabase.functions.invoke("pp-ms-auth-start", { body: {} });
       const d = data as any;
-      if (error || !d?.configured) set(1, { state: "fail", detail: error?.message || "not configured" });
+      if (error || !d?.configured) set(1, { state: "fail", detail: error?.message || t("screens.deepLinkDebug.notConfigured") });
       else set(1, { state: "ok", detail: `client_id=${String(d.client_id).slice(0, 8)}… tenant=${d.tenant_id}` });
     } catch (e: any) { set(1, { state: "fail", detail: e?.message }); }
 
@@ -101,7 +103,7 @@ export default function MDeepLinkDebug() {
     {
       const probe = await probeOptions("pp-ms-auth-callback");
       set(2, probe.ok
-        ? { state: "ok", detail: "Endpoint callback prêt (test sans échange OAuth réel)" }
+        ? { state: "ok", detail: t("screens.deepLinkDebug.callbackReadyDetail") }
         : { state: "fail", detail: probe.error || `HTTP ${probe.status}` });
     }
 
@@ -109,7 +111,7 @@ export default function MDeepLinkDebug() {
     set(3, { state: "running" });
     {
       if (!session?.access_token) {
-        set(3, { state: "fail", detail: "Connecte-toi dans l'app puis relance ce test" });
+        set(3, { state: "fail", detail: t("screens.deepLinkDebug.signInHint") });
       } else {
       const isNative = Capacitor.isNativePlatform();
       const { status, data } = await rawInvoke("maestro-oauth-start", {
@@ -120,14 +122,14 @@ export default function MDeepLinkDebug() {
       const d = data as any;
       if (!d?.authorize_url) {
         const detail = status === 401 || d?.error === "unauthorized"
-          ? "requiert une session utilisateur (connecte-toi puis relance)"
+          ? t("screens.deepLinkDebug.unauthorizedHint")
           : (d?.error || `HTTP ${status}`);
         set(3, { state: "fail", detail });
       } else {
         try {
           const u = new URL(d.authorize_url);
           set(3, { state: "ok", detail: `authorize host=${u.host}` });
-        } catch { set(3, { state: "fail", detail: "authorize_url invalide" }); }
+        } catch { set(3, { state: "fail", detail: t("screens.deepLinkDebug.invalidAuthorizeUrl") }); }
       }
       }
     }
@@ -137,14 +139,14 @@ export default function MDeepLinkDebug() {
     {
       const probe = await probeOptions("maestro-oauth-callback");
       set(4, probe.ok
-        ? { state: "ok", detail: "Endpoint callback prêt (test sans échange OAuth réel)" }
+        ? { state: "ok", detail: t("screens.deepLinkDebug.callbackReadyDetail") }
         : { state: "fail", detail: probe.error || `HTTP ${probe.status}` });
     }
 
 
 
     setRunning(false);
-    toast.success("Validation terminée");
+    toast.success(t("screens.deepLinkDebug.validationDone"));
   };
 
 
@@ -161,19 +163,19 @@ export default function MDeepLinkDebug() {
       } else {
         window.location.href = "/auth/maestro/callback?code=TEST_DEBUG&state=debug";
       }
-      toast.info("Test callback déclenché");
+      toast.info(t("screens.deepLinkDebug.testCallbackTriggered"));
     } catch (e: any) {
-      toast.error(e?.message || "Échec du test");
+      toast.error(e?.message || t("screens.deepLinkDebug.testFailed"));
     }
   };
 
   return (
     <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ fontSize: 16, fontWeight: 700, color: "var(--pp-text-primary)" }}>Deep-link debug</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: "var(--pp-text-primary)" }}>{t("screens.deepLinkDebug.title")}</div>
 
       <div className="rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", padding: 12 }}>
         <div style={{ fontSize: 12, color: "var(--pp-text-secondary)", marginBottom: 8 }}>
-          Plateforme : <b>{Capacitor.getPlatform()}</b>
+          {t("screens.deepLinkDebug.platformLabel")} <b>{Capacitor.getPlatform()}</b>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
@@ -183,46 +185,46 @@ export default function MDeepLinkDebug() {
             style={{ background: "#0369a1", color: "white", fontSize: 12, fontWeight: 600, padding: "8px 12px" }}
           >
             {schemeOk === true ? <ShieldCheck className="w-3 h-3" /> : schemeOk === false ? <ShieldAlert className="w-3 h-3" /> : <RefreshCw className={`w-3 h-3 ${probing ? "animate-spin" : ""}`} />}
-            Vérifier scheme planipret://
+            {t("screens.deepLinkDebug.verifyScheme")}
           </button>
           <button
             onClick={triggerTestCallback}
             className="flex items-center gap-1 rounded-md"
             style={{ background: "#a855f7", color: "white", fontSize: 12, fontWeight: 600, padding: "8px 12px" }}
           >
-            <Play className="w-3 h-3" /> Test callback Maestro
+            <Play className="w-3 h-3" /> {t("screens.deepLinkDebug.testCallback")}
           </button>
           <button
             onClick={() => { clearDeepLinkLog(); setEvents([]); }}
             className="flex items-center gap-1 rounded-md"
             style={{ background: "transparent", border: "1px solid #ef4444", color: "#ef4444", fontSize: 12, fontWeight: 600, padding: "8px 12px" }}
           >
-            <Trash2 className="w-3 h-3" /> Vider
+            <Trash2 className="w-3 h-3" /> {t("screens.deepLinkDebug.clear")}
           </button>
         </div>
         {schemeOk !== null && (
           <div style={{ marginTop: 8, fontSize: 11, color: schemeOk ? "#22c55e" : "#ef4444" }}>
-            {schemeOk ? "Le scheme est déclaré et opérationnel." : "Le scheme n'a pas été routé vers l'app. Vérifie Info.plist / AndroidManifest et refais npx cap sync."}
+            {schemeOk ? t("screens.deepLinkDebug.schemeOkDetail") : t("screens.deepLinkDebug.schemeFailDetail")}
           </div>
         )}
       </div>
 
       <div className="rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", padding: 12 }}>
         <div className="flex items-center justify-between mb-2">
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)" }}>Validation Maestro + Microsoft</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)" }}>{t("screens.deepLinkDebug.validationTitle")}</div>
           <button
             onClick={runFullValidation}
             disabled={running}
             className="flex items-center gap-1 rounded-md"
             style={{ background: "#22c55e", color: "white", fontSize: 11, fontWeight: 600, padding: "6px 10px" }}
           >
-            {running ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />} Lancer
+            {running ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />} {t("screens.deepLinkDebug.run")}
           </button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {checks.length === 0 && (
             <div style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>
-              Clique « Lancer » pour vérifier la config serveur, le routage callback et les endpoints des deux connexions.
+              {t("screens.deepLinkDebug.runHint")}
             </div>
           )}
           {checks.map((c, i) => (
@@ -243,10 +245,10 @@ export default function MDeepLinkDebug() {
 
       <div className="rounded-lg" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", padding: 12 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--pp-text-primary)", marginBottom: 8 }}>
-          Historique ({events.length})
+          {t("screens.deepLinkDebug.historyTitle").replace("{count}", String(events.length))}
         </div>
         {events.length === 0 && (
-          <div style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Aucun événement pour le moment.</div>
+          <div style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>{t("screens.deepLinkDebug.noEventsYet")}</div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 420, overflowY: "auto" }}>
           {events.slice().reverse().map((ev, i) => (
@@ -255,7 +257,7 @@ export default function MDeepLinkDebug() {
                 color: ev.kind === "error" ? "#ef4444" : ev.kind === "handler" ? "#22c55e" : "#a855f7",
                 fontWeight: 700,
               }}>
-                [{new Date(ev.ts).toLocaleTimeString()}] {ev.source} · {ev.kind}
+                [{new Date(ev.ts).toLocaleTimeString(lang === "fr" ? "fr-CA" : "en-CA")}] {ev.source} · {ev.kind}
               </div>
               {ev.url && <div style={{ color: "var(--pp-text-secondary)", wordBreak: "break-all" }}>{ev.url}</div>}
               {ev.detail && <div style={{ color: "var(--pp-text-muted)" }}>{ev.detail}</div>}

@@ -655,6 +655,7 @@ class PpSipProvider {
   stop() {
     this.stopKeepAlive();
     if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
+    if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
     if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }
     try { this.ua?.stop(); } catch {}
     this.ua = null;

@@ -6,6 +6,97 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { generateText, Output } from "npm:ai";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
+import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
+
+const GRAPH = "https://graph.microsoft.com/v1.0";
+
+async function graphGet(admin: any, profile: any, path: string, retry = true): Promise<any[]> {
+  try {
+    const r = await fetch(`${GRAPH}${path}`, {
+      headers: { Authorization: `Bearer ${profile.ms365_access_token}` },
+    });
+    if (r.status === 401 && retry) {
+      const t = await refreshMicrosoftAccessToken(admin, profile, MS365_DELEGATED_SCOPES);
+      if (t) { profile.ms365_access_token = t; return graphGet(admin, profile, path, false); }
+      return [];
+    }
+    if (!r.ok) return [];
+    const d = await r.json().catch(() => ({}));
+    return d?.value ?? [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+async function buildMicrosoftStats(admin: any, profile: any, sinceIso: string) {
+  if (!profile?.ms365_access_token) return { connected: false };
+  const nowIso = new Date().toISOString();
+  const futureIso = new Date(Date.now() + 7 * 86400_000).toISOString();
+
+  const [received, sent, unread, flagged, pastEvents, upcoming, todos] = await Promise.all([
+    graphGet(admin, profile, `/me/messages?$filter=receivedDateTime ge ${sinceIso}&$select=receivedDateTime,from,subject,isRead,bodyPreview&$top=100`),
+    graphGet(admin, profile, `/me/mailFolders/sentitems/messages?$filter=sentDateTime ge ${sinceIso}&$select=sentDateTime,toRecipients,subject&$top=100`),
+    graphGet(admin, profile, `/me/messages?$filter=isRead eq false&$select=receivedDateTime,from,subject,bodyPreview&$orderby=receivedDateTime desc&$top=15`),
+    graphGet(admin, profile, `/me/messages?$filter=flag/flagStatus eq 'flagged'&$select=receivedDateTime,from,subject&$top=10`),
+    graphGet(admin, profile, `/me/events?$filter=start/dateTime ge '${sinceIso}' and start/dateTime le '${nowIso}'&$select=subject,start,end,attendees,isOnlineMeeting&$top=50`),
+    graphGet(admin, profile, `/me/events?$filter=start/dateTime ge '${nowIso}' and start/dateTime le '${futureIso}'&$select=subject,start,end,attendees,isOnlineMeeting,location&$orderby=start/dateTime&$top=15`),
+    graphGet(admin, profile, `/me/todo/lists`),
+  ]);
+
+  let tasks: any[] = [];
+  const firstList = todos?.[0]?.id;
+  if (firstList) {
+    const t = await graphGet(admin, profile, `/me/todo/lists/${firstList}/tasks?$filter=status ne 'completed'&$top=15`);
+    tasks = t.map((x: any) => ({ title: x.title, due: x.dueDateTime?.dateTime ?? null, importance: x.importance }));
+  }
+
+  const senderTally = new Map<string, { name?: string; address?: string; count: number }>();
+  for (const m of received) {
+    const a = m?.from?.emailAddress;
+    const key = (a?.address || a?.name || "").toLowerCase();
+    if (!key) continue;
+    const e = senderTally.get(key) ?? { name: a?.name, address: a?.address, count: 0 };
+    e.count++; senderTally.set(key, e);
+  }
+
+  const meetingMinutes = pastEvents.reduce((acc: number, e: any) => {
+    const s = e?.start?.dateTime ? new Date(e.start.dateTime).getTime() : 0;
+    const en = e?.end?.dateTime ? new Date(e.end.dateTime).getTime() : 0;
+    return acc + (s && en && en > s ? Math.round((en - s) / 60000) : 0);
+  }, 0);
+
+  return {
+    connected: true,
+    mailbox: profile.ms365_email ?? null,
+    emails_received: received.length,
+    emails_sent: sent.length,
+    emails_unread: unread.length,
+    emails_flagged: flagged.length,
+    unread_recent: unread.slice(0, 8).map((m: any) => ({
+      from: m?.from?.emailAddress?.name || m?.from?.emailAddress?.address,
+      subject: m.subject,
+      received_at: m.receivedDateTime,
+      preview: (m.bodyPreview || "").slice(0, 180),
+    })),
+    flagged_recent: flagged.slice(0, 5).map((m: any) => ({
+      from: m?.from?.emailAddress?.name || m?.from?.emailAddress?.address,
+      subject: m.subject,
+      received_at: m.receivedDateTime,
+    })),
+    top_senders: [...senderTally.values()].sort((a, b) => b.count - a.count).slice(0, 5),
+    meetings_held: pastEvents.length,
+    meeting_minutes: meetingMinutes,
+    upcoming_meetings: upcoming.slice(0, 8).map((e: any) => ({
+      subject: e.subject,
+      start: e?.start?.dateTime ?? null,
+      end: e?.end?.dateTime ?? null,
+      online: !!e.isOnlineMeeting,
+      location: e?.location?.displayName ?? null,
+      attendees: (e.attendees ?? []).slice(0, 5).map((a: any) => a?.emailAddress?.name || a?.emailAddress?.address),
+    })),
+    tasks_open: tasks,
+  };
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -17,17 +108,17 @@ const json = (b: unknown, s = 200) =>
 const BriefSchema = z.object({
   headline: z.string(),
   overview: z.string().optional(),
-  priorities: z.array(z.string()).max(5),
-  risks: z.array(z.string()).max(3),
-  highlights: z.array(z.string()).max(5).optional(),
-  metrics: z.array(z.object({ label: z.string(), value: z.string() })).max(8).optional(),
-  tips: z.array(z.object({ title: z.string(), detail: z.string() })).max(5).optional(),
+  priorities: z.array(z.string()).max(8),
+  risks: z.array(z.string()).max(5),
+  highlights: z.array(z.string()).max(8).optional(),
+  metrics: z.array(z.object({ label: z.string(), value: z.string() })).max(14).optional(),
+  tips: z.array(z.object({ title: z.string(), detail: z.string() })).max(7).optional(),
   focus: z.string().optional(),
   suggestions: z.array(z.object({
     label: z.string(),
     kind: z.enum(["call", "sms", "email", "reminder"]),
     number: z.string().optional(),
-  })).max(3),
+  })).max(5),
 });
 
 type Period = "day" | "week" | "month" | "shift";
@@ -94,6 +185,12 @@ function buildFallbackBrief(stats: any, period: Period, lang: Lang) {
         { label: "Non lus", value: `${stats.sms_unread} textos · ${stats.voicemails_unread} messages vocaux` },
         { label: "Leads chauds", value: `${stats.hot_leads?.length ?? 0}` },
         { label: "Rendez-vous", value: `${stats.meetings?.length ?? 0}` },
+        ...(stats.microsoft?.connected ? [
+          { label: "Courriels (Microsoft 365)", value: `${stats.microsoft.emails_received} reçus · ${stats.microsoft.emails_sent} envoyés` },
+          { label: "Courriels non lus", value: `${stats.microsoft.emails_unread}` },
+          { label: "Réunions Outlook", value: `${stats.microsoft.meetings_held} (${stats.microsoft.meeting_minutes} min)` },
+          { label: "Réunions à venir", value: `${stats.microsoft.upcoming_meetings?.length ?? 0}` },
+        ] : []),
       ]
     : [
         { label: "Calls", value: `${stats.calls_total} (${stats.calls_inbound} inbound · ${stats.calls_outbound} outbound)` },
@@ -104,6 +201,12 @@ function buildFallbackBrief(stats: any, period: Period, lang: Lang) {
         { label: "Unread", value: `${stats.sms_unread} texts · ${stats.voicemails_unread} voicemails` },
         { label: "Hot leads", value: `${stats.hot_leads?.length ?? 0}` },
         { label: "Meetings", value: `${stats.meetings?.length ?? 0}` },
+        ...(stats.microsoft?.connected ? [
+          { label: "Emails (Microsoft 365)", value: `${stats.microsoft.emails_received} received · ${stats.microsoft.emails_sent} sent` },
+          { label: "Unread emails", value: `${stats.microsoft.emails_unread}` },
+          { label: "Outlook meetings", value: `${stats.microsoft.meetings_held} (${stats.microsoft.meeting_minutes} min)` },
+          { label: "Upcoming meetings", value: `${stats.microsoft.upcoming_meetings?.length ?? 0}` },
+        ] : []),
       ];
 
   const parts = fr
@@ -188,7 +291,7 @@ Deno.serve(async (req) => {
     if (!effectiveUserId) return json({ error: "no_user" }, 400);
 
     const { data: profile } = await admin.from("planipret_profiles")
-      .select("id, user_id, full_name, extension, organization_id, language")
+      .select("id, user_id, full_name, extension, organization_id, language, ms365_access_token, ms365_refresh_token, ms365_email")
       .eq("user_id", effectiveUserId).maybeSingle();
     if (!profile) return json({ error: "no_profile" }, 404);
 
@@ -309,6 +412,7 @@ Deno.serve(async (req) => {
       hot_leads: hotLeads,
       meetings: meetings.data || [],
       tasks_pending: tasks.data || [],
+      microsoft: await buildMicrosoftStats(admin, profile, sinceIso),
     };
 
 

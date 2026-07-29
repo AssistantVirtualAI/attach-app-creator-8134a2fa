@@ -15,7 +15,6 @@ type BootWindow = Window & {
   __PP_REACT_BOOT_ATTEMPTED__?: boolean;
   __PP_REACT_MOUNT_CALLED__?: boolean;
   __PP_MARK_BOOT_READY__?: () => void;
-  __PP_SHOW_BOOT_FALLBACK__?: (message?: string) => void;
   __PP_DISABLE_NATIVE_BOOT_FALLBACK__?: boolean;
 };
 
@@ -32,19 +31,10 @@ function isIgnorableNativeStartupError(raw: unknown): boolean {
   return code === 'UNIMPLEMENTED' && /not implemented/i.test(message);
 }
 
-function showNativeBootFallback(message?: string) {
-  try {
-    if ((window as BootWindow).__PP_DISABLE_NATIVE_BOOT_FALLBACK__) return;
-    ((window as BootWindow).__PP_SHOW_BOOT_FALLBACK__ ?? (() => undefined))(message);
-  } catch {}
-}
-
 function markBootReady() {
   try {
     const win = window as BootWindow;
     win.__PP_REACT_BOOTED__ = true;
-    const fallback = document.getElementById('pp-native-boot-fallback');
-    if (fallback) fallback.style.display = 'none';
   } catch {}
 }
 

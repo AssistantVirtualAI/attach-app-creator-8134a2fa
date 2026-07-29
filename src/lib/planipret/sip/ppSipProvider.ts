@@ -304,8 +304,9 @@ class PpSipProvider {
 
   private deferTransportRecovery(reason: string, delayMs?: number) {
     if (this.wsWatchdogTimer || this.wsRetryTimer) return;
-    // JsSIP's own connection_recovery owns this window; our watchdog only
-    // arms a verification timer behind the same exclusive lease.
+    // JsSIP's own connection_recovery owns the first retry window; our watchdog
+    // only verifies later. Opening our own socket immediately is what recreated
+    // the NetSapiens 1001 reconnect loop.
     if (!this.acquireRecovery("jssip", `defer:${reason}`)) return;
     const rc = getPpSipReconnectConfig();
     const delay = Math.max(PP_SIP_RECONNECT_FLOOR_MS, delayMs ?? rc.socketVerifyDelayMs);
@@ -822,6 +823,8 @@ class PpSipProvider {
    *  A periodic in-dialog OPTIONS ping keeps the socket alive. */
   private startKeepAlive() {
     this.stopKeepAlive();
+    const period = getPpSipReconnectConfig().keepAliveMs;
+    if (!Number.isFinite(period) || period <= 0) return;
     const sendPing = () => {
       const ua = this.ua;
       if (!ua) return;
@@ -839,7 +842,7 @@ class PpSipProvider {
     };
     this.keepAliveTimer = setInterval(() => {
       sendPing();
-    }, getPpSipReconnectConfig().keepAliveMs);
+    }, period);
   }
 
   private stopKeepAlive() {

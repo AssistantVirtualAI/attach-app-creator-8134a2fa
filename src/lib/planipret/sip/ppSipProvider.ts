@@ -196,7 +196,7 @@ class PpSipProvider {
   getReconnectReport() {
     return {
       exportedAt: new Date().toISOString(),
-      guardVersion: "v4",
+      guardVersion: "v5",
       status: this.snap.status,
       extension: this.cfg?.extension ?? null,
       wssUrl: this.cfg?.wssUrl ?? null,
@@ -324,8 +324,9 @@ class PpSipProvider {
     this.wsWatchdogTimer = setTimeout(() => {
       this.wsWatchdogTimer = null;
       if (this.ua && this.snap.status !== "registered" && this.snap.status !== "connected") {
-        // Hand the lease over from JsSIP to our watchdog.
-        this.recoveryOwner = "none";
+        // Hand the lease over cleanly so blocked watchdog recoveries cannot get
+        // stuck behind a stale JsSIP owner.
+        this.releaseRecovery("jssip_timeout");
         this.scheduleSocketReconnect(reason);
       } else {
         this.releaseRecovery("jssip_recovered");

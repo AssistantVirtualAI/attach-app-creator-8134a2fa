@@ -187,6 +187,29 @@ class PpSipProvider {
     (console as any)[fn](`[pp-sip] ${msg}`, detail ?? "");
   }
 
+  private deferTransportRecovery(reason: string, delayMs?: number) {
+    if (this.wsWatchdogTimer || this.wsRetryTimer) return;
+    const rc = getPpSipReconnectConfig();
+    const delay = Math.max(PP_SIP_RECONNECT_FLOOR_MS, delayMs ?? rc.socketVerifyDelayMs);
+    this.reconnectMetrics.lastFailureReason = reason;
+    this.reconnectMetrics.currentDelayMs = delay;
+    this.reconnectMetrics.rawBackoffMs = delay;
+    this.reconnectMetrics.delaySource = delay <= PP_SIP_RECONNECT_FLOOR_MS ? "floor" : "backoff";
+    this.reconnectMetrics.floorMs = PP_SIP_RECONNECT_FLOOR_MS;
+    this.reconnectMetrics.minDelayObservedMs = this.reconnectMetrics.minDelayObservedMs === null
+      ? delay
+      : Math.min(this.reconnectMetrics.minDelayObservedMs, delay);
+    this.reconnectMetrics.lastScheduledAt = Date.now();
+    this.emitMetrics();
+    this.log("warn", `sip transport recovery deferred ${delay}ms (reason=${reason})`);
+    this.wsWatchdogTimer = setTimeout(() => {
+      this.wsWatchdogTimer = null;
+      if (this.ua && this.snap.status !== "registered" && this.snap.status !== "connected") {
+        this.scheduleSocketReconnect(reason);
+      }
+    }, delay);
+  }
+
   async init(cfg: PpSipConfig) {
     if (ppSipInitInFlight) return;
     installSipParserGuard();
@@ -197,7 +220,7 @@ class PpSipProvider {
     }
     const cleanCfg = { ...cfg, wssUrl };
     const sig = `${cleanCfg.extension}|${cleanCfg.sipDomain}|${cleanCfg.wssUrl}|${cleanCfg.password}`;
-    if (this.ua && sig === this.lastSig && (this.snap.status === "registered" || this.snap.status === "connected")) {
+    if (this.ua && sig === this.lastSig && this.snap.status === "registered") {
       return;
     }
     // Never tear down a UA that is still in its initial connect/REGISTER
@@ -208,7 +231,14 @@ class PpSipProvider {
       const busyConnecting = this.snap.status === "connecting" && Date.now() - this.connectingSince < 20_000;
       const tooSoon = Date.now() - this.lastStartAt < 15_000;
       if (busyConnecting || tooSoon) {
-        try { this.ua.register(); } catch {}
+        this.log("warn", `duplicate init ignored while SIP is ${this.snap.status || "starting"}`);
+        return;
+      }
+      if (this.snap.status === "connected") {
+        if (Date.now() - this.lastRegisterAttemptAt >= PP_SIP_RECONNECT_FLOOR_MS) {
+          this.lastRegisterAttemptAt = Date.now();
+          try { this.ua.register(); } catch {}
+        }
         return;
       }
     }
@@ -272,14 +302,7 @@ class PpSipProvider {
         // same AoR: NetSapiens then closed the older socket with code 1001,
         // which restarted the whole cycle forever. We only act as a watchdog if
         // JsSIP has not recovered after socketVerifyDelayMs.
-        const rc = getPpSipReconnectConfig();
-        if (this.wsWatchdogTimer) clearTimeout(this.wsWatchdogTimer);
-        this.wsWatchdogTimer = setTimeout(() => {
-          this.wsWatchdogTimer = null;
-          if (this.ua && this.snap.status !== "registered" && this.snap.status !== "connected") {
-            this.scheduleSocketReconnect(String(e?.reason || "ws_disconnected"));
-          }
-        }, Math.max(PP_SIP_RECONNECT_FLOOR_MS, rc.socketVerifyDelayMs));
+        this.deferTransportRecovery(String(e?.reason || "ws_disconnected"));
       });
       ua.on("registered", () => {
         this.regFailures = 0;
@@ -302,12 +325,7 @@ class PpSipProvider {
         if (!this.ua?.isConnected?.() || recentlyDisconnected || this.snap.status === "disconnected") {
           this.log("warn", "unregistered ignored; transport recovery owns reconnect");
           // Deferred: never open a competing socket while JsSIP recovery runs.
-          if (!this.wsWatchdogTimer && !this.wsRetryTimer) {
-            this.wsWatchdogTimer = setTimeout(() => {
-              this.wsWatchdogTimer = null;
-              if (this.ua && this.snap.status !== "registered") this.scheduleSocketReconnect("unregistered_transport_down");
-            }, Math.max(PP_SIP_RECONNECT_FLOOR_MS, rc.socketVerifyDelayMs));
-          }
+          this.deferTransportRecovery("unregistered_transport_down");
           return;
         }
         this.log("warn", "unregistered on live transport - scheduling guarded re-register");
@@ -331,7 +349,12 @@ class PpSipProvider {
         this.update({ status: "error", errorCause: cause });
         if (!this.ua?.isConnected?.() || /connection error/i.test(String(cause))) {
           if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }
-          this.scheduleSocketReconnect(`registration_failed:${cause}`);
+          // Connection Error is emitted by the failed REGISTER transaction while
+          // JsSIP's transport recovery is already scheduled. Starting our own
+          // reconnect here races that recovery and creates the duplicate WSS
+          // socket that NetSapiens closes with 1001. Wait for the recovery
+          // window, then rebuild the UA only if it is still not registered.
+          this.deferTransportRecovery(`registration_failed:${cause}`);
           return;
         }
         // Retry with exponential backoff and a single pending timer — stacking
@@ -585,7 +608,16 @@ class PpSipProvider {
           this.lastRegisterAttemptAt = Date.now();
           ua.register();
         } else {
-          ua.start();
+          const cfg = this.cfg;
+          if (cfg) {
+            this.log("warn", "sip reconnect rebuilding UA after JsSIP recovery window");
+            try { ua.stop(); } catch {}
+            this.ua = null;
+            this.session = null;
+            void this.init(cfg);
+          } else {
+            ua.start();
+          }
         }
         this.log("info", `sip reconnect attempt #${this.reconnectMetrics.attempt} sent`);
       } catch (e: any) {
@@ -627,7 +659,9 @@ class PpSipProvider {
         // Never call ua.start() from the ping: it races the reconnect loop and
         // opens a duplicate socket (→ 1001 on the previous one).
         if (!ua.isConnected?.()) return;
-        ua.sendRequest((JsSIP as any).C.OPTIONS, `sip:${ua.configuration?.uri?.host ?? ""}`, {});
+        const target = `sip:${this.cfg?.sipDomain ?? ua.configuration?.uri?.host ?? ""}`;
+        if (typeof ua.sendOptions === "function") ua.sendOptions(target, undefined, {});
+        else if (typeof ua.sendRequest === "function") ua.sendRequest((JsSIP as any).C.OPTIONS, target, {});
       } catch { /* ping failures are non-fatal */ }
     };
     this.keepAliveTimer = setInterval(() => {

@@ -101,8 +101,8 @@ describe("ppSipProvider — transport recovery guard", () => {
     ua.emit("disconnected", { reason: "ws_disconnected", code: 1001 });
     ua.emit("unregistered");
 
-    // JsSIP owns the first recovery window; the watchdog only takes over after verification fails.
-    expect(provider.getReconnectMetrics().recoveryOwner).toBe("jssip");
+    // Our watchdog is the only recovery owner; JsSIP recovery is suppressed.
+    expect(provider.getReconnectMetrics().recoveryOwner).toBe("watchdog");
     expect(created.sockets).toHaveLength(1);
 
     // Drive far past the verification window: the watchdog may rebuild the UA,

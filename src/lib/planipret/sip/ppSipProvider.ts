@@ -674,6 +674,9 @@ class PpSipProvider {
    *  the delay never regresses to 1000ms. */
   private scheduleSocketReconnect(reason: string) {
     if (this.wsRetryTimer) return;
+    // Exclusive lease: if JsSIP's connection_recovery currently owns recovery,
+    // we must not open a competing socket.
+    if (!this.acquireRecovery("watchdog", `schedule:${reason}`)) return;
     if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
     const rc = getPpSipReconnectConfig();
     const floorMs = Math.max(PP_SIP_RECONNECT_FLOOR_MS, rc.socketBackoffMinMs);
@@ -696,7 +699,9 @@ class PpSipProvider {
     m.lastScheduledAt = Date.now();
     m.totalAttempts += 1;
     if (raw < floorMs) m.subThresholdHits += 1;
+    this.pushHistory("schedule", reason, delay);
     this.emitMetrics();
+
 
     if (raw < floorMs) {
       // This is the only path that could ever produce a ~1000ms delay: the

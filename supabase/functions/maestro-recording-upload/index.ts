@@ -1,12 +1,10 @@
 // POST /functions/v1/maestro-recording-upload
-// Body: { call_id: uuid, force?: boolean }
+// Body: { call_id: uuid }
 //
-// Per Scott (Maestro): there is NO upload endpoint for recordings/transcripts —
-// Maestro generates both server-side once the call is marked as finished.
-// The correct flow is:
-//   1. PUT /api/v1/users/{brokerId}/calls/{callId}  { status: "ended" }
-//   2. Periodically GET .../calls/{callId}/recording and .../transcription
-//      until the media is ready (handled by `maestro-media-poll`).
+// Per Scott (Maestro): there is NO upload endpoint for recordings — Maestro
+// generates the media server-side once the call is marked `{status:"ended"}`
+// (done by `maestro-cdr`). This function only POLLS:
+//   GET /api/v1/users/{brokerId}/calls/{maestroCallId}/recording
 import {
   adminClient,
   corsHeaders,
@@ -18,6 +16,12 @@ import {
   telecomAuth,
 } from "../_shared/maestro.ts";
 
+function pickUrl(d: any): string | null {
+  if (!d) return null;
+  if (typeof d === "string") return d.startsWith("http") ? d : null;
+  return d.recording_url ?? d.url ?? d.download_url ?? d.media_url ?? d.file_url ?? null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -28,7 +32,7 @@ Deno.serve(async (req) => {
   const admin = adminClient();
   const { data: call } = await admin
     .from("planipret_phone_calls")
-    .select("id, user_id, maestro_call_id, metadata")
+    .select("id, user_id, maestro_call_id, recording_url, metadata")
     .eq("id", call_id)
     .maybeSingle();
 
@@ -37,7 +41,7 @@ Deno.serve(async (req) => {
 
   if (!maestroCallId) {
     await pipelineLog(admin, {
-      call_id, user_id: userId, step: "recording_upload", status: "skipped",
+      call_id, user_id: userId, step: "recording_poll", status: "skipped",
       error_message: "maestro_call_id_missing",
     });
     await admin.from("planipret_recording_uploads").upsert({
@@ -53,48 +57,49 @@ Deno.serve(async (req) => {
     return json({ success: false, error: !auth.brokerId ? "maestro_broker_id_missing" : "maestro_not_configured" });
   }
 
-  // 1) Mark the call as ended so Maestro starts generating media.
   const res = await maestroFetch(cfg, {
-    method: "PUT",
-    path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls/${encodeURIComponent(String(maestroCallId))}`,
+    method: "GET",
+    path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls/${encodeURIComponent(String(maestroCallId))}/recording`,
     token: auth.token,
-    body: { status: "ended" },
   });
-  console.log(`[maestro-recording-upload] call=${call_id} mark_ended ok=${res.ok} status=${res.status}`);
-
+  const url = res.ok ? pickUrl(res.data) : null;
   const meta = ((call as any)?.metadata ?? {}) as Record<string, unknown>;
+
+  if (!url) {
+    await admin.from("planipret_phone_calls").update({
+      metadata: { ...meta, maestro_media_pending: true, maestro_recording_last_poll_at: new Date().toISOString() },
+    }).eq("id", call_id);
+    await pipelineLog(admin, {
+      call_id, user_id: userId, step: "recording_poll", status: "skipped",
+      error_message: "media_not_ready",
+      payload: { maestro_call_id: maestroCallId, status: res.status },
+    });
+    await admin.from("planipret_recording_uploads").upsert({
+      call_id, user_id: userId, status: "pending",
+      error_message: "media_not_ready", updated_at: new Date().toISOString(),
+    }, { onConflict: "call_id" }).then(() => {}, () => {});
+    return json({ success: true, skipped: "media_not_ready", status: res.status });
+  }
+
   await admin.from("planipret_phone_calls").update({
+    recording_url: (call as any)?.recording_url ?? url,
     metadata: {
       ...meta,
-      maestro_marked_ended_at: res.ok ? new Date().toISOString() : (meta.maestro_marked_ended_at ?? null),
-      maestro_media_pending: true,
+      maestro_recording_url: url,
+      maestro_recording_ready_at: new Date().toISOString(),
+      maestro_recording_last_poll_at: new Date().toISOString(),
     },
   }).eq("id", call_id);
 
   await pipelineLog(admin, {
-    call_id, user_id: userId, step: "recording_upload",
-    status: res.ok ? "success" : "error",
-    error_message: res.ok ? null : `mark_ended_http_${res.status}`,
-    payload: { maestro_call_id: maestroCallId, status: res.status, mode: "mark_ended_then_poll" },
+    call_id, user_id: userId, step: "recording_poll", status: "success",
+    payload: { maestro_call_id: maestroCallId, recording_url: url },
   });
-  await setPipelineStep(admin, call_id, "cdr", "done", { recording: res.ok ? "pending_maestro_generation" : "mark_ended_failed" }).catch(() => {});
+  await setPipelineStep(admin, call_id, "cdr", "done", { recording: "ready" }).catch(() => {});
   await admin.from("planipret_recording_uploads").upsert({
-    call_id, user_id: userId,
-    status: res.ok ? "pending" : "error",
-    error_message: res.ok ? null : `mark_ended_http_${res.status}`,
-    updated_at: new Date().toISOString(),
+    call_id, user_id: userId, status: "synced",
+    error_message: null, updated_at: new Date().toISOString(),
   }, { onConflict: "call_id" }).then(() => {}, () => {});
 
-  // 2) Opportunistic first poll (media is usually not ready yet).
-  let media: unknown = null;
-  try {
-    const poll = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-media-poll`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-      body: JSON.stringify({ call_id }),
-    });
-    media = await poll.json().catch(() => null);
-  } catch { /* ignore */ }
-
-  return json({ success: res.ok, mode: "mark_ended_then_poll", status: res.status, maestro_call_id: maestroCallId, media });
+  return json({ success: true, recording_url: url });
 });

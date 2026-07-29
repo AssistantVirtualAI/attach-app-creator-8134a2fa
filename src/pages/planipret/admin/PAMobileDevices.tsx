@@ -373,6 +373,8 @@ export default function PAMobileDevices() {
       blockers: {} as Record<string, number>,
       raw: [] as any[],
       dry: [] as any[],
+      did_failures: [] as any[],
+      did_failure_reasons: {} as Record<string, number>,
     };
 
     // Step 0 — re-read the DID inventory from the PBX so the number→extension
@@ -406,6 +408,10 @@ export default function PAMobileDevices() {
       }
       if (Array.isArray(d?.raw_pbx_responses)) agg.raw.push(...d.raw_pbx_responses.slice(0, 10));
       if (Array.isArray(d?.dry_run_report)) agg.dry.push(...d.dry_run_report);
+      if (Array.isArray(d?.did_failures)) agg.did_failures.push(...d.did_failures.slice(0, 10));
+      for (const [k, v] of Object.entries(d?.did_failure_reasons ?? {})) {
+        agg.did_failure_reasons[k] = (agg.did_failure_reasons[k] ?? 0) + Number(v ?? 0);
+      }
       const next = d?.next_offset;
       if (next === null || next === undefined) break;
       offset = Number(next);
@@ -566,6 +572,19 @@ export default function PAMobileDevices() {
               <span className="text-xs" style={{ color: SUCCESS }}>Aucun blocage détecté</span>
             )}
           </div>
+          {(!!rulesDiag.did_failures?.length || !!Object.keys(rulesDiag.did_failure_reasons ?? {}).length) && (
+            <details className="mt-3" open>
+              <summary className="cursor-pointer text-xs" style={{ color: "#F87171" }}>
+                Échecs DID ({rulesDiag.did_failures?.length ?? 0} courtiers) —{" "}
+                {Object.entries(rulesDiag.did_failure_reasons ?? {})
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join(" · ") || "détail"}
+              </summary>
+              <pre className="mt-2 max-h-56 overflow-auto rounded-lg p-2 text-[11px]" style={{ background: "var(--pp-bg-base)", color: "var(--pp-text-secondary)" }}>
+                {JSON.stringify((rulesDiag.did_failures ?? []).slice(0, 20), null, 2)}
+              </pre>
+            </details>
+          )}
           {!!rulesDiag.raw?.length && (
             <details className="mt-3">
               <summary className="cursor-pointer text-xs" style={{ color: "var(--pp-text-secondary)" }}>Réponses PBX brutes</summary>

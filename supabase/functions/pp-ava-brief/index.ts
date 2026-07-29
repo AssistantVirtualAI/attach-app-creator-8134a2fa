@@ -12,9 +12,12 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
 
 async function graphGet(admin: any, profile: any, path: string, retry = true): Promise<any[]> {
   try {
+    const ctl = new AbortController();
+    const to = setTimeout(() => ctl.abort(), 7000);
     const r = await fetch(`${GRAPH}${path}`, {
       headers: { Authorization: `Bearer ${profile.ms365_access_token}` },
-    });
+      signal: ctl.signal,
+    }).finally(() => clearTimeout(to));
     if (r.status === 401 && retry) {
       const t = await refreshMicrosoftAccessToken(admin, profile, MS365_DELEGATED_SCOPES);
       if (t) { profile.ms365_access_token = t; return graphGet(admin, profile, path, false); }
@@ -419,7 +422,10 @@ Deno.serve(async (req) => {
       hot_leads: hotLeads,
       meetings: meetings.data || [],
       tasks_pending: tasks.data || [],
-      microsoft: await buildMicrosoftStats(admin, profile, sinceIso),
+      microsoft: await Promise.race([
+        buildMicrosoftStats(admin, profile, sinceIso).catch(() => ({ connected: false })),
+        new Promise((res) => setTimeout(() => res({ connected: false, timeout: true }), 15000)),
+      ]),
     };
 
 
@@ -471,7 +477,13 @@ You must cover TWO sources: telephony (calls, texts, voicemails, leads) AND Micr
         prompt: userPrompt,
         experimental_output: Output.object({ schema: BriefSchema }),
       });
-      const out = (r as any).experimental_output ?? (r as any).output;
+      let out: any = (r as any).experimental_output ?? (r as any).output ?? (r as any).text;
+      if (typeof out === "string") {
+        const cleaned = out.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+        const start = cleaned.indexOf("{");
+        const end = cleaned.lastIndexOf("}");
+        out = JSON.parse(start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned);
+      }
       result = BriefSchema.parse(out);
       const fb = buildFallbackBrief(stats, period, lang);
       if (!result.metrics?.length) result.metrics = fb.metrics;

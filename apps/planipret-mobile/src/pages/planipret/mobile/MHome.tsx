@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { loadBriefCache, saveBriefCache, isBriefFresh } from "@/lib/planipret/avaBriefCache";
+
 import { useOutletContext, useNavigate } from "react-router-dom";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -88,6 +90,9 @@ export default function MHome() {
   const [brief, setBrief] = useState<any | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefErr, setBriefErr] = useState<string | null>(null);
+  const [briefAt, setBriefAt] = useState<number | null>(null);
+  const briefInFlight = useRef(false);
+
 
   useMaestroPipelineToasts(profile?.user_id);
 

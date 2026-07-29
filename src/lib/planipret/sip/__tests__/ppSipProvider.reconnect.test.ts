@@ -88,7 +88,7 @@ describe("ppSipProvider — transport recovery guard", () => {
     await bootRegistered();
     expect(created.sockets).toHaveLength(1);
     expect(liveUAs()).toHaveLength(1);
-    expect(created.uas[0].config.contact_uri).toBe("sip:113@pbx.planipret.ca;transport=ws;pp-ua=web-113");
+    expect(created.uas[0].config.contact_uri).toBe("sip:113@pbx.example.com;transport=ws;pp-ua=web-113");
     expect(provider.getSnapshot().status).toBe("registered");
   });
 

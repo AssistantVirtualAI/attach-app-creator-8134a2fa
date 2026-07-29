@@ -495,8 +495,9 @@ You must cover TWO sources: telephony (calls, texts, voicemails, leads) AND Micr
       if (!result.metrics?.length) result.metrics = fb.metrics;
       if (!result.overview) result.overview = fb.overview;
     } catch (e) {
-      console.error("pp-ava-brief AI failed", e);
-      result = buildFallbackBrief(stats, period, lang);
+      const msg = (e as any)?.message ?? String(e);
+      console.error("pp-ava-brief AI failed:", msg);
+      result = { ...buildFallbackBrief(stats, period, lang), ai_error: String(msg).slice(0, 300) };
     }
 
 

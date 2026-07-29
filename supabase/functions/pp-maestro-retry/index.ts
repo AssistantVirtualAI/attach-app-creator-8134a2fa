@@ -35,7 +35,7 @@ async function resolveTarget(admin: any, action: string, reqBody: any, endpoint?
   const messageId = reqBody?.message_id ?? reqBody?.messageId ?? null;
 
   if (/(sms|message|texto)/.test(a) && messageId) return { fn: "maestro-sync-message", body: { message_id: messageId, force: true } };
-  if (/recording/.test(a) && callId) return { fn: "maestro-recording-upload", body: { call_id: callId, force: true } };
+  if (/recording/.test(a) && callId) return { fn: "maestro-sync-call", body: { call_id: callId, force: true } };
   if (callId) return { fn: "maestro-sync-call", body: { call_id: callId, force: true } };
   if (messageId) return { fn: "maestro-sync-message", body: { message_id: messageId, force: true } };
   return null;

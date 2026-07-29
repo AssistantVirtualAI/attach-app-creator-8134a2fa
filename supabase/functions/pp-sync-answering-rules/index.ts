@@ -572,8 +572,9 @@ Deno.serve(async (req) => {
 
       // A 200 on the rule write is not enough: the call only rings if the DID
       // reaches the user AND the stored rule forks to a real device.
-      const didOk = (did_repair as any)?.attempted === 0
-        || ((did_repair as any)?.verified ?? 0) >= ((did_repair as any)?.attempted ?? 0);
+      const didAttempted = Number((did_repair as any)?.attempted ?? 0);
+      const didVerified = Number((did_repair as any)?.verified ?? 0);
+      const didOk = dids.length > 0 && didAttempted > 0 && didVerified >= didAttempted;
       const routing_ok = !!opRes.ok && !!verify?.honored && didOk;
 
       return {

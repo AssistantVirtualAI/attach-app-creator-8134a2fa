@@ -473,6 +473,7 @@ import UIKit
 import AVFoundation
 import CryptoKit
 import UserNotifications
+import Network
 
 // Planiprêt-only. DO NOT reuse in Lemtel (Verto stack).
 @objc(PpSipKeepAlive)
@@ -747,6 +748,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     public let identifier = "PpVoipCall"; public let jsName = "PpVoipCall"
     public let pluginMethods: [CAPPluginMethod] = [
       CAPPluginMethod(name: "getVoipPushToken", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "refreshVoipPushToken", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "reportCallEnded", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
       CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise)
@@ -756,6 +758,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var provider: CXProvider?
     private var callController = CXCallController()
     private var voipToken: String?
+    private var lastReportedToken: String?
     private var activeCallUUID: UUID?
     private var activeCallId: String?
 
@@ -798,12 +801,45 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     // MARK: - JS ↔ Native
     @objc func getVoipPushToken(_ call: CAPPluginCall) {
+        // If PushKit has not handed us a token yet, re-arm the registry: after a
+        // restore/reinstall the first `didUpdate` can be missed entirely.
+        if (voipToken ?? "").isEmpty {
+            NSLog("[PpVoipCall] no VoIP token cached, re-arming PushKit")
+            DispatchQueue.main.async { [weak self] in self?.setupPushKit() }
+        }
         call.resolve([
             "token": voipToken ?? "",
             "platform": "ios",
             "bundleId": Bundle.main.bundleIdentifier ?? "",
             "environment": apnsEnvironment()
         ])
+    }
+
+    /// Force PushKit to re-issue the VoIP token (used on app resume and when the
+    /// backend reports the stored token as invalid/unregistered).
+    @objc func refreshVoipPushToken(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { call.resolve(["ok": false]); return }
+            let previous = self.voipToken
+            self.pushRegistry?.desiredPushTypes = []
+            self.pushRegistry = nil
+            self.setupPushKit()
+            NSLog("[PpVoipCall] VoIP token refresh requested (had token: %@)", previous == nil ? "no" : "yes")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self = self else { return }
+                let current = self.voipToken ?? ""
+                let changed = current != (previous ?? "")
+                NSLog("[PpVoipCall] VoIP token after refresh changed=%@ empty=%@", changed ? "yes" : "no", current.isEmpty ? "yes" : "no")
+                self.notifyListeners("voipPushToken", data: [
+                    "token": current,
+                    "bundleId": Bundle.main.bundleIdentifier ?? "",
+                    "environment": self.apnsEnvironment(),
+                    "changed": changed,
+                    "source": "refresh"
+                ])
+            }
+            call.resolve(["ok": true, "token": previous ?? ""])
+        }
     }
 
     @objc func reportCallEnded(_ call: CAPPluginCall) {
@@ -820,16 +856,24 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     public func pushRegistry(_ registry: PKPushRegistry, didUpdate credentials: PKPushCredentials, for type: PKPushType) {
         guard type == .voIP else { return }
         let token = credentials.token.map { String(format: "%02x", $0) }.joined()
+        let changed = token != (lastReportedToken ?? "")
         self.voipToken = token
+        self.lastReportedToken = token
+        NSLog("[PpVoipCall] VoIP token updated changed=%@ suffix=%@", changed ? "yes" : "no", String(token.suffix(6)))
         notifyListeners("voipPushToken", data: [
             "token": token,
             "bundleId": Bundle.main.bundleIdentifier ?? "",
-            "environment": apnsEnvironment()
+            "environment": apnsEnvironment(),
+            "changed": changed,
+            "source": "pushkit"
         ])
     }
 
     public func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
+        NSLog("[PpVoipCall] VoIP token invalidated — re-arming PushKit")
         self.voipToken = nil
+        notifyListeners("voipPushTokenInvalidated", data: ["platform": "ios"])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.setupPushKit() }
     }
 
     public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {

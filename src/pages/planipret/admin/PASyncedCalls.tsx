@@ -185,12 +185,17 @@ export default function PASyncedCalls() {
             <Badge variant={liveOk ? "default" : "secondary"} className="gap-1">
               <Radio className="h-3 w-3" /> {liveOk ? t.live : t.offline}
             </Badge>
+            <Button size="sm" variant="outline" onClick={() => void linkBrokers()} disabled={linking}>
+              <Link2 className={`h-4 w-4 ${linking ? "animate-pulse" : ""}`} />{" "}
+              {lang === "fr" ? "Lier les courtiers à Maestro" : "Link brokers to Maestro"}
+            </Button>
             <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> {t.refresh}
             </Button>
           </div>
         }
       />
+
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[

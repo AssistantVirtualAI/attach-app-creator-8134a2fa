@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, XCircle, Smartphone, Radio } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +13,7 @@ type DeviceDetail = { id: string; user_agent: string | null; ip: string | null; 
 export default function MExtensionSync() {
   const { profile, reloadProfile } = useOutletContext<PlanipretMobileContext>();
   const navigate = useNavigate();
+  const { t } = useMplanipretLang();
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<State>("idle");
   const [lastResult, setLastResult] = useState<any>(null);
@@ -26,7 +28,7 @@ export default function MExtensionSync() {
   const mobileDeviceId = profile?.ns_mobile_device_id || (extension ? `${extension}_mobile` : null);
   const runResync = async (opts?: { silent?: boolean }) => {
     if (!extension) {
-      toast.error("Aucune extension associée à ce profil.");
+      toast.error(t("screens.extensionSync.noExtension"));
       return;
     }
     setBusy(true);
@@ -43,20 +45,20 @@ export default function MExtensionSync() {
     if (res?.ns_registered_device_id) setRegisteredDeviceId(res.ns_registered_device_id);
     if (error || !res?.ok) {
       setState("error");
-      if (!opts?.silent) toast.error(res?.error ?? error?.message ?? "Échec du resync");
+      if (!opts?.silent) toast.error(res?.error ?? error?.message ?? t("screens.extensionSync.resyncFailed"));
       return;
     }
     await reloadProfile();
     setState("ok");
-    if (!opts?.silent) toast.success(`Extension ${res.sip_extension} synchronisée`);
+    if (!opts?.silent) toast.success(t("screens.extensionSync.resyncSuccess").replace("{ext}", String(res.sip_extension)));
   };
 
   const items: Array<{ label: string; value: string; ok: boolean | null; icon: any }> = [
-    { label: "Extension NetSapiens", value: extension ?? "—", ok: !!extension, icon: Smartphone },
-    { label: "Domaine NetSapiens", value: domain, ok: !!domain, icon: Radio },
-    { label: "État lié (ns_linked)", value: linked ? "Oui" : "Non", ok: linked, icon: linked ? CheckCircle2 : AlertTriangle },
-    { label: "Appareil mobile", value: mobileDeviceId ?? "—", ok: !!mobileDeviceId, icon: Smartphone },
-    { label: "Mode d'appel", value: "REST seulement", ok: true, icon: CheckCircle2 },
+    { label: t("screens.extensionSync.itemExtensionLabel"), value: extension ?? "—", ok: !!extension, icon: Smartphone },
+    { label: t("screens.extensionSync.itemDomainLabel"), value: domain, ok: !!domain, icon: Radio },
+    { label: t("screens.extensionSync.itemLinkedLabel"), value: linked ? t("screens.extensionSync.yes") : t("screens.extensionSync.no"), ok: linked, icon: linked ? CheckCircle2 : AlertTriangle },
+    { label: t("screens.extensionSync.itemMobileDeviceLabel"), value: mobileDeviceId ?? "—", ok: !!mobileDeviceId, icon: Smartphone },
+    { label: t("screens.extensionSync.itemCallModeLabel"), value: t("screens.extensionSync.itemCallModeValue"), ok: true, icon: CheckCircle2 },
   ];
 
   const globalOk = !!extension && linked;
@@ -68,12 +70,12 @@ export default function MExtensionSync() {
           onClick={() => navigate(-1)}
           className="p-2 rounded-full"
           style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}
-          aria-label="Retour"
+          aria-label={t("screens.extensionSync.back")}
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div style={{ fontFamily: "Inter,sans-serif", fontWeight: 700, fontSize: 18 }}>
-          Synchronisation d'extension
+          {t("screens.extensionSync.title")}
         </div>
       </div>
 
@@ -96,10 +98,10 @@ export default function MExtensionSync() {
               : <AlertTriangle className="w-5 h-5" style={{ color: "#F59E0B" }} />}
           <div className="flex-1">
             <div style={{ fontWeight: 700, fontSize: 15 }}>
-              {globalOk ? "Appels REST prêts" : "Synchronisation requise"}
+              {globalOk ? t("screens.extensionSync.restReady") : t("screens.extensionSync.syncRequired")}
             </div>
             <div style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
-              {extension ? `Extension ${extension} · ${domain}` : "Aucune extension"}
+              {extension ? t("screens.extensionSync.extensionAndDomain").replace("{ext}", extension).replace("{domain}", domain) : t("screens.extensionSync.noExtensionShort")}
             </div>
           </div>
         </div>
@@ -153,28 +155,28 @@ export default function MExtensionSync() {
         }}
       >
         <RefreshCw className={`w-4 h-4 ${busy ? "animate-spin" : ""}`} />
-        {busy ? "Synchronisation en cours…" : "Forcer le resync"}
+        {busy ? t("screens.extensionSync.resyncing") : t("screens.extensionSync.forceResync")}
       </button>
 
       {(devicesDetail || devices) && (
         <div className="pp-card" style={{ padding: 10 }}>
           <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
             <div style={{ fontSize: 12, fontWeight: 700 }}>
-              Appareils NetSapiens ({(devicesDetail ?? devices ?? []).length})
+              {t("screens.extensionSync.devicesTitle").replace("{count}", String((devicesDetail ?? devices ?? []).length))}
             </div>
             <button
               onClick={() => runResync({ silent: true })}
               disabled={busy}
               className="flex items-center gap-1 px-2 py-1 rounded-md"
               style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", fontSize: 11 }}
-              aria-label="Rafraîchir la liste"
+              aria-label={t("screens.extensionSync.refreshList")}
             >
               <RefreshCw className={`w-3 h-3 ${busy ? "animate-spin" : ""}`} />
-              Rafraîchir
+              {t("screens.extensionSync.refresh")}
             </button>
           </div>
           {(devicesDetail ?? []).length === 0 && (devices ?? []).length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>Aucun appareil trouvé.</div>
+            <div style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>{t("screens.extensionSync.noDevicesFound")}</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {(devicesDetail ?? (devices ?? []).map((id) => ({ id, user_agent: null, ip: null, registered_at: null, registered: false, is_mine: id === mobileDeviceId } as DeviceDetail))).map((d) => {
@@ -210,22 +212,22 @@ export default function MExtensionSync() {
                       <span style={{ fontWeight: (isMine || isActive) ? 700 : 500, wordBreak: "break-all" }}>{d.id}</span>
                       <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                         {isActive && (
-                          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--pp-color-success)" }}>● ACTIF</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--pp-color-success)" }}>{t("screens.extensionSync.active")}</span>
                         )}
                         {isMine && (
-                          <span style={{ fontSize: 10, color: "#2E9BDC" }}>ce téléphone</span>
+                          <span style={{ fontSize: 10, color: "#2E9BDC" }}>{t("screens.extensionSync.thisPhone")}</span>
                         )}
                       </span>
                     </div>
                     {(d.user_agent || d.ip || d.registered_at) ? (
                       <div style={{ fontSize: 10.5, color: "var(--pp-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
-                        {d.user_agent && <div>UA · {d.user_agent}</div>}
-                        {d.ip && <div>IP · {d.ip}</div>}
-                        {d.registered_at && <div>Enregistré · {d.registered_at}</div>}
+                        {d.user_agent && <div>{t("screens.extensionSync.uaLabel")} · {d.user_agent}</div>}
+                        {d.ip && <div>{t("screens.extensionSync.ipLabel")} · {d.ip}</div>}
+                        {d.registered_at && <div>{t("screens.extensionSync.registeredLabel")} · {d.registered_at}</div>}
                       </div>
                     ) : (
                       <div style={{ fontSize: 10.5, color: "var(--pp-text-muted)", marginTop: 4 }}>
-                        Appareil créé mais non actif.
+                        {t("screens.extensionSync.deviceCreatedNotActive")}
                       </div>
                     )}
                   </div>
@@ -239,7 +241,7 @@ export default function MExtensionSync() {
       {lastResult && (
 
         <div className="pp-card" style={{ padding: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Dernier résultat</div>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{t("screens.extensionSync.lastResult")}</div>
           <pre style={{
             fontSize: 11,
             color: "var(--pp-text-muted)",

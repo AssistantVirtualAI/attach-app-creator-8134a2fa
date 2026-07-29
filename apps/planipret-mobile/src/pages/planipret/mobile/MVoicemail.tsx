@@ -185,7 +185,7 @@ export default function MVoicemail() {
   };
 
   return (
-    <div className="p-4 space-y-4 pb-[calc(2rem+env(safe-area-inset-bottom))] min-h-dvh overflow-y-auto overscroll-contain">
+    <div className="p-4 space-y-4 pb-6">
       {/* Header — cohérent avec les autres pages */}
       <header className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.30)", color: "var(--pp-brand-accent)" }}>
@@ -230,7 +230,7 @@ export default function MVoicemail() {
 
       <div>
         {tab === "greeting" ? (
-          <div className="space-y-3 min-h-0 overflow-visible">
+          <div className="space-y-3">
             <div className="pp-card p-4 overflow-hidden relative">
               <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: "linear-gradient(90deg, transparent, var(--pp-brand-accent), var(--pp-agent), transparent)" }} />
               <div className="flex items-start gap-3">
@@ -240,10 +240,10 @@ export default function MVoicemail() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h2 className="text-[15px] font-bold" style={{ color: "var(--pp-text-primary)" }}>ElevenLabs</h2>
-                    <span className="pp-pill pp-pill-success"><CheckCircle2 className="w-3 h-3" /> Connecté</span>
+                    <span className="pp-pill pp-pill-success"><CheckCircle2 className="w-3 h-3" /> {t("screens.voicemail.elevenLabsConnected")}</span>
                   </div>
                   <p className="text-[11px] leading-relaxed mt-1" style={{ color: "var(--pp-text-secondary)" }}>
-                    Voix IA, aperçu audio et activation NetSapiens synchronisés au profil du courtier.
+                    {t("screens.voicemail.elevenLabsDescription")}
                   </p>
                 </div>
               </div>
@@ -287,7 +287,7 @@ export default function MVoicemail() {
                 {tab === "inbox" ? t("voicemail.emptyInbox") : t("voicemail.emptySaved")}
               </p>
               <p className="text-[11px] mt-1 text-slate-500">
-                {tab === "inbox" ? "Les nouveaux messages apparaîtront ici" : "Sauvegardez vos messages importants"}
+                {tab === "inbox" ? t("screens.voicemail.emptyInboxHint") : t("screens.voicemail.emptySavedHint")}
               </p>
             </div>
           ) : (
@@ -356,7 +356,7 @@ export default function MVoicemail() {
                           {vm.transcript ? (
                             <div className="rounded-xl p-3 text-[12px] leading-relaxed whitespace-pre-wrap border" style={{ background: "var(--pp-bg-elevated)", color: "var(--pp-text-primary)", borderColor: "var(--pp-bg-border)" }}>
                               <div className="flex items-center gap-1.5 mb-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: PRIMARY }}>
-                                <FileText className="w-3 h-3" /> Transcription
+                                <FileText className="w-3 h-3" /> {t("screens.voicemail.transcriptionLabel")}
                               </div>
                               {vm.transcript}
                             </div>
@@ -515,7 +515,7 @@ function AudioPlayer({ vm }: { vm: VM }) {
         <button
           onClick={toggle}
           disabled={!src}
-          aria-label={playing ? "Pause" : "Play"}
+          aria-label={playing ? t("screens.voicemail.pauseAria") : t("screens.voicemail.playAria")}
           className="w-11 h-11 rounded-full flex items-center justify-center text-white shadow-md disabled:opacity-40 flex-shrink-0 active:scale-95 transition-transform relative"
           style={{ background: `linear-gradient(135deg, ${PRIMARY}, ${ACCENT})` }}
         >
@@ -548,7 +548,7 @@ function AudioPlayer({ vm }: { vm: VM }) {
               disabled={!src}
               onChange={(e) => { const v = +e.target.value; setProgress(v); if (audioRef.current) audioRef.current.currentTime = v; }}
               className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-              aria-label="Position lecture"
+              aria-label={t("screens.voicemail.positionAria")}
             />
           </div>
           <div className="flex items-center justify-between mt-1.5">

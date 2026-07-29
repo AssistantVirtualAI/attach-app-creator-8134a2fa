@@ -818,11 +818,13 @@ class PpSipProvider {
     if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
     if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
     if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }
+    this.releaseRecovery("stop");
     try { this.ua?.stop(); } catch {}
     this.ua = null;
     this.session = null;
     this.update({ status: "disconnected", callState: "idle", direction: null, startedAt: null });
   }
+
 }
 
 export const ppSipProvider = new PpSipProvider();

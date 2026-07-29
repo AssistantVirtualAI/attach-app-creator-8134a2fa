@@ -1,47 +1,31 @@
-## Plan: régler définitivement la boucle SIP 1001 / reconnect
+## 1. Change password (root cause confirmed)
 
-### Problème confirmé
-- Le provider Web SIP Planiprêt utilise déjà un guard `v4`, mais il laisse encore deux mécanismes se battre:
-  - JsSIP reconnecte automatiquement le WebSocket.
-  - Le watchdog custom peut reconstruire/reconnecter en même temps.
-- Plusieurs chemins appellent encore `register()` directement après resume, token VoIP, unregistered, retry, watchdog.
-- Le plugin natif iOS envoie aussi un REGISTER au démarrage WebSocket + un autre REGISTER via `beginNativeOwnership`, ce qui peut créer deux REGISTER successifs.
-- Android génère un `Contact` différent à chaque REGISTER avec `UUID.randomUUID()`, ce qui peut laisser des contacts PBX fantômes et envoyer les appels vers voicemail.
+`MMore.tsx` row "Change password" calls `navigate("/reset-password")`, but the mobile router (`apps/planipret-mobile/src/App.tsx`) has no such route — the catch-all `<Route path="*" element={<Navigate to="/mplanipret" replace />} />` sends the user straight back to Home. Same for the Privacy row, which navigates to `/planipret/privacy` (also not registered in the mobile router).
 
-### Correctifs à appliquer
-1. **JS SIP provider**
-   - Passer le guard à `v5`.
-   - Laisser JsSIP propriétaire du premier reconnect WebSocket.
-   - Transformer le watchdog en vérification différée seulement, puis takeover uniquement si JsSIP n’a pas récupéré.
-   - Ajouter un wrapper global autour de `ua.register()` pour bloquer tous les REGISTER trop rapprochés, même ceux déclenchés par resume/token/watchdog.
-   - Remplacer les `ua.register()` directs par un `guardedRegister(reason)` unique.
+Fix:
+- Add a new in-app screen `MChangePassword.tsx` (mobile-styled, bilingual FR/EN, safe-area header) that asks for the new password + confirmation and calls `supabase.auth.updateUser({ password })`, with validation (min length, match), error handling and a success toast then back to Settings.
+- Register `/mplanipret/change-password` in the mobile router and point the settings row at it.
+- Register a mobile privacy route (or reuse the existing privacy screen) so the Privacy row no longer bounces to Home.
 
-2. **iOS native keep-alive**
-   - Supprimer le double REGISTER au moment du handoff background.
-   - Garder un seul REGISTER initial après ouverture WebSocket.
-   - Remplacer le ping OPTIONS immédiat `0.3s` par un délai configurable/plus stable, ou le désactiver si `keepAliveMs <= 0`.
-   - Éviter qu’un `triggerReregister()` en background envoie un REGISTER si un REGISTER vient d’être accepté.
+## 2. Audit of every settings row
 
-3. **Android native keep-alive**
-   - Remplacer le `Contact` aléatoire par un contact stable basé sur l’extension.
-   - Arrêter de demander un re-register JS à chaque heartbeat natif.
-   - Conserver le service foreground, WakeLock/WifiLock, mais éviter les REGISTER concurrents.
+Verify each row in `MMore.tsx` resolves to a real registered route or opens its sheet, and fix any that fall through to the catch-all redirect:
+- Navigation rows: AVA chat, notifications, pipeline, performance, extension sync, voicemails (`/mplanipret/calls?tab=voicemails` — confirm `MCalls` actually reads the `tab` query param; it currently uses internal state, so wire it to `useSearchParams`), connections, Maestro sync, diagnostics, MS365 diagnostics, SIP debug, privacy, change password.
+- Sheet rows: profile edit, language, DND, customize AVA, help, ringtones, delete account.
+- Action rows: NS reconnect, MS365 connect/disconnect, logout.
 
-4. **Config NetSapiens**
-   - Augmenter le backoff minimum et le délai de vérification pour réduire les storms.
-   - Garder un REGISTER expiry long, mais ne pas utiliser REGISTER comme keep-alive toutes les 60s si le socket est déjà enregistré.
+Each broken target gets either a route registration or a corrected path. A small route-existence test (`routes.test.ts`) will assert every path referenced in `MMore.tsx` matches a declared route, so this class of bug can't come back.
 
-5. **Protection / test de non-régression**
-   - Mettre à jour le test existant pour vérifier:
-     - pas de reconnect 1000ms;
-     - pas de double socket;
-     - pas de double `register()` dans une fenêtre courte;
-     - contact Android stable dans le générateur.
+## 3. AVA Brief — one generation per period per 24h
 
-### Validation
-- Lancer le test SIP ciblé.
-- Vérifier par recherche que les anciens patterns dangereux ne restent plus:
-  - REGISTER manuel non gardé;
-  - `UUID.randomUUID()` dans le Contact Android;
-  - ping OPTIONS immédiat après REGISTER;
-  - message legacy `sip reconnect scheduled in 1000ms`.
+Today `MHome` calls `loadBrief(false)` in a `useEffect` on every mount and on every period change, so navigating back to Home re-invokes `pp-ava-brief` and burns tokens.
+
+Fix:
+- Persist the brief in `localStorage` (not sessionStorage) keyed by `user + period` with a `generatedAt` timestamp, via new helpers in `mhomeCache.ts` (`loadBriefCache` / `saveBriefCache`).
+- On mount/period change: if a cached brief exists and is < 24h old, render it immediately and make **no** edge-function call. Only fetch when the cache is missing, older than 24h, or `force === true` (pull-to-refresh / explicit refresh button).
+- Keep separate cache entries for daily / weekly / monthly so each is generated at most once per 24h.
+- Show a subtle "Generated at HH:MM" line plus the existing manual refresh so the user can always force a regeneration.
+- Guard against concurrent calls with an in-flight ref so double mounts (StrictMode / prefetch) can't fire twice.
+
+### Technical notes
+Changes must be mirrored in both copies of the app tree (`src/pages/planipret/mobile/**` and `apps/planipret-mobile/src/**`), which are kept in sync. No backend/schema changes required; `pp-ava-brief` stays as-is.

@@ -710,6 +710,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
       {pending && (
         <CalendarAwareConfirm
           pending={pending}
+          toolLabel={toolLabel}
           onCancel={() => confirmAction(false)}
           onConfirm={(patchedParams) => {
             // Overwrite params with patched (tz + confirmed) then execute
@@ -803,9 +804,10 @@ function isValidIANATimezone(tz: string): boolean {
 }
 
 function CalendarAwareConfirm({
-  pending, onCancel, onConfirm,
+  pending, toolLabel, onCancel, onConfirm,
 }: {
   pending: PendingTool;
+  toolLabel: (name: string) => string;
   onCancel: () => void;
   onConfirm: (patched: Record<string, any>) => void;
 }) {

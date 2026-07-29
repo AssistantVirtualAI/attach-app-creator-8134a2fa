@@ -623,7 +623,9 @@ class PpSipProvider {
       // registration completes is rejected and the server drops the socket.
       if (this.snap.status !== "registered") return;
       try {
-        if (!ua.isConnected?.()) { try { ua.start(); } catch {} return; }
+        // Never call ua.start() from the ping: it races the reconnect loop and
+        // opens a duplicate socket (→ 1001 on the previous one).
+        if (!ua.isConnected?.()) return;
         ua.sendRequest((JsSIP as any).C.OPTIONS, `sip:${ua.configuration?.uri?.host ?? ""}`, {});
       } catch { /* ping failures are non-fatal */ }
     };

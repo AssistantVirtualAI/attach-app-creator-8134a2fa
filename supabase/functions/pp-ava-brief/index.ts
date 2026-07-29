@@ -266,13 +266,33 @@ function periodRange(period: Period): { since: Date; until: Date; label: string 
   return { since, until, label: period };
 }
 
+/** Valid, renderable brief used whenever something upstream fails (never a non-2xx for the app). */
+function degradedBrief(lang: Lang, reason: string) {
+  const fr = lang !== "en";
+  return {
+    headline: fr
+      ? "Brief indisponible pour le moment — données partielles."
+      : "Brief temporarily unavailable — partial data.",
+    overview: fr
+      ? "AVA n'a pas pu récupérer toutes les données (téléphonie, Microsoft 365 ou Maestro). Les indicateurs s'actualiseront automatiquement au prochain rafraîchissement."
+      : "AVA could not retrieve all data (telephony, Microsoft 365 or Maestro). Metrics will refresh automatically on the next reload.",
+    priorities: [], risks: [], highlights: [], metrics: [], tips: [], suggestions: [],
+    stats: null,
+    language: fr ? "fr" : "en",
+    degraded: true,
+    degraded_reason: reason,
+    cached: false,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
+  let requestedLang: Lang | null = null;
   try {
     const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
-    if (!authHeader) return json({ error: "unauthorized" }, 401);
+    if (!authHeader) return json(degradedBrief("fr", "unauthorized"), 401);
     const body = await req.json().catch(() => ({}));
     const period: Period = (["day","week","month","shift"].includes(body?.period) ? body.period : "day") as Period;
     const force = !!body?.force;

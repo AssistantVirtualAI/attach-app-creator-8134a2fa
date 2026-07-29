@@ -35,13 +35,13 @@ Deno.serve(async (req) => {
     const { data: call } = await admin
       .from("planipret_phone_calls")
       .select(
-        "id, user_id, direction, from_number, to_number, started_at, ended_at, duration_seconds, recording_url, maestro_synced, maestro_client_id, ns_call_id",
+        "id, user_id, direction, from_number, to_number, started_at, ended_at, duration_seconds, recording_url, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id",
       )
       .eq("id", call_id)
       .maybeSingle();
 
     if (!call) return json({ success: false, error: "call_not_found" }, 404);
-    if (call.maestro_synced) {
+    if (call.maestro_synced && (call as any).maestro_call_id) {
       return json({ success: true, already_synced: true });
     }
 
@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
               method: "POST",
               path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/lookup-by-phone`,
               token: auth.token,
+              machine: auth.machine,
               body: { phone: contactPhone },
             })
           : { ok: false, status: 0, data: null, path: "lookup_skipped_no_broker_id" } as any;
@@ -199,6 +200,7 @@ Deno.serve(async (req) => {
       method: "POST",
       path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls`,
       token: auth.token,
+      machine: auth.machine,
       body,
       idempotencyKey: call.id,
     }) as any;
@@ -217,6 +219,20 @@ Deno.serve(async (req) => {
 
     if (res.ok || res.status === 409) {
       const maestroCallId = res.data?.call?.id ?? res.data?.id ?? res.data?.call_id ?? null;
+      if (!maestroCallId) {
+        const summary = summarizeMaestroFailure(res.status, res.data);
+        await setPipelineStep(admin, call_id, "cdr", "error", { reason: "maestro_call_id_missing", response_status: res.status });
+        await pipelineLog(admin, {
+          call_id,
+          user_id: call.user_id,
+          step: "cdr_sync",
+          status: "error",
+          duration_ms: ms,
+          error_message: "maestro_call_id_missing",
+          payload: { detail: summary.detail, response_status: res.status },
+        });
+        return json({ success: false, error: "maestro_call_id_missing", detail: summary.detail, status: res.status }, 424);
+      }
       await admin
         .from("planipret_phone_calls")
         .update({

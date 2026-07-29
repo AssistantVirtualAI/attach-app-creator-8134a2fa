@@ -206,6 +206,7 @@ async function bootstrap() {
       },
     });
     root.render(appTree);
+    watchFirstPaint(container);
     window.setTimeout(() => { (window as BootWindow).__PP_REACT_MOUNT_CALLED__ = true; }, 0);
   } catch (e) {
     console.error('[PP] Render failed:', e);

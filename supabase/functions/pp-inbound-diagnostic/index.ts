@@ -325,7 +325,7 @@ Deno.serve(async (req) => {
     term_user: c?.["call-term-user"] ?? c?.["term-user"] ?? c?.["term-to-user"],
     term_to_uri: c?.["call-term-to-uri"] ?? c?.["term-to-uri"] ?? c?.call_term_to_uri ?? null,
     disposition: c?.["call-disposition"] ?? c?.disposition,
-    release_code: c?.["release-code"] ?? c?.["call-release-code"] ?? c?.["disconnect-reason"],
+    release_code: c?.["release-code"] ?? c?.["call-release-code"] ?? c?.["disconnect-reason"] ?? c?.["call-disconnect-reason-text"] ?? c?.reason,
     ring_seconds: Number(c?.["time-ringing"] ?? c?.["ring-duration"] ?? c?.["duration-ringing"] ?? 0),
     answer_time: c?.["call-answer-datetime"] ?? c?.["time-answer"] ?? null,
     start_time: c?.["call-start-datetime"] ?? c?.["time-start"] ?? null,

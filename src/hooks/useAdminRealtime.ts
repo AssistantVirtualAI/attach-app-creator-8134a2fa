@@ -80,7 +80,7 @@ const ensureChannel = () => {
     });
 };
 
-export const clearAdminUnread = () => { _unread = 0; notify(); };
+export const clearAdminUnread = () => { _unread = 0; notifyNow(); };
 
 export function useAdminRealtime() {
   const [, setTick] = useState(0);

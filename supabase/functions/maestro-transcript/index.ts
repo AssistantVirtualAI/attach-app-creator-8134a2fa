@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
           await pipelineLog(admin, {
             call_id, user_id: call.user_id, step: "transcript_poll",
             status: result ? "success" : "skipped",
-            error_message: result ? null : "transcript_not_ready",
+            error_message: result ? undefined : "transcript_not_ready",
             payload: { maestro_call_id: call.maestro_call_id, status: r.status },
           }).catch(() => {});
         }

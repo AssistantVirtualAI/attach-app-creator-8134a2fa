@@ -256,12 +256,13 @@ Deno.serve(async (req) => {
             request_body: { maestro_call_id: maestroCallId, status: "ended" },
             response_status: endRes.status,
             response_body: endRes.data,
+            duration_ms: 0,
             success: !!endRes.ok,
           });
           await pipelineLog(admin, {
             call_id, user_id: call.user_id, step: "call_ended",
             status: endRes.ok ? "success" : "error",
-            error_message: endRes.ok ? null : `http_${endRes.status}`,
+            error_message: endRes.ok ? undefined : `http_${endRes.status}`,
             payload: { maestro_call_id: maestroCallId, status: endRes.status },
           });
         } catch (e) {

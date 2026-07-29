@@ -148,8 +148,8 @@ Deno.serve(async (req) => {
     // Payload format confirmed by Scott (Telecom REST API).
     const body = {
       provider_call_id: call.ns_call_id ?? call.id,
-      to_user_number: call.direction === "inbound" ? call.from_number : call.to_number,
-      from_user_number: call.direction === "inbound" ? call.to_number : call.from_number,
+      to_user_number: call.direction === "inbound" ? normalizePhone(call.from_number) : normalizePhone(call.to_number),
+      from_user_number: call.direction === "inbound" ? normalizePhone(call.to_number) : normalizePhone(call.from_number),
       status: "ended",
       direction: call.direction,
       duration_seconds: call.duration_seconds ?? 0,

@@ -167,6 +167,7 @@ export function useMplanipretSoftphone(enabled = true) {
   const [restCall, setRestCall] = useState<RestCallAttachment | null>(null);
   const [nativeStatus, setNativeStatus] = useState<PpNativeSipStatus | null>(null);
   const seenCallIds = useRef<Set<string>>(new Set());
+  const sipInitInProgress = useRef(false);
 
   // Subscribe to the SIP snapshot.
   useEffect(() => ppSipProvider.subscribe(setSnap), []);
@@ -238,8 +239,11 @@ export function useMplanipretSoftphone(enabled = true) {
           password: String(d.sip_password),
           displayName: String(d.display_name || d.sip_display_name || d.sip_extension),
         };
+        if (sipInitInProgress.current) return;
+        sipInitInProgress.current = true;
         void startPlanipretSipKeepAlive(sipConfig).then((s) => { if (s && !cancelled) setNativeStatus(s); });
-        await ppSipProvider.init(sipConfig);
+        try { await ppSipProvider.init(sipConfig); }
+        finally { sipInitInProgress.current = false; }
         void getPlanipretVoipPushToken().then((t) => {
           if (t?.token) void uploadPlanipretVoipToken(t.token, t.bundleId, sipConfig.extension, t.environment);
         });
@@ -442,7 +446,11 @@ export function useMplanipretSoftphone(enabled = true) {
     const onResume = () => {
       try {
         const cfg = ppSipProvider.getConfig();
-        if (cfg) void ppSipProvider.init(cfg);
+        if (cfg) {
+          if (sipInitInProgress.current) return;
+          sipInitInProgress.current = true;
+          void ppSipProvider.init(cfg).finally(() => { sipInitInProgress.current = false; });
+        }
         else ppSipProvider.forceReregister();
       } catch { /* noop */ }
       evaluate();
@@ -470,7 +478,11 @@ export function useMplanipretSoftphone(enabled = true) {
               // (forceReregister is a no-op once the UA has been stopped).
               try {
                 const cfg = ppSipProvider.getConfig();
-                if (cfg) void ppSipProvider.init(cfg);
+                if (cfg) {
+                  if (sipInitInProgress.current) return;
+                  sipInitInProgress.current = true;
+                  void ppSipProvider.init(cfg).finally(() => { sipInitInProgress.current = false; });
+                }
                 else ppSipProvider.forceReregister();
               } catch { /* noop */ }
               evaluate();

@@ -81,6 +81,93 @@ export async function fallbackBrokerId(admin: SupabaseClient): Promise<string | 
  * NOTE: Scott's Telecom API only accepts the machine key (`Bearer <key>&machine=1`);
  * per-broker OAuth tokens are never used for these calls.
  */
+/** Digits-only comparison helper. */
+function digits(v: unknown): string {
+  return String(v ?? "").replace(/\D/g, "");
+}
+
+/** Verify that a telecom user id really exists (GET /users/{id}/sip). */
+export async function verifyTelecomUserId(cfg: MaestroConfig, id: string): Promise<any | null> {
+  if (!cfg.url || !cfg.key || !/^\d+$/.test(id)) return null;
+  try {
+    const r = await fetch(`${cfg.url}/api/v1/users/${id}/sip?machine=1`, {
+      headers: { Authorization: `Bearer ${cfg.key}` },
+    });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => null);
+    return j?.sip ? j.sip : null;
+  } catch {
+    return null;
+  }
+}
+
+const RESOLVE_COOLDOWN = new Map<string, number>();
+
+/**
+ * Discover the broker's numeric Maestro telecom user id by probing
+ * `GET /users/{id}/sip` and matching the SIP extension or phone number to the
+ * broker's Planiprêt profile. Persists the result on the profile.
+ */
+export async function resolveBrokerIdFromTelecom(
+  admin: SupabaseClient,
+  userId: string,
+  cfg: MaestroConfig,
+  maxId = 250,
+): Promise<string | null> {
+  if (!cfg.url || !cfg.key) return null;
+  const last = RESOLVE_COOLDOWN.get(userId) ?? 0;
+  if (Date.now() - last < 10 * 60_000) return null;
+  RESOLVE_COOLDOWN.set(userId, Date.now());
+
+  const profile = await loadBrokerProfile(admin, userId);
+  const ext = String(profile?.extension ?? "").trim();
+  const phone = digits(profile?.phone);
+  if (!ext && !phone) return null;
+
+
+  const match = async (id: number): Promise<string | null> => {
+    const sip = await verifyTelecomUserId(cfg, String(id));
+    if (!sip) return null;
+    const sipUser = String(sip.sip_username ?? "").trim();
+    const pu = sip.provider_user ?? {};
+    const pNums = [digits(pu.phone_number), digits(pu.sms_number)].filter(Boolean);
+    const extMatch = ext && (sipUser === ext || String(pu.provider_external_user_id ?? "") === ext);
+    const phoneMatch = phone && pNums.some((n) => n.endsWith(phone.slice(-10)));
+    return extMatch || phoneMatch ? String(id) : null;
+  };
+
+  for (let start = 1; start <= maxId; start += 25) {
+    const ids = Array.from({ length: Math.min(25, maxId - start + 1) }, (_, i) => start + i);
+    const found = (await Promise.all(ids.map(match))).find(Boolean);
+    if (found) {
+      await admin.from("planipret_profiles").update({ maestro_broker_id: found }).eq("id", profile!.id);
+      console.log(`[maestro] resolved broker id ${found} for user ${userId}`);
+      return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * `planipret_phone_calls.user_id` sometimes holds the auth user id and
+ * sometimes the `planipret_profiles.id` — resolve both.
+ */
+export async function loadBrokerProfile(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<{ id: string; maestro_broker_id: string | null; extension: string | null; phone: string | null } | null> {
+  const cols = "id, user_id, maestro_broker_id, extension, phone";
+  const byUser = await admin.from("planipret_profiles").select(cols).eq("user_id", userId).maybeSingle();
+  if (byUser.data) return byUser.data as any;
+  const byId = await admin.from("planipret_profiles").select(cols).eq("id", userId).maybeSingle();
+  return (byId.data as any) ?? null;
+}
+
+/**
+ * Resolve the machine API key + the broker's numeric Maestro telecom user id.
+ * NOTE: Scott's Telecom API only accepts the machine key (`Bearer <key>&machine=1`);
+ * per-broker OAuth tokens are never used for these calls.
+ */
 export async function getBrokerAuth(
   admin: SupabaseClient,
   userId: string | null | undefined,
@@ -88,12 +175,15 @@ export async function getBrokerAuth(
   const cfg = await getMaestroConfig(admin);
   let brokerId: string | null = null;
   if (userId) {
-    const { data: profile } = await admin
-      .from("planipret_profiles")
-      .select("maestro_broker_id")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const profile = await loadBrokerProfile(admin, userId);
     brokerId = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
+
+    // A stored id that no longer exists upstream must not silently break sync.
+    if (brokerId && !(await verifyTelecomUserId(cfg, brokerId))) {
+      console.warn(`[maestro] stored broker id ${brokerId} invalid — re-resolving`);
+      brokerId = null;
+    }
+    if (!brokerId) brokerId = await resolveBrokerIdFromTelecom(admin, userId, cfg);
   }
   let usingFallback = false;
   if (!brokerId) {
@@ -102,6 +192,7 @@ export async function getBrokerAuth(
   }
   return { token: cfg.key, brokerId, usingFallback };
 }
+
 
 /**
  * Telecom REST API auth (Scott's spec): the machine API key + the broker's

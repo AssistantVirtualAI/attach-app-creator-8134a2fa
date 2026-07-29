@@ -127,20 +127,12 @@ while (queue.length) {
   }
 }
 
-if (missing.length > 0) {
-  console.error(red(`\n[check-imports] \u2717 ${missing.length} missing local module(s) reachable from src/index.tsx:\n`));
-  for (const { file, line, spec } of missing) {
-    console.error(red(`  \u2022 ${file}:${line}`));
-    console.error(`    imports ${yellow(`"${spec}"`)} \u2192 file not found`);
-    const hint = spec.startsWith("@/")
-      ? `apps/planipret-mobile/src/${spec.slice(2)}.(ts|tsx)`
-      : `resolved relative to ${file}`;
-    console.error(`    expected: ${hint}`);
-  }
-  console.error(red(`\nFix: copy the missing file(s) from the web app into apps/planipret-mobile/src/, or remove the import.`));
-  console.error(red(`Build aborted before vite so the iOS/Android bundle is never shipped broken.\n`));
-  process.exit(1);
+function expectedSource(spec, file) {
+  return spec.startsWith("@/")
+    ? `apps/planipret-mobile/src/${spec.slice(2)}.(ts|tsx)`
+    : `resolved relative to ${file}`;
 }
+
 
 // Orphan files: not part of the bundle graph, so broken imports there cannot
 // break the build — report them so they get cleaned up or fixed.

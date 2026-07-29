@@ -3,7 +3,7 @@
 // and asks Lovable AI Gateway for a French, actionable summary.
 // Cached 30 min per (user, period) in `planipret_ai_insights`.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { generateObject } from "npm:ai";
+import { generateText } from "npm:ai";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
@@ -111,18 +111,18 @@ const json = (b: unknown, s = 200) =>
 const BriefSchema = z.object({
   headline: z.string(),
   overview: z.string().optional(),
-  priorities: z.array(z.string()).max(8),
-  risks: z.array(z.string()).max(5),
-  highlights: z.array(z.string()).max(8).optional(),
-  metrics: z.array(z.object({ label: z.string(), value: z.string() })).max(14).optional(),
-  tips: z.array(z.object({ title: z.string(), detail: z.string() })).max(7).optional(),
+  priorities: z.array(z.string()).optional().default([]),
+  risks: z.array(z.string()).optional().default([]),
+  highlights: z.array(z.string()).optional().default([]),
+  metrics: z.array(z.object({ label: z.string(), value: z.coerce.string() })).optional().default([]),
+  tips: z.array(z.object({ title: z.string(), detail: z.string() })).optional().default([]),
   focus: z.string().optional(),
   suggestions: z.array(z.object({
     label: z.string(),
-    kind: z.enum(["call", "sms", "email", "reminder"]),
+    kind: z.string().optional(),
     number: z.string().optional(),
-  })).max(5),
-});
+  })).optional().default([]),
+}).passthrough();
 
 type Period = "day" | "week" | "month" | "shift";
 type Lang = "fr" | "en";
@@ -471,13 +471,12 @@ You must cover TWO sources: telephony (calls, texts, voicemails, leads) AND Micr
 
     let result: any;
     try {
-      const r = await generateObject({
-        model: gateway("google/gemini-3-flash-preview"),
-        system,
+      const r = await generateText({
+        model: gateway("google/gemini-2.5-flash"),
+        system: `${system}\n\nRéponds UNIQUEMENT avec un objet JSON valide (pas de texte autour, pas de balises markdown) respectant exactement ces clés: headline (string), overview (string), priorities (string[]), risks (string[]), highlights (string[]), metrics ({label,value}[]), tips ({title,detail}[]), focus (string), suggestions ({label,kind,number}[]).`,
         prompt: userPrompt,
-        schema: BriefSchema,
       });
-      let out: any = (r as any).object ?? (r as any).experimental_output ?? (r as any).text;
+      let out: any = (r as any).text;
       if (typeof out === "string") {
         const cleaned = out.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
         const start = cleaned.indexOf("{");
@@ -485,6 +484,13 @@ You must cover TWO sources: telephony (calls, texts, voicemails, leads) AND Micr
         out = JSON.parse(start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned);
       }
       result = BriefSchema.parse(out);
+      result.priorities = (result.priorities ?? []).slice(0, 8);
+      result.risks = (result.risks ?? []).slice(0, 5);
+      result.highlights = (result.highlights ?? []).slice(0, 8);
+      result.metrics = (result.metrics ?? []).slice(0, 14);
+      result.tips = (result.tips ?? []).slice(0, 7);
+      result.suggestions = (result.suggestions ?? [])
+        .filter((x: any) => ["call", "sms", "email", "reminder"].includes(x.kind)).slice(0, 5);
       const fb = buildFallbackBrief(stats, period, lang);
       if (!result.metrics?.length) result.metrics = fb.metrics;
       if (!result.overview) result.overview = fb.overview;

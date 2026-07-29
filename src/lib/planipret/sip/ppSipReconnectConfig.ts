@@ -38,6 +38,8 @@ export type PpSipReconnectConfig = {
   nativeVerifyDelayMs: number;
   /** Native keep-alive REGISTER heartbeat (seconds). */
   nativeHeartbeatSec: number;
+  /** REGISTER expiry used by the native background contact (seconds). */
+  nativeRegisterExpiresSec: number;
 };
 
 const ENV_KEYS: Record<keyof PpSipReconnectConfig, string> = {
@@ -55,6 +57,7 @@ const ENV_KEYS: Record<keyof PpSipReconnectConfig, string> = {
   nativeBackoffMaxMs: "VITE_PP_SIP_NATIVE_BACKOFF_MAX_MS",
   nativeVerifyDelayMs: "VITE_PP_SIP_NATIVE_VERIFY_DELAY_MS",
   nativeHeartbeatSec: "VITE_PP_SIP_NATIVE_HEARTBEAT_SEC",
+  nativeRegisterExpiresSec: "VITE_PP_SIP_NATIVE_REGISTER_EXPIRES_SEC",
 };
 
 function num(v: unknown): number | null {

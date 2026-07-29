@@ -186,7 +186,7 @@ export async function startPlanipretSipKeepAlive(cfg: PpSipConfig): Promise<PpNa
       backoffMaxAttempts: getPpSipReconnectConfig().socketBackoffMaxAttempts,
       verifyDelayMs: getPpSipReconnectConfig().nativeVerifyDelayMs,
       heartbeatSec: getPpSipReconnectConfig().nativeHeartbeatSec,
-      registerExpiresSec: getPpSipReconnectConfig().registerExpiresSec,
+      registerExpiresSec: getPpSipReconnectConfig().nativeRegisterExpiresSec,
     });
     if (platform() === "android") {
       void NativePpSip.requestBatteryOptimizationExemption?.().catch(() => undefined);

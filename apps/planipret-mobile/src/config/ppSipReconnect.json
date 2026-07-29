@@ -12,5 +12,6 @@
   "nativeBackoffMinMs": 2000,
   "nativeBackoffMaxMs": 60000,
   "nativeVerifyDelayMs": 8000,
-  "nativeHeartbeatSec": 60
+  "nativeHeartbeatSec": 60,
+  "nativeRegisterExpiresSec": 1800
 }

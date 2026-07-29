@@ -154,6 +154,14 @@ public class PpSipKeepAlivePlugin extends Plugin {
       call.getString("domain", ""),
       call.getString("displayName", call.getString("extension", "")),
       call.getString("password", ""));
+    // Same reconnection strategy as iOS, pushed from the JS config file / env vars.
+    PpSipKeepAliveService.saveStrategy(getContext(),
+      call.getInt("backoffMinMs", 2000),
+      call.getInt("backoffMaxMs", 60000),
+      call.getInt("backoffMaxAttempts", 5),
+      call.getInt("verifyDelayMs", 8000),
+      call.getInt("heartbeatSec", 60),
+      call.getInt("registerExpiresSec", 1800));
     PpSipKeepAliveService.start(getContext());
     call.resolve(readStatus().put("ok", true));
   }
@@ -268,15 +276,46 @@ public class PpSipKeepAliveService extends Service {
   private final String callId = UUID.randomUUID().toString() + "@planipret-mobile";
   private final String fromTag = Long.toHexString(System.nanoTime());
   private volatile boolean readerRunning = false;
+  // Reconnection strategy (configurable from JS — see src/config/ppSipReconnect.json).
+  private int backoffMinMs = 2000, backoffMaxMs = 60000, backoffMaxAttempts = 5, verifyDelayMs = 8000, heartbeatSec = 60, registerExpires = 1800;
+  private int reconnectAttempts = 0; private volatile boolean reconnectPending = false;
 
   public static void start(Context c) { Intent i = new Intent(c, PpSipKeepAliveService.class); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) c.startForegroundService(i); else c.startService(i); }
   public static void stop(Context c) { c.stopService(new Intent(c, PpSipKeepAliveService.class)); }
   public static void saveConfig(Context c, String host, int port, String path, String login, String domain, String displayName, String password) { c.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString("host", host).putInt("port", port).putString("path", path).putString("login", login).putString("domain", domain).putString("display_name", displayName).putString("password", password).apply(); }
+  public static void saveStrategy(Context c, int backoffMinMs, int backoffMaxMs, int backoffMaxAttempts, int verifyDelayMs, int heartbeatSec, int registerExpiresSec) {
+    c.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+      .putInt("backoff_min_ms", backoffMinMs).putInt("backoff_max_ms", backoffMaxMs).putInt("backoff_max_attempts", backoffMaxAttempts)
+      .putInt("verify_delay_ms", verifyDelayMs).putInt("heartbeat_sec", heartbeatSec).putInt("register_expires_sec", registerExpiresSec).apply();
+  }
+  private void loadStrategy() {
+    SharedPreferences p = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+    backoffMinMs = Math.max(500, p.getInt("backoff_min_ms", 2000));
+    backoffMaxMs = Math.max(backoffMinMs, p.getInt("backoff_max_ms", 60000));
+    backoffMaxAttempts = Math.max(1, p.getInt("backoff_max_attempts", 5));
+    verifyDelayMs = Math.max(1000, p.getInt("verify_delay_ms", 8000));
+    heartbeatSec = Math.max(15, p.getInt("heartbeat_sec", 60));
+    registerExpires = Math.max(60, p.getInt("register_expires_sec", 1800));
+  }
+  /** Exponential backoff reconnect + re-REGISTER, mirroring the iOS plugin. */
+  private void scheduleReconnect(String why) {
+    if (reconnectPending) return;
+    reconnectPending = true;
+    reconnectAttempts = Math.min(reconnectAttempts + 1, backoffMaxAttempts);
+    long delay = Math.min((long) backoffMaxMs, (long) (backoffMinMs * Math.pow(2, reconnectAttempts - 1)));
+    emitStatus("reconnecting", why);
+    executor.schedule(() -> {
+      reconnectPending = false;
+      connectAndRegister();
+      executor.schedule(() -> { if (!"registered".equals(lastStatus)) scheduleReconnect("still_unregistered"); }, verifyDelayMs, TimeUnit.MILLISECONDS);
+    }, delay, TimeUnit.MILLISECONDS);
+  }
   public static void requestReregister(Context c, String reason) { c.sendBroadcast(new Intent(ACTION_REREGISTER).setPackage(c.getPackageName()).putExtra("reason", reason)); }
   public static void clearIncomingNotification(Context c) { try { NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE); if (nm != null) nm.cancel(INCOMING_NOTIFICATION_ID); } catch(Exception ignored) {} }
 
   @Override public void onCreate() {
     super.onCreate();
+    loadStrategy();
     createChannels();
     PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
     wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Planipret::SipWakeLock"); wakeLock.setReferenceCounted(false); wakeLock.acquire();
@@ -295,9 +334,9 @@ public class PpSipKeepAliveService extends Service {
     executor.execute(this::connectAndRegister);
     if (heartbeat != null) heartbeat.cancel(false);
     heartbeat = executor.scheduleAtFixedRate(() -> {
-      try { sendRegister(null); } catch (Exception e) { emitStatus("reconnecting", "register_retry"); connectAndRegister(); }
+      try { sendRegister(null); } catch (Exception e) { scheduleReconnect("register_retry"); }
       requestReregister(this, "keepalive");
-    }, 60, 60, TimeUnit.SECONDS);
+    }, heartbeatSec, heartbeatSec, TimeUnit.SECONDS);
     return START_STICKY;
   }
 
@@ -331,7 +370,7 @@ public class PpSipKeepAliveService extends Service {
     while (wsSocket != null && wsSocket.isConnected() && !wsSocket.isClosed()) {
       String msg = readFrame(); if (msg == null) break; handleSipMessage(msg);
     }
-  } catch(Exception ignored) {} finally { readerRunning = false; emitStatus("reconnecting", "ws_reader_closed"); closeWs(); executor.schedule(this::connectAndRegister, 2, TimeUnit.SECONDS); } }
+  } catch(Exception ignored) {} finally { readerRunning = false; closeWs(); scheduleReconnect("ws_reader_closed"); } }
 
   private void handleSipMessage(String msg) throws Exception {
     if (msg.startsWith("SIP/2.0 401") || msg.startsWith("SIP/2.0 407")) {
@@ -391,7 +430,7 @@ public class PpSipKeepAliveService extends Service {
     sip.append("From: \"").append(display == null ? login : display.replace("\"", "")).append("\" <sip:").append(login).append("@").append(domain).append(">;tag=").append(fromTag).append("\r\n");
     sip.append("Call-ID: ").append(callId).append("\r\n");
     sip.append("CSeq: ").append(seq).append(" REGISTER\r\n");
-    sip.append("Contact: ").append(contact).append(";expires=1800\r\nExpires: 1800\r\nUser-Agent: Planipret Native KeepAlive\r\nSupported: outbound,path,gruu\r\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\r\n");
+    sip.append("Contact: ").append(contact).append(";expires=").append(registerExpires).append("\r\nExpires: ").append(registerExpires).append("\r\nUser-Agent: Planipret Native KeepAlive\r\nSupported: outbound,path,gruu\r\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\r\n");
     if (challenge != null && password != null && password.length() > 0) sip.append("Authorization: ").append(digestAuth(challenge, login, password, domain)).append("\r\n");
     sip.append("Content-Length: 0\r\n\r\n");
     sendFrame(sip.toString());
@@ -725,7 +764,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       var sip = "REGISTER sip:" + domain + " SIP/2.0\\r\\n"
       sip += "Via: SIP/2.0/WSS planipret-ios.invalid;branch=" + branch + "\\r\\nMax-Forwards: 70\\r\\n"
       sip += "To: <sip:" + login + "@" + domain + ">\\r\\nFrom: \\"" + displayName.replacingOccurrences(of: "\\"", with: "") + "\\" <sip:" + login + "@" + domain + ">;tag=" + fromTag + "\\r\\n"
-      sip += "Call-ID: " + callIdReg + "\\r\\nCSeq: " + String(seq) + " REGISTER\\r\\nContact: " + contact + ";expires=1800\\r\\nExpires: 1800\\r\\nUser-Agent: Planipret iOS KeepAlive\\r\\nSupported: outbound,path,gruu\\r\\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\\r\\n"
+      sip += "Call-ID: " + callIdReg + "\\r\\nCSeq: " + String(seq) + " REGISTER\\r\\nContact: " + contact + ";expires=" + String(registerExpires) + "\\r\\nExpires: " + String(registerExpires) + "\\r\\nUser-Agent: Planipret iOS KeepAlive\\r\\nSupported: outbound,path,gruu\\r\\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\\r\\n"
       if let ch = challenge, !password.isEmpty { sip += "Authorization: " + digest(challenge: ch) + "\\r\\n" }
       sip += "Content-Length: 0\\r\\n\\r\\n"
       socket?.send(.string(sip)) { [weak self] err in DispatchQueue.main.async { self?.setStatus(err == nil ? "connecting" : "error", err == nil ? (challenge == nil ? "register_sent" : "register_auth_sent") : "register_send_failed") } }

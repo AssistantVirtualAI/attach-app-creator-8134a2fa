@@ -557,7 +557,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.willResignActiveNotification, object: nil)
       // UIScene lifecycle (iOS 13+) — the app adopts scenes, so the legacy
       // UIApplication notifications are not always delivered. Observing both
-      // keeps `appActive` correct without ever reading UI state off-thread.
+      // keeps appActive correct without ever reading UI state off-thread.
       if #available(iOS 13.0, *) {
         NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIScene.didActivateNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onSceneWillEnterForeground), name: UIScene.willEnterForegroundNotification, object: nil)
@@ -606,7 +606,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
 
     // NEVER touch UIApplication/UIScene off the main thread: it triggers
     // "UI API called on a background thread" and can deadlock (DispatchQueue.main.sync).
-    // The cached `appActive` flag is refreshed only from main-thread notifications.
+    // The cached appActive flag is refreshed only from main-thread notifications.
     private func isForeground() -> Bool {
       if Thread.isMainThread {
         appActive = UIApplication.shared.applicationState == .active

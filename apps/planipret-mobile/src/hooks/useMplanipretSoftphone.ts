@@ -67,6 +67,26 @@ async function uploadPlanipretVoipToken(token: string, bundleId?: string, extens
   } catch (e) { console.warn("[pp-voip] token upload failed", e); }
 }
 
+let softphoneOwnerId: string | null = null;
+let softphoneOwnerUserId: string | null = null;
+let softphoneOwnerSeq = 0;
+
+function acquireSoftphoneOwner(instanceId: string, userId: string): boolean {
+  if (!softphoneOwnerId || softphoneOwnerId === instanceId || softphoneOwnerUserId !== userId) {
+    softphoneOwnerId = instanceId;
+    softphoneOwnerUserId = userId;
+    return true;
+  }
+  return false;
+}
+
+function releaseSoftphoneOwner(instanceId: string) {
+  if (softphoneOwnerId === instanceId) {
+    softphoneOwnerId = null;
+    softphoneOwnerUserId = null;
+  }
+}
+
 
 
 
@@ -122,6 +142,7 @@ type RestCallAttachment = {
 
 export function useMplanipretSoftphone(enabled = true) {
   const { user } = useAuth();
+  const ownerIdRef = useRef<string>(`pp-softphone-${++softphoneOwnerSeq}`);
   const [snap, setSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
   const [loading, setLoading] = useState(false);
   const [net, setNet] = useState<NetSample>(networkMonitor.current());
@@ -169,6 +190,8 @@ export function useMplanipretSoftphone(enabled = true) {
   // NetSapiens with IP/User-Agent instead of empty columns.
   useEffect(() => {
     if (!enabled || !user) { setLoading(false); return; }
+    const ownerId = ownerIdRef.current;
+    if (!acquireSoftphoneOwner(ownerId, user.id)) { setLoading(false); return; }
     let cancelled = false;
     const doInit = async (opts?: { force?: boolean }) => {
       setLoading(true);
@@ -224,6 +247,7 @@ export function useMplanipretSoftphone(enabled = true) {
       cancelled = true;
       window.removeEventListener("pp:sip-ready", onReady as any);
       window.removeEventListener("pp:sip-force-reregister", onForce as any);
+      releaseSoftphoneOwner(ownerId);
     };
   }, [enabled, user?.id]);
 
@@ -231,6 +255,7 @@ export function useMplanipretSoftphone(enabled = true) {
   // iOS receives native background refresh requests and re-registers as soon as execution resumes.
   useEffect(() => {
     if (!enabled || !user) return;
+    if (softphoneOwnerId !== ownerIdRef.current) return;
     let cleanupStatus: (() => void) | undefined;
     let cleanupReregister: (() => void) | undefined;
     let cancelled = false;
@@ -308,6 +333,7 @@ export function useMplanipretSoftphone(enabled = true) {
   // user never sees "Offline" while a call is ringing.
   useEffect(() => {
     if (!enabled || !user) return;
+    if (softphoneOwnerId !== ownerIdRef.current) return;
     let disconnectedSince = 0;
     let softTimer: ReturnType<typeof setTimeout> | null = null;
     let hardTimer: ReturnType<typeof setTimeout> | null = null;

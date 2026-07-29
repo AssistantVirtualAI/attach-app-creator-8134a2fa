@@ -536,6 +536,74 @@ Deno.serve(async (req) => {
     };
 
 
+    // ---- DID inventory refresh (source of truth = PBX, not the CSV import) ----
+    // The original `file_sync` import left mangled rows (a whole CSV line stored
+    // in callerid_name), so the local number→extension map could not be trusted.
+    if (body?.refresh_dids === true) {
+      const domain = String(body?.domain ?? NS_DEFAULT_DOMAIN);
+      const res = await nsFetch(
+        `/domains/${encodeURIComponent(domain)}/phonenumbers`,
+        { method: "GET" },
+        { functionName: "pp-sync-answering-rules" },
+      );
+      const data: any = await readBody(res);
+      if (!res.ok) return json({ error: "ns_phonenumbers_unreadable", status: res.status, detail: data }, 502);
+      const rowsRaw: any[] = Array.isArray(data) ? data : (data?.data ?? data?.items ?? []);
+
+      const numOf = (n: any) => String(n?.phonenumber ?? n?.["phone-number"] ?? n?.number ?? n?.did ?? "").trim();
+      const destOf = (n: any) =>
+        DID_DEST_FIELDS.map((f) => String(n?.[f] ?? "")).filter(Boolean).join(" ");
+      const extOf = (n: any) => {
+        const m = destOf(n).match(/(?:^|[^0-9])(\d{3,6})(?:@|[^0-9]|$)/);
+        return m ? m[1] : "";
+      };
+
+      const upserts: any[] = [];
+      const unrouted: any[] = [];
+      for (const n of rowsRaw) {
+        const digits = normalizeDigits(numOf(n));
+        if (!digits) continue;
+        const ext = extOf(n);
+        const app = DID_APP_FIELDS.map((f) => String(n?.[f] ?? "").toLowerCase()).find(Boolean) ?? "";
+        if (!ext) { unrouted.push({ phone_number: digits, application: app, destination: destOf(n) }); continue; }
+        upserts.push({
+          phone_number_e164: `+${digits}`,
+          phone_number_digits: digits,
+          extension: ext,
+          domain,
+          callerid_name: String(n?.["callerid-name"] ?? n?.["caller-id-name"] ?? n?.["dial-rule-description"] ?? "").slice(0, 120) || null,
+          source: "ns_live",
+          updated_at: new Date().toISOString(),
+        });
+      }
+
+      let written = 0;
+      let writeError: string | null = null;
+      if (!dry_run && upserts.length) {
+        for (let i = 0; i < upserts.length; i += 200) {
+          const chunk = upserts.slice(i, i + 200);
+          const { error } = await admin
+            .from("planipret_did_assignments")
+            .upsert(chunk, { onConflict: "phone_number_e164" });
+          if (error) { writeError = error.message; break; }
+          written += chunk.length;
+        }
+      }
+
+      return json({
+        success: !writeError,
+        mode: "refresh_dids",
+        domain,
+        dry_run,
+        pbx_numbers: rowsRaw.length,
+        mapped: upserts.length,
+        written,
+        unrouted_count: unrouted.length,
+        unrouted: unrouted.slice(0, 25),
+        error: writeError,
+      });
+    }
+
 
     // Single
     if (broker_id && !bulk) {

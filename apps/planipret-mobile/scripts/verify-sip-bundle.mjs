@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LEGACY_MARKERS = [
-  "sip reconnect scheduled in",
-  "unregistered - forcing re-register",
+  "sip reconnect" + " scheduled in",
+  "unregistered -" + " forcing re-register",
 ];
 const REQUIRED_MARKERS = [
   "reconnect guard active v3",

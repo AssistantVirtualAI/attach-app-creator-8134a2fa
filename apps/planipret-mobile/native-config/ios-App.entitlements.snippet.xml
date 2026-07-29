@@ -6,9 +6,5 @@
     <string>development</string>
     <key>com.apple.developer.pushkit.unrestricted-voip</key>
     <true/>
-    <key>com.apple.developer.associated-domains</key>
-    <array>
-        <string>applinks:avastatistic.ca</string>
-    </array>
 </dict>
 </plist>

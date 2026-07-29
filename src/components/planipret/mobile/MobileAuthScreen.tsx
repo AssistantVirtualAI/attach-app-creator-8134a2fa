@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "@/hooks/useSafeAreaInsets";
 import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
 import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
 import { startMicrosoftSignIn } from "@/lib/ms365AuthLogin";
+import { clearMs365Pending } from "@/lib/ms365Pending";
 import { Ms365PendingBanner } from "@/components/planipret/mobile/Ms365PendingBanner";
 
 const AvaBadge = ({ size = 44 }: { size?: number }) => (
@@ -35,6 +36,7 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
     if (error) { toast.error(error.message || t("auth.failed")); return; }
+    clearMs365Pending();
     toast.success(t("auth.success"));
     void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin());
     await onLoggedIn();

@@ -77,7 +77,7 @@ async function uploadPlanipretVoipToken(token: string, bundleId?: string, extens
     if (error) console.warn("[pp-voip] token upload failed", error);
     else if (changed || lastVoipToken !== null) {
       try { ppSipProvider.forceReregister(); } catch {}
-      try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister")); } catch {}
+      try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister", { detail: { force: false, reason: "voip_token_ready" } })); } catch {}
     }
   } catch (e) { console.warn("[pp-voip] token upload failed", e); }
 }
@@ -255,7 +255,10 @@ export function useMplanipretSoftphone(enabled = true) {
     };
     void doInit();
     const onReady = (e: any) => { void doInit({ force: !!e?.detail?.force }); };
-    const onForce = () => { void doInit({ force: true }); };
+    const onForce = (e: any) => {
+      if (e?.detail?.force === true) { void doInit({ force: true }); return; }
+      try { ppSipProvider.forceReregister(); } catch {}
+    };
     window.addEventListener("pp:sip-ready", onReady as any);
     window.addEventListener("pp:sip-force-reregister", onForce as any);
     return () => {
@@ -279,7 +282,7 @@ export function useMplanipretSoftphone(enabled = true) {
       .catch(() => undefined);
     onPlanipretNativeReregister(() => {
       try { ppSipProvider.forceReregister(); } catch {}
-      try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister")); } catch {}
+      try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister", { detail: { force: false, reason: "native_reregister" } })); } catch {}
     }).then((fn) => { cleanupReregister = fn; }).catch(() => undefined);
 
     // Native incoming INVITE (background/lockscreen). Wake JsSIP + broadcast so
@@ -402,7 +405,7 @@ export function useMplanipretSoftphone(enabled = true) {
       hardTimer = setTimeout(() => {
         const s = ppSipProvider.getSnapshot().status;
         if (s !== "registered" && s !== "connected") {
-          try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister")); } catch {}
+          try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister", { detail: { force: true, reason: "watchdog_hard_timeout" } })); } catch {}
         }
       }, 45_000);
     };

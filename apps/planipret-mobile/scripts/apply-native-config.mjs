@@ -166,7 +166,7 @@ public class PpSipKeepAlivePlugin extends Plugin {
       call.getString("password", ""));
     // Same reconnection strategy as iOS, pushed from the JS config file / env vars.
     PpSipKeepAliveService.saveStrategy(getContext(),
-      call.getInt("backoffMinMs", 2000),
+      call.getInt("backoffMinMs", 4000),
       call.getInt("backoffMaxMs", 60000),
       call.getInt("backoffMaxAttempts", 5),
       call.getInt("verifyDelayMs", 8000),
@@ -287,7 +287,7 @@ public class PpSipKeepAliveService extends Service {
   private final String fromTag = Long.toHexString(System.nanoTime());
   private volatile boolean readerRunning = false;
   // Reconnection strategy (configurable from JS — see src/config/ppSipReconnect.json).
-  private int backoffMinMs = 2000, backoffMaxMs = 60000, backoffMaxAttempts = 5, verifyDelayMs = 8000, heartbeatSec = 60, registerExpires = 1800;
+  private int backoffMinMs = 4000, backoffMaxMs = 60000, backoffMaxAttempts = 5, verifyDelayMs = 8000, heartbeatSec = 60, registerExpires = 1800;
   private int reconnectAttempts = 0; private volatile boolean reconnectPending = false;
 
   public static void start(Context c) { Intent i = new Intent(c, PpSipKeepAliveService.class); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) c.startForegroundService(i); else c.startService(i); }
@@ -300,7 +300,7 @@ public class PpSipKeepAliveService extends Service {
   }
   private void loadStrategy() {
     SharedPreferences p = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-    backoffMinMs = Math.max(500, p.getInt("backoff_min_ms", 2000));
+    backoffMinMs = Math.max(4000, p.getInt("backoff_min_ms", 4000));
     backoffMaxMs = Math.max(backoffMinMs, p.getInt("backoff_max_ms", 60000));
     backoffMaxAttempts = Math.max(1, p.getInt("backoff_max_attempts", 5));
     verifyDelayMs = Math.max(1000, p.getInt("verify_delay_ms", 8000));
@@ -550,7 +550,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private var appActive = true
     private var reconnectAttempts = 0
     // Reconnection strategy pushed from JS (src/config/ppSipReconnect.json + VITE_PP_SIP_* env).
-    private var backoffMinMs: Double = 2000
+    private var backoffMinMs: Double = 4000
     private var backoffMaxMs: Double = 60000
     private var backoffMaxAttempts: Int = 5
     private var verifyDelayMs: Double = 8000
@@ -583,7 +583,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       host = call.getString("host") ?? call.getString("domain") ?? ""; port = call.getInt("port") ?? 443; path = call.getString("path") ?? "/"
       login = call.getString("login") ?? call.getString("username") ?? call.getString("extension") ?? ""
       domain = call.getString("domain") ?? ""; displayName = call.getString("displayName") ?? login; password = call.getString("password") ?? ""
-      backoffMinMs = Double(call.getInt("backoffMinMs") ?? 2000)
+      backoffMinMs = max(4000, Double(call.getInt("backoffMinMs") ?? 4000))
       backoffMaxMs = Double(call.getInt("backoffMaxMs") ?? 60000)
       backoffMaxAttempts = call.getInt("backoffMaxAttempts") ?? 5
       verifyDelayMs = Double(call.getInt("verifyDelayMs") ?? 8000)

@@ -119,14 +119,11 @@ export async function resolveBrokerIdFromTelecom(
   if (Date.now() - last < 10 * 60_000) return null;
   RESOLVE_COOLDOWN.set(userId, Date.now());
 
-  const { data: profile } = await admin
-    .from("planipret_profiles")
-    .select("extension, phone")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const profile = await loadBrokerProfile(admin, userId);
   const ext = String(profile?.extension ?? "").trim();
   const phone = digits(profile?.phone);
   if (!ext && !phone) return null;
+
 
   const match = async (id: number): Promise<string | null> => {
     const sip = await verifyTelecomUserId(cfg, String(id));

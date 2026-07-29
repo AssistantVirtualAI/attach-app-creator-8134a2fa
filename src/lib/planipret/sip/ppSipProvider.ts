@@ -61,7 +61,28 @@ export interface PpSipReconnectMetrics {
   totalAttempts: number;
   /** Count of attempts that would have been scheduled below the floor (source of a 1000ms). */
   subThresholdHits: number;
+  /** Total WebSocket interfaces instantiated in this session (must stay 1 per UA). */
+  socketsCreated: number;
+  /** Number of times the UA was fully rebuilt by the watchdog. */
+  uaRebuilds: number;
+  /** Which mechanism currently owns recovery: JsSIP's connection_recovery or our watchdog. */
+  recoveryOwner: PpSipRecoveryOwner;
+  /** Rolling log of every recovery decision (most recent last, capped). */
+  history: PpSipReconnectEvent[];
 }
+
+export type PpSipRecoveryOwner = "none" | "jssip" | "watchdog";
+
+export interface PpSipReconnectEvent {
+  at: number;
+  phase: "defer" | "schedule" | "attempt" | "socket" | "recovered" | "blocked";
+  owner: PpSipRecoveryOwner;
+  attempt: number;
+  delayMs: number;
+  source: PpSipReconnectMetrics["delaySource"];
+  reason: string;
+}
+
 
 
 let sipParserGuardInstalled = false;
@@ -142,10 +163,43 @@ class PpSipProvider {
     lastAttemptAt: null,
     totalAttempts: 0,
     subThresholdHits: 0,
+    socketsCreated: 0,
+    uaRebuilds: 0,
+    recoveryOwner: "none",
+    history: [],
   };
   private metricsListeners = new Set<(m: PpSipReconnectMetrics) => void>();
+  /** Single-owner recovery guard: only one mechanism may drive a reconnect. */
+  private recoveryOwner: PpSipRecoveryOwner = "none";
+  private recoveryOwnerSince = 0;
 
-  getReconnectMetrics(): PpSipReconnectMetrics { return { ...this.reconnectMetrics }; }
+  getReconnectMetrics(): PpSipReconnectMetrics {
+    return { ...this.reconnectMetrics, recoveryOwner: this.recoveryOwner, history: [...this.reconnectMetrics.history] };
+  }
+  /** Full incident export (metrics + config + snapshot) for support/debug. */
+  getReconnectReport() {
+    return {
+      exportedAt: new Date().toISOString(),
+      guardVersion: "v4",
+      status: this.snap.status,
+      extension: this.cfg?.extension ?? null,
+      wssUrl: this.cfg?.wssUrl ?? null,
+      config: getPpSipReconnectConfig(),
+      floorMs: PP_SIP_RECONNECT_FLOOR_MS,
+      metrics: this.getReconnectMetrics(),
+    };
+  }
+  exportReconnectMetrics(): string { return JSON.stringify(this.getReconnectReport(), null, 2); }
+  resetReconnectMetrics() {
+    this.reconnectMetrics = {
+      ...this.reconnectMetrics,
+      attempt: 0, currentDelayMs: 0, rawBackoffMs: 0, delaySource: "none",
+      minDelayObservedMs: null, lastFailureReason: null, lastScheduledAt: null,
+      lastAttemptAt: null, totalAttempts: 0, subThresholdHits: 0,
+      socketsCreated: 0, uaRebuilds: 0, history: [],
+    };
+    this.emitMetrics();
+  }
   subscribeReconnectMetrics(fn: (m: PpSipReconnectMetrics) => void): () => void {
     this.metricsListeners.add(fn);
     fn(this.getReconnectMetrics());
@@ -155,6 +209,51 @@ class PpSipProvider {
     const m = this.getReconnectMetrics();
     this.metricsListeners.forEach((fn) => { try { fn(m); } catch { /* noop */ } });
   }
+  private pushHistory(phase: PpSipReconnectEvent["phase"], reason: string, delayMs = 0) {
+    const h = this.reconnectMetrics.history;
+    h.push({
+      at: Date.now(),
+      phase,
+      owner: this.recoveryOwner,
+      attempt: this.reconnectMetrics.attempt,
+      delayMs,
+      source: this.reconnectMetrics.delaySource,
+      reason,
+    });
+    if (h.length > 200) h.splice(0, h.length - 200);
+  }
+
+  /** Acquire the exclusive recovery lease. Returns false when another
+   *  mechanism (JsSIP connection_recovery or our watchdog) already owns it. */
+  private acquireRecovery(owner: Exclude<PpSipRecoveryOwner, "none">, reason: string): boolean {
+    if (this.recoveryOwner !== "none" && this.recoveryOwner !== owner) {
+      this.pushHistory("blocked", `${reason} (owned by ${this.recoveryOwner})`);
+      this.log("warn", `recovery blocked: ${owner} wanted ${reason}, ${this.recoveryOwner} owns it`);
+      this.emitMetrics();
+      return false;
+    }
+    if (this.recoveryOwner === owner) {
+      // Same owner re-entering: only allowed if it has no pending timer.
+      if (owner === "jssip" ? !!this.wsWatchdogTimer : !!this.wsRetryTimer) {
+        this.pushHistory("blocked", `${reason} (duplicate ${owner} request)`);
+        return false;
+      }
+    }
+    this.recoveryOwner = owner;
+    this.recoveryOwnerSince = Date.now();
+    this.reconnectMetrics.recoveryOwner = owner;
+    return true;
+  }
+
+  private releaseRecovery(reason: string) {
+    if (this.recoveryOwner === "none") return;
+    this.recoveryOwner = "none";
+    this.recoveryOwnerSince = 0;
+    this.reconnectMetrics.recoveryOwner = "none";
+    this.pushHistory("recovered", reason);
+    this.emitMetrics();
+  }
+
 
 
   subscribe(fn: Listener): () => void {
@@ -189,6 +288,9 @@ class PpSipProvider {
 
   private deferTransportRecovery(reason: string, delayMs?: number) {
     if (this.wsWatchdogTimer || this.wsRetryTimer) return;
+    // JsSIP's own connection_recovery owns this window; our watchdog only
+    // arms a verification timer behind the same exclusive lease.
+    if (!this.acquireRecovery("jssip", `defer:${reason}`)) return;
     const rc = getPpSipReconnectConfig();
     const delay = Math.max(PP_SIP_RECONNECT_FLOOR_MS, delayMs ?? rc.socketVerifyDelayMs);
     this.reconnectMetrics.lastFailureReason = reason;
@@ -200,15 +302,21 @@ class PpSipProvider {
       ? delay
       : Math.min(this.reconnectMetrics.minDelayObservedMs, delay);
     this.reconnectMetrics.lastScheduledAt = Date.now();
+    this.pushHistory("defer", reason, delay);
     this.emitMetrics();
     this.log("warn", `sip transport recovery deferred ${delay}ms (reason=${reason})`);
     this.wsWatchdogTimer = setTimeout(() => {
       this.wsWatchdogTimer = null;
       if (this.ua && this.snap.status !== "registered" && this.snap.status !== "connected") {
+        // Hand the lease over from JsSIP to our watchdog.
+        this.recoveryOwner = "none";
         this.scheduleSocketReconnect(reason);
+      } else {
+        this.releaseRecovery("jssip_recovered");
       }
     }, delay);
   }
+
 
   async init(cfg: PpSipConfig) {
     if (ppSipInitInFlight) return;
@@ -257,13 +365,17 @@ class PpSipProvider {
         .filter((u) => /^wss?:\/\//i.test(u)))) as string[];
       if (!urls.length) throw new Error("No valid SIP WSS URL");
       const sockets = urls.map((u) => new (JsSIP as any).WebSocketInterface(u));
+      this.reconnectMetrics.socketsCreated += sockets.length;
+      this.pushHistory("socket", `sockets_created:${urls.join(",")}`);
       const reconnectConfig = getPpSipReconnectConfig();
-      this.log("info", "reconnect guard active v3", {
+      this.log("info", "reconnect guard active v4", {
         floorMs: PP_SIP_RECONNECT_FLOOR_MS,
         backoffMinMs: reconnectConfig.socketBackoffMinMs,
         verifyDelayMs: reconnectConfig.socketVerifyDelayMs,
         registerExpiresSec: reconnectConfig.registerExpiresSec,
+        socketsCreated: this.reconnectMetrics.socketsCreated,
       });
+
       const ua = new (JsSIP as any).UA({
         sockets,
         uri: `sip:${cleanCfg.sipUsername}@${cleanCfg.sipDomain}`,
@@ -310,9 +422,11 @@ class PpSipProvider {
         this.reconnectMetrics.attempt = 0;
         this.reconnectMetrics.currentDelayMs = 0;
         this.reconnectMetrics.delaySource = "none";
-        this.emitMetrics();
         if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
         if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
+        this.releaseRecovery("registered");
+        this.emitMetrics();
+
         this.startKeepAlive();
         if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }
         return this.update({ status: "registered", errorCause: undefined, lastRegistrationAt: Date.now() });
@@ -560,6 +674,9 @@ class PpSipProvider {
    *  the delay never regresses to 1000ms. */
   private scheduleSocketReconnect(reason: string) {
     if (this.wsRetryTimer) return;
+    // Exclusive lease: if JsSIP's connection_recovery currently owns recovery,
+    // we must not open a competing socket.
+    if (!this.acquireRecovery("watchdog", `schedule:${reason}`)) return;
     if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
     const rc = getPpSipReconnectConfig();
     const floorMs = Math.max(PP_SIP_RECONNECT_FLOOR_MS, rc.socketBackoffMinMs);
@@ -582,7 +699,9 @@ class PpSipProvider {
     m.lastScheduledAt = Date.now();
     m.totalAttempts += 1;
     if (raw < floorMs) m.subThresholdHits += 1;
+    this.pushHistory("schedule", reason, delay);
     this.emitMetrics();
+
 
     if (raw < floorMs) {
       // This is the only path that could ever produce a ~1000ms delay: the
@@ -594,8 +713,9 @@ class PpSipProvider {
     this.wsRetryTimer = setTimeout(() => {
       this.wsRetryTimer = null;
       const ua = this.ua;
-      if (!ua) return;
+      if (!ua) { this.releaseRecovery("no_ua"); return; }
       this.reconnectMetrics.lastAttemptAt = Date.now();
+      this.pushHistory("attempt", reason, delay);
       const online = typeof navigator === "undefined" || navigator.onLine !== false;
       if (!online) {
         this.log("warn", "sip reconnect deferred: offline");
@@ -614,6 +734,8 @@ class PpSipProvider {
             try { ua.stop(); } catch {}
             this.ua = null;
             this.session = null;
+            this.reconnectMetrics.uaRebuilds += 1;
+            this.pushHistory("socket", "ua_rebuild");
             void this.init(cfg);
           } else {
             ua.start();
@@ -632,6 +754,7 @@ class PpSipProvider {
   }
 
 
+
   /** Reconnect immediately when the device regains connectivity. */
   private installNetworkWatch() {
     if (this.netWatchInstalled || typeof window === "undefined") return;
@@ -640,8 +763,11 @@ class PpSipProvider {
       this.log("info", "network online → sip reconnect");
       this.wsFailures = 0;
       if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
+      if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
+      this.releaseRecovery("network_online");
       this.scheduleSocketReconnect("network_online");
     });
+
     window.addEventListener("offline", () => this.log("warn", "network offline"));
   }
 
@@ -692,11 +818,13 @@ class PpSipProvider {
     if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
     if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
     if (this.regRetryTimer) { clearTimeout(this.regRetryTimer); this.regRetryTimer = null; }
+    this.releaseRecovery("stop");
     try { this.ua?.stop(); } catch {}
     this.ua = null;
     this.session = null;
     this.update({ status: "disconnected", callState: "idle", direction: null, startedAt: null });
   }
+
 }
 
 export const ppSipProvider = new PpSipProvider();

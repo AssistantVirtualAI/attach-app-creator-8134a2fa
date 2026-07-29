@@ -57,37 +57,50 @@ export async function getMaestroConfig(admin: SupabaseClient): Promise<MaestroCo
   };
 }
 
-/** Resolve broker token + maestro_broker_id for a given user (falls back to service key). */
+/** Fallback broker id from the integration secrets store (machine-key mode). */
+export async function fallbackBrokerId(admin: SupabaseClient): Promise<string | null> {
+  const { data } = await admin
+    .from("planipret_integration_secrets")
+    .select("provider, config")
+    .in("provider", ["maestro_telecom", "maestro"]);
+  const rows = Array.isArray(data) ? data : [];
+  const telecom = rows.find((r: any) => r.provider === "maestro_telecom")?.config ?? {};
+  const legacy = rows.find((r: any) => r.provider === "maestro")?.config ?? {};
+  const c = { ...(legacy as Record<string, unknown>), ...(telecom as Record<string, unknown>) };
+  for (const k of ["broker_id", "maestro_broker_id", "user_id"]) {
+    const v = (c as any)[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "" && /^\d+$/.test(String(v).trim())) {
+      return String(v).trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve the machine API key + the broker's numeric Maestro telecom user id.
+ * NOTE: Scott's Telecom API only accepts the machine key (`Bearer <key>&machine=1`);
+ * per-broker OAuth tokens are never used for these calls.
+ */
 export async function getBrokerAuth(
   admin: SupabaseClient,
   userId: string | null | undefined,
 ): Promise<{ token: string; brokerId: string | null; usingFallback: boolean }> {
-  if (!userId) {
-    const cfg = await getMaestroConfig(admin);
-    return { token: cfg.key, brokerId: null, usingFallback: true };
-  }
-  const { data: profile } = await admin
-    .from("planipret_profiles")
-    .select("maestro_broker_token, maestro_broker_id, maestro_token_expires_at")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const tokenValid =
-    profile?.maestro_broker_token &&
-    (!profile.maestro_token_expires_at ||
-      new Date(profile.maestro_token_expires_at) > new Date());
-  if (tokenValid) {
-    return {
-      token: profile!.maestro_broker_token!,
-      brokerId: profile!.maestro_broker_id ?? null,
-      usingFallback: false,
-    };
-  }
   const cfg = await getMaestroConfig(admin);
-  return {
-    token: cfg.key,
-    brokerId: profile?.maestro_broker_id ?? null,
-    usingFallback: true,
-  };
+  let brokerId: string | null = null;
+  if (userId) {
+    const { data: profile } = await admin
+      .from("planipret_profiles")
+      .select("maestro_broker_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    brokerId = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
+  }
+  let usingFallback = false;
+  if (!brokerId) {
+    brokerId = await fallbackBrokerId(admin);
+    usingFallback = true;
+  }
+  return { token: cfg.key, brokerId, usingFallback };
 }
 
 /**
@@ -98,16 +111,10 @@ export async function getBrokerAuth(
 export async function telecomAuth(
   admin: SupabaseClient,
   userId: string | null | undefined,
-): Promise<{ token: string; brokerId: string | null }> {
-  const cfg = await getMaestroConfig(admin);
-  if (!userId) return { token: cfg.key, brokerId: null };
-  const { data: profile } = await admin
-    .from("planipret_profiles")
-    .select("maestro_broker_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-  return { token: cfg.key, brokerId: profile?.maestro_broker_id ?? null };
+): Promise<{ token: string; brokerId: string | null; usingFallback: boolean }> {
+  return await getBrokerAuth(admin, userId);
 }
+
 
 
 

@@ -296,7 +296,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const period: Period = (["day","week","month","shift"].includes(body?.period) ? body.period : "day") as Period;
     const force = !!body?.force;
-    const requestedLang: Lang | null =
+    requestedLang =
       body?.language === "en" || body?.language === "fr" ? body.language : null;
 
 

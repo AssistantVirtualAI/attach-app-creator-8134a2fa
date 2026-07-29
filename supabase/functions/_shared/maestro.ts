@@ -236,16 +236,14 @@ export async function getBrokerAuth(
       diag.reason = "stored_broker_id_not_numeric";
       brokerId = null;
     } else if (brokerId) {
-      const valid = !!(await verifyTelecomUserId(cfg, brokerId));
-      diag.stored_broker_id_valid = valid;
-      if (!valid) {
-        console.warn(`[maestro.brokerId] stored broker id ${brokerId} rejected by GET /users/${brokerId}/sip — re-resolving`);
-        diag.reason = "stored_broker_id_unknown_upstream";
-        brokerId = null;
-      }
+      // Trust the stored numeric id. Never probe /users/{id}/sip to validate it:
+      // a network hiccup there would discard a perfectly valid broker id.
+      diag.stored_broker_id_valid = true;
+      diag.reason = "ok";
     }
     if (!brokerId) brokerId = await resolveBrokerIdFromTelecom(admin, userId, cfg, 250, diag);
     if (brokerId) diag.reason = "ok";
+
   }
 
   if (!brokerId) {

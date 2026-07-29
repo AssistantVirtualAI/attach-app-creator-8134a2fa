@@ -177,7 +177,7 @@ class PpSipProvider {
         session_timers: false,
         // Match the native keep-alive REGISTER expiry so NetSapiens does not
         // expire one contact while the other still shows "registered" locally.
-        register_expires: 300,
+        register_expires: 180,
         connection_recovery_min_interval: 2,
         connection_recovery_max_interval: 30,
         user_agent: "Planipret Softphone 1.0",

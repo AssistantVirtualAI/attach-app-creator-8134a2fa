@@ -702,17 +702,15 @@ class PpSipProvider {
         this.scheduleSocketReconnect("force_reregister_transport_down");
         return;
       }
-      if (Date.now() - this.lastRegisterAttemptAt < PP_SIP_RECONNECT_FLOOR_MS) return;
-      this.lastRegisterAttemptAt = Date.now();
       if (this.snap.status === "registered") {
         // NEVER unregister({all:true}) here: it wipes EVERY contact bound to the
         // AoR — including the native background keep-alive registration — which
         // left the extension unregistered and sent inbound calls straight to
         // voicemail. A plain re-REGISTER refreshes only this contact.
-        try { ua.register(); } catch {}
+        this.guardedRegister("force_registered_refresh");
         return;
       }
-      try { ua.register(); } catch {}
+      this.guardedRegister("force_reregister");
     } catch {}
   }
 
@@ -773,8 +771,7 @@ class PpSipProvider {
       }
       try {
         if (ua.isConnected?.()) {
-          this.lastRegisterAttemptAt = Date.now();
-          ua.register();
+          this.guardedRegister("watchdog_connected");
         } else {
           const cfg = this.cfg;
           if (cfg) {

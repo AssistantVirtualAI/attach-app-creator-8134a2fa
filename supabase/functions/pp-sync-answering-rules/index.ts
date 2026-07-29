@@ -484,6 +484,15 @@ Deno.serve(async (req) => {
         mode = "created";
       }
       const opBody = await readBody(opRes);
+      const bodySnippet = typeof opBody === "string" ? opBody.slice(0, 200) : JSON.stringify(opBody ?? null).slice(0, 200);
+      const returnedHtml = typeof opBody === "string" && /^\s*<(?:!doctype|html)/i.test(opBody);
+      const authFailed = opRes.status === 401 || opRes.status === 403 || listRes.status === 401 || listRes.status === 403;
+      const raw_pbx = [
+        { extension: ext, step: "list_rules", status: listRes.status },
+        { extension: ext, step: `${mode}_rule`, status: opRes.status, body: bodySnippet },
+      ];
+
+
 
       if (!opRes.ok) {
         console.error("[syncBroker] FAILED", JSON.stringify({

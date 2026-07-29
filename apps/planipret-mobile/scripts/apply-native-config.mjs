@@ -473,6 +473,7 @@ import UIKit
 import AVFoundation
 import CryptoKit
 import UserNotifications
+import Network
 
 // Planiprêt-only. DO NOT reuse in Lemtel (Verto stack).
 @objc(PpSipKeepAlive)
@@ -497,11 +498,26 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private let callIdReg = UUID().uuidString + "@planipret-ios"
     private let fromTag = String(Int(Date().timeIntervalSince1970 * 1000), radix: 16)
     private var appActive = true
+    private var reconnectAttempts = 0
+    private var reconnectPending = false
+    private var pathMonitor: NWPathMonitor?
+    private var networkUp = true
 
     public override func load() {
       DispatchQueue.main.async { [weak self] in self?.appActive = UIApplication.shared.applicationState == .active }
       NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
       NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+      NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
+      NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.willResignActiveNotification, object: nil)
+      // UIScene lifecycle (iOS 13+) — the app adopts scenes, so the legacy
+      // UIApplication notifications are not always delivered. Observing both
+      // keeps `appActive` correct without ever reading UI state off-thread.
+      if #available(iOS 13.0, *) {
+        NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIScene.didActivateNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(onSceneWillEnterForeground), name: UIScene.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIScene.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIScene.willDeactivateNotification, object: nil)
+      }
       // Ask for notification permission so the incoming-call banner can ring.
       UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
@@ -536,18 +552,17 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       call.resolve(["ok": true])
     }
 
+    // NEVER touch UIApplication/UIScene off the main thread: it triggers
+    // "UI API called on a background thread" and can deadlock (DispatchQueue.main.sync).
+    // The cached `appActive` flag is refreshed only from main-thread notifications.
     private func isForeground() -> Bool {
       if Thread.isMainThread {
         appActive = UIApplication.shared.applicationState == .active
         return appActive
       }
-      var active = appActive
-      DispatchQueue.main.sync {
-        active = UIApplication.shared.applicationState == .active
-        self.appActive = active
-      }
-      return active
+      return appActive
     }
+    @objc private func onSceneWillEnterForeground() { onForeground() }
     private func releaseRegistration(_ why: String) {
       if !Thread.isMainThread { DispatchQueue.main.async { [weak self] in self?.releaseRegistration(why) }; return }
       timer?.invalidate(); timer = nil
@@ -566,6 +581,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private func activateAudioSession() { try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]); try? AVAudioSession.sharedInstance().setActive(true) }
     private func connect() {
       guard !host.isEmpty else { setStatus("error", "missing_host"); return }
+      startPathMonitor()
       if isForeground() { return }
       if socket != nil { return }
       var comps = URLComponents(); comps.scheme = port == 80 ? "ws" : "wss"; comps.host = host; comps.port = port; comps.path = path.isEmpty ? "/" : path
@@ -575,7 +591,70 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.sendRegister(challenge: nil) }
     }
     private func scheduleRegister() { timer?.invalidate(); timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.sendRegister(challenge: nil) }; RunLoop.main.add(timer!, forMode: .common) }
-    private func receiveLoop() { socket?.receive { [weak self] result in guard let self = self else { return }; switch result { case .success(let message): if case .string(let text) = message { self.handle(text) }; self.receiveLoop(); case .failure: self.socket = nil; if self.isForeground() { self.setStatus("idle", "foreground_js_owns") } else { self.setStatus("reconnecting", "ws_closed"); DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.connect() } } } } }
+    private func receiveLoop() {
+      socket?.receive { [weak self] result in
+        guard let self = self else { return }
+        switch result {
+        case .success(let message):
+          self.reconnectAttempts = 0
+          if case .string(let text) = message { self.handle(text) }
+          self.receiveLoop()
+        case .failure(let err):
+          self.socket = nil
+          if self.isForeground() { self.setStatus("idle", "foreground_js_owns") }
+          else {
+            NSLog("[PpSipKeepAlive] socket closed: %@", String(describing: err))
+            self.setStatus("reconnecting", "ws_closed")
+            self.scheduleReconnect("ws_closed")
+          }
+        }
+      }
+    }
+
+    /// Exponential backoff (2s → 60s cap) until the socket is back and REGISTER succeeds.
+    private func scheduleReconnect(_ why: String) {
+      if reconnectPending { return }
+      reconnectPending = true
+      reconnectAttempts = min(reconnectAttempts + 1, 5)
+      let delay = min(60.0, 2.0 * pow(2.0, Double(reconnectAttempts - 1)))
+      NSLog("[PpSipKeepAlive] reconnect in %.0fs (%@)", delay, why)
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+        guard let self = self else { return }
+        self.reconnectPending = false
+        if self.isForeground() { self.setStatus("idle", "foreground_js_owns"); return }
+        guard self.networkUp else { self.setStatus("reconnecting", "network_down"); self.scheduleReconnect("network_down"); return }
+        self.connect()
+        self.sendRegister(challenge: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+          guard let self = self else { return }
+          if self.status != "registered" && !self.isForeground() { self.scheduleReconnect("still_unregistered") }
+        }
+      }
+    }
+
+    private func startPathMonitor() {
+      if pathMonitor != nil { return }
+      let m = NWPathMonitor()
+      m.pathUpdateHandler = { [weak self] path in
+        guard let self = self else { return }
+        let up = path.status == .satisfied
+        let wasUp = self.networkUp
+        self.networkUp = up
+        NSLog("[PpSipKeepAlive] network %@", up ? "available" : "lost")
+        if up && !wasUp {
+          self.reconnectAttempts = 0
+          DispatchQueue.main.async { [weak self] in
+            guard let self = self, !self.isForeground() else { return }
+            self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil
+            self.connect(); self.sendRegister(challenge: nil)
+          }
+        } else if !up {
+          self.setStatus("reconnecting", "network_lost")
+        }
+      }
+      m.start(queue: DispatchQueue.global(qos: .utility))
+      pathMonitor = m
+    }
 
     private func handle(_ msg: String) {
       if msg.hasPrefix("SIP/2.0 401") || msg.hasPrefix("SIP/2.0 407") { sendRegister(challenge: headerVal(msg, msg.hasPrefix("SIP/2.0 407") ? "Proxy-Authenticate" : "WWW-Authenticate")); return }
@@ -669,6 +748,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     public let identifier = "PpVoipCall"; public let jsName = "PpVoipCall"
     public let pluginMethods: [CAPPluginMethod] = [
       CAPPluginMethod(name: "getVoipPushToken", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "refreshVoipPushToken", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "reportCallEnded", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
       CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise)
@@ -678,6 +758,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var provider: CXProvider?
     private var callController = CXCallController()
     private var voipToken: String?
+    private var lastReportedToken: String?
     private var activeCallUUID: UUID?
     private var activeCallId: String?
 
@@ -720,12 +801,45 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     // MARK: - JS ↔ Native
     @objc func getVoipPushToken(_ call: CAPPluginCall) {
+        // If PushKit has not handed us a token yet, re-arm the registry: after a
+        // restore/reinstall the first `didUpdate` can be missed entirely.
+        if (voipToken ?? "").isEmpty {
+            NSLog("[PpVoipCall] no VoIP token cached, re-arming PushKit")
+            DispatchQueue.main.async { [weak self] in self?.setupPushKit() }
+        }
         call.resolve([
             "token": voipToken ?? "",
             "platform": "ios",
             "bundleId": Bundle.main.bundleIdentifier ?? "",
             "environment": apnsEnvironment()
         ])
+    }
+
+    /// Force PushKit to re-issue the VoIP token (used on app resume and when the
+    /// backend reports the stored token as invalid/unregistered).
+    @objc func refreshVoipPushToken(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { call.resolve(["ok": false]); return }
+            let previous = self.voipToken
+            self.pushRegistry?.desiredPushTypes = []
+            self.pushRegistry = nil
+            self.setupPushKit()
+            NSLog("[PpVoipCall] VoIP token refresh requested (had token: %@)", previous == nil ? "no" : "yes")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self = self else { return }
+                let current = self.voipToken ?? ""
+                let changed = current != (previous ?? "")
+                NSLog("[PpVoipCall] VoIP token after refresh changed=%@ empty=%@", changed ? "yes" : "no", current.isEmpty ? "yes" : "no")
+                self.notifyListeners("voipPushToken", data: [
+                    "token": current,
+                    "bundleId": Bundle.main.bundleIdentifier ?? "",
+                    "environment": self.apnsEnvironment(),
+                    "changed": changed,
+                    "source": "refresh"
+                ])
+            }
+            call.resolve(["ok": true, "token": previous ?? ""])
+        }
     }
 
     @objc func reportCallEnded(_ call: CAPPluginCall) {
@@ -742,16 +856,24 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     public func pushRegistry(_ registry: PKPushRegistry, didUpdate credentials: PKPushCredentials, for type: PKPushType) {
         guard type == .voIP else { return }
         let token = credentials.token.map { String(format: "%02x", $0) }.joined()
+        let changed = token != (lastReportedToken ?? "")
         self.voipToken = token
+        self.lastReportedToken = token
+        NSLog("[PpVoipCall] VoIP token updated changed=%@ suffix=%@", changed ? "yes" : "no", String(token.suffix(6)))
         notifyListeners("voipPushToken", data: [
             "token": token,
             "bundleId": Bundle.main.bundleIdentifier ?? "",
-            "environment": apnsEnvironment()
+            "environment": apnsEnvironment(),
+            "changed": changed,
+            "source": "pushkit"
         ])
     }
 
     public func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
+        NSLog("[PpVoipCall] VoIP token invalidated — re-arming PushKit")
         self.voipToken = nil
+        notifyListeners("voipPushTokenInvalidated", data: ["platform": "ios"])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.setupPushKit() }
     }
 
     public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
@@ -824,6 +946,7 @@ const IOS_VOIP_CALL_BRIDGE = `#import <Foundation/Foundation.h>
 
 CAP_PLUGIN(PpVoipCall, "PpVoipCall",
   CAP_PLUGIN_METHOD(getVoipPushToken, CAPPluginReturnPromise);
+  CAP_PLUGIN_METHOD(refreshVoipPushToken, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(reportCallEnded, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(addListener, CAPPluginReturnCallback);
   CAP_PLUGIN_METHOD(removeAllListeners, CAPPluginReturnPromise);

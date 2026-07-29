@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   try {
-    const { call_id } = await req.json().catch(() => ({}));
+    const { call_id, force = false } = await req.json().catch(() => ({}));
     if (!call_id) return json({ success: false, error: "call_id_required" }, 400);
 
     const admin = adminClient();
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!call) return json({ success: false, error: "call_not_found" }, 404);
-    if (call.maestro_synced && (call as any).maestro_call_id) {
+    if (!force && call.maestro_synced && (call as any).maestro_call_id) {
       return json({ success: true, already_synced: true });
     }
 

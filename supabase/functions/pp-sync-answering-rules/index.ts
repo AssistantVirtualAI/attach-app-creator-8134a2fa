@@ -754,6 +754,8 @@ Deno.serve(async (req) => {
           Object.entries(blockerBuckets).map(([k, v]) => [k, v.length]),
         ),
         raw_pbx_responses,
+        did_failures,
+        did_failure_reasons,
         dry_run_report: dry_run
           ? (all as any[]).map((r) => ({
               extension: r.extension, email: r.email,

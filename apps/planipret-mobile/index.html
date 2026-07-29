@@ -65,10 +65,16 @@
 
       setTimeout(function () {
         var root = document.getElementById('root');
-        if (root && !window.__PP_REACT_BOOTED__ && window.__PP_SHOW_BOOT_FALLBACK__) {
+        if (!root || window.__PP_REACT_BOOTED__) return;
+        // Only block the screen when React really rendered nothing. A slow
+        // provider/lazy chunk must never hide a working UI behind the overlay.
+        var hasRealContent = root.children.length > 0 && !root.querySelector('[data-pp-boot-visible]');
+        if (hasRealContent) { window.__PP_REACT_BOOTED__ = true; return; }
+        if (window.__PP_SHOW_BOOT_FALLBACK__) {
           window.__PP_SHOW_BOOT_FALLBACK__('Le démarrage iOS a été interrompu avant le premier écran. Fermez puis relancez l’application.');
         }
       }, 4500);
+
     </script>
     <div id="pp-native-boot-fallback" style="display:none;position:fixed;inset:0;z-index:2147483647;align-items:center;justify-content:center;background:#0A1425;color:#E2E8F0;font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;padding:24px;text-align:center">
       <div style="max-width:320px">

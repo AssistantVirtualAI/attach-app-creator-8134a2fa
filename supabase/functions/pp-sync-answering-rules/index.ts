@@ -131,9 +131,11 @@ Deno.serve(async (req) => {
           // tenant it can resolve to a terminating application (SpeakAccount /
           // voicemail) before the registered devices are forked.
           "include-user-extension": "no",
-          // Ring ONLY the mobile device AORs (never <OwnDevices>, which would
-          // also fork to {ext}_web and steal the call from the mobile app).
-          "ring-all-user-phones": "no",
+          // Fork to every registered device as well: if the mobile contact has
+          // expired (app backgrounded / OS suspended the WebView), the call must
+          // still reach any other registered terminal instead of dropping to
+          // voicemail after a 0s leg.
+          "ring-all-user-phones": "yes",
           "parameters": deviceAors,
           "destinations": destinations,
           "list": deviceAors,
@@ -148,10 +150,10 @@ Deno.serve(async (req) => {
         "simultaneous-ring-enabled": "yes",
         "simultaneous-ring-confirm": "no",
         "simultaneous-ring-include-user-extension": "no",
-        "simultaneous-ring-all-user-phones": "no",
+        "simultaneous-ring-all-user-phones": "yes",
         "simultaneous-ring-parameters": deviceAors,
         "sim-ring-include-user-extension": "no",
-        "sim-ring-all-user-phones": "no",
+        "sim-ring-all-user-phones": "yes",
         "sim-ring-parameters": deviceAors,
         "simultaneous-ring-list": deviceAors,
 
@@ -214,7 +216,7 @@ Deno.serve(async (req) => {
         //  4. every provisioned device + <OwnDevices>
         let chosen: string[] = [];
         let source = "";
-        if (registered.length) { chosen = registered; source = "ns_registered_mobile_device"; }
+        if (registered.length) { chosen = [...registered, "<OwnDevices>"]; source = "ns_registered_mobile_device_plus_owndevices"; }
         else if (provisioned.length) { chosen = [...provisioned, "<OwnDevices>"]; source = "ns_provisioned_mobile_device_plus_owndevices"; }
         else if (registeredAll.length) { chosen = [...registeredAll, "<OwnDevices>"]; source = "ns_registered_any_device"; }
         else if (allAors.length) { chosen = [...allAors, "<OwnDevices>"]; source = "ns_provisioned_any_device"; }

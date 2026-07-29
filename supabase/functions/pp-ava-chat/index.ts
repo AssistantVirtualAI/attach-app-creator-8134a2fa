@@ -319,7 +319,7 @@ Deno.serve(async (req) => {
       const reportPeriod = wantsReport(userMessage);
       if (reportPeriod) {
         try {
-          const rep = await invokeFunction("pp-ava-report", authHeader, { period: reportPeriod, language: "fr" });
+          const rep = await invokeFunction("pp-ava-report", authHeader, { period: reportPeriod, language: lang });
           if (rep.ok && rep.data?.report) {
             dataBlocks.push(`Rapport de performance (${reportPeriod}) — Stats: ${JSON.stringify(rep.data.stats ?? {})}\n${String(rep.data.report).slice(0, 6000)}`);
           }
@@ -375,7 +375,7 @@ SMS non lus: ${smsUnread ?? 0}`;
     }
 
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableKey) return json({ reply: "(Lovable AI non configuré)", suggestions: [] });
+    if (!lovableKey) return json({ reply: L("(Lovable AI non configuré)", "(Lovable AI not configured)"), suggestions: [] });
 
     const gateway = createLovableAiGatewayProvider(lovableKey);
 
@@ -400,15 +400,20 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
 
 
     if (mode === "summarize") {
-      const len = level === "short" ? "1 phrase" : level === "detailed" ? "résumé détaillé + points clés + prochaine étape" : "3 phrases + une action recommandée";
-      system = `Tu es AVA. Résume le contenu fourni en ${len}, en français, professionnel. Ne propose pas de suggestions sauf si pertinent (max 2).`;
+      if (lang === "fr") {
+        const len = level === "short" ? "1 phrase" : level === "detailed" ? "résumé détaillé + points clés + prochaine étape" : "3 phrases + une action recommandée";
+        system = `Tu es AVA. Résume le contenu fourni en ${len}, en français du Québec, professionnel. Réponds uniquement en français. Ne propose pas de suggestions sauf si pertinent (max 2).`;
+      } else {
+        const len = level === "short" ? "1 sentence" : level === "detailed" ? "a detailed summary + key points + next step" : "3 sentences + one recommended action";
+        system = `You are AVA. Summarize the provided content in ${len}, in professional English. Answer in English only. Do not propose suggestions unless relevant (max 2).`;
+      }
     }
 
     const prompt = [
       appContext && `[Contexte]\n${appContext}`,
       context && Object.keys(context).length ? `[Données]\n${JSON.stringify(context).slice(0, 4000)}` : "",
       history.length ? `[Historique]\n${history.map(h => `${h.role}: ${h.content}`).join("\n")}` : "",
-      userMessage ? `[Demande]\n${userMessage}` : (mode === "recommend" ? "[Demande]\nDonne-moi 3 recommandations actionnables pour les prochaines heures." : ""),
+      userMessage ? `[Demande]\n${userMessage}` : (mode === "recommend" ? (lang === "fr" ? "[Demande]\nDonne-moi 3 recommandations actionnables pour les prochaines heures." : "[Request]\nGive me 3 actionable recommendations for the next few hours.") : ""),
     ].filter(Boolean).join("\n\n");
 
     let result: any = { reply: "", suggestions: [] };
@@ -432,7 +437,7 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
         });
         result = { reply: r2.text ?? "Désolé, je n'ai pas pu répondre.", suggestions: [] };
       } catch (e2) {
-        return json({ reply: "Désolé, je rencontre un problème. Réessayez.", suggestions: [], error: String(e2) }, 200);
+        return json({ reply: L("Désolé, je rencontre un problème. Réessayez.", "Sorry, something went wrong. Please try again."), suggestions: [], error: String(e2) }, 200);
       }
     }
 

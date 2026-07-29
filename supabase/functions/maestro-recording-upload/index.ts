@@ -192,22 +192,33 @@ Deno.serve(async (req) => {
     form.append("call_id", String(mId));
     if (call.duration_seconds != null) form.append("duration_sec", String(call.duration_seconds));
 
-    const relPath = `/api/v1/calls/${encodeURIComponent(String(mId))}/recording`;
-    const scoped = auth.brokerId
-      ? `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls/${encodeURIComponent(String(mId))}/recording`
-      : relPath;
     const headers: Record<string, string> = { Authorization: `Bearer ${auth.token}` };
     if (cfg.accountId) headers["X-Account-Id"] = cfg.accountId;
     if (auth.brokerId) headers["X-Broker-Id"] = String(auth.brokerId);
 
-    const machineSuffix = auth.usingFallback ? `${scoped.includes("?") ? "&" : "?"}machine=1` : "";
-    let endpoint = `${cfg.url}${scoped}${machineSuffix}`;
-    let res = await fetch(endpoint, { method: "POST", headers, body: form });
-    if (!res.ok && (res.status === 404 || res.status === 405) && scoped !== relPath) {
-      const relMachineSuffix = auth.usingFallback ? `${relPath.includes("?") ? "&" : "?"}machine=1` : "";
-      endpoint = `${cfg.url}${relPath}${relMachineSuffix}`;
-      res = await fetch(endpoint, { method: "POST", headers, body: form });
+    const cid = encodeURIComponent(String(mId));
+    const uid = auth.brokerId ? encodeURIComponent(String(auth.brokerId)) : null;
+    const withMachine = (p: string) => `${cfg.url}${p}${p.includes("?") ? "&" : "?"}machine=1`;
+
+    // Scott's spec only documents GET .../recording. We still push the audio:
+    // try every plausible write route (POST then PUT, broker-scoped first).
+    const candidates: { url: string; method: "POST" | "PUT" }[] = [];
+    const paths = [
+      ...(uid ? [`/api/v1/users/${uid}/call/${cid}/recording`, `/api/v1/users/${uid}/calls/${cid}/recording`] : []),
+      `/api/v1/calls/${cid}/recording`,
+    ];
+    for (const p of paths) {
+      candidates.push({ url: withMachine(p), method: "POST" });
+      candidates.push({ url: withMachine(p), method: "PUT" });
     }
+
+    let endpoint = candidates[0].url;
+    let res = await fetch(endpoint, { method: candidates[0].method, headers, body: form });
+    for (let i = 1; i < candidates.length && !res.ok && [404, 405, 501].includes(res.status); i += 1) {
+      endpoint = candidates[i].url;
+      res = await fetch(endpoint, { method: candidates[i].method, headers, body: form });
+    }
+
 
     const text = await res.text();
     let data: any = null;

@@ -519,8 +519,12 @@ Deno.serve(async (req) => {
           return tf === "default" || tf === "*" || tf === "always";
         }) ?? vArr[0] ?? null;
         const sim = stored?.["simultaneous-ring"] ?? null;
-        const list: any[] = Array.isArray(sim?.destinations) ? sim.destinations
-          : (Array.isArray(sim?.list) ? sim.list : (Array.isArray(stored?.["simultaneous-ring-list"]) ? stored["simultaneous-ring-list"] : []));
+        // NS v2 returns the fork targets under `parameters` (array of AOR
+        // strings). Older/other builds use `destinations` / `list`.
+        const list: any[] = Array.isArray(sim?.parameters) ? sim.parameters
+          : (Array.isArray(sim?.destinations) ? sim.destinations
+          : (Array.isArray(sim?.list) ? sim.list
+          : (Array.isArray(stored?.["simultaneous-ring-list"]) ? stored["simultaneous-ring-list"] : [])));
         const targets = list.map((x: any) => String(x?.destination ?? x ?? "").toLowerCase()).filter(Boolean);
         const simOn = ["yes", "true", "1"].includes(String(sim?.enabled ?? stored?.["simultaneous-ring-enabled"] ?? "").toLowerCase());
         verify = {

@@ -357,6 +357,12 @@ Deno.serve(async (req) => {
     );
   }
 
+  const noDialRule = cdrSummary.filter((c) => /no dial rule/i.test(String(c.release_code ?? "")));
+  if (noDialRule.length) {
+    verdicts.unshift("NO_DIAL_RULE_BLOCK");
+    issues.unshift(`${noDialRule.length} appel(s) récent(s) avec “No Dial Rule” — vérifier/désactiver call screening + listes allow/reject sur le poste.`);
+  }
+
   const unreachable = cdrSummary.filter((c) => {
     const rc = String(c.release_code ?? "");
     return /408|480|486|503|Temporarily Unavailable|Request Timeout/i.test(rc);

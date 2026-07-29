@@ -380,17 +380,46 @@ Deno.serve(async (req) => {
 
 
 
+    // Local DID inventory for one extension (used for diagnostics + dry-run).
+    const localDids = async (ext: string, domain: string) => {
+      const { data } = await admin
+        .from("planipret_did_assignments")
+        .select("phone_number_e164, phone_number_digits")
+        .eq("domain", domain)
+        .eq("extension", ext);
+      return (data ?? []).map((r: any) => r.phone_number_e164 ?? r.phone_number_digits).filter(Boolean);
+    };
+
     const applyRule = async (broker: any) => {
       const ext = broker.ns_extension ?? broker.extension;
       const domain = broker.ns_domain || NS_DEFAULT_DOMAIN;
-      if (!ext) return { broker_id: broker.id ?? broker.user_id, success: false, error: "no_extension" };
+      const brokerLabel = { broker_id: broker.id ?? broker.user_id, broker_name: broker.full_name, email: broker.email };
+      if (!ext) {
+        return {
+          ...brokerLabel, extension: null, domain, success: false,
+          routing_ok: false, error: "no_extension", routing_blockers: ["no_extension"],
+          dids: [], raw_pbx: [],
+        };
+      }
 
+      const dids = await localDids(ext, domain);
       const devices = await fetchDeviceAors(ext, domain);
       const payload = buildRulePayload(ext, domain, devices.aors);
       if (dry_run) {
         const did_repair = { skipped: true, reason: "dry_run" };
-        return { broker_id: broker.id ?? broker.user_id, extension: ext, domain, dry_run: true, payload, devices, did_repair, success: true };
+        const blockers = [
+          ...(dids.length ? [] : ["no_did"]),
+          ...(devices.registered_aors?.length ? [] : ["no_registered_device"]),
+        ];
+        return {
+          ...brokerLabel, extension: ext, domain, dry_run: true,
+          action: blockers.includes("no_did") ? "would_skip" : "would_configure",
+          reason: blockers.join(",") || null,
+          routing_blockers: blockers,
+          dids, payload, devices, did_repair, success: true,
+        };
       }
+
 
 
       // Clear any user-level DND / forward that overrides answering rules and

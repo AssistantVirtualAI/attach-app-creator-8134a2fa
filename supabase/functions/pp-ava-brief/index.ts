@@ -162,6 +162,9 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const period: Period = (["day","week","month","shift"].includes(body?.period) ? body.period : "day") as Period;
     const force = !!body?.force;
+    const requestedLang: Lang | null =
+      body?.language === "en" || body?.language === "fr" ? body.language : null;
+
 
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 

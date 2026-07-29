@@ -365,13 +365,17 @@ class PpSipProvider {
         .filter((u) => /^wss?:\/\//i.test(u)))) as string[];
       if (!urls.length) throw new Error("No valid SIP WSS URL");
       const sockets = urls.map((u) => new (JsSIP as any).WebSocketInterface(u));
+      this.reconnectMetrics.socketsCreated += sockets.length;
+      this.pushHistory("socket", `sockets_created:${urls.join(",")}`);
       const reconnectConfig = getPpSipReconnectConfig();
-      this.log("info", "reconnect guard active v3", {
+      this.log("info", "reconnect guard active v4", {
         floorMs: PP_SIP_RECONNECT_FLOOR_MS,
         backoffMinMs: reconnectConfig.socketBackoffMinMs,
         verifyDelayMs: reconnectConfig.socketVerifyDelayMs,
         registerExpiresSec: reconnectConfig.registerExpiresSec,
+        socketsCreated: this.reconnectMetrics.socketsCreated,
       });
+
       const ua = new (JsSIP as any).UA({
         sockets,
         uri: `sip:${cleanCfg.sipUsername}@${cleanCfg.sipDomain}`,

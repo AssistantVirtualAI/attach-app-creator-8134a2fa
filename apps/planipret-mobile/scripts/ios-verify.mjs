@@ -64,12 +64,7 @@ const MIME = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2',
 };
 
-async function bootCheck() {
-  let playwright;
-  try {
-    playwright = await import('playwright');
-  } catch {
-    console.log(yellow('[ios:verify] ! playwright not installed — running static boot check only'));
+function staticBootCheck() {
     const assets = readdirSync(join(dist, 'assets'));
     const css = assets.filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(dist, 'assets', f), 'utf8'));
     const twOk = css.some((c) => /--tw-/.test(c) && /\.flex\{display:flex\}/.test(c));
@@ -79,6 +74,16 @@ async function bootCheck() {
       process.exit(1);
     }
     console.log(green('[ios:verify] ✓ static boot check (Tailwind compiled, #root present)'));
+}
+
+async function bootCheck() {
+  let playwright, browser;
+  try {
+    playwright = await import('playwright');
+    browser = await (await playwright).chromium.launch({ headless: true });
+  } catch (e) {
+    console.log(yellow(`[ios:verify] ! headless browser unavailable (${(e).message?.split('\n')[0]}) — static boot check only`));
+    staticBootCheck();
     return;
   }
 
@@ -95,7 +100,6 @@ async function bootCheck() {
   await new Promise((r) => server.listen(0, r));
   const port = server.address().port;
 
-  const browser = await playwright.chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));

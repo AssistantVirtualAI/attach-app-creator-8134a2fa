@@ -901,6 +901,10 @@ export default function PAUsers() {
           <button onClick={() => fileInputRef.current?.click()} disabled={importingAssignments} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)", opacity: importingAssignments ? 0.6 : 1 }}>
             <Upload className={`w-4 h-4 ${importingAssignments ? "animate-pulse" : ""}`} /> {importingAssignments ? t.importing : t.importDid}
           </button>
+          <button onClick={syncDidsFromPbx} disabled={syncingDids} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)", opacity: syncingDids ? 0.6 : 1 }}>
+            <RefreshCw className={`w-4 h-4 ${syncingDids ? "animate-spin" : ""}`} /> {t.syncDidPbx}
+          </button>
+
           <button onClick={() => setAddAdminOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: `1px solid ${ACCENT}55`, color: ACCENT }}>
             <Plus className="w-4 h-4" /> {t.addAdminBtn}
           </button>

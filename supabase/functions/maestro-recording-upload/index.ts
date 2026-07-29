@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
       payload: { maestro_call_id: maestroCallId, status: res.status },
     });
     await admin.from("planipret_recording_uploads").upsert({
-      call_id, user_id: userId, status: "pending",
+      call_id, user_id: userId, maestro_call_id: maestroCallId, status: "pending",
       error_message: "media_not_ready", updated_at: new Date().toISOString(),
     }, { onConflict: "call_id" }).then(() => {}, () => {});
     return json({ success: true, skipped: "media_not_ready", status: res.status });
@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
   });
   await setPipelineStep(admin, call_id, "cdr", "done", { recording: "ready" }).catch(() => {});
   await admin.from("planipret_recording_uploads").upsert({
-    call_id, user_id: userId, status: "synced",
+    call_id, user_id: userId, maestro_call_id: maestroCallId, status: "synced",
     error_message: null, updated_at: new Date().toISOString(),
   }, { onConflict: "call_id" }).then(() => {}, () => {});
 

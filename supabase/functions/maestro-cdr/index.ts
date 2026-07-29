@@ -22,6 +22,11 @@ import {
 } from "../_shared/maestro.ts";
 import { markCdrRetrySucceeded, scheduleCdrRetry } from "../_shared/maestro-cdr-retry.ts";
 
+function metaString(meta: unknown, key: string): string | null {
+  const value = (meta as Record<string, unknown> | null)?.[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -35,7 +40,7 @@ Deno.serve(async (req) => {
     const { data: call } = await admin
       .from("planipret_phone_calls")
       .select(
-        "id, user_id, direction, from_number, to_number, started_at, ended_at, duration_seconds, recording_url, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id",
+        "id, user_id, direction, from_number, to_number, started_at, ended_at, duration_seconds, recording_url, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, metadata",
       )
       .eq("id", call_id)
       .maybeSingle();
@@ -146,6 +151,11 @@ Deno.serve(async (req) => {
     const profile = ((profRows ?? []) as any[]).find((r) => r.user_id === call.user_id) ?? (profRows ?? [])[0] ?? null;
 
     // Payload format confirmed by Scott (Telecom REST API).
+    const metadata = ((call as any).metadata ?? {}) as Record<string, unknown>;
+    const startedAt = call.started_at ?? metaString(metadata, "call-start-datetime") ?? metaString(metadata, "started_at");
+    const answeredAt = metaString(metadata, "call-answer-datetime") ?? metaString(metadata, "answered_at") ?? startedAt;
+    const endedAt = call.ended_at ?? metaString(metadata, "call-disconnect-datetime") ?? metaString(metadata, "ended_at") ?? startedAt;
+
     const body = {
       provider_call_id: call.ns_call_id ?? call.id,
       to_user_number: call.direction === "inbound" ? normalizePhone(call.from_number) : normalizePhone(call.to_number),
@@ -153,9 +163,9 @@ Deno.serve(async (req) => {
       status: "ended",
       direction: call.direction,
       duration_seconds: call.duration_seconds ?? 0,
-      initiated_at: call.started_at,
-      answered_at: call.started_at,
-      ended_at: call.ended_at,
+      initiated_at: startedAt,
+      answered_at: answeredAt,
+      ended_at: endedAt,
       notes: null,
       ai_summary: null,
       broker_ext: profile?.ns_extension ?? null,

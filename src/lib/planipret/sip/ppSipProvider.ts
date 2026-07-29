@@ -163,10 +163,43 @@ class PpSipProvider {
     lastAttemptAt: null,
     totalAttempts: 0,
     subThresholdHits: 0,
+    socketsCreated: 0,
+    uaRebuilds: 0,
+    recoveryOwner: "none",
+    history: [],
   };
   private metricsListeners = new Set<(m: PpSipReconnectMetrics) => void>();
+  /** Single-owner recovery guard: only one mechanism may drive a reconnect. */
+  private recoveryOwner: PpSipRecoveryOwner = "none";
+  private recoveryOwnerSince = 0;
 
-  getReconnectMetrics(): PpSipReconnectMetrics { return { ...this.reconnectMetrics }; }
+  getReconnectMetrics(): PpSipReconnectMetrics {
+    return { ...this.reconnectMetrics, recoveryOwner: this.recoveryOwner, history: [...this.reconnectMetrics.history] };
+  }
+  /** Full incident export (metrics + config + snapshot) for support/debug. */
+  getReconnectReport() {
+    return {
+      exportedAt: new Date().toISOString(),
+      guardVersion: "v4",
+      status: this.snap.status,
+      extension: this.cfg?.extension ?? null,
+      wssUrl: this.cfg?.wssUrl ?? null,
+      config: getPpSipReconnectConfig(),
+      floorMs: PP_SIP_RECONNECT_FLOOR_MS,
+      metrics: this.getReconnectMetrics(),
+    };
+  }
+  exportReconnectMetrics(): string { return JSON.stringify(this.getReconnectReport(), null, 2); }
+  resetReconnectMetrics() {
+    this.reconnectMetrics = {
+      ...this.reconnectMetrics,
+      attempt: 0, currentDelayMs: 0, rawBackoffMs: 0, delaySource: "none",
+      minDelayObservedMs: null, lastFailureReason: null, lastScheduledAt: null,
+      lastAttemptAt: null, totalAttempts: 0, subThresholdHits: 0,
+      socketsCreated: 0, uaRebuilds: 0, history: [],
+    };
+    this.emitMetrics();
+  }
   subscribeReconnectMetrics(fn: (m: PpSipReconnectMetrics) => void): () => void {
     this.metricsListeners.add(fn);
     fn(this.getReconnectMetrics());
@@ -176,6 +209,51 @@ class PpSipProvider {
     const m = this.getReconnectMetrics();
     this.metricsListeners.forEach((fn) => { try { fn(m); } catch { /* noop */ } });
   }
+  private pushHistory(phase: PpSipReconnectEvent["phase"], reason: string, delayMs = 0) {
+    const h = this.reconnectMetrics.history;
+    h.push({
+      at: Date.now(),
+      phase,
+      owner: this.recoveryOwner,
+      attempt: this.reconnectMetrics.attempt,
+      delayMs,
+      source: this.reconnectMetrics.delaySource,
+      reason,
+    });
+    if (h.length > 200) h.splice(0, h.length - 200);
+  }
+
+  /** Acquire the exclusive recovery lease. Returns false when another
+   *  mechanism (JsSIP connection_recovery or our watchdog) already owns it. */
+  private acquireRecovery(owner: Exclude<PpSipRecoveryOwner, "none">, reason: string): boolean {
+    if (this.recoveryOwner !== "none" && this.recoveryOwner !== owner) {
+      this.pushHistory("blocked", `${reason} (owned by ${this.recoveryOwner})`);
+      this.log("warn", `recovery blocked: ${owner} wanted ${reason}, ${this.recoveryOwner} owns it`);
+      this.emitMetrics();
+      return false;
+    }
+    if (this.recoveryOwner === owner) {
+      // Same owner re-entering: only allowed if it has no pending timer.
+      if (owner === "jssip" ? !!this.wsWatchdogTimer : !!this.wsRetryTimer) {
+        this.pushHistory("blocked", `${reason} (duplicate ${owner} request)`);
+        return false;
+      }
+    }
+    this.recoveryOwner = owner;
+    this.recoveryOwnerSince = Date.now();
+    this.reconnectMetrics.recoveryOwner = owner;
+    return true;
+  }
+
+  private releaseRecovery(reason: string) {
+    if (this.recoveryOwner === "none") return;
+    this.recoveryOwner = "none";
+    this.recoveryOwnerSince = 0;
+    this.reconnectMetrics.recoveryOwner = "none";
+    this.pushHistory("recovered", reason);
+    this.emitMetrics();
+  }
+
 
 
   subscribe(fn: Listener): () => void {

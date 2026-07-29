@@ -434,9 +434,12 @@ public class PpSipKeepAliveService extends Service {
     SharedPreferences p = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
     String login = p.getString("login", ""), domain = p.getString("domain", ""), display = p.getString("display_name", login), password = p.getString("password", "");
     if (login == null || login.length() == 0 || domain == null || domain.length() == 0) { emitStatus("error", "missing_credentials"); return; }
+    long now = System.currentTimeMillis();
+    if (challenge == null && (now - lastRegisterSentMs) < REGISTER_DEBOUNCE_MS) { emitStatus("connecting", "register_debounced_sent"); return; }
+    if (challenge == null && lastRegisterOkMs > 0 && (now - lastRegisterOkMs) < REGISTER_DEBOUNCE_MS) { emitStatus("registered", "register_debounced_ok"); return; }
     int seq = cseq++;
     String branch = "z9hG4bK" + UUID.randomUUID().toString().replace("-", "");
-    String contact = "<sip:" + login + "@" + UUID.randomUUID().toString().replace("-", "") + ".invalid;transport=wss>";
+    String contact = "<sip:" + login + "@android-" + stableToken(login) + ".planipret.invalid;transport=wss>";
     StringBuilder sip = new StringBuilder();
     sip.append("REGISTER sip:").append(domain).append(" SIP/2.0\\r\\n");
     sip.append("Via: SIP/2.0/WSS planipret-mobile.invalid;branch=").append(branch).append("\\r\\n");

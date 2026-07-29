@@ -533,6 +533,12 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       host = call.getString("host") ?? call.getString("domain") ?? ""; port = call.getInt("port") ?? 443; path = call.getString("path") ?? "/"
       login = call.getString("login") ?? call.getString("username") ?? call.getString("extension") ?? ""
       domain = call.getString("domain") ?? ""; displayName = call.getString("displayName") ?? login; password = call.getString("password") ?? ""
+      backoffMinMs = Double(call.getInt("backoffMinMs") ?? 2000)
+      backoffMaxMs = Double(call.getInt("backoffMaxMs") ?? 60000)
+      backoffMaxAttempts = call.getInt("backoffMaxAttempts") ?? 5
+      verifyDelayMs = Double(call.getInt("verifyDelayMs") ?? 8000)
+      registerExpires = call.getInt("registerExpiresSec") ?? 180
+      NSLog("[PpSipKeepAlive] reconnect strategy min=%.0fms max=%.0fms attempts=%d verify=%.0fms expires=%ds", backoffMinMs, backoffMaxMs, backoffMaxAttempts, verifyDelayMs, registerExpires)
       DispatchQueue.main.async { [weak self] in
         guard let self = self else { call.resolve(["ok": false, "status": "error", "reason": "plugin_released"]); return }
         self.activateAudioSession()

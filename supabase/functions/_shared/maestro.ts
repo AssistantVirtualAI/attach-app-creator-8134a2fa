@@ -208,6 +208,7 @@ export async function loadBrokerProfile(
 export async function getBrokerAuth(
   admin: SupabaseClient,
   userId: string | null | undefined,
+  preferOAuth = false,
 ): Promise<{ token: string; brokerId: string | null; usingFallback: boolean; machine: boolean; diag: BrokerAuthDiag }> {
   const cfg = await getMaestroConfig(admin);
   const diag: BrokerAuthDiag = {
@@ -227,7 +228,7 @@ export async function getBrokerAuth(
   let brokerId: string | null = null;
   if (!userId) diag.reason = "no_user_id_on_record";
 
-  if (userId) {
+  if (preferOAuth && userId) {
     const profile = await loadBrokerProfile(admin, userId, diag);
     if (!profile) {
       diag.reason = "no_planipret_profile_matches_user_id_or_profile_id";
@@ -296,8 +297,9 @@ export async function getBrokerAuth(
 export async function telecomAuth(
   admin: SupabaseClient,
   userId: string | null | undefined,
+  preferOAuth = false,
 ): Promise<{ token: string; brokerId: string | null; usingFallback: boolean; machine: boolean; diag: BrokerAuthDiag }> {
-  return await getBrokerAuth(admin, userId);
+  return await getBrokerAuth(admin, userId, preferOAuth);
 }
 
 

@@ -11,16 +11,25 @@ import {
   AVA_ORG_ID,
 } from "../_shared/planipret-ns.ts";
 
-function pickDirection(raw: any): "inbound" | "outbound" | "missed" {
-  const dir = String(val(raw, ["direction", "call_direction", "call-direction", "type", "call-type"], "")).toLowerCase();
-  const disposition = String(val(raw, ["disposition", "status", "call-status"], "")).toLowerCase();
-  if (dir.includes("in") || dir === "incoming" || dir === "received") {
-    if (raw?.answered === false || ["no-answer", "missed", "unanswered"].includes(disposition)) return "missed";
-    return "inbound";
+function pickDirection(raw: any, ext?: string): "inbound" | "outbound" | "missed" {
+  const disposition = String(val(raw, ["disposition", "status", "call-status", "call-disconnect-reason-text"], "")).toLowerCase();
+  const answered = val(raw, ["answer_time", "answered_at", "time-answer", "call-answer-datetime", "call-batch-answer-datetime"]);
+  if (raw?.answered === false || ["no-answer", "missed", "unanswered"].includes(disposition)) return "missed";
+
+  // Topology first (NetSapiens numeric call-direction is unreliable).
+  const orig = String(val(raw, ["call-orig-user", "orig-user", "orig_user", "from-user"], "")).trim();
+  const term = String(val(raw, ["call-term-user", "term-user", "term_user", "call-through-user", "to-user"], "")).trim();
+  const e = String(ext ?? "").trim();
+  if (e) {
+    if (term === e && orig !== e) return answered ? "inbound" : "inbound";
+    if (orig === e && term !== e) return "outbound";
   }
-  if (["no-answer", "missed", "unanswered"].includes(disposition)) return "missed";
-  return "outbound";
+  const dir = String(val(raw, ["direction", "call_direction", "type", "call-type"], "")).toLowerCase();
+  if (dir.includes("in") || dir === "incoming" || dir === "received") return "inbound";
+  if (dir.includes("out")) return "outbound";
+  return "inbound";
 }
+
 
 function val(raw: any, keys: string[], fb: any = null) {
   for (const k of keys) {

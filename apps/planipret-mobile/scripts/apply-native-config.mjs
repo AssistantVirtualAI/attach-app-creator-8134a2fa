@@ -292,6 +292,9 @@ public class PpSipKeepAliveService extends Service {
   // Reconnection strategy (configurable from JS — see src/config/ppSipReconnect.json).
   private int backoffMinMs = 4000, backoffMaxMs = 60000, backoffMaxAttempts = 5, verifyDelayMs = 8000, heartbeatSec = 60, registerExpires = 1800;
   private int reconnectAttempts = 0; private volatile boolean reconnectPending = false;
+  private long lastRegisterSentMs = 0L;
+  private long lastRegisterOkMs = 0L;
+  private static final long REGISTER_DEBOUNCE_MS = 5000L;
 
   public static void start(Context c) { Intent i = new Intent(c, PpSipKeepAliveService.class); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) c.startForegroundService(i); else c.startService(i); }
   public static void stop(Context c) { c.stopService(new Intent(c, PpSipKeepAliveService.class)); }

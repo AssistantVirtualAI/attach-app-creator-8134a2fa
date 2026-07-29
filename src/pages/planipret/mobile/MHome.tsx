@@ -239,29 +239,45 @@ export default function MHome() {
 
 
   const loadBrief = async (force = false) => {
+    // Token protection: the brief is generated at most once per 24h per period.
+    // Cached renders never call the edge function.
+    const cached = loadBriefCache(profile?.user_id, period, lang);
+    if (cached) { setBrief(cached.brief); setBriefAt(cached.generatedAt); }
+    if (!force && isBriefFresh(cached)) { setBriefErr(null); setBriefLoading(false); return; }
+    if (briefInFlight.current) return;
+    briefInFlight.current = true;
     setBriefLoading(true);
     setBriefErr(null);
     // Protection: one silent retry, then a friendly localized message — never a raw
     // "Edge Function returned a non-2xx status code" and never wipe the last brief.
     let data: any = null;
     let error: any = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const r = await supabase.functions.invoke("pp-ava-brief", { body: { period, force, language: lang } });
-      data = r.data; error = r.error;
-      if (!error) break;
-      await new Promise((res) => setTimeout(res, 800));
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const r = await supabase.functions.invoke("pp-ava-brief", { body: { period, force, language: lang } });
+        data = r.data; error = r.error;
+        if (!error) break;
+        await new Promise((res) => setTimeout(res, 800));
+      }
+    } finally {
+      briefInFlight.current = false;
+      setBriefLoading(false);
     }
-    setBriefLoading(false);
     if (error || !data || (data as any)?.error) {
-      setBriefErr(lang === "en"
-        ? "Brief temporarily unavailable — pull to refresh."
-        : "Brief temporairement indisponible — tirez pour rafraîchir.");
+      if (!cached) {
+        setBriefErr(lang === "en"
+          ? "Brief temporarily unavailable — pull to refresh."
+          : "Brief temporairement indisponible — tirez pour rafraîchir.");
+      }
       return;
     }
     setBrief(data);
+    setBriefAt(Date.now());
+    saveBriefCache(profile?.user_id, period, data, lang);
   };
 
   useEffect(() => { loadStats(); loadBrief(false); /* eslint-disable-next-line */ }, [profile?.user_id, period]);
+
   useEffect(() => {
     registerRefresh(async () => { await Promise.all([loadStats(), loadBrief(true)]); });
     return () => registerRefresh(null);

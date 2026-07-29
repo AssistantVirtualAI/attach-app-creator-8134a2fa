@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     await updateCallPipeline(admin, call_id, { step: "client_lookup", started: true, error: null });
     await pipelineLog(admin, { call_id, user_id: call.user_id, step: "client_lookup", status: "started" });
 
-    const auth = await telecomAuth(admin, call.user_id);
+    const auth = await telecomAuth(admin, call.user_id, true);
 
     // ── STEP 1: client lookup (cache-first) ─────────────────────
     let maestroClientId = call.maestro_client_id ?? null;
@@ -269,6 +269,7 @@ Deno.serve(async (req) => {
             method: "PUT",
             path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls/${encodeURIComponent(String(maestroCallId))}`,
             token: auth.token,
+            machine: auth.machine,
             body: { status: "ended" },
           }) as any;
           await maestroSyncLog(admin, {

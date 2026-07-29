@@ -9,7 +9,9 @@
 
 import { corsHeaders, jsonResponse } from "../_shared/planipret-ns.ts";
 import { requirePlanipretAdmin } from "../_shared/ns-broker.ts";
+import { maestroTelecomFetch } from "../_shared/maestro-telecom.ts";
 import {
+
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
   pingMaestroTelecom,

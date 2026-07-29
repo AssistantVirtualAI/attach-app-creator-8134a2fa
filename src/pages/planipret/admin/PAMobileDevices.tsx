@@ -531,11 +531,60 @@ export default function PAMobileDevices() {
           <button onClick={() => syncAnsweringRules(false)} disabled={syncingRules} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "#0D2540", border: "1px solid #2E9BDC44", color: "#2E9BDC", opacity: syncingRules ? 0.65 : 1 }}>
             {syncingRules ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneCall className="h-4 w-4" />} {t.syncAnsweringRules}
           </button>
+          <button onClick={() => syncAnsweringRules(true)} disabled={syncingRules} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)", opacity: syncingRules ? 0.65 : 1 }}>
+            {syncingRules ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Dry run
+          </button>
           <button onClick={provisionAppReview} className="rounded-lg px-3 py-2 text-sm font-medium" style={{ background: ACCENT, color: "#fff" }}>
             {t.appReviewUser}
           </button>
         </div>
       </div>
+
+      {rulesDiag && (
+        <div className="rounded-xl p-4 text-sm" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)" }}>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="font-semibold" style={{ color: "var(--pp-text-primary)" }}>
+              {rulesDiag.dry_run ? "Dry run — diagnostic routage" : "Diagnostic routage"}
+            </span>
+            <button onClick={() => setRulesDiag(null)} className="text-xs" style={{ color: "var(--pp-text-secondary)" }}>✕</button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4" style={{ color: "var(--pp-text-secondary)" }}>
+            <div>Courtiers: <b style={{ color: "var(--pp-text-primary)" }}>{rulesDiag.brokers_found}</b></div>
+            <div>Avec extension: <b style={{ color: "var(--pp-text-primary)" }}>{rulesDiag.brokers_with_extension}</b></div>
+            <div>Avec DID: <b style={{ color: "var(--pp-text-primary)" }}>{rulesDiag.brokers_with_did}</b></div>
+            <div>Routage OK: <b style={{ color: SUCCESS }}>{rulesDiag.routing_ok}</b></div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {Object.entries(rulesDiag.blockers ?? {})
+              .filter(([, v]) => Number(v) > 0)
+              .map(([k, v]) => (
+                <span key={k} className="rounded-md px-2 py-1 text-xs" style={{ background: "#3A1B1B", color: "#F87171" }}>
+                  {k}: {String(v)}
+                </span>
+              ))}
+            {Object.values(rulesDiag.blockers ?? {}).every((v) => !Number(v)) && (
+              <span className="text-xs" style={{ color: SUCCESS }}>Aucun blocage détecté</span>
+            )}
+          </div>
+          {!!rulesDiag.raw?.length && (
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs" style={{ color: "var(--pp-text-secondary)" }}>Réponses PBX brutes</summary>
+              <pre className="mt-2 max-h-56 overflow-auto rounded-lg p-2 text-[11px]" style={{ background: "var(--pp-bg-base)", color: "var(--pp-text-secondary)" }}>
+                {JSON.stringify(rulesDiag.raw.slice(0, 30), null, 2)}
+              </pre>
+            </details>
+          )}
+          {!!rulesDiag.dry?.length && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs" style={{ color: "var(--pp-text-secondary)" }}>Plan dry run ({rulesDiag.dry.length})</summary>
+              <pre className="mt-2 max-h-56 overflow-auto rounded-lg p-2 text-[11px]" style={{ background: "var(--pp-bg-base)", color: "var(--pp-text-secondary)" }}>
+                {JSON.stringify(rulesDiag.dry.slice(0, 60), null, 2)}
+              </pre>
+            </details>
+          )}
+        </div>
+      )}
+
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {([

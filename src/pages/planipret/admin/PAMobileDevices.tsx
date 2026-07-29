@@ -572,6 +572,19 @@ export default function PAMobileDevices() {
               <span className="text-xs" style={{ color: SUCCESS }}>Aucun blocage détecté</span>
             )}
           </div>
+          {(!!rulesDiag.did_failures?.length || !!Object.keys(rulesDiag.did_failure_reasons ?? {}).length) && (
+            <details className="mt-3" open>
+              <summary className="cursor-pointer text-xs" style={{ color: "#F87171" }}>
+                Échecs DID ({rulesDiag.did_failures?.length ?? 0} courtiers) —{" "}
+                {Object.entries(rulesDiag.did_failure_reasons ?? {})
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join(" · ") || "détail"}
+              </summary>
+              <pre className="mt-2 max-h-56 overflow-auto rounded-lg p-2 text-[11px]" style={{ background: "var(--pp-bg-base)", color: "var(--pp-text-secondary)" }}>
+                {JSON.stringify((rulesDiag.did_failures ?? []).slice(0, 20), null, 2)}
+              </pre>
+            </details>
+          )}
           {!!rulesDiag.raw?.length && (
             <details className="mt-3">
               <summary className="cursor-pointer text-xs" style={{ color: "var(--pp-text-secondary)" }}>Réponses PBX brutes</summary>

@@ -279,19 +279,20 @@ Deno.serve(async (req) => {
     if (serviceHeader) {
       effectiveUserId = req.headers.get("x-broker-user-id") ?? body?.broker_user_id ?? null;
     } else {
+      const token = authHeader.replace(/^Bearer\s+/i, "");
       const sb = createClient(
         Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
         { global: { headers: { Authorization: authHeader } } },
       );
-      const { data: u } = await sb.auth.getUser();
+      const { data: u } = await sb.auth.getUser(token);
       if (!u?.user) return json({ error: "unauthorized" }, 401);
       effectiveUserId = u.user.id;
     }
     if (!effectiveUserId) return json({ error: "no_user" }, 400);
 
     const { data: profile } = await admin.from("planipret_profiles")
-      .select("id, user_id, full_name, extension, organization_id, language, ms365_access_token, ms365_refresh_token, ms365_email")
+      .select("id, user_id, full_name, extension, ns_extension, organization_id, language, ms365_access_token, ms365_refresh_token, ms365_email")
       .eq("user_id", effectiveUserId).maybeSingle();
     if (!profile) return json({ error: "no_profile" }, 404);
 
@@ -315,10 +316,16 @@ Deno.serve(async (req) => {
     // depending on the ingestion path — match both.
     const ids = Array.from(new Set([profile.id, profile.user_id, effectiveUserId].filter(Boolean))) as string[];
 
+    const ext = (profile.ns_extension || profile.extension || "").trim();
+    const callScope = [
+      ids.length ? `user_id.in.(${ids.join(",")})` : null,
+      ext ? `extension.eq.${ext}` : null,
+    ].filter(Boolean).join(",");
+
     const [callRows, smsRows, voicemails, meetings, tasks] = await Promise.all([
       admin.from("planipret_phone_calls")
         .select("id, direction, status, from_number, from_name, to_number, to_name, started_at, duration_seconds, lead_score, lead_temperature, ai_summary, ai_coaching")
-        .in("user_id", ids).gte("started_at", sinceIso).lte("started_at", untilIso)
+        .or(callScope).gte("started_at", sinceIso).lte("started_at", untilIso)
         .order("started_at", { ascending: false }).limit(500),
       admin.from("planipret_phone_messages")
         .select("id, direction, from_number, to_number, body, read_at, created_at")

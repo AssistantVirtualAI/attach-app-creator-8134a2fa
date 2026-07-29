@@ -101,8 +101,8 @@ describe("ppSipProvider — transport recovery guard", () => {
     ua.emit("disconnected", { reason: "ws_disconnected", code: 1001 });
     ua.emit("unregistered");
 
-    // Our watchdog is the only recovery owner; JsSIP recovery is suppressed.
-    expect(provider.getReconnectMetrics().recoveryOwner).toBe("watchdog");
+    // JsSIP owns the first recovery window; the watchdog only takes over after verification fails.
+    expect(provider.getReconnectMetrics().recoveryOwner).toBe("jssip");
     expect(created.sockets).toHaveLength(1);
 
     // Drive far past the verification window: the watchdog may rebuild the UA,
@@ -123,10 +123,22 @@ describe("ppSipProvider — transport recovery guard", () => {
 
     const m = provider.getReconnectMetrics();
     expect(m.subThresholdHits).toBe(0);
-    expect(m.minDelayObservedMs === null || m.minDelayObservedMs >= 3000).toBe(true);
+    expect(m.minDelayObservedMs === null || m.minDelayObservedMs >= 5000).toBe(true);
     // No recovery timer may ever be armed at the legacy 1000ms cadence.
     const recoveryDelays = scheduledDelays.filter((d) => d >= 500 && d < 3000);
     expect(recoveryDelays).toEqual([]);
+  });
+
+  it("debounces duplicate REGISTER calls on the same transport", async () => {
+    const ua = await bootRegistered();
+    scheduledDelays = [];
+
+    await provider.forceReregister();
+    await provider.forceReregister();
+    await provider.forceReregister();
+
+    expect(ua.registerCalls).toBeLessThanOrEqual(1);
+    expect(provider.getReconnectMetrics().history.some((h: any) => h.reason === "register_debounce")).toBe(true);
   });
 
   it("exports an analyzable incident report", async () => {
@@ -136,7 +148,7 @@ describe("ppSipProvider — transport recovery guard", () => {
     await vi.advanceTimersByTimeAsync(15_000);
 
     const report = JSON.parse(provider.exportReconnectMetrics());
-    expect(report.guardVersion).toBe("v4");
+    expect(report.guardVersion).toBe("v5");
     expect(report.metrics.socketsCreated).toBeGreaterThanOrEqual(1);
     expect(Array.isArray(report.metrics.history)).toBe(true);
     expect(report.metrics.history.some((h: any) => h.reason === "ws_disconnected")).toBe(true);

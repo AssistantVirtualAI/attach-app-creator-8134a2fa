@@ -124,6 +124,7 @@ class PpSipProvider {
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
   private regFailures = 0;
   private wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private wsWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
   private wsFailures = 0;
   private lastWsDisconnectedAt = 0;
   private lastRegisterAttemptAt = 0;

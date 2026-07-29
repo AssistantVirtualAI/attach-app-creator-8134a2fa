@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 import fs from 'fs';
+import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
 
 const buildId = `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}Z`;
 const buildTime = new Date().toISOString();

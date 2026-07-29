@@ -298,12 +298,12 @@ Deno.serve(async (req) => {
       if (!u?.user) return json({ error: "unauthorized" }, 401);
       effectiveUserId = u.user.id;
     }
-    if (!effectiveUserId) return json({ error: "no_user" }, 400);
+    if (!effectiveUserId) return json(degradedBrief(requestedLang ?? "fr", "no_user"));
 
     const { data: profile } = await admin.from("planipret_profiles")
       .select("id, user_id, full_name, extension, ns_extension, organization_id, language, ms365_access_token, ms365_refresh_token, ms365_email")
       .eq("user_id", effectiveUserId).maybeSingle();
-    if (!profile) return json({ error: "no_profile" }, 404);
+    if (!profile) return json(degradedBrief(requestedLang ?? "fr", "no_profile"));
 
     // Language: explicit request wins (mobile app sends the active UI language),
     // otherwise fall back to the broker profile (used by the 08:30 / 17:30 schedulers).

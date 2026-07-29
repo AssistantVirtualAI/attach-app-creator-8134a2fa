@@ -375,10 +375,7 @@ class PpSipProvider {
         return;
       }
       if (this.snap.status === "connected") {
-        if (Date.now() - this.lastRegisterAttemptAt >= PP_SIP_RECONNECT_FLOOR_MS) {
-          this.lastRegisterAttemptAt = Date.now();
-          try { this.ua.register(); } catch {}
-        }
+        this.guardedRegister("duplicate_init_connected");
         return;
       }
     }
@@ -400,7 +397,7 @@ class PpSipProvider {
       this.reconnectMetrics.socketsCreated += sockets.length;
       this.pushHistory("socket", `sockets_created:${urls.join(",")}`);
       const reconnectConfig = getPpSipReconnectConfig();
-      this.log("info", "reconnect guard active v4", {
+      this.log("info", "reconnect guard active v5", {
         floorMs: PP_SIP_RECONNECT_FLOOR_MS,
         backoffMinMs: reconnectConfig.socketBackoffMinMs,
         verifyDelayMs: reconnectConfig.socketVerifyDelayMs,
@@ -424,6 +421,26 @@ class PpSipProvider {
         connection_recovery_max_interval: Math.max(3, Math.ceil(reconnectConfig.socketBackoffMaxMs / 1000)),
         user_agent: "Planipret Softphone 1.0",
       });
+
+      // Definitive REGISTER guard: JsSIP already auto-REGISTERs when
+      // `register:true`. App-resume, token-refresh and watchdog events were also
+      // calling register(), causing duplicate REGISTER bursts on the same WSS
+      // connection. Throttle every call path, including JsSIP internal callers.
+      try {
+        const rawRegister = ua.register.bind(ua);
+        ua.register = (...args: any[]) => {
+          const now = Date.now();
+          const minGap = Math.max(5000, getPpSipReconnectConfig().reRegisterDelayMs);
+          if (now - this.lastRegisterAttemptAt < minGap) {
+            this.log("warn", `REGISTER suppressed (${now - this.lastRegisterAttemptAt}ms < ${minGap}ms)`);
+            this.pushHistory("blocked", "register_debounce");
+            this.emitMetrics();
+            return undefined;
+          }
+          this.lastRegisterAttemptAt = now;
+          return rawRegister(...args);
+        };
+      } catch { /* JsSIP API guard */ }
 
       try {
         const transport = (ua as any)?._transport;
@@ -487,8 +504,7 @@ class PpSipProvider {
         setTimeout(() => {
           try {
             if (this.ua?.isConnected?.()) {
-              this.lastRegisterAttemptAt = Date.now();
-              this.ua.register();
+              this.guardedRegister("unregistered_live_transport");
             } else {
               this.scheduleSocketReconnect("guarded_reregister_transport_down");
             }
@@ -513,8 +529,7 @@ class PpSipProvider {
           this.regRetryTimer = null;
           try {
             if (this.ua?.isConnected?.()) {
-              this.lastRegisterAttemptAt = Date.now();
-              this.ua.register();
+              this.guardedRegister("registration_retry");
             } else {
               this.scheduleSocketReconnect("registration_retry_transport_down");
             }

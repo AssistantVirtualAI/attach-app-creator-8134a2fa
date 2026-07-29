@@ -90,7 +90,9 @@ export default function MHome() {
   const [brief, setBrief] = useState<any | null>(null);
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefAt, setBriefAt] = useState<number | null>(null);
+  const [briefErr, setBriefErr] = useState<string | null>(null);
   const briefInFlight = useRef(false);
+
 
 
   useMaestroPipelineToasts(profile?.user_id);

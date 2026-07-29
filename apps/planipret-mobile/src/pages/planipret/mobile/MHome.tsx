@@ -414,6 +414,15 @@ export default function MHome() {
             </button>
           </div>
 
+          {briefAt && (
+            <p className="text-[10px] mb-2" style={{ color: "var(--pp-text-muted)" }}>
+              {lang === "en" ? "Generated at " : "Généré à "}
+              {new Date(briefAt).toLocaleString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}
+            </p>
+          )}
+
+
+
           {briefLoading && !brief ? (
             <div className="space-y-2">
               <Shimmer className="h-4 w-3/4" />

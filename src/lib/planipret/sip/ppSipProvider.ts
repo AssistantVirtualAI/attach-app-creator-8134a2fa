@@ -102,6 +102,33 @@ class PpSipProvider {
   private wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private wsFailures = 0;
   private netWatchInstalled = false;
+  /** Reconnect instrumentation — surfaced via getReconnectMetrics(). */
+  private reconnectMetrics: PpSipReconnectMetrics = {
+    attempt: 0,
+    currentDelayMs: 0,
+    rawBackoffMs: 0,
+    delaySource: "none",
+    floorMs: 0,
+    minDelayObservedMs: null,
+    lastFailureReason: null,
+    lastScheduledAt: null,
+    lastAttemptAt: null,
+    totalAttempts: 0,
+    subThresholdHits: 0,
+  };
+  private metricsListeners = new Set<(m: PpSipReconnectMetrics) => void>();
+
+  getReconnectMetrics(): PpSipReconnectMetrics { return { ...this.reconnectMetrics }; }
+  subscribeReconnectMetrics(fn: (m: PpSipReconnectMetrics) => void): () => void {
+    this.metricsListeners.add(fn);
+    fn(this.getReconnectMetrics());
+    return () => { this.metricsListeners.delete(fn); };
+  }
+  private emitMetrics() {
+    const m = this.getReconnectMetrics();
+    this.metricsListeners.forEach((fn) => { try { fn(m); } catch { /* noop */ } });
+  }
+
 
   subscribe(fn: Listener): () => void {
     this.listeners.add(fn);

@@ -440,6 +440,7 @@ function NativeDeepLinkBridge() {
 
         if (isMs365Callback) {
           localStorage.setItem('pp_ms365_callback_url', rawUrl);
+          void import('@/lib/ms365CallbackStore').then((m) => m.rememberMs365CallbackUrl(rawUrl)).catch(() => {});
           // Dismiss the in-app browser (SFSafariViewController / Chrome Custom Tab)
           // so the user is returned to the app after Microsoft consent.
           import('@capacitor/browser')

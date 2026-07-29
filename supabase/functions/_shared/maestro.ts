@@ -1,5 +1,6 @@
 // Shared Maestro/Kanguru helper — used by all maestro-* edge functions.
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { getUserMaestroAccessToken } from "./maestro-oauth.ts";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -114,6 +115,7 @@ export interface BrokerAuthDiag {
   sip_probe_result: string | null;
   cooldown_active: boolean;
   used_fallback: boolean;
+  token_source?: "oauth" | "machine";
   reason: string;
 }
 
@@ -206,7 +208,7 @@ export async function loadBrokerProfile(
 export async function getBrokerAuth(
   admin: SupabaseClient,
   userId: string | null | undefined,
-): Promise<{ token: string; brokerId: string | null; usingFallback: boolean; diag: BrokerAuthDiag }> {
+): Promise<{ token: string; brokerId: string | null; usingFallback: boolean; machine: boolean; diag: BrokerAuthDiag }> {
   const cfg = await getMaestroConfig(admin);
   const diag: BrokerAuthDiag = {
     user_id: userId ?? null,
@@ -219,6 +221,7 @@ export async function getBrokerAuth(
     sip_probe_result: null,
     cooldown_active: false,
     used_fallback: false,
+    token_source: "machine",
     reason: "ok",
   };
   let brokerId: string | null = null;
@@ -267,7 +270,20 @@ export async function getBrokerAuth(
   if (!brokerId) {
     console.error(`[maestro.brokerId] UNRESOLVED user=${userId ?? "-"} ${JSON.stringify(diag)}`);
   }
-  return { token: cfg.key, brokerId, usingFallback: diag.used_fallback, diag };
+  let token = cfg.key;
+  let machine = true;
+  if (userId) {
+    const oauthToken = await getUserMaestroAccessToken(admin, userId).catch((e) => {
+      console.warn("[maestro.auth] OAuth token unavailable", (e as Error).message);
+      return null;
+    });
+    if (oauthToken) {
+      token = oauthToken;
+      machine = false;
+      diag.token_source = "oauth";
+    }
+  }
+  return { token, brokerId, usingFallback: diag.used_fallback, machine, diag };
 }
 
 
@@ -280,7 +296,7 @@ export async function getBrokerAuth(
 export async function telecomAuth(
   admin: SupabaseClient,
   userId: string | null | undefined,
-): Promise<{ token: string; brokerId: string | null; usingFallback: boolean; diag: BrokerAuthDiag }> {
+): Promise<{ token: string; brokerId: string | null; usingFallback: boolean; machine: boolean; diag: BrokerAuthDiag }> {
   return await getBrokerAuth(admin, userId);
 }
 
@@ -296,6 +312,7 @@ interface CallOpts {
   idempotencyKey?: string;
   accountId?: string;
   brokerId?: string | null;
+  machine?: boolean;
 }
 
 /**
@@ -325,7 +342,7 @@ export async function maestroFetch(cfg: MaestroConfig, opts: CallOpts) {
 
   // Scott's Telecom REST API authenticates the machine API key only when
   // `?machine=1` is present — always append it.
-  const suffix = `${opts.path.includes("?") ? "&" : "?"}machine=1`;
+  const suffix = opts.machine === false ? "" : `${opts.path.includes("?") ? "&" : "?"}machine=1`;
   const endpoint = `${cfg.url}${opts.path}${suffix}`;
   const res = await fetch(endpoint, {
     method: opts.method ?? "GET",
@@ -339,7 +356,10 @@ export async function maestroFetch(cfg: MaestroConfig, opts: CallOpts) {
   } catch {
     data = { raw: text };
   }
-  return { ok: res.ok, status: res.status, data, endpoint };
+  const raw = typeof data?.raw === "string" ? data.raw : "";
+  const contentType = res.headers.get("content-type") ?? "";
+  const htmlLogin = /text\/html/i.test(contentType) || /<html|<body|form-signin|\/login/i.test(raw);
+  return { ok: res.ok && !htmlLogin, status: res.status, data: htmlLogin ? { error: "maestro_html_login_response", raw } : data, endpoint };
 }
 
 /**

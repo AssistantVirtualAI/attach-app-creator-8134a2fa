@@ -39,6 +39,7 @@ import {
   stopPlanipretSipKeepAlive,
   type PpNativeSipStatus,
 } from "@/lib/planipret/sip/nativePpSipService";
+import { addDedupedCapListener } from "@/lib/planipret/sip/capListeners";
 import {
   upsertRingingSession,
   claimCall,
@@ -527,7 +528,7 @@ export function useMplanipretSoftphone(enabled = true) {
       window.removeEventListener("online", onResume);
       window.removeEventListener("pagehide", onBackgrounded);
       window.removeEventListener("freeze", onBackgrounded as EventListener);
-      try { appStateHandle?.remove?.(); } catch {}
+      try { removeAppStateListener(); } catch {}
     };
 
   }, [enabled, user?.id]);

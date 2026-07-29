@@ -56,7 +56,13 @@ Deno.serve(async (req) => {
       .select(SELECT)
       .eq("user_id", u.user.id)
       .maybeSingle();
-    if (!profile) return j({ error: "no_profile" }, 404);
+    if (!profile) {
+      // Protection: always 200 so the mobile app renders a status card instead of an edge error.
+      return j({ success: true, healthy: false, degraded: true, checked_at: new Date().toISOString(), services: [
+        { service: "ms365", state: "not_configured", detail: "no_profile", can_reconnect: true },
+        { service: "maestro", state: "not_configured", detail: "no_profile", can_reconnect: true },
+      ] });
+    }
 
     const p = profile as any;
     const services: Health[] = [];
@@ -118,6 +124,6 @@ Deno.serve(async (req) => {
     return j({ success: true, healthy, checked_at: new Date().toISOString(), services });
   } catch (e) {
     console.error("[pp-connections-status]", e);
-    return j({ error: (e as Error).message }, 500);
+    return j({ success: true, healthy: false, degraded: true, error: (e as Error).message, checked_at: new Date().toISOString(), services: [] });
   }
 });

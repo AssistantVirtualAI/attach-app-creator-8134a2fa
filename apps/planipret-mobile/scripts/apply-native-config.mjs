@@ -410,7 +410,6 @@ public class PpSipKeepAliveService extends Service {
         .putExtra("fromUser", fromUser).putExtra("fromDisplay", fromDisplay));
       // Fire the full-screen "ringing" notification with Answer / Decline actions.
       showIncomingCallNotification(inviteCallId, fromHdr, fromUser, fromDisplay);
-      requestReregister(this, "incoming_invite");
     }
   }
 

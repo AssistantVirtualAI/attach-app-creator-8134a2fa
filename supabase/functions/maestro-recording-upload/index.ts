@@ -74,6 +74,16 @@ async function loadAudio(
 }
 
 Deno.serve(async (req) => {
+  // Scott's Telecom REST API (v1) exposes recordings as READ-ONLY
+  // (GET /users/{id}/call/{callId}/recording). There is no upload route, so we
+  // report a clean skip instead of looping on HTML 404s.
+  if (req.method === "POST") {
+    return json({
+      success: true,
+      skipped: "recording_upload_not_supported",
+      detail: "L'API Telecom Maestro n'expose aucun endpoint d'upload d'enregistrement (lecture seule).",
+    }, 200);
+  }
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 

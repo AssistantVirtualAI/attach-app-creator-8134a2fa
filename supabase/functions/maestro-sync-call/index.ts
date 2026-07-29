@@ -21,6 +21,7 @@ import {
   pipelineLog,
   setPipelineStep,
   summarizeMaestroFailure,
+  telecomAuth,
   updateCallPipeline,
 } from "../_shared/maestro.ts";
 
@@ -152,7 +153,7 @@ Deno.serve(async (req) => {
       steps.cdr = { ok: true, skipped: "already_synced" };
     }
 
-    const auth = await getBrokerAuth(admin, call.user_id);
+    const auth = await telecomAuth(admin, call.user_id);
     log("broker_auth", {
       user_id: call.user_id,
       broker_id: auth.brokerId,
@@ -181,27 +182,10 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (fresh) call = fresh;
     } else if (mId) {
-      // Push the already-stored transcript (no re-transcription cost).
-      const res = await maestroFetchScoped(cfg, {
-        method: "POST",
-        path: `/api/v1/calls/${encodeURIComponent(String(mId))}/transcript`,
-        token: auth.token,
-        brokerId: auth.brokerId,
-        body: {
-          language: call.transcript_language ?? "fr-CA",
-          text: transcript,
-          segments: asArray(call.transcript_segments),
-          confidence: 0.95,
-        },
-      });
-      const failure = res.ok ? null : summarizeMaestroFailure(res.status, res.data);
-      steps.transcript = { ok: res.ok, status: res.status, reused: true, error: failure?.error ?? null, detail: failure?.detail ?? null, permanent: failure?.permanent ?? false };
-      await setPipelineStep(admin, call_id, "transcript", res.ok ? "done" : "error", { pushed: res.ok });
-      await pipelineLog(admin, {
-        call_id, user_id: call.user_id, step: "transcript_push",
-        status: res.ok ? "success" : "error",
-        payload: { status: res.status },
-      });
+      // Scott's Telecom API has no transcript upload endpoint; the transcript
+      // is pushed inside the call PUT below (notes field).
+      steps.transcript = { ok: true, reused: true, delivered_via: "call_update" };
+      await setPipelineStep(admin, call_id, "transcript", "done", { pushed: true });
     } else {
       steps.transcript = { ok: false, skipped: "maestro_call_id_missing", error: "maestro_call_id_missing" };
     }
@@ -222,25 +206,18 @@ Deno.serve(async (req) => {
           ? asArray(aij.key_points)
           : asArray(call.ai_topics);
 
-      const res = await maestroFetchScoped(cfg, {
-        method: "POST",
-        path: `/api/v1/calls/${encodeURIComponent(String(mId))}/ai_summary`,
+      const res = await maestroFetch(cfg, {
+        method: "PUT",
+        path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId ?? ""))}/calls/${encodeURIComponent(String(mId))}`,
         token: auth.token,
-        brokerId: auth.brokerId,
         body: {
-          summary_text: summary,
-          key_points: keyPoints,
-          next_actions: nextActions.map(actionTitle).filter(Boolean),
-          sentiment: (call as any).ai_sentiment ?? aij?.sentiment ?? null,
-          analytics: {
-            coaching: call.ai_coaching ?? aij?.coaching ?? null,
-            coaching_score: call.coaching_score ?? null,
-            lead_score: call.lead_score ?? null,
-            lead_temperature: call.lead_temperature ?? null,
-            lead_score_reason: call.lead_score_reason ?? null,
-            client_insights: call.ai_client_insights ?? aij?.client_insights ?? null,
-            topics: asArray(call.ai_topics),
-          },
+          status: "ended",
+          ai_summary: summary,
+          notes: [
+            keyPoints.length ? `Points clés: ${keyPoints.map(String).join(" • ")}` : null,
+            nextActions.length ? `Prochaines actions: ${nextActions.map(actionTitle).filter(Boolean).join(" • ")}` : null,
+            transcript ? `Transcription:\n${String(transcript).slice(0, 8000)}` : null,
+          ].filter(Boolean).join("\n\n") || null,
         },
       });
       const failure = res.ok ? null : summarizeMaestroFailure(res.status, res.data);

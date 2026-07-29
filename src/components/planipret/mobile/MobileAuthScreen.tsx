@@ -27,20 +27,35 @@ export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Pro
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [showLegal, setShowLegal] = useState<null | "tos" | "privacy">(null);
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) { toast.error(t("auth.missing")); return; }
+  const submit = async (e?: FormEvent) => {
+    e?.preventDefault();
+    setFormError(null);
+    if (!email || !password) { setFormError(t("auth.missing")); toast.error(t("auth.missing")); return; }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    setLoading(false);
-    if (error) { toast.error(error.message || t("auth.failed")); return; }
-    clearMs365Pending();
-    toast.success(t("auth.success"));
-    void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin());
-    await onLoggedIn();
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      if (error) {
+        const msg = error.message || t("auth.failed");
+        setFormError(msg);
+        toast.error(msg);
+        return;
+      }
+      clearMs365Pending();
+      toast.success(t("auth.success"));
+      void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin());
+      await onLoggedIn();
+    } catch (err: any) {
+      const msg = err?.message || "Network error";
+      setFormError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   const forgot = async () => {
     if (!email) { toast.error(t("auth.email")); return; }

@@ -308,36 +308,59 @@ Deno.serve(async (req) => {
 
     const lovableKey = Deno.env.get("LOVABLE_API_KEY");
     if (!lovableKey) {
-      const fallback = buildFallbackBrief(stats, period);
-      return json({ ...fallback, stats, cached: false, degraded: true });
+      const fallback = buildFallbackBrief(stats, period, lang);
+      return json({ ...fallback, stats, language: lang, cached: false, degraded: true });
     }
 
     const gateway = createLovableAiGatewayProvider(lovableKey);
-    const periodLabel = period === "day" ? "la journée" : period === "week" ? "la semaine" : period === "month" ? "le mois" : "votre quart";
-    const system = `Tu es AVA, l'assistante d'un courtier hypothécaire au Québec. Tu reçois les statistiques réelles du courtier ${profile.full_name ?? ""} pour ${periodLabel}.
-Génère un brief court, professionnel, en français du Québec.
+    const periodLabelFr = period === "day" ? "la journée" : period === "week" ? "la semaine" : period === "month" ? "le mois" : "votre quart";
+    const periodLabelEn = period === "day" ? "today" : period === "week" ? "this week" : period === "month" ? "this month" : "this shift";
+
+    const system = lang === "fr"
+      ? `Tu es AVA, l'assistante d'un courtier hypothécaire au Québec. Tu reçois les statistiques réelles du courtier ${profile.full_name ?? ""} pour ${periodLabelFr}.
+Génère un brief DÉTAILLÉ, professionnel et actionnable, ENTIÈREMENT en français du Québec (aucun mot en anglais).
 - headline: 1 phrase percutante citant les chiffres clés réels (appels, manqués, minutes, textos, leads chauds, rendez-vous).
-- priorities: 3 actions concrètes ordonnées par urgence (max 12 mots chacune).
-- risks: jusqu'à 2 risques ou points d'attention.
-- suggestions: jusqu'à 3 actions cliquables (call/sms/reminder) avec si pertinent un numéro extrait des données.`;
+- overview: 3 à 5 phrases qui analysent la performance: volume d'appels entrants vs sortants, taux de réponse, durée moyenne, activité texto, messages vocaux en attente, tendance et qualité des conversations (résumés IA, score de coaching).
+- metrics: 5 à 8 indicateurs { label, value } tirés des chiffres exacts (appels, répondus/manqués, temps au téléphone, durée moyenne, textos, non lus, leads chauds, rendez-vous, score de coaching).
+- highlights: jusqu'à 5 faits saillants nommant les vrais contacts/clients les plus actifs et ce qui s'est passé.
+- priorities: 3 actions concrètes ordonnées par urgence (max 12 mots chacune), en nommant la personne ou le numéro.
+- risks: jusqu'à 3 risques ou points d'attention.
+- suggestions: jusqu'à 3 actions cliquables (call/sms/email/reminder) avec si pertinent un numéro extrait des données.`
+      : `You are AVA, the assistant of a mortgage broker in Quebec. You receive the real statistics of broker ${profile.full_name ?? ""} for ${periodLabelEn}.
+Generate a DETAILED, professional and actionable brief, ENTIRELY in English (no French words at all).
+- headline: 1 punchy sentence quoting the real key numbers (calls, missed, minutes, texts, hot leads, meetings).
+- overview: 3 to 5 sentences analysing performance: inbound vs outbound volume, answer rate, average duration, texting activity, pending voicemails, trend and conversation quality (AI summaries, coaching score).
+- metrics: 5 to 8 indicators { label, value } from the exact numbers (calls, answered/missed, talk time, average duration, texts, unread, hot leads, meetings, coaching score).
+- highlights: up to 5 highlights naming the real most active contacts/clients and what happened.
+- priorities: 3 concrete actions ordered by urgency (max 12 words each), naming the person or number.
+- risks: up to 3 risks or watch-outs.
+- suggestions: up to 3 clickable actions (call/sms/email/reminder) with a number extracted from the data when relevant.`;
+
+    const userPrompt = lang === "fr"
+      ? `Statistiques réelles (JSON):\n${JSON.stringify(stats).slice(0, 12000)}\n\nUtilise ces chiffres exacts (appels, manqués, minutes, textos, boîtes vocales, leads chauds, rendez-vous, contacts actifs). N'invente rien. Réponds uniquement en français.`
+      : `Real statistics (JSON):\n${JSON.stringify(stats).slice(0, 12000)}\n\nUse these exact numbers (calls, missed, minutes, texts, voicemails, hot leads, meetings, active contacts). Do not invent anything. Answer in English only.`;
 
     let result: any;
     try {
       const r = await generateText({
         model: gateway("google/gemini-3-flash-preview"),
         system,
-        prompt: `Statistiques réelles (JSON):\n${JSON.stringify(stats).slice(0, 12000)}\n\nUtilise ces chiffres exacts (appels, manqués, minutes, textos, boîtes vocales, leads chauds, rendez-vous, contacts actifs). N'invente rien.`,
+        prompt: userPrompt,
         experimental_output: Output.object({ schema: BriefSchema }),
       });
       const out = (r as any).experimental_output ?? (r as any).output;
       result = BriefSchema.parse(out);
+      const fb = buildFallbackBrief(stats, period, lang);
+      if (!result.metrics?.length) result.metrics = fb.metrics;
+      if (!result.overview) result.overview = fb.overview;
     } catch (e) {
       console.error("pp-ava-brief AI failed", e);
-      result = buildFallbackBrief(stats, period);
+      result = buildFallbackBrief(stats, period, lang);
     }
 
 
-    return json({ ...result, stats, cached: false });
+    return json({ ...result, stats, language: lang, cached: false });
+
   } catch (e) {
     console.error("pp-ava-brief error", e);
     return json({ error: String(e) }, 500);

@@ -241,7 +241,7 @@ export default function MHome() {
   const loadBrief = async (force = false) => {
     setBriefLoading(true);
     setBriefErr(null);
-    const { data, error } = await supabase.functions.invoke("pp-ava-brief", { body: { period, force } });
+    const { data, error } = await supabase.functions.invoke("pp-ava-brief", { body: { period, force, language: lang } });
     setBriefLoading(false);
     if (error || (data as any)?.error) {
       setBriefErr((data as any)?.error || error?.message || "brief unavailable");

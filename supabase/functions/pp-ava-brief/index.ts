@@ -16,8 +16,11 @@ const json = (b: unknown, s = 200) =>
 
 const BriefSchema = z.object({
   headline: z.string(),
+  overview: z.string().optional(),
   priorities: z.array(z.string()).max(5),
   risks: z.array(z.string()).max(3),
+  highlights: z.array(z.string()).max(5).optional(),
+  metrics: z.array(z.object({ label: z.string(), value: z.string() })).max(8).optional(),
   suggestions: z.array(z.object({
     label: z.string(),
     kind: z.enum(["call", "sms", "email", "reminder"]),
@@ -26,47 +29,117 @@ const BriefSchema = z.object({
 });
 
 type Period = "day" | "week" | "month" | "shift";
+type Lang = "fr" | "en";
 
-function buildFallbackBrief(stats: any, period: Period) {
-  const periodLabel = period === "day" ? "aujourd’hui" : period === "week" ? "cette semaine" : period === "month" ? "ce mois-ci" : "ce quart";
+const plural = (n: number, s: string) => (n > 1 ? `${s}s` : s);
+
+function buildFallbackBrief(stats: any, period: Period, lang: Lang) {
+  const fr = lang === "fr";
+  const periodLabel = fr
+    ? (period === "day" ? "aujourd’hui" : period === "week" ? "cette semaine" : period === "month" ? "ce mois-ci" : "ce quart")
+    : (period === "day" ? "today" : period === "week" ? "this week" : period === "month" ? "this month" : "this shift");
+
   const priorities = [
     stats.missed_recent?.[0]
-      ? `Rappeler ${stats.missed_recent[0].from_name || stats.missed_recent[0].from_number || "l’appel manqué"}`
+      ? (fr ? `Rappeler ${stats.missed_recent[0].from_name || stats.missed_recent[0].from_number || "l’appel manqué"}`
+            : `Call back ${stats.missed_recent[0].from_name || stats.missed_recent[0].from_number || "the missed call"}`)
       : null,
     stats.tasks_pending?.[0]
-      ? `Compléter: ${stats.tasks_pending[0].note || stats.tasks_pending[0].contact_name || "rappel client"}`
+      ? (fr ? `Compléter: ${stats.tasks_pending[0].note || stats.tasks_pending[0].contact_name || "rappel client"}`
+            : `Complete: ${stats.tasks_pending[0].note || stats.tasks_pending[0].contact_name || "client follow-up"}`)
       : null,
     stats.hot_leads?.[0]
-      ? `Relancer ${stats.hot_leads[0].from_name || stats.hot_leads[0].from_number || "le lead chaud"}`
+      ? (fr ? `Relancer ${stats.hot_leads[0].from_name || stats.hot_leads[0].from_number || "le lead chaud"}`
+            : `Follow up with ${stats.hot_leads[0].from_name || stats.hot_leads[0].from_number || "the hot lead"}`)
       : null,
     stats.meetings?.[0]
-      ? `Préparer le rendez-vous ${stats.meetings[0].title || stats.meetings[0].attendee_name || "à venir"}`
+      ? (fr ? `Préparer le rendez-vous ${stats.meetings[0].title || stats.meetings[0].attendee_name || "à venir"}`
+            : `Prepare the meeting ${stats.meetings[0].title || stats.meetings[0].attendee_name || "coming up"}`)
       : null,
   ].filter(Boolean).slice(0, 5) as string[];
+
   const risks = [
-    stats.missed_count > 0 ? `${stats.missed_count} appel${stats.missed_count > 1 ? "s" : ""} manqué${stats.missed_count > 1 ? "s" : ""}` : null,
-    stats.sms_unread > 0 ? `${stats.sms_unread} texto${stats.sms_unread > 1 ? "s" : ""} non lu${stats.sms_unread > 1 ? "s" : ""}` : null,
-    stats.voicemails_unread > 0 ? `${stats.voicemails_unread} boîte${stats.voicemails_unread > 1 ? "s" : ""} vocale${stats.voicemails_unread > 1 ? "s" : ""} à traiter` : null,
+    stats.missed_count > 0
+      ? (fr ? `${stats.missed_count} ${plural(stats.missed_count, "appel")} ${plural(stats.missed_count, "manqué")}`
+            : `${stats.missed_count} missed ${plural(stats.missed_count, "call")}`)
+      : null,
+    stats.sms_unread > 0
+      ? (fr ? `${stats.sms_unread} ${plural(stats.sms_unread, "texto")} non ${plural(stats.sms_unread, "lu")}`
+            : `${stats.sms_unread} unread ${plural(stats.sms_unread, "text")}`)
+      : null,
+    stats.voicemails_unread > 0
+      ? (fr ? `${stats.voicemails_unread} ${plural(stats.voicemails_unread, "boîte")} ${plural(stats.voicemails_unread, "vocale")} à traiter`
+            : `${stats.voicemails_unread} ${plural(stats.voicemails_unread, "voicemail")} to handle`)
+      : null,
   ].filter(Boolean).slice(0, 3) as string[];
+
   const suggestions = [
-    stats.missed_recent?.[0]?.from_number ? { label: "Rappeler l’appel manqué", kind: "call", number: stats.missed_recent[0].from_number } : null,
-    stats.hot_leads?.[0]?.from_number ? { label: "Texter le lead chaud", kind: "sms", number: stats.hot_leads[0].from_number } : null,
+    stats.missed_recent?.[0]?.from_number
+      ? { label: fr ? "Rappeler l’appel manqué" : "Call back the missed call", kind: "call", number: stats.missed_recent[0].from_number }
+      : null,
+    stats.hot_leads?.[0]?.from_number
+      ? { label: fr ? "Texter le lead chaud" : "Text the hot lead", kind: "sms", number: stats.hot_leads[0].from_number }
+      : null,
   ].filter(Boolean).slice(0, 3);
-  const parts = [
-    `${stats.calls_total} appel${stats.calls_total > 1 ? "s" : ""} (${stats.calls_answered} répondus, ${stats.missed_count} manqués)`,
-    `${stats.talk_minutes} min au téléphone`,
-    `${stats.sms_total} texto${stats.sms_total > 1 ? "s" : ""}`,
-    `${stats.hot_leads.length} lead${stats.hot_leads.length > 1 ? "s" : ""} chaud${stats.hot_leads.length > 1 ? "s" : ""}`,
-    `${stats.meetings.length} rendez-vous`,
-  ];
+
+  const metrics = fr
+    ? [
+        { label: "Appels", value: `${stats.calls_total} (${stats.calls_inbound} entrants · ${stats.calls_outbound} sortants)` },
+        { label: "Répondus / manqués", value: `${stats.calls_answered} / ${stats.missed_count}` },
+        { label: "Temps au téléphone", value: `${stats.talk_minutes} min` },
+        { label: "Durée moyenne", value: `${stats.avg_call_seconds} s` },
+        { label: "Textos", value: `${stats.sms_total} (${stats.sms_received} reçus · ${stats.sms_sent} envoyés)` },
+        { label: "Non lus", value: `${stats.sms_unread} textos · ${stats.voicemails_unread} messages vocaux` },
+        { label: "Leads chauds", value: `${stats.hot_leads?.length ?? 0}` },
+        { label: "Rendez-vous", value: `${stats.meetings?.length ?? 0}` },
+      ]
+    : [
+        { label: "Calls", value: `${stats.calls_total} (${stats.calls_inbound} inbound · ${stats.calls_outbound} outbound)` },
+        { label: "Answered / missed", value: `${stats.calls_answered} / ${stats.missed_count}` },
+        { label: "Talk time", value: `${stats.talk_minutes} min` },
+        { label: "Average duration", value: `${stats.avg_call_seconds} s` },
+        { label: "Texts", value: `${stats.sms_total} (${stats.sms_received} received · ${stats.sms_sent} sent)` },
+        { label: "Unread", value: `${stats.sms_unread} texts · ${stats.voicemails_unread} voicemails` },
+        { label: "Hot leads", value: `${stats.hot_leads?.length ?? 0}` },
+        { label: "Meetings", value: `${stats.meetings?.length ?? 0}` },
+      ];
+
+  const parts = fr
+    ? [
+        `${stats.calls_total} ${plural(stats.calls_total, "appel")} (${stats.calls_answered} répondus, ${stats.missed_count} manqués)`,
+        `${stats.talk_minutes} min au téléphone`,
+        `${stats.sms_total} ${plural(stats.sms_total, "texto")}`,
+        `${stats.hot_leads.length} ${plural(stats.hot_leads.length, "lead")} ${plural(stats.hot_leads.length, "chaud")}`,
+        `${stats.meetings.length} ${stats.meetings.length > 1 ? "rendez-vous" : "rendez-vous"}`,
+      ]
+    : [
+        `${stats.calls_total} ${plural(stats.calls_total, "call")} (${stats.calls_answered} answered, ${stats.missed_count} missed)`,
+        `${stats.talk_minutes} min on the phone`,
+        `${stats.sms_total} ${plural(stats.sms_total, "text")}`,
+        `${stats.hot_leads.length} hot ${plural(stats.hot_leads.length, "lead")}`,
+        `${stats.meetings.length} ${plural(stats.meetings.length, "meeting")}`,
+      ];
+
   return {
     headline: `${periodLabel}: ${parts.join(" · ")}.`,
-    priorities: priorities.length ? priorities : ["Aucune urgence détectée — garder le suivi client à jour."],
+    overview: fr
+      ? `Résumé ${periodLabel} — ${parts.join(", ")}. Durée moyenne des appels: ${stats.avg_call_seconds} s.`
+      : `Summary for ${periodLabel} — ${parts.join(", ")}. Average call duration: ${stats.avg_call_seconds} s.`,
+    priorities: priorities.length
+      ? priorities
+      : [fr ? "Aucune urgence détectée — garder le suivi client à jour." : "No urgent item detected — keep client follow-ups up to date."],
     risks,
+    highlights: (stats.top_contacts ?? []).slice(0, 3).map((c: any) =>
+      fr
+        ? `${c.name || c.number}: ${c.calls} ${plural(c.calls, "appel")}, ${c.sms} ${plural(c.sms, "texto")}`
+        : `${c.name || c.number}: ${c.calls} ${plural(c.calls, "call")}, ${c.sms} ${plural(c.sms, "text")}`,
+    ),
+    metrics,
     suggestions,
   };
 
 }
+
 
 function periodRange(period: Period): { since: Date; until: Date; label: string } {
   const now = new Date();

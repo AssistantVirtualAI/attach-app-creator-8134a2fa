@@ -12,6 +12,7 @@ import AvaOrb from "@/components/planipret/mobile/AvaOrb";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import { useAvaContext } from "@/hooks/useAvaContext";
+import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 type AvaSuggestion = { id: string; label: string; kind: string; payload?: Record<string, any> };
 type Msg = { id: string; role: "user" | "assistant"; message: string; created_at: string; suggestions?: AvaSuggestion[] };
@@ -45,6 +46,7 @@ export default function MAvaChat() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const avaContext = useAvaContext();
   const outlet = useOutletContext<PlanipretMobileContext>() as any;
+  const { t, lang } = useMplanipretLang();
 
   const switchMode = (m: "chat" | "voice") => { setMode(m); localStorage.setItem("ava_mode", m); };
 

@@ -98,12 +98,12 @@ export default function MMore() {
     idle: "#94A3B8", connecting: "#F59E0B", connected: "#3B82F6",
     registered: "#10B981", disconnected: "#94A3B8", error: "#EF4444",
   };
-  const sipStatusLabel = sipSnap.status === "registered" ? "Enregistré"
-    : sipSnap.status === "connecting" ? "Connexion…"
-    : sipSnap.status === "connected" ? "Connecté (non enregistré)"
-    : sipSnap.status === "error" ? "Erreur"
-    : sipSnap.status === "disconnected" ? "Déconnecté"
-    : "Inactif";
+  const sipStatusLabel = sipSnap.status === "registered" ? t("screens.more.sipRegistered")
+    : sipSnap.status === "connecting" ? t("screens.more.sipConnecting")
+    : sipSnap.status === "connected" ? t("screens.more.sipConnected")
+    : sipSnap.status === "error" ? t("screens.more.sipError")
+    : sipSnap.status === "disconnected" ? t("screens.more.sipDisconnected")
+    : t("screens.more.sipInactive");
 
   const reconnectNs = async () => {
     setReconnecting(true);
@@ -132,10 +132,10 @@ export default function MMore() {
 
   const connectMs365 = async () => {
     const { data, error } = await supabase.functions.invoke("ms365-status", { body: {} });
-    if (error) { toast.error("Configuration Microsoft inaccessible", { description: error.message }); return; }
+    if (error) { toast.error(t("screens.more.msInaccessible"), { description: error.message }); return; }
     const cfg = ((data as any)?.detection ?? {}) as any;
     if (!cfg.client_id) {
-      toast.error("Microsoft 365 n'est pas configuré côté admin");
+      toast.error(t("screens.more.msNotConfigured"));
       return;
     }
     startMs365OAuth({ ...cfg, client_id: cfg.client_id });
@@ -216,8 +216,8 @@ export default function MMore() {
       </div>
 
       <Section title={t("more.sections.pipeline")}>
-        <Row icon={<Sparkles className="w-4 h-4" />} label="Discuter avec AVA" sub="Assistante IA personnelle" onClick={() => navigate("/mplanipret/ava")} chevron />
-        <Row icon={<Bell className="w-4 h-4" />} label="Notifications AVA" sub="Historique et deep links" onClick={() => navigate("/mplanipret/notifications")} chevron />
+        <Row icon={<Sparkles className="w-4 h-4" />} label={t("screens.more.discussWithAva")} sub={t("screens.more.avaAssistantSub")} onClick={() => navigate("/mplanipret/ava")} chevron />
+        <Row icon={<Bell className="w-4 h-4" />} label={t("screens.more.avaNotifTitle")} sub={t("screens.more.avaNotifSub")} onClick={() => navigate("/mplanipret/notifications")} chevron />
         <Row icon={<BarChart3 className="w-4 h-4" />} label={t("more.pipelineFiles")} onClick={() => navigate("/mplanipret/pipeline")} chevron />
         <Row icon={<BarChart3 className="w-4 h-4" />} label={t("more.performance")} onClick={() => navigate("/mplanipret/stats")} chevron />
       </Section>
@@ -258,7 +258,7 @@ export default function MMore() {
           onClick={() => navigate("/mplanipret/calls?tab=voicemails")} chevron />
         <Row
           icon={<Radio className="w-4 h-4" style={{ color: sipStatusColor[sipSnap.status] }} />}
-          label="État SIP"
+          label={t("screens.more.sipStateLabel")}
           sub={sipSnap.errorCause ? `${sipStatusLabel} — ${sipSnap.errorCause}` : sipStatusLabel}
           onClick={() => navigate("/mplanipret/sip-debug")}
           right={<span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: sipStatusColor[sipSnap.status], color: "#fff" }}>{sipSnap.status.toUpperCase()}</span>}
@@ -281,11 +281,11 @@ export default function MMore() {
       </Section>
 
       <Section title={t("more.sections.integrations")}>
-        <Row icon={<Info className="w-4 h-4" style={{ color: "#5EC2FF" }} />} label="Connexions & diagnostic AVA"
-          sub="Microsoft 365 · Maestro · ElevenLabs"
+        <Row icon={<Info className="w-4 h-4" style={{ color: "#5EC2FF" }} />} label={t("screens.more.connectionsDiagnostic")}
+          sub={t("screens.more.integrationsSub")}
           onClick={() => navigate("/mplanipret/connections")} chevron />
-        <Row icon={<Info className="w-4 h-4" style={{ color: "#F5A623" }} />} label="Historique Maestro Sync"
-          sub="Appels, enregistrements, résumés IA, SMS"
+        <Row icon={<Info className="w-4 h-4" style={{ color: "#F5A623" }} />} label={t("screens.more.maestroSyncHistory")}
+          sub={t("screens.more.maestroSyncSub")}
           onClick={() => navigate("/mplanipret/maestro-sync")} chevron />
         <div className="px-3 pb-2 flex items-center justify-between gap-2">
           <Ms365StatusBadge />
@@ -294,21 +294,21 @@ export default function MMore() {
               onClick={() => navigate("/mplanipret/diagnostics")}
               className="text-[11px] font-semibold"
               style={{ color: "#22c55e" }}
-            >Endpoints →</button>
+            >{t("screens.more.endpointsLink")}</button>
             <button
               onClick={() => navigate("/mplanipret/ms365-diagnostics")}
               className="text-[11px] font-semibold"
               style={{ color: "#2E9BDC" }}
-            >MS365 →</button>
+            >{t("screens.more.ms365Link")}</button>
           </div>
         </div>
-        <Row icon={<Mail className="w-4 h-4" style={{ color: "#3FA3F0" }} />} label="Microsoft 365"
+        <Row icon={<Mail className="w-4 h-4" style={{ color: "#3FA3F0" }} />} label={t("screens.more.ms365Label")}
           sub={
             ms365Detection.loading
-              ? "Vérification de la configuration…"
+              ? t("screens.more.verifyingConfig")
               : ms365Detection.tenant_id || ms365Detection.client_id
-                ? `Tenant ${ms365Detection.tenant_id ? "✓" : "✗"} · Client ${ms365Detection.client_id ? "✓" : "✗"}${isMs365Connected ? " · Authentifié" : " · Non authentifié"}`
-                : "Configuration backend introuvable"
+                ? `${t("screens.more.tenantDetected")} ${ms365Detection.tenant_id ? "✓" : "✗"} · ${t("screens.more.clientDetected")} ${ms365Detection.client_id ? "✓" : "✗"}${isMs365Connected ? " · " + t("screens.more.authenticated") : " · " + t("screens.more.notAuthenticated")}`
+                : t("screens.more.backendConfigMissing")
           }
           onClick={isMs365Connected ? disconnectMs365 : connectMs365}
           right={<StatusPill ok={isMs365Connected} label={isMs365Connected ? t("more.connected") : "—"} />} chevron />
@@ -372,7 +372,7 @@ export default function MMore() {
                       background: active ? "linear-gradient(135deg, #1A4A8A, #2E9BDC)" : "transparent",
                       color: active ? "#fff" : "var(--pp-text-muted)",
                     }}
-                    aria-label={l === "fr" ? "Français" : "English"}
+                    aria-label={l === "fr" ? t("screens.more.frenchLabel") : t("screens.more.englishLabel")}
                   >
                     {l === "fr" ? "FR" : "EN"}
                   </button>

@@ -627,6 +627,7 @@ function Kpi({ icon, value, label, accent, pulse, onClick }: {
 function MsCalendarSection({ profile, events, loading, error, lang }: {
   profile: any; events: any[]; loading: boolean; error: string | null; lang: string;
 }) {
+  const { t } = useMplanipretLang();
   const today = new Date(); today.setHours(0,0,0,0);
   const [cursor, setCursor] = useState(() => { const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; });
   const [selected, setSelected] = useState<Date>(today);

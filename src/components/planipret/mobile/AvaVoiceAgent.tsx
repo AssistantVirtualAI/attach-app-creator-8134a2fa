@@ -11,6 +11,7 @@ import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import AvaOrb, { useAnalyserLevel } from "@/components/planipret/mobile/AvaOrb";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { getAvaToolLabel } from "@/lib/i18n/avaToolLabels";
 
 type AgentState = "idle" | "connecting" | "listening" | "speaking" | "processing" | "tool_running" | "error";
 type AutonomyMode = "confirm" | "semi_auto" | "full_auto";
@@ -67,40 +68,6 @@ const TOOL_ICONS: Record<string, any> = {
   get_upcoming_meetings: Calendar,
 };
 
-const TOOL_LABELS_EN: Record<string, string> = {
-  make_call: "Placing a call",
-  send_sms: "Sending an SMS",
-  send_email: "Sending an email",
-  summarize_email: "Summarizing the email",
-  read_emails: "Reading emails",
-  get_unread_emails: "Unread emails",
-  get_recent_emails: "Recent emails",
-  create_task: "Creating a Maestro task",
-  create_appointment: "Creating an appointment",
-  create_calendar_event: "Creating a meeting",
-  move_calendar_event: "Moving the meeting",
-  cancel_calendar_event: "Cancelling the meeting",
-  get_upcoming_meetings: "Upcoming meetings",
-  generate_voicemail_greeting: "Generating voicemail greeting",
-};
-
-const TOOL_LABELS: Record<string, string> = {
-  make_call: "Lancement d'un appel",
-  send_sms: "Envoi d'un SMS",
-  send_email: "Envoi d'un courriel",
-  summarize_email: "Résumé du courriel",
-  read_emails: "Lecture des courriels",
-  get_unread_emails: "Courriels non lus",
-  get_recent_emails: "Derniers courriels",
-  create_task: "Création d'une tâche Maestro",
-  create_appointment: "Création d'un RDV",
-  create_calendar_event: "Création d'un meeting",
-  move_calendar_event: "Déplacement du meeting",
-  cancel_calendar_event: "Annulation du meeting",
-  get_upcoming_meetings: "Meetings à venir",
-  generate_voicemail_greeting: "Génération de boîte vocale",
-};
-
 const CONFIRM_REQUIRED = new Set([
   "make_call", "send_sms", "send_email",
   "create_task", "create_appointment", "generate_voicemail_greeting",
@@ -112,10 +79,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
   const navigate = useNavigate();
   const { lang } = useMplanipretLang();
   const L = useCallback((fr: string, en: string) => (lang === "en" ? en : fr), [lang]);
-  const toolLabel = useCallback(
-    (name: string) => (lang === "en" ? TOOL_LABELS_EN[name] ?? TOOL_LABELS[name] ?? name : TOOL_LABELS[name] ?? name),
-    [lang],
-  );
+  const toolLabel = useCallback((name: string) => getAvaToolLabel(name, lang), [lang]);
   const [voiceSheetOpen, setVoiceSheetOpen] = useState(false);
   const [state, setState] = useState<AgentState>("idle");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
@@ -803,7 +767,7 @@ function isValidIANATimezone(tz: string): boolean {
   } catch { return false; }
 }
 
-function CalendarAwareConfirm({
+export function CalendarAwareConfirm({
   pending, toolLabel, onCancel, onConfirm,
 }: {
   pending: PendingTool;

@@ -584,6 +584,23 @@ export default function PAUsers() {
     setAllNumbers(((data as any).numbers ?? []) as NsNumber[]);
   };
 
+  // Mirror the live PBX DID inventory into planipret_did_assignments
+  const syncDidsFromPbx = async () => {
+    setSyncingDids(true);
+    const { data, error } = await supabase.functions.invoke("pp-admin-phonenumbers", {
+      body: { action: "sync_from_pbx" },
+    });
+    setSyncingDids(false);
+    if (error || !(data as any)?.success) {
+      toast.error((data as any)?.error ?? error?.message ?? t.genericError);
+      return;
+    }
+    toast.success(t.didPbxSynced((data as any).synced ?? 0, (data as any).removed ?? 0));
+    await loadNumbers();
+  };
+
+
+
   const load = async () => {
     setLoading(true);
     setNsError(null);

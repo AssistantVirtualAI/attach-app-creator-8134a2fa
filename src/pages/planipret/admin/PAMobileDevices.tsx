@@ -356,39 +356,68 @@ export default function PAMobileDevices() {
     await refresh(true);
   }, [refresh, t]);
 
-  const syncAnsweringRules = useCallback(async () => {
+  const syncAnsweringRules = useCallback(async (dryRun = false) => {
     setSyncingRules(true);
+    setRulesDiag(null);
     let offset = 0;
     let ok = 0;
     let total = 0;
     let routingOk = 0;
     let lastError: string | null = null;
+    const agg = {
+      brokers_found: 0,
+      brokers_with_extension: 0,
+      brokers_with_did: 0,
+      routing_ok: 0,
+      blockers: {} as Record<string, number>,
+      raw: [] as any[],
+      dry: [] as any[],
+    };
 
     // Step 0 — re-read the DID inventory from the PBX so the number→extension
     // map used by the repair step is the real one (the original CSV import was
     // partially mangled).
     let didRefresh: any = null;
-    try {
-      const { data } = await supabase.functions.invoke("pp-sync-answering-rules", {
-        body: { refresh_dids: true },
-      });
-      didRefresh = data;
-    } catch { /* non-blocking */ }
+    if (!dryRun) {
+      try {
+        const { data } = await supabase.functions.invoke("pp-sync-answering-rules", {
+          body: { refresh_dids: true },
+        });
+        didRefresh = data;
+      } catch { /* non-blocking */ }
+    }
 
     for (let page = 0; page < 20; page += 1) {
       const { data, error } = await supabase.functions.invoke("pp-sync-answering-rules", {
-        body: { bulk: true, offset, limit: 50, batch_size: 10, include_results: false },
+        body: { bulk: true, offset, limit: 50, batch_size: 10, include_results: false, dry_run: dryRun },
       });
       if (error) { lastError = error.message; break; }
-      ok += Number((data as any)?.succeeded ?? 0);
-      total += Number((data as any)?.processed ?? 0);
-      routingOk += Number((data as any)?.routing_ok_count ?? 0);
-      const next = (data as any)?.next_offset;
+      const d = data as any;
+      ok += Number(d?.succeeded ?? 0);
+      total += Number(d?.processed ?? 0);
+      routingOk += Number(d?.routing_ok_count ?? d?.routing_ok ?? 0);
+      agg.brokers_found += Number(d?.brokers_found ?? 0);
+      agg.brokers_with_extension += Number(d?.brokers_with_extension ?? 0);
+      agg.brokers_with_did += Number(d?.brokers_with_did ?? 0);
+      agg.routing_ok += Number(d?.routing_ok ?? 0);
+      for (const [k, v] of Object.entries(d?.routing_blocker_counts ?? {})) {
+        agg.blockers[k] = (agg.blockers[k] ?? 0) + Number(v ?? 0);
+      }
+      if (Array.isArray(d?.raw_pbx_responses)) agg.raw.push(...d.raw_pbx_responses.slice(0, 10));
+      if (Array.isArray(d?.dry_run_report)) agg.dry.push(...d.dry_run_report);
+      const next = d?.next_offset;
       if (next === null || next === undefined) break;
       offset = Number(next);
     }
     setSyncingRules(false);
+    setRulesDiag({ ...agg, dry_run: dryRun, total });
     if (lastError && total === 0) { toast.error(t.toastSyncRulesError, { description: lastError }); return; }
+    if (dryRun) {
+      toast.success(`Dry run: ${agg.brokers_with_extension}/${agg.brokers_found} avec extension`, {
+        description: `DID: ${agg.brokers_with_did} · sans extension: ${agg.blockers.no_extension ?? 0}`,
+      });
+      return;
+    }
     const didPart = didRefresh?.mapped != null
       ? `DID: ${didRefresh.mapped}/${didRefresh.pbx_numbers} · `
       : "";
@@ -397,6 +426,7 @@ export default function PAMobileDevices() {
     });
     refresh();
   }, [refresh, t]);
+
 
 
   const [diagBroker, setDiagBroker] = useState<Row | null>(null);

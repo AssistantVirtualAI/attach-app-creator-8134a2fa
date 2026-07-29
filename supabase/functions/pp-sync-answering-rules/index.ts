@@ -549,16 +549,23 @@ Deno.serve(async (req) => {
       return {
         broker_id: broker.id ?? broker.user_id,
         broker_name: broker.full_name,
+        email: broker.email,
         extension: ext,
         domain,
         success: opRes.ok,
         routing_ok,
+        dids,
         routing_blockers: [
+          ...(authFailed ? ["pbx_auth_failed"] : []),
+          ...(returnedHtml ? ["pbx_returned_html"] : []),
           ...(opRes.ok ? [] : ["rule_write_failed"]),
           ...(verify?.honored ? [] : ["sim_ring_not_honored"]),
           ...(didOk ? [] : ["did_route_not_verified"]),
+          ...(dids.length ? [] : ["no_did"]),
           ...(devices.registered_aors?.length ? [] : ["no_registered_device"]),
         ],
+        raw_pbx,
+        pbx_returned_html: returnedHtml ? bodySnippet : undefined,
         mode,
         status: opRes.status,
         rule_path: rulePath,
@@ -570,6 +577,7 @@ Deno.serve(async (req) => {
         list_status: listRes.status,
         user_reset_status: userReset,
       };
+
 
     };
 

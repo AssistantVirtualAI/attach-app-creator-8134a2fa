@@ -75,7 +75,7 @@ async function uploadPlanipretVoipToken(token: string, bundleId?: string, extens
       },
     });
     if (error) console.warn("[pp-voip] token upload failed", error);
-    else if (changed) {
+    else if (changed || lastVoipToken !== null) {
       try { ppSipProvider.forceReregister(); } catch {}
       try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister")); } catch {}
     }

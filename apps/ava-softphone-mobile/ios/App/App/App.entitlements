@@ -2,14 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Push Notifications (standard APNs + VoIP PushKit).
-	     PushKit VoIP does NOT require a separate entitlement key in the
-	     .entitlements file — it is enabled via the "Voice over IP" background
-	     mode in Info.plist (UIBackgroundModes) and a VoIP-type APNs certificate
-	     or key in the Apple Developer portal.
-	     The key "com.apple.developer.pushkit.unrestricted-voip" is NOT a valid
-	     provisioning entitlement and must NOT appear here. -->
 	<key>aps-environment</key>
 	<string>development</string>
+	<key>com.apple.developer.pushkit.unrestricted-voip</key>
+	<true/>
 </dict>
 </plist>

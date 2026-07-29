@@ -274,9 +274,10 @@ export async function getBrokerAuth(
 export async function telecomAuth(
   admin: SupabaseClient,
   userId: string | null | undefined,
-): Promise<{ token: string; brokerId: string | null; usingFallback: boolean }> {
+): Promise<{ token: string; brokerId: string | null; usingFallback: boolean; diag: BrokerAuthDiag }> {
   return await getBrokerAuth(admin, userId);
 }
+
 
 
 

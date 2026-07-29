@@ -191,6 +191,7 @@ async function bootstrap() {
     // path for Capacitor only and keep createRoot for web/dev preview.
     if (Capacitor.isNativePlatform() || window.location.protocol === 'capacitor:') {
       legacyRender(appTree, container);
+      watchFirstPaint(container);
       window.setTimeout(() => { (window as BootWindow).__PP_REACT_MOUNT_CALLED__ = true; }, 0);
       return;
     }

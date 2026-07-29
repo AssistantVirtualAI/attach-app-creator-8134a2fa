@@ -26,22 +26,29 @@ Deno.serve(async (req) => {
 
   if (call_id) {
     let userId: string | null = null;
+    let maestroCallId: string | null = null;
+    let reason = "no_upload_endpoint";
     try {
       const { data: call } = await admin
         .from("planipret_phone_calls")
-        .select("id, user_id")
+        .select("id, user_id, maestro_call_id")
         .eq("id", call_id)
         .maybeSingle();
       userId = call?.user_id ?? null;
+      maestroCallId = (call as any)?.maestro_call_id ?? null;
     } catch (_) { /* ignore */ }
+
+    // Make the blocking reason explicit so the retry job can pick it up.
+    reason = maestroCallId ? "no_upload_endpoint" : "maestro_call_id_missing";
+    console.log(`[maestro-recording-upload] call=${call_id} skipped reason=${reason} maestro_call_id=${maestroCallId ?? "-"}`);
 
     await pipelineLog(admin, {
       call_id,
       user_id: userId,
       step: "recording_upload",
       status: "skipped",
-      error_message: "no_upload_endpoint",
-      payload: { reason: SKIP_REASON },
+      error_message: reason,
+      payload: { reason: SKIP_REASON, maestro_call_id: maestroCallId },
     });
     await setPipelineStep(admin, call_id, "cdr", "done", { recording: "skipped_no_upload_endpoint" }).catch(() => {});
     try {
@@ -49,7 +56,7 @@ Deno.serve(async (req) => {
         call_id,
         user_id: userId,
         status: "skipped",
-        error_message: "no_upload_endpoint",
+        error_message: reason,
         updated_at: new Date().toISOString(),
       }, { onConflict: "call_id" });
     } catch (_) { /* ignore */ }

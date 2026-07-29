@@ -76,6 +76,7 @@ const PASipDiagnostic = lazyWithRetry(() => import("./pages/planipret/admin/PASi
 const PADiagnostics = lazyWithRetry(() => import("./pages/planipret/admin/PADiagnostics"));
 const PAMaestroSync = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroSync"));
 const PASyncedCalls = lazyWithRetry(() => import("./pages/planipret/admin/PASyncedCalls"));
+const PATelecomMapping = lazyWithRetry(() => import("./pages/planipret/admin/PATelecomMapping"));
 const PAMaestroStatus = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroStatus"));
 const PlanipretPrivacy = lazyWithRetry(() => import("./pages/planipret/PlanipretPrivacy"));
 const PlanipretIntegrationsLazy = lazyWithRetry(() => import("./pages/planipret/PlanipretIntegrations"));
@@ -609,6 +610,7 @@ const App = () => (
                   <Route path="diagnostics" element={<Suspense fallback={<AdminPageSkeleton />}><PADiagnostics /></Suspense>} />
                   <Route path="maestro-sync" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroSync /></Suspense>} />
                   <Route path="synced-calls" element={<Suspense fallback={<AdminPageSkeleton />}><PASyncedCalls /></Suspense>} />
+                  <Route path="telecom-mapping" element={<Suspense fallback={<AdminPageSkeleton />}><PATelecomMapping /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
                 </Route>
                 <Route path="/planipret/privacy" element={<Suspense fallback={<AdminPageSkeleton />}><PlanipretPrivacy /></Suspense>} />

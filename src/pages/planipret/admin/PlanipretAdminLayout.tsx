@@ -23,9 +23,9 @@ import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "diagnostics" | "maestroSync" | "syncedCalls";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "diagnostics" | "maestroSync" | "syncedCalls" | "telecomMapping";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "syncedCalls";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "syncedCalls" | "telecomMapping";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -63,6 +63,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/sip-diagnostic",  key: "sipDiagnostic",   Icon: PlugZap },
       { to: "/planipret/admin/diagnostics",     key: "diagnostics",     Icon: Gauge },
       { to: "/planipret/admin/maestro-sync",    key: "maestroSync",     Icon: Zap },
+      { to: "/planipret/admin/telecom-mapping", key: "telecomMapping",  Icon: Plug },
       { to: "/planipret/admin/compliance",      key: "compliance",      Icon: ShieldCheck },
       { to: "/planipret/admin/audit-checklist", key: "auditChecklist",  Icon: CheckSquare, badge: "audit" },
     ],
@@ -89,6 +90,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/diagnostics": "diagnostics",
   "/planipret/admin/maestro-sync": "maestroSync",
   "/planipret/admin/synced-calls": "syncedCalls",
+  "/planipret/admin/telecom-mapping": "telecomMapping",
 };
 
 const initials = (n?: string) =>
@@ -323,6 +325,7 @@ export default function PlanipretAdminLayout() {
                   ? raw
                   : (key === "diagnostics" ? (lang === "en" ? "Diagnostics" : "Diagnostic")
                     : key === "maestroSync" ? (lang === "en" ? "Maestro sync" : "Sync Maestro")
+                    : key === "telecomMapping" ? (lang === "en" ? "Telecom mapping" : "Mapping Telecom")
                     : key === "avaToolsAudit" ? (lang === "en" ? "AVA tools audit" : "Audit outils AVA")
                     : key);
                 return (

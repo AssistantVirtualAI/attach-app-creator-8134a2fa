@@ -175,7 +175,7 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Demandez à AVA…"
+            placeholder={lang === "fr" ? "Demandez à AVA…" : "Ask AVA…"}
             rows={1}
             className="flex-1 min-h-[38px] max-h-24 resize-none bg-transparent py-2 outline-none"
             style={{ fontSize: 16, color: "var(--pp-text-primary)", caretColor: "var(--pp-brand-accent)", fontFamily: "Inter,sans-serif" }}

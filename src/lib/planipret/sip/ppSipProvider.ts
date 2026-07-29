@@ -256,6 +256,7 @@ class PpSipProvider {
         // the TCP/WSS connection and still close it before REGISTER 200 OK; if we
         // reset here every drop becomes attempt #1 forever.
         if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
+        if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
         // Do NOT ping here: sending an un-authenticated OPTIONS before the
         // REGISTER 200 OK makes NetSapiens close the socket with code 1001,
         // which produced the endless connect -> 1001 -> "Connection Error" loop.

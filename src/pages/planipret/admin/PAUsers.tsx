@@ -548,6 +548,8 @@ export default function PAUsers() {
   const [numbersError, setNumbersError] = useState<string | null>(null);
   const [numbersLoading, setNumbersLoading] = useState(false);
   const [importingAssignments, setImportingAssignments] = useState(false);
+  const [syncingDids, setSyncingDids] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const didInitialLoad = useRef(false);
 

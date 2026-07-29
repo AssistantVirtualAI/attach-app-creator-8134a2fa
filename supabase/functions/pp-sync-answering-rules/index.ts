@@ -186,8 +186,11 @@ Deno.serve(async (req) => {
     const mobileOnly = (aors: string[], ext: string) =>
       aors.filter((a) => a.toLowerCase().includes(`${String(ext).toLowerCase()}_mobile`));
 
-    const fetchDeviceAors = async (ext: string, domain: string): Promise<{ aors: string[]; source: string; status: number; registered_aors: string[] }> => {
-      const fallback = [`sip:${ext}_mobile@${domain}`];
+    const fetchDeviceAors = async (ext: string, domain: string): Promise<{ aors: string[]; source: string; status: number; registered_aors: string[]; all_aors: string[] }> => {
+      // Last-resort fallback: never leave the rule pointing at a single dead
+      // convention AOR — `<OwnDevices>` makes NS fork to whatever the user has
+      // actually registered instead of answering instantly with voicemail.
+      const fallback = [`sip:${ext}_mobile@${domain}`, "<OwnDevices>"];
       try {
         const res = await nsFetch(
           `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`,
@@ -196,32 +199,38 @@ Deno.serve(async (req) => {
         );
         const data: any = await readBody(res);
         const rows: any[] = Array.isArray(data) ? data : (data?.data ?? data?.items ?? []);
-        const provisioned = mobileOnly(rows.map((r: any) => aorFromRow(r, ext, domain)).filter(Boolean), ext);
-        const registered = mobileOnly(rows.filter(isRegisteredDevice).map((r: any) => aorFromRow(r, ext, domain)).filter(Boolean), ext);
-        const chosen = registered.length ? registered : provisioned;
+        const allAors = [...new Set(rows.map((r: any) => aorFromRow(r, ext, domain)).filter(Boolean))];
+        const provisioned = mobileOnly(allAors, ext);
+        const registeredAll = [...new Set(rows.filter(isRegisteredDevice).map((r: any) => aorFromRow(r, ext, domain)).filter(Boolean))];
+        const registered = mobileOnly(registeredAll, ext);
+
+        // Preference order:
+        //  1. registered mobile device  (best: rings the app instantly)
+        //  2. provisioned mobile device (app exists but is momentarily offline)
+        //  3. every registered device   (desk/web) — better than nothing
+        //  4. every provisioned device + <OwnDevices>
+        let chosen: string[] = [];
+        let source = "";
+        if (registered.length) { chosen = registered; source = "ns_registered_mobile_device"; }
+        else if (provisioned.length) { chosen = [...provisioned, "<OwnDevices>"]; source = "ns_provisioned_mobile_device_plus_owndevices"; }
+        else if (registeredAll.length) { chosen = [...registeredAll, "<OwnDevices>"]; source = "ns_registered_any_device"; }
+        else if (allAors.length) { chosen = [...allAors, "<OwnDevices>"]; source = "ns_provisioned_any_device"; }
+
         if (chosen.length) {
           return {
             aors: [...new Set(chosen)],
-            source: registered.length ? "ns_registered_mobile_device" : "ns_provisioned_mobile_device",
+            source,
             status: res.status,
-            registered_aors: [...new Set(registered)],
+            registered_aors: registered.length ? registered : registeredAll,
+            all_aors: allAors,
           };
         }
-        return {
-          aors: fallback,
-          source: "convention_fallback_mobile",
-          status: res.status,
-          registered_aors: [],
-        };
+        return { aors: fallback, source: "convention_fallback_mobile_plus_owndevices", status: res.status, registered_aors: [], all_aors: [] };
       } catch {
-        return {
-          aors: fallback,
-          source: "convention_fallback_mobile",
-          status: 0,
-          registered_aors: [],
-        };
+        return { aors: fallback, source: "convention_fallback_mobile_plus_owndevices", status: 0, registered_aors: [], all_aors: [] };
       }
     };
+
 
 
     const normalizeDigits = (value: unknown) => {

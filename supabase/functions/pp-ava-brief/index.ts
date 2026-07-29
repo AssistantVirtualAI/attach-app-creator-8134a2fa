@@ -3,7 +3,7 @@
 // and asks Lovable AI Gateway for a French, actionable summary.
 // Cached 30 min per (user, period) in `planipret_ai_insights`.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { generateText, Output } from "npm:ai";
+import { generateObject, generateText, Output } from "npm:ai";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
@@ -471,13 +471,13 @@ You must cover TWO sources: telephony (calls, texts, voicemails, leads) AND Micr
 
     let result: any;
     try {
-      const r = await generateText({
+      const r = await generateObject({
         model: gateway("google/gemini-3-flash-preview"),
         system,
         prompt: userPrompt,
-        experimental_output: Output.object({ schema: BriefSchema }),
+        schema: BriefSchema,
       });
-      let out: any = (r as any).experimental_output ?? (r as any).output ?? (r as any).text;
+      let out: any = (r as any).object ?? (r as any).experimental_output ?? (r as any).text;
       if (typeof out === "string") {
         const cleaned = out.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
         const start = cleaned.indexOf("{");

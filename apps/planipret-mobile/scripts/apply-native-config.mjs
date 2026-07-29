@@ -496,8 +496,10 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private var cseq = 1
     private let callIdReg = UUID().uuidString + "@planipret-ios"
     private let fromTag = String(Int(Date().timeIntervalSince1970 * 1000), radix: 16)
+    private var appActive = true
 
     public override func load() {
+      DispatchQueue.main.async { [weak self] in self?.appActive = UIApplication.shared.applicationState == .active }
       NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
       NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
       // Ask for notification permission so the incoming-call banner can ring.
@@ -509,34 +511,53 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       host = call.getString("host") ?? call.getString("domain") ?? ""; port = call.getInt("port") ?? 443; path = call.getString("path") ?? "/"
       login = call.getString("login") ?? call.getString("username") ?? call.getString("extension") ?? ""
       domain = call.getString("domain") ?? ""; displayName = call.getString("displayName") ?? login; password = call.getString("password") ?? ""
-      activateAudioSession()
-      // Only ONE SIP registration per AOR: while the app is in the foreground the
-      // JsSIP web layer owns the registration. Registering natively at the same
-      // time made NetSapiens close the JsSIP socket (1001), producing an endless
-      // disconnect/reconnect loop. Store the credentials and stay idle instead.
-      if isForeground() { releaseRegistration("foreground_js_owns") } else { connect(); scheduleRegister() }
-      call.resolve(snapshot(ok: true))
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { call.resolve(["ok": false, "status": "error", "reason": "plugin_released"]); return }
+        self.activateAudioSession()
+        // Only ONE SIP registration per AOR: while the app is in the foreground the
+        // JsSIP web layer owns the registration. Registering natively at the same
+        // time made NetSapiens close the JsSIP socket (1001), producing an endless
+        // disconnect/reconnect loop. Store the credentials and stay idle instead.
+        if self.isForeground() { self.releaseRegistration("foreground_js_owns") } else { self.connect(); self.scheduleRegister() }
+        call.resolve(self.snapshot(ok: true))
+      }
     }
-    @objc func stopSipService(_ call: CAPPluginCall) { releaseRegistration("stopped"); call.resolve(snapshot(ok: true)) }
-    @objc func getSipServiceStatus(_ call: CAPPluginCall) { call.resolve(snapshot(ok: true)) }
+    @objc func stopSipService(_ call: CAPPluginCall) { DispatchQueue.main.async { self.releaseRegistration("stopped"); call.resolve(self.snapshot(ok: true)) } }
+    @objc func getSipServiceStatus(_ call: CAPPluginCall) { DispatchQueue.main.async { call.resolve(self.snapshot(ok: true)) } }
     @objc func triggerReregister(_ call: CAPPluginCall) {
-      if isForeground() { releaseRegistration("foreground_js_owns") } else { sendRegister(challenge: nil); notifyListeners("sipReregisterRequested", data: ["reason": "manual"]) }
-      call.resolve(snapshot(ok: true))
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { call.resolve(["ok": false, "status": "error", "reason": "plugin_released"]); return }
+        if self.isForeground() { self.releaseRegistration("foreground_js_owns") } else { self.sendRegister(challenge: nil); self.notifyListeners("sipReregisterRequested", data: ["reason": "manual"]) }
+        call.resolve(self.snapshot(ok: true))
+      }
     }
     @objc func acknowledgeIncoming(_ call: CAPPluginCall) {
       UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["pp_incoming_call"])
       call.resolve(["ok": true])
     }
 
-    private func isForeground() -> Bool { UIApplication.shared.applicationState == .active }
+    private func isForeground() -> Bool {
+      if Thread.isMainThread {
+        appActive = UIApplication.shared.applicationState == .active
+        return appActive
+      }
+      var active = appActive
+      DispatchQueue.main.sync {
+        active = UIApplication.shared.applicationState == .active
+        self.appActive = active
+      }
+      return active
+    }
     private func releaseRegistration(_ why: String) {
+      if !Thread.isMainThread { DispatchQueue.main.async { [weak self] in self?.releaseRegistration(why) }; return }
       timer?.invalidate(); timer = nil
       socket?.cancel(with: .goingAway, reason: nil); socket = nil
       endBackgroundTask(); setStatus("idle", why)
     }
 
-    @objc private func onBackground() { beginBackgroundTask(); activateAudioSession(); connect(); scheduleRegister(); sendRegister(challenge: nil); setStatus("protected", "background_register_sent") }
+    @objc private func onBackground() { appActive = false; beginBackgroundTask(); activateAudioSession(); connect(); scheduleRegister(); sendRegister(challenge: nil); setStatus("protected", "background_register_sent") }
     @objc private func onForeground() {
+      appActive = true
       // Hand the AOR back to JsSIP and ask the web layer to re-REGISTER.
       releaseRegistration("foreground_js_owns")
       notifyListeners("sipReregisterRequested", data: ["reason": "enter_foreground"])

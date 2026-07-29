@@ -367,6 +367,9 @@ const DICT = {
     syncNs: "Sync NS-API",
     importing: "Importing...",
     importDid: "Import DID",
+    syncDidPbx: "Sync DID (PBX)",
+    didPbxSynced: (n: number, r: number) => `${n} DIDs synced from the PBX (${r} removed)`,
+
     addAdminBtn: "Add an admin",
     addBroker: "Add a broker",
     appReviewNotConfigured: "⚡ App Review user not configured",

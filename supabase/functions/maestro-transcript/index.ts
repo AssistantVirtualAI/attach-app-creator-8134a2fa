@@ -12,6 +12,7 @@ import {
   maestroFetch,
   pipelineLog,
   setPipelineStep,
+  telecomAuth,
   updateCallPipeline,
 } from "../_shared/maestro.ts";
 

@@ -8923,6 +8923,57 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_maestro_cdr_retries: {
+        Row: {
+          abandoned_at: string | null
+          attempts: number
+          call_id: string
+          created_at: string
+          id: string
+          last_error: string | null
+          last_reason: string | null
+          last_status: number | null
+          max_attempts: number
+          next_attempt_at: string
+          status: string
+          succeeded_at: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          abandoned_at?: string | null
+          attempts?: number
+          call_id: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_reason?: string | null
+          last_status?: number | null
+          max_attempts?: number
+          next_attempt_at?: string
+          status?: string
+          succeeded_at?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          abandoned_at?: string | null
+          attempts?: number
+          call_id?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_reason?: string | null
+          last_status?: number | null
+          max_attempts?: number
+          next_attempt_at?: string
+          status?: string
+          succeeded_at?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       planipret_maestro_clients: {
         Row: {
           cached_at: string

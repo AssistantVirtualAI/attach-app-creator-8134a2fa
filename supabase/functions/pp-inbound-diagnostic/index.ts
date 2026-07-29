@@ -171,6 +171,16 @@ Deno.serve(async (req) => {
     verdicts.push("HIDDEN_FORWARD");
     issues.push(`Renvoi actif au niveau utilisateur: ${activeForwards.join(", ")}`);
   }
+  const callScreeningKeys = [
+    "call-screening", "call-screening-enabled",
+    "phone-numbers-to-allow-enabled", "phone-numbers-to-reject-enabled",
+    "reject-anonymous-calls-enabled", "anonymous-call-rejection-enabled", "anonymous-call-rejection",
+  ];
+  const activeCallScreening = callScreeningKeys.filter((k) => yes(u?.[k]));
+  if (activeCallScreening.length) {
+    verdicts.unshift("CALL_SCREENING_BLOCKING");
+    issues.unshift(`Call screening / allow-reject list actif: ${activeCallScreening.join(", ")} — cause typique de “No Dial Rule” et voicemail instantané.`);
+  }
 
   // answering rules
   const ruleList = arrOf(rules.data).filter((r) => r && typeof r === "object");
@@ -378,6 +388,7 @@ Deno.serve(async (req) => {
     summary: {
       user_dnd: dndOn,
       user_forwards: activeForwards,
+      user_call_screening: activeCallScreening,
       rules_count: ruleList.length,
       active_timeframe: activeRule ? tfOf(activeRule) : null,
       sim_ring_enabled: simEnabled,

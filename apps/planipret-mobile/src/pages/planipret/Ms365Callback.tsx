@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { clearRememberedMs365RedirectUri, getRememberedMs365CodeVerifierAsync, getRememberedMs365RedirectUriAsync } from "@/lib/ms365OAuth";
 import { clearMs365Pending } from "@/lib/ms365Pending";
+import { clearMs365CallbackUrl, recoverMs365CallbackParams } from "@/lib/ms365CallbackStore";
 import { clearMicrosoftSignInIntentAsync, getMicrosoftSignInIntentAsync, getMicrosoftSignInNextAsync } from "@/lib/ms365AuthLogin";
 import { markOAuthCallbackCompleted } from "@/lib/deepLinkDebug";
 
@@ -172,7 +173,7 @@ export default function Ms365Callback() {
           if (!hydratedSession?.access_token) { await failWithGuard("Session Microsoft non finalisée — reconnectez-vous"); return; }
           clearRememberedMs365RedirectUri();
           markOAuthCallbackCompleted("ms365", window.location.search);
-          try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}
+          void clearMs365CallbackUrl();
           const next = await getMicrosoftSignInNextAsync("/mplanipret/home");
           await clearMicrosoftSignInIntentAsync();
           try { void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin()); } catch {}
@@ -198,7 +199,7 @@ export default function Ms365Callback() {
         }
         clearRememberedMs365RedirectUri();
         markOAuthCallbackCompleted("ms365", window.location.search);
-        try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}
+        void clearMs365CallbackUrl();
         supabase.functions.invoke("ms365-mail-webhook-setup", { body: {} }).then(({ error }) => {
           if (error) console.warn("ms365 webhook setup skipped", error.message);
         }).catch((err) => console.warn("ms365 webhook setup skipped", err?.message ?? err));

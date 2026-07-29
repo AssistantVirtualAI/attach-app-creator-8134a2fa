@@ -1339,6 +1339,16 @@ function patchIosInfoPlist() {
   console.log("[native-config] iOS URL schemes + background modes applied.");
 }
 
+function patchIosEntitlements() {
+  const file = path.join(appDir, "ios", "App", "App", "App.entitlements");
+  if (!fs.existsSync(path.dirname(file))) {
+    console.log("[native-config] iOS App.entitlements path not found — run npx cap add ios first.");
+    return;
+  }
+  writeIfChanged(file, IOS_ENTITLEMENTS);
+  console.log("[native-config] iOS PushKit VoIP entitlements applied.");
+}
+
 function patchAndroidManifest() {
   const file = path.join(appDir, "android", "app", "src", "main", "AndroidManifest.xml");
   if (!fs.existsSync(file)) {

@@ -42,6 +42,10 @@ const MAvaChat = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaChat")
 const MChangePassword = lazyWithRetry(() => import("./pages/planipret/mobile/MChangePassword"));
 
 const MAvaNotifications = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaNotifications"));
+const MDiagnostics = lazyWithRetry(() => import("./pages/planipret/mobile/MDiagnostics"));
+const MBuildDiagnostics = lazyWithRetry(() => import("./pages/planipret/mobile/MBuildDiagnostics"));
+const MKpiAudit = lazyWithRetry(() => import("./pages/planipret/mobile/MKpiAudit"));
+
 const MExtensionSync = lazyWithRetry(() => import("./pages/planipret/mobile/MExtensionSync"));
 const MSipDebug = lazyWithRetry(() => import("./pages/planipret/mobile/MSipDebug"));
 const MConnections = lazyWithRetry(() => import("./pages/planipret/mobile/MConnections"));

@@ -499,6 +499,12 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private let fromTag = String(Int(Date().timeIntervalSince1970 * 1000), radix: 16)
     private var appActive = true
     private var reconnectAttempts = 0
+    // Reconnection strategy pushed from JS (src/config/ppSipReconnect.json + VITE_PP_SIP_* env).
+    private var backoffMinMs: Double = 2000
+    private var backoffMaxMs: Double = 60000
+    private var backoffMaxAttempts: Int = 5
+    private var verifyDelayMs: Double = 8000
+    private var registerExpires: Int = 180
     private var reconnectPending = false
     private var pathMonitor: NWPathMonitor?
     private var networkUp = true
@@ -615,8 +621,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private func scheduleReconnect(_ why: String) {
       if reconnectPending { return }
       reconnectPending = true
-      reconnectAttempts = min(reconnectAttempts + 1, 5)
-      let delay = min(60.0, 2.0 * pow(2.0, Double(reconnectAttempts - 1)))
+      reconnectAttempts = min(reconnectAttempts + 1, max(1, backoffMaxAttempts))
+      let delay = min(backoffMaxMs / 1000.0, (backoffMinMs / 1000.0) * pow(2.0, Double(reconnectAttempts - 1)))
       NSLog("[PpSipKeepAlive] reconnect in %.0fs (%@)", delay, why)
       DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
         guard let self = self else { return }
@@ -625,7 +631,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         guard self.networkUp else { self.setStatus("reconnecting", "network_down"); self.scheduleReconnect("network_down"); return }
         self.connect()
         self.sendRegister(challenge: nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + self.verifyDelayMs / 1000.0) { [weak self] in
           guard let self = self else { return }
           if self.status != "registered" && !self.isForeground() { self.scheduleReconnect("still_unregistered") }
         }

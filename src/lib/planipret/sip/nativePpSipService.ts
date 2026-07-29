@@ -224,23 +224,13 @@ export async function triggerPlanipretNativeReregister(): Promise<void> {
 }
 
 export async function onPlanipretSipKeepAliveStatus(cb: (status: PpNativeSipStatus) => void): Promise<() => void> {
-  if (!isNative() || !NativePpSip.addListener) return () => undefined;
-  try {
-    const handle = await NativePpSip.addListener("sipServiceStatus", cb);
-    return () => { void handle?.remove?.(); };
-  } catch {
-    return () => undefined;
-  }
+  if (!isNative()) return () => undefined;
+  return addDedupedCapListener("PpSipKeepAlive", NativePpSip, "sipServiceStatus", (data: any) => cb(data as PpNativeSipStatus));
 }
 
 export async function onPlanipretNativeReregister(cb: () => void): Promise<() => void> {
-  if (!isNative() || !NativePpSip.addListener) return () => undefined;
-  try {
-    const handle = await NativePpSip.addListener("sipReregisterRequested", () => cb());
-    return () => { void handle?.remove?.(); };
-  } catch {
-    return () => undefined;
-  }
+  if (!isNative()) return () => undefined;
+  return addDedupedCapListener("PpSipKeepAlive", NativePpSip, "sipReregisterRequested", () => cb());
 }
 
 /** Fires whenever the native SIP socket sees an INVITE while the WebView is
@@ -248,14 +238,10 @@ export async function onPlanipretNativeReregister(cb: () => void): Promise<() =>
  *  the corresponding button on the Android full-screen notification (iOS uses
  *  the local notification banner + CallKit). Planiprêt-only. */
 export async function onPlanipretIncomingInvite(cb: (invite: PpIncomingInvite) => void): Promise<() => void> {
-  if (!isNative() || !NativePpSip.addListener) return () => undefined;
-  try {
-    const handle = await NativePpSip.addListener("sipIncomingInvite", (data: PpIncomingInvite) => cb(data ?? {}));
-    return () => { void handle?.remove?.(); };
-  } catch {
-    return () => undefined;
-  }
+  if (!isNative()) return () => undefined;
+  return addDedupedCapListener("PpSipKeepAlive", NativePpSip, "sipIncomingInvite", (data: any) => cb((data ?? {}) as PpIncomingInvite));
 }
+
 
 export async function acknowledgePlanipretIncoming(): Promise<void> {
   if (!isNative()) return;

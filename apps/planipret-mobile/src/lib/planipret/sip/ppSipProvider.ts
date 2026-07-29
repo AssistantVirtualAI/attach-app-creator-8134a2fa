@@ -236,8 +236,8 @@ class PpSipProvider {
       });
       ua.on("newRTCSession", (e: any) => this.attachSession(e.session, e.originator));
 
-      ua.start();
       this.ua = ua;
+      ua.start();
       this.installNetworkWatch();
     } catch (err: any) {
       const msg = String(err?.message || err);

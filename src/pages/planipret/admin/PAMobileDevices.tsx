@@ -373,6 +373,8 @@ export default function PAMobileDevices() {
       blockers: {} as Record<string, number>,
       raw: [] as any[],
       dry: [] as any[],
+      did_failures: [] as any[],
+      did_failure_reasons: {} as Record<string, number>,
     };
 
     // Step 0 — re-read the DID inventory from the PBX so the number→extension

@@ -34,6 +34,8 @@ const MStats = lazyWithRetry(() => import('@/pages/planipret/mobile/MStats'), 'M
 const MAvaChat = lazyWithRetry(() => import('@/pages/planipret/mobile/MAvaChat'), 'MAvaChat');
 const MAvaNotifications = lazyWithRetry(() => import('@/pages/planipret/mobile/MAvaNotifications'), 'MAvaNotifications');
 const MExtensionSync = lazyWithRetry(() => import('@/pages/planipret/mobile/MExtensionSync'), 'MExtensionSync');
+const MConnections = lazyWithRetry(() => import('@/pages/planipret/mobile/MConnections'), 'MConnections');
+const MMaestroSync = lazyWithRetry(() => import('@/pages/planipret/mobile/MMaestroSync'), 'MMaestroSync');
 const Ms365Callback = lazyWithRetry(() => import('@/pages/planipret/Ms365Callback'), 'Ms365Callback');
 const MaestroCallback = lazyWithRetry(() => import('@/pages/planipret/MaestroCallback'), 'MaestroCallback');
 const MMs365Diagnostics = lazyWithRetry(() => import('@/pages/planipret/mobile/MMs365Diagnostics'), 'MMs365Diagnostics');
@@ -145,6 +147,8 @@ export default function App() {
                     <Route path="ava" element={<MAvaChat />} />
                     <Route path="notifications" element={<MAvaNotifications />} />
                     <Route path="extension-sync" element={<MExtensionSync />} />
+                    <Route path="connections" element={<MConnections />} />
+                    <Route path="maestro-sync" element={<MMaestroSync />} />
                     <Route path="ms365-diagnostics" element={<MMs365Diagnostics />} />
                     <Route path="style-diagnostics" element={<MStyleDiagnostics />} />
                     <Route path="diagnostics" element={<MDiagnostics />} />

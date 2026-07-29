@@ -370,7 +370,7 @@ public class PpSipKeepAliveService extends Service {
     raw.setSoTimeout(90000);
     wsSocket = raw; wsIn = raw.getInputStream(); wsOut = raw.getOutputStream();
     String key = websocketKey();
-    String req = "GET " + (path == null || path.length() == 0 ? "/" : path) + " HTTP/1.1\r\nHost: " + host + ":" + port + "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: " + key + "\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: sip\r\nOrigin: https://" + host + "\r\n\r\n";
+    String req = "GET " + (path == null || path.length() == 0 ? "/" : path) + " HTTP/1.1\\r\\nHost: " + host + ":" + port + "\\r\\nUpgrade: websocket\\r\\nConnection: Upgrade\\r\\nSec-WebSocket-Key: " + key + "\\r\\nSec-WebSocket-Version: 13\\r\\nSec-WebSocket-Protocol: sip\\r\\nOrigin: https://" + host + "\\r\\n\\r\\n";
     wsOut.write(req.getBytes(StandardCharsets.UTF_8)); wsOut.flush();
     String headers = readHttpHeaders();
     if (!headers.contains(" 101 ")) { emitStatus("error", "ws_handshake_failed"); return; }
@@ -417,14 +417,14 @@ public class PpSipKeepAliveService extends Service {
     // Add a to-tag if none, so upstream proxies don't reject.
     String toWithTag = to.contains(";tag=") ? to : to + ";tag=" + Long.toHexString(System.nanoTime());
     StringBuilder r = new StringBuilder();
-    r.append("SIP/2.0 180 Ringing\r\n")
-     .append("Via: ").append(via).append("\r\n")
-     .append("From: ").append(from).append("\r\n")
-     .append("To: ").append(toWithTag).append("\r\n")
-     .append("Call-ID: ").append(cid).append("\r\n")
-     .append("CSeq: ").append(cseqHeader).append("\r\n")
-     .append("User-Agent: Planipret Native KeepAlive\r\n")
-     .append("Content-Length: 0\r\n\r\n");
+    r.append("SIP/2.0 180 Ringing\\r\\n")
+     .append("Via: ").append(via).append("\\r\\n")
+     .append("From: ").append(from).append("\\r\\n")
+     .append("To: ").append(toWithTag).append("\\r\\n")
+     .append("Call-ID: ").append(cid).append("\\r\\n")
+     .append("CSeq: ").append(cseqHeader).append("\\r\\n")
+     .append("User-Agent: Planipret Native KeepAlive\\r\\n")
+     .append("Content-Length: 0\\r\\n\\r\\n");
     sendFrame(r.toString());
   }
 
@@ -436,28 +436,28 @@ public class PpSipKeepAliveService extends Service {
     String branch = "z9hG4bK" + UUID.randomUUID().toString().replace("-", "");
     String contact = "<sip:" + login + "@" + UUID.randomUUID().toString().replace("-", "") + ".invalid;transport=wss>";
     StringBuilder sip = new StringBuilder();
-    sip.append("REGISTER sip:").append(domain).append(" SIP/2.0\r\n");
-    sip.append("Via: SIP/2.0/WSS planipret-mobile.invalid;branch=").append(branch).append("\r\n");
-    sip.append("Max-Forwards: 70\r\n");
-    sip.append("To: <sip:").append(login).append("@").append(domain).append(">\r\n");
-    sip.append("From: \"").append(display == null ? login : display.replace("\"", "")).append("\" <sip:").append(login).append("@").append(domain).append(">;tag=").append(fromTag).append("\r\n");
-    sip.append("Call-ID: ").append(callId).append("\r\n");
-    sip.append("CSeq: ").append(seq).append(" REGISTER\r\n");
-    sip.append("Contact: ").append(contact).append(";expires=").append(registerExpires).append("\r\nExpires: ").append(registerExpires).append("\r\nUser-Agent: Planipret Native KeepAlive\r\nSupported: outbound,path,gruu\r\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\r\n");
-    if (challenge != null && password != null && password.length() > 0) sip.append("Authorization: ").append(digestAuth(challenge, login, password, domain)).append("\r\n");
-    sip.append("Content-Length: 0\r\n\r\n");
+    sip.append("REGISTER sip:").append(domain).append(" SIP/2.0\\r\\n");
+    sip.append("Via: SIP/2.0/WSS planipret-mobile.invalid;branch=").append(branch).append("\\r\\n");
+    sip.append("Max-Forwards: 70\\r\\n");
+    sip.append("To: <sip:").append(login).append("@").append(domain).append(">\\r\\n");
+    sip.append("From: \\"").append(display == null ? login : display.replace("\\"", "")).append("\\" <sip:").append(login).append("@").append(domain).append(">;tag=").append(fromTag).append("\\r\\n");
+    sip.append("Call-ID: ").append(callId).append("\\r\\n");
+    sip.append("CSeq: ").append(seq).append(" REGISTER\\r\\n");
+    sip.append("Contact: ").append(contact).append(";expires=").append(registerExpires).append("\\r\\nExpires: ").append(registerExpires).append("\\r\\nUser-Agent: Planipret Native KeepAlive\\r\\nSupported: outbound,path,gruu\\r\\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\\r\\n");
+    if (challenge != null && password != null && password.length() > 0) sip.append("Authorization: ").append(digestAuth(challenge, login, password, domain)).append("\\r\\n");
+    sip.append("Content-Length: 0\\r\\n\\r\\n");
     sendFrame(sip.toString());
     emitStatus("connecting", challenge == null ? "register_sent" : "register_auth_sent");
   }
 
-  private String digestAuth(String challenge, String user, String pass, String domain) throws Exception { Map<String,String> m = parseDigest(challenge); String realm = m.containsKey("realm") ? m.get("realm") : domain, nonce = m.get("nonce"), qop = m.get("qop"), opaque = m.get("opaque"), uri = "sip:" + domain, nc = "00000001", cnonce = Long.toHexString(System.nanoTime()); String ha1 = md5(user + ":" + realm + ":" + pass), ha2 = md5("REGISTER:" + uri); String resp = qop != null && qop.contains("auth") ? md5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":auth:" + ha2) : md5(ha1 + ":" + nonce + ":" + ha2); StringBuilder a = new StringBuilder("Digest username=\"").append(user).append("\", realm=\"").append(realm).append("\", nonce=\"").append(nonce).append("\", uri=\"").append(uri).append("\", response=\"").append(resp).append("\", algorithm=MD5"); if (qop != null && qop.contains("auth")) a.append(", qop=auth, nc=").append(nc).append(", cnonce=\"").append(cnonce).append("\""); if (opaque != null) a.append(", opaque=\"").append(opaque).append("\""); return a.toString(); }
-  private Map<String,String> parseDigest(String h) { Map<String,String> out = new HashMap<>(); String s = h.replaceFirst("(?i)^Digest\\\\s+", ""); for (String part : s.split(",")) { int i = part.indexOf('='); if (i <= 0) continue; String k = part.substring(0, i).trim(); String v = part.substring(i + 1).trim(); if (v.startsWith("\"") && v.endsWith("\"")) v = v.substring(1, v.length() - 1); out.put(k, v); } return out; }
+  private String digestAuth(String challenge, String user, String pass, String domain) throws Exception { Map<String,String> m = parseDigest(challenge); String realm = m.containsKey("realm") ? m.get("realm") : domain, nonce = m.get("nonce"), qop = m.get("qop"), opaque = m.get("opaque"), uri = "sip:" + domain, nc = "00000001", cnonce = Long.toHexString(System.nanoTime()); String ha1 = md5(user + ":" + realm + ":" + pass), ha2 = md5("REGISTER:" + uri); String resp = qop != null && qop.contains("auth") ? md5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":auth:" + ha2) : md5(ha1 + ":" + nonce + ":" + ha2); StringBuilder a = new StringBuilder("Digest username=\\"").append(user).append("\\", realm=\\"").append(realm).append("\\", nonce=\\"").append(nonce).append("\\", uri=\\"").append(uri).append("\\", response=\\"").append(resp).append("\\", algorithm=MD5"); if (qop != null && qop.contains("auth")) a.append(", qop=auth, nc=").append(nc).append(", cnonce=\\"").append(cnonce).append("\\""); if (opaque != null) a.append(", opaque=\\"").append(opaque).append("\\""); return a.toString(); }
+  private Map<String,String> parseDigest(String h) { Map<String,String> out = new HashMap<>(); String s = h.replaceFirst("(?i)^Digest\\\\s+", ""); for (String part : s.split(",")) { int i = part.indexOf('='); if (i <= 0) continue; String k = part.substring(0, i).trim(); String v = part.substring(i + 1).trim(); if (v.startsWith("\\"") && v.endsWith("\\"")) v = v.substring(1, v.length() - 1); out.put(k, v); } return out; }
   private String header(String msg, String name) { for (String line : msg.split("\\r?\\n")) if (line.toLowerCase(Locale.US).startsWith(name.toLowerCase(Locale.US) + ":")) return line.substring(name.length() + 1).trim(); return null; }
-  private String parseDisplay(String header) { if (header == null) return null; int lt = header.indexOf('<'); if (lt > 0) { String d = header.substring(0, lt).trim(); if (d.startsWith("\"") && d.endsWith("\"")) d = d.substring(1, d.length() - 1); return d.length() == 0 ? null : d; } return null; }
+  private String parseDisplay(String header) { if (header == null) return null; int lt = header.indexOf('<'); if (lt > 0) { String d = header.substring(0, lt).trim(); if (d.startsWith("\\"") && d.endsWith("\\"")) d = d.substring(1, d.length() - 1); return d.length() == 0 ? null : d; } return null; }
   private String parseUser(String header) { if (header == null) return null; int lt = header.indexOf('<'); String uri = lt >= 0 ? header.substring(lt + 1, Math.max(lt + 1, header.indexOf('>', lt))) : header; if (uri.startsWith("sip:")) uri = uri.substring(4); else if (uri.startsWith("sips:")) uri = uri.substring(5); int at = uri.indexOf('@'); if (at > 0) uri = uri.substring(0, at); int semi = uri.indexOf(';'); if (semi > 0) uri = uri.substring(0, semi); return uri; }
   private String md5(String s) throws Exception { MessageDigest md = MessageDigest.getInstance("MD5"); byte[] b = md.digest(s.getBytes(StandardCharsets.UTF_8)); StringBuilder sb = new StringBuilder(); for (byte x : b) sb.append(String.format(Locale.US, "%02x", x & 0xff)); return sb.toString(); }
   private String websocketKey() { byte[] b = new byte[16]; new SecureRandom().nextBytes(b); return Base64.encodeToString(b, Base64.NO_WRAP); }
-  private String readHttpHeaders() throws IOException { ByteArrayOutputStream b = new ByteArrayOutputStream(); int prev3 = -1, prev2 = -1, prev1 = -1, cur; while ((cur = wsIn.read()) != -1) { b.write(cur); if (prev3 == '\r' && prev2 == '\n' && prev1 == '\r' && cur == '\n') break; prev3 = prev2; prev2 = prev1; prev1 = cur; } return b.toString("UTF-8"); }
+  private String readHttpHeaders() throws IOException { ByteArrayOutputStream b = new ByteArrayOutputStream(); int prev3 = -1, prev2 = -1, prev1 = -1, cur; while ((cur = wsIn.read()) != -1) { b.write(cur); if (prev3 == '\\r' && prev2 == '\\n' && prev1 == '\\r' && cur == '\\n') break; prev3 = prev2; prev2 = prev1; prev1 = cur; } return b.toString("UTF-8"); }
   private void sendFrame(String text) throws IOException { if (wsOut == null) throw new IOException("no_ws"); byte[] payload = text.getBytes(StandardCharsets.UTF_8); ByteArrayOutputStream f = new ByteArrayOutputStream(); f.write(0x81); int len = payload.length; if (len < 126) f.write(0x80 | len); else if (len <= 65535) { f.write(0x80 | 126); f.write((len >> 8) & 255); f.write(len & 255); } else throw new IOException("frame_too_large"); byte[] mask = new byte[4]; new SecureRandom().nextBytes(mask); f.write(mask); for (int i = 0; i < payload.length; i++) f.write(payload[i] ^ mask[i % 4]); wsOut.write(f.toByteArray()); wsOut.flush(); }
   private String readFrame() throws IOException { int b1 = wsIn.read(); if (b1 < 0) return null; int b2 = wsIn.read(); if (b2 < 0) return null; int opcode = b1 & 0x0f; boolean masked = (b2 & 0x80) != 0; long len = b2 & 0x7f; if (len == 126) len = (wsIn.read() << 8) | wsIn.read(); else if (len == 127) { len = 0; for (int i = 0; i < 8; i++) len = (len << 8) | wsIn.read(); } byte[] mask = new byte[4]; if (masked) readFully(mask); byte[] payload = new byte[(int)len]; readFully(payload); if (masked) for (int i = 0; i < payload.length; i++) payload[i] = (byte)(payload[i] ^ mask[i % 4]); if (opcode == 8) return null; if (opcode == 9) { sendPong(payload); return ""; } if (opcode != 1) return ""; return new String(payload, StandardCharsets.UTF_8); }
   private void readFully(byte[] b) throws IOException { int off = 0; while (off < b.length) { int r = wsIn.read(b, off, b.length - off); if (r < 0) throw new EOFException(); off += r; } }
@@ -812,13 +812,13 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       guard let sock = socket, status == "registered", !domain.isEmpty else { return }
       let seq = cseq; cseq += 1
       let branch = "z9hG4bK" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
-      var sip = "OPTIONS sip:" + domain + " SIP/2.0\r\n"
-      sip += "Via: SIP/2.0/WSS planipret-ios.invalid;branch=" + branch + "\r\n"
-      sip += "From: <sip:" + login + "@" + domain + ">;tag=" + fromTag + "\r\n"
-      sip += "To: <sip:" + domain + ">\r\n"
-      sip += "Call-ID: " + UUID().uuidString + "@planipret-ios\r\n"
-      sip += "CSeq: " + String(seq) + " OPTIONS\r\n"
-      sip += "Max-Forwards: 70\r\nUser-Agent: Planipret iOS KeepAlive\r\nContent-Length: 0\r\n\r\n"
+      var sip = "OPTIONS sip:" + domain + " SIP/2.0\\r\\n"
+      sip += "Via: SIP/2.0/WSS planipret-ios.invalid;branch=" + branch + "\\r\\n"
+      sip += "From: <sip:" + login + "@" + domain + ">;tag=" + fromTag + "\\r\\n"
+      sip += "To: <sip:" + domain + ">\\r\\n"
+      sip += "Call-ID: " + UUID().uuidString + "@planipret-ios\\r\\n"
+      sip += "CSeq: " + String(seq) + " OPTIONS\\r\\n"
+      sip += "Max-Forwards: 70\\r\\nUser-Agent: Planipret iOS KeepAlive\\r\\nContent-Length: 0\\r\\n\\r\\n"
       sock.send(.string(sip)) { err in
         if let e = err { NSLog("[PpSipKeepAlive] OPTIONS ping failed: %@", String(describing: e)) }
       }

@@ -716,6 +716,25 @@ Deno.serve(async (req) => {
       }
       const raw_pbx_responses = (all as any[]).flatMap((r) => r.raw_pbx ?? []).slice(0, 50);
 
+      // Surface why the DID repair step failed (was hidden inside per-broker results).
+      const did_failures = (all as any[])
+        .filter((r) => (r.did_repair?.failures?.length ?? 0) > 0)
+        .slice(0, 25)
+        .map((r) => ({
+          extension: r.extension,
+          email: r.email,
+          attempted: r.did_repair?.attempted ?? 0,
+          verified: r.did_repair?.verified ?? 0,
+          failures: (r.did_repair?.failures ?? []).slice(0, 5),
+        }));
+      const did_failure_reasons: Record<string, number> = {};
+      for (const b of did_failures) {
+        for (const f of b.failures) {
+          const key = String(f?.reason ?? "unknown");
+          did_failure_reasons[key] = (did_failure_reasons[key] ?? 0) + 1;
+        }
+      }
+
       return json({
         success: failed === 0,
         offset,

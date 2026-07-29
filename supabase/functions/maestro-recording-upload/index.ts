@@ -12,6 +12,7 @@ import {
   maestroSyncLog,
   pipelineLog,
   setPipelineStep,
+  summarizeMaestroFailure,
 } from "../_shared/maestro.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -160,7 +161,30 @@ Deno.serve(async (req) => {
     }
 
     const auth = await getBrokerAuth(admin, call.user_id);
-    const mId = call.maestro_call_id ?? call.ns_call_id ?? call.id;
+    const mId = call.maestro_call_id;
+    if (!mId) {
+      const ms = Date.now() - t0;
+      await setPipelineStep(admin, call_id, "recording" as any, "error", { reason: "maestro_call_id_missing" });
+      await pipelineLog(admin, {
+        call_id, user_id: call.user_id, step: "recording_upload", status: "skipped",
+        duration_ms: ms, error_message: "maestro_call_id_missing",
+      });
+      await maestroSyncLog(admin, {
+        user_id: call.user_id,
+        action: "recording_upload.skipped.no_maestro_call_id",
+        endpoint: "/api/v1/calls/{maestro_call_id}/recording",
+        request_body: { call_id, ns_call_id: call.ns_call_id ?? null, has_audio: true },
+        response_status: 424,
+        response_body: { error: "maestro_call_id_missing", detail: "CDR sync must succeed before recording upload can be attached to a Maestro call." },
+        duration_ms: ms,
+        success: false,
+      });
+      await admin.from("planipret_recording_uploads").upsert({
+        call_id, user_id: call.user_id, status: "failed",
+        error_message: "maestro_call_id_missing", updated_at: new Date().toISOString(),
+      }, { onConflict: "call_id" });
+      return json({ success: false, status: 424, error: "maestro_call_id_missing", detail: "CDR sync must succeed before recording upload." }, 200);
+    }
     const ext = audio.contentType.includes("wav") ? "wav" : "mp3";
 
     const form = new FormData();
@@ -194,7 +218,7 @@ Deno.serve(async (req) => {
       user_id: call.user_id,
       action: "recording_upload",
       endpoint,
-      request_body: { bytes: audio.bytes.byteLength, content_type: audio.contentType },
+      request_body: { call_id, maestro_call_id: mId, bytes: audio.bytes.byteLength, content_type: audio.contentType },
       response_status: res.status,
       response_body: data,
       duration_ms: ms,
@@ -202,17 +226,18 @@ Deno.serve(async (req) => {
     });
 
     if (!res.ok) {
-      console.error(`maestro recording upload failed [${res.status}]: ${text.slice(0, 500)}`);
-      await setPipelineStep(admin, call_id, "recording" as any, "error", { status: res.status });
+      const failure = summarizeMaestroFailure(res.status, data);
+      console.error(`maestro recording upload failed [${res.status}]: ${failure.error} ${text.slice(0, 300)}`);
+      await setPipelineStep(admin, call_id, "recording" as any, "error", { status: res.status, error: failure.error });
       await pipelineLog(admin, {
         call_id, user_id: call.user_id, step: "recording_upload", status: "error",
-        duration_ms: ms, error_message: `status_${res.status}`,
+        duration_ms: ms, error_message: failure.error,
       });
       await admin.from("planipret_recording_uploads").upsert({
         call_id, user_id: call.user_id, status: "failed",
-        error_message: `status_${res.status}`, updated_at: new Date().toISOString(),
+        error_message: failure.error, updated_at: new Date().toISOString(),
       }, { onConflict: "call_id" });
-      return json({ success: false, status: res.status, details: data }, 200);
+      return json({ success: false, status: res.status, error: failure.error, detail: failure.detail, permanent: failure.permanent, details: data }, 200);
     }
 
     await admin

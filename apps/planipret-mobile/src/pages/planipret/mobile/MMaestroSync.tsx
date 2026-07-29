@@ -41,6 +41,11 @@ function matchesFilter(row: LogRow, filter: string) {
   }
 }
 
+function retryErrorMessage(data: any, fallback: string) {
+  const result = data?.result ?? data;
+  return result?.detail ?? result?.error ?? data?.error ?? fallback;
+}
+
 export default function MMaestroSync() {
   const nav = useNavigate();
   const [rows, setRows] = useState<LogRow[]>([]);
@@ -72,7 +77,9 @@ export default function MMaestroSync() {
         headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
       });
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if ((data as any)?.success === false || (data as any)?.error) {
+        throw new Error(retryErrorMessage(data, "Relance refusée"));
+      }
       toast.success(`Relancé via ${(data as any)?.invoked ?? "Maestro"}`);
       await load();
     } catch (e: any) {

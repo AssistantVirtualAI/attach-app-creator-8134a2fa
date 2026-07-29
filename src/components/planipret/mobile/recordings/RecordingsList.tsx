@@ -1333,6 +1333,6 @@ function MaestroSyncSection({ call, onUpdated }: { call: RecordingCall; onUpdate
 
 /** Erreurs Maestro non-récupérables : inutile de relancer en boucle. */
 function isPermanentMaestroError(d: any): boolean {
-  const txt = `${d?.error ?? ""} ${JSON.stringify(d?.steps ?? {})}`.toLowerCase();
-  return /maestro_not_configured|not_configured|unauthorized|forbidden|404|call_not_found|endpoint/.test(txt);
+  const txt = `${d?.error ?? ""} ${d?.detail ?? ""} ${JSON.stringify(d?.steps ?? {})}`.toLowerCase();
+  return /maestro_not_configured|not_configured|unauthorized|forbidden|404|call_not_found|endpoint|maestro_call_id_missing/.test(txt);
 }

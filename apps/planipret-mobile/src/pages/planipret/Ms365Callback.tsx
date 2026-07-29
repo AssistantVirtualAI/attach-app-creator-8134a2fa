@@ -77,6 +77,29 @@ export default function Ms365Callback() {
     navigate("/mplanipret/more", { replace: true });
   };
 
+  // Protection: if a Supabase session already exists (magic-link verified, or the
+  // code was consumed by a previous delivery of the same deep link), never show an
+  // error — land the user on the home page.
+  const homeIfSignedIn = async (): Promise<boolean> => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.access_token) {
+        clearRememberedMs365RedirectUri();
+        await clearMicrosoftSignInIntentAsync();
+        setStatus("ok");
+        navigate("/mplanipret/home", { replace: true });
+        return true;
+      }
+    } catch {}
+    return false;
+  };
+
+  const failWithGuard = async (message: string) => {
+    if (await homeIfSignedIn()) return;
+    setStatus("error");
+    setError(message);
+  };
+
   useEffect(() => {
     if (currentCode && currentCode !== lastCodeRef.current) {
       lastCodeRef.current = currentCode;
@@ -101,11 +124,13 @@ export default function Ms365Callback() {
         clearMs365Pending();
         const code = params.get("code");
         const err = params.get("error_description") ?? params.get("error");
-        if (err) { setStatus("error"); setError(err); return; }
+        if (err) { await failWithGuard(err); return; }
         if (!code) { navigate("/mplanipret/home", { replace: true }); return; }
-        const redirect_uri = await getRememberedMs365RedirectUri();
+        // Async getters also read native Preferences — sessionStorage/localStorage
+        // can be empty when the WebView is recreated by the OAuth deep link.
+        const redirect_uri = await getRememberedMs365RedirectUriAsync();
         const state = params.get("state");
-        const code_verifier = await getRememberedMs365CodeVerifier(state);
+        const code_verifier = await getRememberedMs365CodeVerifierAsync(state);
         if (!code_verifier) {
           navigate("/mplanipret/home", { replace: true });
           return;
@@ -115,13 +140,13 @@ export default function Ms365Callback() {
           const { data, errMsg } = await invokeAndParse("pp-ms-auth-callback", { code, redirect_uri, code_verifier });
           if (errMsg || !(data as any)?.success) {
             console.error("ms365 auth failed", { data, errMsg, redirect_uri });
-            setStatus("error"); setError(errMsg ?? (data as any)?.error ?? "Échec OAuth");
+            await failWithGuard(errMsg ?? (data as any)?.error ?? "Échec OAuth");
             return;
           }
           const verify = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: (data as any).token_hash });
-          if (verify.error) { setStatus("error"); setError(verify.error.message); return; }
+          if (verify.error) { await failWithGuard(verify.error.message); return; }
           const hydratedSession = verify.data?.session ?? await getSessionWithRetry();
-          if (!hydratedSession?.access_token) { setStatus("error"); setError("Session Microsoft non finalisée — reconnectez-vous"); return; }
+          if (!hydratedSession?.access_token) { await failWithGuard("Session Microsoft non finalisée — reconnectez-vous"); return; }
           clearRememberedMs365RedirectUri();
           markOAuthCallbackCompleted("ms365", window.location.search);
           try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}

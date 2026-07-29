@@ -241,7 +241,7 @@ export function useMplanipretSoftphone(enabled = true) {
         };
         if (sipInitInProgress.current) return;
         sipInitInProgress.current = true;
-        void startPlanipretSipKeepAlive(sipConfig).then((s) => { if (s && !cancelled) setNativeStatus(s); });
+        startPlanipretSipKeepAlive(sipConfig).then((s) => { if (s && !cancelled) setNativeStatus(s); }).catch(() => undefined);
         try { await ppSipProvider.init(sipConfig); }
         finally { sipInitInProgress.current = false; }
         void getPlanipretVoipPushToken().then((t) => {
@@ -380,9 +380,9 @@ export function useMplanipretSoftphone(enabled = true) {
   useEffect(() => {
     if (!enabled || !user) return;
     if (softphoneOwnerId !== ownerIdRef.current) return;
-    let disconnectedSince = 0;
     let softTimer: ReturnType<typeof setTimeout> | null = null;
     let hardTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastWatchdogAt = 0;
     const clearTimers = () => {
       if (softTimer) { clearTimeout(softTimer); softTimer = null; }
       if (hardTimer) { clearTimeout(hardTimer); hardTimer = null; }
@@ -390,7 +390,7 @@ export function useMplanipretSoftphone(enabled = true) {
     const evaluate = () => {
       const st = ppSipProvider.getSnapshot().status;
       if (st === "registered" || st === "connected") {
-        disconnectedSince = 0;
+        lastWatchdogAt = 0;
         clearTimers();
         return;
       }
@@ -398,7 +398,8 @@ export function useMplanipretSoftphone(enabled = true) {
       // the UA while it is still "connecting" was the cause of the endless
       // "registration failed: Connection Error" loop.
       if (st === "connecting") return;
-      if (!disconnectedSince) disconnectedSince = Date.now();
+      if (Date.now() - lastWatchdogAt < 20_000) return;
+      lastWatchdogAt = Date.now();
       clearTimers();
       softTimer = setTimeout(() => {
         const s = ppSipProvider.getSnapshot().status;
@@ -409,7 +410,7 @@ export function useMplanipretSoftphone(enabled = true) {
       hardTimer = setTimeout(() => {
         const s = ppSipProvider.getSnapshot().status;
         if (s !== "registered" && s !== "connected") {
-          try { window.dispatchEvent(new CustomEvent("pp:sip-force-reregister", { detail: { force: true, reason: "watchdog_hard_timeout" } })); } catch {}
+          try { ppSipProvider.forceReregister(); } catch {}
         }
       }, 45_000);
     };

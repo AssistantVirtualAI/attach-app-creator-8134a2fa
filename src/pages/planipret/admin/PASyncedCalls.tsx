@@ -5,8 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RefreshCw, Radio, FileText, Sparkles, BarChart3, CheckCircle2, Clock, Search } from "lucide-react";
+import { RefreshCw, Radio, FileText, Sparkles, BarChart3, CheckCircle2, Clock, Search, Link2 } from "lucide-react";
+import { toast } from "sonner";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+
 
 const DICT = {
   fr: {

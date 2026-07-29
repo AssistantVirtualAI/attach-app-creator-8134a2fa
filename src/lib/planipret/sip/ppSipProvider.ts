@@ -61,7 +61,28 @@ export interface PpSipReconnectMetrics {
   totalAttempts: number;
   /** Count of attempts that would have been scheduled below the floor (source of a 1000ms). */
   subThresholdHits: number;
+  /** Total WebSocket interfaces instantiated in this session (must stay 1 per UA). */
+  socketsCreated: number;
+  /** Number of times the UA was fully rebuilt by the watchdog. */
+  uaRebuilds: number;
+  /** Which mechanism currently owns recovery: JsSIP's connection_recovery or our watchdog. */
+  recoveryOwner: PpSipRecoveryOwner;
+  /** Rolling log of every recovery decision (most recent last, capped). */
+  history: PpSipReconnectEvent[];
 }
+
+export type PpSipRecoveryOwner = "none" | "jssip" | "watchdog";
+
+export interface PpSipReconnectEvent {
+  at: number;
+  phase: "defer" | "schedule" | "attempt" | "socket" | "recovered" | "blocked";
+  owner: PpSipRecoveryOwner;
+  attempt: number;
+  delayMs: number;
+  source: PpSipReconnectMetrics["delaySource"];
+  reason: string;
+}
+
 
 
 let sipParserGuardInstalled = false;

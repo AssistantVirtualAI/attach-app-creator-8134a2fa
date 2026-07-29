@@ -95,6 +95,28 @@ export default function PASyncedCalls() {
   const t = DICT[(lang === "en" ? "en" : "fr") as "fr" | "en"];
   const [rows, setRows] = useState<CallRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [linking, setLinking] = useState(false);
+
+  const linkBrokers = useCallback(async () => {
+    setLinking(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-maestro-broker-backfill", {
+        body: { only_missing: true, max_id: 800 },
+      });
+      if (error) throw error;
+      const d = data as { matched?: number; updated?: number; unmatched?: number };
+      toast.success(
+        lang === "fr"
+          ? `${d?.updated ?? 0} courtier(s) liés à Maestro — ${d?.unmatched ?? 0} sans correspondance`
+          : `${d?.updated ?? 0} broker(s) linked to Maestro — ${d?.unmatched ?? 0} unmatched`,
+      );
+    } catch (e) {
+      toast.error((e as Error)?.message ?? "Error");
+    } finally {
+      setLinking(false);
+    }
+  }, [lang]);
+
   const [liveOk, setLiveOk] = useState(false);
   const [q, setQ] = useState("");
   const [onlySynced, setOnlySynced] = useState(true);

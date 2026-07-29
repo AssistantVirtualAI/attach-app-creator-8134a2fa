@@ -1045,6 +1045,8 @@ export const MP_DICT = {
     },
   },
   en: {
+    screens: SCREENS_EN,
+
     common: {
       loading: "Loading…",
       retry: "Retry",

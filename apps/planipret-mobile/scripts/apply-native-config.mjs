@@ -840,15 +840,22 @@ function stripObsoleteIosFallbackFromHtml(html) {
   );
   next = next.replace(/\n\s*window\.__PP_SHOW_BOOT_FALLBACK__ = showBootFallback;\s*/g, "\n");
   next = next.replace(/\n\s*<div id="pp-native-boot-fallback"[\s\S]*?\n\s*<\/body>/, "\n  </body>");
+  next = next.replace(/const t=document\.getElementById\("pp-native-boot-fallback"\);t&&\(t\.style\.display="none"\)/g, "");
   return next;
 }
 
 function patchCopiedWebBundles() {
-  for (const rel of [
+  const rels = [
     "dist/index.html",
     "ios/App/App/public/index.html",
     "android/app/src/main/assets/public/index.html",
-  ]) {
+  ];
+  for (const assetsRel of ["dist/assets", "ios/App/App/public/assets", "android/app/src/main/assets/public/assets"]) {
+    const dir = path.join(appDir, assetsRel);
+    if (!fs.existsSync(dir)) continue;
+    for (const name of fs.readdirSync(dir)) if (name.endsWith(".js")) rels.push(path.join(assetsRel, name));
+  }
+  for (const rel of rels) {
     const file = path.join(appDir, rel);
     if (!fs.existsSync(file)) continue;
     const before = fs.readFileSync(file, "utf8");

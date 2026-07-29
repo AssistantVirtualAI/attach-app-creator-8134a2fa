@@ -4,7 +4,7 @@
  * The fallback was a diagnostic overlay, but once copied into the Capacitor
  * bundle it can survive rebuilds and create an endless “Relancer” loop.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +15,13 @@ const files = [
   join(root, "android", "app", "src", "main", "assets", "public", "index.html"),
 ];
 
+for (const dir of [join(root, "dist", "assets"), join(root, "ios", "App", "App", "public", "assets"), join(root, "android", "app", "src", "main", "assets", "public", "assets")]) {
+  if (!existsSync(dir)) continue;
+  for (const name of readdirSync(dir)) {
+    if (name.endsWith(".js")) files.push(join(dir, name));
+  }
+}
+
 function strip(html) {
   let next = html;
   next = next.replace(
@@ -23,6 +30,7 @@ function strip(html) {
   );
   next = next.replace(/\n\s*window\.__PP_SHOW_BOOT_FALLBACK__ = showBootFallback;\s*/g, "\n");
   next = next.replace(/\n\s*<div id="pp-native-boot-fallback"[\s\S]*?\n\s*<\/body>/, "\n  </body>");
+  next = next.replace(/const t=document\.getElementById\("pp-native-boot-fallback"\);t&&\(t\.style\.display="none"\)/g, "");
   return next;
 }
 

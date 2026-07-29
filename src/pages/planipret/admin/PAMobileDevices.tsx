@@ -361,7 +361,20 @@ export default function PAMobileDevices() {
     let offset = 0;
     let ok = 0;
     let total = 0;
+    let routingOk = 0;
     let lastError: string | null = null;
+
+    // Step 0 — re-read the DID inventory from the PBX so the number→extension
+    // map used by the repair step is the real one (the original CSV import was
+    // partially mangled).
+    let didRefresh: any = null;
+    try {
+      const { data } = await supabase.functions.invoke("pp-sync-answering-rules", {
+        body: { refresh_dids: true },
+      });
+      didRefresh = data;
+    } catch { /* non-blocking */ }
+
     for (let page = 0; page < 20; page += 1) {
       const { data, error } = await supabase.functions.invoke("pp-sync-answering-rules", {
         body: { bulk: true, offset, limit: 50, batch_size: 10, include_results: false },
@@ -369,15 +382,22 @@ export default function PAMobileDevices() {
       if (error) { lastError = error.message; break; }
       ok += Number((data as any)?.succeeded ?? 0);
       total += Number((data as any)?.processed ?? 0);
+      routingOk += Number((data as any)?.routing_ok_count ?? 0);
       const next = (data as any)?.next_offset;
       if (next === null || next === undefined) break;
       offset = Number(next);
     }
     setSyncingRules(false);
     if (lastError && total === 0) { toast.error(t.toastSyncRulesError, { description: lastError }); return; }
-    toast.success(t.toastSyncRulesSuccess(ok, total));
+    const didPart = didRefresh?.mapped != null
+      ? `DID: ${didRefresh.mapped}/${didRefresh.pbx_numbers} · `
+      : "";
+    toast.success(t.toastSyncRulesSuccess(ok, total), {
+      description: `${didPart}routage vérifié: ${routingOk}/${total}`,
+    });
     refresh();
   }, [refresh, t]);
+
 
   const [diagBroker, setDiagBroker] = useState<Row | null>(null);
   const [diagLoading, setDiagLoading] = useState(false);

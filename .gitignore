@@ -31,3 +31,4 @@ postcss.config.mjs
 # Local patch backups
 *.bak_*
 lemtel-live-fusionpbx-patch.sh
+apps/planipret-mobile/reports/

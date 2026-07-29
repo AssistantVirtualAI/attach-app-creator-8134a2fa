@@ -160,7 +160,23 @@ Deno.serve(async (req) => {
       using_service_key_fallback: auth.usingFallback,
       token_len: auth.token ? auth.token.length : 0,
     });
+    if (!auth.brokerId) {
+      await pipelineLog(admin, {
+        call_id,
+        user_id: call.user_id,
+        step: "maestro_sync",
+        status: "error",
+        error_message: "maestro_broker_id_missing",
+      });
+      return json({
+        success: false,
+        error: "maestro_broker_id_missing",
+        hint: "Set maestro_broker_id (numeric broker ID from Scott, e.g. 67 or 93135) on planipret_profiles for this user.",
+        steps,
+      }, 200);
+    }
     const mId = call.maestro_call_id;
+
 
 
     // ── 2. Recording upload ────────────────────────────────

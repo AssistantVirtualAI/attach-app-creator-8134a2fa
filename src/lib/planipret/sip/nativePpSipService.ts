@@ -14,17 +14,39 @@ export type PpNativeSipStatus = {
 
 type ListenerHandle = { remove: () => Promise<void> | void };
 
+export type PpIncomingInvite = {
+  callId?: string;
+  from?: string;
+  fromUser?: string;
+  fromDisplay?: string;
+  /** Present only when user tapped Answer / Decline on the native notification. */
+  action?: "answer" | "decline";
+};
+
 type PpSipKeepAlivePlugin = {
   startSipService?: (opts: Record<string, unknown>) => Promise<PpNativeSipStatus>;
   stopSipService?: () => Promise<PpNativeSipStatus>;
   getSipServiceStatus?: () => Promise<PpNativeSipStatus>;
   requestBatteryOptimizationExemption?: () => Promise<PpNativeSipStatus>;
   triggerReregister?: () => Promise<PpNativeSipStatus>;
-  addListener?: (event: "sipServiceStatus" | "sipReregisterRequested", cb: (data: PpNativeSipStatus) => void) => Promise<ListenerHandle>;
+  acknowledgeIncoming?: () => Promise<{ ok: boolean }>;
+  addListener?: (
+    event: "sipServiceStatus" | "sipReregisterRequested" | "sipIncomingInvite",
+    cb: (data: any) => void,
+  ) => Promise<ListenerHandle>;
 };
 
 type PpVoipCallPlugin = {
   getVoipPushToken?: () => Promise<{ token: string | null; platform: string; bundleId?: string; environment?: string }>;
+  reportCallEnded?: (opts: { callId?: string; reason?: string }) => Promise<{ ok: boolean }>;
+  addListener?: (
+    event:
+      | "voipPushToken"
+      | "incomingCallAnswered"
+      | "incomingCallRejected"
+      | "callKitReady",
+    cb: (data: any) => void,
+  ) => Promise<ListenerHandle>;
 };
 
 const isNative = () => {
@@ -36,10 +58,13 @@ const platform = () => {
 };
 
 
-// Some builds ship without the native SIP/VoIP plugins compiled in. Capacitor
-// then rejects every call with `UNIMPLEMENTED`, which used to spam the console
-// on every 15s poll. Latch the unavailability once and no-op afterwards.
-const unavailable = { sip: false, voip: false };
+// Some previews/builds can report `UNIMPLEMENTED` before the native bridge is
+// ready. Do not disable SIP forever after one miss: background registration
+// must recover when the real native plugin is present.
+const unavailable = {
+  sip: { until: 0, warned: false },
+  voip: { until: 0, warned: false },
+};
 function isUnimplemented(e: unknown): boolean {
   const anyE = e as any;
   return String(anyE?.code ?? "") === "UNIMPLEMENTED"
@@ -47,13 +72,16 @@ function isUnimplemented(e: unknown): boolean {
 }
 function markUnavailable(kind: "sip" | "voip", e: unknown, label: string): boolean {
   if (!isUnimplemented(e)) return false;
-  if (!unavailable[kind]) {
-    unavailable[kind] = true;
-    console.warn(`[${label}] native plugin unavailable in this build — disabling native SIP guard`);
+  const state = unavailable[kind];
+  state.until = Date.now() + 60_000;
+  if (!state.warned) {
+    state.warned = true;
+    console.warn(`[${label}] native plugin unavailable — retrying later`);
   }
   return true;
 }
-export function isPlanipretNativeSipAvailable(): boolean { return isNative() && !unavailable.sip; }
+const isTemporarilyUnavailable = (kind: "sip" | "voip") => Date.now() < unavailable[kind].until;
+export function isPlanipretNativeSipAvailable(): boolean { return isNative() && !isTemporarilyUnavailable("sip"); }
 
 const NativePpSip: PpSipKeepAlivePlugin = isNative()
   ? registerPlugin<PpSipKeepAlivePlugin>("PpSipKeepAlive")
@@ -63,13 +91,44 @@ const NativePpVoipCall: PpVoipCallPlugin = isNative()
   ? registerPlugin<PpVoipCallPlugin>("PpVoipCall")
   : {};
 
+// ---------- CallKit + PushKit bridge (iOS only) ----------
 export async function getPlanipretVoipPushToken(): Promise<{ token: string | null; platform: string; bundleId?: string; environment?: string } | null> {
-  if (platform() !== "ios" || unavailable.voip) return null;
+  if (platform() !== "ios" || isTemporarilyUnavailable("voip")) return null;
   try { return (await NativePpVoipCall.getVoipPushToken?.()) ?? null; }
   catch (e) {
     if (!markUnavailable("voip", e, "pp-voip-call")) console.warn("[pp-voip-call] getVoipPushToken failed", e);
     return null;
   }
+}
+
+export async function onPlanipretVoipPushToken(cb: (data: { token: string; bundleId?: string; environment?: string }) => void): Promise<() => void> {
+  if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
+  try {
+    const handle = await NativePpVoipCall.addListener("voipPushToken", (data: any) => cb(data ?? {}));
+    return () => { void handle?.remove?.(); };
+  } catch { return () => undefined; }
+}
+
+export async function onPlanipretIncomingCallAnswered(cb: (data: { callUUID: string; callId?: string }) => void): Promise<() => void> {
+  if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
+  try {
+    const handle = await NativePpVoipCall.addListener("incomingCallAnswered", (data: any) => cb(data ?? {}));
+    return () => { void handle?.remove?.(); };
+  } catch { return () => undefined; }
+}
+
+export async function onPlanipretIncomingCallRejected(cb: (data: { callUUID: string; callId?: string }) => void): Promise<() => void> {
+  if (platform() !== "ios" || !NativePpVoipCall.addListener) return () => undefined;
+  try {
+    const handle = await NativePpVoipCall.addListener("incomingCallRejected", (data: any) => cb(data ?? {}));
+    return () => { void handle?.remove?.(); };
+  } catch { return () => undefined; }
+}
+
+export async function reportPlanipretCallEnded(callId?: string, reason?: string): Promise<void> {
+  if (platform() !== "ios") return;
+  try { await NativePpVoipCall.reportCallEnded?.({ callId, reason }); }
+  catch { /* noop */ }
 }
 
 function parseWss(cfg: PpSipConfig) {
@@ -126,7 +185,7 @@ export async function stopPlanipretSipKeepAlive(): Promise<void> {
 }
 
 export async function requestPlanipretBatteryOptimizationExemption(): Promise<void> {
-  if (platform() !== "android" || unavailable.sip) return;
+  if (platform() !== "android" || isTemporarilyUnavailable("sip")) return;
   try { await NativePpSip.requestBatteryOptimizationExemption?.(); }
   catch (e) { console.warn("[pp-sip-native] battery exemption failed", e); }
 }
@@ -157,4 +216,24 @@ export async function onPlanipretNativeReregister(cb: () => void): Promise<() =>
   } catch {
     return () => undefined;
   }
+}
+
+/** Fires whenever the native SIP socket sees an INVITE while the WebView is
+ *  suspended, and again with `action: "answer" | "decline"` when the user taps
+ *  the corresponding button on the Android full-screen notification (iOS uses
+ *  the local notification banner + CallKit). Planiprêt-only. */
+export async function onPlanipretIncomingInvite(cb: (invite: PpIncomingInvite) => void): Promise<() => void> {
+  if (!isNative() || !NativePpSip.addListener) return () => undefined;
+  try {
+    const handle = await NativePpSip.addListener("sipIncomingInvite", (data: PpIncomingInvite) => cb(data ?? {}));
+    return () => { void handle?.remove?.(); };
+  } catch {
+    return () => undefined;
+  }
+}
+
+export async function acknowledgePlanipretIncoming(): Promise<void> {
+  if (!isNative()) return;
+  try { await NativePpSip.acknowledgeIncoming?.(); }
+  catch { /* noop */ }
 }

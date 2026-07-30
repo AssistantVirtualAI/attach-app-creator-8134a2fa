@@ -200,6 +200,7 @@ function deviceCreatePayload(id: string, isMobile: boolean, password: string, co
     "device-sip-registration-expiry-seconds": 1800,
     "device-sip-nat-traversal-enabled": "automatic",
     transport: "WSS",
+    "device-sip-transport-type": "WSS",
     "device-srtp-enabled": "opportunistic",
     "device-sip-allowed-user-agent": "",
     "device-push-enabled": isMobile ? "yes" : "no",
@@ -385,6 +386,8 @@ Deno.serve(async (req) => {
       "device-sip-allowed-user-agent": "",
       // Normalize every broker's device to the same transport/NAT/push profile.
       transport: "WSS",
+      // SIP transport at the core level — prevents the 1001 close after 200 OK.
+      "device-sip-transport-type": "WSS",
       "server-nat": clientType === "mobile" ? "yes" : "no",
       // Documented NS-API v2 keys — default expiry of 60s was dropping the
       // registration between re-REGISTERs; "automatic" NAT traversal keeps the

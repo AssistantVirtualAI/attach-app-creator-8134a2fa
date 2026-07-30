@@ -124,6 +124,9 @@ Deno.serve(async (req) => {
             body: JSON.stringify({
               "device-sip-registration-password": sipPassword,
               "transport": "WSS",
+              // SIP-level transport: without this NS closes the WSS socket with
+              // code 1001 right after the REGISTER 200 OK.
+              "device-sip-transport-type": "WSS",
               "device-srtp-enabled": "opportunistic",
               "device-sip-allowed-user-agent": "",
               "device-provisioning-registration-core-server": "core1.cluster1.ucstack.io",
@@ -158,6 +161,7 @@ Deno.serve(async (req) => {
             "device-sip-registration-expiry-seconds": 1800,
             "device-sip-nat-traversal-enabled": "automatic",
             "transport": "WSS",
+            "device-sip-transport-type": "WSS",
             "device-srtp-enabled": "opportunistic",
             "device-sip-allowed-user-agent": "",
             "device-push-enabled": isMobile ? "yes" : "no",

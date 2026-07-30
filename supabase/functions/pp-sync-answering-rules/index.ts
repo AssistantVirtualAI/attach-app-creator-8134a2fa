@@ -512,6 +512,31 @@ Deno.serve(async (req) => {
         return tf === "default" || tf === "*" || tf === "always";
       });
 
+      // 1b) Any OTHER enabled rule (custom timeframe) with DND or an always /
+      // no-answer forward outranks or short-circuits the default rule and sends
+      // inbound calls straight to voicemail. Disable those.
+      const shadowing: any[] = [];
+      for (const r of arr) {
+        if (r === defaultRule) continue;
+        const tf = String(r?.["time-frame"] ?? r?.timeframe ?? r?.time_frame ?? "").trim();
+        if (!tf) continue;
+        const on = (v: any) => ["yes", "true", "1"].includes(String(v?.enabled ?? v ?? "").toLowerCase());
+        const bad = on(r?.["do-not-disturb"]) || on(r?.["forward-always"]) ||
+          on(r?.["do-not-disturb-enabled"]) || on(r?.["forward-always-enabled"]);
+        if (!bad) continue;
+        try {
+          const dRes = await nsFetch(
+            `${base}/${encodeURIComponent(String(r?.id ?? tf))}`,
+            { method: "PUT", body: JSON.stringify({ enabled: "no", "do-not-disturb": { enabled: "no" }, "forward-always": { enabled: "no" } }) },
+            { functionName: "pp-sync-answering-rules" },
+          );
+          await dRes.text().catch(() => {});
+          shadowing.push({ time_frame: tf, status: dRes.status });
+        } catch { /* best-effort */ }
+      }
+
+
+
       // 2) Upsert
       let opRes: Response;
       let mode: "created" | "updated";

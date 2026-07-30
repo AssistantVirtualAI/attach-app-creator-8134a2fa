@@ -70,11 +70,6 @@ function deviceNameFor(ext: string, ct: ClientType): string {
   return ct === "web" ? webDeviceId(ext) : mobileDeviceId(ext);
 }
 
-/** Legacy AOR kept only as a read fallback while the migration rolls out. */
-function legacyDeviceNameFor(ext: string, ct: ClientType): string {
-  return ct === "web" ? legacyWebDeviceId(ext) : legacyMobileDeviceId(ext);
-}
-
 function deviceIdOf(d: any): string | null {
   const id = d?.device ?? d?.aor ?? d?.["device-aor"] ?? null;
   if (!id) return null;

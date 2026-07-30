@@ -186,6 +186,8 @@ export function useMplanipretSoftphone(enabled = true) {
   const [nativeStatus, setNativeStatus] = useState<PpNativeSipStatus | null>(null);
   const seenCallIds = useRef<Set<string>>(new Set());
   const mobileSipConfigRef = useRef<PpSipConfig | null>(null);
+  /** True when the `<ext>_web` device is unavailable → JsSIP is the only owner. */
+  const sameAorRef = useRef<boolean>(false);
 
   // Subscribe to the SIP snapshot.
   useEffect(() => ppSipProvider.subscribe(setSnap), []);

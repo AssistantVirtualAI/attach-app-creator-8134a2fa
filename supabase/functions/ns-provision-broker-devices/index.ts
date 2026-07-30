@@ -4,13 +4,9 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  MOBILE_SUFFIX,
-  WEB_SUFFIX,
   mobileDeviceId,
   webDeviceId,
   legacyDeviceIds,
-  isMobileDeviceId,
-  isWebDeviceId,
 } from "../_shared/pp-device-ids.ts";
 
 const cors = {

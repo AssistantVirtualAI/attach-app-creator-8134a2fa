@@ -229,6 +229,7 @@ Deno.serve(async (req) => {
           domain,
           mobile: { id: mobileId, created: !!mobile.created, existed: !!mobile.existed, status: (mobile as any).status ?? null },
           widget: { id: widgetId, created: !!widget.created, existed: !!widget.existed, status: (widget as any).status ?? null },
+          removed_legacy,
           db_error: uErr?.message ?? null,
         },
       }).then(() => {}, () => {});
@@ -239,7 +240,7 @@ Deno.serve(async (req) => {
         extension: ext,
         success: ok,
         db_error: uErr?.message,
-        ns_user: nsUser, mobile, widget,
+        ns_user: nsUser, mobile, widget, removed_legacy,
         sip_credentials: { mobile_device_id: mobileId, widget_device_id: widgetId, password: sipPassword },
       };
     };

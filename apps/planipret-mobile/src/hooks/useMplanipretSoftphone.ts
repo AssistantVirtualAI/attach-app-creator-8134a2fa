@@ -257,11 +257,17 @@ export function useMplanipretSoftphone(enabled = true) {
           password: String(d.sip_password),
           displayName: String(d.display_name || d.sip_display_name || d.sip_extension),
         };
-        // The native keep-alive service owns the `<ext>_mobile` device.
-        // The WebView (JsSIP) MUST register a DIFFERENT device (`<ext>_web`):
-        // registering the same AoR twice makes NetSapiens close one of the two
-        // WSS sockets with code 1001 in a loop (never reaching REGISTER).
-        startPlanipretSipKeepAlive(sipConfig).then((s) => { if (s && !cancelled) setNativeStatus(s); }).catch(() => undefined);
+        // The native keep-alive service owns the `<ext>_mobile` device, but ONLY
+        // in background. Running it while the WebView (JsSIP) is registered makes
+        // NetSapiens close the sockets alternately (code 1001 loop, hundreds of
+        // sockets). In foreground the JS provider is the single owner.
+        const appIsForeground = typeof document === "undefined" || document.visibilityState !== "hidden";
+        if (appIsForeground) {
+          void stopPlanipretSipKeepAlive().catch(() => undefined);
+        } else {
+          startPlanipretSipKeepAlive(sipConfig).then((s) => { if (s && !cancelled) setNativeStatus(s); }).catch(() => undefined);
+        }
+
 
         let webConfig = sipConfig;
         try {
@@ -521,19 +527,19 @@ export function useMplanipretSoftphone(enabled = true) {
       try { ppSipProvider.forceReregister(); } catch { /* noop */ }
     };
     const stopNativeAfterWebRegistered = () => {
+      // Foreground = single owner (JsSIP). Stop the native keep-alive right away:
+      // waiting for the WebView to reach "registered" first created a deadlock —
+      // the two SIP stacks kept kicking each other off the PBX (WSS 1001 loop)
+      // so the WebView never stabilised and the native service never stopped.
       if (nativeStopTimer) clearTimeout(nativeStopTimer);
-      const startedAt = Date.now();
-      const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void stopPlanipretSipKeepAlive().catch(() => undefined);
+      nativeStopTimer = setTimeout(() => {
         if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-        const st = ppSipProvider.getSnapshot().status;
-        if (st === "registered") {
-          void stopPlanipretSipKeepAlive().catch(() => undefined);
-          return;
-        }
-        if (Date.now() - startedAt < 20_000) nativeStopTimer = setTimeout(tick, 1_000);
-      };
-      nativeStopTimer = setTimeout(tick, 1_000);
+        void stopPlanipretSipKeepAlive().catch(() => undefined);
+      }, 3_000);
     };
+
     const un = ppSipProvider.subscribe(() => evaluate());
     const onResume = () => {
       const now = Date.now();

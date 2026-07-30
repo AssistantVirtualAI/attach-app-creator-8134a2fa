@@ -296,10 +296,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Repair DIDs that are not routed to a user (e.g. "to-user-residential" with an
-    // empty parameter → caller hears "the subscriber you are trying to reach is not in
-    // service"). NS-API v2 requires dial-rule-application=user + dial-rule-parameter=user_<ext>.
+    // DISABLED: bulk DID repair rewrote NetSapiens DID→user assignments and
+    // destroyed the carrier-side source of truth. DID assignment is managed in
+    // the NetSapiens portal only. Do not re-enable without written approval.
     if (action === "repair_dids") {
+      return jsonResponse({
+        success: false,
+        disabled: true,
+        error: "bulk_did_repair_disabled",
+        message: "DID assignments are managed in the NetSapiens portal. Automated bulk DID rewrites are permanently disabled.",
+      }, 200);
+    }
+    if (action === "__never_repair_dids") {
       const r = await nsFetchFirstOk([
         `/domains/${encodeURIComponent(domain)}/phonenumbers?limit=1000`,
         `/domains/${encodeURIComponent(domain)}/phone-numbers?limit=1000`,

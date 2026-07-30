@@ -248,16 +248,14 @@ Deno.serve(async (req) => {
 
     const buildDidPayload = (ext: string, _domain: string) => ({
       // Documented Phonenumber routing (phonenumbers.md / updatephonenumberuser):
-      // ONLY application + parameter. The translation fields must stay at their
-      // documented default `[*]`; forcing
-      // `dial-rule-translation-destination-user: <ext>` rewrote the To-URI before
-      // dial-rule matching, so NS no longer matched the DID → "number not in service".
+      // ONLY application + parameter. Never send translation-* fields — writing
+      // either `<ext>` or the literal `[*]` rewrites the To-URI and NS answers
+      // "no subscriber at the number called".
       "dial-rule-application": "user",
       "dial-rule-parameter": `user_${ext}`,
-      "dial-rule-translation-destination-user": "[*]",
-      "dial-rule-translation-destination-host": "[*]",
       enabled: "yes",
     });
+
 
 
     // Read a DID back from NS and decide whether it really routes to the user.

@@ -39,7 +39,7 @@ async function copyToClipboard(value: string, label: string) {
 }
 
 
-type Tab = "personal" | "favorites" | "directory";
+type Tab = "personal" | "favorites" | "directory" | "clients";
 
 // ---- Favorites (local, per-device) ----
 const FAV_KEY = "planipret.contacts.favorites.v1";
@@ -113,6 +113,7 @@ export default function MContacts() {
     return cached ? (cached as any[]).map(normalizeContact) : [];
   });
   const [directory, setDirectory] = useState<any[]>(() => peekPpContacts("directory") ?? []);
+  const [clients, setClients] = useState<any[]>(() => peekPpContacts("maestro_clients") ?? []);
   const [favorites, setFavorites] = useState<FavEntry[]>(() => loadFavs());
   const [loadingTab, setLoadingTab] = useState<Tab | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -156,15 +157,39 @@ export default function MContacts() {
     if (!opts.force && loadedTabsRef.current.has(which)) return;
     // If the shared cache already has data for this action, skip the spinner
     // and refresh in the background so the page renders instantly.
-    const cachedHint = which === "directory" ? peekPpContacts("directory") : peekPpContacts("list");
+    const cachedHint = which === "directory"
+      ? peekPpContacts("directory")
+      : which === "clients"
+      ? peekPpContacts("maestro_clients")
+      : peekPpContacts("list");
     const runBackground = opts.background || (!opts.force && !!cachedHint);
     if (!runBackground) setLoadingTab(which);
     setLoadError(null);
     try {
       const { getPpContacts } = await import("@/lib/ppContactsCache");
-      if (which === "directory") {
-        const rows = await getPpContacts("directory", { limit: opts.limit ?? 500, force: opts.force });
-        setDirectory(rows as any[]);
+      if (which === "clients") {
+        const rows = await getPpContacts("maestro_clients", { limit: opts.limit ?? 500, force: opts.force });
+        setClients(rows as any[]);
+      } else if (which === "directory") {
+        const [dirRes, brokersRes] = await Promise.allSettled([
+          getPpContacts("directory", { limit: opts.limit ?? 500, force: opts.force }),
+          getPpContacts("maestro_brokers", { limit: opts.limit ?? 500, force: opts.force }),
+        ]);
+        const dirRows = dirRes.status === "fulfilled" ? (dirRes.value as any[]) : [];
+        const brokerRows = brokersRes.status === "fulfilled" ? (brokersRes.value as any[]) : [];
+        const seen = new Set<string>();
+        const keyOf = (c: any) => String(c?.email ?? "").toLowerCase()
+          || String(c?.phone ?? c?.cell_phone ?? "").replace(/\D/g, "")
+          || String(c?.extension ?? "");
+        const merged: any[] = [];
+        for (const c of [...dirRows, ...brokerRows]) {
+          const k = keyOf(c);
+          if (k && seen.has(k)) continue;
+          if (k) seen.add(k);
+          merged.push(c);
+        }
+        setDirectory(merged);
+        if (dirRes.status === "rejected") throw dirRes.reason;
       } else {
         const [backend, device] = await Promise.allSettled([
           getPpContacts("list", { limit: opts.limit ?? 500, force: opts.force }),
@@ -245,7 +270,10 @@ export default function MContacts() {
 
 
   const list = useMemo(() => {
-    const src: any[] = tab === "personal" ? personal : tab === "favorites" ? favorites : directory;
+    const src: any[] = tab === "personal" ? personal
+      : tab === "favorites" ? favorites
+      : tab === "clients" ? clients
+      : directory;
     const tokens = tokenize(q);
     let out = src;
     if (tab === "directory") {
@@ -296,7 +324,7 @@ export default function MContacts() {
       }
     }
     return out;
-  }, [tab, personal, favorites, directory, q, filterDept, filterTeam, sortBy]);
+  }, [tab, personal, favorites, directory, clients, q, filterDept, filterTeam, sortBy]);
 
   const deptOptions = useMemo(() => {
     const s = new Set<string>();
@@ -409,6 +437,7 @@ export default function MContacts() {
           { id: "personal", label: t("contacts.personal") || "Personnels", Icon: Users },
           { id: "favorites", label: t("contacts.favorites") || "Favoris", Icon: Star },
           { id: "directory", label: t("contacts.directory") || "Annuaire", Icon: BookUser },
+          { id: "clients", label: t("contacts.clients") || "Clients", Icon: Briefcase },
         ] as const).map((p) => {
           const active = tab === p.id;
           return (

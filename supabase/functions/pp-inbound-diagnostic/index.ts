@@ -136,7 +136,10 @@ Deno.serve(async (req) => {
 
   // 4) DID inventory — probe domain-wide AND user-scoped endpoints (NS v1/v2 variants)
   const didProbes = [
-    await get(`/domains/${d}/phonenumbers`),
+    // The unpaginated NS endpoint silently returns only the first 100 DIDs.
+    // This tenant has 350+, so it produced false NO_DID_POINTING_TO_EXT
+    // verdicts for extensions whose number was beyond page one.
+    await get(`/domains/${d}/phonenumbers?limit=1000`),
     await get(`/domains/${d}/users/${e}/phonenumbers`),
     await get(`/domains/${d}/phonenumbers?user=${e}`),
   ];
@@ -240,19 +243,26 @@ Deno.serve(async (req) => {
     verdicts.push("NO_REGISTRATION_VISIBLE");
     issues.push("NS-API ne montre aucune registration active pour cette extension (endpoint devices/subscriptions).");
   }
-  const mobileRegistered = [...registeredAors].some((a) => a.includes(`${ext.toLowerCase()}_mobile`));
+  const mobileAor = `${ext.toLowerCase()}m`;
+  const legacyMobileAor = `${ext.toLowerCase()}_mobile`;
+  const mobileRegistered = [...registeredAors].some((a) => {
+    const user = a.replace(/^sip:/, "").split("@")[0];
+    return user === mobileAor || user === legacyMobileAor;
+  });
   if (registeredAors.size && !mobileRegistered) {
     verdicts.push("MOBILE_DEVICE_NOT_REGISTERED");
-    issues.push(`Le device ${ext}_mobile n'apparaît pas enregistré côté NS.`);
+    issues.push(`Le device ${ext}M n'apparaît pas enregistré côté NS.`);
   }
 
   // sim-ring destinations vs registered devices
   const simTargets = simList.map((x) => String(x?.destination ?? x ?? "").toLowerCase()).filter(Boolean);
-  const simCoversMobile = simTargets.some((t) => t.includes(`${ext.toLowerCase()}_mobile`));
+  const simCoversMobile = simTargets.some((t) =>
+    t === "<owndevices>" || t.includes(`${ext.toLowerCase()}m`) || t.includes(`${ext.toLowerCase()}_mobile`)
+  );
   const simCoversExtOnly = simTargets.length > 0 && !simCoversMobile;
   if (simCoversExtOnly) {
     verdicts.push("SIM_RING_MISSING_MOBILE");
-    issues.push(`La sonnerie simultanée ne cible pas ${ext}_mobile: ${simTargets.join(", ")}`);
+    issues.push(`La sonnerie simultanée ne cible pas ${ext}M / <OwnDevices>: ${simTargets.join(", ")}`);
   }
 
   // DIDs pointing at this extension — dedupe by number, match on ANY destination-ish field

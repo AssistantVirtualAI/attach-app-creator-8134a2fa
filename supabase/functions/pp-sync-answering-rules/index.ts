@@ -291,9 +291,11 @@ Deno.serve(async (req) => {
       const dest = DID_DEST_FIELDS.map((f) => String(row?.[f] ?? "")).filter(Boolean).join(" ").toLowerCase();
       const badApp = /vmail|voicemail|speakaccount|speakeraccount|auto-?attendant|conference|queue/.test(`${app} ${dest}`);
       if (badApp) return false;
-       const appOk = !app || ["user", "to-user", "sip", "to_user"].includes(app);
+      const appOk = app === "user";
       const extRe = new RegExp(`(^|[^0-9])${ext}([^0-9]|$)`);
-      const destOk = extRe.test(dest) || dest.includes(`${ext.toLowerCase()}@${domain.toLowerCase()}`);
+      const destOk = dest.split(/\s+/).includes(`user_${ext.toLowerCase()}`) ||
+        dest.split(/\s+/).includes(ext.toLowerCase()) ||
+        dest.includes(`${ext.toLowerCase()}@${domain.toLowerCase()}`);
       return appOk && destOk;
     };
 
@@ -363,8 +365,8 @@ Deno.serve(async (req) => {
         // after a write — the route IS correct (application field matches) but
         // the destination field has not propagated yet. Accept this as verified
         // to avoid false write_not_honored errors.
-         const appAccepted = ["user", "to-user", "sip", "to_user"].includes(afterApp);
-        const destAccepted = appAccepted && (!afterDest || afterDest.includes(ext.toLowerCase()));
+        const appAccepted = afterApp === "user";
+        const destAccepted = appAccepted && afterDest.includes(`user_${ext.toLowerCase()}`);
         const isVerified = (after.row && didRoutesToUser(after.row, ext, domain)) ||
           (appAccepted && destAccepted);
         if (isVerified) {

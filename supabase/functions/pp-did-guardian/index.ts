@@ -66,6 +66,20 @@ function destOf(x: any): string | null {
   return d && d !== "[*]" ? d : null;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Le PBX est éventuellement cohérent : on relit jusqu'à 3 fois avant de conclure à une dérive. */
+async function readDest(domain: string, pn: string, ext: string, attempts = 3) {
+  let last: any = null;
+  for (let i = 0; i < attempts; i++) {
+    const r = await ns(pnPath(domain, pn));
+    last = r;
+    if (destOf(r.data) === ext) return { dest: ext, raw: r };
+    if (i < attempts - 1) await sleep(600);
+  }
+  return { dest: destOf(last?.data), raw: last };
+}
+
 const pnPath = (domain: string, pn: string) =>
   `/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`;
 
@@ -151,10 +165,11 @@ Deno.serve(async (req) => {
       const drift: any[] = [];
       let ok = 0;
       for (const { pn, ext } of slice) {
-        const cur = await ns(pnPath(domain, pn));
-        if (destOf(cur.data) === ext) { ok++; continue; }
+        const check = await readDest(domain, pn, ext);
+        const cur = check.raw;
+        if (check.dest === ext) { ok++; continue; }
         if (action === "verify") {
-          drift.push({ phone_number: pn, expected: ext, live: destOf(cur.data), status: cur.status });
+          drift.push({ phone_number: pn, expected: ext, live: check.dest, status: cur?.status });
           continue;
         }
         let payload: Record<string, unknown>;
@@ -162,9 +177,9 @@ Deno.serve(async (req) => {
         catch (e) { drift.push({ phone_number: pn, expected: ext, error: String(e) }); continue; }
 
         await ns(pnPath(domain, pn), { method: "PUT", body: JSON.stringify(payload) });
-        const back = await ns(pnPath(domain, pn)); // relecture obligatoire
-        if (destOf(back.data) === ext) ok++;
-        else drift.push({ phone_number: pn, expected: ext, live: destOf(back.data), status: back.status });
+        const back = await readDest(domain, pn, ext); // relecture obligatoire
+        if (back.dest === ext) ok++;
+        else drift.push({ phone_number: pn, expected: ext, live: back.dest, status: back.raw?.status });
       }
       return json({
         success: true, action, offset, limit, total: expected.length,

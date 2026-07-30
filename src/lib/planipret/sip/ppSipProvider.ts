@@ -105,14 +105,23 @@ function sipToken(value: string): string {
 }
 
 function buildContactUri(cfg: PpSipConfig): string {
-  const user = sipToken(cfg.sipUsername || cfg.extension);
+  // Device AORs are case-sensitive in this NetSapiens tenant (`113M`, not
+  // `113m`). Do not pass the Contact user through sipToken(), which lowercases.
+  const user = String(cfg.sipUsername || cfg.extension || "pp")
+    .replace(/[^a-zA-Z0-9_.!~*'()%+-]/g, "-")
+    .slice(0, 64) || "pp";
   const ext = sipToken(cfg.extension || cfg.sipUsername);
   const domain = String(cfg.sipDomain || "").trim().toLowerCase();
-  // NetSapiens validates the Contact host: a `.invalid` pseudo-domain
-  // (RFC 7118) is rejected by some builds and the socket is closed with 1001
-  // before the REGISTER completes. Always advertise the real SIP domain and
-  // keep the device identity in a URI parameter instead of the host.
-  const host = /^[a-z0-9.-]+$/.test(domain) ? domain : `${ext}-web.planipret.invalid`;
+  // Advertise the routable SBC used by the active WSS transport. Registrations
+  // expose this value as device-sip-registration-contact in NS-API v2.
+  let edgeHost = "";
+  try {
+    const candidate = [cfg.wssUrl, ...(cfg.wssUrls ?? [])].find(Boolean);
+    edgeHost = candidate ? new URL(candidate).hostname.toLowerCase() : "";
+  } catch { /* fall back to the SIP domain below */ }
+  const host = /^[a-z0-9.-]+$/.test(edgeHost)
+    ? edgeHost
+    : (/^[a-z0-9.-]+$/.test(domain) ? domain : "voice.ava-telecom.ca");
   return `sip:${user}@${host};transport=ws;pp-ua=web-${ext}`;
 }
 

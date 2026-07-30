@@ -617,8 +617,10 @@ export function useMplanipretSoftphone(enabled = true) {
       try {
         removeAppStateListener = addDedupedCapListener("App", cap?.Plugins?.App, "appStateChange", (state: { isActive: boolean }) => {
           if (state?.isActive) {
-            // Keep native SIP alive until the WebView has confirmed REGISTERED;
-            // stopping it first creates a no-contact gap and sends calls to VM.
+            // Cancel any pending background handoff first: iOS fires transient
+            // isActive:false blips and a late handoff would restart the native
+            // stack while JsSIP is registered (WSS 1001 loop).
+            cancelPendingHandoff();
             try {
               const cfg = ppSipProvider.getConfig();
               if (cfg) {

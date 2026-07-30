@@ -22,6 +22,21 @@ async function nsRead(res: Response) {
   try { return text ? JSON.parse(text) : null; } catch { return text; }
 }
 
+// NetSapiens closes idle keep-alive sockets abruptly; Deno surfaces this as
+// "connection closed before message completed". Retry transient network errors.
+async function nsFetch(url: string, init?: RequestInit, attempts = 3): Promise<Response> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetch(url, { ...init, headers: { ...(init?.headers ?? {}), Connection: "close" } });
+    } catch (e) {
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 300 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -86,16 +101,16 @@ Deno.serve(async (req) => {
 
     const ensureNsUser = async (broker: any, ext: string, domain: string, password: string) => {
       const userUrl = `${NS_API_BASE_URL}/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}`;
-      const direct = await fetch(userUrl, { headers: nsHeaders });
+      const direct = await nsFetch(userUrl, { headers: nsHeaders });
       if (direct.ok) return { ok: true, existed: true, status: direct.status };
-      const create = await fetch(`${NS_API_BASE_URL}/domains/${encodeURIComponent(domain)}/users`, {
+      const create = await nsFetch(`${NS_API_BASE_URL}/domains/${encodeURIComponent(domain)}/users`, {
         method: "POST",
         headers: nsHeaders,
         body: JSON.stringify(nsUserPayload(broker, ext, password)),
       });
       const data = await nsRead(create);
       if (!create.ok && create.status !== 409) return { ok: false, status: create.status, data };
-      const verify = await fetch(userUrl, { headers: nsHeaders });
+      const verify = await nsFetch(userUrl, { headers: nsHeaders });
       return { ok: verify.ok || create.ok || create.status === 409, created: create.ok, status: verify.status || create.status, data };
     };
 
@@ -115,7 +130,7 @@ Deno.serve(async (req) => {
       const nsUser = await ensureNsUser(broker, ext, domain, sipPassword);
       if (!nsUser.ok) return { broker_id: broker.id ?? broker.user_id, success: false, error: "ns_user_create_failed", ns_user: nsUser };
 
-      const listRes = await fetch(base, { headers: nsHeaders });
+      const listRes = await nsFetch(base, { headers: nsHeaders });
       const existing: any[] = listRes.ok ? (await listRes.json().catch(() => [])) : [];
       const arr = Array.isArray(existing) ? existing : [];
       const hasDev = (id: string) =>
@@ -127,7 +142,7 @@ Deno.serve(async (req) => {
           // and (critically) the 1800s registration expiry + automatic NAT traversal.
           // Without this branch a bulk force:true never repaired existing devices,
           // which kept them on the NS default 60s expiry -> straight to voicemail.
-          const r = await fetch(`${base}/${encodeURIComponent(id)}`, {
+          const r = await nsFetch(`${base}/${encodeURIComponent(id)}`, {
             method: "PUT", headers: nsHeaders,
             body: JSON.stringify({
               "device-sip-registration-password": sipPassword,
@@ -149,7 +164,7 @@ Deno.serve(async (req) => {
         // core-server is MANDATORY — without it JsSIP/PJSIP cannot register.
         // Both mobile and web use WSS transport so JsSIP (WebRTC) can connect.
         // Empty device-sip-allowed-user-agent accepts any softphone (JsSIP, SIP.js, etc.).
-        const r = await fetch(base, {
+        const r = await nsFetch(base, {
           method: "POST", headers: nsHeaders,
           body: JSON.stringify({
             device: id,
@@ -190,7 +205,7 @@ Deno.serve(async (req) => {
       if (newPairOk) {
         for (const legacyId of legacyDeviceIds(ext)) {
           if (!hasDev(legacyId)) continue;
-          const del = await fetch(`${base}/${encodeURIComponent(legacyId)}`, { method: "DELETE", headers: nsHeaders }).catch(() => null);
+          const del = await nsFetch(`${base}/${encodeURIComponent(legacyId)}`, { method: "DELETE", headers: nsHeaders }).catch(() => null);
           removed_legacy.push({ id: legacyId, deleted: !!del?.ok, status: del?.status ?? 0 });
         }
       }
@@ -287,7 +302,7 @@ Deno.serve(async (req) => {
       let consumed = 0;
       for (let i = 0; i < list.length; i += batch_size) {
         const batch = list.slice(i, i + batch_size);
-        const res = await Promise.all(batch.map((b) => provision(b)));
+        const res = await Promise.all(batch.map((b) => provision(b).catch((e) => ({ broker_id: b.id ?? b.user_id, success: false, error: String((e as Error)?.message ?? e) }))));
         all.push(...res);
         consumed += batch.length;
         succeeded += res.filter((r) => r.success).length;

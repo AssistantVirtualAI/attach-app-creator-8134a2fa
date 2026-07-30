@@ -179,6 +179,7 @@ export default function PlanipretAdminLayout() {
       const { data } = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_SAFE_COLUMNS).eq("user_id", user.id).maybeSingle();
       if (cancelled) return;
       if (data && data.role && data.role !== "admin") { navigate("/mplanipret", { replace: true }); return; }
+      setUserEmail((user.email ?? "").toLowerCase());
       setProfile(data ?? { full_name: user.email, role: "admin" });
       setLoading(false);
       if (data && (data.language === "fr" || data.language === "en")) {

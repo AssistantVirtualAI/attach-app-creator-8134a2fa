@@ -7,7 +7,8 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 
-type Action = "list" | "shared" | "directory" | "maestro";
+type Action = "list" | "shared" | "directory" | "maestro" | "maestro_clients" | "maestro_brokers";
+const ALL_ACTIONS: Action[] = ["list", "shared", "directory", "maestro", "maestro_clients", "maestro_brokers"];
 type Entry = { at: number; value: any[] };
 
 const TTL_MS = 60_000;

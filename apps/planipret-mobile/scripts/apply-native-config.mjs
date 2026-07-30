@@ -1693,8 +1693,8 @@ function patchIosNativeFiles() {
       // inline copy causes "Invalid redeclaration of 'PpSipKeepAlive'".
       swift = stripInlinePlugins(swift);
     } else if (!swift.includes("@objc(PpSipKeepAlive)")) {
-      swift = ensureSwiftImports(swift, ["Foundation", "Capacitor", "UIKit", "AVFoundation", "CryptoKit", "UserNotifications", "PushKit", "CallKit"]);
-      swift = `${swift.trim()}\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n`;
+      swift = ensureSwiftImports(swift, ["Foundation", "Capacitor", "UIKit", "AVFoundation", "CryptoKit", "UserNotifications", "PushKit", "CallKit", "AuthenticationServices"]);
+      swift = `${swift.trim()}\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n\n${stripSwiftImports(IOS_AUTH_SESSION_PLUGIN)}\n`;
       console.log("[native-config] iOS native plugins embedded into existing ViewController target.");
     }
     if (swift !== before) writeIfChanged(file, swift);
@@ -1704,10 +1704,10 @@ function patchIosNativeFiles() {
   const storyboard = path.join(iosApp, "Base.lproj", "Main.storyboard");
   const storyboardText = fs.existsSync(storyboard) ? fs.readFileSync(storyboard, "utf8") : "";
   const bridgeText = fs.existsSync(bridge) ? fs.readFileSync(bridge, "utf8") : "";
-  if (!bridgeText.includes("PpSipKeepAlive()") || !bridgeText.includes("PpVoipCall()") || !storyboardText.includes('customClass="AppBridgeViewController"')) {
-    throw new Error("[native-config] iOS native plugins are not wired into the launch ViewController; aborting sync so SIP/VoIP cannot ship UNIMPLEMENTED.");
+  if (!bridgeText.includes("PpSipKeepAlive()") || !bridgeText.includes("PpVoipCall()") || !bridgeText.includes("PpAuthSession()") || !storyboardText.includes('customClass="AppBridgeViewController"')) {
+    throw new Error("[native-config] iOS native plugins are not wired into the launch ViewController; aborting sync so SIP/VoIP/OAuth cannot ship UNIMPLEMENTED.");
   }
-  console.log("[native-config] iOS PpSipKeepAlive + PpVoipCall plugins applied.");
+  console.log("[native-config] iOS PpSipKeepAlive + PpVoipCall + PpAuthSession plugins applied.");
 }
 
 patchCopiedWebBundles();

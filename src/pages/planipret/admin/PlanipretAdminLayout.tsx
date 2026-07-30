@@ -263,7 +263,9 @@ export default function PlanipretAdminLayout() {
   const pageKey = PAGE_KEY_BY_PATH[location.pathname];
   const title = pageKey ? tt(`adminPortal.pageTitles.${pageKey}`) : tt("adminPortal.dashboardTitle");
   const dateLabel = new Date().toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const sectionKey = NAV.find((g) => g.items.some((i) => i.to === location.pathname))?.sectionKey;
+  const isSuperAdmin = !!userEmail && SUPER_ADMIN_EMAILS.includes(userEmail);
+  const navGroups = isSuperAdmin ? NAV : NAV_REGULAR;
+  const sectionKey = navGroups.find((g) => g.items.some((i) => i.to === location.pathname))?.sectionKey;
   const sectionLabel = sectionKey ? tt(`adminPortal.sections.${sectionKey}`) : tt("adminPortal.administration");
 
   const renderBadge = (b?: NavBadge) => {

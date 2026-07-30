@@ -77,29 +77,17 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     const internalCall = req.headers.get("x-internal-call") === "1" &&
       authHeader.replace(/^Bearer\s+/i, "").trim() === SERVICE_ROLE;
-    if (internalCall) {
-      const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-      if (broker_id) {
-        const { data: broker } = await admin.from("planipret_profiles")
-          .select("id, user_id, full_name, email, extension, ns_extension, ns_domain")
-          .or(`user_id.eq.${broker_id},id.eq.${broker_id}`).maybeSingle();
-        if (!broker) return json({ error: "broker_not_found", broker_id }, 404);
-        const result = await applyRule(broker);
-        return json({ success: result.success, result });
-      }
-      return json({ error: "provide broker_id" }, 400);
-    }
     const userClient = createClient(SUPABASE_URL, ANON_KEY ?? SERVICE_ROLE, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: userData } = await userClient.auth.getUser();
+    const { data: userData } = internalCall ? { data: null as any } : await userClient.auth.getUser();
     const caller = userData?.user;
-    if (!caller) return json({ error: "not_authenticated" }, 401);
+    if (!caller && !internalCall) return json({ error: "not_authenticated" }, 401);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-    let isAdmin = false;
-    try { const { data } = await admin.rpc("is_planipret_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ }
-    if (!isAdmin) { try { const { data } = await admin.rpc("is_super_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
+    let isAdmin = internalCall;
+    if (!isAdmin && caller) { try { const { data } = await admin.rpc("is_planipret_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
+    if (!isAdmin && caller) { try { const { data } = await admin.rpc("is_super_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
     if (!isAdmin) return json({ error: "forbidden", detail: "admin role required" }, 403);
 
     // NS-API v2 answering-rule schema. We include BOTH the nested-object

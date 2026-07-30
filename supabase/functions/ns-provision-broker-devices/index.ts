@@ -257,17 +257,26 @@ Deno.serve(async (req) => {
       // that exist in the DB but are broken/missing in NetSapiens). Otherwise we
       // only touch brokers that have never been provisioned.
       const force: boolean = !!body?.force;
+      // Chunked execution: the platform kills the request at 150s, so we only
+      // process brokers while we stay inside the time budget and hand back a
+      // `next_offset` the caller loops on.
+      const offset: number = Math.max(0, Number(body?.offset ?? 0));
+      const maxMs: number = Math.max(5_000, Math.min(110_000, Number(body?.max_ms ?? 90_000)));
+      const t0 = Date.now();
       let q = admin.from("planipret_profiles")
         .select("id, user_id, full_name, email, extension, ns_extension, ns_domain, ns_mobile_device_id, ns_widget_device_id, ns_sip_password_ref_mobile")
-        .not("ns_extension", "is", null);
+        .not("ns_extension", "is", null)
+        .order("id", { ascending: true });
       if (!force) q = q.or("ns_mobile_device_id.is.null,ns_widget_device_id.is.null,ns_sip_password_ref_mobile.is.null");
       const { data: brokers } = await q;
-      const list = brokers ?? [];
+      const fullList = brokers ?? [];
+      const list = fullList.slice(offset);
       if (list.length === 0) {
         return json({
           success: true,
           message: "Aucun courtier à provisionner (tous déjà provisionnés — utilisez force:true pour re-provisionner)",
-          count: 0, total: 0, processed: 0, succeeded: 0, failed: 0, forced: force,
+          count: 0, total: fullList.length, processed: 0, succeeded: 0, failed: 0, forced: force,
+          offset, next_offset: null, done: true,
         });
       }
 
@@ -275,14 +284,18 @@ Deno.serve(async (req) => {
       const startedAt = new Date().toISOString();
       const all: any[] = [];
       let succeeded = 0, failed = 0;
+      let consumed = 0;
       for (let i = 0; i < list.length; i += batch_size) {
         const batch = list.slice(i, i + batch_size);
         const res = await Promise.all(batch.map((b) => provision(b)));
         all.push(...res);
+        consumed += batch.length;
         succeeded += res.filter((r) => r.success).length;
         failed += res.filter((r) => !r.success).length;
+        if (Date.now() - t0 > maxMs) break;
         if (i + batch_size < list.length) await new Promise((r) => setTimeout(r, 500));
       }
+      const nextOffset = offset + consumed < fullList.length ? offset + consumed : null;
 
       // Detailed device-level counters so the admin portal can show a real report
       // (created / patched / skipped / errors) instead of only succeeded/failed.

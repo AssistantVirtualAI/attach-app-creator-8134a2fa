@@ -133,6 +133,11 @@ Deno.serve(async (req) => {
       return {
         "time-frame": "*",
         "enabled": "yes",                    // voicemail fallback ON after no-answer
+        // `*` defaults to order 99 (lowest priority); push it to the top so no
+        // stale rule (DND / forward-always) shadows it and sends the caller
+        // straight to voicemail.
+        "new-position": "top",
+
         "do-not-disturb": { "enabled": "no" },
         "call-screening": { "enabled": "no" },
         "phone-numbers-to-allow": { "enabled": "no" },

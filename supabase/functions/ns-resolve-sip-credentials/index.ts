@@ -10,6 +10,12 @@ import {
   isMaestroTelecomConfigured,
   maestroTelecomFetch,
 } from "../_shared/maestro-telecom.ts";
+import {
+  mobileDeviceId,
+  webDeviceId,
+  legacyMobileDeviceId,
+  legacyWebDeviceId,
+} from "../_shared/pp-device-ids.ts";
 
 
 const corsHeaders = {

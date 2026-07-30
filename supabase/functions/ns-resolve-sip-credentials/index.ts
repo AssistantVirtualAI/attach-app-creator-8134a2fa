@@ -367,9 +367,15 @@ Deno.serve(async (req) => {
       // Normalize every broker's device to the same transport/NAT/push profile.
       transport: "WSS",
       "server-nat": clientType === "mobile" ? "yes" : "no",
+      // Documented NS-API v2 keys — default expiry of 60s was dropping the
+      // registration between re-REGISTERs; "automatic" NAT traversal keeps the
+      // Contact rewritten for mobile networks.
+      "device-sip-registration-expiry-seconds": 1800,
+      "device-sip-nat-traversal-enabled": "automatic",
       "device-push-enabled": clientType === "mobile" ? "yes" : "no",
     },
   );
+
 
 
   return json({

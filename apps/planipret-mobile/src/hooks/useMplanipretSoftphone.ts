@@ -492,6 +492,8 @@ export function useMplanipretSoftphone(enabled = true) {
     // and retry a few times — a single failed start was leaving the extension
     // unregistered as soon as the app left the foreground.
     let handoffSeq = 0;
+    /** True once the native keep-alive really took the registration over. */
+    let handedOffToNative = false;
     let handoffTimer: ReturnType<typeof setTimeout> | null = null;
     const cancelPendingHandoff = () => {
       if (handoffTimer) { clearTimeout(handoffTimer); handoffTimer = null; }
@@ -638,22 +640,7 @@ export function useMplanipretSoftphone(enabled = true) {
             // isActive:false blips and a late handoff would restart the native
             // stack while JsSIP is registered (WSS 1001 loop).
             cancelPendingHandoff();
-            try {
-              const cfg = ppSipProvider.getConfig();
-              if (cfg) {
-                stopNativeAfterWebRegistered(true);
-                if (!acquireSipInitLock(4000)) return;
-                void ppSipProvider.init(cfg).finally(() => {
-                  releaseSipInitLock();
-                  stopNativeAfterWebRegistered(true);
-                });
-              }
-              else {
-                ppSipProvider.forceReregister();
-                stopNativeAfterWebRegistered(true);
-              }
-            } catch { /* noop */ }
-            evaluate();
+            resumeSip();
           } else {
             scheduleHandoff();
           }

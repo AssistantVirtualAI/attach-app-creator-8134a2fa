@@ -904,6 +904,29 @@ function ContactDetailSheet({
           </button>
         )}
 
+        {/* Maestro profile (clients / brokers endpoints) */}
+        {mProfile && (
+          <div className="mb-3 p-3 rounded-xl" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
+            <div className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--pp-text-muted)" }}>
+              {maestroKind === "broker" ? (t("contacts.brokerProfile") || "Profil courtier") : (t("contacts.clientProfile") || "Profil client")}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(mProfile)
+                .filter(([k, v]) =>
+                  !k.startsWith("__") &&
+                  !["id", "name", "display_name", "first_name", "last_name", "maestro_client_id"].includes(k) &&
+                  v !== null && v !== "" && typeof v !== "object")
+                .slice(0, 12)
+                .map(([k, v]) => (
+                  <div key={k}>
+                    <div className="text-[9px] uppercase" style={{ color: "var(--pp-text-muted)" }}>{k.replace(/_/g, " ")}</div>
+                    <div className="text-xs" style={{ color: "var(--pp-text-primary)" }}>{String(v)}</div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
 
         {/* Timeline */}
         <div className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--pp-text-muted)" }}>

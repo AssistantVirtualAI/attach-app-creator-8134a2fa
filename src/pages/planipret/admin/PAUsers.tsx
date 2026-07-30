@@ -571,9 +571,18 @@ export default function PAUsers() {
 
   const loadNumbers = async () => {
     setNumbersLoading(true);
-    const { data, error } = await supabase.functions.invoke("pp-admin-phonenumbers", {
+    const primary = await supabase.functions.invoke("pp-admin-phonenumbers", {
       body: { action: "list" },
     });
+    let data = primary.data;
+    let error = primary.error;
+    if (error || !(data as any)?.success) {
+      const fallback = await supabase.functions.invoke("pp-admin-did-assignments", {
+        body: { domain: "planipret.ca" },
+      });
+      data = fallback.data;
+      error = fallback.error;
+    }
     setNumbersLoading(false);
     if (error || !(data as any)?.success) {
       setNumbersError((data as any)?.error ?? error?.message ?? t.genericError);

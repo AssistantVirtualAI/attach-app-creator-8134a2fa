@@ -307,6 +307,61 @@ Deno.serve(async (req) => {
         message: "DID assignments are managed in the NetSapiens portal. Automated bulk DID rewrites are permanently disabled.",
       }, 200);
     }
+
+    // READ-ONLY audit: compares live NS routing with our last known DID→extension
+    // map so the team can restore the broken assignments in the NetSapiens portal.
+    // Never writes to NetSapiens.
+    if (action === "audit_dids") {
+      const r = await nsFetchFirstOk([
+        `/domains/${encodeURIComponent(domain)}/phonenumbers?limit=1000`,
+        `/domains/${encodeURIComponent(domain)}/phone-numbers?limit=1000`,
+      ]);
+      if (!r.ok) return jsonResponse({ success: false, error: `NS-API list failed (${r.status})`, detail: r.data }, 200);
+      const rawList = Array.isArray(r.data) ? r.data : (r.data?.data ?? r.data?.items ?? []);
+      const live = (rawList ?? []).map(normalizeNumber).filter((n: any) => n.raw);
+
+      const db = supaAdmin();
+      const { data: assigns } = await db
+        .from("planipret_did_assignments")
+        .select("phone_number_e164,phone_number_digits,extension,callerid_name")
+        .eq("domain", domain);
+      const expected = new Map<string, any>();
+      for (const a of (assigns ?? []) as any[]) {
+        if (a.phone_number_digits) expected.set(String(a.phone_number_digits), a);
+        if (a.phone_number_e164) expected.set(String(a.phone_number_e164).replace(/\D/g, ""), a);
+      }
+
+      const rows = live.map((n: any) => {
+        const digits = String(n.raw ?? "").replace(/\D/g, "");
+        const exp = expected.get(digits) ?? expected.get(digits.length === 10 ? `1${digits}` : digits);
+        const expectedExt = exp?.extension ? String(exp.extension) : null;
+        const currentExt = n.extension ? String(n.extension) : null;
+        let status: "ok" | "unrouted" | "mismatch" | "unknown";
+        if (!currentExt) status = expectedExt ? "unrouted" : "unknown";
+        else if (!expectedExt) status = "ok";
+        else status = currentExt === expectedExt ? "ok" : "mismatch";
+        return {
+          phone_number: n.raw,
+          e164: n.e164,
+          pretty: n.pretty,
+          application: n.application,
+          current_extension: currentExt,
+          expected_extension: expectedExt,
+          callerid_name: exp?.callerid_name ?? null,
+          active: n.active,
+          status,
+        };
+      });
+
+      const summary = rows.reduce((acc: any, x: any) => { acc[x.status] = (acc[x.status] ?? 0) + 1; return acc; }, {});
+      const csv = [
+        "phone_number,e164,current_extension,expected_extension,application,status,callerid_name",
+        ...rows.map((x: any) => [x.phone_number, x.e164, x.current_extension ?? "", x.expected_extension ?? "", x.application ?? "", x.status, (x.callerid_name ?? "").replace(/,/g, " ")].join(",")),
+      ].join("\n");
+
+      return jsonResponse({ success: true, domain, count: rows.length, summary, rows, csv });
+    }
+
     if (action === "__never_repair_dids") {
       const r = await nsFetchFirstOk([
         `/domains/${encodeURIComponent(domain)}/phonenumbers?limit=1000`,

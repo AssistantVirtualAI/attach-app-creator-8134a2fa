@@ -246,6 +246,7 @@ Deno.serve(async (req) => {
       }
 
 
+      const startedAt = new Date().toISOString();
       const all: any[] = [];
       let succeeded = 0, failed = 0;
       for (let i = 0; i < list.length; i += batch_size) {
@@ -256,7 +257,40 @@ Deno.serve(async (req) => {
         failed += res.filter((r) => !r.success).length;
         if (i + batch_size < list.length) await new Promise((r) => setTimeout(r, 500));
       }
-      return json({ success: true, total: list.length, processed: all.length, succeeded, failed, results: all });
+
+      // Detailed device-level counters so the admin portal can show a real report
+      // (created / patched / skipped / errors) instead of only succeeded/failed.
+      const devStats = { created: 0, patched: 0, skipped: 0, errors: 0 };
+      const errorSamples: any[] = [];
+      for (const r of all) {
+        for (const d of [r.mobile, r.widget]) {
+          if (!d) { devStats.errors += 1; continue; }
+          if (d.created) devStats.created += 1;
+          else if (d.existed && d.patched) devStats.patched += 1;
+          else if (d.existed) devStats.skipped += 1;
+          else devStats.errors += 1;
+        }
+        if (!r.success && errorSamples.length < 25) {
+          errorSamples.push({ broker_id: r.broker_id, broker_name: r.broker_name, extension: r.extension, error: r.error ?? r.db_error ?? null });
+        }
+      }
+
+      const summary = {
+        forced: force, total: list.length, processed: all.length, succeeded, failed,
+        devices: devStats, errors_sample: errorSamples,
+        expiry_seconds: 1800, nat_traversal: "automatic",
+      };
+      await admin.from("planipret_edge_function_runs").insert({
+        function_name: "ns-provision-broker-devices",
+        started_at: startedAt,
+        finished_at: new Date().toISOString(),
+        status: failed === 0 ? "ok" : (succeeded > 0 ? "partial" : "error"),
+        summary,
+        triggered_by: caller.id,
+      }).then(() => {}, () => {});
+
+      return json({ success: true, ...summary, results: all });
+
     }
 
     return json({ error: "provide broker_id or bulk:true" }, 400);

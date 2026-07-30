@@ -4,19 +4,19 @@ import RecentsList from './RecentsList';
 import ContactsList from './ContactsList';
 import VoicemailList from './VoicemailList';
 import SmsThreads from './SmsThreads';
+import RecordingsList from './RecordingsList';
 import CallForwarding from './CallForwarding';
 import LemtelLogo from './LemtelLogo';
 import BrandTagline from './BrandTagline';
-
 // ProfileMenu is rendered globally in TitleBar — no longer duplicated here.
 import { AppErrorBoundary } from './AppErrorBoundary';
 import { theme } from '../lib/theme';
 import DialerKeypad from './DialerKeypad';
 import { ava } from '../lib/avaApi';
 import {
-  PhoneIcon, ClockIcon, UsersIcon, VoicemailIcon,
-  MessageIcon,
-} from './TabIcons';
+  Phone, MessageCircle, Users, LayoutGrid, Grid3x3,
+} from 'lucide-react';
+// TabIcons legacy — replaced by lucide-react in new bottom nav
 import OutputDevicePicker from './OutputDevicePicker';
 import { watchA11y } from '../lib/a11yAudit';
 import pkg from '../../package.json';
@@ -36,14 +36,17 @@ interface Creds {
   refreshToken?: string;
 }
 
-type Tab = 'dial' | 'recents' | 'contacts' | 'voicemail' | 'sms';
+type Tab = 'keypad' | 'chats' | 'calls' | 'contacts' | 'speeddial';
+type CallsSubTab = 'recents' | 'recordings' | 'voicemail';
 
-const TAB_META: Record<Tab, { Icon: React.FC<{ size?: number; color?: string }>; label: string }> = {
-  dial:      { Icon: PhoneIcon,     label: 'Phone' },
-  recents:   { Icon: ClockIcon,     label: 'History' },
-  contacts:  { Icon: UsersIcon,     label: 'Contacts' },
-  voicemail: { Icon: VoicemailIcon, label: 'Voicemail' },
-  sms:       { Icon: MessageIcon,   label: 'SMS' },
+const MAIN_TABS: Tab[] = ['keypad', 'chats', 'calls', 'contacts', 'speeddial'];
+
+const TAB_META: Record<Tab, { LucideIcon: React.ComponentType<{ size?: number | string; color?: string; strokeWidth?: number | string }>; label: string }> = {
+  keypad:    { LucideIcon: Grid3x3,       label: 'Keypad' },
+  chats:     { LucideIcon: MessageCircle, label: 'Chats' },
+  calls:     { LucideIcon: Phone,         label: 'Calls' },
+  contacts:  { LucideIcon: Users,         label: 'Contacts' },
+  speeddial: { LucideIcon: LayoutGrid,    label: 'Speed Dial' },
 };
 
 const { colors: c, glow } = theme;
@@ -71,7 +74,9 @@ export default function SoftphonePane({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const prevCallStateRef = useRef(false);
   const syncAfterCallRef = useRef(false);
-  const [tab, setTab] = useState<Tab>('dial');
+  const [tab, setTab] = useState<Tab>('keypad');
+  const [callsSubTab, setCallsSubTab] = useState<CallsSubTab>('recents');
+  const [showAvaChat, setShowAvaChat] = useState(false);
   const [dial, setDial] = useState('');
   const [timer, setTimer] = useState(0);
   const [showXfer, setShowXfer] = useState(false);
@@ -412,6 +417,20 @@ export default function SoftphonePane({
             aria-label="Sync phone system"
           >{syncingPhone ? '…' : '↻'}</button>
           <button
+            onClick={() => setShowAvaChat((v) => !v)}
+            title="AVA AI Assistant"
+            aria-label="AVA AI"
+            style={{
+              background: showAvaChat ? 'linear-gradient(135deg, #7a4cff, #21d4fd)' : 'rgba(122,76,255,0.10)',
+              border: '1px solid rgba(122,76,255,0.30)',
+              color: showAvaChat ? '#fff' : '#7a4cff',
+              cursor: 'pointer',
+              width: compact ? 26 : 30, height: compact ? 24 : 28, borderRadius: 8, fontSize: 13,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all .2s ease',
+            }}
+          >✦</button>
+          <button
             onClick={onOpenSettings}
             style={{
               background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.12)',
@@ -599,9 +618,8 @@ export default function SoftphonePane({
           </div>
         )}
 
-        {/* Idle — Dialer */}
-
-        {!inCall && !ringing && tab === 'dial' && (
+        {/* Idle — Keypad (Dialer) */}
+        {!inCall && !ringing && tab === 'keypad' && (
           <Dialer
             dial={dial} setDial={setDial}
             dialKeys={dialKeys}
@@ -614,24 +632,83 @@ export default function SoftphonePane({
           />
         )}
 
-        {!inCall && !ringing && tab === 'recents' && (
+        {/* Chats (SMS) */}
+        {!inCall && !ringing && tab === 'chats' && (
           <div style={{ animation: 'fadeIn .25s ease-out' }}>
-            <AppErrorBoundary compact onBack={() => setTab('dial')}><RecentsList extension={creds.extension} onCall={(n) => { setDial(n); sp.call(n); }} /></AppErrorBoundary>
+            <SmsThreads />
           </div>
         )}
+
+        {/* Calls — avec sous-onglets Recents / Recordings / Voicemail */}
+        {!inCall && !ringing && tab === 'calls' && (
+          <div style={{ animation: 'fadeIn .25s ease-out', display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* Sous-onglets */}
+            <div style={{
+              display: 'flex', gap: 6, padding: compact ? '8px 10px 4px' : '10px 14px 6px',
+              flexShrink: 0,
+            }}>
+              {(['recents', 'recordings', 'voicemail'] as CallsSubTab[]).map((st) => {
+                const active = callsSubTab === st;
+                const labels: Record<CallsSubTab, string> = { recents: 'Recents', recordings: 'Recordings', voicemail: 'Voicemail' };
+                return (
+                  <button
+                    key={st}
+                    onClick={() => setCallsSubTab(st)}
+                    style={{
+                      flex: 1, padding: '6px 4px', borderRadius: 10, fontSize: 11,
+                      fontWeight: active ? 800 : 600, letterSpacing: 0.5,
+                      border: active ? '1px solid rgba(0,35,230,0.25)' : '1px solid rgba(0,0,0,0.08)',
+                      background: active ? 'rgba(0,35,230,0.10)' : 'rgba(255,255,255,0.7)',
+                      color: active ? '#0023e6' : '#6b7a99',
+                      cursor: 'pointer',
+                      transition: 'all .18s ease',
+                    }}
+                  >{labels[st]}</button>
+                );
+              })}
+            </div>
+            {/* Contenu du sous-onglet */}
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              {callsSubTab === 'recents' && (
+                <AppErrorBoundary compact onBack={() => setCallsSubTab('recents')}>
+                  <RecentsList extension={creds.extension} onCall={(n) => { setDial(n); sp.call(n); }} />
+                </AppErrorBoundary>
+              )}
+              {callsSubTab === 'recordings' && (
+                <AppErrorBoundary compact onBack={() => setCallsSubTab('recents')}>
+                  <RecordingsList extension={creds.extension} />
+                </AppErrorBoundary>
+              )}
+              {callsSubTab === 'voicemail' && (
+                <AppErrorBoundary compact onBack={() => setCallsSubTab('recents')}>
+                  <VoicemailList extension={creds.extension} onCall={(n) => { setDial(n); sp.call(n); }} />
+                </AppErrorBoundary>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Contacts */}
         {!inCall && !ringing && tab === 'contacts' && (
           <div style={{ animation: 'fadeIn .25s ease-out', minWidth: 0, width: '100%' }}>
             <ContactsList selfExtension={creds.extension} onCall={(n) => { setDial(n); sp.call(n); }} />
           </div>
         )}
-        {!inCall && !ringing && tab === 'voicemail' && (
+
+        {/* Speed Dial */}
+        {!inCall && !ringing && tab === 'speeddial' && (
           <div style={{ animation: 'fadeIn .25s ease-out' }}>
-            <AppErrorBoundary compact onBack={() => setTab('dial')}><VoicemailList extension={creds.extension} onCall={(n) => { setDial(n); sp.call(n); }} /></AppErrorBoundary>
+            <SpeedDialPane sp={sp} onCall={(n) => { setDial(n); sp.call(n); }} />
           </div>
         )}
-        {!inCall && !ringing && tab === 'sms' && (
-          <div style={{ animation: 'fadeIn .25s ease-out' }}>
-            <SmsThreads />
+
+        {/* AVA Chat (overlay) */}
+        {showAvaChat && !inCall && !ringing && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 50,
+            background: '#f0f4ff', display: 'flex', flexDirection: 'column',
+          }}>
+            <AvaChatPane onClose={() => setShowAvaChat(false)} />
           </div>
         )}
 
@@ -641,80 +718,81 @@ export default function SoftphonePane({
       {!inCall && !ringing && !hideTabs && (
         <div style={{
           position: 'relative', zIndex: 1, flexShrink: 0,
-          background: '#ffffff',
-          borderTop: '1px solid rgba(0,0,0,0.08)',
-          boxShadow: '0 -1px 8px rgba(0,0,0,0.04)',
+          padding: compact ? '6px 6px 6px' : '8px 8px 8px',
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(244,247,255,0.86) 100%)',
+          backdropFilter: 'blur(28px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(180%)',
+          borderTop: '1px solid rgba(255,255,255,0.9)',
+          boxShadow: '0 -4px 24px -8px rgba(7,22,168,0.18), 0 -1px 0 rgba(0,35,230,0.05) inset',
         }}>
           <div style={{
-            display: 'flex',
-            height: ultraCompact ? 54 : compact ? 60 : 68,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, 1fr)',
+            alignItems: 'center',
+            height: ultraCompact ? 50 : compact ? 56 : 64,
             minWidth: 0,
             width: '100%',
-            paddingLeft: compact ? 4 : 0,
-            paddingRight: compact ? 4 : 0,
           }}>
-            {(['dial', 'recents', 'contacts', 'voicemail', 'sms'] as Tab[]).map((tk) => {
+            {MAIN_TABS.map((tk) => {
               const active = tab === tk;
-              const { Icon, label } = TAB_META[tk];
-              const activeColor = '#0023e6';
+              const { LucideIcon, label } = TAB_META[tk];
+              const accent = '#0023e6';
               const inactiveColor = '#6b7a99';
-              const hoverColor = '#0023e6';
               return (
                 <button
                   key={tk}
-                  onClick={() => setTab(tk)}
+                  onClick={() => { setTab(tk); if (showAvaChat) setShowAvaChat(false); }}
                   title={label}
                   aria-label={label}
-                  className="lemtel-tab-btn"
                   style={{
-                    flex: 1, minWidth: 0,
-                    padding: ultraCompact ? '4px 2px' : compact ? '5px 3px' : '4px 4px 0',
-
-                    background: active ? 'rgba(0,35,230,0.08)' : 'transparent',
-                    border: active ? '1px solid rgba(0,35,230,0.20)' : '1px solid transparent',
-                    borderRadius: 10,
-                    margin: compact ? '5px 2px' : '6px 3px',
-                    color: active ? activeColor : inactiveColor,
-                    textShadow: 'none',
-                    cursor: 'pointer',
+                    position: 'relative',
+                    minHeight: ultraCompact ? 42 : compact ? 48 : 54,
                     display: 'flex', flexDirection: 'column',
                     alignItems: 'center', justifyContent: 'center',
-                    gap: compact ? 3 : 6,
-                    transition: 'color 180ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease',
-                    position: 'relative',
+                    gap: 3, padding: compact ? '4px 2px' : '6px 2px',
+                    borderRadius: 12,
+                    background: active
+                      ? `linear-gradient(180deg, rgba(0,35,230,0.13) 0%, rgba(255,255,255,0.4) 100%)`
+                      : 'transparent',
+                    border: active ? '1px solid rgba(0,35,230,0.20)' : '1px solid transparent',
+                    boxShadow: active
+                      ? '0 8px 20px -10px rgba(0,35,230,0.40), 0 1px 0 rgba(255,255,255,0.9) inset'
+                      : 'none',
+                    color: active ? accent : inactiveColor,
+                    cursor: 'pointer',
+                    transition: 'all .22s cubic-bezier(.34,1.56,.64,1)',
+                    transform: active ? 'translateY(-2px)' : 'translateY(0)',
                   }}
                   onMouseEnter={(e) => {
                     const el = e.currentTarget as HTMLButtonElement;
-                    if (!active) {
-                      el.style.color = hoverColor;
-                      el.style.background = 'linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.10))';
-                      el.style.borderColor = 'rgba(255,215,0,0.48)';
-                    }
+                    if (!active) { el.style.color = accent; el.style.background = 'rgba(0,35,230,0.06)'; }
                   }}
                   onMouseLeave={(e) => {
                     const el = e.currentTarget as HTMLButtonElement;
-                    if (!active) {
-                      el.style.color = inactiveColor;
-                      el.style.background = 'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06))';
-                      el.style.borderColor = 'rgba(235,240,255,0.20)';
-                    }
+                    if (!active) { el.style.color = inactiveColor; el.style.background = 'transparent'; }
                   }}
                 >
-                  {active && <span className={`lemtel-tab-dot${isAI ? ' lemtel-tab-dot--ai' : ''}`} />}
-                  <Icon size={ultraCompact ? 17 : compact ? 18 : 20} color={active ? activeColor : 'currentColor'} />
+                  <span style={{
+                    position: 'relative',
+                    display: 'grid', placeItems: 'center',
+                    width: compact ? 24 : 28, height: compact ? 24 : 28, borderRadius: 10,
+                    background: active
+                      ? `radial-gradient(circle at 30% 30%, rgba(0,35,230,0.20), rgba(0,35,230,0.08) 70%)`
+                      : 'transparent',
+                  }}>
+                    <LucideIcon size={ultraCompact ? 16 : compact ? 18 : 20} strokeWidth={active ? 2.6 : 2} color={active ? accent : 'currentColor'} />
+                  </span>
                   {!ultraCompact && (
                     <span style={{
                       fontSize: compact ? 9 : 10,
-                      letterSpacing: compact ? 0.7 : 1.2,
-                      textTransform: 'uppercase',
                       fontWeight: active ? 800 : 600,
+                      letterSpacing: 0.3,
                       maxWidth: '100%',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {label}
                     </span>
                   )}
-
                 </button>
               );
             })}
@@ -1303,4 +1381,275 @@ function diagBtn(c: typeof theme.colors): React.CSSProperties {
     padding: '5px 8px', cursor: 'pointer',
     whiteSpace: 'nowrap',
   };
+}
+
+/* ============================================================
+   SpeedDialPane — Composition rapide (favoris + suggestions)
+   ============================================================ */
+type Favorite = { id: string; name: string; number: string };
+const FAV_KEY = 'ava.speeddial.favorites';
+function loadFavorites(): Favorite[] {
+  try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; }
+}
+function saveFavorites(list: Favorite[]) {
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(list)); } catch {}
+}
+function SpeedDialPane({ sp, onCall }: { sp: any; onCall: (n: string) => void }) {
+  const [favs, setFavs] = useState<Favorite[] | null>(null);
+  useEffect(() => { setFavs(loadFavorites()); }, []);
+  const addFav = (name: string, number: string) => {
+    const next = [...(favs || []), { id: crypto.randomUUID(), name, number }];
+    setFavs(next); saveFavorites(next);
+  };
+  const removeFav = (id: string) => {
+    const next = (favs || []).filter((f) => f.id !== id);
+    setFavs(next); saveFavorites(next);
+  };
+  const [newName, setNewName] = useState('');
+  const [newNum, setNewNum] = useState('');
+  if (favs === null) return <div style={{ padding: 16, color: c.textDim, fontSize: 12 }}>Chargement…</div>;
+  return (
+    <div style={{ padding: '14px 14px 20px', overflowY: 'auto', height: '100%' }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 12, letterSpacing: -0.2 }}>
+        ⚡ Speed Dial — Favoris
+      </div>
+      {favs.length === 0 ? (
+        <div style={{
+          padding: '24px 16px', borderRadius: 14, textAlign: 'center',
+          background: 'rgba(0,35,230,0.04)', border: '1px dashed rgba(0,35,230,0.20)',
+          color: c.textDim, fontSize: 12,
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>⭐</div>
+          <div style={{ fontWeight: 700, marginBottom: 4, color: c.text }}>Aucun favori</div>
+          <div>Ajoutez vos contacts les plus appelés pour les composer en un clic.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
+          {favs.map((f) => (
+            <div key={f.id} style={{
+              padding: 12, borderRadius: 14,
+              background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,35,230,0.12)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+              boxShadow: '0 2px 8px -4px rgba(0,35,230,0.12)',
+            }}>
+              <button onClick={() => onCall(f.number)} style={{
+                width: 52, height: 52, borderRadius: '50%', border: 'none',
+                background: 'linear-gradient(135deg, #0023e6, #21d4fd)',
+                color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer',
+                boxShadow: '0 8px 20px -10px rgba(0,35,230,0.7)',
+              }} aria-label={`Appeler ${f.name}`}>
+                <Phone size={22} />
+              </button>
+              <div style={{ fontSize: 11, fontWeight: 700, color: c.text, textAlign: 'center', wordBreak: 'break-word' }}>{f.name}</div>
+              <div style={{ fontSize: 10, color: c.textDim, fontFamily: 'JetBrains Mono, monospace' }}>{f.number}</div>
+              <button onClick={() => removeFav(f.id)} style={{
+                background: 'transparent', border: 'none', color: c.textDim, fontSize: 10, cursor: 'pointer',
+              }}>Retirer</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Ajouter un favori */}
+      <div style={{ marginTop: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: c.textSub, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+          Ajouter un favori
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Nom"
+            style={{
+              flex: 1, minWidth: 80, padding: '7px 10px', borderRadius: 8, fontSize: 12,
+              border: '1px solid rgba(0,35,230,0.20)', background: '#fff', color: c.text, outline: 'none',
+            }}
+          />
+          <input
+            value={newNum}
+            onChange={(e) => setNewNum(e.target.value)}
+            placeholder="Numéro"
+            style={{
+              flex: 1, minWidth: 80, padding: '7px 10px', borderRadius: 8, fontSize: 12,
+              border: '1px solid rgba(0,35,230,0.20)', background: '#fff', color: c.text, outline: 'none',
+            }}
+          />
+          <button
+            onClick={() => { if (newName && newNum) { addFav(newName, newNum); setNewName(''); setNewNum(''); } }}
+            disabled={!newName || !newNum}
+            style={{
+              padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+              background: newName && newNum ? 'linear-gradient(135deg, #0023e6, #4d6dff)' : 'rgba(0,0,0,0.08)',
+              border: 'none', color: newName && newNum ? '#fff' : c.textDim, cursor: newName && newNum ? 'pointer' : 'not-allowed',
+            }}
+          >+ Ajouter</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   AvaChatPane — Assistant IA AVA (comme AVAChatScreen mobile)
+   ============================================================ */
+type AvaMsg = { id: string; role: 'user' | 'assistant'; text: string; pending?: boolean };
+const AVA_SUGGESTIONS = [
+  "Combien d'appels avons-nous reçus aujourd'hui ?",
+  "Qui a manqué le plus d'appels cette semaine ?",
+  "Résume le dernier appel enregistré",
+  "Quelle est la durée moyenne des appels ?",
+];
+function AvaChatPane({ onClose }: { onClose: () => void }) {
+  const [msgs, setMsgs] = useState<AvaMsg[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => { taRef.current?.focus(); }, []);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [msgs]);
+  const send = async (raw?: string) => {
+    const text = (raw ?? input).trim();
+    if (!text || busy) return;
+    const userMsg: AvaMsg = { id: 'u' + Date.now(), role: 'user', text };
+    const placeholder: AvaMsg = { id: 'a' + Date.now(), role: 'assistant', text: '', pending: true };
+    setMsgs((m) => [...m, userMsg, placeholder]);
+    setInput(''); setBusy(true);
+    try {
+      const res = await fetch(`https://gejxisrqtvxavbrfcoxz.supabase.co/functions/v1/ava-assistant`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdlanhpc3JxdHZ4YXZicmZjb3h6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1MDMxNzQsImV4cCI6MjA3NzA3OTE3NH0.kaO-GslE99OCNrZ4_AMnbzGqya2azqz_UMZR34zZvvo',
+          ...(localStorage.getItem('sb-gejxisrqtvxavbrfcoxz-auth-token')
+            ? { Authorization: `Bearer ${JSON.parse(localStorage.getItem('sb-gejxisrqtvxavbrfcoxz-auth-token') || '{}')?.access_token || ''}` }
+            : {}),
+        },
+        body: JSON.stringify({ message: text, history: msgs.map((m) => ({ role: m.role, content: m.text })) }),
+      });
+      const data = res.ok ? await res.json() : null;
+      const reply = data?.answer || "Je suis en mode démo — connectez-vous à votre espace AVA pour poser des questions sur votre PBX.";
+      setMsgs((m) => m.map((x) => x.id === placeholder.id ? { ...x, text: reply, pending: false } : x));
+    } catch (e: any) {
+      setMsgs((m) => m.map((x) => x.id === placeholder.id ? { ...x, text: `Désolé — ${e.message || 'AVA est indisponible.'}`, pending: false } : x));
+    } finally {
+      setBusy(false);
+      setTimeout(() => taRef.current?.focus(), 50);
+    }
+  };
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#f0f4ff' }}>
+      {/* Header */}
+      <div style={{
+        padding: '12px 14px 8px', display: 'flex', alignItems: 'center', gap: 10,
+        background: '#ffffff', borderBottom: '1px solid rgba(0,0,0,0.08)',
+        boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
+      }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: '50%',
+          background: 'linear-gradient(135deg, #7a4cff, #21d4fd)',
+          display: 'grid', placeItems: 'center', fontSize: 16, color: '#fff',
+          boxShadow: '0 4px 14px rgba(122,76,255,0.40)',
+          flexShrink: 0,
+        }}>✦</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#0d1426', letterSpacing: -0.3 }}>AVA</div>
+          <div style={{ fontSize: 10, color: '#6b7a99' }}>Assistant IA · données PBX en direct</div>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
+            color: '#6b7a99', cursor: 'pointer', borderRadius: 8,
+            width: 28, height: 28, display: 'grid', placeItems: 'center', fontSize: 16,
+          }}
+          aria-label="Fermer AVA"
+        >×</button>
+      </div>
+      {/* Transcript */}
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 12px' }}>
+        {msgs.length === 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0d1426', marginBottom: 10 }}>
+              Posez n'importe quelle question à AVA sur votre système téléphonique.
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {AVA_SUGGESTIONS.map((s) => (
+                <button key={s} onClick={() => send(s)} style={{
+                  textAlign: 'left', padding: '11px 13px', borderRadius: 12,
+                  background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(122,76,255,0.25)',
+                  color: '#0d1426', fontSize: 12, cursor: 'pointer',
+                  boxShadow: '0 2px 8px -4px rgba(122,76,255,0.15)',
+                }}>
+                  <span style={{ color: '#7a4cff', marginRight: 8 }}>✦</span>{s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {msgs.map((m) => (
+          <div key={m.id} style={{
+            display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start',
+            marginBottom: 10,
+          }}>
+            <div style={{
+              maxWidth: '82%',
+              padding: '10px 13px',
+              borderRadius: 14,
+              background: m.role === 'user'
+                ? 'linear-gradient(135deg, #0023e6, #4d6dff)'
+                : 'rgba(255,255,255,0.92)',
+              color: m.role === 'user' ? '#fff' : '#0d1426',
+              fontSize: 12, lineHeight: 1.5,
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              border: m.role === 'assistant' ? '1px solid rgba(0,0,0,0.08)' : 'none',
+              boxShadow: m.role === 'assistant' ? '0 2px 8px -4px rgba(0,0,0,0.10)' : 'none',
+            }}>
+              {m.pending ? <span style={{ color: '#6b7a99', fontStyle: 'italic' }}>Réflexion…</span> : m.text}
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Composer */}
+      <div style={{
+        padding: '8px 12px 12px',
+        borderTop: '1px solid rgba(0,0,0,0.08)',
+        background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(14px)',
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'flex-end', gap: 8,
+          background: '#fff', borderRadius: 14,
+          border: '1px solid rgba(0,35,230,0.15)',
+          padding: 6, boxShadow: '0 2px 8px -4px rgba(0,35,230,0.12)',
+        }}>
+          <textarea
+            ref={taRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Message AVA…"
+            rows={1}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+            style={{
+              flex: 1, resize: 'none', border: 'none', outline: 'none',
+              padding: '8px 6px', fontSize: 12, fontFamily: 'inherit',
+              background: 'transparent', color: '#0d1426', maxHeight: 120,
+            }}
+          />
+          <button
+            onClick={() => send()}
+            disabled={!input.trim() || busy}
+            aria-label="Envoyer"
+            style={{
+              width: 36, height: 36, borderRadius: '50%',
+              border: 'none', cursor: input.trim() && !busy ? 'pointer' : 'not-allowed',
+              background: input.trim() && !busy ? 'linear-gradient(135deg, #7a4cff, #21d4fd)' : 'rgba(0,0,0,0.08)',
+              color: '#fff', fontSize: 16, display: 'grid', placeItems: 'center',
+              flexShrink: 0,
+            }}
+          >↑</button>
+        </div>
+      </div>
+    </div>
+  );
 }

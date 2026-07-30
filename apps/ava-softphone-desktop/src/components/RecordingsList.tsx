@@ -207,8 +207,8 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
     setAudioLoading(r.id);
     try {
       // Prefer short-lived signed URL (no client download); fallback to proxy blob.
-      const signed = await ava.getRecordingSignedUrl(r);
-      const url = signed?.url || (await ava.getRecordingAudioUrl(r));
+      const signed = await ava.getRecordingSignedUrl(r as any);
+      const url = signed?.url || (await ava.getRecordingAudioUrl(r as any));
       if (!url) {
         setAudioErrors((all) => ({
           ...all,
@@ -234,7 +234,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
     setAudioLoading(r.id);
     setError(null);
     try {
-      const url = await ava.getRecordingAudioUrl(r);
+      const url = await ava.getRecordingAudioUrl(r as any);
       if (url) {
         audioCache.set(r.id, url);
         setAudio((a) => ({ ...a, [r.id]: url }));

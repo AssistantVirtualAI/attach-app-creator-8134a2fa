@@ -1,56 +1,34 @@
-## Contexte
-
-Les appels entrants tombent en boîte vocale car, à certains moments, **aucun contact SIP n'est enregistré** sur le PBX. Deux causes cumulables :
-
-1. **Gap d'enregistrement au passage en arrière-plan** — la WebView se désenregistre avant que le service natif ait confirmé un REGISTER 200 OK.
-2. **Contact/Via natifs en `.invalid`** — NetSapiens peut rejeter ou ignorer ces AOR non routables.
-
-Bonus lié : les devices créés à la volée (self-heal) n'étaient pas ajoutés à la règle de sonnerie.
-
-## Étape 1 — Handoff sans trou d'enregistrement (déjà appliqué)
-
-Fichiers : `src/hooks/useMplanipretSoftphone.ts` + copie `apps/planipret-mobile/...`
-
-- `handoffToNative()` démarre le service natif puis **attend une confirmation réelle** (`status = registered` ou `protected`) via `getPlanipretSipKeepAliveStatus()`, sondage 1 s pendant 12 s.
-- La WebView n'appelle `releaseForBackground()` **que si** la confirmation arrive.
-- 3 tentatives avec backoff (2 s, 4 s, 6 s) ; annulation propre si un nouveau handoff démarre (`handoffSeq`).
-- Si aucun 200 OK natif : `forceReregister()` — la WebView garde l'enregistrement plutôt que de laisser l'extension nue.
-
+## Goal
+Consume Scott's 4 new Maestro endpoints for mobile:
 ```text
-background → start natif → poll status (12s)
-  ├─ registered/protected → release WebView   (1 AOR actif en continu)
-  └─ timeout/error → retry x3 → fallback WebView registered
+GET /users/{id}/clients
+GET /users/{id}/clients/{client-id}/profile
+GET /users/{id}/brokers
+GET /users/{id}/brokers/{broker-id}/profile
 ```
+`{id}` = the broker's numeric Maestro telecom user id (already resolved today via `resolveBrokerId` / `planipret_profiles.maestro_broker_id`).
 
-## Étape 2 — Domaine SIP réel côté natif (déjà appliqué)
+## Backend (`supabase/functions/maestro-actions/index.ts`)
+Add 4 actions, all routed through `maestroTelecomFetch` (machine key + `machine=1`, retries/timeouts already handled), never raw fetch:
+- `list_clients` → `/users/{id}/clients` (optional `search`, `limit`)
+- `client_profile` → `/users/{id}/clients/{clientId}/profile`
+- `list_brokers` → `/users/{id}/brokers`
+- `broker_profile` → `/users/{id}/brokers/{brokerId}/profile`
 
-Fichier : `apps/planipret-mobile/scripts/apply-native-config.mjs`
+Rules:
+- Resolve `{id}` server-side from the caller's JWT → `planipret_profiles.maestro_broker_id`; allow an explicit `payload.user_id` only for admins.
+- Normalize each response into the shared contact shape already used by the dialer (`id, first_name, last_name, display_name, email, phone/cell_phone/work_phone, company, maestro_client_id`), tolerating array vs `{clients|brokers|data}` envelopes.
+- On non-OK, return the provider status + body (no bare 500).
 
-- Android : `Contact: <sip:{login}@{domain};transport=wss>` (avant : `@android-xxx.planipret.invalid`).
-- Android : `Via: SIP/2.0/WSS {domain}` (avant : `planipret-mobile.invalid`).
-- iOS (même classe de bug) : `stableContactHost()` retourne le domaine réel, et les `Via` REGISTER/OPTIONS utilisent `{domain}`.
+## Mobile (`apps/planipret-mobile`)
+- `src/lib/ppContactsCache.ts`: add cache actions `maestro_clients` and `maestro_brokers` (same TTL + localStorage persistence + inflight dedup), fetched via the new actions; add them to `prefetchPpContacts`.
+- Contacts/Directory screen: show sections "Mes clients" (Maestro clients) and "Courtiers" (Maestro brokers) alongside the existing NS directory, deduped by phone/email.
+- Contact detail: lazy-load the `*/profile` endpoint on open (cached per id) to show the extra profile fields; keep existing SMS/Call/Email actions.
 
-## Étape 3 — Règle de sonnerie resynchronisée après self-heal (déjà appliqué)
+## Staging validation
+- Call each of the 4 actions with `curl_edge_functions` for one known broker id, log the raw status/body shape, and confirm field names before finalizing normalization (Scott's exact payload shape is unverified — the mapping is adjusted after this probe).
+- Report results back to Scott.
 
-- `ns-resolve-sip-credentials` : après création self-heal d'un device, appel fire-and-forget de `pp-sync-answering-rules` avec `broker_id`, encapsulé dans `EdgeRuntime.waitUntil` (n'allonge pas la résolution des credentials).
-- `pp-sync-answering-rules` : nouveau chemin d'auth interne (`x-internal-call: 1` + service role), l'accès admin normal reste inchangé.
-
-## Étape 4 — Validation (à faire côté device)
-
-1. `npm run build` dans `apps/planipret-mobile` → régénère les sources natives + `verify-sip-bundle.mjs`.
-2. Xcode / Android Studio : vérifier dans les logs que le REGISTER natif contient le domaine réel (aucun `.invalid`).
-3. Portail NetSapiens : après mise en arrière-plan, l'AOR `<ext>_mobile` doit rester **Registered** en continu (aucune fenêtre à 0 device).
-4. Appel entrant app fermée → doit sonner avant le timeout `forward-no-answer`.
-5. Nouveau broker jamais provisionné → vérifier que la règle de sonnerie est créée automatiquement au premier login.
-
-## Détails techniques
-
-- Aucun changement de schéma DB ni de politique RLS.
-- Fonctions à redéployer : `ns-resolve-sip-credentials`, `pp-sync-answering-rules`.
-- `verify-sip-bundle.mjs` continue de bloquer les régressions (Contact aléatoire, re-REGISTER sur INVITE, OPTIONS trop rapide).
-- Typecheck du projet : OK.
-
-## Reste à surveiller (causes 3 et 4 de l'investigation)
-
-- Latence PushKit iOS au démarrage à froid vs `forward-no-answer` : à mesurer une fois #1/#2 confirmés stables.
-- Devices WSS/WebRTC activés dans le portail NetSapiens (vérification manuelle).
+## Notes
+- No DB migration needed; nothing is persisted unless you want a cache table later.
+- Existing `list_contacts` stays as-is (fallback), so nothing regresses if the new endpoints are not yet live on prod.

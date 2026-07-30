@@ -345,7 +345,7 @@ export default function PlanipretAdminLayout() {
 
         {/* Nav groups */}
         <nav className="flex-1 py-2 overflow-y-auto">
-          {NAV.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.sectionKey}>
               <div className="pp-nav-section">{tt(`adminPortal.sections.${group.sectionKey}`)}</div>
               {group.items.map(({ to, key, Icon, badge }) => {

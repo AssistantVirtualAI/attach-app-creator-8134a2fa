@@ -31,6 +31,24 @@ type ClientType = "mobile" | "web" | "widget";
 // Point WSS at the same core cluster the widget uses as its Outbound Proxy.
 const NS_SIP_WSS_URL = Deno.env.get("NS_SIP_WSS_URL") ?? "wss://voice.ava-telecom.ca:9002";
 
+/**
+ * NetSapiens core nodes (core1.cluster1.ucstack.io …) accept the REGISTER and
+ * then close the WebSocket with 1001 "Going Away" ~10-15s later: client
+ * registrations must live on the SBC edge. Verified live 2026-05.
+ * Never advertise a core node as a client WSS target.
+ */
+const isCoreWss = (u: string) => {
+  try { return /(^|\.)(core\d*|cluster\d*)[^/]*\.ucstack\.io$/i.test(new URL(u).hostname); }
+  catch { return /ucstack\.io/i.test(u); }
+};
+const edgeWssUrls = (candidates: (string | undefined | null)[]): string[] => {
+  const kept = Array.from(new Set(candidates
+    .map((u) => String(u ?? "").trim())
+    .filter((u) => /^wss?:\/\//i.test(u))))
+    .filter((u) => !isCoreWss(u));
+  return kept.length ? kept : ["wss://voice.ava-telecom.ca:9002"];
+};
+
 function json(b: unknown, s = 200) {
   return new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
@@ -235,8 +253,9 @@ Deno.serve(async (req) => {
         const dom = d.sip_domain ?? d.domain;
         const pwd = d.sip_password ?? d.password;
         if (r.ok && ext && dom && pwd) {
-          const wss = d.sip_wss_url ?? d.wss_url ?? NS_SIP_WSS_URL;
-          const wssUrls = Array.from(new Set([wss, NS_SIP_WSS_URL, "wss://core1.cluster1.ucstack.io:9002"].filter(Boolean)));
+          const rawWss = d.sip_wss_url ?? d.wss_url ?? NS_SIP_WSS_URL;
+          const wss = edgeWssUrls([rawWss, NS_SIP_WSS_URL])[0];
+          const wssUrls = edgeWssUrls([wss, NS_SIP_WSS_URL]);
           return json({
             ok: true,
             source: "maestro_telecom",
@@ -392,8 +411,8 @@ Deno.serve(async (req) => {
     sip_uri: sipUri,
     sip_ws_url: NS_SIP_WSS_URL,
     sip_wss_url: NS_SIP_WSS_URL,
-    sip_ws_urls: Array.from(new Set([NS_SIP_WSS_URL, `wss://${coreServer}:9002`, "wss://core1.cluster1.ucstack.io:9002"])),
-    sip_wss_urls: Array.from(new Set([NS_SIP_WSS_URL, `wss://${coreServer}:9002`, "wss://core1.cluster1.ucstack.io:9002"])),
+    sip_ws_urls: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`]),
+    sip_wss_urls: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`]),
     display_name: brokerDisplayName,
     sip_state: sipState,
     device_registered: sipState === "registered",

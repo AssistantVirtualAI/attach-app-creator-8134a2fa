@@ -14,7 +14,7 @@ import { theme } from '../lib/theme';
 import DialerKeypad from './DialerKeypad';
 import { ava } from '../lib/avaApi';
 import {
-  Phone, MessageCircle, Users, LayoutGrid, Grid3x3,
+  Phone, MessageCircle, LayoutGrid, Grid3x3, User,
 } from 'lucide-react';
 // TabIcons legacy — replaced by lucide-react in new bottom nav
 import OutputDevicePicker from './OutputDevicePicker';
@@ -39,13 +39,13 @@ interface Creds {
 type Tab = 'keypad' | 'chats' | 'calls' | 'contacts' | 'speeddial';
 type CallsSubTab = 'recents' | 'recordings' | 'voicemail';
 
-const MAIN_TABS: Tab[] = ['keypad', 'chats', 'calls', 'contacts', 'speeddial'];
+const MAIN_TABS: Tab[] = ['contacts', 'chats', 'calls', 'keypad', 'speeddial'];
 
 const TAB_META: Record<Tab, { LucideIcon: React.ComponentType<{ size?: number | string; color?: string; strokeWidth?: number | string }>; label: string }> = {
-  keypad:    { LucideIcon: Grid3x3,       label: 'Keypad' },
+  contacts:  { LucideIcon: User,          label: 'Contacts' },
   chats:     { LucideIcon: MessageCircle, label: 'Chats' },
   calls:     { LucideIcon: Phone,         label: 'Calls' },
-  contacts:  { LucideIcon: Users,         label: 'Contacts' },
+  keypad:    { LucideIcon: Grid3x3,       label: 'Keypad' },
   speeddial: { LucideIcon: LayoutGrid,    label: 'Speed Dial' },
 };
 

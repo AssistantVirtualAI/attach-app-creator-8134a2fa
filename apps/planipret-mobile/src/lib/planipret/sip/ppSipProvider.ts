@@ -361,13 +361,21 @@ class PpSipProvider {
     if (ppSipInitInFlight) return;
     installSipParserGuard();
     const wssUrl = String(cfg.wssUrl ?? "").trim();
-    if (!cfg.extension || !cfg.sipDomain || !wssUrl || wssUrl === "undefined" || !/^wss?:\/\//i.test(wssUrl) || !cfg.password) {
+    const rawWssUrl = String(cfg.wssUrl ?? "").trim();
+    if (!cfg.extension || !cfg.sipDomain || !rawWssUrl || rawWssUrl === "undefined" || !/^wss?:\/\//i.test(rawWssUrl) || !cfg.password) {
       this.update({ status: "error", errorCause: "invalid_config" });
       return;
     }
-    const cleanCfg = { ...cfg, wssUrl };
+    // Core nodes close the socket with 1001 right after the 200 OK — registrations
+    // must go to the SBC edge only.
+    const edgeUrls = edgeOnlyWssUrls([rawWssUrl, ...(cfg.wssUrls || [])]);
+    if (isCoreWssUrl(rawWssUrl)) {
+      this.log("warn", `core WSS target rejected (${rawWssUrl}) → using edge ${edgeUrls[0]}`);
+    }
+    const wssUrl = edgeUrls[0];
+    const cleanCfg = { ...cfg, wssUrl, wssUrls: edgeUrls };
     const sig = `${cleanCfg.extension}|${cleanCfg.sipDomain}|${cleanCfg.wssUrl}|${cleanCfg.password}`;
-    if (this.ua && sig === this.lastSig && this.snap.status === "registered") {
+
       return;
     }
     // Never tear down a UA that is still in its initial connect/REGISTER

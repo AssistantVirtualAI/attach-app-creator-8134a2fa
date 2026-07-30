@@ -189,7 +189,8 @@ Deno.serve(async (req) => {
   const ruleList = arrOf(rules.data).filter((r) => r && typeof r === "object");
   const tfOf = (r: any) => String(r?.["time-frame"] ?? r?.timeframe ?? r?.time_frame ?? "");
   const defaultRule = ruleList.find((r) => ["default", "*", "always"].includes(tfOf(r).toLowerCase()));
-  const activeRule = ruleList.find((r) => yes(r?.["active"]) ) ?? defaultRule;
+  // NS-API v2 exposes the computed active timeframe as `is-active`.
+  const activeRule = ruleList.find((r) => yes(r?.["is-active"])) ?? defaultRule;
 
   if (!ruleList.length) {
     verdicts.push("NO_ANSWERING_RULE");
@@ -200,7 +201,8 @@ Deno.serve(async (req) => {
   }
 
   const simRing = activeRule?.["simultaneous-ring"] ?? null;
-  const simList: any[] = arrOf(simRing?.destinations ?? simRing?.list ?? activeRule?.["simultaneous-ring-list"] ?? []);
+  // NS-API v2 AnswerruleFeatureSimRing stores destinations in `parameters`.
+  const simList: any[] = arrOf(simRing?.parameters ?? []);
   const simEnabled = yes(simRing?.enabled) || yes(activeRule?.["simultaneous-ring-enabled"]);
   const ringTimeout = Number(
     simRing?.timeout ?? activeRule?.["ring-timeout"] ?? activeRule?.["timeout"] ?? 0,
@@ -279,6 +281,7 @@ Deno.serve(async (req) => {
   });
   const destFields = [
     "destination", "dialrule-application", "dial-rule-application",
+    "dialrule-parameter", "dial-rule-parameter",
     "dialrule-destination", "dial-rule-destination", "application",
     "to-user", "users", "user", "dest-user", "destination-user",
     "dialrule-translation-destination", "dial-rule-translation-destination",

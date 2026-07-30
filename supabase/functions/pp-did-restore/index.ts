@@ -3,16 +3,16 @@
 //   dial-rule-application = "user", dial-rule-parameter = "user_<ext>"
 // Actions: probe (read-only), restore (batched PUT + read-back verify), verify
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
+import { requirePlanipretAdmin } from "../_shared/ns-broker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-restore-key",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
 const NS_API_BASE_URL = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";
 const NS_DEFAULT_DOMAIN = Deno.env.get("NS_DEFAULT_DOMAIN") ?? "planipret.ca";
-const RESTORE_KEY = Deno.env.get("PP_DID_RESTORE_KEY") ?? "";
 
 import { DID_MAP } from "./mapping.ts";
 
@@ -61,9 +61,8 @@ function destOf(pn: any): string | null {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
-    if (!RESTORE_KEY || req.headers.get("x-restore-key") !== RESTORE_KEY) {
-      return json({ success: false, error: "Unauthorized" }, 401);
-    }
+    const auth = await requirePlanipretAdmin(req);
+    if ("error" in auth) return auth.error;
     if (!NS_API_KEY) return json({ success: false, error: "NS_API_KEY not configured" }, 500);
 
     const body = await req.json().catch(() => ({}));

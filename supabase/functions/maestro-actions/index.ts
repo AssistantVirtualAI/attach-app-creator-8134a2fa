@@ -12,6 +12,31 @@ async function getMaestroConfig(admin: any) {
   };
 }
 
+/** Normalize a Maestro client/broker payload into the shared contact shape. */
+function normalizeContact(c: any) {
+  if (!c || typeof c !== "object") return c;
+  const first = c.first_name ?? c.firstname ?? c.given_name ?? null;
+  const last = c.last_name ?? c.lastname ?? c.family_name ?? null;
+  const full = c.full_name ?? c.name ?? c.display_name ??
+    [first, last].filter(Boolean).join(" ").trim() || null;
+  const id = c.id ?? c.client_id ?? c.broker_id ?? c.user_id ?? c.uuid ?? null;
+  return {
+    id,
+    first_name: first,
+    last_name: last,
+    name: full,
+    display_name: full,
+    email: c.email ?? c.email_address ?? null,
+    company: c.company ?? c.employer ?? c.organization ?? null,
+    phone: c.phone ?? c.mobile ?? c.cell_phone ?? c.phone_number ?? null,
+    cell_phone: c.cell_phone ?? c.mobile ?? null,
+    work_phone: c.work_phone ?? c.office_phone ?? null,
+    home_phone: c.home_phone ?? null,
+    maestro_client_id: c.client_id ?? id,
+    ...c,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {

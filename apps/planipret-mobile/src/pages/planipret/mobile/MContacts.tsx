@@ -227,7 +227,7 @@ export default function MContacts() {
   // Prefetch personal + directory in parallel after first paint so subsequent
   // tab switches render from memory. Dedup + TTL handled by ppContactsCache.
   useEffect(() => {
-    prefetchPpContacts(["list", "directory"], 500);
+    prefetchPpContacts(["list", "directory", "maestro_clients", "maestro_brokers"], 500);
     const quick = window.setTimeout(() => { void load("directory", { limit: 120, background: true }); }, 250);
     const full = window.setTimeout(() => { void load("directory", { force: true, limit: 500, background: true }); }, 1000);
     return () => { window.clearTimeout(quick); window.clearTimeout(full); };

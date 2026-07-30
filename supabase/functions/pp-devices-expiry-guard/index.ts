@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
   const NS_API_KEY = Deno.env.get("NS_API_KEY");
   const NS_API_BASE_URL = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";
   const NS_DEFAULT_DOMAIN = Deno.env.get("NS_DEFAULT_DOMAIN") ?? "planipret.ca";
-  const CRON_SECRET = Deno.env.get("PP_CRON_SECRET") ?? "";
+  const CRON_SECRETS = [Deno.env.get("PP_CRON_SECRET"), Deno.env.get("CRON_PBX_SECRET"), Deno.env.get("CRON_SECRET")].filter((v): v is string => !!v);
 
   if (!SUPABASE_URL || !SERVICE_ROLE || !NS_API_KEY) {
     return json({ error: "missing_config", detail: "SUPABASE_SERVICE_ROLE_KEY / NS_API_KEY required" }, 500);
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     const body: any = await req.json().catch(() => ({}));
     const authHeader = req.headers.get("Authorization") ?? "";
     const cronHeader = req.headers.get("x-cron-secret") ?? "";
-    const isCron = !!CRON_SECRET && cronHeader === CRON_SECRET;
+    const isCron = !!cronHeader && CRON_SECRETS.includes(cronHeader);
     const serviceCall = authHeader.includes(SERVICE_ROLE);
 
     let callerId: string | null = null;

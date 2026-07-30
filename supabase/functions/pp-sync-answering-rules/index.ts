@@ -438,6 +438,10 @@ Deno.serve(async (req) => {
           {
             method: "PUT",
             body: JSON.stringify({
+              // Ring window lives on the user record in NS-API v2. Without it
+              // the fork can time out after the tenant default (often 0-10s)
+              // and the caller lands on voicemail before the devices ring.
+              "ring-no-answer-timeout-seconds": ring_timeout,
               "do-not-disturb": "no",
               "do-not-disturb-enabled": "no",
               "call-screening-enabled": "no",
@@ -453,6 +457,7 @@ Deno.serve(async (req) => {
               "call-forward-busy": "",
               "call-forward-no-answer": "",
             }),
+
           },
           { functionName: "pp-sync-answering-rules" },
         );

@@ -3,7 +3,6 @@ import TitleBar from './components/TitleBar';
 import SetupWizard from './components/SetupWizard';
 import UpdateBanner from './components/UpdateBanner';
 import SoftphonePane from './components/SoftphonePane';
-import ConsoleLayout from './components/console/ConsoleLayout';
 import SettingsPage from './components/SettingsPage';
 import BrightnessOverlay from './components/BrightnessOverlay';
 import ResponsiveLab from './components/ResponsiveLab';
@@ -122,7 +121,6 @@ function DesktopApp() {
 
   const [creds, setCreds] = useState<Creds>(null);
   const [loading, setLoading] = useState(true);
-  const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 980);
   const [mobileSettings, setMobileSettings] = useState(false);
 
   useEffect(() => {
@@ -227,19 +225,7 @@ function DesktopApp() {
       const s = sipProvider.getSnapshot?.().callState;
       return s === 'ringing-in' || s === 'ringing-out' || s === 'active' || s === 'held';
     };
-    const onResize = () => {
-      // Freeze layout during an active/ringing call so the pane holding the
-      // <audio> element and the dialer view is never unmounted mid-call.
-      if (isCallBusy()) return;
-      setWide(window.innerWidth >= 980);
-    };
-    window.addEventListener('resize', onResize);
-    // When the call ends, re-sync layout to the current window size.
-    const unsubscribeSip = sipProvider.subscribe?.((snap) => {
-      if (snap.callState === 'idle' || snap.callState === 'ended') {
-        setWide(window.innerWidth >= 980);
-      }
-    });
+    const unsubscribeSip = sipProvider.subscribe?.((snap) => { void snap; });
 
     import('./lib/mediaPermissions').then(({ requestMediaPermissions }) => {
       requestMediaPermissions().catch(() => { /* noop */ });
@@ -249,13 +235,12 @@ function DesktopApp() {
       cancelled = true;
       clearInterval(syncTimer);
       subscription.unsubscribe();
-      window.removeEventListener('resize', onResize);
       try { unsubscribeSip?.(); } catch { /* noop */ }
     };
   }, []);
 
   const openSettingsMobile = () => {
-    // Navigate to the settings view via the global nav bus so both ConsoleLayout
+    // Navigate to the settings view via the global nav bus so SoftphonePane
     // and the standalone SoftphonePane gear button reach the SettingsPage.
     setMobileSettings(true);
     window.dispatchEvent(new CustomEvent('lemtel:nav', { detail: 'settings' }));
@@ -303,9 +288,7 @@ function DesktopApp() {
       <BrightnessOverlay />
       {!IS_EMBED && <TitleBar />}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative', zIndex: 1 }}>
-        {wide && !IS_EMBED ? (
-          <ConsoleLayout creds={creds} onOpenSettings={openSettingsMobile} />
-        ) : mobileSettings ? (
+        {mobileSettings ? (
           <SettingsPage creds={creds} onSignOut={signOutDesktop} onBack={() => setMobileSettings(false)} />
         ) : (
           <SoftphonePane creds={creds} onOpenSettings={openSettingsMobile} />

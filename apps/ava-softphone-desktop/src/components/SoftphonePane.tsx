@@ -7,8 +7,7 @@ import SmsThreads from './SmsThreads';
 import CallForwarding from './CallForwarding';
 import LemtelLogo from './LemtelLogo';
 import BrandTagline from './BrandTagline';
-import RecordingsList from './RecordingsList';
-import AIInsights from './AIInsights';
+
 // ProfileMenu is rendered globally in TitleBar — no longer duplicated here.
 import { AppErrorBoundary } from './AppErrorBoundary';
 import { theme } from '../lib/theme';
@@ -16,7 +15,7 @@ import DialerKeypad from './DialerKeypad';
 import { ava } from '../lib/avaApi';
 import {
   PhoneIcon, ClockIcon, UsersIcon, VoicemailIcon,
-  MessageIcon, DiscIcon, SparkleIcon,
+  MessageIcon,
 } from './TabIcons';
 import OutputDevicePicker from './OutputDevicePicker';
 import { watchA11y } from '../lib/a11yAudit';
@@ -37,16 +36,14 @@ interface Creds {
   refreshToken?: string;
 }
 
-type Tab = 'dial' | 'recents' | 'contacts' | 'voicemail' | 'sms' | 'recordings' | 'ai';
+type Tab = 'dial' | 'recents' | 'contacts' | 'voicemail' | 'sms';
 
 const TAB_META: Record<Tab, { Icon: React.FC<{ size?: number; color?: string }>; label: string }> = {
-  dial:       { Icon: PhoneIcon,     label: 'Phone' },
-  recents:    { Icon: ClockIcon,     label: 'History' },
-  contacts:   { Icon: UsersIcon,     label: 'Contacts' },
-  voicemail:  { Icon: VoicemailIcon, label: 'Voicemail' },
-  sms:        { Icon: MessageIcon,   label: 'SMS' },
-  recordings: { Icon: DiscIcon,      label: 'Recordings' },
-  ai:         { Icon: SparkleIcon,   label: 'AI' },
+  dial:      { Icon: PhoneIcon,     label: 'Phone' },
+  recents:   { Icon: ClockIcon,     label: 'History' },
+  contacts:  { Icon: UsersIcon,     label: 'Contacts' },
+  voicemail: { Icon: VoicemailIcon, label: 'Voicemail' },
+  sms:       { Icon: MessageIcon,   label: 'SMS' },
 };
 
 const { colors: c, glow } = theme;
@@ -356,14 +353,8 @@ export default function SoftphonePane({
   return (
     <div ref={rootRef} style={{
       display: 'flex', flexDirection: 'column', height: '100%',
-      background: c.bg, color: c.text, position: 'relative', overflow: 'hidden',
+      background: '#f0f4ff', color: '#0d1426', position: 'relative', overflow: 'hidden',
     }}>
-      {/* Ambient background glow */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: c.bgGradient,
-        pointerEvents: 'none', zIndex: 0,
-      }} />
 
       <audio ref={audioRef} autoPlay />
 
@@ -374,24 +365,23 @@ export default function SoftphonePane({
         gap: ultraCompact ? 4 : compact ? 6 : 10,
         padding: ultraCompact ? '6px 8px' : compact ? '7px 10px' : '10px 14px',
         height: ultraCompact ? 42 : compact ? 46 : 52, boxSizing: 'border-box',
-        background: 'rgba(0,0,0,0.3)',
-        borderBottom: `1px solid ${c.border}`,
-        backdropFilter: 'blur(12px)',
+        background: '#ffffff',
+        borderBottom: '1px solid rgba(0,0,0,0.08)',
+        boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
       }}>
         {/* Extension badge */}
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
           padding: compact ? '3px 8px' : '4px 10px', borderRadius: 999,
-          background: c.goldDim, border: `1px solid ${c.borderGold}`,
-          color: c.gold, fontSize: compact ? 10 : 11, fontWeight: 700, letterSpacing: 0.5,
-          boxShadow: glow.gold,
+          background: 'rgba(0,35,230,0.08)', border: '1px solid rgba(0,35,230,0.20)',
+          color: '#0023e6', fontSize: compact ? 10 : 11, fontWeight: 700, letterSpacing: 0.5,
         }}>
           Ext {creds.extension}
         </div>
 
         {!compact && (
           <div style={{
-            fontSize: 12, fontWeight: 500, color: c.text, opacity: 0.85,
+            fontSize: 12, fontWeight: 500, color: '#0d1426', opacity: 0.85,
             flex: 1, minWidth: 0, textAlign: 'center',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
@@ -415,8 +405,8 @@ export default function SoftphonePane({
             disabled={syncingPhone}
             title="Sync phone system"
             style={{
-              background: 'rgba(255,215,0,0.08)', border: `1px solid ${c.borderGold}`,
-              color: c.gold, cursor: syncingPhone ? 'wait' : 'pointer',
+              background: 'rgba(0,35,230,0.06)', border: '1px solid rgba(0,35,230,0.20)',
+              color: '#0023e6', cursor: syncingPhone ? 'wait' : 'pointer',
               width: compact ? 26 : 30, height: compact ? 24 : 28, borderRadius: 8, fontSize: 12,
             }}
             aria-label="Sync phone system"
@@ -424,8 +414,8 @@ export default function SoftphonePane({
           <button
             onClick={onOpenSettings}
             style={{
-              background: 'rgba(255,255,255,0.05)', border: `1px solid ${c.border}`,
-              color: c.text, cursor: 'pointer',
+              background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.12)',
+              color: '#3a4560', cursor: 'pointer',
               width: compact ? 26 : 30, height: compact ? 24 : 28, borderRadius: 8, fontSize: 14,
             }}
             aria-label="Settings"
@@ -644,25 +634,16 @@ export default function SoftphonePane({
             <SmsThreads />
           </div>
         )}
-        {!inCall && !ringing && tab === 'recordings' && (
-          <div style={{ animation: 'fadeIn .25s ease-out' }}>
-            <AppErrorBoundary compact onBack={() => setTab('dial')}><RecordingsList extension={creds.extension} /></AppErrorBoundary>
-          </div>
-        )}
-        {!inCall && !ringing && tab === 'ai' && (
-          <div style={{ animation: 'fadeIn .25s ease-out' }}>
-            <AppErrorBoundary compact onBack={() => setTab('dial')}><AIInsights /></AppErrorBoundary>
-          </div>
-        )}
+
       </div>
 
       {/* BOTTOM TABS */}
       {!inCall && !ringing && !hideTabs && (
         <div style={{
           position: 'relative', zIndex: 1, flexShrink: 0,
-          background: 'linear-gradient(180deg, rgba(15,15,30,0.6) 0%, rgba(8,8,18,0.95) 100%)',
-          borderTop: `1px solid ${c.border}`,
-          backdropFilter: 'blur(14px)',
+          background: '#ffffff',
+          borderTop: '1px solid rgba(0,0,0,0.08)',
+          boxShadow: '0 -1px 8px rgba(0,0,0,0.04)',
         }}>
           <div style={{
             display: 'flex',
@@ -672,39 +653,29 @@ export default function SoftphonePane({
             paddingLeft: compact ? 4 : 0,
             paddingRight: compact ? 4 : 0,
           }}>
-            {(['dial', 'recents', 'contacts', 'voicemail', 'sms', 'recordings', 'ai'] as Tab[]).map((tk) => {
+            {(['dial', 'recents', 'contacts', 'voicemail', 'sms'] as Tab[]).map((tk) => {
               const active = tab === tk;
               const { Icon, label } = TAB_META[tk];
-              const isAI = tk === 'ai';
-              const activeColor = isAI ? c.aiLight : c.gold;
-              // High-contrast inactive color so tabs are clearly readable on dark glass bar
-              const inactiveColor = '#EAF1FF';
-              const hoverColor = '#FFFFFF';
+              const activeColor = '#0023e6';
+              const inactiveColor = '#6b7a99';
+              const hoverColor = '#0023e6';
               return (
                 <button
                   key={tk}
                   onClick={() => setTab(tk)}
                   title={label}
                   aria-label={label}
-                  className={`lemtel-glass${isAI ? ' lemtel-glass--ai' : ''}`}
+                  className="lemtel-tab-btn"
                   style={{
                     flex: 1, minWidth: 0,
                     padding: ultraCompact ? '4px 2px' : compact ? '5px 3px' : '4px 4px 0',
 
-                    background: active
-                      ? (isAI
-                          ? 'linear-gradient(180deg, rgba(157,111,240,0.34), rgba(58,38,118,0.22))'
-                          : 'linear-gradient(180deg, rgba(255,215,0,0.30), rgba(78,62,18,0.24))')
-                      : 'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06))',
-                    border: active
-                      ? `1px solid ${isAI ? 'rgba(201,178,255,0.72)' : 'rgba(255,215,0,0.78)'}`
-                      : '1px solid rgba(235,240,255,0.20)',
+                    background: active ? 'rgba(0,35,230,0.08)' : 'transparent',
+                    border: active ? '1px solid rgba(0,35,230,0.20)' : '1px solid transparent',
                     borderRadius: 10,
                     margin: compact ? '5px 2px' : '6px 3px',
                     color: active ? activeColor : inactiveColor,
-                    textShadow: active
-                      ? `0 0 10px ${isAI ? 'rgba(157,111,240,0.55)' : 'rgba(255,215,0,0.55)'}`
-                      : '0 1px 2px rgba(0,0,0,0.5)',
+                    textShadow: 'none',
                     cursor: 'pointer',
                     display: 'flex', flexDirection: 'column',
                     alignItems: 'center', justifyContent: 'center',

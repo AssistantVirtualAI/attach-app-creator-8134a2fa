@@ -438,10 +438,10 @@ public class PpSipKeepAliveService extends Service {
     if (challenge == null && lastRegisterOkMs > 0 && (now - lastRegisterOkMs) < REGISTER_DEBOUNCE_MS) { emitStatus("registered", "register_debounced_ok"); return; }
     int seq = cseq++;
     String branch = "z9hG4bK" + UUID.randomUUID().toString().replace("-", "");
-    String contact = "<sip:" + login + "@android-" + stableToken(login) + ".planipret.invalid;transport=wss>";
+    String contact = "<sip:" + login + "@" + domain + ";transport=wss>";
     StringBuilder sip = new StringBuilder();
     sip.append("REGISTER sip:").append(domain).append(" SIP/2.0\\r\\n");
-    sip.append("Via: SIP/2.0/WSS planipret-mobile.invalid;branch=").append(branch).append("\\r\\n");
+    sip.append("Via: SIP/2.0/WSS ").append(domain).append(";branch=").append(branch).append("\\r\\n");
     sip.append("Max-Forwards: 70\\r\\n");
     sip.append("To: <sip:").append(login).append("@").append(domain).append(">\\r\\n");
     sip.append("From: \\"").append(display == null ? login : display.replace("\\"", "")).append("\\" <sip:").append(login).append("@").append(domain).append(">;tag=").append(fromTag).append("\\r\\n");
@@ -818,7 +818,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       let seq = cseq; cseq += 1
       let branch = "z9hG4bK" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
       var sip = "OPTIONS sip:" + domain + " SIP/2.0\\r\\n"
-      sip += "Via: SIP/2.0/WSS planipret-ios.invalid;branch=" + branch + "\\r\\n"
+      sip += "Via: SIP/2.0/WSS " + domain + ";branch=" + branch + "\\r\\n"
       sip += "From: <sip:" + login + "@" + domain + ">;tag=" + fromTag + "\\r\\n"
       sip += "To: <sip:" + domain + ">\\r\\n"
       sip += "Call-ID: " + UUID().uuidString + "@planipret-ios\\r\\n"
@@ -848,7 +848,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       let branch = "z9hG4bK" + UUID().uuidString.replacingOccurrences(of: "-", with: "")
       let contact = "<sip:" + login + "@" + stableContactHost() + ";transport=wss>"
       var sip = "REGISTER sip:" + domain + " SIP/2.0\\r\\n"
-      sip += "Via: SIP/2.0/WSS planipret-ios.invalid;branch=" + branch + "\\r\\nMax-Forwards: 70\\r\\n"
+      sip += "Via: SIP/2.0/WSS " + domain + ";branch=" + branch + "\\r\\nMax-Forwards: 70\\r\\n"
       sip += "To: <sip:" + login + "@" + domain + ">\\r\\nFrom: \\"" + displayName.replacingOccurrences(of: "\\"", with: "") + "\\" <sip:" + login + "@" + domain + ">;tag=" + fromTag + "\\r\\n"
       sip += "Call-ID: " + callIdReg + "\\r\\nCSeq: " + String(seq) + " REGISTER\\r\\nContact: " + contact + ";expires=" + String(registerExpires) + "\\r\\nExpires: " + String(registerExpires) + "\\r\\nUser-Agent: Planipret iOS KeepAlive\\r\\nSupported: outbound,path,gruu\\r\\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\\r\\n"
       if let ch = challenge, !password.isEmpty { sip += (proxyAuth ? "Proxy-Authorization: " : "Authorization: ") + digest(challenge: ch) + "\\r\\n" }
@@ -876,7 +876,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         return "-"
       }
       let token = String(safe).split(separator: "-").joined(separator: "-")
-      return "ios-" + (token.isEmpty ? "planipret" : token) + ".planipret.invalid"
+      _ = token
+      return domain.isEmpty ? "planipret.ca" : domain
     }
 
     private func digest(challenge: String) -> String { let m = parseDigest(challenge); let realm = m["realm"] ?? domain; let nonce = m["nonce"] ?? ""; let qop = m["qop"] ?? ""; let uri = "sip:" + domain; let nc = "00000001"; let cnonce = String(Int(Date().timeIntervalSince1970 * 1000), radix: 16); let ha1 = md5(login + ":" + realm + ":" + password); let ha2 = md5("REGISTER:" + uri); let response = qop.contains("auth") ? md5(ha1 + ":" + nonce + ":" + nc + ":" + cnonce + ":auth:" + ha2) : md5(ha1 + ":" + nonce + ":" + ha2); var out = "Digest username=\\"" + login + "\\", realm=\\"" + realm + "\\", nonce=\\"" + nonce + "\\", uri=\\"" + uri + "\\", response=\\"" + response + "\\", algorithm=MD5"; if qop.contains("auth") { out += ", qop=auth, nc=" + nc + ", cnonce=\\"" + cnonce + "\\"" }; if let opaque = m["opaque"] { out += ", opaque=\\"" + opaque + "\\"" }; return out }

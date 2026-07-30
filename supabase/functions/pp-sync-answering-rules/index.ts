@@ -246,15 +246,19 @@ Deno.serve(async (req) => {
       return digits.length === 10 ? `1${digits}` : digits;
     };
 
-    const buildDidPayload = (ext: string, domain: string) => ({
-      // Documented Phonenumber routing: application=user, parameter=user_<ext>.
-      // Do not mix undocumented aliases: NS may accept HTTP 202 while retaining
-      // the previous dial rule.
+    const buildDidPayload = (ext: string, _domain: string) => ({
+      // Documented Phonenumber routing (phonenumbers.md / updatephonenumberuser):
+      // ONLY application + parameter. The translation fields must stay at their
+      // documented default `[*]`; forcing
+      // `dial-rule-translation-destination-user: <ext>` rewrote the To-URI before
+      // dial-rule matching, so NS no longer matched the DID → "number not in service".
       "dial-rule-application": "user",
       "dial-rule-parameter": `user_${ext}`,
-      "dial-rule-translation-destination-user": ext,
+      "dial-rule-translation-destination-user": "[*]",
+      "dial-rule-translation-destination-host": "[*]",
       enabled: "yes",
     });
+
 
     // Read a DID back from NS and decide whether it really routes to the user.
     const DID_DEST_FIELDS = [

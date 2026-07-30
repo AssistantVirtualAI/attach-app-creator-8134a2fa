@@ -58,7 +58,14 @@ function extractDest(pn: any): { extension: string | null; type: string | null }
     pn?.["dest_type"] ?? pn?.["destination-type"] ?? pn?.dest_app ??
     pn?.["dial-rule-application"] ?? pn?.["dial_rule_application"] ?? null;
 
+  // NS-API v2 user route stores the target as dial-rule-parameter = "user_113".
+  const ruleParam = String(
+    pn?.["dial-rule-parameter"] ?? pn?.["dial_rule_parameter"] ?? "",
+  ).trim();
+  const paramUser = /^user_([a-z0-9._-]+)$/i.exec(ruleParam)?.[1] ?? null;
+
   const candidates: any[] = [
+    paramUser,
     pn?.["to-user"], pn?.["to_user"], pn?.["dest-user"], pn?.["dest_user"],
     pn?.dest, pn?.destination, pn?.["destination-user"], pn?.["destination_user"],
     pn?.["destination-user-name"], pn?.["destination_user_name"],
@@ -69,6 +76,7 @@ function extractDest(pn: any): { extension: string | null; type: string | null }
     pn?.["to-connection"], pn?.["forward-all-destination"], pn?.["dest-extension"],
     pn?.user, pn?.subscriber, pn?.extension, pn?.ext,
   ];
+
 
   let ext: string | null = null;
   for (const raw of candidates) {

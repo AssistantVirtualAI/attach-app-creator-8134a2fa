@@ -20,6 +20,15 @@ function normalizeContact(c: any) {
   const full = c.full_name ?? c.name ?? c.display_name ??
     ([first, last].filter(Boolean).join(" ").trim() || null);
   const id = c.id ?? c.client_id ?? c.broker_id ?? c.user_id ?? c.uuid ?? null;
+  // Maestro profiles carry numbers in a `telephones[]` array.
+  const tels: any[] = Array.isArray(c.telephones) ? c.telephones : [];
+  const telOf = (...types: string[]) => {
+    const hit = tels.find((t) => types.includes(String(t?.telephone_type ?? "").toLowerCase()));
+    return hit?.telephone_number ? String(hit.telephone_number) : null;
+  };
+  const cell = c.cell_phone ?? c.mobile ?? telOf("mobile", "cell") ?? null;
+  const work = c.work_phone ?? c.office_phone ?? telOf("work", "office") ?? null;
+  const home = c.home_phone ?? telOf("home") ?? null;
   return {
     ...c,
     id,
@@ -29,10 +38,11 @@ function normalizeContact(c: any) {
     display_name: full,
     email: c.email ?? c.email_address ?? null,
     company: c.company ?? c.employer ?? c.organization ?? null,
-    phone: c.phone ?? c.mobile ?? c.cell_phone ?? c.phone_number ?? null,
-    cell_phone: c.cell_phone ?? c.mobile ?? null,
-    work_phone: c.work_phone ?? c.office_phone ?? null,
-    home_phone: c.home_phone ?? null,
+    phone: c.phone ?? c.phone_number ?? cell ?? work ?? home ??
+      (tels[0]?.telephone_number ? String(tels[0].telephone_number) : null),
+    cell_phone: cell,
+    work_phone: work,
+    home_phone: home,
     maestro_client_id: c.client_id ?? id,
   };
 }

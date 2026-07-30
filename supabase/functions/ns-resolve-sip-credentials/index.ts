@@ -117,6 +117,35 @@ async function nsPut(path: string, payload: Record<string, unknown>) {
   });
 }
 
+async function nsPost(path: string, payload: Record<string, unknown>) {
+  return await nsFetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Same device payload as ns-provision-broker-devices so EVERY broker ends up
+ * with an identical `<ext>_mobile` + `<ext>_web` pair (no per-user drift).
+ */
+function deviceCreatePayload(id: string, isMobile: boolean, password: string, coreServer: string) {
+  return {
+    device: id,
+    "device-sip-registration-password": password,
+    "device-provisioning-protocol": "sip",
+    "device-model": isMobile ? "Mobile Softphone" : "Web Softphone",
+    "core-server": coreServer,
+    "device-provisioning-registration-core-server": coreServer,
+    "server-nat": isMobile ? "yes" : "no",
+    transport: "WSS",
+    "device-srtp-enabled": "opportunistic",
+    "device-sip-allowed-user-agent": "",
+    "device-push-enabled": isMobile ? "yes" : "no",
+  };
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);

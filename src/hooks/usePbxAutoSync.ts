@@ -84,7 +84,7 @@ export function usePbxAutoSync(
     let lastRun = 0;
     const runAllThrottled = async () => {
       const now = Date.now();
-      if (now - lastRun < intervalMs) return;
+      if (now - lastRun < intervalMs - 1_000) return;
       lastRun = now;
       await runAll();
     };

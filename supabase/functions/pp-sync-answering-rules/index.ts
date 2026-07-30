@@ -295,13 +295,18 @@ Deno.serve(async (req) => {
       const dest = DID_DEST_FIELDS.map((f) => String(row?.[f] ?? "")).filter(Boolean).join(" ").toLowerCase();
       const badApp = /vmail|voicemail|speakaccount|speakeraccount|auto-?attendant|conference|queue/.test(`${app} ${dest}`);
       if (badApp) return false;
+      // Regression guard: a previous build wrote the extension into the
+      // translation destination-user, which broke DID matching ("number not in
+      // service"). Any value other than the documented `[*]` must be rewritten.
+      const transDest = String(row?.["dial-rule-translation-destination-user"] ?? "[*]").trim();
+      if (transDest && transDest !== "[*]") return false;
       const appOk = app === "user";
-      const extRe = new RegExp(`(^|[^0-9])${ext}([^0-9]|$)`);
       const destOk = dest.split(/\s+/).includes(`user_${ext.toLowerCase()}`) ||
         dest.split(/\s+/).includes(ext.toLowerCase()) ||
         dest.includes(`${ext.toLowerCase()}@${domain.toLowerCase()}`);
       return appOk && destOk;
     };
+
 
     const repairDidRoutes = async (ext: string, domain: string) => {
       if (!repair_dids) return { skipped: true, reason: "disabled" };

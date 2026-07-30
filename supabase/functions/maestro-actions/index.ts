@@ -122,6 +122,78 @@ Deno.serve(async (req) => {
         }
         return j({ success: false, error: "user_not_found", debug: results }, 404);
       }
+      case "list_clients":
+      case "client_profile":
+      case "list_brokers":
+      case "broker_profile": {
+        const tCfg = await getMaestroTelecomConfig(admin);
+        if (!isMaestroTelecomConfigured(tCfg)) return j({ success: false, error: "maestro_telecom_not_configured" }, 500);
+
+        // Resolve the caller's numeric Maestro telecom user id from their JWT.
+        const authHeader = req.headers.get("Authorization") ?? "";
+        let callerId: string | null = null;
+        if (authHeader) {
+          const { data: u } = await admin.auth.getUser(authHeader.replace(/^Bearer\s+/i, ""));
+          callerId = u?.user?.id ?? null;
+        }
+        let telecomUserId: string | null = null;
+        let isAdmin = false;
+        if (callerId) {
+          const { data: prof } = await admin
+            .from("planipret_profiles")
+            .select("id, maestro_broker_id, role")
+            .or(`user_id.eq.${callerId},id.eq.${callerId}`)
+            .limit(1)
+            .maybeSingle();
+          telecomUserId = prof?.maestro_broker_id ? String(prof.maestro_broker_id).trim() : null;
+          isAdmin = prof?.role === "admin";
+        }
+        const requested = payload.user_id !== undefined && payload.user_id !== null
+          ? String(payload.user_id).trim()
+          : null;
+        if (requested && (isAdmin || !callerId)) telecomUserId = requested;
+        if (!telecomUserId || !/^\d+$/.test(telecomUserId)) {
+          return j({ success: false, error: "maestro_user_id_unresolved" }, 400);
+        }
+
+        const qs: string[] = [];
+        if (payload.search) qs.push(`search=${encodeURIComponent(String(payload.search))}`);
+        if (payload.limit) qs.push(`limit=${encodeURIComponent(String(payload.limit))}`);
+        const q = qs.length ? `?${qs.join("&")}` : "";
+
+        let path = "";
+        if (action === "list_clients") path = `/users/${telecomUserId}/clients${q}`;
+        else if (action === "list_brokers") path = `/users/${telecomUserId}/brokers${q}`;
+        else if (action === "client_profile") {
+          const cid = String(payload.client_id ?? "").trim();
+          if (!cid) return j({ success: false, error: "client_id required" }, 400);
+          path = `/users/${telecomUserId}/clients/${encodeURIComponent(cid)}/profile`;
+        } else {
+          const bid = String(payload.broker_id ?? "").trim();
+          if (!bid) return j({ success: false, error: "broker_id required" }, 400);
+          path = `/users/${telecomUserId}/brokers/${encodeURIComponent(bid)}/profile`;
+        }
+
+        const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
+        if (!r.ok) {
+          console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
+          return j({ success: false, error: `maestro ${action} failed`, status: r.status, details: r.data }, r.status && r.status >= 400 ? r.status : 502);
+        }
+        const d: any = r.data;
+        if (action === "client_profile" || action === "broker_profile") {
+          const obj = d?.profile ?? d?.client ?? d?.broker ?? d?.data ?? d;
+          return j({ success: true, profile: normalizeContact(obj), raw: obj });
+        }
+        const listRaw = Array.isArray(d)
+          ? d
+          : (d?.clients ?? d?.brokers ?? d?.data ?? d?.results ?? []);
+        const list = Array.isArray(listRaw) ? listRaw : [];
+        return j({
+          success: true,
+          [action === "list_clients" ? "clients" : "brokers"]: list.map(normalizeContact),
+          count: list.length,
+        });
+      }
       case "test": {
         const r = await fetch(`${cfg.url}/contacts?limit=1`, { headers: h });
         return j({ success: r.ok, status: r.status });

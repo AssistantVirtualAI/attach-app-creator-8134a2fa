@@ -652,17 +652,16 @@ export function useMplanipretSoftphone(enabled = true) {
     const base: PpSipSnapshot = (nativeOwnsRegistration && snap.status !== "registered" && snap.status !== "connected")
       ? ({ ...snap, status: "registered", lastError: null } as PpSipSnapshot)
       : snap;
-    snap = base;
     if (!restCall?.id) return base;
     const state = normalizeRestState(restCall.status);
     return {
-      ...snap,
+      ...base,
       callState: state,
       callId: restCall.id,
       remoteIdentity: restCall.other || restCall.number || "—",
       remoteNumber: restCall.number || restCall.other || "",
       direction: restCall.direction ?? null,
-      startedAt: restCall.startedAt ?? snap.startedAt ?? Date.now(),
+      startedAt: restCall.startedAt ?? base.startedAt ?? Date.now(),
       onHold: state === "held",
     };
   }, [snap, restCall, normalizeRestState, nativeOwnsRegistration]);

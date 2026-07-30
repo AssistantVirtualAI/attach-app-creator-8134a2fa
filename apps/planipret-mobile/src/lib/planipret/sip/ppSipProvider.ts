@@ -360,7 +360,6 @@ class PpSipProvider {
   async init(cfg: PpSipConfig) {
     if (ppSipInitInFlight) return;
     installSipParserGuard();
-    const wssUrl = String(cfg.wssUrl ?? "").trim();
     const rawWssUrl = String(cfg.wssUrl ?? "").trim();
     if (!cfg.extension || !cfg.sipDomain || !rawWssUrl || rawWssUrl === "undefined" || !/^wss?:\/\//i.test(rawWssUrl) || !cfg.password) {
       this.update({ status: "error", errorCause: "invalid_config" });
@@ -370,14 +369,15 @@ class PpSipProvider {
     // must go to the SBC edge only.
     const edgeUrls = edgeOnlyWssUrls([rawWssUrl, ...(cfg.wssUrls || [])]);
     if (isCoreWssUrl(rawWssUrl)) {
-      this.log("warn", `core WSS target rejected (${rawWssUrl}) → using edge ${edgeUrls[0]}`);
+      this.log("warn", `core WSS target rejected (${rawWssUrl}) -> using edge ${edgeUrls[0]}`);
     }
     const wssUrl = edgeUrls[0];
     const cleanCfg = { ...cfg, wssUrl, wssUrls: edgeUrls };
     const sig = `${cleanCfg.extension}|${cleanCfg.sipDomain}|${cleanCfg.wssUrl}|${cleanCfg.password}`;
-
+    if (this.ua && sig === this.lastSig && this.snap.status === "registered") {
       return;
     }
+
     // Never tear down a UA that is still in its initial connect/REGISTER
     // handshake — doing so closed the WebSocket (code 1001) before NetSapiens
     // could answer, which surfaced as an endless "registration failed:

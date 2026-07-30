@@ -659,6 +659,7 @@ export function useMplanipretSoftphone(enabled = true) {
     return () => {
       un();
       clearTimers();
+      cancelPendingHandoff();
       if (nativeStopTimer) clearTimeout(nativeStopTimer);
       window.clearInterval(heartbeat);
       document.removeEventListener("visibilitychange", onVis);

@@ -112,16 +112,9 @@ function buildContactUri(cfg: PpSipConfig): string {
     .slice(0, 64) || "pp";
   const ext = sipToken(cfg.extension || cfg.sipUsername);
   const domain = String(cfg.sipDomain || "").trim().toLowerCase();
-  // Advertise the routable SBC used by the active WSS transport. Registrations
-  // expose this value as device-sip-registration-contact in NS-API v2.
-  let edgeHost = "";
-  try {
-    const candidate = [cfg.wssUrl, ...(cfg.wssUrls ?? [])].find(Boolean);
-    edgeHost = candidate ? new URL(candidate).hostname.toLowerCase() : "";
-  } catch { /* fall back to the SIP domain below */ }
-  const host = /^[a-z0-9.-]+$/.test(edgeHost)
-    ? edgeHost
-    : (/^[a-z0-9.-]+$/.test(domain) ? domain : "voice.ava-telecom.ca");
+  // NS-API v2 documents the registration URI as sip:[device]@[domain]. The
+  // edge SBC belongs only in the WSS transport URL, never in the SIP AOR.
+  const host = /^[a-z0-9.-]+$/.test(domain) ? domain : "planipret.ca";
   return `sip:${user}@${host};transport=ws;pp-ua=web-${ext}`;
 }
 

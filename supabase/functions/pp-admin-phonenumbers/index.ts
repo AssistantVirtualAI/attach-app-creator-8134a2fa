@@ -131,15 +131,17 @@ function normalizeAssignment(input: any, domain: string) {
   };
 }
 
-function buildToUserDidPayload(ext: string, domain: string) {
+function buildToUserDidPayload(ext: string, _domain: string) {
   return {
-    // NS-API v2 Phonenumber user route.
+    // NS-API v2 Phonenumber user route: application + parameter only.
+    // Sending translation-destination-* rewrites the To-URI and breaks DID
+    // matching ("no subscriber at the number called").
     "dial-rule-application": "user",
     "dial-rule-parameter": `user_${ext}`,
-    "dial-rule-translation-destination-user": ext,
     enabled: "yes",
   };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

@@ -51,6 +51,25 @@ async function maestroFetch(ctx: Ctx, path: string, init?: RequestInit) {
   return r.json().catch(() => ({}));
 }
 
+/** Call the maestro-actions edge function with service-role auth (Scott's /users/{id}/... endpoints). */
+async function maestroActions(ctx: Ctx, action: string, payload: Record<string, unknown> = {}) {
+  const { data: prof } = await ctx.admin
+    .from("planipret_profiles")
+    .select("maestro_broker_id")
+    .eq("id", ctx.profile.id)
+    .maybeSingle();
+  const userId = prof?.maestro_broker_id ?? ctx.profile.maestro_broker_id ?? null;
+  const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-actions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    },
+    body: JSON.stringify({ action, payload: { ...payload, user_id: userId } }),
+  });
+  return await r.json().catch(() => ({ success: false, error: "invalid_response" }));
+}
+
 async function broadcastNav(ctx: Ctx, route: string, extra?: any) {
   // Use Supabase Realtime broadcast so the mobile app can navigate live.
   try {

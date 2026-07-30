@@ -1353,10 +1353,12 @@ function ensurePluginRegistration(swift) {
   let next = swift;
   const sipLine = "        bridge?.registerPluginInstance(PpSipKeepAlive())\n";
   const voipLine = "        bridge?.registerPluginInstance(PpVoipCall())\n";
+  const authLine = "        bridge?.registerPluginInstance(PpAuthSession())\n";
   const needsSip = !next.includes("PpSipKeepAlive()");
   const needsVoip = !next.includes("PpVoipCall()");
-  if (!needsSip && !needsVoip) return next;
-  const lines = `${needsSip ? sipLine : ""}${needsVoip ? voipLine : ""}`;
+  const needsAuth = !next.includes("PpAuthSession()");
+  if (!needsSip && !needsVoip && !needsAuth) return next;
+  const lines = `${needsSip ? sipLine : ""}${needsVoip ? voipLine : ""}${needsAuth ? authLine : ""}`;
   if (next.includes("registerPluginInstance")) {
     return next.replace(/(bridge\?\.registerPluginInstance\([^\n]+\)\n)/, `$1${lines}`);
   }

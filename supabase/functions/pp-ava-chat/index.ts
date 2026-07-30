@@ -351,6 +351,21 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Maestro clients/brokers directory (endpoints /users/{id}/clients|brokers)
+      if (/\bclients?\b|\bcourtiers?\b|\bbrokers?\b|\bdossiers?\b|\bportefeuille\b/i.test(userMessage)) {
+        try {
+          const isBroker = /\bcourtiers?\b|\bbrokers?\b/i.test(userMessage);
+          const r = await invokeFunction("maestro-actions", authHeader, {
+            action: isBroker ? "list_brokers" : "list_clients",
+            payload: { search: tokens.names[0], limit: 25 },
+          });
+          if (r.ok && (r.data as any)?.success) {
+            const list = (r.data as any).clients ?? (r.data as any).brokers ?? [];
+            dataBlocks.push(`${isBroker ? "Courtiers" : "Clients"} Maestro: ${JSON.stringify(list).slice(0, 3000)}`);
+          }
+        } catch (e) { console.error("pp-ava-chat maestro list fail", e); }
+      }
+
       if (dataBlocks.length) appContext += `\n${dataBlocks.join("\n")}`;
     }
 

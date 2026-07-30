@@ -311,24 +311,8 @@ Deno.serve(async (req) => {
     console.log(`[ns-resolve] self-heal device ${deviceName} status=${created.status}`);
     if (created.ok || created.status === 409) {
       // A freshly created device is not in the user's answering rule yet →
-      // inbound calls would keep going straight to voicemail. Re-sync the ring
-      // rule for this broker (fire-and-forget, never blocks credential resolve).
-      try {
-        const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-        if (svc) {
-          const p = fetch(`${SUPABASE_URL}/functions/v1/pp-sync-answering-rules`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-internal-call": "1",
-              Authorization: `Bearer ${svc}`,
-            },
-            body: JSON.stringify({ broker_id: String(profile.user_id) }),
-          }).then((r) => console.log(`[ns-resolve] ring-rule resync status=${r.status}`))
-            .catch((e) => console.error("[ns-resolve] ring-rule resync failed", e));
-          try { (globalThis as any).EdgeRuntime?.waitUntil?.(p); } catch { /* ignore */ }
-        }
-      } catch (e) { console.error("[ns-resolve] ring-rule resync error", e); }
+      // inbound calls would keep going straight to voicemail. Force a resync.
+      queueRingRuleResync(String(profile.user_id), "self_heal_device", true);
 
       const again = await nsGet(
         `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(deviceName)}`,
@@ -336,7 +320,12 @@ Deno.serve(async (req) => {
       device = again.ok ? (Array.isArray(again.data) ? again.data[0] : again.data) : null;
       if (!device) device = { device: deviceName, "core-server": FALLBACK_PROXY };
     }
+  } else {
+    // Device already exists but the answering rule may still be the legacy
+    // self-referencing one (never re-synced since the fix). Throttled resync.
+    queueRingRuleResync(String(profile.user_id), "periodic");
   }
+
 
   if (!device) {
     return json({

@@ -113,9 +113,13 @@ Deno.serve(async (req) => {
       const hasDev = (needle: string) => arr.some((d: any) => (d?.device ?? d?.aor ?? "").toString().toLowerCase().includes(needle));
 
       const create = async (id: string, model: string, needle: string) => {
+        const isMobileDev = needle === "_mobile";
         if (hasDev(needle)) {
-          // Device exists — patch it to ensure WSS transport and empty user-agent filter.
-          await fetch(`${base}/${encodeURIComponent(id)}`, {
+          // Device exists — patch it to ensure WSS transport, empty user-agent filter,
+          // and (critically) the 1800s registration expiry + automatic NAT traversal.
+          // Without this branch a bulk force:true never repaired existing devices,
+          // which kept them on the NS default 60s expiry -> straight to voicemail.
+          const r = await fetch(`${base}/${encodeURIComponent(id)}`, {
             method: "PUT", headers: nsHeaders,
             body: JSON.stringify({
               "device-sip-registration-password": sipPassword,
@@ -123,10 +127,14 @@ Deno.serve(async (req) => {
               "device-srtp-enabled": "opportunistic",
               "device-sip-allowed-user-agent": "",
               "device-provisioning-registration-core-server": "core1.cluster1.ucstack.io",
+              "device-sip-registration-expiry-seconds": 1800,
+              "device-sip-nat-traversal-enabled": "automatic",
+              "device-push-enabled": isMobileDev ? "yes" : "no",
             }),
-          }).catch(() => {});
-          return { existed: true, id };
+          }).catch(() => null);
+          return { existed: true, id, patched: !!r?.ok, status: r?.status ?? 0 };
         }
+
         const isMobile = needle === "_mobile";
         // core-server is MANDATORY — without it JsSIP/PJSIP cannot register.
         // Both mobile and web use WSS transport so JsSIP (WebRTC) can connect.

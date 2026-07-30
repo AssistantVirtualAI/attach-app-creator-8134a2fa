@@ -21,6 +21,7 @@ function normalizeContact(c: any) {
     [first, last].filter(Boolean).join(" ").trim() || null;
   const id = c.id ?? c.client_id ?? c.broker_id ?? c.user_id ?? c.uuid ?? null;
   return {
+    ...c,
     id,
     first_name: first,
     last_name: last,
@@ -33,7 +34,6 @@ function normalizeContact(c: any) {
     work_phone: c.work_phone ?? c.office_phone ?? null,
     home_phone: c.home_phone ?? null,
     maestro_client_id: c.client_id ?? id,
-    ...c,
   };
 }
 

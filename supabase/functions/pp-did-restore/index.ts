@@ -52,10 +52,13 @@ async function nsFetch(path: string, init: RequestInit = {}) {
 const pnPath = (domain: string, pn: string) =>
   `/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`;
 
+// The PBX portal "Destination" column reads dial-rule-translation-destination-user.
+// A phonenumber with an empty destination is treated as "no subscribers".
 function destOf(pn: any): string | null {
-  const p = String(pn?.["dial-rule-parameter"] ?? pn?.dial_rule_parameter ?? "").trim();
-  const m = /^user_([a-z0-9._-]+)$/i.exec(p);
-  return m ? m[1] : (p || null);
+  const o = Array.isArray(pn) ? pn[0] : pn;
+  const d = String(o?.["dial-rule-translation-destination-user"] ?? "").trim();
+  if (d && d !== "[*]") return d;
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -105,8 +108,11 @@ Deno.serve(async (req) => {
           if (cur.ok && destOf(cur.data) === ext) { results.push({ did, ext, ok: true, skipped: true }); continue; }
         }
         const payload = {
-          "dial-rule-application": "user",
+          "dial-rule-application": "to-user-residential",
           "dial-rule-parameter": `user_${ext}`,
+          "dial-rule-translation-destination-user": ext,
+          "dial-rule-translation-destination-host": domain,
+          "dial-rule-translation-source-name": "[*]",
           enabled: "yes",
         };
         let r = await nsFetch(pnPath(domain, did), { method: "PUT", body: JSON.stringify(payload) });

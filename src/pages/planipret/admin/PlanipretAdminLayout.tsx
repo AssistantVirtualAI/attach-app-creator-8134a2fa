@@ -126,6 +126,7 @@ export default function PlanipretAdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [profile, setProfile] = useState<any>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [missingIntegrations, setMissingIntegrations] = useState(0);
   const [missedCalls, setMissedCalls] = useState(0);

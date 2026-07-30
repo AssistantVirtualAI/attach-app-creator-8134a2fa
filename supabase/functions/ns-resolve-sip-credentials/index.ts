@@ -13,8 +13,6 @@ import {
 import {
   mobileDeviceId,
   webDeviceId,
-  legacyMobileDeviceId,
-  legacyWebDeviceId,
 } from "../_shared/pp-device-ids.ts";
 
 

@@ -291,6 +291,15 @@ export function useMplanipretSoftphone(enabled = true) {
         } catch {
           console.warn("[softphone] web credential lookup failed, using mobile device");
         }
+        // If the `<ext>_web` device could not be resolved, JsSIP and the native
+        // keep-alive would share the SAME AOR. NetSapiens then closes the WSS
+        // sockets alternately (code 1001 loop). In that case the WebView stays
+        // the only SIP owner and the native service must never be started.
+        sameAorRef.current = webConfig.sipUsername === sipConfig.sipUsername;
+        if (sameAorRef.current) {
+          console.warn("[softphone] single-AOR mode: native keep-alive disabled to avoid WSS 1001 loop");
+          await stopPlanipretSipKeepAlive().catch(() => undefined);
+        }
         if (cancelled) return;
         await ppSipProvider.init(webConfig);
         void getPlanipretVoipPushToken().then((t) => {

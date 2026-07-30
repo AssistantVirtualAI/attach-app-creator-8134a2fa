@@ -578,27 +578,44 @@ export function useMplanipretSoftphone(enabled = true) {
     };
 
     const un = ppSipProvider.subscribe(() => evaluate());
-    const onResume = () => {
+    /**
+     * Resume with hysteresis. iOS fires transient `isActive:false/true` pairs
+     * (permission sheets, CallKit, control center). Re-`init()`-ing JsSIP on
+     * each of them tore down a healthy WSS socket and produced the stop/start
+     * loop. We only rebuild the UA when the stack is actually broken or when
+     * the native keep-alive really took ownership in background.
+     */
+    const resumeSip = () => {
       const now = Date.now();
       if (now - lastResumeAt < 4000) return;
       lastResumeAt = now;
       try {
+        const status = ppSipProvider.getSnapshot().status;
+        const healthy = status === "registered" && !handedOffToNative;
+        if (healthy) {
+          // Nothing to rebuild — just make sure native isn't holding the AOR.
+          stopNativeAfterWebRegistered(true);
+          evaluate();
+          return;
+        }
         const cfg = ppSipProvider.getConfig();
         if (cfg) {
           stopNativeAfterWebRegistered(true);
           if (!acquireSipInitLock(4000)) return;
-            void ppSipProvider.init(cfg).finally(() => {
-              releaseSipInitLock();
-              stopNativeAfterWebRegistered(true);
-            });
-        }
-        else {
+          void ppSipProvider.init(cfg).finally(() => {
+            handedOffToNative = false;
+            releaseSipInitLock();
+            stopNativeAfterWebRegistered(true);
+          });
+        } else {
           ppSipProvider.forceReregister();
+          handedOffToNative = false;
           stopNativeAfterWebRegistered(true);
         }
       } catch { /* noop */ }
       evaluate();
     };
+    const onResume = () => resumeSip();
     const onVis = () => { if (document.visibilityState === "visible") { cancelPendingHandoff(); onResume(); } else scheduleHandoff(); };
     document.addEventListener("visibilitychange", onVis);
     const onBackgrounded = () => { scheduleHandoff(); };

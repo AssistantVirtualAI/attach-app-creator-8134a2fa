@@ -72,8 +72,23 @@ Deno.serve(async (req) => {
     // still point to voicemail/SpeakAccount before the user's ring rule runs.
     const repair_dids: boolean = !dry_run && body?.repair_dids !== false;
 
-    // Auth: admin only
+    // Auth: admin only — or an internal service-role call (e.g. the
+    // ns-resolve-sip-credentials self-heal, which runs as the broker).
     const authHeader = req.headers.get("Authorization") ?? "";
+    const internalCall = req.headers.get("x-internal-call") === "1" &&
+      authHeader.replace(/^Bearer\s+/i, "").trim() === SERVICE_ROLE;
+    if (internalCall) {
+      const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+      if (broker_id) {
+        const { data: broker } = await admin.from("planipret_profiles")
+          .select("id, user_id, full_name, email, extension, ns_extension, ns_domain")
+          .or(`user_id.eq.${broker_id},id.eq.${broker_id}`).maybeSingle();
+        if (!broker) return json({ error: "broker_not_found", broker_id }, 404);
+        const result = await applyRule(broker);
+        return json({ success: result.success, result });
+      }
+      return json({ error: "provide broker_id" }, 400);
+    }
     const userClient = createClient(SUPABASE_URL, ANON_KEY ?? SERVICE_ROLE, {
       global: { headers: { Authorization: authHeader } },
     });

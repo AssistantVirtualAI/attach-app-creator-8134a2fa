@@ -315,7 +315,8 @@ Deno.serve(async (req) => {
       }
 
       const summary = {
-        forced: force, total: list.length, processed: all.length, succeeded, failed,
+        forced: force, total: fullList.length, processed: all.length, succeeded, failed,
+        offset, next_offset: nextOffset, done: nextOffset === null,
         devices: devStats, errors_sample: errorSamples,
         expiry_seconds: 1800, nat_traversal: "automatic",
       };

@@ -1113,6 +1113,73 @@ CAP_PLUGIN(PpVoipCall, "PpVoipCall",
 )
 `;
 
+// ---------- PpAuthSession: iOS ASWebAuthenticationSession ----------
+// Microsoft SSO must come back into the app WITHOUT the Safari
+// "Ouvrir cette page dans Planiprêt Mobile ?" prompt. SFSafariViewController
+// (@capacitor/browser) cannot follow a custom-scheme redirect silently;
+// ASWebAuthenticationSession hands the callback URL straight back to JS.
+const IOS_AUTH_SESSION_PLUGIN = `import Foundation
+import Capacitor
+import UIKit
+import AuthenticationServices
+
+@objc(PpAuthSession)
+public class PpAuthSession: CAPPlugin, CAPBridgedPlugin, ASWebAuthenticationPresentationContextProviding {
+    public let identifier = "PpAuthSession"
+    public let jsName = "PpAuthSession"
+    public let pluginMethods: [CAPPluginMethod] = [
+      CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise)
+    ]
+
+    private var session: ASWebAuthenticationSession?
+
+    @objc func start(_ call: CAPPluginCall) {
+        guard let urlString = call.getString("url"), let url = URL(string: urlString) else {
+            call.reject("missing url"); return
+        }
+        let scheme = call.getString("scheme") ?? "capacitor"
+        DispatchQueue.main.async {
+            let authSession = ASWebAuthenticationSession(url: url, callbackURLScheme: scheme) { callbackUrl, error in
+                self.session = nil
+                if let error = error {
+                    let nsError = error as NSError
+                    if nsError.domain == ASWebAuthenticationSessionErrorDomain,
+                       nsError.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
+                        call.resolve(["cancelled": true])
+                        return
+                    }
+                    NSLog("[PpAuthSession] failed: %@", error.localizedDescription)
+                    call.reject(error.localizedDescription)
+                    return
+                }
+                guard let callbackUrl = callbackUrl else { call.resolve(["cancelled": true]); return }
+                NSLog("[PpAuthSession] callback received")
+                call.resolve(["url": callbackUrl.absoluteString])
+            }
+            authSession.presentationContextProvider = self
+            authSession.prefersEphemeralWebBrowserSession = false
+            self.session = authSession
+            if !authSession.start() {
+                self.session = nil
+                call.reject("cannot start auth session")
+            }
+        }
+    }
+
+    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        return self.bridge?.viewController?.view.window ?? ASPresentationAnchor()
+    }
+}
+`;
+
+const IOS_AUTH_SESSION_BRIDGE = `#import <Foundation/Foundation.h>
+#import <Capacitor/Capacitor.h>
+
+CAP_PLUGIN(PpAuthSession, "PpAuthSession",
+  CAP_PLUGIN_METHOD(start, CAPPluginReturnPromise);
+)
+`;
+
 const IOS_KEEPALIVE_BRIDGE_FILENAME = "PpSipKeepAlive.m";
 const IOS_KEEPALIVE_BRIDGE = `#import <Foundation/Foundation.h>
 #import <Capacitor/Capacitor.h>
@@ -1286,10 +1353,12 @@ function ensurePluginRegistration(swift) {
   let next = swift;
   const sipLine = "        bridge?.registerPluginInstance(PpSipKeepAlive())\n";
   const voipLine = "        bridge?.registerPluginInstance(PpVoipCall())\n";
+  const authLine = "        bridge?.registerPluginInstance(PpAuthSession())\n";
   const needsSip = !next.includes("PpSipKeepAlive()");
   const needsVoip = !next.includes("PpVoipCall()");
-  if (!needsSip && !needsVoip) return next;
-  const lines = `${needsSip ? sipLine : ""}${needsVoip ? voipLine : ""}`;
+  const needsAuth = !next.includes("PpAuthSession()");
+  if (!needsSip && !needsVoip && !needsAuth) return next;
+  const lines = `${needsSip ? sipLine : ""}${needsVoip ? voipLine : ""}${needsAuth ? authLine : ""}`;
   if (next.includes("registerPluginInstance")) {
     return next.replace(/(bridge\?\.registerPluginInstance\([^\n]+\)\n)/, `$1${lines}`);
   }
@@ -1371,6 +1440,7 @@ class AppBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(PpSipKeepAlive())
         bridge?.registerPluginInstance(PpVoipCall())
+        bridge?.registerPluginInstance(PpAuthSession())
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
@@ -1596,14 +1666,18 @@ function patchIosNativeFiles() {
   writeIfChanged(path.join(iosApp, "Plugins", "PpSipKeepAlive", IOS_KEEPALIVE_BRIDGE_FILENAME), IOS_KEEPALIVE_BRIDGE);
   writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.swift"), IOS_VOIP_CALL_PLUGIN);
   writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.m"), IOS_VOIP_CALL_BRIDGE);
+  writeIfChanged(path.join(iosApp, "Plugins", "PpAuthSession", "PpAuthSession.swift"), IOS_AUTH_SESSION_PLUGIN);
+  writeIfChanged(path.join(iosApp, "Plugins", "PpAuthSession", "PpAuthSession.m"), IOS_AUTH_SESSION_BRIDGE);
   const iosRoot = path.join(appDir, "ios", "App");
   ensureXcodeSourceFiles(iosRoot, [
     "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.swift",
     "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.m",
     "App/Plugins/PpVoipCall/PpVoipCall.swift",
     "App/Plugins/PpVoipCall/PpVoipCall.m",
+    "App/Plugins/PpAuthSession/PpAuthSession.swift",
+    "App/Plugins/PpAuthSession/PpAuthSession.m",
   ]);
-  const pluginFilesAreInProject = hasProjectReference(iosRoot, "PpSipKeepAlive.swift") && hasProjectReference(iosRoot, "PpVoipCall.swift");
+  const pluginFilesAreInProject = hasProjectReference(iosRoot, "PpSipKeepAlive.swift") && hasProjectReference(iosRoot, "PpVoipCall.swift") && hasProjectReference(iosRoot, "PpAuthSession.swift");
   patchIosAppDelegate(iosApp);
   ensureIosBridgeController(iosApp, pluginFilesAreInProject);
   ensureIosSceneDelegate(iosApp);
@@ -1619,8 +1693,8 @@ function patchIosNativeFiles() {
       // inline copy causes "Invalid redeclaration of 'PpSipKeepAlive'".
       swift = stripInlinePlugins(swift);
     } else if (!swift.includes("@objc(PpSipKeepAlive)")) {
-      swift = ensureSwiftImports(swift, ["Foundation", "Capacitor", "UIKit", "AVFoundation", "CryptoKit", "UserNotifications", "PushKit", "CallKit"]);
-      swift = `${swift.trim()}\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n`;
+      swift = ensureSwiftImports(swift, ["Foundation", "Capacitor", "UIKit", "AVFoundation", "CryptoKit", "UserNotifications", "PushKit", "CallKit", "AuthenticationServices"]);
+      swift = `${swift.trim()}\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n\n${stripSwiftImports(IOS_AUTH_SESSION_PLUGIN)}\n`;
       console.log("[native-config] iOS native plugins embedded into existing ViewController target.");
     }
     if (swift !== before) writeIfChanged(file, swift);
@@ -1630,10 +1704,10 @@ function patchIosNativeFiles() {
   const storyboard = path.join(iosApp, "Base.lproj", "Main.storyboard");
   const storyboardText = fs.existsSync(storyboard) ? fs.readFileSync(storyboard, "utf8") : "";
   const bridgeText = fs.existsSync(bridge) ? fs.readFileSync(bridge, "utf8") : "";
-  if (!bridgeText.includes("PpSipKeepAlive()") || !bridgeText.includes("PpVoipCall()") || !storyboardText.includes('customClass="AppBridgeViewController"')) {
-    throw new Error("[native-config] iOS native plugins are not wired into the launch ViewController; aborting sync so SIP/VoIP cannot ship UNIMPLEMENTED.");
+  if (!bridgeText.includes("PpSipKeepAlive()") || !bridgeText.includes("PpVoipCall()") || !bridgeText.includes("PpAuthSession()") || !storyboardText.includes('customClass="AppBridgeViewController"')) {
+    throw new Error("[native-config] iOS native plugins are not wired into the launch ViewController; aborting sync so SIP/VoIP/OAuth cannot ship UNIMPLEMENTED.");
   }
-  console.log("[native-config] iOS PpSipKeepAlive + PpVoipCall plugins applied.");
+  console.log("[native-config] iOS PpSipKeepAlive + PpVoipCall + PpAuthSession plugins applied.");
 }
 
 patchCopiedWebBundles();

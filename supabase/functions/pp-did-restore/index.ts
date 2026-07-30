@@ -104,7 +104,6 @@ Deno.serve(async (req) => {
         const payload = {
           "dial-rule-application": "user",
           "dial-rule-parameter": `user_${ext}`,
-          "dial-rule-description": `DID ${did} -> ext ${ext}`,
           enabled: "yes",
         };
         let r = await nsFetch(pnPath(domain, did), { method: "PUT", body: JSON.stringify(payload) });

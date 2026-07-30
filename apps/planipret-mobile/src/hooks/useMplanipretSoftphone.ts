@@ -554,6 +554,7 @@ export function useMplanipretSoftphone(enabled = true) {
               // the WebView contact so NetSapiens stops forking inbound calls
               // to a suspended WebSocket.
               try { await ppSipProvider.releaseForBackground(); } catch { /* noop */ }
+              handedOffToNative = true;
               return;
             }
           }

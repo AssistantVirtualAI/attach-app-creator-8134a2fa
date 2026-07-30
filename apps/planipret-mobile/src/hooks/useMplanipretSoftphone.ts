@@ -434,7 +434,6 @@ export function useMplanipretSoftphone(enabled = true) {
     if (softphoneOwnerId !== ownerIdRef.current) return;
     let softTimer: ReturnType<typeof setTimeout> | null = null;
     let hardTimer: ReturnType<typeof setTimeout> | null = null;
-    let nativeStopTimer: ReturnType<typeof setTimeout> | null = null;
     let lastWatchdogAt = 0;
     let lastResumeAt = 0;
     const clearTimers = () => {
@@ -544,13 +543,13 @@ export function useMplanipretSoftphone(enabled = true) {
       // waiting for the WebView to reach "registered" first created a deadlock —
       // the two SIP stacks kept kicking each other off the PBX (WSS 1001 loop)
       // so the WebView never stabilised and the native service never stopped.
-      if (nativeStopTimer) clearTimeout(nativeStopTimer);
       if (!force && typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      void stopPlanipretSipKeepAlive().catch(() => undefined);
-      nativeStopTimer = setTimeout(() => {
-        if (!force && typeof document !== "undefined" && document.visibilityState === "hidden") return;
-        void stopPlanipretSipKeepAlive().catch(() => undefined);
-      }, 3_000);
+      void getPlanipretSipKeepAliveStatus()
+        .then((status) => {
+          if (status?.status === "idle") return;
+          return stopPlanipretSipKeepAlive();
+        })
+        .catch(() => undefined);
     };
 
     const un = ppSipProvider.subscribe(() => evaluate());
@@ -643,7 +642,6 @@ export function useMplanipretSoftphone(enabled = true) {
       un();
       clearTimers();
       cancelPendingHandoff();
-      if (nativeStopTimer) clearTimeout(nativeStopTimer);
       window.clearInterval(heartbeat);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("focus", onResume);

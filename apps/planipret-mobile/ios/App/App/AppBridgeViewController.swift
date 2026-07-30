@@ -388,13 +388,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     }
 
     private func stableContactHost() -> String {
-      let raw = (login.isEmpty ? "planipret" : login).lowercased()
-      let safe = raw.map { ch -> Character in
-        if ch.isLetter || ch.isNumber || ch == "-" { return ch }
-        return "-"
-      }
-      let token = String(safe).split(separator: "-").joined(separator: "-")
-      _ = token
+      // RFC-routable Contact host: always the real SIP domain (never .invalid)
       return domain.isEmpty ? "planipret.ca" : domain
     }
 

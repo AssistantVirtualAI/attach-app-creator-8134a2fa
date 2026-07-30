@@ -177,10 +177,15 @@ function deviceCreatePayload(id: string, isMobile: boolean, password: string, co
     "core-server": coreServer,
     "device-provisioning-registration-core-server": coreServer,
     "server-nat": isMobile ? "yes" : "no",
+    // Documented NS-API v2 device fields. The registration expiry default is 60s,
+    // which marks the softphone unregistered between re-REGISTERs (calls -> voicemail).
+    "device-sip-registration-expiry-seconds": 1800,
+    "device-sip-nat-traversal-enabled": "automatic",
     transport: "WSS",
     "device-srtp-enabled": "opportunistic",
     "device-sip-allowed-user-agent": "",
     "device-push-enabled": isMobile ? "yes" : "no",
+
   };
 }
 

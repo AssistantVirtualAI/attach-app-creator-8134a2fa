@@ -10,6 +10,10 @@ import JsSIP from "jssip";
 import { getPpSipReconnectConfig, ppSipBackoffDelay, PP_SIP_RECONNECT_FLOOR_MS } from "./ppSipReconnectConfig";
 import { edgeOnlyWssUrls, isCoreWssUrl } from "./sipEdgePolicy";
 
+// Let the SBC finish removing the previous Contact before a replacement UA
+// REGISTERs the same AOR. Without this gap NetSapiens closes one WSS with 1001.
+const PP_SIP_UA_SWAP_DELAY_MS = 800;
+
 export type PpSipStatus = "idle" | "connecting" | "connected" | "registered" | "disconnected" | "error";
 export type PpCallState = "idle" | "ringing-out" | "ringing-in" | "active" | "held" | "ended";
 
@@ -396,7 +400,10 @@ class PpSipProvider {
         return;
       }
     }
-    if (this.ua) this.stop();
+    if (this.ua) {
+      this.stop();
+      await new Promise((resolve) => setTimeout(resolve, PP_SIP_UA_SWAP_DELAY_MS));
+    }
     this.cfg = cleanCfg;
     this.lastSig = sig;
     this.connectingSince = Date.now();
@@ -799,7 +806,7 @@ class PpSipProvider {
             this.session = null;
             this.reconnectMetrics.uaRebuilds += 1;
             this.pushHistory("socket", "ua_rebuild");
-            void this.init(cfg);
+            setTimeout(() => { void this.init(cfg); }, PP_SIP_UA_SWAP_DELAY_MS);
           } else {
             ua.start();
           }

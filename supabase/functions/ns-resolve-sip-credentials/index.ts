@@ -307,11 +307,17 @@ Deno.serve(async (req) => {
     `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(resolvedId)}`,
     {
       "device-sip-registration-password": sipPassword,
+      "core-server": coreServer,
       "device-provisioning-registration-core-server": coreServer,
       "device-srtp-enabled": "opportunistic",
       "device-sip-allowed-user-agent": "",
+      // Normalize every broker's device to the same transport/NAT/push profile.
+      transport: "WSS",
+      "server-nat": clientType === "mobile" ? "yes" : "no",
+      "device-push-enabled": clientType === "mobile" ? "yes" : "no",
     },
   );
+
 
   return json({
     ok: true,

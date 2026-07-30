@@ -18,7 +18,7 @@ function normalizeContact(c: any) {
   const first = c.first_name ?? c.firstname ?? c.given_name ?? null;
   const last = c.last_name ?? c.lastname ?? c.family_name ?? null;
   const full = c.full_name ?? c.name ?? c.display_name ??
-    [first, last].filter(Boolean).join(" ").trim() || null;
+    ([first, last].filter(Boolean).join(" ").trim() || null);
   const id = c.id ?? c.client_id ?? c.broker_id ?? c.user_id ?? c.uuid ?? null;
   return {
     ...c,

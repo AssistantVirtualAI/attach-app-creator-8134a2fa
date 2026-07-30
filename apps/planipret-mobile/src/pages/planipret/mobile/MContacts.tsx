@@ -169,14 +169,15 @@ export default function MContacts() {
       const { getPpContacts } = await import("@/lib/ppContactsCache");
       if (which === "clients") {
         const rows = await getPpContacts("maestro_clients", { limit: opts.limit ?? 500, force: opts.force });
-        setClients(rows as any[]);
+        setClients((rows as any[]).map((c) => ({ ...c, __maestro_kind: "client" })));
       } else if (which === "directory") {
         const [dirRes, brokersRes] = await Promise.allSettled([
           getPpContacts("directory", { limit: opts.limit ?? 500, force: opts.force }),
           getPpContacts("maestro_brokers", { limit: opts.limit ?? 500, force: opts.force }),
         ]);
         const dirRows = dirRes.status === "fulfilled" ? (dirRes.value as any[]) : [];
-        const brokerRows = brokersRes.status === "fulfilled" ? (brokersRes.value as any[]) : [];
+        const brokerRows = (brokersRes.status === "fulfilled" ? (brokersRes.value as any[]) : [])
+          .map((c) => ({ ...c, __maestro_kind: "broker" }));
         const seen = new Set<string>();
         const keyOf = (c: any) => String(c?.email ?? "").toLowerCase()
           || String(c?.phone ?? c?.cell_phone ?? "").replace(/\D/g, "")
@@ -753,6 +754,7 @@ function ContactDetailSheet({
   const [smsOpen, setSmsOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [apptOpen, setApptOpen] = useState(false);
+  const [mProfile, setMProfile] = useState<any | null>(null);
 
   const name = `${contact.first_name ?? ""} ${contact.last_name ?? ""}`.trim()
     || contact.name || contact.display_name || contact.phone || contact.email || "Contact";
@@ -767,6 +769,28 @@ function ContactDetailSheet({
   const phone: string | undefined = rawPhone || extension;
   const email: string | undefined = contact.email || contact.mail || contact.email_address;
   const maestroId: string | undefined = contact.maestro_client_id || contact.external_id || contact.id;
+
+  // Lazy-load the Maestro profile (/users/{id}/clients|brokers/{id}/profile)
+  const maestroKind: string | undefined = contact.__maestro_kind;
+  useEffect(() => {
+    let cancel = false;
+    setMProfile(null);
+    if (!maestroKind) return;
+    const targetId = contact.maestro_client_id ?? contact.id;
+    if (!targetId) return;
+    (async () => {
+      try {
+        const { data } = await supabase.functions.invoke("maestro-actions", {
+          body: {
+            action: maestroKind === "broker" ? "broker_profile" : "client_profile",
+            payload: maestroKind === "broker" ? { broker_id: targetId } : { client_id: targetId },
+          },
+        });
+        if (!cancel && (data as any)?.success) setMProfile((data as any).profile ?? null);
+      } catch { /* non-blocking */ }
+    })();
+    return () => { cancel = true; };
+  }, [maestroKind, contact.maestro_client_id, contact.id]);
 
   useEffect(() => {
     let cancel = false;

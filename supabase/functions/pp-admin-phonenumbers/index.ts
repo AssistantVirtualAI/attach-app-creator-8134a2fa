@@ -139,13 +139,19 @@ function normalizeAssignment(input: any, domain: string) {
   };
 }
 
-function buildToUserDidPayload(ext: string, _domain: string) {
+// GARDE-FOU (incident 2026-07-30) : une charge utile sans
+// `dial-rule-translation-destination-user` laisse la Destination VIDE dans le
+// PBX => "il n'y a pas d'abonnés à ce numéro". Toute écriture DID doit passer
+// par cette fonction, et toute réparation de masse par `pp-did-guardian`.
+function buildToUserDidPayload(ext: string, domain: string) {
+  const e = String(ext ?? "").trim();
+  if (!/^[0-9]{2,10}$/.test(e)) throw new Error(`DID write refused: invalid extension "${ext}"`);
   return {
-    // NS-API v2 Phonenumber user route: application + parameter only.
-    // Sending translation-destination-* rewrites the To-URI and breaks DID
-    // matching ("no subscriber at the number called").
-    "dial-rule-application": "user",
-    "dial-rule-parameter": `user_${ext}`,
+    "dial-rule-application": "to-user-residential",
+    "dial-rule-parameter": `user_${e}`,
+    "dial-rule-translation-destination-user": e,
+    "dial-rule-translation-destination-host": domain,
+    "dial-rule-translation-source-name": "[*]",
     enabled: "yes",
   };
 }

@@ -492,11 +492,31 @@ export function useMplanipretSoftphone(enabled = true) {
     // and retry a few times — a single failed start was leaving the extension
     // unregistered as soon as the app left the foreground.
     let handoffSeq = 0;
+    let handoffTimer: ReturnType<typeof setTimeout> | null = null;
+    const cancelPendingHandoff = () => {
+      if (handoffTimer) { clearTimeout(handoffTimer); handoffTimer = null; }
+      handoffSeq++; // invalidate any in-flight handoff
+    };
+    /** iOS emits transient `isActive:false` (permission sheets, CallKit, push
+     *  prompts). Handing off instantly on each blip started/stopped the native
+     *  SIP stack every second and produced the NetSapiens WSS 1001 loop.
+     *  Only hand off once the app has really stayed in background. */
+    const scheduleHandoff = (delay = 2500) => {
+      if (sameAorRef.current) return;
+      if (handoffTimer) clearTimeout(handoffTimer);
+      handoffTimer = setTimeout(() => {
+        handoffTimer = null;
+        const stillHidden = typeof document === "undefined" || document.visibilityState === "hidden";
+        if (!stillHidden) return;
+        void handoffToNative();
+      }, delay);
+    };
     const handoffToNative = async () => {
       // Native must always own the dedicated `<ext>_mobile` AOR in background.
       // `ppSipProvider.getConfig()` is intentionally the foreground `<ext>_web`
       // config, so using it here makes native + JsSIP fight over the same AOR
       // on resume and recreates the NetSapiens 1001 disconnect loop.
+      if (sameAorRef.current) { try { ppSipProvider.forceReregister(); } catch {} return; }
       const cfg = mobileSipConfigRef.current ?? ppSipProvider.getConfig();
       if (!cfg) return;
       const seq = ++handoffSeq;

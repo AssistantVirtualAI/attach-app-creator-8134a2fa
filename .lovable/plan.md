@@ -1,31 +1,56 @@
-## 1. Change password (root cause confirmed)
+## Contexte
 
-`MMore.tsx` row "Change password" calls `navigate("/reset-password")`, but the mobile router (`apps/planipret-mobile/src/App.tsx`) has no such route — the catch-all `<Route path="*" element={<Navigate to="/mplanipret" replace />} />` sends the user straight back to Home. Same for the Privacy row, which navigates to `/planipret/privacy` (also not registered in the mobile router).
+Les appels entrants tombent en boîte vocale car, à certains moments, **aucun contact SIP n'est enregistré** sur le PBX. Deux causes cumulables :
 
-Fix:
-- Add a new in-app screen `MChangePassword.tsx` (mobile-styled, bilingual FR/EN, safe-area header) that asks for the new password + confirmation and calls `supabase.auth.updateUser({ password })`, with validation (min length, match), error handling and a success toast then back to Settings.
-- Register `/mplanipret/change-password` in the mobile router and point the settings row at it.
-- Register a mobile privacy route (or reuse the existing privacy screen) so the Privacy row no longer bounces to Home.
+1. **Gap d'enregistrement au passage en arrière-plan** — la WebView se désenregistre avant que le service natif ait confirmé un REGISTER 200 OK.
+2. **Contact/Via natifs en `.invalid`** — NetSapiens peut rejeter ou ignorer ces AOR non routables.
 
-## 2. Audit of every settings row
+Bonus lié : les devices créés à la volée (self-heal) n'étaient pas ajoutés à la règle de sonnerie.
 
-Verify each row in `MMore.tsx` resolves to a real registered route or opens its sheet, and fix any that fall through to the catch-all redirect:
-- Navigation rows: AVA chat, notifications, pipeline, performance, extension sync, voicemails (`/mplanipret/calls?tab=voicemails` — confirm `MCalls` actually reads the `tab` query param; it currently uses internal state, so wire it to `useSearchParams`), connections, Maestro sync, diagnostics, MS365 diagnostics, SIP debug, privacy, change password.
-- Sheet rows: profile edit, language, DND, customize AVA, help, ringtones, delete account.
-- Action rows: NS reconnect, MS365 connect/disconnect, logout.
+## Étape 1 — Handoff sans trou d'enregistrement (déjà appliqué)
 
-Each broken target gets either a route registration or a corrected path. A small route-existence test (`routes.test.ts`) will assert every path referenced in `MMore.tsx` matches a declared route, so this class of bug can't come back.
+Fichiers : `src/hooks/useMplanipretSoftphone.ts` + copie `apps/planipret-mobile/...`
 
-## 3. AVA Brief — one generation per period per 24h
+- `handoffToNative()` démarre le service natif puis **attend une confirmation réelle** (`status = registered` ou `protected`) via `getPlanipretSipKeepAliveStatus()`, sondage 1 s pendant 12 s.
+- La WebView n'appelle `releaseForBackground()` **que si** la confirmation arrive.
+- 3 tentatives avec backoff (2 s, 4 s, 6 s) ; annulation propre si un nouveau handoff démarre (`handoffSeq`).
+- Si aucun 200 OK natif : `forceReregister()` — la WebView garde l'enregistrement plutôt que de laisser l'extension nue.
 
-Today `MHome` calls `loadBrief(false)` in a `useEffect` on every mount and on every period change, so navigating back to Home re-invokes `pp-ava-brief` and burns tokens.
+```text
+background → start natif → poll status (12s)
+  ├─ registered/protected → release WebView   (1 AOR actif en continu)
+  └─ timeout/error → retry x3 → fallback WebView registered
+```
 
-Fix:
-- Persist the brief in `localStorage` (not sessionStorage) keyed by `user + period` with a `generatedAt` timestamp, via new helpers in `mhomeCache.ts` (`loadBriefCache` / `saveBriefCache`).
-- On mount/period change: if a cached brief exists and is < 24h old, render it immediately and make **no** edge-function call. Only fetch when the cache is missing, older than 24h, or `force === true` (pull-to-refresh / explicit refresh button).
-- Keep separate cache entries for daily / weekly / monthly so each is generated at most once per 24h.
-- Show a subtle "Generated at HH:MM" line plus the existing manual refresh so the user can always force a regeneration.
-- Guard against concurrent calls with an in-flight ref so double mounts (StrictMode / prefetch) can't fire twice.
+## Étape 2 — Domaine SIP réel côté natif (déjà appliqué)
 
-### Technical notes
-Changes must be mirrored in both copies of the app tree (`src/pages/planipret/mobile/**` and `apps/planipret-mobile/src/**`), which are kept in sync. No backend/schema changes required; `pp-ava-brief` stays as-is.
+Fichier : `apps/planipret-mobile/scripts/apply-native-config.mjs`
+
+- Android : `Contact: <sip:{login}@{domain};transport=wss>` (avant : `@android-xxx.planipret.invalid`).
+- Android : `Via: SIP/2.0/WSS {domain}` (avant : `planipret-mobile.invalid`).
+- iOS (même classe de bug) : `stableContactHost()` retourne le domaine réel, et les `Via` REGISTER/OPTIONS utilisent `{domain}`.
+
+## Étape 3 — Règle de sonnerie resynchronisée après self-heal (déjà appliqué)
+
+- `ns-resolve-sip-credentials` : après création self-heal d'un device, appel fire-and-forget de `pp-sync-answering-rules` avec `broker_id`, encapsulé dans `EdgeRuntime.waitUntil` (n'allonge pas la résolution des credentials).
+- `pp-sync-answering-rules` : nouveau chemin d'auth interne (`x-internal-call: 1` + service role), l'accès admin normal reste inchangé.
+
+## Étape 4 — Validation (à faire côté device)
+
+1. `npm run build` dans `apps/planipret-mobile` → régénère les sources natives + `verify-sip-bundle.mjs`.
+2. Xcode / Android Studio : vérifier dans les logs que le REGISTER natif contient le domaine réel (aucun `.invalid`).
+3. Portail NetSapiens : après mise en arrière-plan, l'AOR `<ext>_mobile` doit rester **Registered** en continu (aucune fenêtre à 0 device).
+4. Appel entrant app fermée → doit sonner avant le timeout `forward-no-answer`.
+5. Nouveau broker jamais provisionné → vérifier que la règle de sonnerie est créée automatiquement au premier login.
+
+## Détails techniques
+
+- Aucun changement de schéma DB ni de politique RLS.
+- Fonctions à redéployer : `ns-resolve-sip-credentials`, `pp-sync-answering-rules`.
+- `verify-sip-bundle.mjs` continue de bloquer les régressions (Contact aléatoire, re-REGISTER sur INVITE, OPTIONS trop rapide).
+- Typecheck du projet : OK.
+
+## Reste à surveiller (causes 3 et 4 de l'investigation)
+
+- Latence PushKit iOS au démarrage à froid vs `forward-no-answer` : à mesurer une fois #1/#2 confirmés stables.
+- Devices WSS/WebRTC activés dans le portail NetSapiens (vérification manuelle).

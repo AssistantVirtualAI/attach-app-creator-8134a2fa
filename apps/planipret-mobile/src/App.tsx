@@ -100,7 +100,10 @@ function NativeDeepLinkBridge() {
       }
     })();
 
-    return () => unsubscribe?.();
+    return () => {
+      window.removeEventListener("pp-oauth-callback", onAuthSessionCallback);
+      unsubscribe?.();
+    };
   }, [navigate]);
 
   return null;

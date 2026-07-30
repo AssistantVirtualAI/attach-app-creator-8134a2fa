@@ -16,7 +16,7 @@ import { requirePlanipretAdmin } from "../_shared/ns-broker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
 const NS_API_KEY = Deno.env.get("NS_API_KEY") ?? "";
@@ -94,7 +94,9 @@ Deno.serve(async (req) => {
   try {
     // Autorisation : admin Planipret OU appel machine avec la clé de service (cron).
     const authHeader = req.headers.get("Authorization") ?? "";
-    const isService = SERVICE_KEY && authHeader === `Bearer ${SERVICE_KEY}`;
+    const cronHeader = req.headers.get("x-cron-secret") ?? "";
+    const CRON_SECRETS = [Deno.env.get("PP_CRON_SECRET"), Deno.env.get("CRON_PBX_SECRET"), Deno.env.get("CRON_SECRET")].filter((v): v is string => !!v);
+    const isService = (!!SERVICE_KEY && authHeader === `Bearer ${SERVICE_KEY}`) || (!!cronHeader && CRON_SECRETS.includes(cronHeader));
     if (!isService) {
       const auth = await requirePlanipretAdmin(req);
       if ("error" in auth) return auth.error;

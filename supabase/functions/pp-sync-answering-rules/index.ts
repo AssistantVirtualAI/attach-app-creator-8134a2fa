@@ -259,8 +259,10 @@ Deno.serve(async (req) => {
     // Read a DID back from NS and decide whether it really routes to the user.
     const DID_DEST_FIELDS = [
       "destination", "dest", "user", "to-user", "dest-user", "destination-user",
+      "dial-rule-parameter", "dialrule-parameter",
       "dial-rule-destination", "dialrule-destination",
       "dial-rule-translation-destination", "dialrule-translation-destination",
+      "dial-rule-translation-destination-user",
     ];
     const DID_APP_FIELDS = [
       "dest-application", "destination-application",

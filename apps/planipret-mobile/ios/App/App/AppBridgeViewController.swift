@@ -170,12 +170,9 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       activateAudioSession()
       setStatus("protected", "background_handoff_pending")
       backgroundHandoffWorkItem?.cancel()
-      let work = DispatchWorkItem { [weak self] in
-        guard let self = self, !self.isForeground() else { return }
-        self.beginNativeOwnership("background_handoff")
-      }
-      backgroundHandoffWorkItem = work
-      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+      // JS owns the ordering: it unregisters/stops JsSIP before calling
+      // startSipService. Starting here first creates two transports for the same
+      // NetSapiens device AOR and the SBC closes one with WebSocket code 1001.
     }
     @objc private func onForeground() {
       appActive = true

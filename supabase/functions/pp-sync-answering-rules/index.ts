@@ -556,14 +556,20 @@ Deno.serve(async (req) => {
           status: vRes.status,
           sim_ring_enabled: simOn,
           stored_targets: targets,
-          covers_mobile: targets.some((t) => t.includes(`${String(ext).toLowerCase()}_mobile`)),
+          covers_mobile: targets.some((t) => t.includes(`${String(ext).toLowerCase()}_mobile`) || t.includes("owndevices")),
           ring_timeout: Number(sim?.timeout ?? stored?.["ring-timeout"] ?? stored?.timeout ?? 0) || null,
           include_user_extension: String(sim?.["include-user-extension"] ?? stored?.["simultaneous-ring-include-user-extension"] ?? "").toLowerCase(),
-          honored: simOn && targets.length > 0 && !targets.some((t) => t === `sip:${String(ext).toLowerCase()}@${String(domain).toLowerCase()}` || t === `${String(ext).toLowerCase()}@${String(domain).toLowerCase()}`),
+          // Honored = sim-ring on with at least one usable fork target that is
+          // not a self-reference to the bare extension (which terminates on
+          // voicemail/SpeakAccount instead of forking to the devices).
+          honored: simOn && targets.length > 0 &&
+            targets.some((t) => t.includes("owndevices") || (t.startsWith(String(ext).toLowerCase()) && t !== String(ext).toLowerCase())) &&
+            !targets.some((t) => t === String(ext).toLowerCase() || t === `sip:${String(ext).toLowerCase()}@${String(domain).toLowerCase()}` || t === `${String(ext).toLowerCase()}@${String(domain).toLowerCase()}`),
         };
         if (!verify.honored) {
           console.error("[syncBroker] NS ignored sim-ring keys", JSON.stringify({ extension: ext, domain, verify, sent: devices.aors }));
         }
+
       } catch (e) {
         verify = { error: (e as Error).message };
       }

@@ -117,6 +117,35 @@ async function nsPut(path: string, payload: Record<string, unknown>) {
   });
 }
 
+async function nsPost(path: string, payload: Record<string, unknown>) {
+  return await nsFetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Same device payload as ns-provision-broker-devices so EVERY broker ends up
+ * with an identical `<ext>_mobile` + `<ext>_web` pair (no per-user drift).
+ */
+function deviceCreatePayload(id: string, isMobile: boolean, password: string, coreServer: string) {
+  return {
+    device: id,
+    "device-sip-registration-password": password,
+    "device-provisioning-protocol": "sip",
+    "device-model": isMobile ? "Mobile Softphone" : "Web Softphone",
+    "core-server": coreServer,
+    "device-provisioning-registration-core-server": coreServer,
+    "server-nat": isMobile ? "yes" : "no",
+    transport: "WSS",
+    "device-srtp-enabled": "opportunistic",
+    "device-sip-allowed-user-agent": "",
+    "device-push-enabled": isMobile ? "yes" : "no",
+  };
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -229,6 +258,27 @@ Deno.serve(async (req) => {
 
 
 
+  // Self-heal: brokers provisioned before the `_web` device existed (or whose
+  // device was deleted in the portal) get it created on the fly, with exactly
+  // the same payload as ns-provision-broker-devices. Applies to every broker,
+  // not just the ones an admin re-provisioned manually.
+  if (!device) {
+    const selfHealPwd = await derivePassword(String(profile.user_id));
+    const isMobile = clientType === "mobile";
+    const created = await nsPost(
+      `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`,
+      deviceCreatePayload(deviceName, isMobile, selfHealPwd, FALLBACK_PROXY),
+    );
+    console.log(`[ns-resolve] self-heal device ${deviceName} status=${created.status}`);
+    if (created.ok || created.status === 409) {
+      const again = await nsGet(
+        `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(deviceName)}`,
+      );
+      device = again.ok ? (Array.isArray(again.data) ? again.data[0] : again.data) : null;
+      if (!device) device = { device: deviceName, "core-server": FALLBACK_PROXY };
+    }
+  }
+
   if (!device) {
     return json({
       ok: false,
@@ -240,6 +290,7 @@ Deno.serve(async (req) => {
       action: "Aucun device SIP trouvé. Lancez la provision (ns-provision-broker-devices) ou contactez votre administrateur.",
     }, 200);
   }
+
 
   const resolvedId = deviceIdOf(device) || deviceName;
   const rawCore = (device["core-server"] ?? device["device-sip-registration-core-server"] ?? device["sip-registration-core-server"] ?? "").toString().trim();
@@ -256,11 +307,17 @@ Deno.serve(async (req) => {
     `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(resolvedId)}`,
     {
       "device-sip-registration-password": sipPassword,
+      "core-server": coreServer,
       "device-provisioning-registration-core-server": coreServer,
       "device-srtp-enabled": "opportunistic",
       "device-sip-allowed-user-agent": "",
+      // Normalize every broker's device to the same transport/NAT/push profile.
+      transport: "WSS",
+      "server-nat": clientType === "mobile" ? "yes" : "no",
+      "device-push-enabled": clientType === "mobile" ? "yes" : "no",
     },
   );
+
 
   return json({
     ok: true,

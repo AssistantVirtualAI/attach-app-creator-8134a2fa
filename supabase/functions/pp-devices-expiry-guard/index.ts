@@ -117,7 +117,10 @@ Deno.serve(async (req) => {
           const nat = String(dev["device-sip-nat-traversal-enabled"] ?? "");
           const registered = String(dev["device-sip-registration-state"] ?? dev["registration-status"] ?? "");
           const expires = dev["device-sip-registration-expires-datetime"] ?? null;
-          const compliant = expiry === TARGET_EXPIRY && nat === "automatic";
+          // The device LIST endpoint does not always return the NAT field; only
+          // treat it as drift when it is present AND wrong.
+          const natOk = nat === "" || nat === "automatic";
+          const compliant = expiry === TARGET_EXPIRY && natOk;
           if (compliant) {
             stats.compliant += 1;
             out.devices.push({ id, status: "ok", expiry, nat, registered, expires });

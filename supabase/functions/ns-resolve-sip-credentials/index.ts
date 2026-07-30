@@ -126,6 +126,45 @@ async function nsPost(path: string, payload: Record<string, unknown>) {
 }
 
 /**
+ * Ring-rule resync (fire-and-forget).
+ *
+ * Root cause observed on ext. 113: the corrected sim-ring payload in
+ * `pp-sync-answering-rules` had never been applied to that extension, so NS
+ * still held the legacy self-referencing rule → instant voicemail.
+ * We therefore resync on EVERY credential resolve, throttled per broker, so no
+ * extension can stay on a stale rule waiting for an admin to press a button.
+ */
+const RING_RULE_RESYNC_TTL_MS = 6 * 60 * 60 * 1000; // 6h per broker
+const lastRingRuleResync = new Map<string, number>();
+
+function queueRingRuleResync(brokerId: string, reason: string, force = false) {
+  if (!brokerId) return;
+  const now = Date.now();
+  const last = lastRingRuleResync.get(brokerId) ?? 0;
+  if (!force && now - last < RING_RULE_RESYNC_TTL_MS) return;
+  lastRingRuleResync.set(brokerId, now);
+  try {
+    const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    if (!svc) return;
+    const p = fetch(`${SUPABASE_URL}/functions/v1/pp-sync-answering-rules`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-call": "1",
+        Authorization: `Bearer ${svc}`,
+      },
+      body: JSON.stringify({ broker_id: brokerId }),
+    })
+      .then((r) => console.log(`[ns-resolve] ring-rule resync (${reason}) status=${r.status}`))
+      .catch((e) => console.error(`[ns-resolve] ring-rule resync (${reason}) failed`, e));
+    try { (globalThis as any).EdgeRuntime?.waitUntil?.(p); } catch { /* ignore */ }
+  } catch (e) {
+    console.error("[ns-resolve] ring-rule resync error", e);
+  }
+}
+
+
+/**
  * Same device payload as ns-provision-broker-devices so EVERY broker ends up
  * with an identical `<ext>_mobile` + `<ext>_web` pair (no per-user drift).
  */
@@ -272,24 +311,8 @@ Deno.serve(async (req) => {
     console.log(`[ns-resolve] self-heal device ${deviceName} status=${created.status}`);
     if (created.ok || created.status === 409) {
       // A freshly created device is not in the user's answering rule yet →
-      // inbound calls would keep going straight to voicemail. Re-sync the ring
-      // rule for this broker (fire-and-forget, never blocks credential resolve).
-      try {
-        const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-        if (svc) {
-          const p = fetch(`${SUPABASE_URL}/functions/v1/pp-sync-answering-rules`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-internal-call": "1",
-              Authorization: `Bearer ${svc}`,
-            },
-            body: JSON.stringify({ broker_id: String(profile.user_id) }),
-          }).then((r) => console.log(`[ns-resolve] ring-rule resync status=${r.status}`))
-            .catch((e) => console.error("[ns-resolve] ring-rule resync failed", e));
-          try { (globalThis as any).EdgeRuntime?.waitUntil?.(p); } catch { /* ignore */ }
-        }
-      } catch (e) { console.error("[ns-resolve] ring-rule resync error", e); }
+      // inbound calls would keep going straight to voicemail. Force a resync.
+      queueRingRuleResync(String(profile.user_id), "self_heal_device", true);
 
       const again = await nsGet(
         `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(deviceName)}`,
@@ -297,7 +320,12 @@ Deno.serve(async (req) => {
       device = again.ok ? (Array.isArray(again.data) ? again.data[0] : again.data) : null;
       if (!device) device = { device: deviceName, "core-server": FALLBACK_PROXY };
     }
+  } else {
+    // Device already exists but the answering rule may still be the legacy
+    // self-referencing one (never re-synced since the fix). Throttled resync.
+    queueRingRuleResync(String(profile.user_id), "periodic");
   }
+
 
   if (!device) {
     return json({

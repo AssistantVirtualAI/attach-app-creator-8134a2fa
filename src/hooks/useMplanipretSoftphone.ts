@@ -419,6 +419,7 @@ export function useMplanipretSoftphone(enabled = true) {
       window.clearInterval(voipRecheck);
       cleanupVoipToken?.();
       cleanupVoipInvalid?.();
+      cleanupVoipIncoming?.();
       cleanupVoipAnswer?.();
       cleanupVoipReject?.();
     };

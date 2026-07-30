@@ -410,14 +410,63 @@ Deno.serve(async (req) => {
 
 
     // Local DID inventory for one extension (used for diagnostics + dry-run).
+    // PBX phonenumber inventory, fetched at most once per invocation.
+    let pbxNumbersCache: any[] | null = null;
+    const pbxNumbers = async (domain: string): Promise<any[]> => {
+      if (pbxNumbersCache) return pbxNumbersCache;
+      try {
+        const res = await nsFetch(
+          `/domains/${encodeURIComponent(domain)}/phonenumbers`,
+          { method: "GET" },
+          { functionName: "pp-sync-answering-rules" },
+        );
+        const data: any = await readBody(res);
+        pbxNumbersCache = Array.isArray(data) ? data : (data?.data ?? data?.items ?? []);
+      } catch { pbxNumbersCache = []; }
+      return pbxNumbersCache!;
+    };
+
+    // The PBX is the source of truth: if the local table has no DID for this
+    // extension, look the number up on NetSapiens and persist it.
+    const pbxDidsForExt = async (ext: string, domain: string): Promise<string[]> => {
+      const rows = await pbxNumbers(domain);
+      const found: string[] = [];
+      for (const n of rows) {
+        const dest = DID_DEST_FIELDS.map((f) => String(n?.[f] ?? "")).filter(Boolean).join(" ");
+        const m = dest.match(/(?:^|[^0-9])(\d{3,6})(?:@|[^0-9]|$)/);
+        if (!m || m[1] !== String(ext)) continue;
+        const digits = normalizeDigits(
+          String(n?.phonenumber ?? n?.["phone-number"] ?? n?.number ?? n?.did ?? "").trim(),
+        );
+        if (digits) found.push(digits);
+      }
+      if (found.length) {
+        await admin.from("planipret_did_assignments").upsert(
+          found.map((digits) => ({
+            phone_number_e164: `+${digits}`,
+            phone_number_digits: digits,
+            extension: String(ext),
+            domain,
+            source: "ns_live",
+            updated_at: new Date().toISOString(),
+          })),
+          { onConflict: "phone_number_e164" },
+        );
+      }
+      return found.map((d) => `+${d}`);
+    };
+
     const localDids = async (ext: string, domain: string) => {
       const { data } = await admin
         .from("planipret_did_assignments")
         .select("phone_number_e164, phone_number_digits")
         .eq("domain", domain)
         .eq("extension", ext);
-      return (data ?? []).map((r: any) => r.phone_number_e164 ?? r.phone_number_digits).filter(Boolean);
+      const local = (data ?? []).map((r: any) => r.phone_number_e164 ?? r.phone_number_digits).filter(Boolean);
+      if (local.length) return local;
+      return await pbxDidsForExt(String(ext), domain);
     };
+
 
     const applyRule = async (broker: any) => {
       const ext = broker.ns_extension ?? broker.extension;

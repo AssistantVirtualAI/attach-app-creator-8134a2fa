@@ -37,10 +37,9 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private var verifyDelayMs: Double = 8000
     private var registerExpires: Int = 1800
     // NetSapiens closes the socket when it sees two REGISTERs for the same AoR
-    // back-to-back. Debounce non-challenge REGISTERs both before and after 200 OK.
-    private var lastRegisterSentTime: Date?
+    // back-to-back. Debounce every REGISTER for 2s after a 200 OK.
     private var lastRegisterOkTime: Date?
-    private let registerDebounceSec: TimeInterval = 5.0
+    private let registerDebounceSec: TimeInterval = 2.0
     private var reconnectPending = false
     private var backgroundHandoffWorkItem: DispatchWorkItem?
     private var pathMonitor: NWPathMonitor?
@@ -144,6 +143,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       guard !isForeground() else { releaseRegistration("foreground_js_owns"); return }
       connect()
       scheduleRegister()
+      if socket != nil, status != "registered" { sendRegister(challenge: nil) }
       setStatus(status == "registered" ? "registered" : "protected", why)
     }
 
@@ -195,6 +195,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         if self.isForeground() { self.setStatus("idle", "foreground_js_owns"); return }
         guard self.networkUp else { self.setStatus("reconnecting", "network_down"); self.scheduleReconnect("network_down"); return }
         self.connect()
+        self.sendRegister(challenge: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + self.verifyDelayMs / 1000.0) { [weak self] in
           guard let self = self else { return }
           if self.status != "registered" && !self.isForeground() { self.scheduleReconnect("still_unregistered") }
@@ -216,7 +217,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
           DispatchQueue.main.async { [weak self] in
             guard let self = self, !self.isForeground() else { return }
             self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil
-            self.connect()
+            self.connect(); self.sendRegister(challenge: nil)
           }
         } else if !up {
           self.setStatus("reconnecting", "network_lost")
@@ -324,7 +325,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       sip += "Call-ID: " + callIdReg + "\r\nCSeq: " + String(seq) + " REGISTER\r\nContact: " + contact + ";expires=" + String(registerExpires) + "\r\nExpires: " + String(registerExpires) + "\r\nUser-Agent: Planipret iOS KeepAlive\r\nSupported: outbound,path,gruu\r\nAllow: INVITE,ACK,CANCEL,BYE,OPTIONS,MESSAGE,INFO,UPDATE,REGISTER\r\n"
       if let ch = challenge, !password.isEmpty { sip += (proxyAuth ? "Proxy-Authorization: " : "Authorization: ") + digest(challenge: ch) + "\r\n" }
       sip += "Content-Length: 0\r\n\r\n"
-      lastRegisterSentTime = Date()
       socket?.send(.string(sip)) { [weak self] err in
         DispatchQueue.main.async {
           guard let self = self else { return }

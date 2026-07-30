@@ -639,8 +639,21 @@ export function useMplanipretSoftphone(enabled = true) {
     return "active";
   }, [restCall?.direction]);
 
+  // When the app is backgrounded, the WebView SIP contact is intentionally
+  // released and the native keep-alive service owns the registration. Without
+  // this merge the UI reported "disconnected" even though the extension is
+  // still registered on the PBX (native contact alive).
+  const nativeOwnsRegistration = useMemo(() => {
+    const st = String((nativeStatus as any)?.status ?? "");
+    return (nativeStatus as any)?.ok !== false && (st === "registered" || st === "protected");
+  }, [nativeStatus]);
+
   const effectiveSnap = useMemo<PpSipSnapshot>(() => {
-    if (!restCall?.id) return snap;
+    const base: PpSipSnapshot = (nativeOwnsRegistration && snap.status !== "registered" && snap.status !== "connected")
+      ? ({ ...snap, status: "registered", lastError: null } as PpSipSnapshot)
+      : snap;
+    snap = base;
+    if (!restCall?.id) return base;
     const state = normalizeRestState(restCall.status);
     return {
       ...snap,
@@ -652,7 +665,7 @@ export function useMplanipretSoftphone(enabled = true) {
       startedAt: restCall.startedAt ?? snap.startedAt ?? Date.now(),
       onHold: state === "held",
     };
-  }, [snap, restCall, normalizeRestState]);
+  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration]);
 
   const restControl = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {
     const id = restCall?.id;

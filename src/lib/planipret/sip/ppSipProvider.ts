@@ -396,10 +396,10 @@ class PpSipProvider {
 
     try {
       ppSipInitInFlight = true;
-      const urls = Array.from(new Set([cleanCfg.wssUrl, ...(cleanCfg.wssUrls || [])]
-        .map((u) => String(u ?? "").trim())
-        .filter((u) => /^wss?:\/\//i.test(u)))) as string[];
+      const urls = filterSipEdgeUrls([cleanCfg.wssUrl, ...(cleanCfg.wssUrls || [])], (msg) =>
+        this.log("warn", msg));
       if (!urls.length) throw new Error("No valid SIP WSS URL");
+
       const sockets = urls.map((u) => new (JsSIP as any).WebSocketInterface(u));
       this.reconnectMetrics.socketsCreated += sockets.length;
       this.pushHistory("socket", `sockets_created:${urls.join(",")}`);

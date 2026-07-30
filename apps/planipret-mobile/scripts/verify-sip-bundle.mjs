@@ -26,6 +26,14 @@ const NATIVE_FORBIDDEN_MARKERS = [
     label: "OPTIONS iOS trop rapide après REGISTER",
     value: "DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.sendOptionsPing() }",
   },
+  {
+    label: "iOS Contact host .invalid (non routable)",
+    value: "\".plan" + "ipret.invalid\"",
+  },
+  {
+    label: "iOS Via host .invalid (non routable)",
+    value: "Via: SIP/2.0/WSS plan" + "ipret-ios.invalid",
+  },
 ];
 const REQUIRED_MARKERS = [
   "sip reconnect #",

@@ -336,15 +336,13 @@ Deno.serve(async (req) => {
         }
 
         // 2) Write.
-        const endpoints = [
-          before.endpoint,
-          `/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(pn)}`,
-          `/domains/${encodeURIComponent(domain)}/phone-numbers/${encodeURIComponent(pn)}`,
-          `/domains/${encodeURIComponent(domain)}/numbers/${encodeURIComponent(pn)}`,
-        ].filter(Boolean) as string[];
+        // Write ONLY to the endpoint that actually returned the number, so we
+        // never create/patch a phantom row on an alias path.
+        const endpoints = [before.endpoint].filter(Boolean) as string[];
         let lastStatus = 0;
         let ok = false;
         for (const endpoint of [...new Set(endpoints)]) {
+
           const res = await nsFetch(endpoint, { method: "PUT", body: JSON.stringify(payload) }, { functionName: "pp-sync-answering-rules" });
           lastStatus = res.status;
           await res.text().catch(() => {});

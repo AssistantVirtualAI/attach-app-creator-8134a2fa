@@ -16,6 +16,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       CAPPluginMethod(name: "getSipServiceStatus", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "triggerReregister", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "acknowledgeIncoming", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "wakeForIncomingCall", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
       CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise)
     ]
@@ -39,6 +40,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     // NetSapiens closes the socket when it sees two REGISTERs for the same AoR
     // back-to-back. Debounce every REGISTER for 2s after a 200 OK.
     private var lastRegisterOkTime: Date?
+    private var lastRegisterSentTime: Date?
     private let registerDebounceSec: TimeInterval = 2.0
     private var reconnectPending = false
     private var backgroundHandoffWorkItem: DispatchWorkItem?
@@ -61,6 +63,10 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIScene.willDeactivateNotification, object: nil)
       }
       // Ask for notification permission so the incoming-call banner can ring.
+      // PushKit (PpVoipCall) posts this when an incoming-call VoIP push lands:
+      // this is the ONLY reliable iOS background wake, so re-REGISTER immediately
+      // instead of relying on a long-lived WSS socket.
+      NotificationCenter.default.addObserver(self, selector: #selector(onVoipPushWake(_:)), name: Notification.Name("PpVoipIncomingPush"), object: nil)
       UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
     deinit { NotificationCenter.default.removeObserver(self); timer?.invalidate(); socket?.cancel(with: .goingAway, reason: nil) }
@@ -98,6 +104,33 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     @objc func acknowledgeIncoming(_ call: CAPPluginCall) {
       UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["pp_incoming_call"])
       call.resolve(["ok": true])
+    }
+    @objc func wakeForIncomingCall(_ call: CAPPluginCall) {
+      let why = call.getString("reason") ?? "js"
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { call.resolve(["ok": false]); return }
+        self.wakeForPush(why)
+        call.resolve(self.snapshot(ok: true))
+      }
+    }
+    @objc private func onVoipPushWake(_ note: Notification) {
+      DispatchQueue.main.async { [weak self] in self?.wakeForPush("voip_push") }
+    }
+    /// Immediate, debounce-free REGISTER triggered by a VoIP push. Apple only
+    /// guarantees background execution through PushKit, so this is the path that
+    /// must bring the AOR back before the PBX times out to voicemail.
+    private func wakeForPush(_ why: String) {
+      NSLog("[PpSipKeepAlive] VoIP push wake (%@)", why)
+      beginBackgroundTask()
+      activateAudioSession()
+      lastRegisterOkTime = nil
+      lastRegisterSentTime = nil
+      if isForeground() {
+        notifyListeners("sipReregisterRequested", data: ["reason": "voip_push"])
+        return
+      }
+      if socket == nil { connect() } else { sendRegister(challenge: nil, force: true) }
+      setStatus(status == "registered" ? "registered" : "protected", "voip_push_wake")
     }
 
     // NEVER touch UIApplication/UIScene off the main thread: it triggers
@@ -301,17 +334,17 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       }
     }
 
-    private func sendRegister(challenge: String?, proxyAuth: Bool = false) {
+    private func sendRegister(challenge: String?, proxyAuth: Bool = false, force: Bool = false) {
       if isForeground() { releaseRegistration("foreground_js_owns"); return }
       if socket == nil { connect(); return }
       // Two REGISTERs in a row on the same WSS connection make NetSapiens see a
       // duplicate AoR and close the socket. Hold off after each send/200 OK
       // (auth challenge responses are exempt: they complete the same handshake).
-      if challenge == nil, let sentAt = lastRegisterSentTime, Date().timeIntervalSince(sentAt) <= registerDebounceSec {
+      if !force, challenge == nil, let sentAt = lastRegisterSentTime, Date().timeIntervalSince(sentAt) <= registerDebounceSec {
         NSLog("[PpSipKeepAlive] REGISTER debounced: %.2fs since sent (min %.1fs)", Date().timeIntervalSince(sentAt), registerDebounceSec)
         return
       }
-      if challenge == nil, let okAt = lastRegisterOkTime, Date().timeIntervalSince(okAt) <= registerDebounceSec {
+      if !force, challenge == nil, let okAt = lastRegisterOkTime, Date().timeIntervalSince(okAt) <= registerDebounceSec {
         NSLog("[PpSipKeepAlive] REGISTER debounced: %.2fs since 200 OK (min %.1fs)", Date().timeIntervalSince(okAt), registerDebounceSec)
         return
       }
@@ -329,6 +362,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         DispatchQueue.main.async {
           guard let self = self else { return }
           if err == nil {
+            self.lastRegisterSentTime = Date()
             self.setStatus("connecting", challenge == nil ? "register_sent" : "register_auth_sent")
           } else {
             NSLog("[PpSipKeepAlive] REGISTER send failed: %@", String(describing: err))

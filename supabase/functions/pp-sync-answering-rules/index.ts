@@ -562,7 +562,9 @@ Deno.serve(async (req) => {
           status: opRes.status,
           body: bodySnippet,
         },
+        ...shadowing.map((s) => ({ extension: ext, step: "disable_shadowing_rule", route: `PUT ${base}/${s.time_frame}`, http_status: s.status, status: s.status })),
       ];
+
 
 
 

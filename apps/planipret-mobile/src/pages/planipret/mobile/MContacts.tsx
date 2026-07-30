@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
-import { Search, Phone, MessageSquare, Mail, Users, UserCog, BookUser, X, Calendar, ListChecks, Loader2, ExternalLink, Sparkles, Plus, Star, Copy, Send, Filter, Check, AlertTriangle, History } from "lucide-react";
+import { Search, Phone, MessageSquare, Mail, Users, UserCog, BookUser, X, Calendar, ListChecks, Loader2, ExternalLink, Sparkles, Plus, Star, Copy, Send, Filter, Briefcase, Check, AlertTriangle, History } from "lucide-react";
 import { saveAppointment, loadAppointments, subscribeAppointments, type ApptHistoryEntry } from "@/lib/appointmentHistory";
 import AvaSummarizeSheet from "@/components/planipret/ava/AvaSummarizeSheet";
 import { supabase } from "@/integrations/supabase/client";

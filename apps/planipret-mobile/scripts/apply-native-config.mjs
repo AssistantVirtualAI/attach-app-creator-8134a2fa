@@ -1666,14 +1666,18 @@ function patchIosNativeFiles() {
   writeIfChanged(path.join(iosApp, "Plugins", "PpSipKeepAlive", IOS_KEEPALIVE_BRIDGE_FILENAME), IOS_KEEPALIVE_BRIDGE);
   writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.swift"), IOS_VOIP_CALL_PLUGIN);
   writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.m"), IOS_VOIP_CALL_BRIDGE);
+  writeIfChanged(path.join(iosApp, "Plugins", "PpAuthSession", "PpAuthSession.swift"), IOS_AUTH_SESSION_PLUGIN);
+  writeIfChanged(path.join(iosApp, "Plugins", "PpAuthSession", "PpAuthSession.m"), IOS_AUTH_SESSION_BRIDGE);
   const iosRoot = path.join(appDir, "ios", "App");
   ensureXcodeSourceFiles(iosRoot, [
     "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.swift",
     "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.m",
     "App/Plugins/PpVoipCall/PpVoipCall.swift",
     "App/Plugins/PpVoipCall/PpVoipCall.m",
+    "App/Plugins/PpAuthSession/PpAuthSession.swift",
+    "App/Plugins/PpAuthSession/PpAuthSession.m",
   ]);
-  const pluginFilesAreInProject = hasProjectReference(iosRoot, "PpSipKeepAlive.swift") && hasProjectReference(iosRoot, "PpVoipCall.swift");
+  const pluginFilesAreInProject = hasProjectReference(iosRoot, "PpSipKeepAlive.swift") && hasProjectReference(iosRoot, "PpVoipCall.swift") && hasProjectReference(iosRoot, "PpAuthSession.swift");
   patchIosAppDelegate(iosApp);
   ensureIosBridgeController(iosApp, pluginFilesAreInProject);
   ensureIosSceneDelegate(iosApp);

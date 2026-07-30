@@ -30,9 +30,11 @@ import {
   onPlanipretIncomingInvite,
   onPlanipretNativeReregister,
   onPlanipretSipKeepAliveStatus,
+  onPlanipretVoipIncomingCall,
   onPlanipretVoipPushToken,
   onPlanipretVoipPushTokenInvalidated,
   refreshPlanipretVoipPushToken,
+  wakePlanipretNativeSipForIncomingCall,
   reportPlanipretCallEnded,
   requestPlanipretBatteryOptimizationExemption,
   startPlanipretSipKeepAlive,
@@ -378,6 +380,17 @@ export function useMplanipretSoftphone(enabled = true) {
     document.addEventListener("visibilitychange", onVisibleVoip);
     const voipRecheck = window.setInterval(verifyVoipToken, getPpSipReconnectConfig().voipTokenCheckMs);
 
+    // PushKit is the only reliable iOS background wake: as soon as the VoIP push
+    // creates the CallKit call, force the native keep-alive to re-REGISTER (the
+    // WSS socket is usually dead after suspension) instead of waiting on it.
+    let cleanupVoipIncoming: (() => void) | undefined;
+    onPlanipretVoipIncomingCall((data) => {
+      console.log("[pp-voip] incoming VoIP push → waking native SIP", data?.callId);
+      void wakePlanipretNativeSipForIncomingCall("voip_push");
+      try { ppSipProvider.forceReregister(); } catch {}
+      try { (window as any).__ppPendingAnswer = { callId: data?.callId, ts: Date.now() }; } catch {}
+    }).then((fn) => { cleanupVoipIncoming = fn; }).catch(() => undefined);
+
     onPlanipretIncomingCallAnswered((data) => {
       try { (window as any).__ppPendingAnswer = { callId: data?.callId, ts: Date.now() }; } catch {}
       try { ppSipProvider.forceReregister(); } catch {}
@@ -472,7 +485,10 @@ export function useMplanipretSoftphone(enabled = true) {
           const st = await getPlanipretSipKeepAliveStatus().catch(() => null);
           if (st) setNativeStatus(st);
           const v = String(st?.status ?? "");
-          if (v === "registered" || v === "protected") return true;
+          // Only a real PBX 200 OK counts. "protected" alone just means the
+          // background task is held, so require loggedIn on that path.
+          if (v === "registered") return true;
+          if (v === "protected" && st?.loggedIn === true) return true;
           if (v === "error") return false;
           await new Promise((r) => setTimeout(r, 1_000));
         }

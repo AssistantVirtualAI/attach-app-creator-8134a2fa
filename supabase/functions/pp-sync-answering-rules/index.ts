@@ -1,5 +1,5 @@
 // pp-sync-answering-rules — Apply the standard Planiprêt answering rule
-// (simultaneously ring {ext}_mobile, 25s timeout, then voicemail) to
+// (simultaneously ring {ext}M, 25s timeout, then voicemail) to
 // brokers in NetSapiens.
 //
 // Modes:

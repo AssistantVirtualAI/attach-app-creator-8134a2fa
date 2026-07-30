@@ -599,9 +599,9 @@ export function useMplanipretSoftphone(enabled = true) {
       } catch { /* noop */ }
       evaluate();
     };
-    const onVis = () => { if (document.visibilityState === "visible") onResume(); else void handoffToNative(); };
+    const onVis = () => { if (document.visibilityState === "visible") { cancelPendingHandoff(); onResume(); } else scheduleHandoff(); };
     document.addEventListener("visibilitychange", onVis);
-    const onBackgrounded = () => { void handoffToNative(); };
+    const onBackgrounded = () => { scheduleHandoff(); };
     window.addEventListener("pagehide", onBackgrounded);
     window.addEventListener("freeze", onBackgrounded as EventListener);
 
@@ -636,7 +636,7 @@ export function useMplanipretSoftphone(enabled = true) {
             } catch { /* noop */ }
             evaluate();
           } else {
-            void handoffToNative();
+            scheduleHandoff();
           }
         });
       } catch { /* ignore */ }
@@ -647,7 +647,7 @@ export function useMplanipretSoftphone(enabled = true) {
     // watchdog escalates to forceReregister even without a subscribe callback.
     const heartbeat = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-        void handoffToNative();
+        scheduleHandoff(0);
         return;
       }
       evaluate();

@@ -537,18 +537,31 @@ Deno.serve(async (req) => {
 
 
 
-      // 2) Upsert
-      let opRes: Response;
-      let mode: "created" | "updated";
-      if (defaultRule) {
-        const ruleId = encodeURIComponent(String(defaultRule?.id ?? defaultRule?.["time-frame"] ?? "Default"));
-        opRes = await nsFetch(`${base}/${ruleId}`, { method: "PUT", body: JSON.stringify(payload) }, { functionName: "pp-sync-answering-rules" });
-        mode = "updated";
-      } else {
-        opRes = await nsFetch(base, { method: "POST", body: JSON.stringify(payload) }, { functionName: "pp-sync-answering-rules" });
-        mode = "created";
+      // 2) Upsert — retried: NS answers 202 but occasionally drops the socket
+      // (transient 5xx / connection reset) which surfaced as rule_write_failed.
+      let opRes!: Response;
+      let opBody: any = null;
+      let mode: "created" | "updated" = defaultRule ? "updated" : "created";
+      const ruleId = encodeURIComponent(String(defaultRule?.id ?? defaultRule?.["time-frame"] ?? "*"));
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          opRes = mode === "updated"
+            ? await nsFetch(`${base}/${ruleId}`, { method: "PUT", body: JSON.stringify(payload) }, { functionName: "pp-sync-answering-rules" })
+            : await nsFetch(base, { method: "POST", body: JSON.stringify(payload) }, { functionName: "pp-sync-answering-rules" });
+        } catch (e) {
+          opRes = new Response(JSON.stringify({ error: (e as Error).message }), { status: 599 });
+        }
+        opBody = await readBody(opRes);
+        if (opRes.ok) break;
+        // PUT on a rule NS no longer has → create it instead
+        if (mode === "updated" && opRes.status === 404) { mode = "created"; continue; }
+        if (opRes.status >= 500 || opRes.status === 429 || opRes.status === 0) {
+          await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+          continue;
+        }
+        break;
       }
-      const opBody = await readBody(opRes);
+
       const bodySnippet = typeof opBody === "string" ? opBody.slice(0, 200) : JSON.stringify(opBody ?? null).slice(0, 200);
       const returnedHtml = typeof opBody === "string" && /^\s*<(?:!doctype|html)/i.test(opBody);
       const authFailed = opRes.status === 401 || opRes.status === 403 || listRes.status === 401 || listRes.status === 403;

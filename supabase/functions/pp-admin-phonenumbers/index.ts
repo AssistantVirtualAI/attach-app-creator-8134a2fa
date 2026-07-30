@@ -312,9 +312,11 @@ Deno.serve(async (req) => {
       }
 
       const only = String(payload?.phone_number ?? "").replace(/\D/g, "");
+      const maxBatch = Math.max(1, Math.min(200, Number(payload?.limit ?? 40)));
       const repaired: any[] = [];
       const orphans: string[] = [];
       const failed: any[] = [];
+      let remaining = 0;
 
       for (const n of numbers) {
         const digits = String(n.raw).replace(/\D/g, "");
@@ -324,6 +326,7 @@ Deno.serve(async (req) => {
         if (okRoute) continue;
         const ext = n.extension ?? byDigits.get(digits) ?? byDigits.get(digits.replace(/^1/, "")) ?? null;
         if (!ext) { orphans.push(digits); continue; }
+        if (repaired.length + failed.length >= maxBatch) { remaining++; continue; }
         const put = await nsFetchFirstOk([
           `/domains/${encodeURIComponent(domain)}/phonenumbers/${encodeURIComponent(digits)}`,
           `/domains/${encodeURIComponent(domain)}/phone-numbers/${encodeURIComponent(digits)}`,
@@ -337,10 +340,12 @@ Deno.serve(async (req) => {
         checked: numbers.length,
         repaired_count: repaired.length,
         repaired,
+        remaining,
         orphans_count: orphans.length,
-        orphans,
+        orphans: orphans.slice(0, 50),
         failed,
       });
+
     }
 
     if (action === "sync_assignments") {

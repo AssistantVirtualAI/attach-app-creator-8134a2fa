@@ -257,11 +257,17 @@ export function useMplanipretSoftphone(enabled = true) {
           password: String(d.sip_password),
           displayName: String(d.display_name || d.sip_display_name || d.sip_extension),
         };
-        // The native keep-alive service owns the `<ext>_mobile` device.
-        // The WebView (JsSIP) MUST register a DIFFERENT device (`<ext>_web`):
-        // registering the same AoR twice makes NetSapiens close one of the two
-        // WSS sockets with code 1001 in a loop (never reaching REGISTER).
-        startPlanipretSipKeepAlive(sipConfig).then((s) => { if (s && !cancelled) setNativeStatus(s); }).catch(() => undefined);
+        // The native keep-alive service owns the `<ext>_mobile` device, but ONLY
+        // in background. Running it while the WebView (JsSIP) is registered makes
+        // NetSapiens close the sockets alternately (code 1001 loop, hundreds of
+        // sockets). In foreground the JS provider is the single owner.
+        const appIsForeground = typeof document === "undefined" || document.visibilityState !== "hidden";
+        if (appIsForeground) {
+          void stopPlanipretSipKeepAlive().catch(() => undefined);
+        } else {
+          startPlanipretSipKeepAlive(sipConfig).then((s) => { if (s && !cancelled) setNativeStatus(s); }).catch(() => undefined);
+        }
+
 
         let webConfig = sipConfig;
         try {

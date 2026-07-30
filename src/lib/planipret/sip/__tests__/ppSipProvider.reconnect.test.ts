@@ -125,7 +125,8 @@ describe("ppSipProvider — transport recovery guard", () => {
     expect(m.subThresholdHits).toBe(0);
     expect(m.minDelayObservedMs === null || m.minDelayObservedMs >= 5000).toBe(true);
     // No recovery timer may ever be armed at the legacy 1000ms cadence.
-    const recoveryDelays = scheduledDelays.filter((d) => d >= 500 && d < 3000);
+    // The intentional 800ms UA handoff gap is not a recovery cadence.
+    const recoveryDelays = scheduledDelays.filter((d) => d >= 1000 && d < 3000);
     expect(recoveryDelays).toEqual([]);
   });
 

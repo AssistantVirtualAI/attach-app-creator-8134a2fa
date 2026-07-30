@@ -3,6 +3,11 @@
 // Verifies caller is an admin before performing bulk operations.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  mobileDeviceId,
+  webDeviceId,
+  legacyDeviceIds,
+} from "../_shared/pp-device-ids.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -100,8 +105,11 @@ Deno.serve(async (req) => {
       if (!ext) return { broker_id: broker.user_id, success: false, error: "no_extension" };
 
       const sipPassword = await genPassword(broker.user_id);
-      const mobileId = `${ext}_mobile`;
-      const widgetId = `${ext}_web`;
+      // Naming convention: <ext>M / <ext>W (no underscore — Snap Mobile and the
+      // web widget mangle `_` in the AOR user part). Legacy <ext>_mobile /
+      // <ext>_web devices are removed once the new pair exists.
+      const mobileId = mobileDeviceId(ext);
+      const widgetId = webDeviceId(ext);
       const base = `${NS_API_BASE_URL}/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`;
 
       const nsUser = await ensureNsUser(broker, ext, domain, sipPassword);
@@ -110,11 +118,11 @@ Deno.serve(async (req) => {
       const listRes = await fetch(base, { headers: nsHeaders });
       const existing: any[] = listRes.ok ? (await listRes.json().catch(() => [])) : [];
       const arr = Array.isArray(existing) ? existing : [];
-      const hasDev = (needle: string) => arr.some((d: any) => (d?.device ?? d?.aor ?? "").toString().toLowerCase().includes(needle));
+      const hasDev = (id: string) =>
+        arr.some((d: any) => (d?.device ?? d?.aor ?? "").toString().replace(/^sip:/i, "").split("@")[0].trim().toLowerCase() === id.toLowerCase());
 
-      const create = async (id: string, model: string, needle: string) => {
-        const isMobileDev = needle === "_mobile";
-        if (hasDev(needle)) {
+      const create = async (id: string, model: string, isMobile: boolean) => {
+        if (hasDev(id)) {
           // Device exists — patch it to ensure WSS transport, empty user-agent filter,
           // and (critically) the 1800s registration expiry + automatic NAT traversal.
           // Without this branch a bulk force:true never repaired existing devices,
@@ -132,13 +140,12 @@ Deno.serve(async (req) => {
               "device-provisioning-registration-core-server": "core1.cluster1.ucstack.io",
               "device-sip-registration-expiry-seconds": 1800,
               "device-sip-nat-traversal-enabled": "automatic",
-              "device-push-enabled": isMobileDev ? "yes" : "no",
+              "device-push-enabled": isMobile ? "yes" : "no",
             }),
           }).catch(() => null);
           return { existed: true, id, patched: !!r?.ok, status: r?.status ?? 0 };
         }
 
-        const isMobile = needle === "_mobile";
         // core-server is MANDATORY — without it JsSIP/PJSIP cannot register.
         // Both mobile and web use WSS transport so JsSIP (WebRTC) can connect.
         // Empty device-sip-allowed-user-agent accepts any softphone (JsSIP, SIP.js, etc.).
@@ -172,8 +179,22 @@ Deno.serve(async (req) => {
         return { created: r.ok, status: r.status, id, data };
       };
 
-      const mobile = await create(mobileId, "Mobile Softphone", "_mobile");
-      const widget = await create(widgetId, "Web Softphone", "_web");
+      const mobile = await create(mobileId, "Mobile Softphone", true);
+      const widget = await create(widgetId, "Web Softphone", false);
+
+      // Rename migration: NS device names are immutable, so once <ext>M/<ext>W
+      // exist we delete the legacy <ext>_mobile / <ext>_web AORs. Leaving them
+      // registered would keep sim-ring forking to dead contacts.
+      const removed_legacy: any[] = [];
+      const newPairOk = (mobile.created || mobile.existed) && (widget.created || widget.existed);
+      if (newPairOk) {
+        for (const legacyId of legacyDeviceIds(ext)) {
+          if (!hasDev(legacyId)) continue;
+          const del = await fetch(`${base}/${encodeURIComponent(legacyId)}`, { method: "DELETE", headers: nsHeaders }).catch(() => null);
+          removed_legacy.push({ id: legacyId, deleted: !!del?.ok, status: del?.status ?? 0 });
+        }
+      }
+
 
       const secretName = `pp_sip_${broker.id ?? broker.user_id}_mobile`;
       try {
@@ -204,6 +225,7 @@ Deno.serve(async (req) => {
           domain,
           mobile: { id: mobileId, created: !!mobile.created, existed: !!mobile.existed, status: (mobile as any).status ?? null },
           widget: { id: widgetId, created: !!widget.created, existed: !!widget.existed, status: (widget as any).status ?? null },
+          removed_legacy,
           db_error: uErr?.message ?? null,
         },
       }).then(() => {}, () => {});
@@ -214,7 +236,7 @@ Deno.serve(async (req) => {
         extension: ext,
         success: ok,
         db_error: uErr?.message,
-        ns_user: nsUser, mobile, widget,
+        ns_user: nsUser, mobile, widget, removed_legacy,
         sip_credentials: { mobile_device_id: mobileId, widget_device_id: widgetId, password: sipPassword },
       };
     };

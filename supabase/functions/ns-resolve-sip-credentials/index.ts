@@ -10,6 +10,10 @@ import {
   isMaestroTelecomConfigured,
   maestroTelecomFetch,
 } from "../_shared/maestro-telecom.ts";
+import {
+  mobileDeviceId,
+  webDeviceId,
+} from "../_shared/pp-device-ids.ts";
 
 
 const corsHeaders = {
@@ -58,9 +62,10 @@ function normalizeClientType(v: unknown): ClientType {
   return "mobile";
 }
 
+// Naming convention: <ext>M (mobile) / <ext>W (web+widget). No underscore —
+// Snap Mobile provisioning and the web widget mangle `_` in the AOR user part.
 function deviceNameFor(ext: string, ct: ClientType): string {
-  if (ct === "web" || ct === "widget") return `${ext}_web`;
-  return `${ext}_${ct}`;
+  return ct === "web" ? webDeviceId(ext) : mobileDeviceId(ext);
 }
 
 function deviceIdOf(d: any): string | null {
@@ -184,7 +189,7 @@ function queueRingRuleResync(brokerId: string, reason: string, force = false) {
 
 /**
  * Same device payload as ns-provision-broker-devices so EVERY broker ends up
- * with an identical `<ext>_mobile` + `<ext>_web` pair (no per-user drift).
+ * with an identical `<ext>M` + `<ext>W` pair (no per-user drift).
  */
 function deviceCreatePayload(id: string, isMobile: boolean, password: string, coreServer: string) {
   return {
@@ -261,7 +266,7 @@ Deno.serve(async (req) => {
             ok: true,
             source: "maestro_telecom",
             client_type: clientType,
-            device_id: d.device_id ?? `${ext}_${clientType}`,
+            device_id: d.device_id ?? deviceNameFor(String(ext), clientType),
             sip_username: d.sip_username ?? ext,
             sip_auth_user: d.sip_auth_user ?? d.sip_username ?? ext,
             sip_password: pwd,
@@ -322,7 +327,7 @@ Deno.serve(async (req) => {
 
 
 
-  // Self-heal: brokers provisioned before the `_web` device existed (or whose
+  // Self-heal: brokers provisioned before the `<ext>W` device existed (or whose
   // device was deleted in the portal) get it created on the fly, with exactly
   // the same payload as ns-provision-broker-devices. Applies to every broker,
   // not just the ones an admin re-provisioned manually.

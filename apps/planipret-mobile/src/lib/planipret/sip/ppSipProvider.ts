@@ -113,7 +113,7 @@ function buildContactUri(cfg: PpSipConfig): string {
   // NS-API v2 documents the registration URI as sip:[device]@[domain]. The
   // edge SBC belongs only in the WSS transport URL, never in the SIP AOR.
   const host = /^[a-z0-9.-]+$/.test(domain) ? domain : "planipret.ca";
-  return `sip:${user}@${host};transport=ws;pp-ua=web-${ext}`;
+  return `sip:${user}@${host};transport=wss;pp-ua=web-${ext}`;
 }
 
 function isKnownJsSipParserCrash(value: unknown): boolean {

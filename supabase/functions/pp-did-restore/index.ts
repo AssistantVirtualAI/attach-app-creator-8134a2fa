@@ -94,13 +94,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (action === "restore") {
+    if (action === "restore" || action === "sweep") {
       const db = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       );
       const results: any[] = [];
       for (const [did, ext] of slice) {
+        if (action === "sweep") {
+          const cur = await nsFetch(pnPath(domain, did));
+          if (cur.ok && destOf(cur.data) === ext) { results.push({ did, ext, ok: true, skipped: true }); continue; }
+        }
         const payload = {
           "dial-rule-application": "user",
           "dial-rule-parameter": `user_${ext}`,

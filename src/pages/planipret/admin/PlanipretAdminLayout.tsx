@@ -70,6 +70,31 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
   },
 ];
 
+/** Emails with unrestricted (super admin) sidebar access. */
+const SUPER_ADMIN_EMAILS = ["mhassoun@assistantvirtualai.com"];
+
+/** Reduced navigation for regular org admins (Marc, Gilles, etc.). */
+const NAV_REGULAR: typeof NAV = [
+  {
+    sectionKey: "pilotage",
+    items: [
+      { to: "/planipret/admin/overview", key: "overview", Icon: LayoutDashboard },
+      { to: "/planipret/admin/reports",  key: "reports",  Icon: BarChart3 },
+      { to: "/planipret/admin/ava",      key: "ava",      Icon: Sparkles },
+    ],
+  },
+  {
+    sectionKey: "communications",
+    items: [
+      { to: "/planipret/admin/users",      key: "brokers",     Icon: Users, badge: "brokers" },
+      { to: "/planipret/admin/calls",      key: "calls",       Icon: Phone, badge: "missed" },
+      { to: "/planipret/admin/messages",   key: "messages",    Icon: MessageSquare },
+      { to: "/planipret/admin/recordings", key: "recordings",  Icon: Mic },
+      { to: "/planipret/admin/hold-music", key: "holdMusic",   Icon: Music },
+    ],
+  },
+];
+
 const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/overview": "overview",
   "/planipret/admin/users": "users",

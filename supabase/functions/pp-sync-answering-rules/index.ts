@@ -117,20 +117,27 @@ Deno.serve(async (req) => {
     // We therefore send bare device AOR ids (ext + suffix, e.g. "113M")
     // plus "<OwnDevices>" so NS always forks to every registered device of
     // {ext}@{domain}, whatever the device naming is on that broker.
+    // NS-API v2 (AnswerruleFeatureSimRing) only accepts extensions / phone
+    // numbers / "confirm_…;delay=" strings / the literal "<OwnDevices>" token.
+    // Device AOR ids such as "113M" are NOT valid sim-ring parameters: NS
+    // stores them, fails to resolve them at call time and terminates the call
+    // on voicemail. The ONLY documented way to fork to the user's registered
+    // devices is "<OwnDevices>".
     const bareAor = (aor: string) => String(aor).replace(/^sip:/i, "").split("@")[0].trim();
 
-    const buildRuleParams = (deviceAors: string[]) => {
-      const ids = deviceAors
-        .map(bareAor)
-        .filter((v) => v && v !== "<OwnDevices>");
-      return [...new Set([...ids, "<OwnDevices>"])];
-    };
+    const buildRuleParams = (_deviceAors: string[]) => ["<OwnDevices>"];
+
 
     const buildRulePayload = (ext: string, domain: string, deviceAors: string[]) => {
       const parameters = buildRuleParams(deviceAors);
       return {
         "time-frame": "*",
         "enabled": "yes",                    // voicemail fallback ON after no-answer
+        // `*` defaults to order 99 (lowest priority); push it to the top so no
+        // stale rule (DND / forward-always) shadows it and sends the caller
+        // straight to voicemail.
+        "new-position": "top",
+
         "do-not-disturb": { "enabled": "no" },
         "call-screening": { "enabled": "no" },
         "phone-numbers-to-allow": { "enabled": "no" },
@@ -505,6 +512,31 @@ Deno.serve(async (req) => {
         return tf === "default" || tf === "*" || tf === "always";
       });
 
+      // 1b) Any OTHER enabled rule (custom timeframe) with DND or an always /
+      // no-answer forward outranks or short-circuits the default rule and sends
+      // inbound calls straight to voicemail. Disable those.
+      const shadowing: any[] = [];
+      for (const r of arr) {
+        if (r === defaultRule) continue;
+        const tf = String(r?.["time-frame"] ?? r?.timeframe ?? r?.time_frame ?? "").trim();
+        if (!tf) continue;
+        const on = (v: any) => ["yes", "true", "1"].includes(String(v?.enabled ?? v ?? "").toLowerCase());
+        const bad = on(r?.["do-not-disturb"]) || on(r?.["forward-always"]) ||
+          on(r?.["do-not-disturb-enabled"]) || on(r?.["forward-always-enabled"]);
+        if (!bad) continue;
+        try {
+          const dRes = await nsFetch(
+            `${base}/${encodeURIComponent(String(r?.id ?? tf))}`,
+            { method: "PUT", body: JSON.stringify({ enabled: "no", "do-not-disturb": { enabled: "no" }, "forward-always": { enabled: "no" } }) },
+            { functionName: "pp-sync-answering-rules" },
+          );
+          await dRes.text().catch(() => {});
+          shadowing.push({ time_frame: tf, status: dRes.status });
+        } catch { /* best-effort */ }
+      }
+
+
+
       // 2) Upsert
       let opRes: Response;
       let mode: "created" | "updated";
@@ -530,7 +562,9 @@ Deno.serve(async (req) => {
           status: opRes.status,
           body: bodySnippet,
         },
+        ...shadowing.map((s) => ({ extension: ext, step: "disable_shadowing_rule", route: `PUT ${base}/${s.time_frame}`, http_status: s.status, status: s.status })),
       ];
+
 
 
 

@@ -35,7 +35,6 @@ import {
   refreshPlanipretVoipPushToken,
   reportPlanipretCallEnded,
   requestPlanipretBatteryOptimizationExemption,
-  getPlanipretSipKeepAliveStatus,
   startPlanipretSipKeepAlive,
   stopPlanipretSipKeepAlive,
   type PpNativeSipStatus,

@@ -101,10 +101,21 @@ Deno.serve(async (req) => {
   );
 
   const actions: string[] = [];
+  const blockers: string[] = [];
   if (!mobileRegistered) actions.push("reregister");
   if (!tokenRow?.device_token || (tokenAgeH != null && tokenAgeH > 24)) actions.push("refresh_push_token");
+  // device-push-enabled=no => NS never fires the APNs VoIP push, no webhook can
+  // compensate for that. Surface it as a hard blocker so it gets repaired.
+  if (devicePushEnabled === false) {
+    blockers.push("MOBILE_PUSH_DISABLED");
+    actions.push("repair_device_push");
+  }
+  if (!mobileDevice) blockers.push("MOBILE_DEVICE_MISSING");
+  if (!callSubscription) blockers.push("CALL_SUBSCRIPTION_MISSING");
 
-  const healthy = mobileRegistered && !!tokenRow?.device_token && callSubscription;
+  const healthy = mobileRegistered && !!tokenRow?.device_token && callSubscription &&
+    devicePushEnabled !== false;
+
 
   return jsonResponse({
     ok: true,

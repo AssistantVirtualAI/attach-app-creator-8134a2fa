@@ -618,11 +618,13 @@ class PpSipProvider {
     // the session arrives (within a 30s intent window).
     if (incoming) {
       try {
+        // NOTE: the VoIP push callId (NetSapiens `1-XXXXXXXX-...`) and the SIP
+        // Call-ID are two different identifier spaces — never compare them.
+        // Any incoming INVITE within the 30s answer-intent window is answered.
         const pending = this.pendingAnswer;
-        const callMatches = !pending?.callId || !callId || pending.callId === callId;
-        if (pending && pending.expiresAt > Date.now() && callMatches) {
+        if (pending && pending.expiresAt > Date.now()) {
           this.pendingAnswer = null;
-          setTimeout(() => { this.answer(callId); }, 250);
+          setTimeout(() => { this.answer(); }, 250);
         }
       } catch {}
     }
@@ -748,13 +750,12 @@ class PpSipProvider {
     return false;
   }
 
-  answer(expectedCallId?: string): boolean {
+  answer(_expectedCallId?: string): boolean {
     const session = this.session;
     if (!session || this.snap.callState !== "ringing-in") return false;
-    if (expectedCallId && this.snap.callId && expectedCallId !== this.snap.callId) {
-      this.log("warn", "answer rejected: Call-ID mismatch", { expectedCallId, sessionCallId: this.snap.callId });
-      return false;
-    }
+    // Never reject on a Call-ID mismatch: the VoIP push id and the SIP Call-ID
+    // belong to different identifier spaces on NetSapiens.
+
     try {
       session.answer({
         mediaConstraints: { audio: true, video: false },

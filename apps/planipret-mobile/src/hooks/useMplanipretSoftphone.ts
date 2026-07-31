@@ -42,6 +42,7 @@ import {
   startPlanipretSipKeepAlive,
   stopPlanipretSipKeepAlive,
   type PpNativeSipStatus,
+  setPlanipretNativeCallActive,
 } from "@/lib/planipret/sip/nativePpSipService";
 import { addDedupedCapListener } from "@/lib/planipret/sip/capListeners";
 import { checkSipBackendRegistration } from "@/lib/planipret/sip/sipBackendCheck";
@@ -521,16 +522,27 @@ export function useMplanipretSoftphone(enabled = true) {
      *  prompts). Handing off instantly on each blip started/stopped the native
      *  SIP stack every second and produced the NetSapiens WSS 1001 loop.
      *  Only hand off once the app has really stayed in background. */
+    /** A live/ringing call must keep the WebView transport + media: any native
+     *  takeover closes the JsSIP socket (WSS 1001) and the audio dies. */
+    const callInProgress = () => {
+      try {
+        const st = ppSipProvider.getSnapshot().callState;
+        return ppSipProvider.hasActiveCall() || st === "ringing-in" || st === "ringing-out";
+      } catch { return false; }
+    };
     const scheduleHandoff = (delay = 2500) => {
       if (handoffTimer) clearTimeout(handoffTimer);
+      if (callInProgress()) { void setPlanipretNativeCallActive(true); return; }
       handoffTimer = setTimeout(() => {
         handoffTimer = null;
         const stillHidden = typeof document === "undefined" || document.visibilityState === "hidden";
         if (!stillHidden) return;
+        if (callInProgress()) { void setPlanipretNativeCallActive(true); return; }
         void handoffToNative();
       }, delay);
     };
     const handoffToNative = async () => {
+      if (callInProgress()) { void setPlanipretNativeCallActive(true); return; }
       // NetSapiens permits one active transport for this device AOR. Remove the
       // foreground contact first, then let native claim the same `<ext>M` AOR.
       const cfg = mobileSipConfigRef.current ?? ppSipProvider.getConfig();
@@ -618,6 +630,8 @@ export function useMplanipretSoftphone(enabled = true) {
       resumePending = true;
       void (async () => {
        try {
+        // Never re-init JsSIP while a call is up: it would drop the media.
+        if (callInProgress()) { evaluate(); return; }
         const status = ppSipProvider.getSnapshot().status;
         const healthy = status === "registered" && !handedOffToNative;
         if (healthy) {
@@ -698,6 +712,7 @@ export function useMplanipretSoftphone(enabled = true) {
     // watchdog escalates to forceReregister even without a subscribe callback.
     const heartbeat = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        if (callInProgress()) { void setPlanipretNativeCallActive(true); return; }
         scheduleHandoff();
         return;
       }
@@ -724,6 +739,10 @@ export function useMplanipretSoftphone(enabled = true) {
   // Live call quality only while a call is active.
   useEffect(() => {
     const active = snap.callState === "active" || snap.callState === "held";
+    const ringing = snap.callState === "ringing-in" || snap.callState === "ringing-out";
+    // Keep the native iOS audio session alive while a call is up, otherwise
+    // WebKit interrupts it as soon as the app is backgrounded (no audio).
+    void setPlanipretNativeCallActive(active || ringing);
     if (!active) { setQuality(null); return; }
     const un = callQualitySampler.subscribe(setQuality);
     return () => { un(); };

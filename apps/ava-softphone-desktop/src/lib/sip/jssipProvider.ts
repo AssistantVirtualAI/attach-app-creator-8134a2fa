@@ -845,11 +845,39 @@ class JsSipProvider {
     }
   }
 
+  /** True when the UA is registered and a call can actually be placed. */
+  canPlaceCall() {
+    if (this.config?.mock) return true;
+    if (!this.ua) return false;
+    try { return (this.ua.isRegistered?.() ?? false) && (this.ua.isConnected?.() ?? false); }
+    catch { return this.snap.status === 'registered'; }
+  }
+
+  /** Human-readable reason the phone can't dial right now (null when it can). */
+  unavailableReason(): string | null {
+    if (this.canPlaceCall()) return null;
+    if (this.snap.authBlocked) {
+      return `Phone line rejected by the server (${this.snap.authBlocked.code}). Refresh your SIP credentials.`;
+    }
+    if (!this.ua) return 'Phone line not connected yet. Tap Retry to connect.';
+    if (this.snap.status === 'error') return `Phone line unavailable: ${this.snap.errorCause || 'registration error'}.`;
+    if (this.snap.recovering) return 'Reconnecting your phone line… calls will work in a moment.';
+    return 'Phone line is offline. Tap Retry to reconnect.';
+  }
+
   async call(number: string): Promise<string | null> {
     if (!this.config || !this.ua) {
       this.logEvent('error', 'UA not ready — cannot call');
-      return 'SIP not initialized';
+      this.kickReconnect('call attempted while offline');
+      return this.unavailableReason() || 'SIP not initialized';
     }
+    if (!this.canPlaceCall() && !this.config.mock) {
+      const reason = this.unavailableReason() || 'Phone line unavailable';
+      this.logEvent('error', `Call blocked — ${reason}`);
+      this.kickReconnect('call attempted while unregistered');
+      return reason;
+    }
+
     const target = `sip:${number}@${this.config.sipDomain}`;
     this.logEvent('info', `Dialing ${number} (workaround=${isSdpWorkaroundEnabled() ? 'on' : 'off'})`);
     // Reset SDP capture so this attempt only contains its own offer

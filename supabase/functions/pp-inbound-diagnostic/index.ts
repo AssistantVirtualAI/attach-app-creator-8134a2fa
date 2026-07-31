@@ -433,6 +433,9 @@ Deno.serve(async (req) => {
       ring_timeout: ringTimeout || null,
       registered_aors: [...registeredAors],
       mobile_registered: mobileRegistered,
+      device_push_flags: pushFlags,
+      mobile_push_enabled: mobilePush ? mobilePush.pushEnabled || "unknown" : "unknown",
+
       dids_total_read: numbers.length,
       dids_matching_extension: mine.map(numOf).filter(Boolean),
       inbound_cdrs: cdrSummary,

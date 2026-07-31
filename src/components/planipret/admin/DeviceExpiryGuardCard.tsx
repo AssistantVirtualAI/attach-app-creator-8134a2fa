@@ -32,6 +32,8 @@ const DICT = {
     drifted: "En dérive",
     repaired: "Réparés",
     errors: "Erreurs",
+    pushOff: "Push mobile OFF",
+
     noRun: "Aucune exécution enregistrée pour l'instant.",
     lastRuns: "Dernières exécutions",
     running: "Exécution en cours…",

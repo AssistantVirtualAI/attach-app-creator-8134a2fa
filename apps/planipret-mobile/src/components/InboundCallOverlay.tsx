@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { startSelectedRingtone } from "@/lib/planipret/audio/ringtonePresets";
+import { formatSipParty } from "@/lib/planipret/sip/formatSipParty";
 
 export type InboundCall = { call_id?: string; from_number?: string; caller_name?: string } | null;
 

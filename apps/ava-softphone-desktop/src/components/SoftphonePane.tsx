@@ -358,7 +358,8 @@ export default function SoftphonePane({
   return (
     <div ref={rootRef} style={{
       display: 'flex', flexDirection: 'column', height: '100%',
-      background: '#f0f4ff', color: '#0d1426', position: 'relative', overflow: 'hidden',
+      background: 'radial-gradient(1000px 620px at 6% -12%, rgba(0,35,230,0.32), transparent 62%), radial-gradient(780px 560px at 105% 105%, rgba(224,168,0,0.18), transparent 58%), linear-gradient(180deg, #060C1C 0%, #0A1429 52%, #0E1B3D 100%)',
+      color: '#E8EEFB', position: 'relative', overflow: 'hidden',
     }}>
 
       <audio ref={audioRef} autoPlay />
@@ -370,23 +371,25 @@ export default function SoftphonePane({
         gap: ultraCompact ? 4 : compact ? 6 : 10,
         padding: ultraCompact ? '6px 8px' : compact ? '7px 10px' : '10px 14px',
         height: ultraCompact ? 42 : compact ? 46 : 52, boxSizing: 'border-box',
-        background: '#ffffff',
-        borderBottom: '1px solid rgba(0,0,0,0.08)',
-        boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
+        background: 'rgba(255,255,255,0.04)',
+        backdropFilter: 'blur(18px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: 'none',
       }}>
         {/* Extension badge */}
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
           padding: compact ? '3px 8px' : '4px 10px', borderRadius: 999,
-          background: 'rgba(0,35,230,0.08)', border: '1px solid rgba(0,35,230,0.20)',
-          color: '#0023e6', fontSize: compact ? 10 : 11, fontWeight: 700, letterSpacing: 0.5,
+          background: 'rgba(0,35,230,0.20)', border: '1px solid rgba(255,255,255,0.10)',
+          color: '#E8EEFB', fontSize: compact ? 10 : 11, fontWeight: 700, letterSpacing: 0.5,
         }}>
           Ext {creds.extension}
         </div>
 
         {!compact && (
           <div style={{
-            fontSize: 12, fontWeight: 500, color: '#0d1426', opacity: 0.85,
+            fontSize: 12, fontWeight: 500, color: '#E8EEFB', opacity: 0.85,
             flex: 1, minWidth: 0, textAlign: 'center',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
@@ -410,8 +413,8 @@ export default function SoftphonePane({
             disabled={syncingPhone}
             title="Sync phone system"
             style={{
-              background: 'rgba(0,35,230,0.06)', border: '1px solid rgba(0,35,230,0.20)',
-              color: '#0023e6', cursor: syncingPhone ? 'wait' : 'pointer',
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)',
+              color: '#B0BACC', cursor: syncingPhone ? 'wait' : 'pointer',
               width: compact ? 26 : 30, height: compact ? 24 : 28, borderRadius: 8, fontSize: 12,
             }}
             aria-label="Sync phone system"
@@ -421,9 +424,10 @@ export default function SoftphonePane({
             title="AVA AI Assistant"
             aria-label="AVA AI"
             style={{
-              background: showAvaChat ? 'linear-gradient(135deg, #7a4cff, #21d4fd)' : 'rgba(122,76,255,0.10)',
+              background: 'linear-gradient(135deg, #7A4CFF, #23d6ff)',
+              opacity: showAvaChat ? 1 : 0.55,
               border: '1px solid rgba(122,76,255,0.30)',
-              color: showAvaChat ? '#fff' : '#7a4cff',
+              color: '#fff',
               cursor: 'pointer',
               width: compact ? 26 : 30, height: compact ? 24 : 28, borderRadius: 8, fontSize: 13,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -433,8 +437,8 @@ export default function SoftphonePane({
           <button
             onClick={onOpenSettings}
             style={{
-              background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.12)',
-              color: '#3a4560', cursor: 'pointer',
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)',
+              color: '#B0BACC', cursor: 'pointer',
               width: compact ? 26 : 30, height: compact ? 24 : 28, borderRadius: 8, fontSize: 14,
             }}
             aria-label="Settings"
@@ -457,7 +461,7 @@ export default function SoftphonePane({
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center',
         }}>
           <div style={{ fontSize: 32, lineHeight: 1 }} aria-hidden>🔐</div>
-          <div style={{ color: c.text, fontSize: 16, fontWeight: 700 }}>SIP Not Configured</div>
+          <div style={{ color: '#E8EEFB', fontSize: 16, fontWeight: 700 }}>SIP Not Configured</div>
           <div style={{ color: c.mutedSilver, fontSize: 12, lineHeight: 1.5, maxWidth: 280 }}>
             Your extension needs a SIP password. Contact your administrator or visit the portal.
           </div>
@@ -490,7 +494,7 @@ export default function SoftphonePane({
             : sp.snap.status === 'disconnected'
               ? '1px solid rgba(148,163,184,0.35)'
               : '1px solid rgba(245,158,11,0.35)',
-          color: c.text, fontSize: 12,
+          color: '#E8EEFB', fontSize: 12,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={{ fontWeight: 700, fontSize: 12 }}>
@@ -626,6 +630,8 @@ export default function SoftphonePane({
             onCall={handleCall}
             canCall={dial.length >= 3 && sipReady && !callBusy && micPermission !== 'denied'}
             sipRegistered={sipReady}
+            sipStatus={sp.snap.status}
+            sipError={sp.credError || sp.snap.errorCause || null}
             extension={creds.extension}
             compact={compact}
             ultraCompact={ultraCompact}
@@ -642,30 +648,36 @@ export default function SoftphonePane({
         {/* Calls — avec sous-onglets Recents / Recordings / Voicemail */}
         {!inCall && !ringing && tab === 'calls' && (
           <div style={{ animation: 'fadeIn .25s ease-out', display: 'flex', flexDirection: 'column', height: '100%' }}>
-            {/* Sous-onglets */}
-            <div style={{
-              display: 'flex', gap: 6, padding: compact ? '8px 10px 4px' : '10px 14px 6px',
-              flexShrink: 0,
-            }}>
-              {(['recents', 'recordings', 'voicemail'] as CallsSubTab[]).map((st) => {
-                const active = callsSubTab === st;
-                const labels: Record<CallsSubTab, string> = { recents: 'Recents', recordings: 'Recordings', voicemail: 'Voicemail' };
-                return (
-                  <button
-                    key={st}
-                    onClick={() => setCallsSubTab(st)}
-                    style={{
-                      flex: 1, padding: '6px 4px', borderRadius: 10, fontSize: 11,
-                      fontWeight: active ? 800 : 600, letterSpacing: 0.5,
-                      border: active ? '1px solid rgba(0,35,230,0.25)' : '1px solid rgba(0,0,0,0.08)',
-                      background: active ? 'rgba(0,35,230,0.10)' : 'rgba(255,255,255,0.7)',
-                      color: active ? '#0023e6' : '#6b7a99',
-                      cursor: 'pointer',
-                      transition: 'all .18s ease',
-                    }}
-                  >{labels[st]}</button>
-                );
-              })}
+            {/* Sous-onglets — SegmentedControl (mobile parity) */}
+            <div style={{ padding: compact ? '8px 10px 4px' : '10px 14px 6px', flexShrink: 0 }}>
+              <div style={{
+                display: 'flex', gap: 4,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 14, padding: 4,
+              }}>
+                {(['recents', 'recordings', 'voicemail'] as CallsSubTab[]).map((st) => {
+                  const active = callsSubTab === st;
+                  const labels: Record<CallsSubTab, string> = { recents: 'Recents', recordings: 'Recordings', voicemail: 'Voicemail' };
+                  return (
+                    <button
+                      key={st}
+                      onClick={() => setCallsSubTab(st)}
+                      style={{
+                        flex: 1, padding: '7px 4px', borderRadius: 10, fontSize: 11,
+                        fontWeight: active ? 800 : 600, letterSpacing: 0.5,
+                        border: 'none',
+                        background: active
+                          ? 'linear-gradient(135deg, #0023e6 0%, #2a4dff 50%, #E0A800 140%)'
+                          : 'transparent',
+                        color: active ? '#fff' : '#7C8AA8',
+                        cursor: 'pointer',
+                        transition: 'all .18s ease',
+                      }}
+                    >{labels[st]}</button>
+                  );
+                })}
+              </div>
             </div>
             {/* Contenu du sous-onglet */}
             <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -706,7 +718,8 @@ export default function SoftphonePane({
         {showAvaChat && !inCall && !ringing && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 50,
-            background: '#f0f4ff', display: 'flex', flexDirection: 'column',
+            background: 'radial-gradient(1000px 620px at 6% -12%, rgba(0,35,230,0.32), transparent 62%), linear-gradient(180deg, #060C1C 0%, #0A1429 100%)',
+            display: 'flex', flexDirection: 'column',
           }}>
             <AvaChatPane onClose={() => setShowAvaChat(false)} />
           </div>
@@ -719,11 +732,11 @@ export default function SoftphonePane({
         <div style={{
           position: 'relative', zIndex: 1, flexShrink: 0,
           padding: compact ? '6px 6px 6px' : '8px 8px 8px',
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(244,247,255,0.86) 100%)',
+          background: 'linear-gradient(180deg, rgba(10,20,41,0.92) 0%, rgba(14,27,61,0.86) 100%)',
           backdropFilter: 'blur(28px) saturate(180%)',
           WebkitBackdropFilter: 'blur(28px) saturate(180%)',
-          borderTop: '1px solid rgba(255,255,255,0.9)',
-          boxShadow: '0 -4px 24px -8px rgba(7,22,168,0.18), 0 -1px 0 rgba(0,35,230,0.05) inset',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 -4px 24px -8px rgba(0,35,230,0.35)',
         }}>
           <div style={{
             display: 'grid',
@@ -736,8 +749,8 @@ export default function SoftphonePane({
             {MAIN_TABS.map((tk) => {
               const active = tab === tk;
               const { LucideIcon, label } = TAB_META[tk];
-              const accent = '#0023e6';
-              const inactiveColor = '#6b7a99';
+              const accent = '#7FA0FF';
+              const inactiveColor = '#7C8AA8';
               return (
                 <button
                   key={tk}
@@ -852,7 +865,7 @@ export default function SoftphonePane({
           <LemtelLogo size="xs" glow />
           <BrandTagline size="sm" showPoweredBy={false} style={{ marginTop: 0, minWidth: 0 }} />
         </div>
-        <div style={{ fontSize: compact ? 9 : 10, color: c.textDim, letterSpacing: 0.5 }}>
+        <div style={{ fontSize: compact ? 9 : 10, color: '#7C8AA8', letterSpacing: 0.5 }}>
           v{APP_VERSION} {ultraCompact ? '' : '· Powered by '}
           <a
             onClick={(e) => { e.preventDefault(); window.electronAPI?.openExternal?.('https://assistantvirtualai.com'); }}
@@ -875,11 +888,13 @@ export default function SoftphonePane({
 
 const Dialer = React.memo(function Dialer({
   dial, setDial, dialKeys, onCall, canCall, sipRegistered = true, extension, compact = false, ultraCompact = false,
+  sipStatus, sipError,
 }: {
   dial: string; setDial: (s: string | ((p: string) => string)) => void;
   dialKeys: [string, string][]; onCall: () => void; canCall: boolean;
   sipRegistered?: boolean; extension: string;
   compact?: boolean; ultraCompact?: boolean;
+  sipStatus?: string; sipError?: string | null;
 }) {
   // Stable handlers so the memoized DialerKeypad below doesn't re-render
   // on every keystroke (which was causing the wide-mode freeze).
@@ -889,18 +904,34 @@ const Dialer = React.memo(function Dialer({
   const handleSubmit = useMemo(() => (canCall ? onCall : undefined), [canCall, onCall]);
   const density = ultraCompact ? 'ultra' : compact ? 'compact' : 'spacious';
 
+  const sipBanner = sipRegistered && !sipError
+    ? { bg: 'rgba(34,197,94,0.12)', bd: 'rgba(34,197,94,0.30)', fg: '#22c55e', text: `✅ SIP enregistré — Ext ${extension}` }
+    : sipError || sipStatus === 'error' || sipStatus === 'failed'
+      ? { bg: 'rgba(239,68,68,0.12)', bd: 'rgba(239,68,68,0.30)', fg: '#ef4444', text: `🔴 SIP indisponible — ${sipError || sipStatus}` }
+      : { bg: 'rgba(245,158,11,0.12)', bd: 'rgba(245,158,11,0.30)', fg: '#f59e0b', text: '🟡 Connexion en cours…' };
+
   return (
     <div style={{ animation: 'fadeIn .25s ease-out', padding: compact ? '2px 0 8px' : '4px 4px 8px', minWidth: 0 }}>
       <CallForwarding extension={extension} />
+
+      {/* Bannière de statut SIP */}
+      <div style={{
+        margin: compact ? '4px auto 8px' : '6px auto 10px', maxWidth: 320, width: '100%',
+        boxSizing: 'border-box', padding: '7px 12px', borderRadius: 12,
+        background: sipBanner.bg, border: `1px solid ${sipBanner.bd}`, color: sipBanner.fg,
+        fontSize: 11, fontWeight: 700, textAlign: 'center',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>{sipBanner.text}</div>
+
 
       {/* Number display — premium glass tile */}
       <div style={{
         margin: compact ? '4px auto 16px' : '4px auto 22px', maxWidth: 320,
         width: '100%', boxSizing: 'border-box',
         padding: compact ? '14px 12px' : '18px 20px', borderRadius: 18,
-        background: c.bgElev,
-        border: `1px solid ${c.border}`,
-        boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -16px rgba(0,35,230,0.18)',
+        background: 'linear-gradient(155deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 8px 24px -16px rgba(0,35,230,0.35)',
         textAlign: 'center', minHeight: 64,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
       }}>
@@ -909,7 +940,7 @@ const Dialer = React.memo(function Dialer({
           style={{
             fontSize: compact ? 26 : 32, letterSpacing: compact ? 0.4 : 0.8, fontWeight: 600,
             lineHeight: 1.05,
-            color: dial ? c.text : c.textDim,
+            color: dial ? '#E8EEFB' : '#7C8AA8',
             textShadow: dial ? '0 0 22px rgba(33,212,253,0.30)' : 'none',
             minHeight: 36,
             maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -940,7 +971,7 @@ const Dialer = React.memo(function Dialer({
           disabled={!dial}
           style={{
             background: 'none', border: 'none',
-            color: dial ? c.textSub : 'transparent',
+            color: dial ? '#B0BACC' : 'transparent',
             fontSize: 10.5, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase',
             cursor: dial ? 'pointer' : 'default', padding: 8, width: 56,
             transition: 'color 120ms ease',
@@ -958,7 +989,7 @@ const Dialer = React.memo(function Dialer({
             background: !canCall
               ? 'rgba(120,120,140,0.18)'
               : sipRegistered
-                ? 'linear-gradient(135deg, #059669, #10B981)'
+                ? 'linear-gradient(135deg, #0023e6, #2a4dff)'
                 : 'linear-gradient(135deg, #D97706, #F59E0B)',
             border: canCall ? '1px solid rgba(255,255,255,0.22)' : '1px solid rgba(255,255,255,0.08)',
             color: '#fff', fontSize: 28,
@@ -967,7 +998,7 @@ const Dialer = React.memo(function Dialer({
             boxShadow: !canCall
               ? 'none'
               : sipRegistered
-                ? '0 4px 20px rgba(16,185,129,0.5), inset 0 1px 0 rgba(255,255,255,0.28)'
+                ? '0 8px 24px -8px rgba(0,35,230,0.50), inset 0 1px 0 rgba(255,255,255,0.28)'
                 : '0 4px 20px rgba(245,158,11,0.4), inset 0 1px 0 rgba(255,255,255,0.28)',
             transition: 'transform .18s ease, box-shadow .18s ease',
             display: 'grid', placeItems: 'center',
@@ -985,7 +1016,7 @@ const Dialer = React.memo(function Dialer({
           onClick={handleBackspace}
           disabled={!dial}
           style={{
-            background: 'none', border: 'none', color: dial ? c.textSub : 'transparent',
+            background: 'none', border: 'none', color: dial ? '#B0BACC' : 'transparent',
             fontSize: 22, cursor: dial ? 'pointer' : 'default', padding: 8, width: 56,
           }}
           aria-label="Backspace"
@@ -1020,7 +1051,7 @@ function CallingState({ who, onHangup }: { who: string; onHangup: () => void }) 
         }}>☏</div>
       </div>
       <div style={{ fontSize: 11, color: c.aiLight, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>Calling…</div>
-      <div style={{ fontSize: 24, fontWeight: 600, marginBottom: 32, color: c.text }}>{who}</div>
+      <div style={{ fontSize: 24, fontWeight: 600, marginBottom: 32, color: '#E8EEFB' }}>{who}</div>
       <button onClick={onHangup} style={hangupBtn}>📵</button>
     </div>
   );
@@ -1046,8 +1077,8 @@ function IncomingCall({ who, number, onAnswer, onDecline }: { who: string; numbe
         }}>{String(who).charAt(0).toUpperCase()}</div>
       </div>
       <div style={{ fontSize: 11, color: c.gold, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 }}>Incoming Call</div>
-      <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 4, color: c.text }}>{who}</div>
-      {number && number !== who && <div style={{ fontSize: 13, color: c.textSub, marginBottom: 32 }}>{number}</div>}
+      <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 4, color: '#E8EEFB' }}>{who}</div>
+      {number && number !== who && <div style={{ fontSize: 13, color: '#B0BACC', marginBottom: 32 }}>{number}</div>}
       <div style={{ display: 'flex', gap: 28, marginTop: 24 }}>
         <button onClick={onDecline} className="lemtel-glass lemtel-focus" aria-label="Decline incoming call" style={{
           ...hangupBtn, background: 'linear-gradient(135deg, #DC2626, #EF4444)', boxShadow: glow.red,
@@ -1091,7 +1122,7 @@ function ActiveCall({
         {String(remote).charAt(0).toUpperCase()}
       </div>
 
-      <div style={{ fontSize: compact ? 17 : 20, fontWeight: 700, marginBottom: 4, color: c.text, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{remote}</div>
+      <div style={{ fontSize: compact ? 17 : 20, fontWeight: 700, marginBottom: 4, color: '#E8EEFB', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{remote}</div>
       <div style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: '3px 10px', borderRadius: 999,
@@ -1107,7 +1138,7 @@ function ActiveCall({
         color: c.gold, letterSpacing: '0.04em', marginBottom: 4, lineHeight: 1,
       }}>{timer}</div>
       <div style={{
-        fontSize: 10, color: c.textSub, letterSpacing: 0.6,
+        fontSize: 10, color: '#B0BACC', letterSpacing: 0.6,
         marginBottom: 18, display: 'flex', alignItems: 'center', gap: 4,
         maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>
@@ -1269,7 +1300,7 @@ const endCallBtn: React.CSSProperties = {
 const ghostBtn: React.CSSProperties = {
   flex: 1, height: 40, borderRadius: 10,
   background: 'rgba(255,255,255,0.05)', border: `1px solid ${c.border}`,
-  color: c.text, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+  color: '#E8EEFB', fontSize: 13, fontWeight: 600, cursor: 'pointer',
 };
 
 // ---------------------------------------------------------------------------
@@ -1321,7 +1352,7 @@ function SipDiagnostics({
           <span style={{
             display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: statusColor,
           }} />
-          <span style={{ color: c.text, fontWeight: 700, fontSize: 11 }}>SIP {sp.snap.status}</span>
+          <span style={{ color: '#E8EEFB', fontWeight: 700, fontSize: 11 }}>SIP {sp.snap.status}</span>
           {sp.snap.errorCause && (
             <span title={sp.snap.errorCause} style={{
               color: '#fca5a5', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis',
@@ -1335,7 +1366,7 @@ function SipDiagnostics({
           onClick={() => setOpen((v) => !v)}
           style={{
             background: 'rgba(255,255,255,0.06)', border: `1px solid ${c.border}`,
-            borderRadius: 6, color: c.text, fontSize: 10, padding: '3px 8px', cursor: 'pointer',
+            borderRadius: 6, color: '#E8EEFB', fontSize: 10, padding: '3px 8px', cursor: 'pointer',
           }}
         >{open ? 'Hide' : 'Diagnostics'}</button>
       </div>
@@ -1356,7 +1387,7 @@ function SipDiagnostics({
           {devices && (
             <div style={{
               padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.08)',
-              fontSize: 10, color: c.text,
+              fontSize: 10, color: '#E8EEFB',
               fontFamily: 'JetBrains Mono, Menlo, monospace',
             }}>
               <div>🎙  Input:  {devices.input}</div>
@@ -1376,7 +1407,7 @@ function diagBtn(c: typeof theme.colors): React.CSSProperties {
     flex: '1 1 auto',
     background: 'rgba(255,255,255,0.05)',
     border: `1px solid ${c.border}`,
-    borderRadius: 6, color: c.text,
+    borderRadius: 6, color: '#E8EEFB',
     fontSize: 10, fontWeight: 600,
     padding: '5px 8px', cursor: 'pointer',
     whiteSpace: 'nowrap',
@@ -1407,20 +1438,20 @@ function SpeedDialPane({ sp, onCall }: { sp: any; onCall: (n: string) => void })
   };
   const [newName, setNewName] = useState('');
   const [newNum, setNewNum] = useState('');
-  if (favs === null) return <div style={{ padding: 16, color: c.textDim, fontSize: 12 }}>Chargement…</div>;
+  if (favs === null) return <div style={{ padding: 16, color: '#7C8AA8', fontSize: 12 }}>Chargement…</div>;
   return (
     <div style={{ padding: '14px 14px 20px', overflowY: 'auto', height: '100%' }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: c.text, marginBottom: 12, letterSpacing: -0.2 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#E8EEFB', marginBottom: 12, letterSpacing: -0.2 }}>
         ⚡ Speed Dial — Favoris
       </div>
       {favs.length === 0 ? (
         <div style={{
           padding: '24px 16px', borderRadius: 14, textAlign: 'center',
           background: 'rgba(0,35,230,0.04)', border: '1px dashed rgba(0,35,230,0.20)',
-          color: c.textDim, fontSize: 12,
+          color: '#7C8AA8', fontSize: 12,
         }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>⭐</div>
-          <div style={{ fontWeight: 700, marginBottom: 4, color: c.text }}>Aucun favori</div>
+          <div style={{ fontWeight: 700, marginBottom: 4, color: '#E8EEFB' }}>Aucun favori</div>
           <div>Ajoutez vos contacts les plus appelés pour les composer en un clic.</div>
         </div>
       ) : (
@@ -1428,22 +1459,23 @@ function SpeedDialPane({ sp, onCall }: { sp: any; onCall: (n: string) => void })
           {favs.map((f) => (
             <div key={f.id} style={{
               padding: 12, borderRadius: 14,
-              background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(0,35,230,0.12)',
+              background: 'linear-gradient(155deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)',
+              border: '1px solid rgba(255,255,255,0.08)',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-              boxShadow: '0 2px 8px -4px rgba(0,35,230,0.12)',
+              boxShadow: '0 2px 8px -4px rgba(0,35,230,0.25)',
             }}>
               <button onClick={() => onCall(f.number)} style={{
                 width: 52, height: 52, borderRadius: '50%', border: 'none',
-                background: 'linear-gradient(135deg, #0023e6, #21d4fd)',
+                background: 'linear-gradient(135deg, #0023e6, #2a4dff)',
                 color: '#fff', display: 'grid', placeItems: 'center', cursor: 'pointer',
-                boxShadow: '0 8px 20px -10px rgba(0,35,230,0.7)',
+                boxShadow: '0 8px 24px -8px rgba(0,35,230,0.50)',
               }} aria-label={`Appeler ${f.name}`}>
                 <Phone size={22} />
               </button>
-              <div style={{ fontSize: 11, fontWeight: 700, color: c.text, textAlign: 'center', wordBreak: 'break-word' }}>{f.name}</div>
-              <div style={{ fontSize: 10, color: c.textDim, fontFamily: 'JetBrains Mono, monospace' }}>{f.number}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#E8EEFB', textAlign: 'center', wordBreak: 'break-word' }}>{f.name}</div>
+              <div style={{ fontSize: 10, color: '#7C8AA8', fontFamily: 'JetBrains Mono, monospace' }}>{f.number}</div>
               <button onClick={() => removeFav(f.id)} style={{
-                background: 'transparent', border: 'none', color: c.textDim, fontSize: 10, cursor: 'pointer',
+                background: 'transparent', border: 'none', color: '#7C8AA8', fontSize: 10, cursor: 'pointer',
               }}>Retirer</button>
             </div>
           ))}
@@ -1451,7 +1483,7 @@ function SpeedDialPane({ sp, onCall }: { sp: any; onCall: (n: string) => void })
       )}
       {/* Ajouter un favori */}
       <div style={{ marginTop: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: c.textSub, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#B0BACC', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8 }}>
           Ajouter un favori
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -1461,7 +1493,7 @@ function SpeedDialPane({ sp, onCall }: { sp: any; onCall: (n: string) => void })
             placeholder="Nom"
             style={{
               flex: 1, minWidth: 80, padding: '7px 10px', borderRadius: 8, fontSize: 12,
-              border: '1px solid rgba(0,35,230,0.20)', background: '#fff', color: c.text, outline: 'none',
+              border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.06)', color: '#E8EEFB', outline: 'none',
             }}
           />
           <input
@@ -1470,7 +1502,7 @@ function SpeedDialPane({ sp, onCall }: { sp: any; onCall: (n: string) => void })
             placeholder="Numéro"
             style={{
               flex: 1, minWidth: 80, padding: '7px 10px', borderRadius: 8, fontSize: 12,
-              border: '1px solid rgba(0,35,230,0.20)', background: '#fff', color: c.text, outline: 'none',
+              border: '1px solid rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.06)', color: '#E8EEFB', outline: 'none',
             }}
           />
           <button
@@ -1479,7 +1511,7 @@ function SpeedDialPane({ sp, onCall }: { sp: any; onCall: (n: string) => void })
             style={{
               padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
               background: newName && newNum ? 'linear-gradient(135deg, #0023e6, #4d6dff)' : 'rgba(0,0,0,0.08)',
-              border: 'none', color: newName && newNum ? '#fff' : c.textDim, cursor: newName && newNum ? 'pointer' : 'not-allowed',
+              border: 'none', color: newName && newNum ? '#fff' : '#7C8AA8', cursor: newName && newNum ? 'pointer' : 'not-allowed',
             }}
           >+ Ajouter</button>
         </div>
@@ -1538,29 +1570,29 @@ function AvaChatPane({ onClose }: { onClose: () => void }) {
     }
   };
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#f0f4ff' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'radial-gradient(1000px 620px at 6% -12%, rgba(0,35,230,0.32), transparent 62%), linear-gradient(180deg, #060C1C 0%, #0A1429 100%)' }}>
       {/* Header */}
       <div style={{
         padding: '12px 14px 8px', display: 'flex', alignItems: 'center', gap: 10,
-        background: '#ffffff', borderBottom: '1px solid rgba(0,0,0,0.08)',
-        boxShadow: '0 1px 8px rgba(0,0,0,0.06)',
+        background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)',
+        backdropFilter: 'blur(18px) saturate(160%)', boxShadow: 'none',
       }}>
         <div style={{
           width: 36, height: 36, borderRadius: '50%',
-          background: 'linear-gradient(135deg, #7a4cff, #21d4fd)',
+          background: 'linear-gradient(135deg, #7A4CFF, #23d6ff)',
           display: 'grid', placeItems: 'center', fontSize: 16, color: '#fff',
           boxShadow: '0 4px 14px rgba(122,76,255,0.40)',
           flexShrink: 0,
         }}>✦</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#0d1426', letterSpacing: -0.3 }}>AVA</div>
-          <div style={{ fontSize: 10, color: '#6b7a99' }}>Assistant IA · données PBX en direct</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#E8EEFB', letterSpacing: -0.3 }}>AVA</div>
+          <div style={{ fontSize: 10, color: '#7C8AA8' }}>Assistant IA · données PBX en direct</div>
         </div>
         <button
           onClick={onClose}
           style={{
-            background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
-            color: '#6b7a99', cursor: 'pointer', borderRadius: 8,
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)',
+            color: '#B0BACC', cursor: 'pointer', borderRadius: 8,
             width: 28, height: 28, display: 'grid', placeItems: 'center', fontSize: 16,
           }}
           aria-label="Fermer AVA"
@@ -1570,15 +1602,15 @@ function AvaChatPane({ onClose }: { onClose: () => void }) {
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 12px' }}>
         {msgs.length === 0 && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0d1426', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#E8EEFB', marginBottom: 10 }}>
               Posez n'importe quelle question à AVA sur votre système téléphonique.
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
               {AVA_SUGGESTIONS.map((s) => (
                 <button key={s} onClick={() => send(s)} style={{
                   textAlign: 'left', padding: '11px 13px', borderRadius: 12,
-                  background: 'rgba(255,255,255,0.85)', border: '1px solid rgba(122,76,255,0.25)',
-                  color: '#0d1426', fontSize: 12, cursor: 'pointer',
+                  background: 'linear-gradient(155deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)', border: '1px solid rgba(122,76,255,0.25)',
+                  color: '#E8EEFB', fontSize: 12, cursor: 'pointer',
                   boxShadow: '0 2px 8px -4px rgba(122,76,255,0.15)',
                 }}>
                   <span style={{ color: '#7a4cff', marginRight: 8 }}>✦</span>{s}
@@ -1597,15 +1629,15 @@ function AvaChatPane({ onClose }: { onClose: () => void }) {
               padding: '10px 13px',
               borderRadius: 14,
               background: m.role === 'user'
-                ? 'linear-gradient(135deg, #0023e6, #4d6dff)'
-                : 'rgba(255,255,255,0.92)',
-              color: m.role === 'user' ? '#fff' : '#0d1426',
+                ? 'linear-gradient(135deg, #0023e6, #2a4dff)'
+                : 'rgba(255,255,255,0.06)',
+              color: m.role === 'user' ? '#fff' : '#E8EEFB',
               fontSize: 12, lineHeight: 1.5,
               whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              border: m.role === 'assistant' ? '1px solid rgba(0,0,0,0.08)' : 'none',
-              boxShadow: m.role === 'assistant' ? '0 2px 8px -4px rgba(0,0,0,0.10)' : 'none',
+              border: m.role === 'assistant' ? '1px solid rgba(255,255,255,0.08)' : 'none',
+              boxShadow: 'none',
             }}>
-              {m.pending ? <span style={{ color: '#6b7a99', fontStyle: 'italic' }}>Réflexion…</span> : m.text}
+              {m.pending ? <span style={{ color: '#7C8AA8', fontStyle: 'italic' }}>Réflexion…</span> : m.text}
             </div>
           </div>
         ))}
@@ -1613,14 +1645,14 @@ function AvaChatPane({ onClose }: { onClose: () => void }) {
       {/* Composer */}
       <div style={{
         padding: '8px 12px 12px',
-        borderTop: '1px solid rgba(0,0,0,0.08)',
-        background: 'rgba(255,255,255,0.92)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(10,20,41,0.72)',
         backdropFilter: 'blur(14px)',
       }}>
         <div style={{
           display: 'flex', alignItems: 'flex-end', gap: 8,
-          background: '#fff', borderRadius: 14,
-          border: '1px solid rgba(0,35,230,0.15)',
+          background: 'rgba(255,255,255,0.06)', borderRadius: 14,
+          border: '1px solid rgba(255,255,255,0.10)',
           padding: 6, boxShadow: '0 2px 8px -4px rgba(0,35,230,0.12)',
         }}>
           <textarea
@@ -1633,7 +1665,7 @@ function AvaChatPane({ onClose }: { onClose: () => void }) {
             style={{
               flex: 1, resize: 'none', border: 'none', outline: 'none',
               padding: '8px 6px', fontSize: 12, fontFamily: 'inherit',
-              background: 'transparent', color: '#0d1426', maxHeight: 120,
+              background: 'transparent', color: '#E8EEFB', maxHeight: 120,
             }}
           />
           <button
@@ -1643,7 +1675,7 @@ function AvaChatPane({ onClose }: { onClose: () => void }) {
             style={{
               width: 36, height: 36, borderRadius: '50%',
               border: 'none', cursor: input.trim() && !busy ? 'pointer' : 'not-allowed',
-              background: input.trim() && !busy ? 'linear-gradient(135deg, #7a4cff, #21d4fd)' : 'rgba(0,0,0,0.08)',
+              background: input.trim() && !busy ? 'linear-gradient(135deg, #7A4CFF, #23d6ff)' : 'rgba(255,255,255,0.08)',
               color: '#fff', fontSize: 16, display: 'grid', placeItems: 'center',
               flexShrink: 0,
             }}

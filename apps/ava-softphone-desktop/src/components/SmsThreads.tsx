@@ -199,8 +199,8 @@ export default function SmsThreads() {
 const center: React.CSSProperties = { textAlign: 'center', padding: 40, opacity: 0.5, fontSize: 12 };
 const rowBtn: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10,
-  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-  borderRadius: 8, padding: '8px 10px', cursor: 'pointer', color: '#fff',
+  background: 'linear-gradient(155deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)', border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: 14, padding: '8px 10px', cursor: 'pointer', color: '#E8EEFB',
 };
 const backBtn: React.CSSProperties = {
   background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff',

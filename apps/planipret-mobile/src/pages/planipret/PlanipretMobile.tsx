@@ -486,6 +486,10 @@ export default function PlanipretMobile() {
   // Wait for the profile before SIP init so cold starts do not race auth/profile boot.
   const softphone = useMplanipretSoftphone(Boolean(profile?.user_id));
   const attachRestCall = (softphone as any).attachRestCall as ((a: any) => void) | undefined;
+  const sipCallLive = ["ringing-in", "ringing-out", "active", "held"].includes(
+    String(softphone.snap.callState),
+  );
+
   const [loading, setLoading] = useState(true);
   const [accessError, setAccessError] = useState<"unauthenticated" | "missing_profile" | "load_failed" | null>(null);
   const [profileErrorDetail, setProfileErrorDetail] = useState<string>("");

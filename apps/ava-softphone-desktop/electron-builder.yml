@@ -40,3 +40,9 @@ linux:
   category: Office
   maintainer: "Automatisation Assistant Virtuel IA Inc. <support@assistantvirtualai.com>"
 
+publish:
+  provider: github
+  owner: AssistantVirtualAI
+  repo: attach-app-creator-8134a2fa
+  private: true
+  releaseType: release

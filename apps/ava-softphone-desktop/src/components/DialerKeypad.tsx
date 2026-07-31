@@ -267,7 +267,7 @@ export default function DialerKeypad({
               alignContent: 'center',
               padding: 0,
               borderRadius: t.radius,
-              background: `linear-gradient(160deg, rgba(255,255,255,0.09), ${c.overlay04})`,
+              background: `linear-gradient(160deg, ${c.overlay10}, ${c.overlay04})`,
               border: `1px solid ${c.overlay12}`,
               boxShadow: `inset 0 1px 0 ${c.overlay10}, 0 4px 14px -10px rgba(0,0,0,0.8)`,
               color: c.text,
@@ -283,7 +283,7 @@ export default function DialerKeypad({
             }}
             onMouseLeave={(e) => {
               const el = e.currentTarget as HTMLButtonElement;
-              el.style.background = `linear-gradient(160deg, rgba(255,255,255,0.09), ${c.overlay04})`;
+              el.style.background = `linear-gradient(160deg, ${c.overlay10}, ${c.overlay04})`;
               el.style.borderColor = c.overlay12;
               el.style.boxShadow = `inset 0 1px 0 ${c.overlay10}, 0 4px 14px -10px rgba(0,0,0,0.8)`;
             }}
@@ -312,7 +312,7 @@ export default function DialerKeypad({
                   height: t.subRow,
                   lineHeight: `${t.subRow}px`,
                   fontSize: t.sub,
-                  color: 'rgba(159,179,214,0.72)',
+                  color: c.textSub,
                   letterSpacing: '0.22em',
                   fontWeight: 700,
                   minWidth: '2.4em',

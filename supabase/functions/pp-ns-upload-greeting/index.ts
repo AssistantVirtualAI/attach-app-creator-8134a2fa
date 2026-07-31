@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     const {
       user: nsUser,
       domain: nsDomain,
-      index = "1",
+      index = "9", // announcement slot — NEVER 1 (voicemail greeting)
       bucket = DEFAULT_BUCKET,
       object = DEFAULT_OBJECT,
       description = "Avis d'enregistrement d'appel (AVA)",

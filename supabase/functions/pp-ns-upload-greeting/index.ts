@@ -109,11 +109,12 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             synchronous: "yes",
             convert: "yes",
-            index: String(index),
-            description,
-            filename: object,
-            file: base64,
+            index: Number(index),
+            script: description,
+            encoding: "audio/wav",
+            base64_file: base64,
           }),
+
         },
         { functionName: "pp-ns-upload-greeting" },
       );

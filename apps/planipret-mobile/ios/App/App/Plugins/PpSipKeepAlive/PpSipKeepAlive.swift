@@ -65,15 +65,15 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
       NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
       NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
-      NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.willResignActiveNotification, object: nil)
       // UIScene lifecycle (iOS 13+) — the app adopts scenes, so the legacy
-      // UIApplication notifications are not always delivered. Observing both
-      // keeps appActive correct without ever reading UI state off-thread.
+      // UIApplication notifications are not always delivered. Only the actual
+      // didEnterBackground transition may transfer SIP ownership. The transient
+      // willDeactivate/willResignActive events also fire for CallKit, Control
+      // Center and notification interruptions and previously caused handoff loops.
       if #available(iOS 13.0, *) {
         NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIScene.didActivateNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onSceneWillEnterForeground), name: UIScene.willEnterForegroundNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIScene.didEnterBackgroundNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIScene.willDeactivateNotification, object: nil)
       }
       // Ask for notification permission so the incoming-call banner can ring.
       // PushKit (PpVoipCall) posts this when an incoming-call VoIP push lands:
@@ -321,7 +321,14 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       socket = session.webSocketTask(with: req); socket?.resume(); setStatus("connecting", "ws_connecting"); receiveLoop()
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.sendRegister(challenge: nil) }
     }
-    private func scheduleRegister() { timer?.invalidate(); timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in self?.sendRegister(challenge: nil) }; RunLoop.main.add(timer!, forMode: .common) }
+    private func scheduleRegister() {
+      timer?.invalidate()
+      // Refresh once near expiry, not every minute. NetSapiens treats repeated
+      // REGISTER handshakes on one AOR as competing bindings.
+      let refreshInterval = max(60.0, Double(registerExpires) * 0.8)
+      timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in self?.sendRegister(challenge: nil) }
+      if let timer = timer { RunLoop.main.add(timer, forMode: .common) }
+    }
     private func receiveLoop() {
       socket?.receive { [weak self] result in
         guard let self = self else { return }
@@ -388,7 +395,11 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     }
 
     private func handle(_ msg: String) {
-      if msg.hasPrefix("SIP/2.0 401") || msg.hasPrefix("SIP/2.0 407") {
+      // A 401/407 only authenticates REGISTER when the response CSeq says so.
+      // NetSapiens can challenge OPTIONS too; treating that as a REGISTER
+      // challenge created a REGISTER → OPTIONS → 407 → REGISTER loop every 3s.
+      let responseCSeq = (headerVal(msg, "CSeq") ?? "").uppercased()
+      if (msg.hasPrefix("SIP/2.0 401") || msg.hasPrefix("SIP/2.0 407")) && responseCSeq.contains("REGISTER") {
         let isProxyAuth = msg.hasPrefix("SIP/2.0 407")
         sendRegister(challenge: headerVal(msg, isProxyAuth ? "Proxy-Authenticate" : "WWW-Authenticate"), proxyAuth: isProxyAuth)
         return

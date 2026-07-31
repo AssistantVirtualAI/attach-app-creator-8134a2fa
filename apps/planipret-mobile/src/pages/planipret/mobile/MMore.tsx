@@ -19,7 +19,6 @@ import MRingtoneSettings from "@/components/planipret/mobile/MRingtoneSettings";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { openMs365Authorize } from "@/lib/ms365OAuth";
-import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { ppSipProvider, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
 import { Radio } from "lucide-react";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
@@ -28,7 +27,7 @@ const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
 
 export default function MMore() {
-  const { profile, reloadProfile } = useOutletContext<PlanipretMobileContext>();
+  const { profile, reloadProfile, softphone } = useOutletContext<PlanipretMobileContext>();
   const { t, lang, setLang } = useMplanipretLang();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -89,7 +88,7 @@ export default function MMore() {
     })();
   }, [profile?.id]);
 
-  const { sipConnected, reregister } = useMplanipretSoftphone();
+  const { sipConnected, reregister } = softphone;
   const nsConnected = !!(profile?.ns_extension ?? profile?.extension) && sipConnected;
   const isMs365Connected = ms365Connected(profile);
 

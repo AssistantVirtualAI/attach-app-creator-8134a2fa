@@ -618,11 +618,13 @@ class PpSipProvider {
     // the session arrives (within a 30s intent window).
     if (incoming) {
       try {
+        // NOTE: the VoIP push callId (NetSapiens `1-XXXXXXXX-...`) and the SIP
+        // Call-ID are two different identifier spaces — never compare them.
+        // Any incoming INVITE within the 30s answer-intent window is answered.
         const pending = this.pendingAnswer;
-        const callMatches = !pending?.callId || !callId || pending.callId === callId;
-        if (pending && pending.expiresAt > Date.now() && callMatches) {
+        if (pending && pending.expiresAt > Date.now()) {
           this.pendingAnswer = null;
-          setTimeout(() => { this.answer(callId); }, 250);
+          setTimeout(() => { this.answer(); }, 250);
         }
       } catch {}
     }

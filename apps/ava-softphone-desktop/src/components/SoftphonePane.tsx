@@ -369,7 +369,7 @@ export default function SoftphonePane({
   return (
     <div ref={rootRef} style={{
       display: 'flex', flexDirection: 'column', height: '100%',
-      background: 'radial-gradient(1000px 620px at 6% -12%, rgba(0,35,230,0.32), transparent 62%), radial-gradient(780px 560px at 105% 105%, rgba(224,168,0,0.18), transparent 58%), linear-gradient(180deg, #060C1C 0%, #0A1429 52%, #0E1B3D 100%)',
+      background: c.bgGradient,
       color: c.text, position: 'relative', overflow: 'hidden',
     }}>
 
@@ -387,13 +387,6 @@ export default function SoftphonePane({
         WebkitBackdropFilter: 'blur(18px) saturate(160%)',
         borderBottom: `1px solid ${c.overlay08}`,
       }}>
-        {/* LEFT: Logo Lemtel */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <LemtelLogo size={ultraCompact ? 'xs' : compact ? 'xs' : 'sm'} glow shape="square" />
-          {!ultraCompact && !compact && (
-            <span style={{ fontSize: 13, fontWeight: 800, color: c.text, letterSpacing: 0.3 }}>Lemtel</span>
-          )}
-        </div>
 
         {/* CENTER: Extension + SIP dot + display name */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
@@ -817,7 +810,7 @@ export default function SoftphonePane({
         }} onClick={() => setShowXfer(false)}>
           <div
             style={{
-              background: 'rgba(15,15,30,0.95)', border: `1px solid ${c.borderGold}`,
+              background: c.bgElev, border: `1px solid ${c.borderGold}`,
               borderRadius: 16, padding: 20, width: 300,
               boxShadow: '0 25px 50px rgba(0,0,0,0.6)',
             }}
@@ -847,18 +840,14 @@ export default function SoftphonePane({
       {/* Footer */}
       <div style={{
         position: 'relative', zIndex: 1, flexShrink: 0,
-        padding: compact ? '7px 8px 8px' : '12px 14px 14px',
+        padding: compact ? '4px 8px' : '6px 12px',
         textAlign: 'center',
         borderTop: `1px solid ${c.border}`,
-        background: c.bg,
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 3 : 6,
+        background: c.bgCard,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: compact ? 6 : 8, minWidth: 0, maxWidth: '100%', flexWrap: 'wrap' }}>
-          <LemtelLogo size="xs" glow />
-          <BrandTagline size="sm" showPoweredBy={false} style={{ marginTop: 0, minWidth: 0 }} />
-        </div>
-        <div style={{ fontSize: compact ? 9 : 10, color: c.textDim, letterSpacing: 0.5 }}>
-          v{APP_VERSION} {ultraCompact ? '' : '· Powered by '}
+        <div style={{ fontSize: compact ? 9 : 10, color: c.textSub, letterSpacing: 0.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {ultraCompact ? '' : 'Lemtel Communications · '}v{APP_VERSION} {ultraCompact ? '' : '· Powered by '}
           <a
             onClick={(e) => { e.preventDefault(); window.electronAPI?.openExternal?.('https://assistantvirtualai.com'); }}
             href="#"
@@ -896,9 +885,8 @@ const Dialer = React.memo(function Dialer({
   const handleSubmit = useMemo(() => (canCall ? onCall : undefined), [canCall, onCall]);
   const density = ultraCompact ? 'ultra' : compact ? 'compact' : 'spacious';
 
-  const sipBanner = sipRegistered && !sipError
-    ? { bg: 'rgba(34,197,94,0.12)', bd: 'rgba(34,197,94,0.30)', fg: c.success, text: `✅ SIP enregistré — Ext ${extension}` }
-    : sipError || sipStatus === 'error' || sipStatus === 'failed'
+  const sipOk = sipRegistered && !sipError;
+  const sipBanner = sipError || sipStatus === 'error' || sipStatus === 'failed'
       ? { bg: 'rgba(239,68,68,0.12)', bd: 'rgba(239,68,68,0.30)', fg: c.danger, text: `🔴 SIP indisponible — ${sipError || sipStatus}` }
       : { bg: 'rgba(245,158,11,0.12)', bd: 'rgba(245,158,11,0.30)', fg: c.warning, text: '🟡 Connexion en cours…' };
 
@@ -906,14 +894,14 @@ const Dialer = React.memo(function Dialer({
     <div style={{ animation: 'fadeIn .25s ease-out', padding: compact ? '2px 0 8px' : '4px 4px 8px', minWidth: 0 }}>
       <CallForwarding extension={extension} />
 
-      {/* Bannière de statut SIP */}
-      <div style={{
+      {/* Bannière de statut SIP — uniquement en cas de problème */}
+      {!sipOk && <div style={{
         margin: compact ? '4px auto 8px' : '6px auto 10px', maxWidth: 320, width: '100%',
         boxSizing: 'border-box', padding: '7px 12px', borderRadius: 12,
         background: sipBanner.bg, border: `1px solid ${sipBanner.bd}`, color: sipBanner.fg,
         fontSize: 11, fontWeight: 700, textAlign: 'center',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>{sipBanner.text}</div>
+      }}>{sipBanner.text}</div>}
 
 
       {/* Number display — premium glass tile */}
@@ -939,11 +927,6 @@ const Dialer = React.memo(function Dialer({
           }}>
           {dial || 'Enter a number'}
         </div>
-        {dial && (
-          <div style={{ fontSize: 9.5, color: c.signalGold, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, opacity: 0.92 }}>
-            Ready to dial · ext {extension}
-          </div>
-        )}
       </div>
 
       {/* Dialpad — locked baselines via DialerKeypad */}

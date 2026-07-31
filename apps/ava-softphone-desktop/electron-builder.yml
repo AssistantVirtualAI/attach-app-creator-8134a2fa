@@ -65,5 +65,4 @@ publish:
   provider: github
   owner: AssistantVirtualAI
   repo: attach-app-creator-8134a2fa
-  private: true
   releaseType: release

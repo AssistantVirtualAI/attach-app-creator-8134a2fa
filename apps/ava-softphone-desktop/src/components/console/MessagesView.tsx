@@ -4,11 +4,12 @@ import { ava, SmsThread, SmsMessage } from '../../lib/avaApi';
 import { useRealtimeRefresh } from '../../lib/useRealtimeRefresh';
 import { useOrgId } from '../../lib/useOrgId';
 import {
-import SkeletonRows from '../ui/SkeletonRows';
   loadTemplates, saveTemplates, interpolate, filterTemplates,
   getDefaultTemplateId, setDefaultTemplate,
   MsgTemplate, TemplateCategory, CATEGORIES,
 } from '../../lib/messageTemplates';
+import SkeletonRows from '../ui/SkeletonRows';
+
 
 const { colors: c } = theme;
 

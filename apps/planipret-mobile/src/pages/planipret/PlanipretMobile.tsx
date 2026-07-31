@@ -1131,7 +1131,16 @@ export default function PlanipretMobile() {
 
         <Dialer open={dialerOpen} autoDial={dialerAutoDial} onClose={() => { setDialerOpen(false); setDialerAutoDial(false); }} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); openSmsComposer({ number: n }); }} softphone={softphone} maestroConfigured={Boolean(profile?.maestro_broker_id)} />
         <PpActiveCallScreen softphone={softphone} />
-        <InboundCallOverlay call={inbound} onClose={() => setInbound(null)} />
+        {/* A live WebRTC session owns the UI: PpActiveCallScreen already shows
+            the ringing/answer + keypad screen, so the REST overlay must not
+            steal the tap. */}
+        <InboundCallOverlay
+          call={sipCallLive ? null : inbound}
+          onClose={() => setInbound(null)}
+          onAnswer={async () => { await softphone.answer(); }}
+          onReject={() => { softphone.hangup(); }}
+        />
+
         {avaOpen && profile?.user_id && (
           profile.voice_agent_enabled && avaMode === "voice"
             ? (

@@ -1,5 +1,6 @@
 import React from 'react';
 import LemtelLogo from './LemtelLogo';
+import lemtelWordmark from '../assets/lemtel-wordmark.png';
 import ProfileMenu from './ProfileMenu';
 import { theme } from '../lib/theme';
 import { formatAge, useSyncStatus } from '../hooks/useSyncStatus';

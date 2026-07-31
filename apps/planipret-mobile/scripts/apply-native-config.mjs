@@ -692,8 +692,9 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     }
     @objc private func onForeground() {
       appActive = true
-      // Hand the AOR back to JsSIP and ask the web layer to re-REGISTER.
-      releaseRegistration("foreground_js_owns")
+      // Keep the last confirmed native Contact until JS reports its own
+      // REGISTER 200 and explicitly calls stopSipService. Closing here created
+      // a zero-Contact window where NetSapiens followed the voicemail rule.
       notifyListeners("sipReregisterRequested", data: ["reason": "enter_foreground"])
     }
 
@@ -914,7 +915,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private func beginBackgroundTask() { if bgTask != .invalid { return }; bgTask = UIApplication.shared.beginBackgroundTask(withName: "PlanipretSIPKeepAlive") { [weak self] in self?.endBackgroundTask(); self?.setStatus("protected", "background_task_expired") }; DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in self?.sendRegister(challenge: nil); self?.endBackgroundTask() } }
     private func endBackgroundTask() { if bgTask != .invalid { UIApplication.shared.endBackgroundTask(bgTask); bgTask = .invalid } }
     private func setStatus(_ next: String, _ nextReason: String) { status = next; reason = nextReason; updatedAt = Date().timeIntervalSince1970 * 1000; DispatchQueue.main.async { self.notifyListeners("sipServiceStatus", data: self.snapshot(ok: true)) } }
-    private func snapshot(ok: Bool) -> [String: Any] { ["ok": ok, "status": status, "reason": reason, "updatedAt": updatedAt, "backgroundTaskActive": bgTask != .invalid, "loggedIn": status == "registered" || status == "protected"] }
+    private func snapshot(ok: Bool) -> [String: Any] { ["ok": ok, "status": status, "reason": reason, "updatedAt": updatedAt, "backgroundTaskActive": bgTask != .invalid, "loggedIn": status == "registered"] }
 }
 `;
 
@@ -936,6 +937,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
       CAPPluginMethod(name: "getVoipPushToken", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "refreshVoipPushToken", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "reportCallEnded", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "completeAnswer", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
       CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise)
     ]
@@ -947,6 +949,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var lastReportedToken: String?
     private var activeCallUUID: UUID?
     private var activeCallId: String?
+    private var pendingAnswerAction: CXAnswerCallAction?
 
     private func apnsEnvironment() -> String {
         #if DEBUG
@@ -1038,6 +1041,19 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         call.resolve(["ok": true])
     }
 
+    @objc func completeAnswer(_ call: CAPPluginCall) {
+        let callId = call.getString("callId") ?? ""
+        let ok = call.getBool("ok") ?? false
+        guard let action = pendingAnswerAction,
+              callId.isEmpty || activeCallId == nil || activeCallId == callId else {
+            call.resolve(["ok": false, "reason": "call_id_mismatch"])
+            return
+        }
+        pendingAnswerAction = nil
+        if ok { action.fulfill() } else { action.fail() }
+        call.resolve(["ok": true])
+    }
+
     // MARK: - PKPushRegistryDelegate
     public func pushRegistry(_ registry: PKPushRegistry, didUpdate credentials: PKPushCredentials, for type: PKPushType) {
         guard type == .voIP else { return }
@@ -1103,6 +1119,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     // MARK: - CXProviderDelegate
     public func providerDidReset(_ provider: CXProvider) {
+        pendingAnswerAction?.fail(); pendingAnswerAction = nil
         activeCallUUID = nil; activeCallId = nil
     }
 
@@ -1113,10 +1130,17 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             "callUUID": action.callUUID.uuidString,
             "callId": activeCallId ?? ""
         ])
-        action.fulfill()
+        pendingAnswerAction?.fail()
+        pendingAnswerAction = action
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30.0) { [weak self, weak action] in
+            guard let self = self, let action = action, self.pendingAnswerAction === action else { return }
+            self.pendingAnswerAction = nil
+            action.fail()
+        }
     }
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+        pendingAnswerAction?.fail(); pendingAnswerAction = nil
         notifyListeners("incomingCallRejected", data: [
             "callUUID": action.callUUID.uuidString,
             "callId": activeCallId ?? ""
@@ -1138,6 +1162,7 @@ CAP_PLUGIN(PpVoipCall, "PpVoipCall",
   CAP_PLUGIN_METHOD(getVoipPushToken, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(refreshVoipPushToken, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(reportCallEnded, CAPPluginReturnPromise);
+  CAP_PLUGIN_METHOD(completeAnswer, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(addListener, CAPPluginReturnCallback);
   CAP_PLUGIN_METHOD(removeAllListeners, CAPPluginReturnPromise);
 )

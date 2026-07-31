@@ -24,6 +24,7 @@ import { getAudioConstraints, type NCMode } from "@/lib/planipret/audio/audioCon
 import { ensureMicPermission, type MicPermissionState } from "@/lib/planipret/audio/micPermission";
 import {
   acknowledgePlanipretIncoming,
+  completePlanipretCallKitAnswer,
   getPlanipretSipKeepAliveStatus,
   getPlanipretVoipPushToken,
   onPlanipretIncomingCallAnswered,
@@ -220,6 +221,15 @@ export function useMplanipretSoftphone(enabled = true) {
 
   // Subscribe to the SIP snapshot.
   useEffect(() => ppSipProvider.subscribe(setSnap), []);
+
+  // CallKit must only mark Answer fulfilled after the SIP dialog is confirmed;
+  // otherwise iOS shows a connected call while NetSapiens is still ringing or
+  // has already followed the voicemail branch.
+  useEffect(() => {
+    if (snap.callState === "active" && snap.direction === "in") {
+      void completePlanipretCallKitAnswer(snap.callId, true);
+    }
+  }, [snap.callState, snap.direction, snap.callId]);
 
   // 24h SIP stability soak recorder (rolling window in localStorage).
   useEffect(() => startSipStabilityMonitor(), []);

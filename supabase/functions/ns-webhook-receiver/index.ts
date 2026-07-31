@@ -128,28 +128,50 @@ async function processEvent(event: any) {
         console.error("[ns-webhook] APNs VoIP missing bundle id", { token_id: row.id, call_id: payload?.call_id });
         return { ok: false, skipped: "missing_bundle_id" };
       }
-      const host = row.environment === "sandbox" ? "api.sandbox.push.apple.com" : "api.push.apple.com";
-      const res = await fetch(`https://${host}/3/device/${row.device_token}`, {
-        method: "POST",
-        headers: {
-          authorization: `bearer ${jwt}`,
-          "apns-topic": `${bundleId}.voip`,
-          "apns-push-type": "voip",
-          "apns-priority": "10",
-          "content-type": "application/json",
+      // Apple VoIP requirements: push-type `voip`, topic `<bundle>.voip`,
+      // priority 10 and expiration 0 (immediate delivery only — a stored VoIP
+      // push delivered late is rejected by iOS and kills the app).
+      const send = (env: string) => fetch(
+        `https://${env === "sandbox" ? "api.sandbox.push.apple.com" : "api.push.apple.com"}/3/device/${row.device_token}`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `bearer ${jwt}`,
+            "apns-topic": `${bundleId}.voip`,
+            "apns-push-type": "voip",
+            "apns-priority": "10",
+            "apns-expiration": "0",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ aps: { "content-available": 1 }, ...payload }),
         },
-        body: JSON.stringify({ aps: { "content-available": 1 }, ...payload }),
-      });
+      );
+
+      const primary = row.environment === "sandbox" ? "sandbox" : "production";
+      let env = primary;
+      let res = await send(env);
+      let body = res.ok ? "" : await res.text().catch(() => "");
+      // Dev-signed builds (aps-environment=development) hold sandbox tokens; a
+      // stored `production` environment then yields BadDeviceToken. Retry once
+      // on the other APNs host before discarding the token.
+      if (!res.ok && (body.includes("BadDeviceToken") || body.includes("DeviceTokenNotForTopic"))) {
+        env = primary === "sandbox" ? "production" : "sandbox";
+        res = await send(env);
+        body = res.ok ? "" : await res.text().catch(() => "");
+        if (res.ok) {
+          await admin.from("planipret_voip_push_tokens").update({ environment: env }).eq("id", row.id);
+        }
+      }
       if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        console.error("[ns-webhook] APNs VoIP failed", { status: res.status, body, token_id: row.id, env: row.environment, bundle_id: bundleId, call_id: payload?.call_id });
-        if (res.status === 410 || body.includes("BadDeviceToken") || body.includes("Unregistered")) {
+        console.error("[ns-webhook] APNs VoIP failed", { status: res.status, body, token_id: row.id, env, bundle_id: bundleId, call_id: payload?.call_id });
+        if (res.status === 410 || body.includes("Unregistered")) {
           await admin.from("planipret_voip_push_tokens").delete().eq("id", row.id);
         }
         return { ok: false, status: res.status };
       }
-      console.log("[ns-webhook] APNs VoIP sent", { token_id: row.id, env: row.environment, bundle_id: bundleId, call_id: payload?.call_id });
+      console.log("[ns-webhook] APNs VoIP sent", { token_id: row.id, env, bundle_id: bundleId, call_id: payload?.call_id });
       return { ok: true };
+
     }));
     const sent = results.filter((r) => r.status === "fulfilled" && (r.value as any)?.ok).length;
     if (!sent) console.warn("[ns-webhook] APNs VoIP delivered to 0 tokens", { user_id: uid, call_id: payload?.call_id, token_count: tokens.length });

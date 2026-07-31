@@ -11,7 +11,7 @@
   },
   "scripts": {
     "predev": "tsc -p electron/tsconfig.json",
-    "dev": "concurrently \"vite\" \"electron .\"",
+    "dev": "concurrently -k \"vite\" \"node scripts/wait-and-launch.mjs\"",
     "build": "vite build && tsc -p electron/tsconfig.json",
     "build:win": "vite build && tsc -p electron/tsconfig.json && electron-builder --win",
     "build:mac": "vite build && tsc -p electron/tsconfig.json && electron-builder --mac --x64 --arm64",

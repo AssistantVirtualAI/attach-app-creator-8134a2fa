@@ -10,5 +10,5 @@ For the Planiprêt app (mobile + portal), ALWAYS base telephony/SIP/answering-ru
 
 Known platform facts:
 - Device registration state lives on the Device object (`device-sip-registration-*`), no `/registrations` resource.
-- Core nodes (`core*.cluster*.ucstack.io`) drain client registrations → WSS close 1001. Clients must register on the SBC edge `voice.ava-telecom.ca:9002`, even though the portal shows `Outbound Proxy: core1.cluster1.ucstack.io`.
+- Les clients DOIVENT s'enregistrer sur `core1.cluster1.ucstack.io:9002` ou `core2.cluster1.ucstack.io:9002`. `voice.ava-telecom.ca` = portail (`portal1.cluster1.ucstack.io`) : REGISTER accepté mais appels entrants non livrés → voicemail. Voir mem://integrations/netsapiens-wss-core-registration.
 - Multiple AORs on one user (`113`, `113_mobile`, `113_web`) require SimRing/`ring-all-user-phones` in the answering rule, otherwise inbound goes straight to voicemail.

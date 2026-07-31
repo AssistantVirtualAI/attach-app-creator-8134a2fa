@@ -16,28 +16,6 @@ class AppBridgeViewController: CAPBridgeViewController {
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
 }
-
-// MARK: - Inline Planiprêt native plugins
-// Planiprêt-only. DO NOT reuse in Lemtel (Verto stack).
-@objc(PpSipKeepAlive)
-public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate {
-    public let identifier = "PpSipKeepAlive"; public let jsName = "PpSipKeepAlive"
-    public let pluginMethods: [CAPPluginMethod] = [
-      CAPPluginMethod(name: "startSipService", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "stopSipService", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "getSipServiceStatus", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "triggerReregister", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "acknowledgeIncoming", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "wakeForIncomingCall", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "setCallActive", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
-      CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise)
-    ]
-    private var status = "idle"; private var reason = "plugin_loaded"; private var updatedAt = Date().timeIntervalSince1970 * 1000
-    private var bgTask: UIBackgroundTaskIdentifier = .invalid
-    private var host = ""; private var port = 443; private var path = "/"; private var login = ""; private var domain = ""; private var displayName = ""; private var password = ""
-    private var socket: URLSessionWebSocketTask?
-    private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue())
     private var timer: Timer?
     private var cseq = 1
     private let callIdReg = UUID().uuidString + "@planipret-ios"

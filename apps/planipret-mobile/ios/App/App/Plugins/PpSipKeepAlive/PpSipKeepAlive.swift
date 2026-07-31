@@ -146,7 +146,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     @objc private func onSceneWillEnterForeground() { onForeground() }
     private func releaseRegistration(_ why: String) {
       if !Thread.isMainThread { DispatchQueue.main.async { [weak self] in self?.releaseRegistration(why) }; return }
-      if status == "idle" && socket == nil && timer == nil { return }
       backgroundHandoffWorkItem?.cancel(); backgroundHandoffWorkItem = nil
       timer?.invalidate(); timer = nil
       socket?.cancel(with: .goingAway, reason: nil); socket = nil

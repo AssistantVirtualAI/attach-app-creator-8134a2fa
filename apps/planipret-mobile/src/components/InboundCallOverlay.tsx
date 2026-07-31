@@ -58,6 +58,20 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
     if (busy) return;
     setBusy(true);
     try {
+      if (action === "answer" && onAnswer) {
+        // Let the softphone pick up: the full-screen in-call UI (with keypad)
+        // takes over immediately — no navigation away from the call.
+        stopRef.current?.();
+        await onAnswer();
+        onClose();
+        return;
+      }
+      if (action === "reject" && onReject) {
+        stopRef.current?.();
+        await onReject();
+        onClose();
+        return;
+      }
       await supabase.functions.invoke("pp-ns-calls", { body: { action, call_id: call?.call_id } });
       handleClose();
       if (action === "answer") navigate(`/mplanipret/calls?call=${call?.call_id ?? ""}`);
@@ -67,6 +81,7 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
       setBusy(false);
     }
   };
+
 
   const sendToVoicemail = async () => {
     if (busy) return;

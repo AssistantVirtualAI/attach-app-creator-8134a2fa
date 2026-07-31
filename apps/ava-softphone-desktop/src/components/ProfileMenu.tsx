@@ -912,9 +912,10 @@ function ProfileEditor({
 
         {/* ===== Email reset confirmation ===== */}
         {emStep === 'confirm' && (
-          <div style={{ marginTop: 14, padding: 12, background: '#f1f5f9', border: `1px solid ${c.border}`, borderRadius: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Send reset link?</div>
-            <div style={{ fontSize: 11, color: '#475569', marginBottom: 10, lineHeight: 1.45 }}>
+          <div style={{ marginTop: 14, padding: 12, background: 'rgba(255,255,255,0.06)', border: `1px solid ${c.border}`, borderRadius: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: c.textIce, marginBottom: 4 }}>Send reset link?</div>
+            <div style={{ fontSize: 11, color: c.textDim, marginBottom: 10, lineHeight: 1.45 }}>
+
               We'll email a one-time reset link to <strong>{email}</strong>. It expires in 1 hour.
             </div>
             {emError && <div style={{ ...errBox, marginTop: 0, marginBottom: 8 }}>{emError}</div>}

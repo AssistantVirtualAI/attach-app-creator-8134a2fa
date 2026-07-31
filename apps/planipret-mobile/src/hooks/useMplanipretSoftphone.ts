@@ -799,11 +799,17 @@ export function useMplanipretSoftphone(enabled = true) {
     return (nativeStatus as any)?.ok !== false && (st === "registered" || st === "protected");
   }, [nativeStatus]);
 
+  // A live WebRTC session ALWAYS wins over the REST/DB attachment: otherwise the
+  // realtime "ringing" row hijacks the snapshot and answer() goes REST-only,
+  // leaving the real SIP session unanswered (no audio, no in-call keypad).
+  const hasLiveSipSession = snap.callState === "ringing-in" || snap.callState === "ringing-out"
+    || snap.callState === "active" || snap.callState === "held";
+
   const effectiveSnap = useMemo<PpSipSnapshot>(() => {
     const base: PpSipSnapshot = (nativeOwnsRegistration && snap.status !== "registered" && snap.status !== "connected")
       ? ({ ...snap, status: "registered", lastError: null } as PpSipSnapshot)
       : snap;
-    if (!restCall?.id) return base;
+    if (!restCall?.id || hasLiveSipSession) return base;
     const state = normalizeRestState(restCall.status);
     return {
       ...base,
@@ -815,7 +821,8 @@ export function useMplanipretSoftphone(enabled = true) {
       startedAt: restCall.startedAt ?? base.startedAt ?? Date.now(),
       onHold: state === "held",
     };
-  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration]);
+  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration, hasLiveSipSession]);
+
 
   const restControl = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {
     const id = restCall?.id;

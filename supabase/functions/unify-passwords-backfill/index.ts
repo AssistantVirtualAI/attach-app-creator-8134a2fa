@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ success: true, dry_run: dryRun, total: rows?.length || 0, updated, skipped, errors });
+    return json({ success: true, dry_run: dryRun, total: rows?.length || 0, updated, generated, skipped, errors });
   } catch (e: any) {
     return json({ error: "BACKFILL_FAILED", message: e?.message || String(e) }, 500);
   }

@@ -190,10 +190,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     set('glass', t.glass);
     set('glass-border', t.glassBorder);
     set('shadow', t.shadow);
-    root.style.background = t.bg;
+    // Global background uses the themed gradient (fixed so it never scrolls).
+    root.style.background = t.bgGradient;
+    root.style.backgroundColor = t.bg;
+    root.style.backgroundAttachment = 'fixed';
     root.style.color = t.text;
-    document.body.style.background = t.bg;
+    document.body.style.background = t.bgGradient;
+    document.body.style.backgroundColor = t.bg;
+    document.body.style.backgroundAttachment = 'fixed';
     document.body.style.color = t.text;
+
   }, [mode, t]);
 
 

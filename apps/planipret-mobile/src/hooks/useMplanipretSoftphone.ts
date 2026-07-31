@@ -923,6 +923,13 @@ export function useMplanipretSoftphone(enabled = true) {
   // lose (widget answered first), don't pick up — the winner already has audio.
   const answer = useCallback(async () => {
     if (restCall?.id && !hasLiveSipSession) return await restControl("answer");
+    // Push VoIP reçu mais INVITE pas encore arrivé : on bufferise la réponse,
+    // ppSipProvider répondra dès que la session SIP se présente.
+    if (!hasLiveSipSession && pushRing) {
+      try { ppSipProvider.forceReregister(); } catch {}
+      ppSipProvider.requestAnswer(pushRing.callId || undefined);
+      return true;
+    }
     const callId = ppSipProvider.getSnapshot().callId;
     const won = await claimCall(callId, "mobile");
     if (!won) {
@@ -934,7 +941,7 @@ export function useMplanipretSoftphone(enabled = true) {
     // Clear the REST/DB attachment so the in-call UI follows the live session.
     if (ok && restCall?.id) setRestCall(null);
     return ok;
-  }, [restCall?.id, restControl, hasLiveSipSession]);
+  }, [restCall?.id, restControl, hasLiveSipSession, pushRing]);
 
   const hangup = useCallback(() => {
     if (restCall?.id && !hasLiveSipSession) {

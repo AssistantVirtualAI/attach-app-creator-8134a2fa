@@ -13,7 +13,7 @@ import {
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { audioRouter } from "@/lib/planipret/audio/audioRouter";
-import { playRecordingNotice } from "@/lib/planipret/audio/recordingNotice";
+import { playRecordingNotice, resetRecordingNotice } from "@/lib/planipret/audio/recordingNotice";
 import { formatSipParty } from "@/lib/planipret/sip/formatSipParty";
 import PpCallDiagnosticPanel from "./PpCallDiagnosticPanel";
 
@@ -73,15 +73,20 @@ export default function PpActiveCallScreen({
     if (!active) { setView("main"); setDtmfBuf(""); setTransferQuery(""); setElapsed(0); }
   }, [active]);
 
-  // Recording notice — played once per call as soon as it connects
-  const noticeForCallRef = useRef<string | null>(null);
+  // Recording notice — played once per call as soon as it connects.
+  // Dedup lives in the module (recordingNotice.ts), so remounting this screen
+  // (navigation, re-render) never replays or skips the notice.
   useEffect(() => {
     if (snap.callState !== "active") return;
     const key = snap.callId || String(snap.startedAt ?? "");
-    if (!key || noticeForCallRef.current === key) return;
-    noticeForCallRef.current = key;
-    void playRecordingNotice();
+    void playRecordingNotice(key);
   }, [snap.callState, snap.callId, snap.startedAt]);
+
+  // Free the dedup slot when the call is over so the next call plays it again.
+  useEffect(() => {
+    if (snap.callState === "idle" || snap.callState === "ended") resetRecordingNotice();
+  }, [snap.callState]);
+
 
   // Duration timer for connected calls
   useEffect(() => {

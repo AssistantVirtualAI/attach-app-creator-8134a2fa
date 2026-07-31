@@ -617,6 +617,7 @@ class PpSipProvider {
     // before JsSIP had a chance to receive the INVITE, auto-answer as soon as
     // the session arrives (within a 30s intent window).
     if (incoming) {
+      this.log("info", "incoming INVITE attached", { sipCallId: callId, from: remoteUri });
       try {
         // NOTE: the VoIP push callId (NetSapiens `1-XXXXXXXX-...`) and the SIP
         // Call-ID are two different identifier spaces — never compare them.
@@ -624,10 +625,20 @@ class PpSipProvider {
         const pending = this.pendingAnswer;
         if (pending && pending.expiresAt > Date.now()) {
           this.pendingAnswer = null;
-          setTimeout(() => { this.answer(); }, 250);
+          this.log("info", "pending answer intent active → auto-answering INVITE", {
+            pushCallId: pending.callId || null, sipCallId: callId,
+          });
+          setTimeout(() => {
+            const ok = this.answer();
+            this.log(ok ? "info" : "error", `auto-answer ${ok ? "sent 200 OK" : "FAILED"}`, { sipCallId: callId });
+          }, 250);
+        } else if (pending) {
+          this.log("warn", "answer intent expired before INVITE arrived");
+          this.pendingAnswer = null;
         }
       } catch {}
     }
+
 
 
     session.on("progress", () => { if (!incoming) this.update({ callState: "ringing-out" }); });

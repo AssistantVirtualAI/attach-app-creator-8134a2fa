@@ -248,9 +248,10 @@ function Grid({ children }: { children: React.ReactNode }) {
 
 function Stat({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
-    <div style={{ padding: 10, borderRadius: 10, background: "rgba(245,247,252,0.6)", border: `1px solid ${"rgba(180,196,224,0.55)"}` }}>
+    <div style={{ padding: 10, borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: `1px solid ${c.border}` }}>
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: c.textSub }}>{label}</div>
-      <div style={{ marginTop: 4, fontSize: 16, fontWeight: 700, color: danger ? '#b91c1c' : c.text }}>{value}</div>
+      <div style={{ marginTop: 4, fontSize: 16, fontWeight: 700, color: danger ? c.danger : c.text }}>{value}</div>
+
     </div>
   );
 }

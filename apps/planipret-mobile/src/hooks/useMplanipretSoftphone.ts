@@ -799,11 +799,17 @@ export function useMplanipretSoftphone(enabled = true) {
     return (nativeStatus as any)?.ok !== false && (st === "registered" || st === "protected");
   }, [nativeStatus]);
 
+  // A live WebRTC session ALWAYS wins over the REST/DB attachment: otherwise the
+  // realtime "ringing" row hijacks the snapshot and answer() goes REST-only,
+  // leaving the real SIP session unanswered (no audio, no in-call keypad).
+  const hasLiveSipSession = snap.callState === "ringing-in" || snap.callState === "ringing-out"
+    || snap.callState === "active" || snap.callState === "held";
+
   const effectiveSnap = useMemo<PpSipSnapshot>(() => {
     const base: PpSipSnapshot = (nativeOwnsRegistration && snap.status !== "registered" && snap.status !== "connected")
       ? ({ ...snap, status: "registered", lastError: null } as PpSipSnapshot)
       : snap;
-    if (!restCall?.id) return base;
+    if (!restCall?.id || hasLiveSipSession) return base;
     const state = normalizeRestState(restCall.status);
     return {
       ...base,
@@ -815,7 +821,8 @@ export function useMplanipretSoftphone(enabled = true) {
       startedAt: restCall.startedAt ?? base.startedAt ?? Date.now(),
       onHold: state === "held",
     };
-  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration]);
+  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration, hasLiveSipSession]);
+
 
   const restControl = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {
     const id = restCall?.id;
@@ -891,7 +898,7 @@ export function useMplanipretSoftphone(enabled = true) {
   // Wrapped answer: race to claim the call before actually picking up. If we
   // lose (widget answered first), don't pick up — the winner already has audio.
   const answer = useCallback(async () => {
-    if (restCall?.id) return await restControl("answer");
+    if (restCall?.id && !hasLiveSipSession) return await restControl("answer");
     const callId = ppSipProvider.getSnapshot().callId;
     const won = await claimCall(callId, "mobile");
     if (!won) {
@@ -899,11 +906,14 @@ export function useMplanipretSoftphone(enabled = true) {
       try { ppSipProvider.hangup(); } catch {}
       return false;
     }
-    return ppSipProvider.answer(callId);
-  }, [restCall?.id, restControl]);
+    const ok = await ppSipProvider.answer(callId);
+    // Clear the REST/DB attachment so the in-call UI follows the live session.
+    if (ok && restCall?.id) setRestCall(null);
+    return ok;
+  }, [restCall?.id, restControl, hasLiveSipSession]);
 
   const hangup = useCallback(() => {
-    if (restCall?.id) {
+    if (restCall?.id && !hasLiveSipSession) {
       const id = restCall.id;
       void restControl("disconnect");
       maestroLog(() => maestroTelecom.updateCall(id, { status: "ended", ended_reason: "completed" }));
@@ -911,11 +921,13 @@ export function useMplanipretSoftphone(enabled = true) {
     }
     const callId = ppSipProvider.getSnapshot().callId;
     ppSipProvider.hangup();
+    if (restCall?.id) setRestCall(null);
     if (callId) {
       void endSession(callId, "hangup");
       maestroLog(() => maestroTelecom.updateCall(callId, { status: "ended", ended_reason: "completed" }));
     }
-  }, [restCall?.id, restControl]);
+  }, [restCall?.id, restControl, hasLiveSipSession]);
+
 
 
   const attachRestCall = useCallback((attachment: RestCallAttachment | null) => {
@@ -945,17 +957,18 @@ export function useMplanipretSoftphone(enabled = true) {
     answer,
     hangup,
     reregister: () => { try { ppSipProvider.forceReregister(); } catch {} },
-    mute: () => restCall?.id ? void restControl("mute", { muted: true }) : ppSipProvider.mute(),
-    unmute: () => restCall?.id ? void restControl("mute", { muted: false }) : ppSipProvider.unmute(),
-    hold: () => restCall?.id ? void restControl("hold") : ppSipProvider.hold(),
-    unhold: () => restCall?.id ? void restControl("unhold") : ppSipProvider.unhold(),
-    sendDTMF: (k: string) => restCall?.id ? void restControl("dtmf", { digit: k }) : ppSipProvider.sendDTMF(k),
-    transfer: (t: string) => restCall?.id ? void restControl("transfer", { destination: t, target: t }) : ppSipProvider.transfer(t),
+    mute: () => (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: true }) : ppSipProvider.mute(),
+    unmute: () => (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: false }) : ppSipProvider.unmute(),
+    hold: () => (restCall?.id && !hasLiveSipSession) ? void restControl("hold") : ppSipProvider.hold(),
+    unhold: () => (restCall?.id && !hasLiveSipSession) ? void restControl("unhold") : ppSipProvider.unhold(),
+    sendDTMF: (k: string) => (restCall?.id && !hasLiveSipSession) ? void restControl("dtmf", { digit: k }) : ppSipProvider.sendDTMF(k),
+    transfer: (t: string) => (restCall?.id && !hasLiveSipSession) ? void restControl("transfer", { destination: t, target: t }) : ppSipProvider.transfer(t),
     // The provider owns a persistent hidden <audio> sink; screens must not
     // detach it on unmount (that killed remote audio mid-call).
     setAudioEl: (_el: HTMLAudioElement | null) => {},
 
     forceHandover: () => handoverController.forceHandover(),
-  }), [effectiveSnap, loading, net, quality, nativeStatus, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl]);
+  }), [effectiveSnap, loading, net, quality, nativeStatus, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl, hasLiveSipSession]);
+
 
 }

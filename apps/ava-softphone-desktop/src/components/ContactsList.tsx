@@ -35,14 +35,14 @@ function initials(name: string): string {
 }
 
 const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg, #0023e6, #2a4dff)',
-  'linear-gradient(135deg, #7C3AED, #A855F7)',
+  `linear-gradient(135deg, ${c.primary}, ${c.primary})`,
+  `linear-gradient(135deg, ${c.ai}, #A855F7)`,
   'linear-gradient(135deg, #0891B2, #06B6D4)',
-  'linear-gradient(135deg, #059669, #10B981)',
-  'linear-gradient(135deg, #D97706, #F59E0B)',
-  'linear-gradient(135deg, #DC2626, #EF4444)',
-  'linear-gradient(135deg, #7C3AED, #0023e6)',
-  'linear-gradient(135deg, #0891B2, #7C3AED)',
+  `linear-gradient(135deg, #059669, ${c.success})`,
+  `linear-gradient(135deg, #D97706, ${c.warning})`,
+  `linear-gradient(135deg, #DC2626, ${c.danger})`,
+  `linear-gradient(135deg, ${c.ai}, ${c.primary})`,
+  `linear-gradient(135deg, #0891B2, ${c.ai})`,
 ];
 
 function avatarGradient(ext: string): string {
@@ -161,22 +161,22 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
       {/* Header with search and stats */}
       <div style={{
         padding: '10px 12px 8px',
-        background: 'rgba(255,255,255,0.02)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: c.overlay02,
+        borderBottom: `1px solid ${c.overlay06}`,
         flexShrink: 0,
       }}>
         {/* Stats row */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span style={{ fontSize: 11, color: '#7C8AA8', fontWeight: 600, letterSpacing: 0.5 }}>
+          <span style={{ fontSize: 11, color: c.textDim, fontWeight: 600, letterSpacing: 0.5 }}>
             {filtered.length} contact{filtered.length !== 1 ? 's' : ''}
           </span>
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
-            fontSize: 10, color: '#10B981', fontWeight: 600,
+            fontSize: 10, color: c.success, fontWeight: 600,
             background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)',
             borderRadius: 20, padding: '2px 8px',
           }}>
-            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', animation: 'statusPulse 2s ease-in-out infinite' }} />
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: c.success, animation: 'statusPulse 2s ease-in-out infinite' }} />
             {onlineCount} online
           </span>
         </div>
@@ -185,7 +185,7 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
         <div style={{ position: 'relative', marginBottom: 8 }}>
           <span style={{
             position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-            color: '#7C8AA8', fontSize: 13, pointerEvents: 'none',
+            color: c.textDim, fontSize: 13, pointerEvents: 'none',
           }}>🔍</span>
           <input
             value={q}
@@ -194,21 +194,21 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
             aria-label="Search contacts"
             style={{
               width: '100%', boxSizing: 'border-box',
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.10)',
+              background: c.overlay04,
+              border: `1px solid ${c.overlay10}`,
               borderRadius: 10, padding: '7px 10px 7px 32px',
-              color: '#E8EEFB', fontSize: 12, outline: 'none',
+              color: c.text, fontSize: 12, outline: 'none',
               transition: 'border-color 0.15s ease',
             }}
             onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(0,35,230,0.6)'; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = c.overlay10; }}
           />
           {q && (
             <button
               onClick={() => setQ('')}
               style={{
                 position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                background: 'none', border: 'none', color: '#7C8AA8', cursor: 'pointer', fontSize: 14, padding: 0,
+                background: 'none', border: 'none', color: c.textDim, cursor: 'pointer', fontSize: 14, padding: 0,
               }}
             >✕</button>
           )}
@@ -223,9 +223,9 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
               style={{
                 padding: '3px 10px', borderRadius: 20, fontSize: 10, fontWeight: 600,
                 cursor: 'pointer', border: '1px solid',
-                background: filter === f ? (f === 'available' ? 'rgba(16,185,129,0.18)' : f === 'oncall' ? 'rgba(245,158,11,0.18)' : 'rgba(0,35,230,0.18)') : 'rgba(255,255,255,0.04)',
-                borderColor: filter === f ? (f === 'available' ? 'rgba(16,185,129,0.5)' : f === 'oncall' ? 'rgba(245,158,11,0.5)' : 'rgba(0,35,230,0.5)') : 'rgba(255,255,255,0.10)',
-                color: filter === f ? (f === 'available' ? '#10B981' : f === 'oncall' ? '#F59E0B' : '#6B8AFF') : '#7C8AA8',
+                background: filter === f ? (f === 'available' ? 'rgba(16,185,129,0.18)' : f === 'oncall' ? 'rgba(245,158,11,0.18)' : 'rgba(0,35,230,0.18)') : c.overlay04,
+                borderColor: filter === f ? (f === 'available' ? 'rgba(16,185,129,0.5)' : f === 'oncall' ? 'rgba(245,158,11,0.5)' : 'rgba(0,35,230,0.5)') : c.overlay10,
+                color: filter === f ? (f === 'available' ? c.success : f === 'oncall' ? c.warning : '#6B8AFF') : c.textDim,
                 transition: 'all 0.15s ease',
               }}
             >
@@ -238,7 +238,7 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
       {/* Contact list */}
       <div className="lemtel-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#7C8AA8', fontSize: 12 }}>
+          <div style={{ textAlign: 'center', padding: 40, color: c.textDim, fontSize: 12 }}>
             No contacts found
           </div>
         ) : (
@@ -248,9 +248,9 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
               <div style={{
                 padding: '6px 14px 4px',
                 fontSize: 10, fontWeight: 700, letterSpacing: 1.5,
-                color: '#7C8AA8', textTransform: 'uppercase',
-                background: 'rgba(255,255,255,0.02)',
-                borderBottom: '1px solid rgba(255,255,255,0.04)',
+                color: c.textDim, textTransform: 'uppercase',
+                background: c.overlay02,
+                borderBottom: `1px solid ${c.overlay04}`,
                 position: 'sticky', top: 0, zIndex: 2,
               }}>
                 {letter}
@@ -260,10 +260,10 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
                 const st = presence[e.extension] || 'offline';
                 const dnd = !!e.do_not_disturb;
                 const dotColor =
-                  dnd ? '#EF4444' :
-                  st === 'oncall' || st === 'busy' ? '#F59E0B' :
-                  st === 'available' || st === 'online' ? '#10B981' :
-                  st === 'away' ? '#F59E0B' :
+                  dnd ? c.danger :
+                  st === 'oncall' || st === 'busy' ? c.warning :
+                  st === 'available' || st === 'online' ? c.success :
+                  st === 'away' ? c.warning :
                   '#4B5563';
                 const name = e.effective_cid_name || e.description || `Extension ${e.extension}`;
                 const isOnline = (st === 'available' || st === 'online') && !dnd;
@@ -276,11 +276,11 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
                     style={{
                       display: 'flex', alignItems: 'center', gap: 11,
                       padding: '9px 12px',
-                      borderBottom: '1px solid rgba(255,255,255,0.04)',
+                      borderBottom: `1px solid ${c.overlay04}`,
                       cursor: 'default',
                       transition: 'background 0.12s ease',
                     }}
-                    onMouseEnter={(ev) => { (ev.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.04)'; }}
+                    onMouseEnter={(ev) => { (ev.currentTarget as HTMLDivElement).style.background = c.overlay04; }}
                     onMouseLeave={(ev) => { (ev.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
                   >
                     {/* Avatar with presence ring */}
@@ -289,8 +289,8 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
                         width: 42, height: 42, borderRadius: '50%',
                         background: avatarGradient(e.extension),
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#fff', fontSize: 14, fontWeight: 700,
-                        border: `2px solid ${dnd ? '#EF4444' : isOnCall ? '#F59E0B' : isOnline ? '#10B981' : 'rgba(255,255,255,0.10)'}`,
+                        color: c.onAccent, fontSize: 14, fontWeight: 700,
+                        border: `2px solid ${dnd ? '${c.danger}' : isOnCall ? '${c.warning}' : isOnline ? '${c.success}' : '${c.overlay10}'}`,
                         boxShadow: isOnline ? '0 0 10px rgba(16,185,129,0.3)' : isOnCall ? '0 0 10px rgba(245,158,11,0.3)' : 'none',
                         letterSpacing: 0.5,
                       }}>
@@ -310,14 +310,14 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
                     {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
-                        color: '#E8EEFB', fontSize: 13, fontWeight: 700,
+                        color: c.text, fontSize: 13, fontWeight: 700,
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         marginBottom: 2,
                       }}>{name}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center',
-                          background: 'rgba(224,168,0,0.12)', color: '#E0A800',
+                          background: 'rgba(224,168,0,0.12)', color: c.warning,
                           border: '1px solid rgba(224,168,0,0.25)',
                           borderRadius: 4, padding: '1px 5px',
                           fontSize: 10, fontWeight: 700, flexShrink: 0,
@@ -338,7 +338,7 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
                       title={`Call ${name}`}
                       style={{
                         width: 36, height: 36, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #059669, #10B981)',
+                        background: `linear-gradient(135deg, #059669, ${c.success})`,
                         border: '1px solid rgba(16,185,129,0.4)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         cursor: 'pointer', flexShrink: 0,

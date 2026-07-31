@@ -106,8 +106,8 @@ function CallControlGridImpl({ organizationId, onDial, onTransfer }: Props) {
   }, []);
 
   const statusColor = (s: string) => ({
-    online: '#22c55e', busy: '#ef4444', away: '#f59e0b', offline: '#64748b',
-  } as Record<string, string>)[s] || '#64748b';
+    online: c.success, busy: c.danger, away: c.warning, offline: c.textDim,
+  } as Record<string, string>)[s] || c.textDim;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, padding: 12, height: '100%', color: c.textIce }}>

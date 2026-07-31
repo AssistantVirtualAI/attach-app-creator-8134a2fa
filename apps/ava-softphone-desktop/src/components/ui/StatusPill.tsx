@@ -17,16 +17,16 @@ export type StatusVariant =
   | 'away';
 
 const MAP: Record<StatusVariant, { fg: string; bg: string; dot: string; key: I18nKey }> = {
-  connected:       { fg: '#10b981', bg: 'rgba(16,185,129,0.12)',  dot: '#10b981', key: 'status.connected' },
-  registered:      { fg: '#10b981', bg: 'rgba(16,185,129,0.12)',  dot: '#10b981', key: 'status.registered' },
-  'sync-pending':  { fg: '#f59e0b', bg: 'rgba(245,158,11,0.14)',  dot: '#f59e0b', key: 'status.syncPending' },
-  'sync-failed':   { fg: '#ef4444', bg: 'rgba(239,68,68,0.14)',   dot: '#ef4444', key: 'status.syncFailed' },
-  'not-configured':{ fg: c.mutedSilver, bg: 'rgba(255,255,255,0.06)', dot: c.mutedSilver, key: 'status.notConfigured' },
-  online:          { fg: '#10b981', bg: 'rgba(16,185,129,0.12)',  dot: '#10b981', key: 'status.online' },
-  offline:         { fg: c.mutedSilver, bg: 'rgba(255,255,255,0.06)', dot: c.mutedSilver, key: 'status.offline' },
-  busy:            { fg: '#f59e0b', bg: 'rgba(245,158,11,0.14)',  dot: '#f59e0b', key: 'status.busy' },
-  dnd:             { fg: '#ef4444', bg: 'rgba(239,68,68,0.14)',   dot: '#ef4444', key: 'status.dnd' },
-  away:            { fg: '#94a3b8', bg: 'rgba(148,163,184,0.14)', dot: '#94a3b8', key: 'status.away' },
+  connected:       { fg: c.success, bg: 'rgba(16,185,129,0.12)',  dot: c.success, key: 'status.connected' },
+  registered:      { fg: c.success, bg: 'rgba(16,185,129,0.12)',  dot: c.success, key: 'status.registered' },
+  'sync-pending':  { fg: c.warning, bg: 'rgba(245,158,11,0.14)',  dot: c.warning, key: 'status.syncPending' },
+  'sync-failed':   { fg: c.danger, bg: 'rgba(239,68,68,0.14)',   dot: c.danger, key: 'status.syncFailed' },
+  'not-configured':{ fg: c.mutedSilver, bg: c.overlay06, dot: c.mutedSilver, key: 'status.notConfigured' },
+  online:          { fg: c.success, bg: 'rgba(16,185,129,0.12)',  dot: c.success, key: 'status.online' },
+  offline:         { fg: c.mutedSilver, bg: c.overlay06, dot: c.mutedSilver, key: 'status.offline' },
+  busy:            { fg: c.warning, bg: 'rgba(245,158,11,0.14)',  dot: c.warning, key: 'status.busy' },
+  dnd:             { fg: c.danger, bg: 'rgba(239,68,68,0.14)',   dot: c.danger, key: 'status.dnd' },
+  away:            { fg: c.textDim, bg: 'rgba(148,163,184,0.14)', dot: c.textDim, key: 'status.away' },
 };
 
 interface Props {

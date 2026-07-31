@@ -368,7 +368,7 @@ export default function CallsView({ scope = 'mine' }: { scope?: 'mine' | 'org' }
                       style={{
                         padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700,
                         background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
-                        border: 'none', color: '#fff', cursor: 'pointer', opacity: analyzing ? 0.6 : 1,
+                        border: 'none', color: c.onAccent, cursor: 'pointer', opacity: analyzing ? 0.6 : 1,
                       }}>{analyzing ? STAGE_LABEL[stage.stage] : stubT ? '↻ Retry transcription' : '🧠 Re-analyze'}</button>
                   )}
                 </Panel>
@@ -430,7 +430,7 @@ const dot = (col: string): React.CSSProperties => ({ color: col, fontSize: 8 });
 const badge = (col: string): React.CSSProperties => ({ fontSize: 9, padding: '2px 5px', borderRadius: 999, color: col, background: `${col}16`, border: `1px solid ${col}44`, fontWeight: 800 });
 const tag = (col: string): React.CSSProperties => ({
   fontSize: 10, padding: '3px 8px', borderRadius: 999,
-  background: 'rgba(255,255,255,0.04)', color: col,
+  background: c.overlay04, color: col,
   border: `1px solid ${col}33`, fontWeight: 600,
 });
 

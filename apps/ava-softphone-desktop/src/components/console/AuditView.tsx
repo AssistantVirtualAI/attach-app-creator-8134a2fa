@@ -114,7 +114,7 @@ export default function AuditView() {
           style={{
             marginLeft: 'auto', minWidth: 240,
             padding: '7px 11px', borderRadius: 8,
-            border: `1px solid ${c.border}`, background: 'rgba(255,255,255,0.04)',
+            border: `1px solid ${c.border}`, background: c.overlay04,
             color: c.textIce, fontSize: 12,
           }}
         />
@@ -159,7 +159,7 @@ export default function AuditView() {
               }}>{r.action}</span>
               <span style={{
                 fontSize: 10, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
-                color: r.result === 'success' ? '#3fce8c' : r.error ? '#ff5577' : c.mutedSilver,
+                color: r.result === 'success' ? '#3fce8c' : r.error ? c.danger : c.mutedSilver,
               }}>{r.result || (r.error ? 'error' : '—')}</span>
             </button>
           ))}
@@ -177,7 +177,7 @@ export default function AuditView() {
 function actionColor(a: string) {
   if (a === 'create') return '#3fce8c';
   if (a === 'update') return '#23d6ff';
-  if (a === 'delete') return '#ff5577';
+  if (a === 'delete') return c.danger;
   if (a === 'rollback') return '#b388ff';
   return '#ffd000';
 }
@@ -185,7 +185,7 @@ function actionColor(a: string) {
 const btnPrimary: React.CSSProperties = {
   padding: '8px 14px', borderRadius: 8,
   background: `linear-gradient(135deg, ${c.signalGold}, ${c.lemtelBlue})`,
-  border: 'none', color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 0.5,
+  border: 'none', color: c.onAccent, fontSize: 11, fontWeight: 800, letterSpacing: 0.5,
   textTransform: 'uppercase', cursor: 'pointer',
 };
 
@@ -230,7 +230,7 @@ function DetailDrawer({ row, onClose, onRollback }: { row: Row; onClose: () => v
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {row.before_json && row.action !== 'rollback' && (
-              <button onClick={onRollback} style={{ ...btnPrimary, background: 'linear-gradient(135deg,#b388ff,#7a4cff)' }}>Roll back</button>
+              <button onClick={onRollback} style={{ ...btnPrimary, background: `linear-gradient(135deg,#b388ff,${c.ai})` }}>Roll back</button>
             )}
             <button onClick={onClose} style={{ padding: '8px 12px', borderRadius: 8, background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce, cursor: 'pointer', fontSize: 11 }}>Close</button>
           </div>

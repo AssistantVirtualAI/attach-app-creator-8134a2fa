@@ -201,7 +201,7 @@ function TtsGreetingField({ value, onChange, field, fullForm }: {
         <button type="button" onClick={generate} disabled={busy || uploading}
           style={{
             padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700,
-            border: 'none', cursor: 'pointer', color: '#fff',
+            border: 'none', cursor: 'pointer', color: c.onAccent,
             background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
             opacity: (busy || uploading) ? 0.6 : 1,
           }}>{busy ? 'Generating…' : '🎙 Generate'}</button>
@@ -529,7 +529,7 @@ export default function PbxEditSheet({
           }}>Cancel</button>
           <button onClick={handleSave} disabled={saving} style={{
             padding: '9px 20px', borderRadius: 10, border: 'none',
-            color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            color: c.onAccent, fontSize: 12, fontWeight: 800, cursor: 'pointer',
             backgroundImage: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
             opacity: saving ? 0.6 : 1,
             boxShadow: '0 8px 24px -10px rgba(0,35,230,0.45)',

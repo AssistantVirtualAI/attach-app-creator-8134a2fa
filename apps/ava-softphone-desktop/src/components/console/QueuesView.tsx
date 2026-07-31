@@ -38,10 +38,10 @@ interface WaitingCall {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  available: '#22c55e',
-  paused: '#f59e0b',
+  available: c.success,
+  paused: c.warning,
   on_call: '#3b82f6',
-  offline: '#64748b',
+  offline: c.textDim,
 };
 
 export default function QueuesView({ isAdmin, isSuperAdmin, isSupervisor }: Props) {
@@ -204,9 +204,9 @@ export default function QueuesView({ isAdmin, isSuperAdmin, isSupervisor }: Prop
 
       {/* My status */}
       {meRow && meRow.cc_role && meRow.cc_role !== 'none' && (
-        <section style={{ marginBottom: 18, padding: 14, borderRadius: 12, border: `1px solid ${c.border}`, background: 'rgba(255,255,255,0.02)' }}>
+        <section style={{ marginBottom: 18, padding: 14, borderRadius: 12, border: `1px solid ${c.border}`, background: c.overlay02 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: STATUS_COLOR[meRow.cc_status || 'offline'] || '#64748b' }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: STATUS_COLOR[meRow.cc_status || 'offline'] || c.textDim }} />
             <div style={{ flex: 1, minWidth: 200 }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>My status: <span style={{ textTransform: 'capitalize' }}>{(meRow.cc_status || 'offline').replace('_', ' ')}</span></div>
               <div style={{ fontSize: 11, color: c.mutedSilver }}>Ext {meRow.extension} · {meRow.cc_queues?.length || 0} queue(s){meRow.cc_pause_reason ? ` · ${meRow.cc_pause_reason}` : ''}</div>
@@ -276,7 +276,7 @@ function QueueCard({ q, waiting, stats, highlight }: { q: Queue; waiting: Waitin
     <div style={{
       padding: 12, borderRadius: 12,
       border: `1px solid ${highlight ? c.signalGold : c.border}`,
-      background: highlight ? 'rgba(255,230,0,0.05)' : 'rgba(255,255,255,0.02)',
+      background: highlight ? 'rgba(255,230,0,0.05)' : c.overlay02,
       transition: 'all .15s ease',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
@@ -284,7 +284,7 @@ function QueueCard({ q, waiting, stats, highlight }: { q: Queue; waiting: Waitin
         <span style={{ fontSize: 10, color: c.mutedSilver, fontFamily: 'monospace' }}>{q.extension}</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginBottom: 8 }}>
-        <Stat label="Waiting" value={waiting.length} accent={waiting.length > 0 ? '#f59e0b' : undefined} />
+        <Stat label="Waiting" value={waiting.length} accent={waiting.length > 0 ? c.warning : undefined} />
         <Stat label="Agents" value={stats?.agents_available ?? '—'} />
         <Stat label="Answered" value={stats?.answered_today ?? '—'} />
         <Stat label="Abandoned" value={stats?.abandoned_today ?? '—'} />
@@ -317,7 +317,7 @@ function WaitingRow({ w }: { w: WaitingCall }) {
 
 function Stat({ label, value, accent }: { label: string; value: any; accent?: string }) {
   return (
-    <div style={{ textAlign: 'center', padding: '6px 0', background: 'rgba(255,255,255,0.02)', borderRadius: 6 }}>
+    <div style={{ textAlign: 'center', padding: '6px 0', background: c.overlay02, borderRadius: 6 }}>
       <div style={{ fontSize: 15, fontWeight: 800, color: accent || c.textIce, fontFamily: 'monospace' }}>{value}</div>
       <div style={{ fontSize: 9, color: c.mutedSilver, letterSpacing: 0.5, textTransform: 'uppercase' }}>{label}</div>
     </div>
@@ -345,8 +345,8 @@ function QueueDetail({ queue, agents, waiting, queues, busy, canAdmin, onAgentAc
       <h5 style={{ margin: '0 0 6px', fontSize: 11, color: c.signalGold, letterSpacing: 1.2, textTransform: 'uppercase' }}>Agents ({queueAgents.length})</h5>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {queueAgents.map(a => (
-          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', flexWrap: 'wrap' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COLOR[a.cc_status || 'offline'] || '#64748b' }} />
+          <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, background: c.overlay02, flexWrap: 'wrap' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_COLOR[a.cc_status || 'offline'] || c.textDim }} />
             <span style={{ fontSize: 12, fontWeight: 600 }}>{a.display_name || a.extension}</span>
             <span style={{ fontSize: 10, color: c.mutedSilver, fontFamily: 'monospace' }}>{a.extension}</span>
             <span style={{ fontSize: 10, color: c.mutedSilver, textTransform: 'capitalize' }}>{(a.cc_status || 'offline').replace('_', ' ')}{a.cc_pause_reason ? ` · ${a.cc_pause_reason}` : ''}</span>
@@ -378,6 +378,6 @@ function QueueDetail({ queue, agents, waiting, queues, busy, canAdmin, onAgentAc
 const baseBtn: React.CSSProperties = {
   fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
 };
-function BtnPrimary(p: any) { return <button {...p} style={{ ...baseBtn, background: c.signalGold, color: '#0b1530', border: 'none' }} />; }
+function BtnPrimary(p: any) { return <button {...p} style={{ ...baseBtn, background: c.signalGold, color: c.text, border: 'none' }} />; }
 function BtnGhost(p: any) { return <button {...p} style={{ ...baseBtn, background: 'transparent', color: c.textIce, border: `1px solid ${c.border}` }} />; }
 function Mini(p: any) { return <button {...p} style={{ ...baseBtn, fontSize: 10, padding: '3px 8px', background: 'rgba(0,35,230,0.25)', color: c.textIce, border: `1px solid ${c.border}` }} />; }

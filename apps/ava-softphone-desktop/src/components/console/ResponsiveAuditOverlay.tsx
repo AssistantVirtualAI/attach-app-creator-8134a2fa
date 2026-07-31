@@ -60,10 +60,10 @@ export default function ResponsiveAuditOverlay({ open, onClose }: Props) {
                 style={{
                   padding: '6px 10px',
                   borderRadius: 8,
-                  border: '1px solid rgba(255,255,255,0.18)',
+                  border: `1px solid ${c.overlay18}`,
                   background: selection[p.key]
-                    ? 'linear-gradient(135deg, #0023e6, #21d4fd)'
-                    : 'rgba(255,255,255,0.06)',
+                    ? `linear-gradient(135deg, ${c.primary}, ${c.cyan})`
+                    : c.overlay06,
                   color: c.textIce,
                   fontSize: 11,
                   fontWeight: 600,
@@ -92,7 +92,7 @@ export default function ResponsiveAuditOverlay({ open, onClose }: Props) {
             style={{
               padding: '8px 14px', borderRadius: 10,
               border: '1px solid rgba(255,255,255,0.2)',
-              background: 'rgba(255,255,255,0.08)', color: c.textIce,
+              background: c.overlay08, color: c.textIce,
               cursor: 'pointer', fontSize: 12, fontWeight: 600,
             }}>
             Close (Esc)

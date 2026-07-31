@@ -35,7 +35,7 @@ const EMOJIS = ['👍','❤️','😂','🎉','🚀','👀'];
 
 
 const STATUS_COLOR: Record<string, string> = {
-  online: '#22d39a', available: '#22d39a',
+  online: c.success, available: c.success,
   busy: '#ff5a5f', dnd: '#ff5a5f', on_call: '#ff8a3d',
   away: '#f4c248', idle: '#f4c248',
   offline: '#6b7280',
@@ -388,7 +388,7 @@ export default function OrgChatView() {
       }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{icon} {label}</span>
         {unreadN > 0 && !active && (
-          <span style={{ background: c.danger, color: '#fff', fontSize: 10, padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>{unreadN}</span>
+          <span style={{ background: c.danger, color: c.onAccent, fontSize: 10, padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>{unreadN}</span>
         )}
       </button>
     );
@@ -400,7 +400,7 @@ export default function OrgChatView() {
       {/* ─── SIDEBAR ─── */}
       <aside style={{
         width: 220, flexShrink: 0,
-        borderRight: '1px solid rgba(255,255,255,0.06)',
+        borderRight: `1px solid ${c.overlay06}`,
         background: 'linear-gradient(180deg, rgba(6,12,28,0.97) 0%, rgba(8,15,38,0.93) 100%)',
         display: 'flex', flexDirection: 'column',
         overflowY: 'hidden',
@@ -413,12 +413,12 @@ export default function OrgChatView() {
           position: 'relative',
           flexShrink: 0,
         }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, #E0A800, rgba(0,35,230,0.6) 60%, transparent)' }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${c.warning}, rgba(0,35,230,0.6) 60%, transparent)` }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'rgba(224,168,0,0.15)', border: '1px solid rgba(224,168,0,0.30)', color: '#E0A800', fontSize: 13 }}>💬</div>
+              <div style={{ width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'rgba(224,168,0,0.15)', border: '1px solid rgba(224,168,0,0.30)', color: c.warning, fontSize: 13 }}>💬</div>
               <div>
-                <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.8, color: '#E0A800', textTransform: 'uppercase' }}>Team Chat</div>
+                <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.8, color: c.warning, textTransform: 'uppercase' }}>Team Chat</div>
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>{channels.length} channels</div>
               </div>
             </div>
@@ -442,7 +442,7 @@ export default function OrgChatView() {
             <>
               <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(224,168,0,0.7)', textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ flex: 1 }}>Groups</span>
-                <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: '#E0A800', padding: '1px 5px', borderRadius: 4 }}>{groupChannels.length}</span>
+                <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: c.warning, padding: '1px 5px', borderRadius: 4 }}>{groupChannels.length}</span>
               </div>
               {groupChannels.map((ch) => renderChannelRow(ch, ch.name, '👥'))}
             </>
@@ -453,7 +453,7 @@ export default function OrgChatView() {
             <>
               <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(224,168,0,0.7)', textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ flex: 1 }}>Direct</span>
-                <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: '#E0A800', padding: '1px 5px', borderRadius: 4 }}>{dmChannels.length}</span>
+                <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: c.warning, padding: '1px 5px', borderRadius: 4 }}>{dmChannels.length}</span>
               </div>
               {dmChannels.map((ch) => renderChannelRow(ch, dmNameFor(ch), '@'))}
             </>
@@ -462,7 +462,7 @@ export default function OrgChatView() {
           {/* Team members */}
           <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(224,168,0,0.7)', textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ flex: 1 }}>Team</span>
-            <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: '#E0A800', padding: '1px 5px', borderRadius: 4 }}>{members.length}</span>
+            <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: c.warning, padding: '1px 5px', borderRadius: 4 }}>{members.length}</span>
           </div>
           {members.length === 0 && <div style={{ fontSize: 11, color: c.mutedSilver, padding: '4px 6px' }}>No teammates yet.</div>}
           {members.filter((m) => m.user_id !== me?.id).map((m) => {
@@ -471,10 +471,10 @@ export default function OrgChatView() {
               <button key={m.user_id} onClick={() => openDM(m.user_id, m.display_name)} style={{
                 display: 'flex', width: '100%', alignItems: 'center', gap: 7,
                 padding: '5px 8px', marginBottom: 1, borderRadius: 7, border: 'none', cursor: 'pointer',
-                background: 'transparent', color: '#B0BACC', fontSize: 12, textAlign: 'left',
+                background: 'transparent', color: c.textDim, fontSize: 12, textAlign: 'left',
                 transition: 'background .15s',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+              onMouseEnter={(e) => (e.currentTarget.style.background = c.overlay04)}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
                 {/* Avatar initials */}
@@ -482,7 +482,7 @@ export default function OrgChatView() {
                   width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
                   background: `linear-gradient(135deg, rgba(0,35,230,0.6), rgba(122,76,255,0.6))`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 700, color: '#fff', position: 'relative',
+                  fontSize: 10, fontWeight: 700, color: c.onAccent, position: 'relative',
                 }}>
                   {m.display_name.charAt(0).toUpperCase()}
                   <span style={{
@@ -510,11 +510,11 @@ export default function OrgChatView() {
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#E8EEFB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {headerLabel || <span style={{ color: '#7C8AA8' }}>Select a channel</span>}
+            <div style={{ fontSize: 14, fontWeight: 700, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {headerLabel || <span style={{ color: c.textDim }}>Select a channel</span>}
             </div>
             {activeChannel && (
-              <div style={{ fontSize: 10, color: '#7C8AA8', marginTop: 2 }}>
+              <div style={{ fontSize: 10, color: c.textDim, marginTop: 2 }}>
                 {isActiveDm && otherDmMember ? (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_COLOR[otherDmMember.status] || STATUS_COLOR.offline, display: 'inline-block' }} />
@@ -539,7 +539,7 @@ export default function OrgChatView() {
             }} style={{
               padding: '5px 12px', borderRadius: 8,
               border: '1px solid rgba(34,211,154,0.30)',
-              background: 'rgba(34,211,154,0.12)', color: '#22d39a',
+              background: 'rgba(34,211,154,0.12)', color: c.success,
               cursor: 'pointer', fontSize: 11.5, fontWeight: 700, flexShrink: 0,
             }}>📞 {isActiveGroup ? 'Call group' : 'Call'}</button>
           )}
@@ -548,9 +548,9 @@ export default function OrgChatView() {
             placeholder="Search…"
             style={{
               padding: '5px 10px', borderRadius: 8,
-              border: '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(255,255,255,0.04)',
-              color: '#E8EEFB', fontSize: 11.5, width: 130, flexShrink: 0, outline: 'none',
+              border: `1px solid ${c.overlay08}`,
+              background: c.overlay04,
+              color: c.text, fontSize: 11.5, width: 130, flexShrink: 0, outline: 'none',
             }} />
         </div>
 
@@ -561,7 +561,7 @@ export default function OrgChatView() {
           scrollbarColor: 'rgba(0,35,230,0.30) transparent',
         }}>
           {filtered.length === 0 && (
-            <div style={{ color: '#7C8AA8', fontSize: 12, textAlign: 'center', marginTop: 48 }}>
+            <div style={{ color: c.textDim, fontSize: 12, textAlign: 'center', marginTop: 48 }}>
               {messages.length === 0 ? '👋 Say hi to your team!' : 'No messages match your search.'}
             </div>
           )}
@@ -574,9 +574,9 @@ export default function OrgChatView() {
 
         {/* Typing indicator */}
         {typingNames.length > 0 && (
-          <div style={{ padding: '4px 18px', fontSize: 11, color: '#7C8AA8', fontStyle: 'italic', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ padding: '4px 18px', fontSize: 11, color: c.textDim, fontStyle: 'italic', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ display: 'flex', gap: 3 }}>
-              {[0,1,2].map((i) => <span key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: '#7C8AA8', display: 'inline-block', animation: `typing-dot 1.2s ease-in-out ${i * 0.2}s infinite` }} />)}
+              {[0,1,2].map((i) => <span key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: c.textDim, display: 'inline-block', animation: `typing-dot 1.2s ease-in-out ${i * 0.2}s infinite` }} />)}
             </span>
             <span>{typingNames.join(', ')} {typingNames.length === 1 ? 'is' : 'are'} typing…</span>
           </div>
@@ -592,9 +592,9 @@ export default function OrgChatView() {
         }}>
           <button onClick={() => fileRef.current?.click()} disabled={!activeId} title="Attach file" style={{
             width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-            border: '1px solid rgba(255,255,255,0.10)',
-            background: 'rgba(255,255,255,0.05)',
-            color: '#7C8AA8', cursor: activeId ? 'pointer' : 'not-allowed', fontSize: 16,
+            border: `1px solid ${c.overlay10}`,
+            background: c.overlay04,
+            color: c.textDim, cursor: activeId ? 'pointer' : 'not-allowed', fontSize: 16,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'all .15s',
           }}>
@@ -608,22 +608,22 @@ export default function OrgChatView() {
             disabled={!activeId}
             style={{
               flex: 1, padding: '10px 16px', borderRadius: 12,
-              border: '1px solid rgba(255,255,255,0.10)',
-              background: 'rgba(255,255,255,0.06)',
-              color: '#E8EEFB', fontSize: 13, outline: 'none',
+              border: `1px solid ${c.overlay10}`,
+              background: c.overlay06,
+              color: c.text, fontSize: 13, outline: 'none',
               transition: 'border-color .15s, box-shadow .15s',
               boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.20)',
             }}
             onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(0,35,230,0.50)'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0,35,230,0.15), inset 0 1px 3px rgba(0,0,0,0.20)'; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; e.currentTarget.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.20)'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = c.overlay10; e.currentTarget.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.20)'; }}
           />
           <button onClick={send} disabled={!input.trim() || !activeId} title="Send (Enter)" style={{
             width: 36, height: 36, borderRadius: 10, flexShrink: 0,
             border: 'none', cursor: input.trim() && activeId ? 'pointer' : 'not-allowed',
             background: input.trim() && activeId
-              ? 'linear-gradient(135deg, #0023e6, #7A4CFF)'
-              : 'rgba(255,255,255,0.06)',
-            color: '#fff', fontSize: 15,
+              ? `linear-gradient(135deg, ${c.primary}, ${c.ai})`
+              : c.overlay06,
+            color: c.onAccent, fontSize: 15,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'all .15s',
             boxShadow: input.trim() && activeId ? '0 4px 14px rgba(0,35,230,0.40)' : 'none',
@@ -670,7 +670,7 @@ function NewGroupModal({ members, onClose, onCreate }: { members: Member[]; onCl
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
           <button onClick={onClose} style={{ padding: '8px 14px', borderRadius: 8, background: 'transparent', border: `1px solid ${c.border}`, color: c.mutedSilver, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
           <button onClick={() => onCreate(name, Array.from(selected))} disabled={!name.trim() || selected.size === 0} style={{
-            padding: '8px 16px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer',
+            padding: '8px 16px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700, color: c.onAccent, cursor: 'pointer',
             background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
             opacity: !name.trim() || selected.size === 0 ? 0.5 : 1,
           }}>Create</button>
@@ -693,7 +693,7 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
   }, [m.id]);
 
   if (m.message_type === 'deleted') return (
-    <div style={{ fontSize: 11, fontStyle: 'italic', color: '#7C8AA8', marginBottom: 10, paddingLeft: 42 }}>— message deleted</div>
+    <div style={{ fontSize: 11, fontStyle: 'italic', color: c.textDim, marginBottom: 10, paddingLeft: 42 }}>— message deleted</div>
   );
 
   const isMine = m.sender_id === meId;
@@ -728,7 +728,7 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
           width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
           background: 'linear-gradient(135deg, rgba(0,35,230,0.7), rgba(122,76,255,0.7))',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 11, fontWeight: 700, color: '#fff',
+          fontSize: 11, fontWeight: 700, color: c.onAccent,
         }}>{initials}</span>
       )}
 
@@ -736,8 +736,8 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
         {/* Sender name + time */}
         {!isMine && (
           <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', marginBottom: 3 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#E8EEFB' }}>{m.sender_name ?? 'User'}</span>
-            <span style={{ fontSize: 10, color: '#7C8AA8' }} title={timeStr}>{relTime}{m.edited_at ? ' · edited' : ''}</span>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: c.text }}>{m.sender_name ?? 'User'}</span>
+            <span style={{ fontSize: 10, color: c.textDim }} title={timeStr}>{relTime}{m.edited_at ? ' · edited' : ''}</span>
           </div>
         )}
 
@@ -747,13 +747,13 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
             padding: '9px 14px',
             borderRadius: isMine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
             background: isMine
-              ? 'linear-gradient(135deg, #0023e6 0%, #2a4dff 60%, #7a4cff 100%)'
-              : 'rgba(255,255,255,0.08)',
-            border: isMine ? 'none' : '1px solid rgba(255,255,255,0.10)',
+              ? `linear-gradient(135deg, ${c.primary} 0%, ${c.primary} 60%, ${c.ai} 100%)`
+              : c.overlay08,
+            border: isMine ? 'none' : `1px solid ${c.overlay10}`,
             boxShadow: isMine
               ? '0 4px 18px -6px rgba(0,35,230,0.50)'
               : '0 2px 8px -4px rgba(0,0,0,0.30)',
-            color: '#E8EEFB',
+            color: c.text,
             fontSize: 13,
             lineHeight: 1.55,
             whiteSpace: 'pre-wrap',
@@ -763,14 +763,14 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
 
         {/* Time for own messages */}
         {isMine && (
-          <span style={{ fontSize: 9.5, color: '#7C8AA8', marginTop: 3 }} title={timeStr}>{relTime}{m.edited_at ? ' · edited' : ''}</span>
+          <span style={{ fontSize: 9.5, color: c.textDim, marginTop: 3 }} title={timeStr}>{relTime}{m.edited_at ? ' · edited' : ''}</span>
         )}
 
         {/* Attachments */}
         {(m.attachments ?? []).map((a: any) => (
           <div key={a.path} style={{ marginTop: 6 }}>
             {a.mime?.startsWith('image/') && urls[a.path]
-              ? <img src={urls[a.path]} alt={a.name} style={{ maxHeight: 200, maxWidth: '100%', borderRadius: 10, border: '1px solid rgba(255,255,255,0.10)' }} />
+              ? <img src={urls[a.path]} alt={a.name} style={{ maxHeight: 200, maxWidth: '100%', borderRadius: 10, border: `1px solid ${c.overlay10}` }} />
               : <a href={urls[a.path]} target="_blank" rel="noreferrer" style={{ color: '#8CB4FF', fontSize: 12 }}>📎 {a.name}</a>
             }
           </div>
@@ -782,8 +782,8 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
             {Object.entries(reactions).map(([e, uids]) => (
               <button key={e} onClick={() => onReact(e)} style={{
                 background: (uids as string[]).includes(meId || '') ? 'rgba(0,35,230,0.30)' : 'rgba(255,255,255,0.07)',
-                border: '1px solid rgba(255,255,255,0.10)',
-                color: '#E8EEFB', fontSize: 11, padding: '2px 8px', borderRadius: 12, cursor: 'pointer',
+                border: `1px solid ${c.overlay10}`,
+                color: c.text, fontSize: 11, padding: '2px 8px', borderRadius: 12, cursor: 'pointer',
               }}>{e} {(uids as string[]).length}</button>
             ))}
           </div>
@@ -794,7 +794,7 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
           <div style={{
             display: 'flex', gap: 6, marginTop: 5, padding: '5px 10px',
             background: 'rgba(6,12,28,0.95)',
-            border: '1px solid rgba(255,255,255,0.12)',
+            border: `1px solid ${c.overlay12}`,
             borderRadius: 10, width: 'fit-content',
             boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
           }}>
@@ -807,7 +807,7 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
 
       {/* React button on hover */}
       <button onClick={onToggleEmoji} title="React" style={{
-        background: 'transparent', border: 'none', color: '#7C8AA8',
+        background: 'transparent', border: 'none', color: c.textDim,
         cursor: 'pointer', fontSize: 13, alignSelf: 'center', opacity: 0.6,
         padding: 2,
       }}>😊</button>

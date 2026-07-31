@@ -113,15 +113,15 @@ export default function LeftRail({ view, onChange, onOpenSettings, onOpenSearch,
   if (compact) return <CompactRail view={view} onChange={onChange} onOpenSettings={onOpenSettings} items={isSuperAdmin ? [...USER_ITEMS, ...ADMIN_ITEMS] : ITEMS} />;
 
   const glowColor = pbx === 'error'
-    ? '#ff5577'
+    ? c.danger
     : healthy
       ? '#23d6ff'
       : pbx === 'registered'
         ? c.signalGold
         : c.borderAI;
   const railSurface = 'var(--ava-glass, rgba(20,28,56,0.72))';
-  const railElev = 'var(--ava-surface-elev, rgba(255,255,255,0.08))';
-  const railHover = 'var(--ava-surface-hover, rgba(255,255,255,0.12))';
+  const railElev = `var(--ava-surface-elev, ${c.overlay08})`;
+  const railHover = `var(--ava-surface-hover, ${c.overlay12})`;
 
   const darkTextSub = 'rgba(230,240,255,0.82)';
   const darkTextIce = '#f1f7ff';
@@ -176,7 +176,7 @@ export default function LeftRail({ view, onChange, onOpenSettings, onOpenSearch,
         }}>
           <span style={{
             width: 7, height: 7, borderRadius: '50%',
-            background: pbx === 'registered' ? '#22c55e' : pbx === 'error' ? '#ef4444' : c.mutedSilver,
+            background: pbx === 'registered' ? c.success : pbx === 'error' ? c.danger : c.mutedSilver,
           }} />
           <span style={{ fontSize: 11, fontWeight: 600, color: c.textIce, letterSpacing: 0.3 }}>
             {pbx === 'registered' ? 'Online' : pbx === 'error' ? 'Offline' : 'Connecting…'}
@@ -197,7 +197,7 @@ export default function LeftRail({ view, onChange, onOpenSettings, onOpenSearch,
           {tenantLoading ? (
             <span aria-label="Loading extension" className="ava-skeleton" style={{
               display: 'inline-block', width: 36, height: 12, borderRadius: 4,
-              background: 'linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.18), rgba(255,255,255,0.08))',
+              background: `linear-gradient(90deg, ${c.overlay08}, ${c.overlay18}, ${c.overlay08})`,
               backgroundSize: '200% 100%', animation: 'avaShimmer 1.2s linear infinite',
             }} />
           ) : (
@@ -229,7 +229,7 @@ export default function LeftRail({ view, onChange, onOpenSettings, onOpenSearch,
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           {t('nav.search')}
         </span>
-          <kbd style={{ fontSize: 9, padding: '2px 5px', borderRadius: 4, background: isDark ? 'rgba(255,255,255,0.10)' : railHover, color: isDark ? darkTextIce : c.text, fontFamily: 'inherit' }}>⌘K</kbd>
+          <kbd style={{ fontSize: 9, padding: '2px 5px', borderRadius: 4, background: isDark ? c.overlay10 : railHover, color: isDark ? darkTextIce : c.text, fontFamily: 'inherit' }}>⌘K</kbd>
       </button>
 
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, WebkitAppRegion: 'no-drag' as any, overflowY: 'auto' }}>
@@ -325,7 +325,7 @@ function RailItem({ v, active, onClick, label, badge }: { v: ConsoleView; active
   const isDark = mode === 'dark' || mode === 'midnight';
   const isAI = v === 'ai';
   const accent = isAI ? c.avaViolet : c.signalGold;
-  const hoverSurface = 'var(--ava-surface-hover, rgba(255,255,255,0.12))';
+  const hoverSurface = `var(--ava-surface-hover, ${c.overlay12})`;
   const darkTextSub = 'rgba(230,240,255,0.82)';
   const darkTextIce = '#f1f7ff';
   return (
@@ -355,7 +355,7 @@ function RailItem({ v, active, onClick, label, badge }: { v: ConsoleView; active
       }}
       onMouseEnter={(e) => {
         if (!active) {
-          e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.10)' : hoverSurface;
+          e.currentTarget.style.background = isDark ? c.overlay10 : hoverSurface;
           e.currentTarget.style.color = isDark ? darkTextIce : c.textIce;
           e.currentTarget.style.transform = 'translateX(2px)';
         }
@@ -372,17 +372,17 @@ function RailItem({ v, active, onClick, label, badge }: { v: ConsoleView; active
         <span aria-hidden style={{
           position: 'absolute', left: 0, top: 8, bottom: 8, width: 3,
           borderRadius: 3,
-          background: isAI ? 'linear-gradient(180deg,#7a4cff,#21d4fd)' : 'linear-gradient(180deg,#0023e6,#21d4fd)',
+          background: isAI ? `linear-gradient(180deg,${c.ai},${c.cyan})` : `linear-gradient(180deg,${c.primary},${c.cyan})`,
           boxShadow: isDark ? '0 0 14px rgba(77,109,255,0.70)' : '0 0 12px rgba(0,35,230,0.55)',
         }} />
       )}
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? (isAI ? '#7a4cff' : '#0023e6') : 'currentColor'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? (isAI ? c.ai : c.primary) : 'currentColor'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <path d={ICON[v]} />
       </svg>
       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label ?? LABEL[v]}</span>
       {!!badge && badge > 0 && (
         <span className="ava-pulse-badge" style={{
-          background: c.signalGold, color: '#0b1530',
+          background: c.signalGold, color: c.text,
           fontSize: 10, fontWeight: 800, lineHeight: 1,
           padding: '3px 6px', borderRadius: 999, minWidth: 18,
           textAlign: 'center', boxShadow: `0 0 0 2px ${c.signalGold}33`,

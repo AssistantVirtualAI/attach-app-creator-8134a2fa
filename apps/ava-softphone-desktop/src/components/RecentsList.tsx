@@ -167,8 +167,8 @@ function RecentsListImpl({ extension, onCall }: Props) {
               background: missed
                 ? 'linear-gradient(135deg, #7F1D1D 0%, #DC2626 100%)'
                 : outbound
-                  ? 'linear-gradient(135deg, #C9A84C 0%, #FFD700 100%)'
-                  : 'linear-gradient(135deg, #003DA6 0%, #7C3AED 100%)',
+                  ? `linear-gradient(135deg, #C9A84C 0%, ${c.gold} 100%)`
+                  : `linear-gradient(135deg, ${c.primary} 0%, ${c.ai} 100%)`,
             }}>
               {initial}
             </div>

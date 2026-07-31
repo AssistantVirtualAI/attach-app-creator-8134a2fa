@@ -22,10 +22,10 @@ const STATUS_META: Record<string, { label: string; tone: string; hint: string }>
   'no-audio':     { label: 'No audio',         tone: '#ffd000', hint: 'The recording could not be retrieved from the PBX or storage. CDR sync may still be pending.' },
   'no-transcript':{ label: 'No transcript',    tone: '#ffd000', hint: 'No transcript was available to analyze. Try transcription first.' },
   'missing-key':  { label: 'Missing AI key',   tone: '#ff9a3c', hint: 'The Lovable AI key is not configured for this workspace. Ask an administrator.' },
-  'ai-error':     { label: 'AI provider error', tone: '#ff5577', hint: 'The AI provider returned an error. See the error code below.' },
+  'ai-error':     { label: 'AI provider error', tone: c.danger, hint: 'The AI provider returned an error. See the error code below.' },
   forbidden:      { label: 'Forbidden',        tone: '#b388ff', hint: 'You do not have access to run AI for this organization.' },
-  'bad-request':  { label: 'Bad request',      tone: '#ff5577', hint: 'Required fields were missing from the request.' },
-  error:          { label: 'Error',            tone: '#ff5577', hint: 'Unexpected error — see the error code below.' },
+  'bad-request':  { label: 'Bad request',      tone: c.danger, hint: 'Required fields were missing from the request.' },
+  error:          { label: 'Error',            tone: c.danger, hint: 'Unexpected error — see the error code below.' },
   timeout:        { label: 'Timeout',          tone: '#ff9a3c', hint: 'The AI provider did not respond in time.' },
 };
 
@@ -85,7 +85,7 @@ export default function TranscriptionStatusPanel({ callRecordId, compact }: { ca
 function StatusCell({ title, row }: { title: string; row?: AuditRow }) {
   const meta = row ? STATUS_META[row.status] || { label: row.status, tone: '#8aa0c8', hint: '' } : null;
   return (
-    <div style={{ padding: 10, borderRadius: 10, border: `1px solid ${c.border}`, background: 'rgba(255,255,255,0.02)' }}>
+    <div style={{ padding: 10, borderRadius: 10, border: `1px solid ${c.border}`, background: c.overlay02 }}>
       <div style={{ fontSize: 10, color: c.mutedSilver, textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 4 }}>{title}</div>
       {!row ? (
         <div style={{ fontSize: 11, color: c.mutedSilver }}>No attempts yet.</div>
@@ -96,7 +96,7 @@ function StatusCell({ title, row }: { title: string; row?: AuditRow }) {
             <span style={{ fontSize: 12, color: c.textIce, fontWeight: 700 }}>{meta!.label}</span>
             {row.http_status && <span style={{ fontSize: 9, color: c.mutedSilver, fontFamily: 'Fira Code, monospace' }}>HTTP {row.http_status}</span>}
           </div>
-          {row.error_code && <div style={{ fontSize: 10.5, color: '#ff8a8a', fontFamily: 'Fira Code, monospace', marginBottom: 4 }}>code: {row.error_code}</div>}
+          {row.error_code && <div style={{ fontSize: 10.5, color: c.danger, fontFamily: 'Fira Code, monospace', marginBottom: 4 }}>code: {row.error_code}</div>}
           {meta!.hint && <div style={{ fontSize: 10.5, color: c.textSub, lineHeight: 1.4 }}>{meta!.hint}</div>}
           {row.message && <div style={{ fontSize: 10, color: c.mutedSilver, marginTop: 4 }}>{row.message.slice(0, 160)}</div>}
           <div style={{ fontSize: 9.5, color: c.mutedSilver, marginTop: 4 }}>{new Date(row.created_at).toLocaleString()}{row.latency_ms ? ` · ${row.latency_ms}ms` : ''}{row.model ? ` · ${row.model}` : ''}</div>

@@ -195,7 +195,7 @@ export default function ConsoleLayout({
             fontSize: 11, fontWeight: 600, color: c.textSub, letterSpacing: 0.2,
             boxShadow: '0 4px 14px -4px rgba(0,35,230,0.18)',
           }}>
-            <span style={{ width: 6, height: 6, borderRadius: 3, background: '#22d39a' }} />
+            <span style={{ width: 6, height: 6, borderRadius: 3, background: c.success }} />
             {orgName && <span style={{ color: c.textIce }}>{orgName}</span>}
             {domainLabel && <span style={{ opacity: 0.7 }}>· {domainLabel}</span>}
           </div>

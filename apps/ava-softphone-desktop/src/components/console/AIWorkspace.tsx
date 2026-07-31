@@ -11,7 +11,7 @@ const { colors: c } = theme;
 type Module = 'intelligence' | 'transcripts' | 'greetings' | 'queues' | 'agents' | 'coaching';
 
 const MODULES: { id: Module; label: string; desc: string; accent: string }[] = [
-  { id: 'intelligence', label: 'Call Intelligence', desc: 'Summaries, sentiment, topics, action items, risks, opportunities.', accent: '#7A4CFF' },
+  { id: 'intelligence', label: 'Call Intelligence', desc: 'Summaries, sentiment, topics, action items, risks, opportunities.', accent: c.ai },
   { id: 'transcripts',  label: 'Transcript Search', desc: 'Search across calls and messages by intent, topic, or keyword.', accent: '#23D6FF' },
   { id: 'greetings',    label: 'Greeting Studio', desc: 'Generate IVR / voicemail / queue greetings through AVA + ElevenLabs.', accent: '#FFE600' },
   { id: 'queues',       label: 'Queue Optimizer', desc: 'Recommendations for strategy, overflow, staffing, hold messaging.', accent: '#28E6A5' },
@@ -140,7 +140,7 @@ function Greetings() {
       <button onClick={gen} disabled={busy} style={{
         marginTop: 10, padding: '10px 18px', borderRadius: 10,
         background: `linear-gradient(135deg, ${c.avaViolet}, ${c.avaCyan})`,
-        border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+        border: 'none', color: c.onAccent, fontSize: 12, fontWeight: 700, cursor: 'pointer',
       }}>{busy ? 'Generating…' : '✨ Generate with AVA'}</button>
       {out && (
         <div style={{ marginTop: 16, padding: 14, borderRadius: 10, background: c.midnight, border: `1px solid ${c.borderAI}` }}>

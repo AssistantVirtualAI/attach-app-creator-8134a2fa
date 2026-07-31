@@ -22,18 +22,18 @@ type Status =
   | 'away';
 
 const STATUS_META: Record<Status, { label: string; icon: string; color: string; manual: 'available' | 'dnd' | 'away' }> = {
-  available: { label: 'Available',         icon: '🟢', color: '#22c55e', manual: 'available' },
-  busy:      { label: 'Busy',              icon: '🔴', color: '#ef4444', manual: 'dnd' },
-  meeting:   { label: 'In a meeting',      icon: '📅', color: '#f59e0b', manual: 'dnd' },
-  dnd:       { label: 'Do not disturb',    icon: '⛔', color: '#dc2626', manual: 'dnd' },
+  available: { label: 'Available',         icon: '🟢', color: c.success, manual: 'available' },
+  busy:      { label: 'Busy',              icon: '🔴', color: c.danger, manual: 'dnd' },
+  meeting:   { label: 'In a meeting',      icon: '📅', color: c.warning, manual: 'dnd' },
+  dnd:       { label: 'Do not disturb',    icon: '⛔', color: c.danger, manual: 'dnd' },
   lunch:     { label: 'Lunch break',       icon: '🍽️', color: '#fb923c', manual: 'away' },
-  break:     { label: 'On a break',        icon: '☕', color: '#a78bfa', manual: 'away' },
+  break:     { label: 'On a break',        icon: '☕', color: c.aiLight, manual: 'away' },
   training:  { label: 'Training',          icon: '🎓', color: '#38bdf8', manual: 'dnd' },
   travel:    { label: 'On travel',         icon: '✈️', color: '#06b6d4', manual: 'away' },
   vacation:  { label: 'On vacation',       icon: '🏖️', color: '#0ea5e9', manual: 'away' },
   sick:      { label: 'Sick leave',        icon: '🤒', color: '#f43f5e', manual: 'away' },
   remote:    { label: 'Working remotely',  icon: '🏠', color: '#8b5cf6', manual: 'available' },
-  away:      { label: 'Not available',     icon: '⚪', color: '#94a3b8', manual: 'away' },
+  away:      { label: 'Not available',     icon: '⚪', color: c.textDim, manual: 'away' },
 };
 
 const AVATAR_KEY = 'lemtel:user-avatar';
@@ -440,14 +440,14 @@ export default function ProfileMenu() {
           style={{
             position: 'relative', width: 26, height: 26, borderRadius: '50%',
             overflow: 'hidden', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            background: 'linear-gradient(135deg, #0023e6, #7a4cff)',
-            color: '#fff', fontSize: 10, fontWeight: 800, letterSpacing: 0.5, cursor: 'pointer',
+            background: `linear-gradient(135deg, ${c.primary}, ${c.ai})`,
+            color: c.onAccent, fontSize: 10, fontWeight: 800, letterSpacing: 0.5, cursor: 'pointer',
           }}
         >
           {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
           <span style={{
             position: 'absolute', right: -1, bottom: -1, width: 9, height: 9, borderRadius: '50%',
-            background: meta.color, border: '2px solid #ffffff',
+            background: meta.color, border: `2px solid ${c.onAccent}`,
           }} />
         </span>
         <span
@@ -475,8 +475,8 @@ export default function ProfileMenu() {
             <button onClick={onPickPhoto} title="Change photo" style={{
               position: 'relative', width: 44, height: 44, borderRadius: '50%', overflow: 'hidden',
               border: `1px solid ${c.border}`, padding: 0, cursor: 'pointer',
-              background: 'linear-gradient(135deg, #0023e6, #7a4cff)',
-              color: '#fff', fontSize: 14, fontWeight: 800,
+              background: `linear-gradient(135deg, ${c.primary}, ${c.ai})`,
+              color: c.onAccent, fontSize: 14, fontWeight: 800,
             }}>
               {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
             </button>
@@ -543,7 +543,7 @@ export default function ProfileMenu() {
                 {isPending && needsDuration && (
                   <div style={{
                     margin: '2px 4px 8px', padding: '8px', borderRadius: 8,
-                    background: 'rgba(255,255,255,0.04)', border: `1px dashed ${c.border}`,
+                    background: c.overlay04, border: `1px dashed ${c.border}`,
                   }}>
                     <div style={{ fontSize: 9.5, fontWeight: 700, color: c.textSub, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>
                       How long?
@@ -575,7 +575,7 @@ export default function ProfileMenu() {
                 maxLength={80}
                 style={{
                   width: '100%', boxSizing: 'border-box',
-                  background: 'rgba(255,255,255,0.06)', color: c.textIce,
+                  background: c.overlay06, color: c.textIce,
                   border: `1px solid ${c.border}`, borderRadius: 8,
                   padding: '7px 9px', fontSize: 11, outline: 'none',
                 }}
@@ -594,7 +594,7 @@ export default function ProfileMenu() {
             <span aria-hidden>⚙</span>
             <span style={{ flex: 1, textAlign: 'left' }}>Settings</span>
           </button>
-          <button onClick={signOut} style={{ ...menuItem(false), color: '#ef4444' }}>
+          <button onClick={signOut} style={{ ...menuItem(false), color: c.danger }}>
             <span aria-hidden>⎋</span>
             <span style={{ flex: 1, textAlign: 'left' }}>Sign out</span>
           </button>
@@ -677,7 +677,7 @@ function ProfileEditor({
     return s;
   })();
   const strengthLabel = ['Too weak', 'Weak', 'Fair', 'Strong', 'Very strong'][strength];
-  const strengthColor = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#16a34a'][strength];
+  const strengthColor = [c.danger, '#f97316', '#eab308', c.success, c.success][strength];
 
   const validatePwForm = (): boolean => {
     const fe: typeof fieldErrors = {};
@@ -773,8 +773,8 @@ function ProfileEditor({
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
           <button onClick={onPickPhoto} style={{
             width: 64, height: 64, borderRadius: '50%', overflow: 'hidden', border: `1px solid ${c.border}`,
-            padding: 0, cursor: 'pointer', background: 'linear-gradient(135deg, #0023e6, #7a4cff)',
-            color: '#fff', fontSize: 20, fontWeight: 800,
+            padding: 0, cursor: 'pointer', background: `linear-gradient(135deg, ${c.primary}, ${c.ai})`,
+            color: c.onAccent, fontSize: 20, fontWeight: 800,
           }}>
             {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
           </button>
@@ -799,7 +799,7 @@ function ProfileEditor({
             marginTop: 12, padding: '8px 10px', borderRadius: 8, fontSize: 11.5,
             background: msg.kind === 'ok' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
             border: `1px solid ${msg.kind === 'ok' ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
-            color: msg.kind === 'ok' ? '#22d39a' : '#ff6b6b',
+            color: msg.kind === 'ok' ? c.success : '#ff6b6b',
           }}>{msg.text}</div>
         )}
 
@@ -819,7 +819,7 @@ function ProfileEditor({
                 value={currentPw}
                 onChange={(e) => { setCurrentPw(e.target.value); setFieldErrors((f) => ({ ...f, current: undefined })); }}
                 placeholder="Enter your current password"
-                style={{ ...input, paddingRight: 56, borderColor: fieldErrors.current ? '#ef4444' : (input.borderColor as any) }}
+                style={{ ...input, paddingRight: 56, borderColor: fieldErrors.current ? c.danger : (input.borderColor as any) }}
               />
               <button type="button" onClick={() => setShowCurrent((v) => !v)} style={eyeBtn}>{showCurrent ? 'Hide' : 'Show'}</button>
             </div>
@@ -832,7 +832,7 @@ function ProfileEditor({
                 value={pw1}
                 onChange={(e) => { setPw1(e.target.value); setFieldErrors((f) => ({ ...f, pw1: undefined })); }}
                 placeholder="At least 8 characters, with a number"
-                style={{ ...input, paddingRight: 56, borderColor: fieldErrors.pw1 ? '#ef4444' : (input.borderColor as any) }}
+                style={{ ...input, paddingRight: 56, borderColor: fieldErrors.pw1 ? c.danger : (input.borderColor as any) }}
               />
               <button type="button" onClick={() => setShowNew((v) => !v)} style={eyeBtn}>{showNew ? 'Hide' : 'Show'}</button>
             </div>
@@ -857,7 +857,7 @@ function ProfileEditor({
               value={pw2}
               onChange={(e) => { setPw2(e.target.value); setFieldErrors((f) => ({ ...f, pw2: undefined })); }}
               placeholder="Re-enter new password"
-              style={{ ...input, borderColor: fieldErrors.pw2 ? '#ef4444' : (input.borderColor as any) }}
+              style={{ ...input, borderColor: fieldErrors.pw2 ? c.danger : (input.borderColor as any) }}
             />
             {fieldErrors.pw2 && <div style={fieldErr}>{fieldErrors.pw2}</div>}
 
@@ -897,9 +897,9 @@ function ProfileEditor({
           <div style={{ textAlign: 'center', padding: '8px 4px' }}>
             <div style={{
               width: 56, height: 56, borderRadius: '50%', margin: '0 auto 12px',
-              background: 'rgba(34,197,94,0.15)', border: '2px solid #22c55e',
+              background: 'rgba(34,197,94,0.15)', border: `2px solid ${c.success}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 28, color: '#16a34a',
+              fontSize: 28, color: c.success,
             }}>✓</div>
             <div style={{ fontSize: 14, fontWeight: 800, color: c.textIce, marginBottom: 4 }}>Password updated</div>
             <div style={{ fontSize: 11.5, color: c.textDim, marginBottom: 14, lineHeight: 1.5 }}>
@@ -912,7 +912,7 @@ function ProfileEditor({
 
         {/* ===== Email reset confirmation ===== */}
         {emStep === 'confirm' && (
-          <div style={{ marginTop: 14, padding: 12, background: 'rgba(255,255,255,0.06)', border: `1px solid ${c.border}`, borderRadius: 10 }}>
+          <div style={{ marginTop: 14, padding: 12, background: c.overlay06, border: `1px solid ${c.border}`, borderRadius: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: c.textIce, marginBottom: 4 }}>Send reset link?</div>
             <div style={{ fontSize: 11, color: c.textDim, marginBottom: 10, lineHeight: 1.45 }}>
 
@@ -945,7 +945,7 @@ function ProfileEditor({
 
 const miniBtn: React.CSSProperties = {
   fontSize: 9, padding: '3px 7px', borderRadius: 6,
-  background: 'rgba(255,255,255,0.08)', border: `1px solid ${c.border}`,
+  background: c.overlay08, border: `1px solid ${c.border}`,
   color: c.textIce, cursor: 'pointer', letterSpacing: 0.4,
 };
 
@@ -956,15 +956,15 @@ const lbl: React.CSSProperties = {
 
 const input: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(255,255,255,0.06)', color: c.textIce,
+  background: c.overlay06, color: c.textIce,
   border: `1px solid ${c.border}`, borderRadius: 8,
   padding: '9px 11px', fontSize: 12, outline: 'none',
 };
 
 const primaryBtn: React.CSSProperties = {
   padding: '8px 12px', borderRadius: 8, border: 'none',
-  background: 'linear-gradient(135deg, #0023e6, #4d82ff)',
-  color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+  background: `linear-gradient(135deg, ${c.primary}, #4d82ff)`,
+  color: c.onAccent, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
 };
 
 const ghostBtn: React.CSSProperties = {
@@ -976,7 +976,7 @@ const ghostBtn: React.CSSProperties = {
 const eyeBtn: React.CSSProperties = {
   position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
   fontSize: 10, padding: '4px 8px', borderRadius: 6,
-  background: 'rgba(255,255,255,0.08)', border: `1px solid ${c.border}`,
+  background: c.overlay08, border: `1px solid ${c.border}`,
   color: c.textIce, cursor: 'pointer', fontWeight: 700,
 };
 
@@ -1006,10 +1006,10 @@ function SyncBadge({ state, detail }: { state: 'idle' | 'saving' | 'saved' | 'er
   const map: Record<typeof state, { icon: string; color: string; bg: string; label: string }> = {
     idle:     { icon: '',   color: '',         bg: '',                       label: '' },
     saving:   { icon: '⟳',  color: '#0ea5e9',  bg: 'rgba(14,165,233,0.18)',  label: 'Syncing' },
-    saved:    { icon: '✓',  color: '#16a34a',  bg: 'rgba(34,197,94,0.18)',   label: 'Synced' },
-    error:    { icon: '!',  color: '#dc2626',  bg: 'rgba(239,68,68,0.18)',   label: 'Sync error' },
-    conflict: { icon: '⇄',  color: '#d97706',  bg: 'rgba(245,158,11,0.20)',  label: 'Updated elsewhere' },
-    offline:  { icon: '○',  color: '#64748b',  bg: 'rgba(100,116,139,0.20)', label: 'Offline' },
+    saved:    { icon: '✓',  color: c.success,  bg: 'rgba(34,197,94,0.18)',   label: 'Synced' },
+    error:    { icon: '!',  color: c.danger,  bg: 'rgba(239,68,68,0.18)',   label: 'Sync error' },
+    conflict: { icon: '⇄',  color: c.warning,  bg: 'rgba(245,158,11,0.20)',  label: 'Updated elsewhere' },
+    offline:  { icon: '○',  color: c.textDim,  bg: 'rgba(100,116,139,0.20)', label: 'Offline' },
   };
   const m = map[state];
   return (

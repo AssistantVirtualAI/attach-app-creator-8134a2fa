@@ -144,7 +144,7 @@ export function EmptyState({
             <button onClick={cta.onClick} style={{
               padding: '10px 18px', borderRadius: 12, border: 'none',
               background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.cyan})`,
-              color: '#fff', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+              color: c.onAccent, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
               boxShadow: `0 10px 28px -12px ${c.lemtelBlue}99`,
               letterSpacing: 0.2,
             }}>{cta.label}</button>

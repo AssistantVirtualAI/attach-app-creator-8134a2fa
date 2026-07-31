@@ -142,7 +142,7 @@ export default function DesktopTour({
           {steps.map((_, i) => (
             <div key={i} style={{
               flex: 1, height: 3, borderRadius: 2,
-              background: i <= step ? c.signalGold : 'rgba(255,255,255,0.08)',
+              background: i <= step ? c.signalGold : c.overlay08,
               transition: 'background .25s',
             }} />
           ))}
@@ -171,7 +171,7 @@ export default function DesktopTour({
             <button onClick={next} style={{
               padding: '8px 18px', borderRadius: 9,
               background: `linear-gradient(135deg, ${c.avaViolet}, ${c.avaCyan})`,
-              border: 'none', color: '#fff', fontSize: 12, fontWeight: 700,
+              border: 'none', color: c.onAccent, fontSize: 12, fontWeight: 700,
               cursor: 'pointer', letterSpacing: 0.4,
               boxShadow: `0 6px 20px -8px ${c.avaViolet}`,
             }}>

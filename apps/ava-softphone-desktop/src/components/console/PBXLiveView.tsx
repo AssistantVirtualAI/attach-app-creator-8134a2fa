@@ -152,7 +152,7 @@ export default function PBXLiveView() {
 
 function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <div style={{ border: `1px solid ${tone}55`, borderRadius: 16, padding: '13px 14px', background: `linear-gradient(135deg, ${tone}18, rgba(255,255,255,0.02))` }}>
+    <div style={{ border: `1px solid ${tone}55`, borderRadius: 16, padding: '13px 14px', background: `linear-gradient(135deg, ${tone}18, ${c.overlay02})` }}>
       <div style={{ fontSize: 10, color: c.mutedSilver, textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 800 }}>{label}</div>
       <div style={{ color: c.textIce, fontSize: 24, fontWeight: 900, marginTop: 4 }}>{value}</div>
     </div>

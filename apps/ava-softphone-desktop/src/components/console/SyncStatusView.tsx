@@ -113,7 +113,7 @@ export default function SyncStatusView() {
           style={{
             padding: '10px 18px', borderRadius: 12, border: `1px solid ${"rgba(180,196,224,0.55)"}`,
             background: running ? "rgba(245,247,252,0.6)" : `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
-            color: '#fff', fontWeight: 600, fontSize: 13, cursor: running ? 'wait' : 'pointer',
+            color: c.onAccent, fontWeight: 600, fontSize: 13, cursor: running ? 'wait' : 'pointer',
             opacity: !orgId ? 0.5 : 1,
           }}
         >
@@ -248,7 +248,7 @@ function Grid({ children }: { children: React.ReactNode }) {
 
 function Stat({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
-    <div style={{ padding: 10, borderRadius: 10, background: 'rgba(255,255,255,0.06)', border: `1px solid ${c.border}` }}>
+    <div style={{ padding: 10, borderRadius: 10, background: c.overlay06, border: `1px solid ${c.border}` }}>
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: c.textSub }}>{label}</div>
       <div style={{ marginTop: 4, fontSize: 16, fontWeight: 700, color: danger ? c.danger : c.text }}>{value}</div>
 

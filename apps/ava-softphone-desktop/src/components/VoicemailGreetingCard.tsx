@@ -83,7 +83,7 @@ export default function VoicemailGreetingCard() {
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <button onClick={generate} disabled={busy} style={{
           padding: '7px 14px', borderRadius: 9, border: 'none', cursor: 'pointer',
-          fontSize: 11, fontWeight: 700, color: '#fff',
+          fontSize: 11, fontWeight: 700, color: c.onAccent,
           background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
           opacity: busy ? 0.6 : 1,
         }}>{busy ? 'Generating…' : '🎙 Preview'}</button>

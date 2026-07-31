@@ -70,7 +70,7 @@ interface Props {
 const btnPrimary: React.CSSProperties = {
   padding: '8px 14px', borderRadius: 10,
   background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
-  border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+  border: 'none', color: c.onAccent, fontSize: 12, fontWeight: 700, cursor: 'pointer',
   letterSpacing: 0.4,
 };
 const btnGhost: React.CSSProperties = {
@@ -288,7 +288,7 @@ export default function PbxResourceSection({
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…"
-            style={{ padding: '8px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: `1px solid ${c.border}`, color: c.textIce, fontSize: 12, minWidth: 200, outline: 'none' }}
+            style={{ padding: '8px 12px', borderRadius: 10, background: c.overlay04, border: `1px solid ${c.border}`, color: c.textIce, fontSize: 12, minWidth: 200, outline: 'none' }}
           />
           <button onClick={reload} style={btnGhost}>↻ Refresh</button>
           {canCreate && ((fieldGroups && fieldGroups.length > 0) || fields.length > 0) && (
@@ -299,7 +299,7 @@ export default function PbxResourceSection({
 
       <div style={{
         ...theme.glass.card, padding: 0, overflow: 'hidden',
-        background: 'rgba(255,255,255,0.04)', borderColor: c.border,
+        background: c.overlay04, borderColor: c.border,
       }}>
         {loading ? (
           <SkeletonRows rows={5} padding={24} />

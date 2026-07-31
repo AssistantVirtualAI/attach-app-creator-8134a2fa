@@ -135,6 +135,8 @@ Deno.serve(async (req) => {
       token_age_hours: tokenAgeH,
     },
     call_subscription: callSubscription,
+    blockers,
     actions,
+
   });
 });

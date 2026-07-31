@@ -368,6 +368,31 @@ class JsSipProvider {
     document.removeEventListener('visibilitychange', this.onVisible);
   }
 
+  /**
+   * Single-flight guard: never allow two REGISTER / socket-start flows to run
+   * at the same time. Any caller (heartbeat, disconnect handler, network
+   * online, visibility, manual retry) funnels through here.
+   */
+  private recoveryInFlight = false;
+  private recoveryAttempt = 0;
+  private recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastRegisterAt = 0;
+  private static readonly REGISTER_MIN_GAP_MS = 6000;
+
+  private clearRecoveryTimer() {
+    if (this.recoveryTimer) { clearTimeout(this.recoveryTimer); this.recoveryTimer = null; }
+  }
+
+  /** Reset the watchdog after a healthy registration. */
+  private markRecovered() {
+    this.clearRecoveryTimer();
+    this.recoveryInFlight = false;
+    this.recoveryAttempt = 0;
+    if (this.snap.recovering || this.snap.nextRetryAt) {
+      this.update({ recovering: false, recoveryAttempt: 0, nextRetryAt: null });
+    }
+  }
+
   private kickReconnect(why: string) {
     if (!this.ua) return;
     if (this.snap.authBlocked) {
@@ -376,19 +401,70 @@ class JsSipProvider {
       // restart or a password sync that bumps the config.
       return;
     }
+    if (this.recoveryInFlight) return;
+    const since = Date.now() - this.lastRegisterAt;
+    if (since < JsSipProvider.REGISTER_MIN_GAP_MS) return;
+
+    let connected = false;
+    let registered = false;
     try {
-      const connected = this.ua.isConnected?.() ?? false;
-      const registered = this.ua.isRegistered?.() ?? false;
-      if (connected) {
-        if (!registered) {
-          this.logEvent('info', `Keep-alive: re-register (${why})`);
-          try { this.ua.register(); } catch { /* noop */ }
-        }
-        return;
-      }
+      connected = this.ua.isConnected?.() ?? false;
+      registered = this.ua.isRegistered?.() ?? false;
     } catch { /* noop */ }
-    this.logEvent('info', `Keep-alive: forcing reconnect (${why})`);
-    try { this.ua.start(); } catch { /* noop */ }
+
+    if (connected && registered) { this.markRecovered(); return; }
+
+    this.recoveryInFlight = true;
+    this.lastRegisterAt = Date.now();
+    this.recoveryAttempt += 1;
+    this.update({ recovering: true, recoveryAttempt: this.recoveryAttempt, nextRetryAt: null });
+    try {
+      if (connected) {
+        this.logEvent('info', `Watchdog: re-register (${why}) attempt #${this.recoveryAttempt}`);
+        this.ua.register();
+      } else {
+        this.logEvent('info', `Watchdog: reconnecting socket (${why}) attempt #${this.recoveryAttempt}`);
+        this.ua.start();
+      }
+    } catch (e: any) {
+      this.logEvent('warn', `Watchdog attempt failed: ${e?.message || e}`);
+    }
+    // Release the single-flight lock after the attempt window; if it worked,
+    // 'registered' clears the watchdog, otherwise the backoff schedules next.
+    setTimeout(() => {
+      this.recoveryInFlight = false;
+      if (this.ua && !this.snap.authBlocked) {
+        let ok = false;
+        try { ok = (this.ua.isRegistered?.() ?? false) && (this.ua.isConnected?.() ?? false); } catch { /* noop */ }
+        if (ok) this.markRecovered();
+        else this.scheduleRecovery('attempt did not register');
+      }
+    }, 5000);
+  }
+
+  /** Exponential backoff scheduler — at most one pending retry at a time. */
+  private scheduleRecovery(why: string) {
+    if (!this.ua || this.snap.authBlocked) return;
+    if (this.recoveryTimer || this.recoveryInFlight) return;
+    const delay = Math.min(30_000, 1000 * Math.pow(2, Math.min(this.recoveryAttempt, 5)));
+    this.update({ recovering: true, nextRetryAt: Date.now() + delay });
+    this.logEvent('info', `Watchdog: retry in ${Math.round(delay / 1000)}s (${why})`);
+    this.recoveryTimer = setTimeout(() => {
+      this.recoveryTimer = null;
+      this.kickReconnect(why);
+    }, delay);
+  }
+
+  /** User-triggered immediate retry — bypasses backoff but stays single-flight. */
+  retryNow() {
+    this.clearRecoveryTimer();
+    this.recoveryAttempt = 0;
+    this.lastRegisterAt = 0;
+    this.recoveryInFlight = false;
+    if (this.snap.authBlocked) this.update({ authBlocked: null, errorCause: undefined });
+    if (!this.ua) return false;
+    this.kickReconnect('manual retry');
+    return true;
   }
 
   private startKeepAlive() {
@@ -401,9 +477,11 @@ class JsSipProvider {
         const registered = this.ua.isRegistered?.() ?? false;
         if (!connected) this.kickReconnect('heartbeat: socket down');
         else if (!registered) this.kickReconnect('heartbeat: not registered');
+        else this.markRecovered();
       } catch { /* noop */ }
     }, 25_000);
   }
+
 
   private logEvent(level: SipEvent['level'], message: string) {
     const next = [...this.snap.events, { at: Date.now(), level, message }].slice(-50);

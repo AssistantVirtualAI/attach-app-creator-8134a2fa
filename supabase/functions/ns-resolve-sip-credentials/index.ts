@@ -34,7 +34,7 @@ type ClientType = "mobile" | "web" | "widget";
 
 // Registrations must land on a call-processing core node, not the portal.
 const NS_SIP_WSS_URL = Deno.env.get("NS_SIP_WSS_URL") ?? "wss://core1.cluster1.ucstack.io:9002";
-const NS_SIP_WSS_URL_2 = Deno.env.get("NS_SIP_WSS_URL_2") ?? "wss://core2.cluster1.ucstack.io:9002";
+// Single pinned core node: never mix core1/core2 for the same AOR.
 
 /**
  * Carrier rule (2026-07): SIP clients must register to core1/core2, never to

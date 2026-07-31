@@ -62,10 +62,24 @@ Deno.serve(async (req) => {
   const mobileRegistered = aors.some((a) => a.toLowerCase() === mobileAor.toLowerCase());
 
   // 2) Mobile device must have push enabled (docs/netsapiens/devices.md).
+  //    The device LIST endpoint often omits `device-push-enabled`, so fall back
+  //    to the device DETAIL endpoint before concluding anything.
   const mobileDevice = devices.find((x: any) =>
     String(x?.device ?? x?.aor ?? x?.name ?? "").toLowerCase().includes(mobileAor.toLowerCase())
   );
-  const devicePushEnabled = mobileDevice ? yes(mobileDevice?.["device-push-enabled"]) : null;
+  let pushRaw = mobileDevice?.["device-push-enabled"];
+  if (mobileDevice && (pushRaw === undefined || pushRaw === null || pushRaw === "")) {
+    const detail = await get(`/domains/${d}/users/${e}/devices/${encodeURIComponent(mobileAor)}`);
+    if (detail.ok) {
+      const row = Array.isArray(detail.data)
+        ? detail.data[0]
+        : (Array.isArray(detail.data?.data) ? detail.data.data[0] : detail.data);
+      pushRaw = row?.["device-push-enabled"];
+    }
+  }
+  const pushKnown = pushRaw !== undefined && pushRaw !== null && String(pushRaw) !== "";
+  const devicePushEnabled = mobileDevice ? (pushKnown ? yes(pushRaw) : null) : null;
+
 
   // 3) VoIP push token freshness (Supabase side).
   const { data: tokenRow } = await supabase

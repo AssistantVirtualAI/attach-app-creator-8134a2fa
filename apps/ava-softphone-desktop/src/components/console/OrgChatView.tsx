@@ -401,14 +401,14 @@ export default function OrgChatView() {
       <aside style={{
         width: 220, flexShrink: 0,
         borderRight: `1px solid ${c.overlay06}`,
-        background: 'linear-gradient(180deg, rgba(6,12,28,0.97) 0%, rgba(8,15,38,0.93) 100%)',
+        background: c.bgElev,
         display: 'flex', flexDirection: 'column',
         overflowY: 'hidden',
       }}>
         {/* Sidebar header */}
         <div style={{
           padding: '14px 14px 12px',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: `1px solid ${c.border}`,
           background: 'linear-gradient(135deg, rgba(0,35,230,0.10), transparent 70%)',
           position: 'relative',
           flexShrink: 0,
@@ -419,7 +419,7 @@ export default function OrgChatView() {
               <div style={{ width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'rgba(224,168,0,0.15)', border: '1px solid rgba(224,168,0,0.30)', color: c.warning, fontSize: 13 }}>💬</div>
               <div>
                 <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.8, color: c.warning, textTransform: 'uppercase' }}>Team Chat</div>
-                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>{channels.length} channels</div>
+                <div style={{ fontSize: 10, color: c.textSub, marginTop: 1 }}>{channels.length} channels</div>
               </div>
             </div>
             <button onClick={() => setShowGroup(true)} title="New group" style={{
@@ -440,7 +440,7 @@ export default function OrgChatView() {
           {/* Groups */}
           {groupChannels.length > 0 && (
             <>
-              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(224,168,0,0.7)', textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: c.warning, textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ flex: 1 }}>Groups</span>
                 <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: c.warning, padding: '1px 5px', borderRadius: 4 }}>{groupChannels.length}</span>
               </div>
@@ -451,7 +451,7 @@ export default function OrgChatView() {
           {/* DMs */}
           {dmChannels.length > 0 && (
             <>
-              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(224,168,0,0.7)', textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: c.warning, textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ flex: 1 }}>Direct</span>
                 <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: c.warning, padding: '1px 5px', borderRadius: 4 }}>{dmChannels.length}</span>
               </div>
@@ -460,7 +460,7 @@ export default function OrgChatView() {
           )}
 
           {/* Team members */}
-          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(224,168,0,0.7)', textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: c.warning, textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ flex: 1 }}>Team</span>
             <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: c.warning, padding: '1px 5px', borderRadius: 4 }}>{members.length}</span>
           </div>
@@ -488,7 +488,7 @@ export default function OrgChatView() {
                   <span style={{
                     position: 'absolute', bottom: 0, right: 0,
                     width: 8, height: 8, borderRadius: '50%',
-                    background: color, border: '1.5px solid #060C1C',
+                    background: color, border: `1.5px solid ${c.bgCard}`,
                   }} />
                 </span>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{m.display_name}</span>
@@ -505,7 +505,7 @@ export default function OrgChatView() {
         {/* Chat header */}
         <div style={{
           padding: '10px 18px', flexShrink: 0,
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: `1px solid ${c.border}`,
           background: 'linear-gradient(135deg, rgba(0,35,230,0.06), transparent 70%)',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
@@ -585,8 +585,8 @@ export default function OrgChatView() {
         {/* Composer */}
         <div style={{
           padding: '10px 14px 12px',
-          borderTop: '1px solid rgba(255,255,255,0.07)',
-          background: 'rgba(6,12,28,0.60)',
+          borderTop: `1px solid ${c.border}`,
+          background: c.bgCard,
           backdropFilter: 'blur(12px)',
           display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0,
         }}>

@@ -1,5 +1,6 @@
 import React from 'react';
 import LemtelLogo from './LemtelLogo';
+import lemtelWordmark from '../assets/lemtel-wordmark.png';
 import ProfileMenu from './ProfileMenu';
 import { theme } from '../lib/theme';
 import { formatAge, useSyncStatus } from '../hooks/useSyncStatus';
@@ -47,6 +48,11 @@ export default function TitleBar(_props: Props = {}) {
         <span style={{ fontSize: 13, fontWeight: 700, color: colors.textIce, letterSpacing: 0.2 }}>
           Lemtel Softphone
         </span>
+        <img
+          src={lemtelWordmark}
+          alt="Lemtel"
+          style={{ height: 20, width: 'auto', objectFit: 'contain', opacity: 0.95 }}
+        />
       </div>
 
 

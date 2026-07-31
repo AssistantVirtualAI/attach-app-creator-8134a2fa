@@ -21,6 +21,7 @@ import OutputDevicePicker from './OutputDevicePicker';
 import { watchA11y } from '../lib/a11yAudit';
 import pkg from '../../package.json';
 import SkeletonRows from './ui/SkeletonRows';
+import avaLogo from '../assets/ava-statistic-logo.png';
 
 const APP_VERSION: string =
   (typeof window !== 'undefined' && (window as any).electronAPI?.getVersion?.()) ||
@@ -605,13 +606,14 @@ export default function SoftphonePane({
                       key={st}
                       onClick={() => setChatsSubTab(st)}
                       style={{
-                        flex: 1, padding: '7px 4px', borderRadius: 10, fontSize: 11,
+                        flex: 1, padding: '8px 4px', borderRadius: 11, fontSize: 11.5,
                         fontWeight: active ? 800 : 600, letterSpacing: 0.5,
-                        border: 'none',
+                        border: active ? `1px solid ${c.overlay12}` : '1px solid transparent',
                         background: active
-                          ? `linear-gradient(135deg, ${c.primary} 0%, ${c.primary} 50%, ${c.warning} 140%)`
+                          ? `linear-gradient(135deg, ${c.primary} 0%, ${c.primary} 55%, ${c.warning} 150%)`
                           : 'transparent',
                         color: active ? c.onAccent : c.textDim,
+                        boxShadow: active ? `0 6px 18px -8px ${c.primary}` : 'none',
                         cursor: 'pointer',
                         transition: 'all .18s ease',
                       }}
@@ -621,7 +623,15 @@ export default function SoftphonePane({
               </div>
             </div>
             {/* Contenu du sous-onglet */}
-            <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+            <div style={{
+              flex: 1, overflow: 'hidden', minHeight: 0,
+              margin: compact ? '4px 8px 8px' : '6px 12px 12px',
+              borderRadius: 16,
+              border: `1px solid ${c.border}`,
+              background: c.bgCard,
+              boxShadow: '0 16px 40px -28px rgba(0,0,0,.45)',
+              display: 'flex', flexDirection: 'column',
+            }}>
               {chatsSubTab === 'team' && <OrgChatView />}
               {chatsSubTab === 'sms' && <SmsThreads />}
             </div>
@@ -838,19 +848,20 @@ export default function SoftphonePane({
       {/* Footer */}
       <div style={{
         position: 'relative', zIndex: 1, flexShrink: 0,
-        padding: compact ? '4px 8px' : '6px 12px',
+        padding: compact ? '8px 10px' : '12px 16px',
         textAlign: 'center',
         borderTop: `1px solid ${c.border}`,
         background: c.bgCard,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
       }}>
-        <div style={{ fontSize: compact ? 9 : 10, color: c.textSub, letterSpacing: 0.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: compact ? 10 : 11, color: c.textSub, letterSpacing: 0.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {ultraCompact ? '' : 'Lemtel Communications · '}v{APP_VERSION} {ultraCompact ? '' : '· Powered by '}
           <a
             onClick={(e) => { e.preventDefault(); window.electronAPI?.openExternal?.('https://assistantvirtualai.com'); }}
             href="#"
-            style={{ color: c.gold, textDecoration: 'none', cursor: 'pointer', fontWeight: 600 }}
+            style={{ color: c.gold, textDecoration: 'none', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
+            <img src={avaLogo} alt="AVA Statistic" style={{ height: compact ? 18 : 22, width: 'auto', objectFit: 'contain' }} />
             {ultraCompact ? 'AVA Statistic' : 'AVA Statistic · assistantvirtualai.com'}
           </a>
         </div>

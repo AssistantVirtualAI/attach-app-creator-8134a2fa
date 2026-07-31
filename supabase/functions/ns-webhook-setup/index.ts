@@ -27,17 +27,25 @@ Deno.serve(async (req) => {
     const listData = await listRes.json().catch(() => ({}));
     const existing: any[] = Array.isArray(listData) ? listData : (listData.subscriptions ?? listData.data ?? []);
 
-    const matches = (s: any, ev: string) => {
-      const e = s.model ?? s.event ?? s.event_type ?? s.type;
-      const u = s["post-url"] ?? s.post_url ?? s.target_url ?? s.url ?? s.callback_url;
-      return e === ev && (!u || u === target);
-    };
+    const urlOf = (s: any) => String(s["post-url"] ?? s.post_url ?? s.target_url ?? s.url ?? s.callback_url ?? "");
+    const modelOf = (s: any) => s.model ?? s.event ?? s.event_type ?? s.type;
+    const matches = (s: any, ev: string) => modelOf(s) === ev && urlOf(s) === target;
+    // Same model + our receiver but WITHOUT the secret → stale, must be replaced.
+    const stale = (s: any, ev: string) =>
+      modelOf(s) === ev && urlOf(s).startsWith(base) && urlOf(s) !== target;
 
     const created: any[] = [];
     const kept: any[] = [];
+    const replaced: any[] = [];
     for (const event of desired) {
       const hit = existing.find((s) => matches(s, event));
       if (hit) { kept.push({ event, id: hit.id ?? null }); continue; }
+      for (const old of existing.filter((s) => stale(s, event))) {
+        if (!old?.id) continue;
+        const del = await nsBrokerFetch(admin, profile, `/subscriptions/${old.id}`, { method: "DELETE" });
+        replaced.push({ event, id: old.id, deleted: del.ok });
+      }
+
       const res = await nsBrokerFetch(admin, profile, "/subscriptions", {
         method: "POST",
         // Documented v2 payload: model + post-url (+ scope filters).

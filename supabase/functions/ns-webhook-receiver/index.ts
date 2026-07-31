@@ -1,5 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { normalizeNsEvents, nsCallKey, shouldProcessCall } from "../_shared/ns-call-events.ts";
+
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
 
@@ -25,11 +27,16 @@ async function apnsJwt(teamId: string, keyId: string, privateKeyPem: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // FIX 2 — strict shared-secret validation
+  // FIX 2 — strict shared-secret validation.
+  // NetSapiens v2 subscriptions cannot send custom headers (docs: verification
+  // is IP allowlist + X-Correlation-ID), so the secret also travels in the
+  // post-url query string that ns-webhook-setup registers.
   const expected = Deno.env.get("NS_WEBHOOK_SECRET");
+  const url = new URL(req.url);
   const got = req.headers.get("x-webhook-secret")
     ?? req.headers.get("authorization")?.replace("Bearer ", "")
-    ?? req.headers.get("x-ns-secret");
+    ?? req.headers.get("x-ns-secret")
+    ?? url.searchParams.get("secret");
   if (!expected || got !== expected) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
@@ -37,11 +44,22 @@ Deno.serve(async (req) => {
     });
   }
 
-  let event: any;
-  try { event = await req.json(); } catch { return ok(); }
+
+  let body: any;
+  try { body = await req.json(); } catch { return ok(); }
+
+  // NS-API v2 posts an ARRAY of resource objects (docs/netsapiens/webhooks.md).
+  const events = normalizeNsEvents(body);
+  if (!events.length) return ok();
 
   // FIX 4 — return 200 immediately, process async
-  EdgeRuntime.waitUntil(processEvent(event).catch((e) => console.error("ns-webhook async error", e)));
+  EdgeRuntime.waitUntil(
+    (async () => {
+      for (const ev of events) {
+        try { await processEvent(ev); } catch (e) { console.error("ns-webhook async error", e); }
+      }
+    })(),
+  );
   return ok();
 });
 
@@ -51,6 +69,14 @@ async function processEvent(event: any) {
 
   const type = event?.type ?? event?.event?.type;
   const data = event?.data ?? event?.payload ?? event;
+
+  // The `call` model fires on every state change — only the first ringing
+  // event for a given SIP Call-ID may trigger a VoIP push.
+  if (type === "call.inbound" && !shouldProcessCall(nsCallKey(data))) {
+    console.log("[ns-webhook] duplicate call event ignored", { call_id: nsCallKey(data) });
+    return;
+  }
+
 
   const ext = data?.extension ?? data?.user ?? data?.to ?? data?.callee ?? null;
   let userId: string | null = null;

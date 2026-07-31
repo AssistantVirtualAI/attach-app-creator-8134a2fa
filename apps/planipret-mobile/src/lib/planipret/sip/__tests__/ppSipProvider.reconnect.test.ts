@@ -113,6 +113,25 @@ describe("ppSipProvider — transport recovery guard", () => {
     }
   });
 
+  it("ignores a delayed disconnect from the replaced UA", async () => {
+    const oldUa = await bootRegistered();
+    oldUa.connected = false;
+    oldUa.emit("disconnected", { reason: "ws_disconnected", code: 1001 });
+
+    await vi.advanceTimersByTimeAsync(5_800);
+    const replacement = created.uas[1];
+    expect(replacement).toBeTruthy();
+    replacement.connected = true;
+    replacement.emit("connected");
+    replacement.emit("registered");
+
+    // URLSession/JsSIP can deliver the old socket's close callback after the
+    // replacement REGISTER 200 OK. It must not poison the current UA state.
+    oldUa.emit("disconnected", { reason: "", code: 1001 });
+    expect(provider.getSnapshot().status).toBe("registered");
+    expect(provider.getReconnectMetrics().recoveryOwner).toBe("none");
+  });
+
   it("never re-schedules a reconnect at 1000ms", async () => {
     const ua = await bootRegistered();
     scheduledDelays = [];

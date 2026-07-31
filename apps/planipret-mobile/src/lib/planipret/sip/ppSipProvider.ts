@@ -477,8 +477,14 @@ class PpSipProvider {
         }
       } catch { /* private JsSIP API guard */ }
 
-      ua.on("connecting", () => { this.connectingSince = Date.now(); this.update({ status: "connecting" }); });
+      const isCurrentUa = () => this.ua === ua;
+      ua.on("connecting", () => {
+        if (!isCurrentUa()) return;
+        this.connectingSince = Date.now();
+        this.update({ status: "connecting" });
+      });
       ua.on("connected", () => {
+        if (!isCurrentUa()) return;
         // Do not reset wsFailures until REGISTER succeeds. NetSapiens can accept
         // the TCP/WSS connection and still close it before REGISTER 200 OK; if we
         // reset here every drop becomes attempt #1 forever.
@@ -490,6 +496,13 @@ class PpSipProvider {
         this.update({ status: "connected" });
       });
       ua.on("disconnected", (e: any) => {
+        // ua.stop() may emit `disconnected` after the replacement UA has already
+        // REGISTERed. Never let that stale event mark the new core1 transport as
+        // disconnected or start another rebuild (the observed post-REGISTER 1001 loop).
+        if (!isCurrentUa()) {
+          this.log("warn", "stale UA disconnect ignored", { code: e?.code, reason: e?.reason });
+          return;
+        }
         this.log("warn", "ws disconnected", e);
         this.lastWsDisconnectedAt = Date.now();
         this.stopKeepAlive();
@@ -497,6 +510,7 @@ class PpSipProvider {
         this.scheduleSocketReconnect(String(e?.reason || "ws_disconnected"));
       });
       ua.on("registered", () => {
+        if (!isCurrentUa()) return;
         this.regFailures = 0;
         this.wsFailures = 0;
         this.reconnectMetrics.attempt = 0;
@@ -514,6 +528,7 @@ class PpSipProvider {
         return this.update({ status: "registered", errorCause: undefined, lastRegistrationAt: Date.now() });
       });
       ua.on("unregistered", () => {
+        if (!isCurrentUa()) return;
         const rc = getPpSipReconnectConfig();
         const recentlyDisconnected = Date.now() - this.lastWsDisconnectedAt < rc.socketVerifyDelayMs;
         // When the transport is already down, the socket reconnect loop owns
@@ -538,6 +553,7 @@ class PpSipProvider {
         }, Math.max(PP_SIP_RECONNECT_FLOOR_MS, rc.reRegisterDelayMs));
       });
       ua.on("registrationFailed", (e: any) => {
+        if (!isCurrentUa()) return;
         const cause = e?.cause || e?.response?.reason_phrase || "registration_failed";
         this.log("error", `registration failed: ${cause}`);
         this.update({ status: "error", errorCause: cause });
@@ -562,7 +578,10 @@ class PpSipProvider {
           } catch {}
         }, Math.max(PP_SIP_RECONNECT_FLOOR_MS, Math.min(rc.registerRetryMaxMs, rc.registerRetryBaseMs * this.regFailures)));
       });
-      ua.on("newRTCSession", (e: any) => this.attachSession(e.session, e.originator));
+      ua.on("newRTCSession", (e: any) => {
+        if (!isCurrentUa()) return;
+        this.attachSession(e.session, e.originator);
+      });
 
       this.ua = ua;
       ua.start();
@@ -824,8 +843,10 @@ class PpSipProvider {
           const cfg = this.cfg;
           if (cfg) {
             this.log("warn", "sip reconnect rebuilding UA after JsSIP recovery window");
-            try { ua.stop(); } catch {}
+            // Detach ownership before stop(): JsSIP may emit disconnected either
+            // synchronously or later. In both cases the old UA event is stale.
             this.ua = null;
+            try { ua.stop(); } catch {}
             this.session = null;
             this.reconnectMetrics.uaRebuilds += 1;
             this.pushHistory("socket", "ua_rebuild");

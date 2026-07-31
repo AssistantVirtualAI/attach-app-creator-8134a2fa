@@ -617,6 +617,21 @@ export default function PlanipretMobile() {
     } catch { /* ignore */ }
     return () => window.removeEventListener("pp:incoming-notification-action", onAction);
   }, [profile?.user_id, attachRestCall, navigate, softphone]);
+
+  useEffect(() => {
+    if (!profile?.user_id) return;
+    const onNativeInvite = (event: Event) => {
+      const invite = (event as CustomEvent).detail ?? {};
+      const callId = String(invite.callId ?? invite.call_id ?? "");
+      if (!callId) return;
+      const from = String(invite.from ?? invite.fromNumber ?? invite.callerNumber ?? "");
+      attachRestCall?.({ id: callId, direction: "in", other: from || "Appel entrant", number: from, status: "ringing-in" });
+      setInbound({ call_id: callId, from_number: from, caller_name: String(invite.callerName ?? "") || undefined });
+      navigate("/mplanipret/calls", { replace: true });
+    };
+    window.addEventListener("pp:sip-incoming-invite", onNativeInvite);
+    return () => window.removeEventListener("pp:sip-incoming-invite", onNativeInvite);
+  }, [profile?.user_id, attachRestCall, navigate]);
   const onAiInsight = useCallback((row: any) => {
     toast(t("toasts.aiAnalysisReady"), {
       description: String(row.ai_summary ?? "").slice(0, 80),

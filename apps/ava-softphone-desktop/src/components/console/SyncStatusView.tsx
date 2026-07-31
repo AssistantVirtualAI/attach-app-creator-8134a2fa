@@ -236,7 +236,7 @@ function StatusBadge({ progress }: { progress: SyncProgress }) {
 
 function Verdict({ ok, okText, failText }: { ok: boolean; okText: string; failText: string }) {
   return (
-    <div style={{ padding: '10px 12px', borderRadius: 10, background: ok ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)', border: `1px solid ${ok ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`, color: ok ? '#047857' : '#b91c1c', fontSize: 13, fontWeight: 600 }}>
+    <div style={{ padding: '10px 12px', borderRadius: 10, background: ok ? 'rgba(34,211,154,0.14)' : 'rgba(255,85,119,0.14)', border: `1px solid ${ok ? 'rgba(34,211,154,0.40)' : 'rgba(255,85,119,0.40)'}`, color: ok ? c.success : c.danger, fontSize: 13, fontWeight: 600 }}>
       {ok ? '✓ ' : '✗ '}{ok ? okText : failText}
     </div>
   );

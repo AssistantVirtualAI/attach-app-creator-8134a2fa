@@ -13,6 +13,7 @@ import {
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { audioRouter } from "@/lib/planipret/audio/audioRouter";
+import { playRecordingNotice } from "@/lib/planipret/audio/recordingNotice";
 import { formatSipParty } from "@/lib/planipret/sip/formatSipParty";
 import PpCallDiagnosticPanel from "./PpCallDiagnosticPanel";
 
@@ -71,6 +72,16 @@ export default function PpActiveCallScreen({
   useEffect(() => {
     if (!active) { setView("main"); setDtmfBuf(""); setTransferQuery(""); setElapsed(0); }
   }, [active]);
+
+  // Recording notice — played once per call as soon as it connects
+  const noticeForCallRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (snap.callState !== "active") return;
+    const key = snap.callId || String(snap.startedAt ?? "");
+    if (!key || noticeForCallRef.current === key) return;
+    noticeForCallRef.current = key;
+    void playRecordingNotice();
+  }, [snap.callState, snap.callId, snap.startedAt]);
 
   // Duration timer for connected calls
   useEffect(() => {

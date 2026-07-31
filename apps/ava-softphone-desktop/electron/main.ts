@@ -354,7 +354,10 @@ autoUpdater.on('update-downloaded', (info) => {
 autoUpdater.on('error', (err) => {
   mainWindow?.webContents.send('update-error', err?.message ?? String(err));
 });
-// preload uses 'updater:install' — keep both channel names for compatibility
-ipcMain.handle('updater:install', () => autoUpdater.quitAndInstall(false, true));
-ipcMain.handle('install-update',  () => autoUpdater.quitAndInstall(false, true));
-ipcMain.handle('check-for-updates', () => autoUpdater.checkForUpdates());
+// IPC handlers — preload uses 'updater:*' namespace
+ipcMain.handle('updater:install',     () => autoUpdater.quitAndInstall(false, true));
+ipcMain.handle('updater:check',       () => autoUpdater.checkForUpdates());
+ipcMain.handle('updater:app-version', () => app.getVersion());
+// Legacy aliases kept for compatibility
+ipcMain.handle('install-update',      () => autoUpdater.quitAndInstall(false, true));
+ipcMain.handle('check-for-updates',   () => autoUpdater.checkForUpdates());

@@ -389,24 +389,25 @@ export default function OrgChatView() {
 
       {/* ─── SIDEBAR ─── */}
       <aside style={{
-        width: 200, flexShrink: 0,
-        borderRight: '1px solid rgba(255,255,255,0.07)',
-        background: 'rgba(6,12,28,0.85)',
+        width: 210, flexShrink: 0,
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+        background: 'linear-gradient(180deg, rgba(6,12,28,0.95) 0%, rgba(8,15,35,0.90) 100%)',
         display: 'flex', flexDirection: 'column',
-        overflowY: 'auto',
-        scrollbarWidth: 'thin',
-        scrollbarColor: 'rgba(0,35,230,0.35) transparent',
+        overflowY: 'hidden',
       }}>
         {/* Sidebar header */}
         <div style={{
-          padding: '12px 12px 8px',
+          padding: '14px 14px 10px',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexShrink: 0,
         }}>
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.8, color: '#E0A800', textTransform: 'uppercase' }}>Channels</span>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, color: '#E0A800', textTransform: 'uppercase' }}>Messages</span>
           <button onClick={() => setShowGroup(true)} title="New group" style={{
-            background: 'rgba(0,35,230,0.20)', border: '1px solid rgba(0,35,230,0.35)',
-            color: '#8CB4FF', fontSize: 11, padding: '2px 7px', borderRadius: 6, cursor: 'pointer', fontWeight: 700,
+            background: 'linear-gradient(135deg, rgba(0,35,230,0.25), rgba(122,76,255,0.25))',
+            border: '1px solid rgba(0,35,230,0.40)',
+            color: '#8CB4FF', fontSize: 14, width: 24, height: 24, borderRadius: 7,
+            cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>+</button>
         </div>
 
@@ -535,40 +536,50 @@ export default function OrgChatView() {
 
         {/* Composer */}
         <div style={{
-          padding: '10px 12px',
+          padding: '10px 14px 12px',
           borderTop: '1px solid rgba(255,255,255,0.07)',
-          background: 'rgba(255,255,255,0.02)',
+          background: 'rgba(6,12,28,0.60)',
+          backdropFilter: 'blur(12px)',
           display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0,
         }}>
           <button onClick={() => fileRef.current?.click()} disabled={!activeId} title="Attach file" style={{
-            width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
             border: '1px solid rgba(255,255,255,0.10)',
-            background: 'rgba(255,255,255,0.04)',
-            color: '#7C8AA8', cursor: 'pointer', fontSize: 15,
+            background: 'rgba(255,255,255,0.05)',
+            color: '#7C8AA8', cursor: activeId ? 'pointer' : 'not-allowed', fontSize: 16,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>📎</button>
+            transition: 'all .15s',
+          }}>
+            📎
+          </button>
           <input ref={fileRef} type="file" style={{ display: 'none' }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) { uploadFile(f); e.target.value = ''; } }} />
           <input value={input} onChange={(e) => handleTyping(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={activeId ? 'Message…' : 'Select a channel to start chatting'}
+            placeholder={activeId ? `Message ${headerLabel || 'channel'}…` : 'Sélectionnez un canal pour commencer'}
             disabled={!activeId}
             style={{
-              flex: 1, padding: '9px 14px', borderRadius: 10,
+              flex: 1, padding: '10px 16px', borderRadius: 12,
               border: '1px solid rgba(255,255,255,0.10)',
-              background: 'rgba(255,255,255,0.05)',
+              background: 'rgba(255,255,255,0.06)',
               color: '#E8EEFB', fontSize: 13, outline: 'none',
-              transition: 'border-color .15s',
-            }} />
-          <button onClick={send} disabled={!input.trim() || !activeId} style={{
-            width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-            border: 'none', cursor: 'pointer',
+              transition: 'border-color .15s, box-shadow .15s',
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.20)',
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(0,35,230,0.50)'; e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0,35,230,0.15), inset 0 1px 3px rgba(0,0,0,0.20)'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'; e.currentTarget.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.20)'; }}
+          />
+          <button onClick={send} disabled={!input.trim() || !activeId} title="Send (Enter)" style={{
+            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+            border: 'none', cursor: input.trim() && activeId ? 'pointer' : 'not-allowed',
             background: input.trim() && activeId
               ? 'linear-gradient(135deg, #0023e6, #7A4CFF)'
               : 'rgba(255,255,255,0.06)',
-            color: '#fff', fontSize: 16,
+            color: '#fff', fontSize: 15,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'all .15s',
+            boxShadow: input.trim() && activeId ? '0 4px 14px rgba(0,35,230,0.40)' : 'none',
+            transform: input.trim() && activeId ? 'translateY(-1px)' : 'none',
           }}>➤</button>
         </div>
       </div>

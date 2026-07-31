@@ -463,8 +463,7 @@ export default function SoftphonePane({
 
       </div>
 
-      {/* Diagnostics strip — always available */}
-      <SipDiagnostics sp={sp} compact={compact} c={c} />
+      {/* SipDiagnostics est accessible depuis Settings uniquement — supprimé du header principal */}
 
       {sp.credError && (
         <div style={{
@@ -506,36 +505,7 @@ export default function SoftphonePane({
           onDiagnose={() => window.dispatchEvent(new CustomEvent('lemtel:nav', { detail: 'settings' }))}
         />
       )}
-      {!sp.credError && sp.snap.status !== 'registered' && sp.snap.status !== 'idle' && (
-        <div style={{
-          position: 'relative', zIndex: 1,
-          margin: compact ? '6px 12px 0' : '6px 16px 0',
-          color: '#E8EEFB', fontSize: 12,
-        }}>
 
-          {sp.snap.events && sp.snap.events.length > 0 && (
-            <details style={{ marginTop: 6 }}>
-              <summary style={{ cursor: 'pointer', fontSize: 10, opacity: 0.75 }}>
-                Show last {sp.snap.events.length} SIP events
-              </summary>
-              <div style={{
-                marginTop: 4, maxHeight: 140, overflowY: 'auto',
-                fontFamily: 'JetBrains Mono, Menlo, monospace', fontSize: 10,
-                background: 'rgba(0,0,0,0.35)', borderRadius: 6, padding: 6,
-              }}>
-                {sp.snap.events.slice().reverse().map((ev, i) => (
-                  <div key={i} style={{
-                    color: ev.level === 'error' ? '#fca5a5' : ev.level === 'warn' ? '#fcd34d' : '#a7f3d0',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>
-                    {new Date(ev.at).toLocaleTimeString()} · {ev.message}
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-        </div>
-      )}
 
 
 
@@ -1128,7 +1098,7 @@ function ActiveCall({
   return (
     <div style={{
       ...callViewStyle,
-      background: 'linear-gradient(180deg, rgba(245,248,253,0.96) 0%, rgba(230,238,250,0.98) 100%)',
+      background: 'linear-gradient(180deg, #060C1C 0%, #0A1429 52%, #0E1B3D 100%)',
       justifyContent: compact ? 'flex-start' : 'center',
       minHeight: '100%',
       padding: compact ? '18px 10px 20px' : callViewStyle.padding,
@@ -1181,17 +1151,38 @@ function ActiveCall({
 
       {showDTMF && (
         <div role="group" aria-label="DTMF keypad" style={{
-          display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6,
-          marginBottom: 14, width: 'min(100%, 240px)',
+          display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: compact ? 6 : 10,
+          marginBottom: 16, width: compact ? '100%' : 'min(100%, 260px)',
+          padding: compact ? '8px' : '14px',
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.10)',
+          borderRadius: 20,
+          backdropFilter: 'blur(20px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)',
         }}>
-          {dialKeys.map(([k]) => (
+          {dialKeys.map(([k, sub]) => (
             <button
               key={k}
-              className="lemtel-key lemtel-glass lemtel-focus"
               onClick={() => sp.sendDTMF(k)}
               aria-label={`Send DTMF tone ${k}`}
-              style={{ padding: '10px 0', fontSize: 16 }}
-            >{k}</button>
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                padding: compact ? '10px 0' : '14px 0', borderRadius: 14,
+                background: 'linear-gradient(145deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))',
+                border: '1px solid rgba(255,255,255,0.14)',
+                color: '#E8EEFB', cursor: 'pointer',
+                transition: 'all 0.12s ease',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.10)',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(145deg, rgba(0,35,230,0.30), rgba(0,35,230,0.15))'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(0,35,230,0.50)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(145deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.14)'; }}
+              onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.93)'; (e.currentTarget as HTMLButtonElement).style.background = 'linear-gradient(145deg, rgba(0,35,230,0.45), rgba(0,35,230,0.25))'; }}
+              onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; }}
+            >
+              <span style={{ fontSize: compact ? 18 : 22, fontWeight: 700, lineHeight: 1, letterSpacing: -0.5 }}>{k}</span>
+              {sub && <span style={{ fontSize: compact ? 7 : 8.5, color: '#7C8AA8', letterSpacing: 1.5, marginTop: 3, textTransform: 'uppercase' }}>{sub}</span>}
+            </button>
           ))}
         </div>
       )}

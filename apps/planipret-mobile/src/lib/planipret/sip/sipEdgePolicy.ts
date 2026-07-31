@@ -1,29 +1,50 @@
 /**
- * NetSapiens core nodes (core1.cluster1.ucstack.io …) accept a REGISTER, answer
- * 200 OK, then close the WebSocket with 1001 "Going Away" a few seconds later.
- * Client registrations MUST live on the SBC edge (voice.ava-telecom.ca:9002).
- * Measured live 2026-05/07. This is the last-line client guard: even if the
- * backend or a cached device row hands us a core URL, we never dial it.
+ * NetSapiens WSS endpoint policy (updated 2026-07, per carrier instruction).
+ *
+ * SIP clients MUST register on a call-processing core node
+ * (`core1.cluster1.ucstack.io` / `core2.cluster1.ucstack.io`), NOT on the
+ * portal server. `voice.ava-telecom.ca` resolves to `portal1.cluster1.ucstack.io`,
+ * which accepts the REGISTER but does not carry the registration for call
+ * delivery — inbound calls then go straight to voicemail.
+ *
+ * So: portal hosts are dropped, core hosts are preferred.
  */
-export const PP_SIP_EDGE_FALLBACK = "wss://voice.ava-telecom.ca:9002";
+export const PP_SIP_CORE_PRIMARY = "wss://core1.cluster1.ucstack.io:9002";
+export const PP_SIP_CORE_SECONDARY = "wss://core2.cluster1.ucstack.io:9002";
+export const PP_SIP_EDGE_FALLBACK = PP_SIP_CORE_PRIMARY;
 
-export function isCoreWssUrl(u: string): boolean {
-  try {
-    return /(^|\.)(core\d*|cluster\d*)[^/]*\.ucstack\.io$/i.test(new URL(u).hostname);
-  } catch {
-    return /ucstack\.io/i.test(u);
-  }
+const PORTAL_HOST = /(^|\.)(portal\d*|voice)[^/]*\.(ucstack\.io|ava-telecom\.ca)$/i;
+const CORE_HOST = /(^|\.)core\d+\.[^/]*ucstack\.io$/i;
+
+function hostOf(u: string): string {
+  try { return new URL(u).hostname; } catch { return ""; }
 }
 
-/** Keep only SBC-edge WSS targets; fall back to the known edge when empty. */
+/** True for portal / non-call-processing hosts that must never carry a REGISTER. */
+export function isPortalWssUrl(u: string): boolean {
+  const h = hostOf(u);
+  return h ? PORTAL_HOST.test(h) : /voice\.ava-telecom\.ca|portal\d*\./i.test(u);
+}
+
+/** True for a call-processing core node (valid registration target). */
+export function isCoreWssUrl(u: string): boolean {
+  const h = hostOf(u);
+  return h ? CORE_HOST.test(h) : /core\d+\./i.test(u);
+}
+
+/** Keep only core WSS targets; fall back to core1/core2 when none resolved. */
 export function edgeOnlyWssUrls(candidates: (string | null | undefined)[]): string[] {
   const kept = Array.from(
     new Set(
       candidates
         .map((u) => String(u ?? "").trim())
         .filter((u) => /^wss?:\/\//i.test(u))
-        .filter((u) => !isCoreWssUrl(u))
+        .filter((u) => !isPortalWssUrl(u))
     )
   );
-  return kept.length ? kept : [PP_SIP_EDGE_FALLBACK];
+  const cores = kept.filter(isCoreWssUrl);
+  const ordered = [...cores, ...kept.filter((u) => !isCoreWssUrl(u))];
+  if (!ordered.length) return [PP_SIP_CORE_PRIMARY, PP_SIP_CORE_SECONDARY];
+  if (!ordered.some((u) => u === PP_SIP_CORE_SECONDARY)) ordered.push(PP_SIP_CORE_SECONDARY);
+  return Array.from(new Set(ordered));
 }

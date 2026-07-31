@@ -457,8 +457,8 @@ export default function SoftphonePane({
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center',
         }}>
           <div style={{ fontSize: 32, lineHeight: 1 }} aria-hidden>🔐</div>
-          <div style={{ color: '#fff', fontSize: 16, fontWeight: 700 }}>SIP Not Configured</div>
-          <div style={{ color: 'rgba(235,240,255,0.78)', fontSize: 12, lineHeight: 1.5, maxWidth: 280 }}>
+          <div style={{ color: c.text, fontSize: 16, fontWeight: 700 }}>SIP Not Configured</div>
+          <div style={{ color: c.mutedSilver, fontSize: 12, lineHeight: 1.5, maxWidth: 280 }}>
             Your extension needs a SIP password. Contact your administrator or visit the portal.
           </div>
           <button
@@ -471,7 +471,7 @@ export default function SoftphonePane({
               boxShadow: '0 4px 14px rgba(124,58,237,0.35)',
             }}
           >Open Portal →</button>
-          <div style={{ color: 'rgba(235,240,255,0.5)', fontSize: 10, marginTop: 4 }}>{sp.credError}</div>
+          <div style={{ color: c.mutedSilver, fontSize: 10, marginTop: 4 }}>{sp.credError}</div>
         </div>
       )}
 
@@ -490,7 +490,7 @@ export default function SoftphonePane({
             : sp.snap.status === 'disconnected'
               ? '1px solid rgba(148,163,184,0.35)'
               : '1px solid rgba(245,158,11,0.35)',
-          color: '#fff', fontSize: 12,
+          color: c.text, fontSize: 12,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={{ fontWeight: 700, fontSize: 12 }}>
@@ -502,9 +502,9 @@ export default function SoftphonePane({
             <button
               onClick={() => sp.restart()}
               style={{
-                background: 'rgba(255,255,255,0.1)',
-                border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
-                color: '#fff', padding: '3px 8px', fontSize: 10, cursor: 'pointer',
+                background: 'rgba(0,35,230,0.08)',
+                border: `1px solid ${c.border}`, borderRadius: 6,
+                color: c.primary, padding: '3px 8px', fontSize: 10, cursor: 'pointer',
               }}
               title="Reinitialize SIP"
             >↻ Retry</button>
@@ -516,8 +516,8 @@ export default function SoftphonePane({
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent('lemtel:nav', { detail: 'settings' }))}
                 style={{
-                  marginLeft: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.25)',
-                  color: '#fff', borderRadius: 6, padding: '2px 6px', fontSize: 10, cursor: 'pointer',
+                  marginLeft: 6, background: 'transparent', border: `1px solid ${c.border}`,
+                  color: c.primary, borderRadius: 6, padding: '2px 6px', fontSize: 10, cursor: 'pointer',
                 }}
                 title="Open Diagnostics"
               >Diagnose ↗</button>
@@ -1321,7 +1321,7 @@ function SipDiagnostics({
           <span style={{
             display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: statusColor,
           }} />
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: 11 }}>SIP {sp.snap.status}</span>
+          <span style={{ color: c.text, fontWeight: 700, fontSize: 11 }}>SIP {sp.snap.status}</span>
           {sp.snap.errorCause && (
             <span title={sp.snap.errorCause} style={{
               color: '#fca5a5', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis',
@@ -1355,8 +1355,8 @@ function SipDiagnostics({
           </div>
           {devices && (
             <div style={{
-              padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.3)',
-              fontSize: 10, color: 'rgba(235,240,255,0.85)',
+              padding: 6, borderRadius: 6, background: 'rgba(0,0,0,0.08)',
+              fontSize: 10, color: c.text,
               fontFamily: 'JetBrains Mono, Menlo, monospace',
             }}>
               <div>🎙  Input:  {devices.input}</div>

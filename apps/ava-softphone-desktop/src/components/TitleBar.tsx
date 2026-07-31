@@ -58,10 +58,10 @@ export default function TitleBar(_props: Props = {}) {
           boxShadow: '0 18px 50px -18px rgba(0,0,0,.55)', padding: 10, zIndex: 1002,
         }}>
           <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>CDR sync attempts</div>
-          {sync.log.length === 0 ? <div style={{ fontSize: 11, color: colors.textMuted }}>No attempts logged yet.</div> : sync.log.slice(0, 8).map((l) => (
-            <div key={l.id} style={{ padding: '6px 0', borderTop: `1px solid ${colors.border}`, fontSize: 11, color: l.status === 'failed' ? colors.danger : l.status === 'success' ? colors.success : colors.textMuted }}>
+          {sync.log.length === 0 ? <div style={{ fontSize: 11, color: colors.mutedSilver }}>No attempts logged yet.</div> : sync.log.slice(0, 8).map((l) => (
+            <div key={l.id} style={{ padding: '6px 0', borderTop: `1px solid ${colors.border}`, fontSize: 11, color: l.status === 'failed' ? colors.danger : l.status === 'success' ? colors.success : colors.mutedSilver }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong>{l.status.toUpperCase()}</strong><span>{new Date(l.at).toLocaleTimeString()}</span></div>
-              <div style={{ marginTop: 2, color: colors.textMuted }}>{l.source}{l.attempt ? ` · attempt ${l.attempt}` : ''} — {l.reason}</div>
+              <div style={{ marginTop: 2, color: colors.mutedSilver }}>{l.source}{l.attempt ? ` · attempt ${l.attempt}` : ''} — {l.reason}</div>
             </div>
           ))}
         </div>

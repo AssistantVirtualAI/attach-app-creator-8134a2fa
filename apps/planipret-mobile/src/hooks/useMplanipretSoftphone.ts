@@ -813,11 +813,27 @@ export function useMplanipretSoftphone(enabled = true) {
   const hasLiveSipSession = snap.callState === "ringing-in" || snap.callState === "ringing-out"
     || snap.callState === "active" || snap.callState === "held";
 
+  // Dès qu'une vraie session SIP existe, le push n'a plus à piloter l'écran.
+  useEffect(() => { if (hasLiveSipSession || snap.callState === "ended") setPushRing(null); }, [hasLiveSipSession, snap.callState]);
+
   const effectiveSnap = useMemo<PpSipSnapshot>(() => {
     const base: PpSipSnapshot = (nativeOwnsRegistration && snap.status !== "registered" && snap.status !== "connected")
       ? ({ ...snap, status: "registered", lastError: null } as PpSipSnapshot)
       : snap;
-    if (!restCall?.id || hasLiveSipSession) return base;
+    if (!restCall?.id || hasLiveSipSession) {
+      // Écran "ça sonne" piloté par le push VoIP tant que l'INVITE n'est pas là.
+      if (!hasLiveSipSession && pushRing) {
+        return {
+          ...base,
+          callState: "ringing-in",
+          callId: pushRing.callId || base.callId,
+          remoteIdentity: pushRing.from || "",
+          remoteNumber: pushRing.from || "",
+          direction: "in",
+        } as PpSipSnapshot;
+      }
+      return base;
+    }
     const state = normalizeRestState(restCall.status);
     return {
       ...base,
@@ -829,7 +845,7 @@ export function useMplanipretSoftphone(enabled = true) {
       startedAt: restCall.startedAt ?? base.startedAt ?? Date.now(),
       onHold: state === "held",
     };
-  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration, hasLiveSipSession]);
+  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration, hasLiveSipSession, pushRing]);
 
 
   const restControl = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {

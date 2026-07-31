@@ -2,48 +2,39 @@
 // Planiprêt iOS app and upserts it into planipret_voip_push_tokens so the
 // NetSapiens bridge can push VoIP notifications for incoming calls.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const json = (body: unknown, status: number) => new Response(JSON.stringify(body), {
+  status,
+  headers: { ...corsHeaders, "Access-Control-Allow-Methods": "POST, OPTIONS", "Content-Type": "application/json" },
+});
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "method_not_allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !anonKey || !serviceKey) return json({ error: "backend_not_configured" }, 503);
 
   const authHeader = req.headers.get("Authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!token) {
-    return new Response(JSON.stringify({ error: "missing_auth" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: "missing_auth" }, 401);
   }
 
-  const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData?.user) {
-    return new Response(JSON.stringify({ error: "invalid_session" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: "invalid_session" }, 401);
   }
 
-  let body: any = {};
-  try { body = await req.json(); } catch { /* noop */ }
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return json({ error: "invalid_json" }, 400); }
 
   const deviceToken = String(body?.deviceToken || body?.device_token || "").trim();
   const platform = String(body?.platform || "ios").toLowerCase();
@@ -51,14 +42,13 @@ Deno.serve(async (req) => {
   const bundleId = body?.bundleId || null;
   const environment = body?.environment || "production";
 
-  if (!deviceToken || deviceToken.length < 8) {
-    return new Response(JSON.stringify({ error: "invalid_device_token" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  if (!/^[a-fA-F0-9]{32,512}$/.test(deviceToken)) return json({ error: "invalid_device_token" }, 400);
+  if (platform !== "ios") return json({ error: "invalid_platform" }, 400);
+  if (environment !== "production" && environment !== "sandbox") return json({ error: "invalid_environment" }, 400);
+  if (extension && String(extension).length > 64) return json({ error: "invalid_extension" }, 400);
+  if (bundleId && String(bundleId).length > 255) return json({ error: "invalid_bundle_id" }, 400);
 
-  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const admin = createClient(supabaseUrl, serviceKey);
   const { error: upsertErr } = await admin
     .from("planipret_voip_push_tokens")
     .upsert(
@@ -76,14 +66,12 @@ Deno.serve(async (req) => {
 
   if (upsertErr) {
     console.error("[pp-voip-push-token] upsert failed", upsertErr);
-    return new Response(JSON.stringify({ error: "upsert_failed", detail: upsertErr.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: "upsert_failed" }, 500);
   }
 
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return json({ ok: true, persisted: true }, 200);
+  } catch (error) {
+    console.error("[pp-voip-push-token] unhandled", error instanceof Error ? error.message : String(error));
+    return json({ error: "internal_error" }, 500);
+  }
 });

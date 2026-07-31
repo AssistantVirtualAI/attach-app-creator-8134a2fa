@@ -24,6 +24,7 @@ import { getAudioConstraints, type NCMode } from "@/lib/planipret/audio/audioCon
 import { ensureMicPermission, type MicPermissionState } from "@/lib/planipret/audio/micPermission";
 import {
   acknowledgePlanipretIncoming,
+  completePlanipretCallKitAnswer,
   getPlanipretSipKeepAliveStatus,
   getPlanipretVoipPushToken,
   onPlanipretIncomingCallAnswered,
@@ -61,29 +62,57 @@ const maestroLog = (fn: () => Promise<unknown>) => {
 // Last VoIP token pushed to the backend — used to detect rotations (restore,
 // reinstall, APNs re-issue) and re-arm the SIP registration when it changes.
 let lastVoipToken: string | null = null;
+let voipTokenUpload: Promise<boolean> | null = null;
+let voipTokenUploadKey = "";
+let voipTokenRetry: ReturnType<typeof setTimeout> | null = null;
+const VOIP_TOKEN_STORAGE_KEY = "pp.voip-token-confirmed.v1";
 
 async function uploadPlanipretVoipToken(token: string, bundleId?: string, extension?: string | null, environment?: string) {
   if (!token) return;
-  const firstSeen = lastVoipToken === null;
-  const changed = lastVoipToken !== null && lastVoipToken !== token;
-  if (changed) console.info("[pp-voip] VoIP token changed → re-registering SIP", { suffix: token.slice(-6) });
-  else if (lastVoipToken === null) console.info("[pp-voip] VoIP token registered", { suffix: token.slice(-6) });
-  lastVoipToken = token;
+  const key = `${token}|${bundleId ?? ""}|${extension ?? ""}|${environment ?? ""}`;
   try {
-    const { error } = await supabase.functions.invoke("pp-voip-push-token", {
-      body: {
-        deviceToken: token,
-        platform: "ios",
-        bundleId,
-        extension: extension ?? (ppSipProvider.getConfig?.() as any)?.extension ?? null,
-        environment: environment || undefined,
-      },
-    });
-    if (error) console.warn("[pp-voip] token upload failed", error);
-    else if (changed || firstSeen) {
-      try { ppSipProvider.forceReregister(); } catch {}
+    if (localStorage.getItem(VOIP_TOKEN_STORAGE_KEY) === key) {
+      lastVoipToken = token;
+      return;
     }
-  } catch (e) { console.warn("[pp-voip] token upload failed", e); }
+  } catch { /* storage unavailable */ }
+  if (voipTokenUpload && voipTokenUploadKey === key) {
+    await voipTokenUpload;
+    return;
+  }
+  voipTokenUploadKey = key;
+  voipTokenUpload = (async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-voip-push-token", {
+        body: {
+          deviceToken: token,
+          platform: "ios",
+          bundleId,
+          extension: extension ?? ppSipProvider.getConfig()?.extension ?? null,
+          environment: environment || undefined,
+        },
+      });
+      if (error || (data as { ok?: boolean } | null)?.ok !== true) throw error ?? new Error("token_not_persisted");
+      const changed = lastVoipToken !== null && lastVoipToken !== token;
+      lastVoipToken = token;
+      try { localStorage.setItem(VOIP_TOKEN_STORAGE_KEY, key); } catch { /* storage unavailable */ }
+      if (voipTokenRetry) { clearTimeout(voipTokenRetry); voipTokenRetry = null; }
+      console.info("[pp-voip] VoIP token confirmed", { changed, suffix: token.slice(-6) });
+      return true;
+    } catch (error) {
+      console.warn("[pp-voip] token upload failed; retry scheduled", error);
+      if (!voipTokenRetry) {
+        voipTokenRetry = setTimeout(() => {
+          voipTokenRetry = null;
+          void uploadPlanipretVoipToken(token, bundleId, extension, environment);
+        }, 15_000);
+      }
+      return false;
+    } finally {
+      if (voipTokenUploadKey === key) voipTokenUpload = null;
+    }
+  })();
+  await voipTokenUpload;
 }
 
 let softphoneOwnerId: string | null = null;
@@ -192,6 +221,15 @@ export function useMplanipretSoftphone(enabled = true) {
 
   // Subscribe to the SIP snapshot.
   useEffect(() => ppSipProvider.subscribe(setSnap), []);
+
+  // CallKit must only mark Answer fulfilled after the SIP dialog is confirmed;
+  // otherwise iOS shows a connected call while NetSapiens is still ringing or
+  // has already followed the voicemail branch.
+  useEffect(() => {
+    if (snap.callState === "active" && snap.direction === "in") {
+      void completePlanipretCallKitAnswer(snap.callId, true);
+    }
+  }, [snap.callState, snap.direction, snap.callId]);
 
   // 24h SIP stability soak recorder (rolling window in localStorage).
   useEffect(() => startSipStabilityMonitor(), []);
@@ -388,14 +426,11 @@ export function useMplanipretSoftphone(enabled = true) {
     onPlanipretVoipIncomingCall((data) => {
       console.log("[pp-voip] incoming VoIP push → waking native SIP", data?.callId);
       void wakePlanipretNativeSipForIncomingCall("voip_push");
-      try { ppSipProvider.forceReregister(); } catch {}
-      try { (window as any).__ppPendingAnswer = { callId: data?.callId, ts: Date.now() }; } catch {}
     }).then((fn) => { cleanupVoipIncoming = fn; }).catch(() => undefined);
 
     onPlanipretIncomingCallAnswered((data) => {
-      try { (window as any).__ppPendingAnswer = { callId: data?.callId, ts: Date.now() }; } catch {}
       try { ppSipProvider.forceReregister(); } catch {}
-      try { ppSipProvider.answer(); } catch {}
+      ppSipProvider.requestAnswer(data?.callId);
       try { window.dispatchEvent(new CustomEvent("pp:sip-callkit-answered", { detail: data })); } catch {}
     }).then((fn) => { cleanupVoipAnswer = fn; }).catch(() => undefined);
 
@@ -500,7 +535,6 @@ export function useMplanipretSoftphone(enabled = true) {
       if (!cfg) return;
       const seq = ++handoffSeq;
       try { await ppSipProvider.releaseForBackground(); } catch { /* noop */ }
-      await new Promise((r) => setTimeout(r, 500));
       if (seq !== handoffSeq) return;
       // Wait for the native service to report a real PBX REGISTER 200 OK
       // ("registered"/"protected") before dropping the WebView contact. Any
@@ -828,8 +862,7 @@ export function useMplanipretSoftphone(enabled = true) {
       try { ppSipProvider.hangup(); } catch {}
       return false;
     }
-    ppSipProvider.answer();
-    return true;
+    return ppSipProvider.answer(callId);
   }, [restCall?.id, restControl]);
 
   const hangup = useCallback(() => {

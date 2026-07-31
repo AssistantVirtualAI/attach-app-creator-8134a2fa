@@ -34,17 +34,19 @@ Deno.serve(async (req) => {
       bucket = DEFAULT_BUCKET,
       object = DEFAULT_OBJECT,
       description = "Avis d'enregistrement d'appel (AVA)",
+      allUsers = false,
       dryRun = false,
     } = body ?? {};
 
     const { NS_DEFAULT_DOMAIN } = getEnv();
     const domain = nsDomain || NS_DEFAULT_DOMAIN;
-    if (!nsUser) {
-      return new Response(JSON.stringify({ error: "missing_user", hint: "Provide { user: '<extension>' }" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!nsUser && !allUsers) {
+      return new Response(
+        JSON.stringify({ error: "missing_user", hint: "Provide { user: '<extension>' } or { allUsers: true }" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
+
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,

@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
       Accept: "application/json",
     };
 
-    const stats = { checked: 0, compliant: 0, drifted: 0, repaired: 0, repair_failed: 0, missing_device: 0, errors: 0 };
+    const stats = { checked: 0, compliant: 0, drifted: 0, repaired: 0, repair_failed: 0, missing_device: 0, push_disabled: 0, push_repaired: 0, errors: 0 };
     const details: any[] = [];
 
     const checkBroker = async (broker: any) => {

@@ -23,7 +23,10 @@ interface FetchedCreds {
   password_source?: string;
 }
 
-async function fetchSoftphoneCredentials(accessToken: string): Promise<FetchedCreds | null> {
+async function fetchSoftphoneCredentials(
+  accessToken: string,
+  fallbackArgs?: { extension?: string; sipDomain?: string; wssUrl?: string },
+): Promise<FetchedCreds | null> {
   // Retry transient DB / network errors before giving up.
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
@@ -53,13 +56,14 @@ async function fetchSoftphoneCredentials(accessToken: string): Promise<FetchedCr
         if (res.status === 424 || data?.code === 'NO_SIP_PASSWORD') {
           const local = localStorage.getItem('lemtel.sip_password');
           if (local) {
+            // 424 body does NOT include sip_domain/wss_url — use fallbackArgs from creds
             return {
-              extension: data?.extension || '',
-              display_name: data?.display_name || '',
-              sip_domain: data?.sip_domain || '',
-              wss_url: data?.wss_url || '',
+              extension: data?.extension || fallbackArgs?.extension || '',
+              display_name: data?.display_name || fallbackArgs?.extension || '',
+              sip_domain: data?.sip_domain || fallbackArgs?.sipDomain || 'lemtel.lemtel.tel',
+              wss_url: data?.wss_url || fallbackArgs?.wssUrl || 'wss://voice.ava-telecom.ca:9002',
               password: local,
-              auth_username: data?.auth_username,
+              auth_username: data?.auth_username || fallbackArgs?.extension,
               password_source: 'local_account_password',
             } as FetchedCreds;
           }
@@ -148,7 +152,11 @@ export function useSoftphone(args: UseSoftphoneArgs) {
           setCredError('No session token. Re-sign-in.');
           return;
         }
-        const fetched = await fetchSoftphoneCredentials(token);
+        const fetched = await fetchSoftphoneCredentials(token, {
+          extension: args.extension,
+          sipDomain: args.sipDomain,
+          wssUrl: args.wssUrl,
+        });
         if (cancelled) return;
         if (!fetched || !fetched.password) {
           setCredError(fetched ? 'No SIP password on file. Contact your admin.' : 'Failed to load SIP credentials.');

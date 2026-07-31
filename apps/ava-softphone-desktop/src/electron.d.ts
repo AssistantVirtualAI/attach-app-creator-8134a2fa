@@ -4,7 +4,7 @@ declare global {
   interface Window {
     electronAPI: {
       getCredentials: () => Promise<any>;
-      saveCredentials: (creds: object) => Promise<boolean>;
+      saveCredentials: (creds: object | null) => Promise<boolean>;
       clearCredentials: () => Promise<boolean>;
       showNotification: (title: string, body: string, opts?: { tag?: string; urgent?: boolean }) => Promise<void>;
       clearNotification: (tag: string) => Promise<void>;

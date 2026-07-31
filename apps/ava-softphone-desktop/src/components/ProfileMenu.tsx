@@ -1003,8 +1003,7 @@ function menuItem(active: boolean): React.CSSProperties {
 
 function SyncBadge({ state, detail }: { state: 'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'offline'; detail: string }) {
   if (state === 'idle') return null;
-  const map: Record<typeof state, { icon: string; color: string; bg: string; label: string }> = {
-    idle:     { icon: '',   color: '',         bg: '',                       label: '' },
+  const map: Record<'saving' | 'saved' | 'error' | 'conflict' | 'offline', { icon: string; color: string; bg: string; label: string }> = {
     saving:   { icon: '⟳',  color: '#0ea5e9',  bg: 'rgba(14,165,233,0.18)',  label: 'Syncing' },
     saved:    { icon: '✓',  color: c.success,  bg: 'rgba(34,197,94,0.18)',   label: 'Synced' },
     error:    { icon: '!',  color: c.danger,  bg: 'rgba(239,68,68,0.18)',   label: 'Sync error' },

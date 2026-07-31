@@ -353,7 +353,7 @@ export default function CallsView({ scope = 'mine' }: { scope?: 'mine' | 'org' }
                           const result = await runTranscribeAndAnalyze({
                             invoke: async (name, body) => await supabase.functions.invoke(name, { body }),
                             callRecordId: sel.id,
-                            organizationId: orgId,
+                            organizationId: orgId ?? '',
                             onStage: (s, detail) => setStage({ stage: s, detail }),
                           });
                           const fresh = await ava.callDetail(sel.id).catch(() => null);

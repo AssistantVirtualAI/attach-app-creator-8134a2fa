@@ -125,8 +125,8 @@ export default function RecordingsView({ scope = 'mine' }: { scope?: 'mine' | 'o
     if (pending) return pending;
     const p = (async () => {
       // Prefer short-lived signed URL (no client-side blob download); fallback to proxy stream.
-      const signed = await ava.getRecordingSignedUrl(rec);
-      const url = signed?.url || (await ava.getRecordingAudioUrl(rec));
+      const signed = await ava.getRecordingSignedUrl(rec as any);
+      const url = signed?.url || (await ava.getRecordingAudioUrl(rec as any));
       if (url) audioBlobCache.set(rec.id, url);
       return url;
     })().finally(() => audioInFlight.delete(rec.id));

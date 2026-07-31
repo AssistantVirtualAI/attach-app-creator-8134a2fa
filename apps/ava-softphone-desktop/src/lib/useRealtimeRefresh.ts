@@ -49,7 +49,7 @@ export function useRealtimeRefresh(opts: Options, refresh: () => void) {
     const activeEvents = eventsKey.split(',') as Array<'INSERT' | 'UPDATE' | 'DELETE'>;
     for (const ev of activeEvents) {
       channel.on(
-        // @ts-expect-error — supabase-js types for postgres_changes
+        // @ts-ignore — supabase-js types for postgres_changes
         'postgres_changes',
         { event: ev, schema: 'public', table, filter: `organization_id=eq.${organizationId}` },
         (payload: unknown) => {

@@ -2,7 +2,8 @@
 // as a user/domain greeting via NS-API v2 Media/Greetings.
 // Explicitly authorized by the user (media upload only — no DID / phonenumber writes).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-import { nsFetch, getEnv, jsonResponse } from "../_shared/planipret-ns.ts";
+import { nsFetch, getEnv } from "../_shared/planipret-ns.ts";
+import { nsFetchAll } from "../_shared/ns-pagination.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,6 +36,8 @@ Deno.serve(async (req) => {
       object = DEFAULT_OBJECT,
       description = "Avis d'enregistrement d'appel (AVA)",
       allUsers = false,
+      offset = 0,
+      limit = 20,
       dryRun = false,
     } = body ?? {};
 

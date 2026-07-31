@@ -203,12 +203,28 @@ export function useSoftphone(args: UseSoftphoneArgs) {
     return () => window.removeEventListener('lemtel:set-status', onSet as EventListener);
   }, []);
 
+  // Last user-facing SIP problem (call blocked, registration lost, etc.)
+  const [sipNotice, setSipNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (snap.status === 'registered') setSipNotice(null);
+  }, [snap.status]);
+
+  const sipAvailable = snap.status === 'registered';
+
   return {
     snap,
     config,
     loading,
     credError,
-    call: useCallback((n: string) => sipProvider.call(n), []),
+    sipAvailable,
+    sipNotice,
+    dismissSipNotice: useCallback(() => setSipNotice(null), []),
+    sipUnavailableReason: sipProvider.unavailableReason(),
+    call: useCallback(async (n: string) => {
+      const err = await sipProvider.call(n);
+      if (err) setSipNotice(err);
+      return err;
+    }, []),
     answer: useCallback(() => sipProvider.answer(), []),
     hangup: useCallback(() => sipProvider.hangup(), []),
     mute: useCallback(() => sipProvider.mute(), []),
@@ -237,10 +253,20 @@ export function useSoftphone(args: UseSoftphoneArgs) {
       sipProvider.sendDTMF('*2');
       setRecording((r) => !r);
     }, []),
+    /** Fast, safe recovery: single-flight re-registration without a full teardown. */
+    retryNow: useCallback(() => {
+      setSipNotice(null);
+      setCredError(null);
+      const ok = sipProvider.retryNow();
+      // No UA at all → we need fresh credentials + full init.
+      if (!ok) setRetryTick((n) => n + 1);
+    }, []),
     restart: useCallback(async () => {
       setCredError(null);
+      setSipNotice(null);
       await sipProvider.restart();
       setRetryTick((n) => n + 1);
     }, []),
   };
 }
+

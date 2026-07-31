@@ -274,10 +274,30 @@ export function useSoftphone(args: UseSoftphoneArgs) {
     manualStatus,
     setManualStatus,
     recording,
-    toggleRecording: useCallback(() => {
+    toggleRecording: useCallback(async () => {
+      const isRec = recording;
+      setRecording(!isRec);
+      // Always send DTMF *2 as primary signal to FusionPBX
       sipProvider.sendDTMF('*2');
-      setRecording((r) => !r);
-    }, []),
+      // Server-side fallback: invoke uuid_record via fusionpbx-proxy
+      try {
+        const callUuid = snap.callUuid || '';
+        if (!callUuid) {
+          console.warn('[Record] No callUuid in snap — DTMF only, no PBX fallback');
+          return;
+        }
+        const { data, error } = await supabase.functions.invoke('fusionpbx-proxy', {
+          body: { action: isRec ? 'stop-record' : 'start-record', uuid: callUuid },
+        });
+        if (error || !(data as any)?.ok) {
+          console.warn('[Record] PBX fallback failed', error?.message || (data as any)?.error);
+        } else {
+          console.log('[Record] PBX', isRec ? 'stopped' : 'started', { recPath: (data as any)?.recPath });
+        }
+      } catch (e: any) {
+        console.warn('[Record] fusionpbx-proxy error', e?.message || e);
+      }
+    }, [recording, snap.callUuid]),
     /** Fast, safe recovery: single-flight re-registration without a full teardown. */
     retryNow: useCallback(() => {
       setSipNotice(null);

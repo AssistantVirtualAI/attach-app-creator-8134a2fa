@@ -7,6 +7,16 @@ import { mergeIncoming, mergeOnFetch } from './orgChatMerge';
 
 const { colors: c } = theme;
 
+// Inject typing-dot animation once
+if (typeof document !== 'undefined' && !document.getElementById('ava-chat-anim')) {
+  const s = document.createElement('style');
+  s.id = 'ava-chat-anim';
+  s.textContent = `
+    @keyframes typing-dot { 0%,80%,100% { transform: scale(0.7); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+  `;
+  document.head.appendChild(s);
+}
+
 type Channel = { id: string; name: string; channel_type: string; organization_id: string; members: string[] | null; archived_at: string | null };
 type Message = { id: string; channel_id: string; sender_id: string; sender_name: string | null; content: string; created_at: string; reactions?: Record<string, string[]> | null; attachments?: any[] | null; message_type?: string; edited_at?: string | null };
 type Member = { user_id: string; display_name: string; extension: string | null; status: string; call_state: string | null };
@@ -389,26 +399,37 @@ export default function OrgChatView() {
 
       {/* ─── SIDEBAR ─── */}
       <aside style={{
-        width: 210, flexShrink: 0,
+        width: 220, flexShrink: 0,
         borderRight: '1px solid rgba(255,255,255,0.06)',
-        background: 'linear-gradient(180deg, rgba(6,12,28,0.95) 0%, rgba(8,15,35,0.90) 100%)',
+        background: 'linear-gradient(180deg, rgba(6,12,28,0.97) 0%, rgba(8,15,38,0.93) 100%)',
         display: 'flex', flexDirection: 'column',
         overflowY: 'hidden',
       }}>
         {/* Sidebar header */}
         <div style={{
-          padding: '14px 14px 10px',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '14px 14px 12px',
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          background: 'linear-gradient(135deg, rgba(0,35,230,0.10), transparent 70%)',
+          position: 'relative',
           flexShrink: 0,
         }}>
-          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.5, color: '#E0A800', textTransform: 'uppercase' }}>Messages</span>
-          <button onClick={() => setShowGroup(true)} title="New group" style={{
-            background: 'linear-gradient(135deg, rgba(0,35,230,0.25), rgba(122,76,255,0.25))',
-            border: '1px solid rgba(0,35,230,0.40)',
-            color: '#8CB4FF', fontSize: 14, width: 24, height: 24, borderRadius: 7,
-            cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>+</button>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, #E0A800, rgba(0,35,230,0.6) 60%, transparent)' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'rgba(224,168,0,0.15)', border: '1px solid rgba(224,168,0,0.30)', color: '#E0A800', fontSize: 13 }}>💬</div>
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.8, color: '#E0A800', textTransform: 'uppercase' }}>Team Chat</div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>{channels.length} channels</div>
+              </div>
+            </div>
+            <button onClick={() => setShowGroup(true)} title="New group" style={{
+              background: 'linear-gradient(135deg, rgba(0,35,230,0.30), rgba(122,76,255,0.30))',
+              border: '1px solid rgba(0,35,230,0.45)',
+              color: '#8CB4FF', fontSize: 14, width: 26, height: 26, borderRadius: 8,
+              cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0,35,230,0.25)',
+            }}>+</button>
+          </div>
         </div>
 
         <div style={{ flex: 1, padding: '8px 6px', overflowY: 'auto' }}>
@@ -419,7 +440,10 @@ export default function OrgChatView() {
           {/* Groups */}
           {groupChannels.length > 0 && (
             <>
-              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#E0A800', textTransform: 'uppercase', padding: '14px 6px 5px' }}>Groups</div>
+              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(224,168,0,0.7)', textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ flex: 1 }}>Groups</span>
+                <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: '#E0A800', padding: '1px 5px', borderRadius: 4 }}>{groupChannels.length}</span>
+              </div>
               {groupChannels.map((ch) => renderChannelRow(ch, ch.name, '👥'))}
             </>
           )}
@@ -427,14 +451,18 @@ export default function OrgChatView() {
           {/* DMs */}
           {dmChannels.length > 0 && (
             <>
-              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#E0A800', textTransform: 'uppercase', padding: '14px 6px 5px' }}>Direct</div>
+              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(224,168,0,0.7)', textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ flex: 1 }}>Direct</span>
+                <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: '#E0A800', padding: '1px 5px', borderRadius: 4 }}>{dmChannels.length}</span>
+              </div>
               {dmChannels.map((ch) => renderChannelRow(ch, dmNameFor(ch), '@'))}
             </>
           )}
 
           {/* Team members */}
-          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#E0A800', textTransform: 'uppercase', padding: '14px 6px 5px' }}>
-            Team · {members.length}
+          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(224,168,0,0.7)', textTransform: 'uppercase', padding: '14px 8px 5px', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ flex: 1 }}>Team</span>
+            <span style={{ fontSize: 9, background: 'rgba(224,168,0,0.15)', color: '#E0A800', padding: '1px 5px', borderRadius: 4 }}>{members.length}</span>
           </div>
           {members.length === 0 && <div style={{ fontSize: 11, color: c.mutedSilver, padding: '4px 6px' }}>No teammates yet.</div>}
           {members.filter((m) => m.user_id !== me?.id).map((m) => {
@@ -476,14 +504,31 @@ export default function OrgChatView() {
 
         {/* Chat header */}
         <div style={{
-          padding: '10px 16px', flexShrink: 0,
+          padding: '10px 18px', flexShrink: 0,
           borderBottom: '1px solid rgba(255,255,255,0.07)',
-          background: 'rgba(255,255,255,0.02)',
+          background: 'linear-gradient(135deg, rgba(0,35,230,0.06), transparent 70%)',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#E8EEFB', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {headerLabel || <span style={{ color: '#7C8AA8' }}>Select a channel</span>}
-          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#E8EEFB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {headerLabel || <span style={{ color: '#7C8AA8' }}>Select a channel</span>}
+            </div>
+            {activeChannel && (
+              <div style={{ fontSize: 10, color: '#7C8AA8', marginTop: 2 }}>
+                {isActiveDm && otherDmMember ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_COLOR[otherDmMember.status] || STATUS_COLOR.offline, display: 'inline-block' }} />
+                    {otherDmMember.status === 'on_call' ? 'On a call' : otherDmMember.status.charAt(0).toUpperCase() + otherDmMember.status.slice(1)}
+                    {otherDmMember.extension && <span style={{ marginLeft: 6, fontFamily: 'monospace' }}>Ext {otherDmMember.extension}</span>}
+                  </span>
+                ) : isActiveGroup ? (
+                  <span>{(activeChannel.members?.length ?? 0)} members</span>
+                ) : (
+                  <span>{messages.length} messages</span>
+                )}
+              </div>
+            )}
+          </div>
           {canCall && (
             <button onClick={() => {
               if (isActiveDm && otherDmMember?.extension) startCall(otherDmMember.extension);
@@ -529,8 +574,11 @@ export default function OrgChatView() {
 
         {/* Typing indicator */}
         {typingNames.length > 0 && (
-          <div style={{ padding: '3px 16px', fontSize: 11, color: '#7C8AA8', fontStyle: 'italic', flexShrink: 0 }}>
-            {typingNames.join(', ')} {typingNames.length === 1 ? 'is' : 'are'} typing…
+          <div style={{ padding: '4px 18px', fontSize: 11, color: '#7C8AA8', fontStyle: 'italic', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'flex', gap: 3 }}>
+              {[0,1,2].map((i) => <span key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: '#7C8AA8', display: 'inline-block', animation: `typing-dot 1.2s ease-in-out ${i * 0.2}s infinite` }} />)}
+            </span>
+            <span>{typingNames.join(', ')} {typingNames.length === 1 ? 'is' : 'are'} typing…</span>
           </div>
         )}
 
@@ -651,7 +699,19 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
   const isMine = m.sender_id === meId;
   const reactions = m.reactions || {};
   const initials = (m.sender_name ?? 'U').charAt(0).toUpperCase();
-  const timeStr = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  const msgDate = new Date(m.created_at);
+  const diffMs = now.getTime() - msgDate.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffH = Math.floor(diffMs / 3600000);
+  const isToday = msgDate.toDateString() === now.toDateString();
+  const timeStr = isToday
+    ? msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : msgDate.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const relTime = diffMin < 1 ? 'just now'
+    : diffMin < 60 ? `${diffMin}m ago`
+    : diffH < 24 ? `${diffH}h ago`
+    : timeStr;
 
   return (
     <div style={{
@@ -677,19 +737,22 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
         {!isMine && (
           <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', marginBottom: 3 }}>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: '#E8EEFB' }}>{m.sender_name ?? 'User'}</span>
-            <span style={{ fontSize: 10, color: '#7C8AA8' }}>{timeStr}{m.edited_at ? ' ·edited' : ''}</span>
+            <span style={{ fontSize: 10, color: '#7C8AA8' }} title={timeStr}>{relTime}{m.edited_at ? ' · edited' : ''}</span>
           </div>
         )}
 
         {/* Bubble */}
         {m.content && (
           <div style={{
-            padding: '8px 12px',
-            borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+            padding: '9px 14px',
+            borderRadius: isMine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
             background: isMine
-              ? 'linear-gradient(135deg, #0023e6, #2a4dff)'
-              : 'rgba(255,255,255,0.07)',
-            border: isMine ? 'none' : '1px solid rgba(255,255,255,0.09)',
+              ? 'linear-gradient(135deg, #0023e6 0%, #2a4dff 60%, #7a4cff 100%)'
+              : 'rgba(255,255,255,0.08)',
+            border: isMine ? 'none' : '1px solid rgba(255,255,255,0.10)',
+            boxShadow: isMine
+              ? '0 4px 18px -6px rgba(0,35,230,0.50)'
+              : '0 2px 8px -4px rgba(0,0,0,0.30)',
             color: '#E8EEFB',
             fontSize: 13,
             lineHeight: 1.55,
@@ -700,7 +763,7 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
 
         {/* Time for own messages */}
         {isMine && (
-          <span style={{ fontSize: 9.5, color: '#7C8AA8', marginTop: 3 }}>{timeStr}{m.edited_at ? ' · edited' : ''}</span>
+          <span style={{ fontSize: 9.5, color: '#7C8AA8', marginTop: 3 }} title={timeStr}>{relTime}{m.edited_at ? ' · edited' : ''}</span>
         )}
 
         {/* Attachments */}

@@ -170,7 +170,7 @@ export default function MessagesView() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>{t.contact}</span>
-                {t.unread > 0 && <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 999, background: c.signalGold, color: '#000' }}>{t.unread}</span>}
+                {t.unread > 0 && <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 999, background: c.signalGold, color: '#0b1530' }}>{t.unread}</span>}
               </div>
               <span style={{ fontSize: 11, color: c.mutedSilver, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.lastMessage}</span>
             </button>

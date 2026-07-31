@@ -464,7 +464,7 @@ export default function ProfileMenu() {
       {open && (
         <div style={{
           position: 'absolute', top: 38, right: 0, width: 280,
-          background: '#ffffff',
+          background: 'var(--ava-surface-elev, rgba(18,26,54,0.98))',
           border: `1px solid ${c.border}`, borderRadius: 12,
           boxShadow: '0 18px 48px -16px rgba(0,0,0,0.7)',
           padding: 10, zIndex: 200, backdropFilter: 'blur(14px)',
@@ -482,7 +482,7 @@ export default function ProfileMenu() {
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <button onClick={() => { setProfileOpen(true); setOpen(false); }} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', width: '100%' }}>
-                <div style={{ fontSize: 12, color: '#0f172a', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name || 'Account'}</div>
+                <div style={{ fontSize: 12, color: c.textIce, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name || 'Account'}</div>
                 <div style={{ fontSize: 10, color: c.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</div>
               </button>
               <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
@@ -503,7 +503,7 @@ export default function ProfileMenu() {
               display: 'flex', alignItems: 'center', gap: 8,
               margin: '4px 2px 6px', padding: '7px 9px', borderRadius: 8,
               background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.35)',
-              color: '#b91c1c', fontSize: 10.5, lineHeight: 1.35,
+              color: '#ff6b6b', fontSize: 10.5, lineHeight: 1.35,
             }}>
               <span aria-hidden style={{ fontSize: 13 }}>🔒</span>
               <span>Statut verrouillé pendant un appel actif. Terminez l'appel pour le modifier.</span>
@@ -513,7 +513,7 @@ export default function ProfileMenu() {
             <div style={{
               margin: '4px 2px 6px', padding: '7px 9px', borderRadius: 8,
               background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.4)',
-              color: '#92400e', fontSize: 10.5,
+              color: '#fbbf24', fontSize: 10.5,
             }}>{lockMsg}</div>
           )}
           {(Object.keys(STATUS_META) as Status[]).map((s) => {
@@ -543,7 +543,7 @@ export default function ProfileMenu() {
                 {isPending && needsDuration && (
                   <div style={{
                     margin: '2px 4px 8px', padding: '8px', borderRadius: 8,
-                    background: 'rgba(15,23,42,0.04)', border: `1px dashed ${c.border}`,
+                    background: 'rgba(255,255,255,0.04)', border: `1px dashed ${c.border}`,
                   }}>
                     <div style={{ fontSize: 9.5, fontWeight: 700, color: c.textSub, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 6 }}>
                       How long?
@@ -575,7 +575,7 @@ export default function ProfileMenu() {
                 maxLength={80}
                 style={{
                   width: '100%', boxSizing: 'border-box',
-                  background: 'rgba(15,23,42,0.05)', color: '#0f172a',
+                  background: 'rgba(255,255,255,0.06)', color: c.textIce,
                   border: `1px solid ${c.border}`, borderRadius: 8,
                   padding: '7px 9px', fontSize: 11, outline: 'none',
                 }}
@@ -761,13 +761,13 @@ function ProfileEditor({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: 'min(460px, 92vw)', maxHeight: '90vh', overflowY: 'auto',
-          background: '#ffffff', border: `1px solid ${c.border}`, borderRadius: 14,
+          background: 'var(--ava-surface-elev, rgba(18,26,54,0.98))', border: `1px solid ${c.border}`, borderRadius: 14,
           boxShadow: '0 24px 60px -12px rgba(0,0,0,0.55)', padding: 18,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Manage profile</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#64748b' }}>×</button>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: c.textIce }}>Manage profile</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: c.textDim }}>×</button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
@@ -799,7 +799,7 @@ function ProfileEditor({
             marginTop: 12, padding: '8px 10px', borderRadius: 8, fontSize: 11.5,
             background: msg.kind === 'ok' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
             border: `1px solid ${msg.kind === 'ok' ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
-            color: msg.kind === 'ok' ? '#15803d' : '#b91c1c',
+            color: msg.kind === 'ok' ? '#22d39a' : '#ff6b6b',
           }}>{msg.text}</div>
         )}
 
@@ -942,18 +942,18 @@ function ProfileEditor({
 
 const miniBtn: React.CSSProperties = {
   fontSize: 9, padding: '3px 7px', borderRadius: 6,
-  background: 'rgba(15,23,42,0.06)', border: `1px solid ${c.border}`,
-  color: '#0f172a', cursor: 'pointer', letterSpacing: 0.4,
+  background: 'rgba(255,255,255,0.08)', border: `1px solid ${c.border}`,
+  color: c.textIce, cursor: 'pointer', letterSpacing: 0.4,
 };
 
 const lbl: React.CSSProperties = {
-  display: 'block', fontSize: 10, fontWeight: 700, color: '#475569',
+  display: 'block', fontSize: 10, fontWeight: 700, color: c.textDim,
   textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 10, marginBottom: 4,
 };
 
 const input: React.CSSProperties = {
   width: '100%', boxSizing: 'border-box',
-  background: '#f8fafc', color: '#0f172a',
+  background: 'rgba(255,255,255,0.06)', color: c.textIce,
   border: `1px solid ${c.border}`, borderRadius: 8,
   padding: '9px 11px', fontSize: 12, outline: 'none',
 };
@@ -967,33 +967,33 @@ const primaryBtn: React.CSSProperties = {
 const ghostBtn: React.CSSProperties = {
   padding: '8px 12px', borderRadius: 8,
   background: 'transparent', border: `1px solid ${c.border}`,
-  color: '#0f172a', fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+  color: c.textIce, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
 };
 
 const eyeBtn: React.CSSProperties = {
   position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
   fontSize: 10, padding: '4px 8px', borderRadius: 6,
-  background: 'rgba(15,23,42,0.06)', border: `1px solid ${c.border}`,
-  color: '#0f172a', cursor: 'pointer', fontWeight: 700,
+  background: 'rgba(255,255,255,0.08)', border: `1px solid ${c.border}`,
+  color: c.textIce, cursor: 'pointer', fontWeight: 700,
 };
 
 const fieldErr: React.CSSProperties = {
-  fontSize: 10.5, color: '#b91c1c', marginTop: 4, fontWeight: 600,
+  fontSize: 10.5, color: '#ff6b6b', marginTop: 4, fontWeight: 600,
 };
 
 const errBox: React.CSSProperties = {
   marginTop: 10, padding: '9px 11px', borderRadius: 8, fontSize: 11.5,
   background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.4)',
-  color: '#b91c1c', lineHeight: 1.45,
+  color: '#ff6b6b', lineHeight: 1.45,
 };
 
 function menuItem(active: boolean): React.CSSProperties {
   return {
     width: '100%', display: 'flex', alignItems: 'center', gap: 10,
     padding: '8px 10px', borderRadius: 8,
-    background: active ? 'rgba(0,35,230,0.12)' : 'transparent',
+    background: active ? 'rgba(0,35,230,0.22)' : 'transparent',
     border: '1px solid transparent',
-    color: '#0f172a', fontSize: 12, fontWeight: 600,
+    color: c.textIce, fontSize: 12, fontWeight: 600,
     cursor: 'pointer', textAlign: 'left',
   };
 }

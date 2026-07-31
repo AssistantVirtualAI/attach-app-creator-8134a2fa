@@ -377,6 +377,6 @@ function QueueDetail({ queue, agents, waiting, queues, busy, canAdmin, onAgentAc
 const baseBtn: React.CSSProperties = {
   fontSize: 11, fontWeight: 700, padding: '6px 12px', borderRadius: 6, cursor: 'pointer',
 };
-function BtnPrimary(p: any) { return <button {...p} style={{ ...baseBtn, background: c.signalGold, color: '#000', border: 'none' }} />; }
+function BtnPrimary(p: any) { return <button {...p} style={{ ...baseBtn, background: c.signalGold, color: '#0b1530', border: 'none' }} />; }
 function BtnGhost(p: any) { return <button {...p} style={{ ...baseBtn, background: 'transparent', color: c.textIce, border: `1px solid ${c.border}` }} />; }
 function Mini(p: any) { return <button {...p} style={{ ...baseBtn, fontSize: 10, padding: '3px 8px', background: 'rgba(0,35,230,0.25)', color: c.textIce, border: `1px solid ${c.border}` }} />; }

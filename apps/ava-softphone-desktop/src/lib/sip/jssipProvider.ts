@@ -229,6 +229,8 @@ export interface SoftphoneSnapshot {
   startedAt: number | null;
   events: SipEvent[];
   authBlocked?: AuthBlock | null;
+  /** FusionPBX/FreeSWITCH call UUID extracted from the X-Call-UUID SIP header. */
+  callUuid?: string | null;
   /** Watchdog recovery state (single-flight re-registration). */
   recovering?: boolean;
   recoveryAttempt?: number;
@@ -279,6 +281,7 @@ class JsSipProvider {
     startedAt: null,
     events: [],
     authBlocked: null,
+    callUuid: null,
   };
   audioEl: HTMLAudioElement | null = null;
   outputDeviceId: string | null = null;
@@ -706,7 +709,16 @@ class JsSipProvider {
       if (!incoming) this.update({ callState: 'ringing-out' });
     });
     session.on('confirmed', () => {
-      this.update({ callState: 'active', startedAt: Date.now() });
+      // Try to extract the FusionPBX call UUID from the SIP response headers.
+      let callUuid: string | null = null;
+      try {
+        const resp = session._request || session._lastResponse || session.response;
+        callUuid = resp?.getHeader?.('X-Call-UUID') ||
+          resp?.getHeader?.('X-Unique-ID') ||
+          session.id ||
+          null;
+      } catch { /* noop */ }
+      this.update({ callState: 'active', startedAt: Date.now(), callUuid });
       this.patchCurrentAttempt({ outcome: 'connected', sdpAfter: _lastSdpAfter });
       this.lastFailure = null;
     });
@@ -741,7 +753,7 @@ class JsSipProvider {
       setTimeout(() => this.resetCall(), 2500);
     });
     session.on('ended', () => {
-      this.update({ callState: 'ended' });
+      this.update({ callState: 'ended', callUuid: null });
       this.patchCurrentAttempt({ outcome: 'ended' });
       setTimeout(() => this.resetCall(), 2500);
     });

@@ -1042,7 +1042,7 @@ class JsSipProvider {
     this.session = null;
     this.secondSession = null;
     this.lastStableStatus = 'disconnected';
-    this.update({ status: 'disconnected', callState: 'idle', direction: null, startedAt: null });
+    this.update({ status: 'disconnected', callState: 'idle', direction: null, startedAt: null, recovering: false, nextRetryAt: null, recoveryAttempt: 0 });
   }
 }
 

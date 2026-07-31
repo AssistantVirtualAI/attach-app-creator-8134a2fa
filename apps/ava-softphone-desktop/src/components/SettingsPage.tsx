@@ -21,10 +21,10 @@ function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
   const c = theme.colors;
   return (
     <div style={{ marginTop: 22, marginBottom: 8 }}>
-      <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', color: c.mutedSilver, marginBottom: 3 }}>
+      <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', color: '#7C8AA8', marginBottom: 3 }}>
         {eyebrow}
       </div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{title}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#E8EEFB' }}>{title}</div>
     </div>
   );
 }
@@ -33,8 +33,8 @@ function Card({ children, padded = true }: { children: React.ReactNode; padded?:
   const c = theme.colors;
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.88)',
-      border: `1px solid ${c.border}`,
+      background: 'rgba(255,255,255,0.04)',
+      border: '1px solid rgba(255,255,255,0.08)',
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',
       borderRadius: 14,
@@ -68,8 +68,8 @@ function SettingsRow({
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '11px 16px',
         cursor: onPress ? 'pointer' : 'default',
-        background: hovered ? 'rgba(0,35,230,0.04)' : 'transparent',
-        borderBottom: noBorder ? 'none' : `1px solid ${c.border}`,
+        background: hovered ? 'rgba(255,255,255,0.06)' : 'transparent',
+        borderBottom: noBorder ? 'none' : `1px solid rgba(255,255,255,0.08)`,
         transition: 'background 120ms ease',
         minHeight: 44,
       }}
@@ -78,18 +78,18 @@ function SettingsRow({
         <span style={{ fontSize: 16, width: 24, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: danger ? '#dc2626' : c.text, lineHeight: 1.3 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: danger ? '#dc2626' : '#E8EEFB', lineHeight: 1.3 }}>
           {label}
         </div>
         {value && (
-          <div style={{ fontSize: 11, color: c.mutedSilver, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 11, color: '#7C8AA8', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {value}
           </div>
         )}
       </div>
       {right && <div style={{ flexShrink: 0 }}>{right}</div>}
       {onPress && !right && (
-        <span style={{ color: c.mutedSilver, fontSize: 14, flexShrink: 0 }}>›</span>
+        <span style={{ color: '#7C8AA8', fontSize: 14, flexShrink: 0 }}>›</span>
       )}
     </div>
   );
@@ -103,7 +103,7 @@ function Switch({ on, onChange }: { on: boolean; onChange?: (v: boolean) => void
       onClick={(e) => { e.stopPropagation(); onChange?.(!on); }}
       style={{
         width: 40, height: 22, borderRadius: 999,
-        background: on ? c.primary : 'rgba(127,127,127,0.25)',
+        background: on ? 'linear-gradient(135deg, #0023e6, #E0A800)' : 'rgba(255,255,255,0.12)',
         border: 'none', position: 'relative', cursor: 'pointer',
         transition: 'background 160ms ease', flexShrink: 0,
       }}
@@ -206,32 +206,32 @@ export default function SettingsPage({
 
   const selStyle: React.CSSProperties = {
     width: '100%', padding: '9px 12px',
-    background: 'rgba(255,255,255,0.85)',
-    border: `1px solid ${c.border}`,
-    borderRadius: 10, color: c.text,
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 10, color: '#E8EEFB',
     fontSize: 13, outline: 'none', cursor: 'pointer',
   };
 
   return (
     <div style={{
       height: '100%', overflowY: 'auto', overflowX: 'hidden',
-      background: c.bg,
+      background: 'radial-gradient(1000px 620px at 6% -12%, rgba(0,35,230,0.32), transparent 62%), radial-gradient(780px 560px at 105% 105%, rgba(224,168,0,0.18), transparent 58%), linear-gradient(180deg, #060C1C 0%, #0A1429 52%, #0E1B3D 100%)',
       scrollBehavior: 'smooth',
     }}>
       {/* Sticky header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 10,
-        background: 'rgba(255,255,255,0.94)',
+        background: 'rgba(255,255,255,0.04)',
         backdropFilter: 'blur(20px) saturate(160%)',
         WebkitBackdropFilter: 'blur(20px) saturate(160%)',
-        borderBottom: `1px solid ${c.border}`,
+        borderBottom: `1px solid rgba(255,255,255,0.08)`,
         padding: '10px 16px',
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
         <button
           onClick={onBack}
           style={{
-            background: 'rgba(0,35,230,0.07)', border: `1px solid ${c.border}`,
+            background: 'rgba(0,35,230,0.20)', border: '1px solid rgba(255,255,255,0.08)',
             color: c.primary, cursor: 'pointer', fontSize: 13, fontWeight: 700,
             padding: '5px 12px', borderRadius: 8,
             display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -239,7 +239,7 @@ export default function SettingsPage({
         >
           ← Back
         </button>
-        <span style={{ fontSize: 15, fontWeight: 700, color: c.text }}>Settings</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: '#E8EEFB' }}>Settings</span>
         {savedToast && (
           <span style={{
             marginLeft: 'auto', fontSize: 11, color: c.green,
@@ -265,10 +265,10 @@ export default function SettingsPage({
                 {(creds.displayName || creds.email || 'U')[0].toUpperCase()}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: c.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#E8EEFB', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {creds.displayName || creds.email}
                 </div>
-                <div style={{ fontSize: 11, color: c.mutedSilver, marginTop: 3, fontFamily: 'JetBrains Mono, monospace' }}>
+                <div style={{ fontSize: 11, color: '#7C8AA8', marginTop: 3, fontFamily: 'JetBrains Mono, monospace' }}>
                   Ext {creds.extension} · {creds.sipDomain || 'lemtel.tel'}
                 </div>
                 <div style={{ marginTop: 6 }}>
@@ -283,8 +283,8 @@ export default function SettingsPage({
         <SectionTitle eyebrow="APPEARANCE" title="Theme & Display" />
         <Card padded={false}>
           {/* Theme selector */}
-          <div style={{ padding: '12px 16px 14px', borderBottom: `1px solid ${c.border}` }}>
-            <div style={{ fontSize: 11, color: c.mutedSilver, marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+          <div style={{ padding: '12px 16px 14px', borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
+            <div style={{ fontSize: 11, color: '#7C8AA8', marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
               Theme
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -304,7 +304,7 @@ export default function SettingsPage({
                       flex: 1, padding: '10px 6px',
                       background: active ? 'rgba(0,35,230,0.10)' : 'transparent',
                       border: `1px solid ${active ? 'rgba(0,35,230,0.35)' : c.border}`,
-                      color: active ? c.primary : c.text,
+                      color: active ? c.primary : '#E8EEFB',
                       borderRadius: 10, cursor: 'pointer',
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                       fontWeight: active ? 700 : 500, fontSize: 11,
@@ -320,8 +320,8 @@ export default function SettingsPage({
           </div>
 
           {/* Brightness */}
-          <div style={{ padding: '12px 16px 14px', borderBottom: `1px solid ${c.border}` }}>
-            <div style={{ fontSize: 11, color: c.mutedSilver, marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+          <div style={{ padding: '12px 16px 14px', borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
+            <div style={{ fontSize: 11, color: '#7C8AA8', marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
               Brightness
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -335,7 +335,7 @@ export default function SettingsPage({
                       flex: 1, padding: '9px 6px',
                       background: active ? 'rgba(255,215,0,0.12)' : 'transparent',
                       border: `1px solid ${active ? 'rgba(255,215,0,0.45)' : c.border}`,
-                      color: active ? '#D4A73A' : c.text,
+                      color: active ? '#D4A73A' : '#E8EEFB',
                       borderRadius: 10, cursor: 'pointer',
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                       fontWeight: active ? 700 : 500, fontSize: 11,
@@ -352,7 +352,7 @@ export default function SettingsPage({
 
           {/* Contrast */}
           <div style={{ padding: '12px 16px 14px' }}>
-            <div style={{ fontSize: 11, color: c.mutedSilver, marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 11, color: '#7C8AA8', marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
               Contrast
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -366,7 +366,7 @@ export default function SettingsPage({
                       flex: 1, padding: '9px 6px',
                       background: active ? 'rgba(0,82,204,0.12)' : 'transparent',
                       border: `1px solid ${active ? 'rgba(0,82,204,0.45)' : c.border}`,
-                      color: active ? '#4d6dff' : c.text,
+                      color: active ? '#4d6dff' : '#E8EEFB',
                       borderRadius: 10, cursor: 'pointer',
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                       fontWeight: active ? 700 : 500, fontSize: 11,
@@ -402,8 +402,8 @@ export default function SettingsPage({
         {/* ── Audio ────────────────────────────────────────────────────── */}
         <SectionTitle eyebrow="AUDIO" title="Audio Devices" />
         <Card padded={false}>
-          <div style={{ padding: '12px 16px 14px', borderBottom: `1px solid ${c.border}` }}>
-            <div style={{ fontSize: 11, color: c.mutedSilver, marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+          <div style={{ padding: '12px 16px 14px', borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
+            <div style={{ fontSize: 11, color: '#7C8AA8', marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
               🎙 Microphone
             </div>
             <select style={selStyle}>
@@ -411,8 +411,8 @@ export default function SettingsPage({
               {mics.map((o) => <option key={o.deviceId} value={o.deviceId}>{o.label || 'Microphone'}</option>)}
             </select>
           </div>
-          <div style={{ padding: '12px 16px 14px', borderBottom: `1px solid ${c.border}` }}>
-            <div style={{ fontSize: 11, color: c.mutedSilver, marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+          <div style={{ padding: '12px 16px 14px', borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
+            <div style={{ fontSize: 11, color: '#7C8AA8', marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
               🔊 Speaker
             </div>
             <select style={selStyle}>
@@ -421,7 +421,7 @@ export default function SettingsPage({
             </select>
           </div>
           <div style={{ padding: '12px 16px 14px' }}>
-            <div style={{ fontSize: 11, color: c.mutedSilver, marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 11, color: '#7C8AA8', marginBottom: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase' }}>
               🔔 Ring Device
             </div>
             <select style={selStyle}>
@@ -491,9 +491,9 @@ export default function SettingsPage({
           />
           {sipTestResult && (
             <div style={{
-              padding: '8px 16px 12px', fontSize: 11, color: c.mutedSilver,
+              padding: '8px 16px 12px', fontSize: 11, color: '#7C8AA8',
               fontFamily: 'JetBrains Mono, monospace',
-              borderBottom: `1px solid ${c.border}`,
+              borderBottom: `1px solid rgba(255,255,255,0.08)`,
             }}>
               <div>🎙 Input: {sipTestResult.input}</div>
               <div>🔊 Output: {sipTestResult.output}</div>
@@ -550,9 +550,9 @@ export default function SettingsPage({
             onClick={onSignOut}
             style={{
               width: '100%', height: 48, borderRadius: 12,
-              background: 'rgba(220,38,38,0.08)',
-              border: '1px solid rgba(220,38,38,0.35)',
-              color: '#dc2626',
+              background: 'rgba(239,68,68,0.15)',
+              border: '1px solid rgba(239,68,68,0.30)',
+              color: '#EF4444',
               fontSize: 14, fontWeight: 700, cursor: 'pointer',
               transition: 'background 160ms ease',
             }}
@@ -564,7 +564,7 @@ export default function SettingsPage({
         </div>
 
         {/* Footer */}
-        <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: c.mutedSilver, letterSpacing: 0.4 }}>
+        <div style={{ textAlign: 'center', marginTop: 20, fontSize: 10, color: '#7C8AA8', letterSpacing: 0.4 }}>
           {WHITELABEL.appName} · Powered by AVA AI · v{APP_VERSION}
         </div>
 

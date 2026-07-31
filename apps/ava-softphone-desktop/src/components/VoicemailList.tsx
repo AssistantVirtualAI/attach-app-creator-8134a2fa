@@ -130,14 +130,14 @@ export default function VoicemailList({ extension, onCall }: Props) {
 
 const center: React.CSSProperties = { textAlign: 'center', padding: 40, opacity: 0.5, fontSize: 12 };
 const rowBox: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-  borderRadius: 8, padding: 10, color: '#fff',
+  background: 'linear-gradient(155deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)', border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: 14, padding: 10, color: '#E8EEFB',
 };
 const iconAct: React.CSSProperties = {
   background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff',
   borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 12,
 };
 const refreshBtn: React.CSSProperties = {
-  background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)',
+  background: 'none', border: 'none', color: '#7C8AA8',
   cursor: 'pointer', fontSize: 14,
 };

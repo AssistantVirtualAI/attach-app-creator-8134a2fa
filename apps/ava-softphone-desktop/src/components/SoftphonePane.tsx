@@ -606,13 +606,14 @@ export default function SoftphonePane({
                       key={st}
                       onClick={() => setChatsSubTab(st)}
                       style={{
-                        flex: 1, padding: '7px 4px', borderRadius: 10, fontSize: 11,
+                        flex: 1, padding: '8px 4px', borderRadius: 11, fontSize: 11.5,
                         fontWeight: active ? 800 : 600, letterSpacing: 0.5,
-                        border: 'none',
+                        border: active ? `1px solid ${c.overlay12}` : '1px solid transparent',
                         background: active
-                          ? `linear-gradient(135deg, ${c.primary} 0%, ${c.primary} 50%, ${c.warning} 140%)`
+                          ? `linear-gradient(135deg, ${c.primary} 0%, ${c.primary} 55%, ${c.warning} 150%)`
                           : 'transparent',
                         color: active ? c.onAccent : c.textDim,
+                        boxShadow: active ? `0 6px 18px -8px ${c.primary}` : 'none',
                         cursor: 'pointer',
                         transition: 'all .18s ease',
                       }}
@@ -622,7 +623,15 @@ export default function SoftphonePane({
               </div>
             </div>
             {/* Contenu du sous-onglet */}
-            <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+            <div style={{
+              flex: 1, overflow: 'hidden', minHeight: 0,
+              margin: compact ? '4px 8px 8px' : '6px 12px 12px',
+              borderRadius: 16,
+              border: `1px solid ${c.border}`,
+              background: c.bgCard,
+              boxShadow: '0 16px 40px -28px rgba(0,0,0,.45)',
+              display: 'flex', flexDirection: 'column',
+            }}>
               {chatsSubTab === 'team' && <OrgChatView />}
               {chatsSubTab === 'sms' && <SmsThreads />}
             </div>

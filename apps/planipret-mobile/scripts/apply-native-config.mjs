@@ -1076,6 +1076,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var activeCallUUID: UUID?
     private var activeCallId: String?
     private var pendingAnswerAction: CXAnswerCallAction?
+    private let voipTokenDefaultsKey = "pp.voip.push-token.v1"
 
     private func apnsEnvironment() -> String {
         #if DEBUG
@@ -1088,6 +1089,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     public override func load() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            self.voipToken = UserDefaults.standard.string(forKey: self.voipTokenDefaultsKey)
             self.setupCallKit()
             self.setupPushKit()
             self.notifyListeners("callKitReady", data: ["ok": true])
@@ -1108,6 +1110,10 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     }
 
     private func setupPushKit() {
+        guard pushRegistry == nil else {
+            pushRegistry?.desiredPushTypes = [.voIP]
+            return
+        }
         let registry = PKPushRegistry(queue: .main)
         registry.delegate = self
         registry.desiredPushTypes = [.voIP]
@@ -1116,11 +1122,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     // MARK: - JS ↔ Native
     @objc func getVoipPushToken(_ call: CAPPluginCall) {
-        // If PushKit has not handed us a token yet, re-arm the registry: after a
-        // restore/reinstall the first didUpdate can be missed entirely.
-        if (voipToken ?? "").isEmpty {
-            NSLog("[PpVoipCall] no VoIP token cached, re-arming PushKit")
-            DispatchQueue.main.async { [weak self] in self?.setupPushKit() }
+        if pushRegistry == nil {
+            NSLog("[PpVoipCall] PushKit registry missing, creating it")
+            setupPushKit()
         }
         call.resolve([
             "token": voipToken ?? "",
@@ -1130,30 +1134,15 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         ])
     }
 
-    /// Force PushKit to re-issue the VoIP token (used on app resume and when the
-    /// backend reports the stored token as invalid/unregistered).
+    /// Keep one registry alive; replacing it while APNs registration is pending
+    /// prevents the delegate callback from ever delivering the token.
     @objc func refreshVoipPushToken(_ call: CAPPluginCall) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { call.resolve(["ok": false]); return }
-            let previous = self.voipToken
-            self.pushRegistry?.desiredPushTypes = []
-            self.pushRegistry = nil
             self.setupPushKit()
-            NSLog("[PpVoipCall] VoIP token refresh requested (had token: %@)", previous == nil ? "no" : "yes")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                guard let self = self else { return }
-                let current = self.voipToken ?? ""
-                let changed = current != (previous ?? "")
-                NSLog("[PpVoipCall] VoIP token after refresh changed=%@ empty=%@", changed ? "yes" : "no", current.isEmpty ? "yes" : "no")
-                self.notifyListeners("voipPushToken", data: [
-                    "token": current,
-                    "bundleId": Bundle.main.bundleIdentifier ?? "",
-                    "environment": self.apnsEnvironment(),
-                    "changed": changed,
-                    "source": "refresh"
-                ])
-            }
-            call.resolve(["ok": true, "token": previous ?? ""])
+            let current = self.voipToken ?? ""
+            NSLog("[PpVoipCall] PushKit registry armed (cached token: %@)", current.isEmpty ? "no" : "yes")
+            call.resolve(["ok": true, "token": current])
         }
     }
 
@@ -1189,6 +1178,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         let changed = token != (lastReportedToken ?? "")
         self.voipToken = token
         self.lastReportedToken = token
+        UserDefaults.standard.set(token, forKey: voipTokenDefaultsKey)
         NSLog("[PpVoipCall] VoIP token updated changed=%@ suffix=%@", changed ? "yes" : "no", String(token.suffix(6)))
         notifyListeners("voipPushToken", data: [
             "token": token,
@@ -1202,8 +1192,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     public func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
         NSLog("[PpVoipCall] VoIP token invalidated — re-arming PushKit")
         self.voipToken = nil
+        UserDefaults.standard.removeObject(forKey: voipTokenDefaultsKey)
         notifyListeners("voipPushTokenInvalidated", data: ["platform": "ios"])
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.setupPushKit() }
+        DispatchQueue.main.async { [weak self] in self?.setupPushKit() }
     }
 
     public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
@@ -1601,7 +1592,7 @@ function patchIosAppDelegate(iosApp) {
 // plugin-registration fallback had nothing to attach to and both native
 // plugins reported UNIMPLEMENTED. Create a bridge controller and point the
 // storyboard at it so registration always happens.
-function ensureIosBridgeController(iosApp, pluginFilesAreInProject) {
+function ensureIosBridgeController(iosApp) {
   const storyboard = path.join(iosApp, "Base.lproj", "Main.storyboard");
   const existing = ["AppBridgeViewController.swift", "ViewController.swift"]
     .map((n) => path.join(iosApp, n))
@@ -1617,17 +1608,9 @@ function ensureIosBridgeController(iosApp, pluginFilesAreInProject) {
   }
 
   const file = path.join(iosApp, "AppBridgeViewController.swift");
-  const inline = pluginFilesAreInProject
-    ? ""
-    : `\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n`;
   const source = `import Foundation
 import UIKit
 import Capacitor
-import AVFoundation
-import CryptoKit
-import UserNotifications
-import PushKit
-import CallKit
 
 class AppBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
@@ -1637,7 +1620,7 @@ class AppBridgeViewController: CAPBridgeViewController {
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
-}${inline}`;
+}`;
   writeIfChanged(file, source);
   ensureXcodeSourceFiles(path.join(appDir, "ios", "App"), ["App/AppBridgeViewController.swift"]);
 
@@ -1870,26 +1853,16 @@ function patchIosNativeFiles() {
     "App/Plugins/PpAuthSession/PpAuthSession.swift",
     "App/Plugins/PpAuthSession/PpAuthSession.m",
   ]);
-  const pluginFilesAreInProject = hasProjectReference(iosRoot, "PpSipKeepAlive.swift") && hasProjectReference(iosRoot, "PpVoipCall.swift") && hasProjectReference(iosRoot, "PpAuthSession.swift");
   patchIosAppDelegate(iosApp);
-  ensureIosBridgeController(iosApp, pluginFilesAreInProject);
+  ensureIosBridgeController(iosApp);
   ensureIosSceneDelegate(iosApp);
   for (const controllerName of ["AppBridgeViewController.swift", "ViewController.swift"]) {
     const file = path.join(iosApp, controllerName);
     if (!fs.existsSync(file)) continue;
     let swift = fs.readFileSync(file, "utf8");
     const before = swift;
+    swift = stripInlinePlugins(swift);
     swift = ensurePluginRegistrationOrThrow(swift, file);
-    if (pluginFilesAreInProject) {
-      // Older runs inlined the plugin classes into the controller. Now that the
-      // standalone Plugins/*.swift files are in the Xcode target, keeping the
-      // inline copy causes "Invalid redeclaration of 'PpSipKeepAlive'".
-      swift = stripInlinePlugins(swift);
-    } else if (!swift.includes("@objc(PpSipKeepAlive)")) {
-      swift = ensureSwiftImports(swift, ["Foundation", "Capacitor", "UIKit", "AVFoundation", "CryptoKit", "UserNotifications", "PushKit", "CallKit", "AuthenticationServices"]);
-      swift = `${swift.trim()}\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n\n${stripSwiftImports(IOS_AUTH_SESSION_PLUGIN)}\n`;
-      console.log("[native-config] iOS native plugins embedded into existing ViewController target.");
-    }
     if (swift !== before) writeIfChanged(file, swift);
   }
 

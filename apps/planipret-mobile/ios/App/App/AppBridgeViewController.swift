@@ -1,11 +1,6 @@
 import Foundation
 import UIKit
 import Capacitor
-import AVFoundation
-import CryptoKit
-import UserNotifications
-import PushKit
-import CallKit
 
 class AppBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
@@ -17,27 +12,7 @@ class AppBridgeViewController: CAPBridgeViewController {
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
 }
 
-// MARK: - Inline Planiprêt native plugins
-// Planiprêt-only. DO NOT reuse in Lemtel (Verto stack).
-@objc(PpSipKeepAlive)
-public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate {
-    public let identifier = "PpSipKeepAlive"; public let jsName = "PpSipKeepAlive"
-    public let pluginMethods: [CAPPluginMethod] = [
-      CAPPluginMethod(name: "startSipService", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "stopSipService", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "getSipServiceStatus", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "triggerReregister", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "acknowledgeIncoming", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "wakeForIncomingCall", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "setCallActive", returnType: CAPPluginReturnPromise),
-      CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
-      CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise)
-    ]
-    private var status = "idle"; private var reason = "plugin_loaded"; private var updatedAt = Date().timeIntervalSince1970 * 1000
-    private var bgTask: UIBackgroundTaskIdentifier = .invalid
-    private var host = ""; private var port = 443; private var path = "/"; private var login = ""; private var domain = ""; private var displayName = ""; private var password = ""
-    private var socket: URLSessionWebSocketTask?
-    private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue())
+/* stale inline plugin definitions removed; standalone Plugins/*.swift are authoritative
     private var timer: Timer?
     private var cseq = 1
     private let callIdReg = UUID().uuidString + "@planipret-ios"
@@ -460,7 +435,9 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private func setStatus(_ next: String, _ nextReason: String) { status = next; reason = nextReason; updatedAt = Date().timeIntervalSince1970 * 1000; DispatchQueue.main.async { self.notifyListeners("sipServiceStatus", data: self.snapshot(ok: true)) } }
     private func snapshot(ok: Bool) -> [String: Any] { ["ok": ok, "status": status, "reason": reason, "updatedAt": updatedAt, "backgroundTaskActive": bgTask != .invalid, "loggedIn": status == "registered"] }
 }
+*/
 
+/* stale inline VoIP plugin definition removed; standalone plugin is authoritative
 @objc(PpVoipCall)
 public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CXProviderDelegate {
     public let identifier = "PpVoipCall"; public let jsName = "PpVoipCall"
@@ -481,6 +458,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var activeCallUUID: UUID?
     private var activeCallId: String?
     private var pendingAnswerAction: CXAnswerCallAction?
+    private let voipTokenDefaultsKey = "pp.voip.push-token.v1"
 
     private func apnsEnvironment() -> String {
         #if DEBUG
@@ -493,6 +471,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     public override func load() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            self.voipToken = UserDefaults.standard.string(forKey: self.voipTokenDefaultsKey)
             self.setupCallKit()
             self.setupPushKit()
             self.notifyListeners("callKitReady", data: ["ok": true])
@@ -513,6 +492,10 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     }
 
     private func setupPushKit() {
+        guard pushRegistry == nil else {
+            pushRegistry?.desiredPushTypes = [.voIP]
+            return
+        }
         let registry = PKPushRegistry(queue: .main)
         registry.delegate = self
         registry.desiredPushTypes = [.voIP]
@@ -521,11 +504,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     // MARK: - JS ↔ Native
     @objc func getVoipPushToken(_ call: CAPPluginCall) {
-        // If PushKit has not handed us a token yet, re-arm the registry: after a
-        // restore/reinstall the first didUpdate can be missed entirely.
-        if (voipToken ?? "").isEmpty {
-            NSLog("[PpVoipCall] no VoIP token cached, re-arming PushKit")
-            DispatchQueue.main.async { [weak self] in self?.setupPushKit() }
+        if pushRegistry == nil {
+            NSLog("[PpVoipCall] PushKit registry missing, creating it")
+            setupPushKit()
         }
         call.resolve([
             "token": voipToken ?? "",
@@ -535,30 +516,15 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         ])
     }
 
-    /// Force PushKit to re-issue the VoIP token (used on app resume and when the
-    /// backend reports the stored token as invalid/unregistered).
+    /// Keep one registry alive; replacing it while APNs registration is pending
+    /// prevents the delegate callback from ever delivering the token.
     @objc func refreshVoipPushToken(_ call: CAPPluginCall) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { call.resolve(["ok": false]); return }
-            let previous = self.voipToken
-            self.pushRegistry?.desiredPushTypes = []
-            self.pushRegistry = nil
             self.setupPushKit()
-            NSLog("[PpVoipCall] VoIP token refresh requested (had token: %@)", previous == nil ? "no" : "yes")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                guard let self = self else { return }
-                let current = self.voipToken ?? ""
-                let changed = current != (previous ?? "")
-                NSLog("[PpVoipCall] VoIP token after refresh changed=%@ empty=%@", changed ? "yes" : "no", current.isEmpty ? "yes" : "no")
-                self.notifyListeners("voipPushToken", data: [
-                    "token": current,
-                    "bundleId": Bundle.main.bundleIdentifier ?? "",
-                    "environment": self.apnsEnvironment(),
-                    "changed": changed,
-                    "source": "refresh"
-                ])
-            }
-            call.resolve(["ok": true, "token": previous ?? ""])
+            let current = self.voipToken ?? ""
+            NSLog("[PpVoipCall] PushKit registry armed (cached token: %@)", current.isEmpty ? "no" : "yes")
+            call.resolve(["ok": true, "token": current])
         }
     }
 
@@ -594,6 +560,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         let changed = token != (lastReportedToken ?? "")
         self.voipToken = token
         self.lastReportedToken = token
+        UserDefaults.standard.set(token, forKey: voipTokenDefaultsKey)
         NSLog("[PpVoipCall] VoIP token updated changed=%@ suffix=%@", changed ? "yes" : "no", String(token.suffix(6)))
         notifyListeners("voipPushToken", data: [
             "token": token,
@@ -607,8 +574,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     public func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
         NSLog("[PpVoipCall] VoIP token invalidated — re-arming PushKit")
         self.voipToken = nil
+        UserDefaults.standard.removeObject(forKey: voipTokenDefaultsKey)
         notifyListeners("voipPushTokenInvalidated", data: ["platform": "ios"])
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.setupPushKit() }
+        DispatchQueue.main.async { [weak self] in self?.setupPushKit() }
     }
 
     public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
@@ -686,3 +654,4 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         try? audioSession.setActive(true)
     }
 }
+*/

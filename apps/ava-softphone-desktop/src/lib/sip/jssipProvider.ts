@@ -566,6 +566,15 @@ class JsSipProvider {
       );
       sockets.forEach((s: any) => { try { s.via_transport = 'wss'; } catch { /* noop */ } });
 
+      let deviceId = '';
+      try {
+        deviceId = localStorage.getItem('lemtel.device_id') || '';
+        if (!deviceId) {
+          deviceId = (crypto as any)?.randomUUID?.() || String(Date.now());
+          localStorage.setItem('lemtel.device_id', deviceId);
+        }
+      } catch { deviceId = String(Date.now()); }
+
       const ua = new JsSIP.UA({
         sockets,
         uri: `sip:${cfg.extension}@${cfg.sipDomain}`,
@@ -573,9 +582,11 @@ class JsSipProvider {
         authorization_user: cfg.authUsername || cfg.extension,
         realm: cfg.sipDomain,
         contact_uri: `sip:${cfg.extension}@${cfg.sipDomain};transport=wss`,
+        contact_params: `+sip.instance="<urn:uuid:DESKTOP-${deviceId}>";+lemtel.device="desktop"`,
         register: true,
         session_timers: false,
         register_expires: 300,
+        no_answer_timeout: 60,
         connection_recovery_min_interval: 2,
         connection_recovery_max_interval: 30,
         user_agent: 'Lemtel-Softphone/2.3.5',

@@ -64,6 +64,8 @@ export default function SetupWizard({ onComplete }: { onComplete: (creds: Creds)
         setLoading(false);
         return;
       }
+      // Mobile parity: the SIP password is the account password.
+      try { localStorage.setItem('lemtel.sip_password', password); } catch { /* noop */ }
       const { data: allowed, error: gateErr } = await supabase
         .rpc('my_platform_access_allowed', { _platform: 'desktop' });
       if (gateErr || allowed !== true) {

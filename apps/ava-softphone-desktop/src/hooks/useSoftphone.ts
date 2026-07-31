@@ -47,6 +47,23 @@ async function fetchSoftphoneCredentials(accessToken: string): Promise<FetchedCr
           await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
           continue;
         }
+        // Mobile parity: SIP password == account password. When the backend has
+        // no separate SIP secret (HTTP 424 / NO_SIP_PASSWORD), fall back to the
+        // account password captured at sign-in.
+        if (res.status === 424 || data?.code === 'NO_SIP_PASSWORD') {
+          const local = localStorage.getItem('lemtel.sip_password');
+          if (local) {
+            return {
+              extension: data?.extension || '',
+              display_name: data?.display_name || '',
+              sip_domain: data?.sip_domain || '',
+              wss_url: data?.wss_url || '',
+              password: local,
+              auth_username: data?.auth_username,
+              password_source: 'local_account_password',
+            } as FetchedCreds;
+          }
+        }
         return null;
       }
       const data = await res.json();

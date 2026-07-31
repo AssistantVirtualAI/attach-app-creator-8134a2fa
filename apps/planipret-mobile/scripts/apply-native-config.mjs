@@ -723,12 +723,22 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       appActive = false
       beginBackgroundTask()
       activateAudioSession()
+      // During an active call the WebView keeps the media: only keep the audio
+      // session alive, never flip to native ownership (that closed the JsSIP
+      // transport with WSS 1001 and killed the audio).
+      if callActive {
+        startAudioKeepAlive()
+        setStatus("protected", "call_active_audio_kept")
+        backgroundHandoffWorkItem?.cancel(); backgroundHandoffWorkItem = nil
+        return
+      }
       setStatus("protected", "background_handoff_pending")
       backgroundHandoffWorkItem?.cancel()
       // JS owns the ordering: it unregisters/stops JsSIP before calling
       // startSipService. Starting here first creates two transports for the same
       // NetSapiens device AOR and the SBC closes one with WebSocket code 1001.
     }
+
     @objc private func onForeground() {
       appActive = true
       // Keep the last confirmed native Contact until JS reports its own

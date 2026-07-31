@@ -5,6 +5,7 @@ import AVFoundation
 import CryptoKit
 import UserNotifications
 import Network
+import Security
 
 // Planiprêt-only. DO NOT reuse in Lemtel (Verto stack).
 @objc(PpSipKeepAlive)
@@ -52,9 +53,14 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// (WSS 1001) and kills the audio. We only keep the audio session alive.
     private var callActive = false
     private var audioKeepAliveTimer: Timer?
+    private let configDefaultsKey = "pp_sip_native_config_v1"
+    private let passwordService = "com.planipret.mobile.sip"
+    private let passwordAccount = "background-register"
+    private var lastPushWakeAt: Date?
 
 
     public override func load() {
+      restoreConfig()
       DispatchQueue.main.async { [weak self] in self?.appActive = UIApplication.shared.applicationState == .active }
       NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
       NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -87,6 +93,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       backoffMaxAttempts = call.getInt("backoffMaxAttempts") ?? 5
       verifyDelayMs = Double(call.getInt("verifyDelayMs") ?? 8000)
       registerExpires = call.getInt("registerExpiresSec") ?? 1800
+      persistConfig()
       NSLog("[PpSipKeepAlive] reconnect strategy min=%.0fms max=%.0fms attempts=%d verify=%.0fms expires=%ds", backoffMinMs, backoffMaxMs, backoffMaxAttempts, verifyDelayMs, registerExpires)
       DispatchQueue.main.async { [weak self] in
         guard let self = self else { call.resolve(["ok": false, "status": "error", "reason": "plugin_released"]); return }
@@ -159,6 +166,19 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// guarantees background execution through PushKit, so this is the path that
     /// must bring the AOR back before the PBX times out to voicemail.
     private func wakeForPush(_ why: String) {
+      // PushKit wakes the native process before the WebView can resolve SIP
+      // credentials. Restore the last confirmed configuration first so an
+      // incoming call can REGISTER without depending on JavaScript startup.
+      if host.isEmpty || login.isEmpty || domain.isEmpty { restoreConfig() }
+      guard !host.isEmpty, !login.isEmpty, !domain.isEmpty, !password.isEmpty else {
+        setStatus("error", "missing_persisted_sip_config")
+        notifyListeners("sipReregisterRequested", data: ["reason": "missing_persisted_sip_config"])
+        return
+      }
+      // PpVoipCall posts the native wake notification and later emits CallKit
+      // readiness to JS. Treat those as one wake, not two REGISTER handshakes.
+      if let previous = lastPushWakeAt, Date().timeIntervalSince(previous) < 1.0 { return }
+      lastPushWakeAt = Date()
       NSLog("[PpSipKeepAlive] VoIP push wake (%@)", why)
       beginBackgroundTask()
       activateAudioSession()
@@ -170,6 +190,56 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       }
       if socket == nil { connect() } else { sendRegister(challenge: nil, force: true) }
       setStatus(status == "registered" ? "registered" : "protected", "voip_push_wake")
+    }
+
+    private func persistConfig() {
+      UserDefaults.standard.set([
+        "host": host, "port": port, "path": path, "login": login,
+        "domain": domain, "displayName": displayName,
+        "backoffMinMs": backoffMinMs, "backoffMaxMs": backoffMaxMs,
+        "backoffMaxAttempts": backoffMaxAttempts, "verifyDelayMs": verifyDelayMs,
+        "registerExpires": registerExpires,
+      ], forKey: configDefaultsKey)
+      let data = Data(password.utf8)
+      let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: passwordService,
+        kSecAttrAccount as String: passwordAccount,
+      ]
+      SecItemDelete(query as CFDictionary)
+      var add = query
+      add[kSecValueData as String] = data
+      add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+      SecItemAdd(add as CFDictionary, nil)
+    }
+
+    private func restoreConfig() {
+      if let saved = UserDefaults.standard.dictionary(forKey: configDefaultsKey) {
+        host = saved["host"] as? String ?? host
+        port = saved["port"] as? Int ?? port
+        path = saved["path"] as? String ?? path
+        login = saved["login"] as? String ?? login
+        domain = saved["domain"] as? String ?? domain
+        displayName = saved["displayName"] as? String ?? displayName
+        backoffMinMs = saved["backoffMinMs"] as? Double ?? backoffMinMs
+        backoffMaxMs = saved["backoffMaxMs"] as? Double ?? backoffMaxMs
+        backoffMaxAttempts = saved["backoffMaxAttempts"] as? Int ?? backoffMaxAttempts
+        verifyDelayMs = saved["verifyDelayMs"] as? Double ?? verifyDelayMs
+        registerExpires = saved["registerExpires"] as? Int ?? registerExpires
+      }
+      let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: passwordService,
+        kSecAttrAccount as String: passwordAccount,
+        kSecReturnData as String: true,
+        kSecMatchLimit as String: kSecMatchLimitOne,
+      ]
+      var item: CFTypeRef?
+      if SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+         let data = item as? Data,
+         let savedPassword = String(data: data, encoding: .utf8) {
+        password = savedPassword
+      }
     }
 
     // NEVER touch UIApplication/UIScene off the main thread: it triggers

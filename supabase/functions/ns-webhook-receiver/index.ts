@@ -27,17 +27,23 @@ async function apnsJwt(teamId: string, keyId: string, privateKeyPem: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // FIX 2 — strict shared-secret validation
+  // FIX 2 — strict shared-secret validation.
+  // NetSapiens v2 subscriptions cannot send custom headers (docs: verification
+  // is IP allowlist + X-Correlation-ID), so the secret also travels in the
+  // post-url query string that ns-webhook-setup registers.
   const expected = Deno.env.get("NS_WEBHOOK_SECRET");
+  const url = new URL(req.url);
   const got = req.headers.get("x-webhook-secret")
     ?? req.headers.get("authorization")?.replace("Bearer ", "")
-    ?? req.headers.get("x-ns-secret");
+    ?? req.headers.get("x-ns-secret")
+    ?? url.searchParams.get("secret");
   if (!expected || got !== expected) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
 
   let body: any;
   try { body = await req.json(); } catch { return ok(); }

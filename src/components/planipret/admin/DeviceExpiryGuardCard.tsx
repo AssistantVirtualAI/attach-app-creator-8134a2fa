@@ -52,6 +52,8 @@ const DICT = {
     drifted: "Drifted",
     repaired: "Repaired",
     errors: "Errors",
+    pushOff: "Mobile push OFF",
+
     noRun: "No run recorded yet.",
     lastRuns: "Recent runs",
     running: "Running…",

@@ -60,35 +60,69 @@ Deno.serve(async (req) => {
     const bytes = new Uint8Array(await dl.data.arrayBuffer());
     const base64 = toBase64(bytes);
 
-    if (dryRun) {
-      return new Response(JSON.stringify({ ok: true, dryRun: true, bytes: bytes.length, domain, user: nsUser, index }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    // Resolve target users: explicit user, or every user of the domain (allUsers)
+    let targets: string[] = [];
+    if (allUsers) {
+      const ures = await nsFetch(`/domains/${encodeURIComponent(domain)}/users`, {}, {
+        functionName: "pp-ns-upload-greeting",
       });
+      if (!ures.ok) {
+        const t = await ures.text();
+        return new Response(JSON.stringify({ error: "user_list_failed", status: ures.status, details: t.slice(0, 500) }), {
+          status: ures.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const list = await ures.json().catch(() => []);
+      targets = (Array.isArray(list) ? list : (list?.data ?? []))
+        .map((u: Record<string, unknown>) => String(u?.user ?? u?.["user-id"] ?? ""))
+        .filter((u: string) => /^\d{2,6}$/.test(u));
+    } else {
+      targets = [String(nsUser)];
     }
 
-    const res = await nsFetch(
-      `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(nsUser)}/greetings`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          synchronous: "yes",
-          convert: "yes",
-          index: String(index),
-          description,
-          filename: object,
-          file: base64,
-        }),
-      },
-      { functionName: "pp-ns-upload-greeting" },
-    );
+    if (dryRun) {
+      return new Response(
+        JSON.stringify({ ok: true, dryRun: true, bytes: bytes.length, domain, index, count: targets.length, targets }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
-    const text = await res.text();
-    console.log("[pp-ns-upload-greeting] NS status", res.status, text.slice(0, 500));
+    const results: Array<{ user: string; status: number; ok: boolean; body?: string }> = [];
+    for (const t of targets) {
+      const res = await nsFetch(
+        `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(t)}/greetings`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            synchronous: "yes",
+            convert: "yes",
+            index: String(index),
+            description,
+            filename: object,
+            file: base64,
+          }),
+        },
+        { functionName: "pp-ns-upload-greeting" },
+      );
+      const text = await res.text();
+      console.log(`[pp-ns-upload-greeting] ${t} -> ${res.status} ${text.slice(0, 200)}`);
+      results.push({ user: t, status: res.status, ok: res.ok, body: res.ok ? undefined : text.slice(0, 300) });
+    }
 
+    const failed = results.filter((r) => !r.ok);
     return new Response(
-      JSON.stringify({ ok: res.ok, status: res.status, domain, user: nsUser, index, response: text.slice(0, 2000) }),
-      { status: res.ok ? 200 : res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({
+        ok: failed.length === 0,
+        domain,
+        index,
+        total: results.length,
+        succeeded: results.length - failed.length,
+        failed,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
+
   } catch (e) {
     console.error("[pp-ns-upload-greeting] error", e);
     return new Response(JSON.stringify({ error: (e as Error).message }), {

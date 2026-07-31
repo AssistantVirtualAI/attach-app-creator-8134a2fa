@@ -74,31 +74,38 @@ Deno.serve(async (req) => {
 
     // Resolve target users: explicit user, or every user of the domain (allUsers)
     let targets: string[] = [];
+    let totalUsers = 0;
     if (allUsers) {
-      const ures = await nsFetch(`/domains/${encodeURIComponent(domain)}/users`, {}, {
-        functionName: "pp-ns-upload-greeting",
-      });
-      if (!ures.ok) {
-        const t = await ures.text();
-        return new Response(JSON.stringify({ error: "user_list_failed", status: ures.status, details: t.slice(0, 500) }), {
-          status: ures.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const list = await ures.json().catch(() => []);
-      targets = (Array.isArray(list) ? list : (list?.data ?? []))
-        .map((u: Record<string, unknown>) => String(u?.user ?? u?.["user-id"] ?? ""))
-        .filter((u: string) => /^\d{2,6}$/.test(u));
+      const all = await nsFetchAll<Record<string, unknown>>(`/domains/${encodeURIComponent(domain)}/users`);
+      const everyone = all.items
+        .map((u) => String(u?.user ?? u?.["user-id"] ?? ""))
+        .filter((u: string) => /^\d{2,6}$/.test(u))
+        .sort();
+      totalUsers = everyone.length;
+      const off = Number(offset) || 0;
+      const lim = Math.max(1, Math.min(Number(limit) || 20, 40));
+      targets = everyone.slice(off, off + lim);
     } else {
       targets = [String(nsUser)];
+      totalUsers = 1;
     }
 
     if (dryRun) {
       return new Response(
-        JSON.stringify({ ok: true, dryRun: true, bytes: bytes.length, domain, index, count: targets.length, targets }),
+        JSON.stringify({
+          ok: true,
+          dryRun: true,
+          bytes: bytes.length,
+          domain,
+          index,
+          totalUsers,
+          batch: targets.length,
+          targets,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
+
 
     const results: Array<{ user: string; status: number; ok: boolean; body?: string }> = [];
     for (const t of targets) {

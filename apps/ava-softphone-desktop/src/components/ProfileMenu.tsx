@@ -901,8 +901,9 @@ function ProfileEditor({
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 28, color: '#16a34a',
             }}>✓</div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Password updated</div>
-            <div style={{ fontSize: 11.5, color: '#64748b', marginBottom: 14, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: c.textIce, marginBottom: 4 }}>Password updated</div>
+            <div style={{ fontSize: 11.5, color: c.textDim, marginBottom: 14, lineHeight: 1.5 }}>
+
               Your password has been changed successfully. Use it next time you sign in.
             </div>
             <button onClick={resetPwFlow} style={{ ...primaryBtn, width: '100%' }}>Done</button>

@@ -942,13 +942,18 @@ export function useMplanipretSoftphone(enabled = true) {
   }, [restCall?.id, restControl, hasLiveSipSession, pushRing]);
 
   const hangup = useCallback(() => {
+    const callId = ppSipProvider.getSnapshot().callId;
+    // Always signal the PBX over REST as well: the SIP BYE can be lost when the
+    // WebSocket dropped or the session never reached "active", which leaves the
+    // call up on NetSapiens.
+    void restControl("disconnect");
     if (restCall?.id && !hasLiveSipSession) {
       const id = restCall.id;
-      void restControl("disconnect");
       maestroLog(() => maestroTelecom.updateCall(id, { status: "ended", ended_reason: "completed" }));
+      setRestCall(null);
+      setPushRing(null);
       return;
     }
-    const callId = ppSipProvider.getSnapshot().callId;
     ppSipProvider.hangup();
     setPushRing(null);
     if (restCall?.id) setRestCall(null);

@@ -29,7 +29,8 @@ export function isSipCoreWssUrl(url: string): boolean {
 }
 
 /**
- * Normalizes, de-duplicates and strips portal URLs, keeping core nodes first.
+ * Normalizes, de-duplicates and strips portal URLs, then pins a SINGLE core
+ * node (no core1/core2 alternation for the same AOR).
  */
 export function filterSipEdgeUrls(
   candidates: (string | undefined | null)[],
@@ -42,17 +43,14 @@ export function filterSipEdgeUrls(
         .filter((u) => /^wss?:\/\//i.test(u)),
     ),
   );
-  const dropped = all.filter(isSipPortalWssUrl);
-  const kept = all.filter((u) => !isSipPortalWssUrl(u));
+  const dropped = all.filter((u) => isSipPortalWssUrl(u) || !isSipCoreWssUrl(u));
+  const cores = all.filter((u) => !isSipPortalWssUrl(u) && isSipCoreWssUrl(u));
   if (dropped.length) {
-    onDrop?.(`sip portal node(s) dropped (registrations must live on core1/core2): ${dropped.join(", ")}`);
+    onDrop?.(`non-core sip node(s) dropped (registration must live on one core node): ${dropped.join(", ")}`);
   }
-  const cores = kept.filter(isSipCoreWssUrl);
-  const ordered = Array.from(new Set([...cores, ...kept.filter((u) => !isSipCoreWssUrl(u))]));
-  if (!ordered.length) {
+  if (!cores.length) {
     onDrop?.(`no core URL resolved → falling back to ${PP_SIP_CORE_PRIMARY}`);
-    return [PP_SIP_CORE_PRIMARY, PP_SIP_CORE_SECONDARY];
+    return [PP_SIP_CORE_PRIMARY];
   }
-  if (!ordered.includes(PP_SIP_CORE_SECONDARY)) ordered.push(PP_SIP_CORE_SECONDARY);
-  return ordered;
+  return [cores[0]];
 }

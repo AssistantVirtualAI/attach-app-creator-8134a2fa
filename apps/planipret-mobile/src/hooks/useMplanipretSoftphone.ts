@@ -715,13 +715,11 @@ export function useMplanipretSoftphone(enabled = true) {
       } catch { /* ignore */ }
     }
 
-    // Heartbeat: SIP transport can go silent without emitting a status event
-    // (background tab, radio switch, NS keepalive drop). Poll every 15s so the
-    // watchdog escalates to forceReregister even without a subscribe callback.
+    // Foreground-only watchdog. Background ownership is transferred exactly
+    // once by the real lifecycle events above; a periodic handoff restarted the
+    // native service every 15s and caused competing NetSapiens AOR bindings.
     const heartbeat = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-        if (callInProgress()) { void setPlanipretNativeCallActive(true); return; }
-        scheduleHandoff();
         return;
       }
       evaluate();

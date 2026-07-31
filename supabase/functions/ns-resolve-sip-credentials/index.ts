@@ -54,11 +54,10 @@ const edgeWssUrls = (candidates: (string | undefined | null)[]): string[] => {
   const kept = Array.from(new Set(candidates
     .map((u) => String(u ?? "").trim())
     .filter((u) => /^wss?:\/\//i.test(u))))
-    .filter((u) => !isPortalWss(u));
-  const ordered = Array.from(new Set([...kept.filter(isCoreWss), ...kept.filter((u) => !isCoreWss(u))]));
-  if (!ordered.length) return [NS_SIP_WSS_URL, NS_SIP_WSS_URL_2];
-  if (!ordered.includes(NS_SIP_WSS_URL_2)) ordered.push(NS_SIP_WSS_URL_2);
-  return ordered;
+    .filter((u) => !isPortalWss(u))
+    .filter(isCoreWss);
+  // Pin to a SINGLE core node (no core1/core2 alternation).
+  return [kept[0] ?? NS_SIP_WSS_URL];
 };
 
 function json(b: unknown, s = 200) {

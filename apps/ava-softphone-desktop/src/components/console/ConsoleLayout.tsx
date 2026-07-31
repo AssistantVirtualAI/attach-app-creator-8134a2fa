@@ -163,11 +163,12 @@ export default function ConsoleLayout({
   }, [isAuditChild]);
 
   return (
-    <div style={{
+    <div className="ava-aurora-bg" style={{
       display: 'flex', height: '100%',
       background: c.bgGradient,
       color: c.textIce, position: 'relative', overflow: 'hidden',
     }}>
+
       {!compact && (
         <LeftRail
           view={view}

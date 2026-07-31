@@ -701,7 +701,7 @@ export default function SoftphonePane({
         {showAvaChat && !inCall && !ringing && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 50,
-            background: 'radial-gradient(1000px 620px at 6% -12%, rgba(0,35,230,0.32), transparent 62%), linear-gradient(180deg, #060C1C 0%, #0A1429 100%)',
+            background: c.bgGradient,
             display: 'flex', flexDirection: 'column',
           }}>
             <AvaChatPane onClose={() => setShowAvaChat(false)} />
@@ -715,7 +715,7 @@ export default function SoftphonePane({
         <div style={{
           position: 'relative', zIndex: 1, flexShrink: 0,
           padding: compact ? '6px 6px 6px' : '8px 8px 8px',
-          background: 'linear-gradient(180deg, rgba(10,20,41,0.92) 0%, rgba(14,27,61,0.86) 100%)',
+          background: c.bgCard,
           backdropFilter: 'blur(28px) saturate(180%)',
           WebkitBackdropFilter: 'blur(28px) saturate(180%)',
           border: `1px solid ${c.overlay08}`,
@@ -1080,7 +1080,7 @@ function ActiveCall({
   return (
     <div style={{
       ...callViewStyle,
-      background: 'linear-gradient(180deg, #060C1C 0%, #0A1429 52%, #0E1B3D 100%)',
+      background: c.bgGradient,
       justifyContent: compact ? 'flex-start' : 'center',
       minHeight: '100%',
       padding: compact ? '18px 10px 20px' : callViewStyle.padding,
@@ -1564,7 +1564,7 @@ function AvaChatPane({ onClose }: { onClose: () => void }) {
     }
   };
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'radial-gradient(1000px 620px at 6% -12%, rgba(0,35,230,0.32), transparent 62%), linear-gradient(180deg, #060C1C 0%, #0A1429 100%)' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: c.bgGradient }}>
       {/* Header */}
       <div style={{
         padding: '12px 14px 8px', display: 'flex', alignItems: 'center', gap: 10,
@@ -1640,7 +1640,7 @@ function AvaChatPane({ onClose }: { onClose: () => void }) {
       <div style={{
         padding: '8px 12px 12px',
         borderTop: `1px solid ${c.overlay08}`,
-        background: 'rgba(10,20,41,0.72)',
+        background: c.bgCard,
         backdropFilter: 'blur(14px)',
       }}>
         <div style={{

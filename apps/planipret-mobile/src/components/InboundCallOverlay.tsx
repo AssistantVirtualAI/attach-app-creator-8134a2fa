@@ -7,7 +7,15 @@ import { startSelectedRingtone } from "@/lib/planipret/audio/ringtonePresets";
 
 export type InboundCall = { call_id?: string; from_number?: string; caller_name?: string } | null;
 
-export default function InboundCallOverlay({ call, onClose }: { call: InboundCall; onClose: () => void }) {
+export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }: {
+  call: InboundCall;
+  onClose: () => void;
+  /** When provided, answering delegates to the softphone so the in-call screen
+   *  (with keypad) opens instead of navigating to the call history page. */
+  onAnswer?: () => void | Promise<void>;
+  onReject?: () => void | Promise<void>;
+}) {
+
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [contact, setContact] = useState<{ id?: string; full_name?: string; company?: string; avatar_url?: string; tags?: string[] } | null>(null);

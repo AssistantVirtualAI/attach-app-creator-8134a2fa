@@ -864,6 +864,34 @@ export function useMplanipretSoftphone(enabled = true) {
     return true;
   }, [restCall?.id]);
 
+  // Best-effort REST teardown with exponential backoff. Used on hangup so the
+  // PBX always drops the leg even when the SIP WebSocket is down and the BYE
+  // never leaves the device.
+  const restDisconnectWithRetry = useCallback(async (callId: string | null | undefined) => {
+    const id = callId || restCall?.id;
+    if (!id) { console.info("[hangup] no PBX call id → REST disconnect skipped"); return false; }
+    const delays = [0, 800, 2000, 5000];
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i]) await new Promise((r) => window.setTimeout(r, delays[i]));
+      try {
+        const { data, error } = await supabase.functions.invoke("pp-ns-calls", {
+          body: { action: "disconnect", call_id: id },
+        });
+        if (!error && (data as any)?.success !== false) {
+          console.info(`[hangup] NetSapiens confirmed call termination (call_id=${id}, attempt=${i + 1})`);
+          setRestCall((cur) => (cur?.id === id ? null : cur));
+          return true;
+        }
+        console.warn(`[hangup] REST disconnect attempt ${i + 1}/${delays.length} failed`, (error as any)?.message ?? (data as any)?.message ?? "unknown");
+      } catch (e: any) {
+        console.warn(`[hangup] REST disconnect attempt ${i + 1}/${delays.length} threw`, e?.message ?? e);
+      }
+    }
+    console.error(`[hangup] NetSapiens did NOT confirm termination after ${delays.length} attempts (call_id=${id})`);
+    return false;
+  }, [restCall?.id]);
+
+
   const callViaPBX = useCallback(async (destination: string): Promise<OutboundResult> => {
     const { data, error } = await supabase.functions.invoke("pp-ns-calls", { body: { action: "start", to_number: destination, client_type: "mobile" } });
     if (error || (data as any)?.success === false) {

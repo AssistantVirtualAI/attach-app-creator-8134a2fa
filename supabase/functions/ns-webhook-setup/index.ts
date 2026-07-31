@@ -65,13 +65,16 @@ Deno.serve(async (req) => {
     }
 
 
-    console.log("ns-webhook-setup", { existing: kept.length, created: created.length });
+    console.log("ns-webhook-setup", { existing: kept.length, created: created.length, replaced: replaced.length });
     return jsonResponse({
       success: true,
       existing: kept.length,
       created: created.length,
+      replaced,
+      secret_in_url: !!secret,
       subscriptions: [...kept, ...created],
     });
+
   } catch (e) {
     console.error("ns-webhook-setup error", e);
     return jsonResponse({ success: false, error: "Connexion perdue", code: 0 }, 200);

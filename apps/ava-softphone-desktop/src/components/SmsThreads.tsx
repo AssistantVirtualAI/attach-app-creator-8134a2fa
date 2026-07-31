@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, SB_URL, SB_KEY } from '@/lib/supabaseClient';
 import { audit } from '@/lib/audit';
+import SkeletonRows from './ui/SkeletonRows';
 
 interface Thread {
   id: string;
@@ -123,7 +124,7 @@ export default function SmsThreads() {
     }
   };
 
-  if (loading) return <div style={center}>Loading SMS…</div>;
+  if (loading) return <SkeletonRows rows={5} avatar label="Loading SMS" />;
 
   if (selected) {
     return (

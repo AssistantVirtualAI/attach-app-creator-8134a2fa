@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import SkeletonRows from './ui/SkeletonRows';
 
 /**
  * Embedded portal tab for the desktop softphone.
@@ -22,7 +23,7 @@ export function PortalTab() {
   }, []);
 
   if (err) return <div className="p-6 text-sm text-red-500">{err}</div>;
-  if (!url) return <div className="p-6 text-sm text-muted-foreground">Loading portal…</div>;
+  if (!url) return <SkeletonRows rows={4} padding={24} label="Loading portal" />;
 
   // In Electron, prefer <webview>; fall back to <iframe> in browser dev.
   const isElectron = typeof (window as any).electron !== "undefined";

@@ -3,6 +3,7 @@ import { ava, VoicemailItem } from '@/lib/avaApi';
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh';
 import { useOrgId } from '@/lib/useOrgId';
 import { audit } from '@/lib/audit';
+import SkeletonRows from './ui/SkeletonRows';
 
 interface Props {
   extension: string;
@@ -84,7 +85,7 @@ export default function VoicemailList({ extension, onCall }: Props) {
     }
   };
 
-  if (loading) return <div style={center}>Loading voicemail…</div>;
+  if (loading) return <SkeletonRows rows={5} label="Loading voicemail" />;
   if (err) return <div style={{ ...center, color: '#ff8a8a' }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>Retry</button></div>;
   if (rows.length === 0) return <div style={center}>No voicemail</div>;
 

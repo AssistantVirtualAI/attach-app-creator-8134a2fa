@@ -34,6 +34,7 @@ type PpSipKeepAlivePlugin = {
   triggerReregister?: () => Promise<PpNativeSipStatus>;
   acknowledgeIncoming?: () => Promise<{ ok: boolean }>;
   wakeForIncomingCall?: (opts?: { reason?: string }) => Promise<PpNativeSipStatus>;
+  setCallActive?: (opts: { active: boolean }) => Promise<PpNativeSipStatus>;
   addListener?: (
     event: "sipServiceStatus" | "sipReregisterRequested" | "sipIncomingInvite",
     cb: (data: any) => void,

@@ -216,6 +216,9 @@ export function useMplanipretSoftphone(enabled = true) {
   const [brokerId, setBrokerId] = useState<string | null>(null);
   const [answeredElsewhere, setAnsweredElsewhere] = useState<AnsweredBy | null>(null);
   const [restCall, setRestCall] = useState<RestCallAttachment | null>(null);
+  // Appel entrant annoncé par le push VoIP (CallKit) avant l'arrivée du INVITE.
+  // Permet d'afficher immédiatement l'écran "ça sonne" avec Répondre/Raccrocher.
+  const [pushRing, setPushRing] = useState<{ callId: string; from: string } | null>(null);
   const [nativeStatus, setNativeStatus] = useState<PpNativeSipStatus | null>(null);
   const seenCallIds = useRef<Set<string>>(new Set());
   const mobileSipConfigRef = useRef<PpSipConfig | null>(null);

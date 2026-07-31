@@ -914,7 +914,10 @@ export function useMplanipretSoftphone(enabled = true) {
     unhold: () => restCall?.id ? void restControl("unhold") : ppSipProvider.unhold(),
     sendDTMF: (k: string) => restCall?.id ? void restControl("dtmf", { digit: k }) : ppSipProvider.sendDTMF(k),
     transfer: (t: string) => restCall?.id ? void restControl("transfer", { destination: t, target: t }) : ppSipProvider.transfer(t),
-    setAudioEl: (el: HTMLAudioElement | null) => { ppSipProvider.audioEl = el; },
+    // The provider owns a persistent hidden <audio> sink; screens must not
+    // detach it on unmount (that killed remote audio mid-call).
+    setAudioEl: (_el: HTMLAudioElement | null) => {},
+
     forceHandover: () => handoverController.forceHandover(),
   }), [effectiveSnap, loading, net, quality, nativeStatus, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl]);
 

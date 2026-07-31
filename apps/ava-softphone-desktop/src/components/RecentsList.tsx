@@ -3,6 +3,11 @@ import { ava, CallRecord } from '@/lib/avaApi';
 import { ArrowUpRight, ArrowDownLeft, PhoneMissed, PhoneCall } from './RowIcons';
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh';
 import { useOrgId } from '@/lib/useOrgId';
+import SkeletonRows from './ui/SkeletonRows';
+import { theme } from '../lib/theme';
+
+const { colors: c } = theme;
+
 
 interface Props {
   extension: string;

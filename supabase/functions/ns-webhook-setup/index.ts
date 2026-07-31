@@ -40,8 +40,10 @@ Deno.serve(async (req) => {
           model: event,
           "post-url": target,
           "subscription-geo-support": "yes",
+          domain: nsDomain,
           user: "*",
         }),
+
       });
       const data = await res.json().catch(() => ({}));
       // 409 = subscription already exists → treat as present, not an error.

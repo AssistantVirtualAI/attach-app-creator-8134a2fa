@@ -128,12 +128,12 @@ function RecentsListImpl({ extension, onCall }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {err && (
         <div style={{
-          fontSize: 11, color: '#FFD166', background: 'rgba(255,209,102,0.08)',
-          border: '1px solid rgba(255,209,102,0.25)', borderRadius: 8,
+          fontSize: 11, color: c.gold, background: `${c.gold}14`,
+          border: `1px solid ${c.gold}40`, borderRadius: 8,
           padding: '6px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
         }}>
           <span>{err}</span>
-          <button onClick={() => setErr(null)} style={{ background: 'transparent', border: 'none', color: '#FFD166', cursor: 'pointer', fontSize: 14, lineHeight: 1 }} aria-label="Dismiss">×</button>
+          <button onClick={() => setErr(null)} style={{ background: 'transparent', border: 'none', color: c.gold, cursor: 'pointer', fontSize: 14, lineHeight: 1 }} aria-label="Dismiss">×</button>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, padding: '0 2px' }}>
@@ -151,7 +151,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
         </button>
       </div>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, number, extension…" style={{ flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.06)', color: '#F5F5F7', fontSize: 11, outline: 'none' }} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, number, extension…" style={{ flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 8, border: `1px solid ${c.border}`, background: c.bgCard, color: c.text, fontSize: 11, outline: 'none' }} />
         {([7, 30] as const).map((d) => <button key={d} onClick={() => setRangeDays(d)} style={{ ...reloadCdrBtn, padding: '6px 8px', opacity: rangeDays === d ? 1 : 0.55 }}>{d}d</button>)}
       </div>
       {filteredRows.map((r) => {
@@ -159,7 +159,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
         const peer = outbound ? (r.to || '?') : (r.from || '?');
         const name = r.customer || (outbound ? null : r.from);
         const missed = r.status === 'missed';
-        const iconColor = missed ? '#EF4444' : outbound ? '#FFD700' : '#10B981';
+        const iconColor = missed ? c.danger : outbound ? c.gold : c.success;
         const initial = (name || peer || '?').toString().charAt(0).toUpperCase();
         return (
           <button key={r.id} onClick={() => onCall(peer)} className="lemtel-row">
@@ -176,7 +176,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
               <div style={{
                 fontSize: 13, fontWeight: 600, overflow: 'hidden',
                 textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                color: missed ? '#FCA5A5' : '#F5F5F7',
+                color: missed ? c.danger : c.text,
                 display: 'flex', alignItems: 'center', gap: 6,
               }}>
                 <span style={{ color: iconColor, display: 'inline-flex' }}>
@@ -202,12 +202,12 @@ function RecentsListImpl({ extension, onCall }: Props) {
 const center: React.CSSProperties = { textAlign: 'center', padding: 48, opacity: 0.5, fontSize: 12, letterSpacing: 0.5 };
 const refreshBtn: React.CSSProperties = {
   background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)',
-  color: '#FFD700', borderRadius: 8, width: 28, height: 28,
+  color: c.gold, borderRadius: 8, width: 28, height: 28,
   cursor: 'pointer', fontSize: 13,
 };
 const reloadCdrBtn: React.CSSProperties = {
   background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)',
-  color: '#FFD700', borderRadius: 8, padding: '4px 10px',
+  color: c.gold, borderRadius: 8, padding: '4px 10px',
   cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
 };
 

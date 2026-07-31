@@ -72,6 +72,16 @@ export default function PpActiveCallScreen({
     if (!active) { setView("main"); setDtmfBuf(""); setTransferQuery(""); setElapsed(0); }
   }, [active]);
 
+  // Recording notice — played once per call as soon as it connects
+  const noticeForCallRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (snap.callState !== "active") return;
+    const key = snap.callId || String(snap.startedAt ?? "");
+    if (!key || noticeForCallRef.current === key) return;
+    noticeForCallRef.current = key;
+    void playRecordingNotice();
+  }, [snap.callState, snap.callId, snap.startedAt]);
+
   // Duration timer for connected calls
   useEffect(() => {
     if (snap.callState !== "active" || !snap.startedAt) return;

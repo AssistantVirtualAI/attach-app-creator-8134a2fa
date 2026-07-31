@@ -754,3 +754,25 @@ code, .mono, .ava-mono { font-family: 'JetBrains Mono', 'Fira Code', ui-monospac
   .ava-skeleton-row { animation: none !important; }
   .ava-lift:hover { transform: none; }
 }
+
+/* ----- Toast auto-dismiss progress bar ----- */
+@keyframes avaToastProgress {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+.ava-toast-progress {
+  width: 100%;
+  animation-name: avaToastProgress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+/* ----- Global themed background ----- */
+html, body, #root {
+  background: var(--ava-bg-gradient, var(--ava-bg, #eef2fa));
+  background-attachment: fixed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ava-toast-progress { animation: none !important; }
+}

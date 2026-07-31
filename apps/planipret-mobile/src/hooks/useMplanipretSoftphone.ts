@@ -952,6 +952,7 @@ export function useMplanipretSoftphone(enabled = true) {
     }
     const callId = ppSipProvider.getSnapshot().callId;
     ppSipProvider.hangup();
+    setPushRing(null);
     if (restCall?.id) setRestCall(null);
     if (callId) {
       void endSession(callId, "hangup");

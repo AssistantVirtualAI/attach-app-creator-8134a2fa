@@ -42,13 +42,20 @@ export default function ActiveCallDock() {
         animation: 'pulse 1.5s ease-in-out infinite',
       }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: c.textIce }}>
+        <div style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: c.textIce }}>
           {call.displayName || call.number}
         </div>
-        <div style={{ fontSize: 10.5, color: c.mutedSilver, fontFamily: 'JetBrains Mono, monospace' }}>
-          {call.status === 'held' ? t('dialer.onHold') : t('dialer.inCall')} · {mm}:{ss}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 10.5, color: c.mutedSilver }}>
+            {call.status === 'held' ? t('dialer.onHold') : t('dialer.inCall')}
+          </span>
+          <span style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 800,
+            letterSpacing: 0.5, color: call.status === 'held' ? c.warning : c.success,
+          }}>{mm}:{ss}</span>
         </div>
       </div>
+
       <DockBtn label={call.muted ? t('dialer.unmute') : t('dialer.mute')} active={call.muted} accent={c.warning} onClick={() => mute(!call.muted)} hint="⌘M" />
       <DockBtn label={call.status === 'held' ? t('dialer.resume') : t('dialer.hold')} active={call.status === 'held'} accent={c.avaCyan} onClick={() => hold(call.status !== 'held')} hint="⌘H" />
       <button onClick={hangup} style={{

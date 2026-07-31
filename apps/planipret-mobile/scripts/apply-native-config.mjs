@@ -1592,7 +1592,7 @@ function patchIosAppDelegate(iosApp) {
 // plugin-registration fallback had nothing to attach to and both native
 // plugins reported UNIMPLEMENTED. Create a bridge controller and point the
 // storyboard at it so registration always happens.
-function ensureIosBridgeController(iosApp, pluginFilesAreInProject) {
+function ensureIosBridgeController(iosApp) {
   const storyboard = path.join(iosApp, "Base.lproj", "Main.storyboard");
   const existing = ["AppBridgeViewController.swift", "ViewController.swift"]
     .map((n) => path.join(iosApp, n))
@@ -1608,17 +1608,9 @@ function ensureIosBridgeController(iosApp, pluginFilesAreInProject) {
   }
 
   const file = path.join(iosApp, "AppBridgeViewController.swift");
-  const inline = pluginFilesAreInProject
-    ? ""
-    : `\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n`;
   const source = `import Foundation
 import UIKit
 import Capacitor
-import AVFoundation
-import CryptoKit
-import UserNotifications
-import PushKit
-import CallKit
 
 class AppBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
@@ -1628,7 +1620,7 @@ class AppBridgeViewController: CAPBridgeViewController {
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
-}${inline}`;
+}`;
   writeIfChanged(file, source);
   ensureXcodeSourceFiles(path.join(appDir, "ios", "App"), ["App/AppBridgeViewController.swift"]);
 
@@ -1861,26 +1853,16 @@ function patchIosNativeFiles() {
     "App/Plugins/PpAuthSession/PpAuthSession.swift",
     "App/Plugins/PpAuthSession/PpAuthSession.m",
   ]);
-  const pluginFilesAreInProject = hasProjectReference(iosRoot, "PpSipKeepAlive.swift") && hasProjectReference(iosRoot, "PpVoipCall.swift") && hasProjectReference(iosRoot, "PpAuthSession.swift");
   patchIosAppDelegate(iosApp);
-  ensureIosBridgeController(iosApp, pluginFilesAreInProject);
+  ensureIosBridgeController(iosApp);
   ensureIosSceneDelegate(iosApp);
   for (const controllerName of ["AppBridgeViewController.swift", "ViewController.swift"]) {
     const file = path.join(iosApp, controllerName);
     if (!fs.existsSync(file)) continue;
     let swift = fs.readFileSync(file, "utf8");
     const before = swift;
+    swift = stripInlinePlugins(swift);
     swift = ensurePluginRegistrationOrThrow(swift, file);
-    if (pluginFilesAreInProject) {
-      // Older runs inlined the plugin classes into the controller. Now that the
-      // standalone Plugins/*.swift files are in the Xcode target, keeping the
-      // inline copy causes "Invalid redeclaration of 'PpSipKeepAlive'".
-      swift = stripInlinePlugins(swift);
-    } else if (!swift.includes("@objc(PpSipKeepAlive)")) {
-      swift = ensureSwiftImports(swift, ["Foundation", "Capacitor", "UIKit", "AVFoundation", "CryptoKit", "UserNotifications", "PushKit", "CallKit", "AuthenticationServices"]);
-      swift = `${swift.trim()}\n\n// MARK: - Inline Planiprêt native plugins\n${stripSwiftImports(IOS_PLUGIN)}\n\n${stripSwiftImports(IOS_VOIP_CALL_PLUGIN)}\n\n${stripSwiftImports(IOS_AUTH_SESSION_PLUGIN)}\n`;
-      console.log("[native-config] iOS native plugins embedded into existing ViewController target.");
-    }
     if (swift !== before) writeIfChanged(file, swift);
   }
 

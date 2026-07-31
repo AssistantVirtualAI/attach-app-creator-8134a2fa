@@ -1,11 +1,6 @@
 import Foundation
 import UIKit
 import Capacitor
-import AVFoundation
-import CryptoKit
-import UserNotifications
-import PushKit
-import CallKit
 
 class AppBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
@@ -16,6 +11,8 @@ class AppBridgeViewController: CAPBridgeViewController {
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
 }
+
+/* stale inline plugin definitions removed; standalone Plugins/*.swift are authoritative
     private var timer: Timer?
     private var cseq = 1
     private let callIdReg = UUID().uuidString + "@planipret-ios"
@@ -438,6 +435,7 @@ class AppBridgeViewController: CAPBridgeViewController {
     private func setStatus(_ next: String, _ nextReason: String) { status = next; reason = nextReason; updatedAt = Date().timeIntervalSince1970 * 1000; DispatchQueue.main.async { self.notifyListeners("sipServiceStatus", data: self.snapshot(ok: true)) } }
     private func snapshot(ok: Bool) -> [String: Any] { ["ok": ok, "status": status, "reason": reason, "updatedAt": updatedAt, "backgroundTaskActive": bgTask != .invalid, "loggedIn": status == "registered"] }
 }
+*/
 
 @objc(PpVoipCall)
 public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CXProviderDelegate {

@@ -157,7 +157,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
       if (saved && cycle.includes(saved)) return saved;
     } catch {}
-    return 'light';
+    return 'midnight';
   });
 
   const t = themeMap[mode] ?? light;

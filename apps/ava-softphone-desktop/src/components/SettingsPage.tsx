@@ -212,7 +212,7 @@ export default function SettingsPage({
   return (
     <div style={{
       height: '100%', overflowY: 'auto', overflowX: 'hidden',
-      background: 'radial-gradient(1000px 620px at 6% -12%, rgba(0,35,230,0.32), transparent 62%), radial-gradient(780px 560px at 105% 105%, rgba(224,168,0,0.18), transparent 58%), linear-gradient(180deg, #060C1C 0%, #0A1429 52%, #0E1B3D 100%)',
+      background: c.bgGradient,
       scrollBehavior: 'smooth',
     }}>
       {/* Sticky header */}

@@ -154,11 +154,18 @@ const cycle: ThemeMode[] = ['daylight', 'light', 'dark', 'midnight'];
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<ThemeMode>(() => {
     try {
+      // One-time migration: the app now ships a bright, high-contrast default.
+      if (!localStorage.getItem('ava-softphone-theme-v2')) {
+        localStorage.setItem('ava-softphone-theme-v2', '1');
+        localStorage.setItem(STORAGE_KEY, 'light');
+        return 'light';
+      }
       const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
       if (saved && cycle.includes(saved)) return saved;
     } catch {}
-    return 'midnight';
+    return 'light';
   });
+
 
   const t = themeMap[mode] ?? light;
 

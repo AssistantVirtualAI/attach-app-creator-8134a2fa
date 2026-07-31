@@ -44,9 +44,8 @@ export default function TitleBar(_props: Props = {}) {
 
       {/* Left: brand + window controls spacer (macOS traffic lights) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 70 }}>
-        <LemtelLogo size="xs" />
         <span style={{ fontSize: 13, fontWeight: 700, color: colors.textIce, letterSpacing: 0.2 }}>
-          AVA Softphone
+          Lemtel Softphone
         </span>
       </div>
 

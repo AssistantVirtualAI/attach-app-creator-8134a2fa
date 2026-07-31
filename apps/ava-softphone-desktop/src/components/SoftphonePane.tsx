@@ -22,6 +22,7 @@ import {
 import OutputDevicePicker from './OutputDevicePicker';
 import { watchA11y } from '../lib/a11yAudit';
 import pkg from '../../package.json';
+import SkeletonRows from './ui/SkeletonRows';
 
 const APP_VERSION: string =
   (typeof window !== 'undefined' && (window as any).electronAPI?.getVersion?.()) ||
@@ -1450,7 +1451,7 @@ function SpeedDialPane({ sp, onCall }: { sp: any; onCall: (n: string) => void })
   };
   const [newName, setNewName] = useState('');
   const [newNum, setNewNum] = useState('');
-  if (favs === null) return <div style={{ padding: 16, color: '#7C8AA8', fontSize: 12 }}>Chargement…</div>;
+  if (favs === null) return <SkeletonRows rows={4} padding={16} label="Chargement" />;
   return (
     <div style={{ padding: '14px 14px 20px', overflowY: 'auto', height: '100%' }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#E8EEFB', marginBottom: 12, letterSpacing: -0.2 }}>

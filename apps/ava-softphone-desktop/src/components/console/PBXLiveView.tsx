@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ava, type PbxActiveCall, type PbxSystemStatus } from '../../lib/avaApi';
 import { theme } from '../../lib/theme';
+import SkeletonRows from '../ui/SkeletonRows';
 
 const { colors: c } = theme;
 
@@ -126,7 +127,7 @@ export default function PBXLiveView() {
                   </tr>
                 ))}
                 {!calls.length && (
-                  <tr><td colSpan={6} style={{ padding: 30, color: c.mutedSilver, textAlign: 'center' }}>{loading ? 'Loading live channels…' : 'No active PBX channels right now.'}</td></tr>
+                  <tr><td colSpan={6} style={{ padding: 30, color: c.mutedSilver, textAlign: 'center' }}>{loading ? <SkeletonRows rows={4} padding={0} label="Loading live channels" /> : 'No active PBX channels right now.'}</td></tr>
                 )}
               </tbody>
             </table>

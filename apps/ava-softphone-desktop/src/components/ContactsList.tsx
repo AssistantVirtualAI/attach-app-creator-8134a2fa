@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { ava } from '../lib/avaApi';
 import { theme } from '../lib/theme';
+import SkeletonRows from './ui/SkeletonRows';
 
 const { colors: c } = theme;
 
@@ -152,13 +153,8 @@ export default function ContactsList({ selfExtension, onCall }: Props) {
     exts.filter((e) => e.extension !== selfExtension && (presence[e.extension] === 'available' || presence[e.extension] === 'online')).length,
     [exts, presence, selfExtension]);
 
-  if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 }}>
-      <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid rgba(0,35,230,0.3)', borderTopColor: '#0023e6', animation: 'spin 0.8s linear infinite' }} />
-      <span style={{ color: '#7C8AA8', fontSize: 12 }}>Loading contacts…</span>
-    </div>
-  );
-  if (err) return <div style={{ textAlign: 'center', padding: 40, color: '#EF4444', fontSize: 12 }}>{err}</div>;
+  if (loading) return <SkeletonRows rows={7} avatar label="Loading contacts" />;
+  if (err) return <div style={{ textAlign: 'center', padding: 40, color: c.danger, fontSize: 12 }}>{err}</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>

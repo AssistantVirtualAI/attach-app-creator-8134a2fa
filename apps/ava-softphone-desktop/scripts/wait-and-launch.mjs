@@ -1,5 +1,9 @@
 import { spawn } from 'child_process';
 import { createConnection } from 'net';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const electronPath = require('electron');
 
 const VITE_PORT = 5173;
 const MAX_WAIT_MS = 30_000;
@@ -26,10 +30,10 @@ console.log('[wait-and-launch] Waiting for Vite on port', VITE_PORT, '...');
 await waitForVite();
 console.log('[wait-and-launch] Vite ready — launching Electron');
 
-const electronBin = new URL('../node_modules/.bin/electron', import.meta.url).pathname;
-const child = spawn(electronBin, ['.'], {
+const child = spawn(electronPath, ['.'], {
   stdio: 'inherit',
   env: { ...process.env, NODE_ENV: 'development' },
+  cwd: new URL('..', import.meta.url).pathname,
 });
 
 child.on('exit', (code) => process.exit(code ?? 0));

@@ -930,8 +930,9 @@ function ProfileEditor({
 
         {emStep === 'sent' && (
           <div style={{ marginTop: 14, padding: 12, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#15803d', marginBottom: 4 }}>✉ Check your inbox</div>
-            <div style={{ fontSize: 11, color: '#166534', lineHeight: 1.45, marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: c.success, marginBottom: 4 }}>✉ Check your inbox</div>
+            <div style={{ fontSize: 11, color: c.mutedSilver, lineHeight: 1.45, marginBottom: 8 }}>
+
               A reset link was sent to <strong>{email}</strong>. If you don't see it within a minute, check your spam folder.
             </div>
             <button onClick={() => setEmStep('idle')} style={{ ...ghostBtn, width: '100%' }}>Close</button>

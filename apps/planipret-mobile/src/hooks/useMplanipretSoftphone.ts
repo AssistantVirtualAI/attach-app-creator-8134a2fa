@@ -646,7 +646,7 @@ export function useMplanipretSoftphone(enabled = true) {
     // watchdog escalates to forceReregister even without a subscribe callback.
     const heartbeat = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-        scheduleHandoff(0);
+        scheduleHandoff();
         return;
       }
       evaluate();

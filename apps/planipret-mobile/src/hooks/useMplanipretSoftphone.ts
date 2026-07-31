@@ -44,6 +44,8 @@ import {
   type PpNativeSipStatus,
 } from "@/lib/planipret/sip/nativePpSipService";
 import { addDedupedCapListener } from "@/lib/planipret/sip/capListeners";
+import { checkSipBackendRegistration } from "@/lib/planipret/sip/sipBackendCheck";
+
 import {
   upsertRingingSession,
   claimCall,

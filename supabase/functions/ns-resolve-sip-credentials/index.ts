@@ -34,7 +34,7 @@ type ClientType = "mobile" | "web" | "widget";
 
 // Registrations must land on a call-processing core node, not the portal.
 const NS_SIP_WSS_URL = Deno.env.get("NS_SIP_WSS_URL") ?? "wss://core1.cluster1.ucstack.io:9002";
-const NS_SIP_WSS_URL_2 = Deno.env.get("NS_SIP_WSS_URL_2") ?? "wss://core2.cluster1.ucstack.io:9002";
+// Single pinned core node: never mix core1/core2 for the same AOR.
 
 /**
  * Carrier rule (2026-07): SIP clients must register to core1/core2, never to
@@ -54,11 +54,10 @@ const edgeWssUrls = (candidates: (string | undefined | null)[]): string[] => {
   const kept = Array.from(new Set(candidates
     .map((u) => String(u ?? "").trim())
     .filter((u) => /^wss?:\/\//i.test(u))))
-    .filter((u) => !isPortalWss(u));
-  const ordered = Array.from(new Set([...kept.filter(isCoreWss), ...kept.filter((u) => !isCoreWss(u))]));
-  if (!ordered.length) return [NS_SIP_WSS_URL, NS_SIP_WSS_URL_2];
-  if (!ordered.includes(NS_SIP_WSS_URL_2)) ordered.push(NS_SIP_WSS_URL_2);
-  return ordered;
+    .filter((u) => !isPortalWss(u))
+    .filter(isCoreWss);
+  // Pin to a SINGLE core node (no core1/core2 alternation).
+  return [kept[0] ?? NS_SIP_WSS_URL];
 };
 
 function json(b: unknown, s = 200) {
@@ -425,11 +424,11 @@ Deno.serve(async (req) => {
     sip_proxy: coreServer,
     sip_core_server: coreServer,
     sip_uri: sipUri,
-    // Registrations must live on core1/core2 — portal hosts are filtered out.
-    sip_ws_url: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`])[0],
-    sip_wss_url: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`])[0],
-    sip_ws_urls: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`, NS_SIP_WSS_URL_2]),
-    sip_wss_urls: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`, NS_SIP_WSS_URL_2]),
+    // Single pinned core node (no core1/core2 alternation).
+    sip_ws_url: edgeWssUrls([NS_SIP_WSS_URL])[0],
+    sip_wss_url: edgeWssUrls([NS_SIP_WSS_URL])[0],
+    sip_ws_urls: edgeWssUrls([NS_SIP_WSS_URL]),
+    sip_wss_urls: edgeWssUrls([NS_SIP_WSS_URL]),
     display_name: brokerDisplayName,
     sip_state: sipState,
     device_registered: sipState === "registered",

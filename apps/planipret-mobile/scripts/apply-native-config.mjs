@@ -755,13 +755,23 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       setStatus(status == "registered" ? "registered" : "protected", why)
     }
 
-    private func activateAudioSession() { try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]); try? AVAudioSession.sharedInstance().setActive(true) }
+    private func activateAudioSession() {
+      let s = AVAudioSession.sharedInstance()
+      // During a live call we must own the session exclusively: .mixWithOthers
+      // lets WebKit interrupt it when the app goes background (no audio at all).
+      let opts: AVAudioSession.CategoryOptions = callActive
+        ? [.allowBluetooth, .allowBluetoothA2DP]
+        : [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]
+      try? s.setCategory(.playAndRecord, mode: .voiceChat, options: opts)
+      try? s.setActive(true, options: [])
+    }
     private func connect() {
       // A new socket means a new AoR binding: clear the 200 OK debounce.
       lastRegisterOkTime = nil
       guard !host.isEmpty else { setStatus("error", "missing_host"); return }
       startPathMonitor()
       if isForeground() { return }
+      if callActive { return }
       if socket != nil { return }
       var comps = URLComponents(); comps.scheme = port == 80 ? "ws" : "wss"; comps.host = host; comps.port = port; comps.path = path.isEmpty ? "/" : path
       guard let url = comps.url else { setStatus("error", "bad_ws_url"); return }

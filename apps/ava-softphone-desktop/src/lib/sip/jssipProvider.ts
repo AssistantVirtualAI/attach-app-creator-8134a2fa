@@ -229,7 +229,13 @@ export interface SoftphoneSnapshot {
   startedAt: number | null;
   events: SipEvent[];
   authBlocked?: AuthBlock | null;
+  /** Watchdog recovery state (single-flight re-registration). */
+  recovering?: boolean;
+  recoveryAttempt?: number;
+  /** Epoch ms of the next scheduled automatic retry, if any. */
+  nextRetryAt?: number | null;
 }
+
 
 export interface SoftphoneConfig {
   extension: string;

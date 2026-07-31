@@ -26,10 +26,13 @@ export default function ActiveCallDock() {
     <div style={{
       position: 'fixed', bottom: 18, left: '50%', transform: 'translateX(-50%)',
       zIndex: 9998, width: 460,
-      padding: '10px 14px', borderRadius: 14,
-      background: c.deepPanel,
+      padding: '12px 16px', borderRadius: 24,
+      background: 'var(--ava-surface-elev, rgba(12,20,48,0.96))',
+      backdropFilter: 'blur(28px) saturate(160%)',
+      WebkitBackdropFilter: 'blur(28px) saturate(160%)',
       border: `1px solid ${call.status === 'held' ? c.warning + '60' : c.success + '50'}`,
-      boxShadow: '0 12px 32px -14px rgba(15,23,42,0.20)',
+      boxShadow: 'var(--ava-shadow, 0 24px 60px -20px rgba(0,0,0,0.55))',
+
       display: 'flex', alignItems: 'center', gap: 12, color: c.textIce,
     }}>
       <span style={{

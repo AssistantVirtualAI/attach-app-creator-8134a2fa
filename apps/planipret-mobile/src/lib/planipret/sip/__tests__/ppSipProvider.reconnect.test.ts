@@ -177,6 +177,22 @@ describe("ppSipProvider — transport recovery guard", () => {
     expect(provider.getReconnectMetrics().history.some((h: any) => h.reason === "register_debounce")).toBe(true);
   });
 
+  it("never suppresses JsSIP's internal REGISTER after WSS connects", async () => {
+    await provider.init({ ...CFG });
+    const ua = created.uas[0];
+
+    // JsSIP owns these calls during start/connect. The app-level debounce must
+    // not monkey-patch register(), otherwise the post-connect REGISTER can be
+    // dropped and foreground resume remains disconnected until force-quit.
+    ua.register();
+    ua.connected = true;
+    ua.emit("connected");
+    ua.register();
+
+    expect(ua.registerCalls).toBe(2);
+    expect(provider.getReconnectMetrics().history.some((h: any) => h.reason === "register_debounce")).toBe(false);
+  });
+
   it("exports an analyzable incident report", async () => {
     const ua = await bootRegistered();
     ua.connected = false;

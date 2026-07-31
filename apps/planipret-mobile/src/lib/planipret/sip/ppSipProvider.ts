@@ -355,7 +355,20 @@ class PpSipProvider {
       this.scheduleSocketReconnect(`${reason}_transport_down`);
       return false;
     }
+    const now = Date.now();
+    const minGap = Math.max(5000, getPpSipReconnectConfig().reRegisterDelayMs);
+    if (now - this.lastRegisterAttemptAt < minGap) {
+      this.log("warn", `explicit REGISTER suppressed (${now - this.lastRegisterAttemptAt}ms < ${minGap}ms)`);
+      this.pushHistory("blocked", "register_debounce");
+      this.emitMetrics();
+      return false;
+    }
     try {
+      // Debounce only application-triggered refreshes. Never wrap ua.register():
+      // JsSIP calls it once before transport connection and again after WSS is
+      // ready. Suppressing the second internal call left foreground resume stuck
+      // until the app was force-quit.
+      this.lastRegisterAttemptAt = now;
       ua.register();
       return true;
     } catch {
@@ -451,26 +464,6 @@ class PpSipProvider {
         connection_recovery_max_interval: Math.max(3, Math.ceil(reconnectConfig.socketBackoffMaxMs / 1000)),
         user_agent: "Planipret Softphone 1.0",
       });
-
-      // Definitive REGISTER guard: JsSIP already auto-REGISTERs when
-      // `register:true`. App-resume, token-refresh and watchdog events were also
-      // calling register(), causing duplicate REGISTER bursts on the same WSS
-      // connection. Throttle every call path, including JsSIP internal callers.
-      try {
-        const rawRegister = ua.register.bind(ua);
-        ua.register = (...args: any[]) => {
-          const now = Date.now();
-          const minGap = Math.max(5000, getPpSipReconnectConfig().reRegisterDelayMs);
-          if (now - this.lastRegisterAttemptAt < minGap) {
-            this.log("warn", `REGISTER suppressed (${now - this.lastRegisterAttemptAt}ms < ${minGap}ms)`);
-            this.pushHistory("blocked", "register_debounce");
-            this.emitMetrics();
-            return undefined;
-          }
-          this.lastRegisterAttemptAt = now;
-          return rawRegister(...args);
-        };
-      } catch { /* JsSIP API guard */ }
 
       try {
         const transport = (ua as any)?._transport;

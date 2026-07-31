@@ -429,9 +429,13 @@ export function useMplanipretSoftphone(enabled = true) {
     // creates the CallKit call, force the native keep-alive to re-REGISTER (the
     // WSS socket is usually dead after suspension) instead of waiting on it.
     let cleanupVoipIncoming: (() => void) | undefined;
-    onPlanipretVoipIncomingCall((data) => {
+    onPlanipretVoipIncomingCall((data: any) => {
       console.log("[pp-voip] incoming VoIP push → waking native SIP", data?.callId);
       void wakePlanipretNativeSipForIncomingCall("voip_push");
+      const from = String(data?.from ?? data?.handle ?? data?.caller ?? data?.callerName ?? "");
+      setPushRing({ callId: String(data?.callId ?? ""), from });
+      // Sécurité : si aucun INVITE n'arrive, on retire l'écran après 40 s.
+      window.setTimeout(() => setPushRing((cur) => (cur && cur.callId === String(data?.callId ?? "") ? null : cur)), 40_000);
     }).then((fn) => { cleanupVoipIncoming = fn; }).catch(() => undefined);
 
     onPlanipretIncomingCallAnswered((data) => {
@@ -442,6 +446,7 @@ export function useMplanipretSoftphone(enabled = true) {
 
     onPlanipretIncomingCallRejected((data) => {
       try { ppSipProvider.hangup(); } catch {}
+      setPushRing(null);
       void acknowledgePlanipretIncoming();
       try { window.dispatchEvent(new CustomEvent("pp:sip-callkit-rejected", { detail: data })); } catch {}
     }).then((fn) => { cleanupVoipReject = fn; }).catch(() => undefined);

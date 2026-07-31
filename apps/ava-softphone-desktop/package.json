@@ -10,6 +10,7 @@
     "url": "https://assistantvirtualai.com"
   },
   "scripts": {
+    "predev": "tsc -p electron/tsconfig.json",
     "dev": "concurrently \"vite\" \"electron .\"",
     "build": "vite build && tsc -p electron/tsconfig.json",
     "build:win": "vite build && tsc -p electron/tsconfig.json && electron-builder --win",

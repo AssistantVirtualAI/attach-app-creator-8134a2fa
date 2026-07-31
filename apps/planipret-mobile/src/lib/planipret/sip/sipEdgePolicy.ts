@@ -32,7 +32,7 @@ export function isCoreWssUrl(u: string): boolean {
   return h ? CORE_HOST.test(h) : /core\d+\./i.test(u);
 }
 
-/** Keep only core WSS targets; fall back to core1/core2 when none resolved. */
+/** Keep a SINGLE core WSS target (no core1/core2 alternation). */
 export function edgeOnlyWssUrls(candidates: (string | null | undefined)[]): string[] {
   const kept = Array.from(
     new Set(
@@ -40,11 +40,8 @@ export function edgeOnlyWssUrls(candidates: (string | null | undefined)[]): stri
         .map((u) => String(u ?? "").trim())
         .filter((u) => /^wss?:\/\//i.test(u))
         .filter((u) => !isPortalWssUrl(u))
+        .filter(isCoreWssUrl)
     )
   );
-  const cores = kept.filter(isCoreWssUrl);
-  const ordered = [...cores, ...kept.filter((u) => !isCoreWssUrl(u))];
-  if (!ordered.length) return [PP_SIP_CORE_PRIMARY, PP_SIP_CORE_SECONDARY];
-  if (!ordered.some((u) => u === PP_SIP_CORE_SECONDARY)) ordered.push(PP_SIP_CORE_SECONDARY);
-  return Array.from(new Set(ordered));
+  return [kept[0] ?? PP_SIP_CORE_PRIMARY];
 }

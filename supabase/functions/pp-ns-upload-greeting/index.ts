@@ -40,6 +40,16 @@ Deno.serve(async (req) => {
 
     const { NS_DEFAULT_DOMAIN } = getEnv();
     const domain = nsDomain || NS_DEFAULT_DOMAIN;
+
+    // Diagnostic probe: GET an arbitrary NS path to discover the right media route
+    if (body?.probe) {
+      const pr = await nsFetch(String(body.probe), {}, { functionName: "pp-ns-upload-greeting" });
+      const pt = await pr.text();
+      return new Response(JSON.stringify({ probe: body.probe, status: pr.status, body: pt.slice(0, 1500) }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!nsUser && !allUsers) {
       return new Response(
         JSON.stringify({ error: "missing_user", hint: "Provide { user: '<extension>' } or { allUsers: true }" }),

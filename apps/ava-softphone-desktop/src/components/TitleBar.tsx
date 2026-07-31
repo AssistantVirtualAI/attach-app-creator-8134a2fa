@@ -47,6 +47,11 @@ export default function TitleBar(_props: Props = {}) {
         <span style={{ fontSize: 13, fontWeight: 700, color: colors.textIce, letterSpacing: 0.2 }}>
           Lemtel Softphone
         </span>
+        <img
+          src={lemtelWordmark}
+          alt="Lemtel"
+          style={{ height: 20, width: 'auto', objectFit: 'contain', opacity: 0.95 }}
+        />
       </div>
 
 

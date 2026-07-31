@@ -385,60 +385,104 @@ export default function OrgChatView() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%' }}>
-      {/* Sidebar */}
-      <aside style={{ width: 240, borderRight: `1px solid ${c.border}`, background: c.deepPanel, padding: 14, overflowY: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: c.signalGold, textTransform: 'uppercase' }}>
-            {t('orgchat.channels')}
+    <div style={{ display: 'flex', height: '100%', minHeight: 0 }}>
+
+      {/* ─── SIDEBAR ─── */}
+      <aside style={{
+        width: 200, flexShrink: 0,
+        borderRight: '1px solid rgba(255,255,255,0.07)',
+        background: 'rgba(6,12,28,0.85)',
+        display: 'flex', flexDirection: 'column',
+        overflowY: 'auto',
+        scrollbarWidth: 'thin',
+        scrollbarColor: 'rgba(0,35,230,0.35) transparent',
+      }}>
+        {/* Sidebar header */}
+        <div style={{
+          padding: '12px 12px 8px',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.8, color: '#E0A800', textTransform: 'uppercase' }}>Channels</span>
+          <button onClick={() => setShowGroup(true)} title="New group" style={{
+            background: 'rgba(0,35,230,0.20)', border: '1px solid rgba(0,35,230,0.35)',
+            color: '#8CB4FF', fontSize: 11, padding: '2px 7px', borderRadius: 6, cursor: 'pointer', fontWeight: 700,
+          }}>+</button>
+        </div>
+
+        <div style={{ flex: 1, padding: '8px 6px', overflowY: 'auto' }}>
+          {/* Public channels */}
+          {visibleChannels.length === 0 && <div style={{ fontSize: 11, color: c.mutedSilver, padding: '4px 6px' }}>{t('orgchat.noChannels')}</div>}
+          {visibleChannels.map((ch) => renderChannelRow(ch, ch.name, ch.channel_type === 'private' ? '🔒' : '#'))}
+
+          {/* Groups */}
+          {groupChannels.length > 0 && (
+            <>
+              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#E0A800', textTransform: 'uppercase', padding: '14px 6px 5px' }}>Groups</div>
+              {groupChannels.map((ch) => renderChannelRow(ch, ch.name, '👥'))}
+            </>
+          )}
+
+          {/* DMs */}
+          {dmChannels.length > 0 && (
+            <>
+              <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#E0A800', textTransform: 'uppercase', padding: '14px 6px 5px' }}>Direct</div>
+              {dmChannels.map((ch) => renderChannelRow(ch, dmNameFor(ch), '@'))}
+            </>
+          )}
+
+          {/* Team members */}
+          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#E0A800', textTransform: 'uppercase', padding: '14px 6px 5px' }}>
+            Team · {members.length}
           </div>
-          <button onClick={() => setShowGroup(true)} title="New group chat" style={{
-            background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce,
-            fontSize: 11, padding: '2px 8px', borderRadius: 6, cursor: 'pointer',
-          }}>+ Group</button>
+          {members.length === 0 && <div style={{ fontSize: 11, color: c.mutedSilver, padding: '4px 6px' }}>No teammates yet.</div>}
+          {members.filter((m) => m.user_id !== me?.id).map((m) => {
+            const color = STATUS_COLOR[m.status] || STATUS_COLOR.offline;
+            return (
+              <button key={m.user_id} onClick={() => openDM(m.user_id, m.display_name)} style={{
+                display: 'flex', width: '100%', alignItems: 'center', gap: 7,
+                padding: '5px 8px', marginBottom: 1, borderRadius: 7, border: 'none', cursor: 'pointer',
+                background: 'transparent', color: '#B0BACC', fontSize: 12, textAlign: 'left',
+                transition: 'background .15s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
+                {/* Avatar initials */}
+                <span style={{
+                  width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                  background: `linear-gradient(135deg, rgba(0,35,230,0.6), rgba(122,76,255,0.6))`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700, color: '#fff', position: 'relative',
+                }}>
+                  {m.display_name.charAt(0).toUpperCase()}
+                  <span style={{
+                    position: 'absolute', bottom: 0, right: 0,
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: color, border: '1.5px solid #060C1C',
+                  }} />
+                </span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}>{m.display_name}</span>
+              </button>
+            );
+          })}
+          {errMsg && <div style={{ fontSize: 10, color: '#f87171', marginTop: 8, padding: '0 6px' }}>{errMsg}</div>}
         </div>
-        {visibleChannels.length === 0 && <div style={{ fontSize: 12, color: c.mutedSilver }}>{t('orgchat.noChannels')}</div>}
-        {visibleChannels.map((ch) => renderChannelRow(ch, ch.name, ch.channel_type === 'private' ? '🔒' : '#'))}
-
-        {groupChannels.length > 0 && (
-          <>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: c.signalGold, textTransform: 'uppercase', margin: '18px 0 8px' }}>Groups</div>
-            {groupChannels.map((ch) => renderChannelRow(ch, ch.name, '👥'))}
-          </>
-        )}
-
-        {dmChannels.length > 0 && (
-          <>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: c.signalGold, textTransform: 'uppercase', margin: '18px 0 8px' }}>Direct</div>
-            {dmChannels.map((ch) => renderChannelRow(ch, dmNameFor(ch), '@'))}
-          </>
-        )}
-
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: c.signalGold, textTransform: 'uppercase', margin: '18px 0 8px' }}>
-          Team ({members.length})
-        </div>
-        {members.length === 0 && <div style={{ fontSize: 11, color: c.mutedSilver }}>No teammates yet.</div>}
-        {members.filter((m) => m.user_id !== me?.id).map((m) => {
-          const color = STATUS_COLOR[m.status] || STATUS_COLOR.offline;
-          return (
-            <button key={m.user_id} onClick={() => openDM(m.user_id, m.display_name)} style={{
-              display: 'flex', width: '100%', alignItems: 'center', gap: 8,
-              padding: '6px 8px', marginBottom: 1, borderRadius: 8, border: 'none', cursor: 'pointer',
-              background: 'transparent', color: c.textIce, fontSize: 12, textAlign: 'left',
-            }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 6px ${color}` }} />
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.display_name}</span>
-              {m.extension && <span style={{ fontSize: 10, color: c.mutedSilver, fontFamily: 'JetBrains Mono, monospace' }}>{m.extension}</span>}
-            </button>
-          );
-        })}
-        {errMsg && <div style={{ fontSize: 11, color: c.danger, marginTop: 8 }}>{errMsg}</div>}
       </aside>
 
-      {/* Messages */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <header style={{ padding: '12px 18px', borderBottom: `1px solid ${c.border}`, display: 'flex', gap: 12, alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontSize: 15, color: c.textIce }}>{headerLabel}</h2>
+      {/* ─── MAIN CHAT AREA ─── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+
+        {/* Chat header */}
+        <div style={{
+          padding: '10px 16px', flexShrink: 0,
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          background: 'rgba(255,255,255,0.02)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#E8EEFB', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {headerLabel || <span style={{ color: '#7C8AA8' }}>Select a channel</span>}
+          </span>
           {canCall && (
             <button onClick={() => {
               if (isActiveDm && otherDmMember?.extension) startCall(otherDmMember.extension);
@@ -447,18 +491,32 @@ export default function OrgChatView() {
                 supabase.functions.invoke('org-chat', { body: { action: 'send_message', payload: { channel_id: activeId, content: `📞 ${me?.name} started a group call.` } } });
               }
             }} style={{
-              padding: '5px 12px', borderRadius: 8, border: `1px solid ${c.border}`,
-              background: 'rgba(34,211,154,0.15)', color: c.success, cursor: 'pointer', fontSize: 11.5, fontWeight: 700,
+              padding: '5px 12px', borderRadius: 8,
+              border: '1px solid rgba(34,211,154,0.30)',
+              background: 'rgba(34,211,154,0.12)', color: '#22d39a',
+              cursor: 'pointer', fontSize: 11.5, fontWeight: 700, flexShrink: 0,
             }}>📞 {isActiveGroup ? 'Call group' : 'Call'}</button>
           )}
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('orgchat.searchPlaceholder')}
-            style={{ marginLeft: 'auto', padding: '6px 10px', borderRadius: 8, border: `1px solid ${c.border}`, background: 'rgba(140,180,255,0.06)', color: c.textIce, fontSize: 12, minWidth: 200 }} />
-        </header>
+          {/* Search */}
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search…"
+            style={{
+              padding: '5px 10px', borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(255,255,255,0.04)',
+              color: '#E8EEFB', fontSize: 11.5, width: 130, flexShrink: 0, outline: 'none',
+            }} />
+        </div>
 
-        <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
+        {/* Messages list */}
+        <div ref={scrollRef} style={{
+          flex: 1, overflowY: 'auto', padding: '16px 14px 8px',
+          scrollbarWidth: 'thin',
+          scrollbarColor: 'rgba(0,35,230,0.30) transparent',
+        }}>
           {filtered.length === 0 && (
-            <div style={{ color: c.mutedSilver, fontSize: 12, textAlign: 'center', marginTop: 40 }}>
-              {messages.length === 0 ? t('orgchat.sayHi') : t('orgchat.noMatches')}
+            <div style={{ color: '#7C8AA8', fontSize: 12, textAlign: 'center', marginTop: 48 }}>
+              {messages.length === 0 ? '👋 Say hi to your team!' : 'No messages match your search.'}
             </div>
           )}
           {filtered.map((m) => (
@@ -468,29 +526,50 @@ export default function OrgChatView() {
           ))}
         </div>
 
+        {/* Typing indicator */}
         {typingNames.length > 0 && (
-          <div style={{ padding: '4px 18px', fontSize: 11, color: c.mutedSilver, fontStyle: 'italic' }}>
+          <div style={{ padding: '3px 16px', fontSize: 11, color: '#7C8AA8', fontStyle: 'italic', flexShrink: 0 }}>
             {typingNames.join(', ')} {typingNames.length === 1 ? 'is' : 'are'} typing…
           </div>
         )}
 
-        <div style={{ padding: 12, borderTop: `1px solid ${c.border}`, display: 'flex', gap: 8 }}>
-          <button onClick={() => fileRef.current?.click()} disabled={!activeId} title="Attach" style={{
-            padding: '8px 12px', borderRadius: 9, border: `1px solid ${c.border}`, background: 'transparent',
-            color: c.textIce, cursor: 'pointer', fontSize: 14,
+        {/* Composer */}
+        <div style={{
+          padding: '10px 12px',
+          borderTop: '1px solid rgba(255,255,255,0.07)',
+          background: 'rgba(255,255,255,0.02)',
+          display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0,
+        }}>
+          <button onClick={() => fileRef.current?.click()} disabled={!activeId} title="Attach file" style={{
+            width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+            border: '1px solid rgba(255,255,255,0.10)',
+            background: 'rgba(255,255,255,0.04)',
+            color: '#7C8AA8', cursor: 'pointer', fontSize: 15,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>📎</button>
           <input ref={fileRef} type="file" style={{ display: 'none' }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) { uploadFile(f); e.target.value = ''; } }} />
           <input value={input} onChange={(e) => handleTyping(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={activeId ? t('orgchat.messagePlaceholder') : t('orgchat.selectChannel')} disabled={!activeId}
-            style={{ flex: 1, padding: '10px 12px', borderRadius: 9, border: `1px solid ${c.border}`, background: 'rgba(140,180,255,0.06)', color: c.textIce, fontSize: 13 }} />
+            placeholder={activeId ? 'Message…' : 'Select a channel to start chatting'}
+            disabled={!activeId}
+            style={{
+              flex: 1, padding: '9px 14px', borderRadius: 10,
+              border: '1px solid rgba(255,255,255,0.10)',
+              background: 'rgba(255,255,255,0.05)',
+              color: '#E8EEFB', fontSize: 13, outline: 'none',
+              transition: 'border-color .15s',
+            }} />
           <button onClick={send} disabled={!input.trim() || !activeId} style={{
-            padding: '10px 18px', borderRadius: 9, border: 'none', cursor: 'pointer',
-            background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
-            color: '#fff', fontWeight: 700, fontSize: 12,
-            opacity: !input.trim() || !activeId ? 0.5 : 1,
-          }}>{t('common.send')}</button>
+            width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+            border: 'none', cursor: 'pointer',
+            background: input.trim() && activeId
+              ? 'linear-gradient(135deg, #0023e6, #7A4CFF)'
+              : 'rgba(255,255,255,0.06)',
+            color: '#fff', fontSize: 16,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all .15s',
+          }}>➤</button>
         </div>
       </div>
 
@@ -554,46 +633,110 @@ function MessageRow({ m, meId, onReact, emojiOpen, onToggleEmoji, getSigned }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [m.id]);
 
-  if (m.message_type === 'deleted') return <div style={{ fontSize: 11, fontStyle: 'italic', color: c.mutedSilver, marginBottom: 12 }}>— message deleted</div>;
+  if (m.message_type === 'deleted') return (
+    <div style={{ fontSize: 11, fontStyle: 'italic', color: '#7C8AA8', marginBottom: 10, paddingLeft: 42 }}>— message deleted</div>
+  );
 
+  const isMine = m.sender_id === meId;
   const reactions = m.reactions || {};
+  const initials = (m.sender_name ?? 'U').charAt(0).toUpperCase();
+  const timeStr = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
   return (
-    <div style={{ marginBottom: 14, position: 'relative' }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-        <strong style={{ color: c.textIce, fontSize: 12.5 }}>{m.sender_name ?? 'User'}</strong>
-        <span style={{ color: c.mutedSilver, fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}>
-          {new Date(m.created_at).toLocaleString()}{m.edited_at ? ' (edited)' : ''}
-        </span>
-        <button onClick={onToggleEmoji} title="React" style={{
-          marginLeft: 'auto', background: 'transparent', border: 'none', color: c.mutedSilver, cursor: 'pointer', fontSize: 13,
-        }}>😊</button>
+    <div style={{
+      display: 'flex',
+      flexDirection: isMine ? 'row-reverse' : 'row',
+      alignItems: 'flex-end',
+      gap: 8,
+      marginBottom: 10,
+      position: 'relative',
+    }}>
+      {/* Avatar */}
+      {!isMine && (
+        <span style={{
+          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+          background: 'linear-gradient(135deg, rgba(0,35,230,0.7), rgba(122,76,255,0.7))',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, fontWeight: 700, color: '#fff',
+        }}>{initials}</span>
+      )}
+
+      <div style={{ maxWidth: '72%', display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+        {/* Sender name + time */}
+        {!isMine && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', marginBottom: 3 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#E8EEFB' }}>{m.sender_name ?? 'User'}</span>
+            <span style={{ fontSize: 10, color: '#7C8AA8' }}>{timeStr}{m.edited_at ? ' ·edited' : ''}</span>
+          </div>
+        )}
+
+        {/* Bubble */}
+        {m.content && (
+          <div style={{
+            padding: '8px 12px',
+            borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+            background: isMine
+              ? 'linear-gradient(135deg, #0023e6, #2a4dff)'
+              : 'rgba(255,255,255,0.07)',
+            border: isMine ? 'none' : '1px solid rgba(255,255,255,0.09)',
+            color: '#E8EEFB',
+            fontSize: 13,
+            lineHeight: 1.55,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}>{m.content}</div>
+        )}
+
+        {/* Time for own messages */}
+        {isMine && (
+          <span style={{ fontSize: 9.5, color: '#7C8AA8', marginTop: 3 }}>{timeStr}{m.edited_at ? ' · edited' : ''}</span>
+        )}
+
+        {/* Attachments */}
+        {(m.attachments ?? []).map((a: any) => (
+          <div key={a.path} style={{ marginTop: 6 }}>
+            {a.mime?.startsWith('image/') && urls[a.path]
+              ? <img src={urls[a.path]} alt={a.name} style={{ maxHeight: 200, maxWidth: '100%', borderRadius: 10, border: '1px solid rgba(255,255,255,0.10)' }} />
+              : <a href={urls[a.path]} target="_blank" rel="noreferrer" style={{ color: '#8CB4FF', fontSize: 12 }}>📎 {a.name}</a>
+            }
+          </div>
+        ))}
+
+        {/* Reactions */}
+        {Object.keys(reactions).length > 0 && (
+          <div style={{ display: 'flex', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
+            {Object.entries(reactions).map(([e, uids]) => (
+              <button key={e} onClick={() => onReact(e)} style={{
+                background: (uids as string[]).includes(meId || '') ? 'rgba(0,35,230,0.30)' : 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.10)',
+                color: '#E8EEFB', fontSize: 11, padding: '2px 8px', borderRadius: 12, cursor: 'pointer',
+              }}>{e} {(uids as string[]).length}</button>
+            ))}
+          </div>
+        )}
+
+        {/* Emoji picker */}
+        {emojiOpen && (
+          <div style={{
+            display: 'flex', gap: 6, marginTop: 5, padding: '5px 10px',
+            background: 'rgba(6,12,28,0.95)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: 10, width: 'fit-content',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+          }}>
+            {EMOJIS.map((e) => (
+              <button key={e} onClick={() => onReact(e)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 18 }}>{e}</button>
+            ))}
+          </div>
+        )}
       </div>
-      {m.content && <div style={{ color: c.textIce, fontSize: 13, lineHeight: 1.5, marginTop: 2, whiteSpace: 'pre-wrap' }}>{m.content}</div>}
-      {(m.attachments ?? []).map((a: any) => (
-        <div key={a.path} style={{ marginTop: 6 }}>
-          {a.mime?.startsWith('image/') && urls[a.path]
-            ? <img src={urls[a.path]} alt={a.name} style={{ maxHeight: 240, borderRadius: 8, border: `1px solid ${c.border}` }} />
-            : <a href={urls[a.path]} target="_blank" rel="noreferrer" style={{ color: c.lemtelBlue, fontSize: 12 }}>📎 {a.name}</a>
-          }
-        </div>
-      ))}
-      {Object.keys(reactions).length > 0 && (
-        <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
-          {Object.entries(reactions).map(([e, uids]) => (
-            <button key={e} onClick={() => onReact(e)} style={{
-              background: (uids as string[]).includes(meId || '') ? 'rgba(122,76,255,0.25)' : 'rgba(140,180,255,0.08)',
-              border: `1px solid ${c.border}`, color: c.textIce, fontSize: 11, padding: '1px 7px', borderRadius: 10, cursor: 'pointer',
-            }}>{e} {(uids as string[]).length}</button>
-          ))}
-        </div>
-      )}
-      {emojiOpen && (
-        <div style={{ display: 'flex', gap: 6, marginTop: 6, padding: '4px 8px', background: c.deepPanel, border: `1px solid ${c.border}`, borderRadius: 8, width: 'fit-content' }}>
-          {EMOJIS.map((e) => (
-            <button key={e} onClick={() => onReact(e)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16 }}>{e}</button>
-          ))}
-        </div>
-      )}
+
+      {/* React button on hover */}
+      <button onClick={onToggleEmoji} title="React" style={{
+        background: 'transparent', border: 'none', color: '#7C8AA8',
+        cursor: 'pointer', fontSize: 13, alignSelf: 'center', opacity: 0.6,
+        padding: 2,
+      }}>😊</button>
     </div>
   );
 }

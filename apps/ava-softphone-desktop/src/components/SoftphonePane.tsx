@@ -378,46 +378,51 @@ export default function SoftphonePane({
       <div style={{
         position: 'relative', zIndex: 1,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: ultraCompact ? 4 : compact ? 6 : 10,
-        padding: ultraCompact ? '6px 8px' : compact ? '7px 10px' : '10px 14px',
-        height: ultraCompact ? 42 : compact ? 46 : 52, boxSizing: 'border-box',
+        gap: ultraCompact ? 4 : compact ? 6 : 8,
+        padding: ultraCompact ? '5px 8px' : compact ? '6px 10px' : '8px 14px',
+        height: ultraCompact ? 42 : compact ? 46 : 54, boxSizing: 'border-box',
         background: 'rgba(255,255,255,0.04)',
         backdropFilter: 'blur(18px) saturate(160%)',
         WebkitBackdropFilter: 'blur(18px) saturate(160%)',
         borderBottom: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: 'none',
       }}>
-        {/* Extension badge */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
-          padding: compact ? '3px 8px' : '4px 10px', borderRadius: 999,
-          background: 'rgba(0,35,230,0.20)', border: '1px solid rgba(255,255,255,0.10)',
-          color: '#E8EEFB', fontSize: compact ? 10 : 11, fontWeight: 700, letterSpacing: 0.5,
-        }}>
-          Ext {creds.extension}
+        {/* LEFT: Logo Lemtel */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <LemtelLogo size={ultraCompact ? 'xs' : compact ? 'xs' : 'sm'} glow shape="square" />
+          {!ultraCompact && !compact && (
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#E8EEFB', letterSpacing: 0.3 }}>Lemtel</span>
+          )}
         </div>
 
-        {!compact && (
-          <div style={{
-            fontSize: 12, fontWeight: 500, color: '#E8EEFB', opacity: 0.85,
-            flex: 1, minWidth: 0, textAlign: 'center',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {creds.displayName || creds.email}
+        {/* CENTER: Extension + SIP dot + display name */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            {/* SIP status dot — inline à côté de l'extension */}
+            <span
+              title={sp.snap.errorCause || `SIP: ${sp.snap.status}`}
+              style={{
+                width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                background: dotColor,
+                boxShadow: `0 0 6px ${dotColor}`,
+                animation: sp.snap.status === 'registered' ? 'statusPulse 2s ease-in-out infinite' : 'none',
+              }}
+            />
+            <span style={{
+              fontSize: compact ? 11 : 12, fontWeight: 700, color: '#E8EEFB', letterSpacing: 0.4,
+            }}>Ext {creds.extension}</span>
           </div>
-        )}
+          {!ultraCompact && (
+            <div style={{
+              fontSize: 10, color: '#7C8AA8', fontWeight: 500,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%',
+            }}>
+              {creds.displayName || creds.email}
+            </div>
+          )}
+        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 5 : 8, flexShrink: 0, marginLeft: compact ? 'auto' : 0 }}>
-          {/* Compact SIP indicator only — full status & profile live in TitleBar */}
-          <span
-            title={sp.snap.errorCause || `SIP: ${sp.snap.status}`}
-            style={{
-              width: 8, height: 8, borderRadius: '50%',
-              background: dotColor,
-              boxShadow: `0 0 8px ${dotColor}`,
-              animation: sp.snap.status === 'registered' ? 'statusPulse 2s ease-in-out infinite' : 'none',
-            }}
-          />
+        {/* RIGHT: Sync + AI + Settings */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 4 : 6, flexShrink: 0 }}>
           <button
             onClick={syncPhoneSystem}
             disabled={syncingPhone}
@@ -425,7 +430,8 @@ export default function SoftphonePane({
             style={{
               background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)',
               color: '#B0BACC', cursor: syncingPhone ? 'wait' : 'pointer',
-              width: compact ? 26 : 30, height: compact ? 24 : 28, borderRadius: 8, fontSize: 12,
+              width: compact ? 26 : 28, height: compact ? 24 : 26, borderRadius: 8, fontSize: 12,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
             aria-label="Sync phone system"
           >{syncingPhone ? '…' : '↻'}</button>
@@ -434,12 +440,11 @@ export default function SoftphonePane({
             title="AVA AI Assistant"
             aria-label="AVA AI"
             style={{
-              background: 'linear-gradient(135deg, #7A4CFF, #23d6ff)',
-              opacity: showAvaChat ? 1 : 0.55,
+              background: showAvaChat ? 'linear-gradient(135deg, #7A4CFF, #23d6ff)' : 'rgba(122,76,255,0.15)',
               border: '1px solid rgba(122,76,255,0.30)',
               color: '#fff',
               cursor: 'pointer',
-              width: compact ? 26 : 30, height: compact ? 24 : 28, borderRadius: 8, fontSize: 13,
+              width: compact ? 26 : 28, height: compact ? 24 : 26, borderRadius: 8, fontSize: 13,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'all .2s ease',
             }}
@@ -449,7 +454,8 @@ export default function SoftphonePane({
             style={{
               background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)',
               color: '#B0BACC', cursor: 'pointer',
-              width: compact ? 26 : 30, height: compact ? 24 : 28, borderRadius: 8, fontSize: 14,
+              width: compact ? 26 : 28, height: compact ? 24 : 26, borderRadius: 8, fontSize: 14,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
             aria-label="Settings"
           >⚙</button>
@@ -653,7 +659,7 @@ export default function SoftphonePane({
               </div>
             </div>
             {/* Contenu du sous-onglet */}
-            <div style={{ flex: 1, overflow: 'hidden' }}>
+            <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
               {chatsSubTab === 'team' && <OrgChatView />}
               {chatsSubTab === 'sms' && <SmsThreads />}
             </div>
@@ -695,7 +701,7 @@ export default function SoftphonePane({
               </div>
             </div>
             {/* Contenu du sous-onglet */}
-            <div style={{ flex: 1, overflow: 'hidden' }}>
+            <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
               {callsSubTab === 'recents' && (
                 <AppErrorBoundary compact onBack={() => setCallsSubTab('recents')}>
                   <RecentsList extension={creds.extension} onCall={(n) => { setDial(n); sp.call(n); }} />

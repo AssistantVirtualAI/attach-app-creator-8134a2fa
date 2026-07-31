@@ -13,6 +13,7 @@ import {
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { audioRouter } from "@/lib/planipret/audio/audioRouter";
+import { formatSipParty } from "@/lib/planipret/sip/formatSipParty";
 import PpCallDiagnosticPanel from "./PpCallDiagnosticPanel";
 
 type Contact = {
@@ -139,8 +140,11 @@ export default function PpActiveCallScreen({
   const isIncoming = snap.callState === "ringing-in";
   const isOutgoingRinging = snap.callState === "ringing-out";
   const isHeld = snap.callState === "held";
-  const displayName = snap.remoteIdentity || snap.remoteNumber || "—";
-  const displayNumber = snap.remoteNumber && snap.remoteNumber !== displayName ? snap.remoteNumber : null;
+  // Normalisation universelle : la même UI marche pour n'importe quel broker
+  // et n'importe quel format d'appelant (SIP URI, tel:, E.164, poste, masqué).
+  const party = formatSipParty(snap.remoteIdentity, "fr", snap.remoteNumber);
+  const displayName = party.name;
+  const displayNumber = party.subtitle || null;
   const statusText = isIncoming ? (t("call.incoming") || "Appel entrant")
     : isOutgoingRinging ? (t("call.ringing") || "Sonnerie…")
     : isHeld ? (t("call.onHold") || "En attente")

@@ -592,13 +592,14 @@ export function useMplanipretSoftphone(enabled = true) {
         }
         const cfg = ppSipProvider.getConfig();
         if (cfg) {
-          await stopPlanipretSipKeepAlive().catch(() => undefined);
-          await new Promise((r) => setTimeout(r, 500));
+          // Keep the native registration alive while JsSIP rebuilds: stopping
+          // it first left the AOR unregistered (=> voicemail on inbound).
           if (!acquireSipInitLock(4000)) return;
           await ppSipProvider.init(cfg).finally(() => {
             handedOffToNative = false;
             releaseSipInitLock();
           });
+          stopNativeAfterWebRegistered(true);
         } else {
           ppSipProvider.forceReregister();
           handedOffToNative = false;

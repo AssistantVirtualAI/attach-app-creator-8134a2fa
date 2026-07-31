@@ -278,14 +278,18 @@ export default function SoftphonePane({
   const [callBusy, setCallBusy] = useState(false);
   const sipReady = sp.snap.status === 'registered';
   const callDisabledReason =
-    !sipReady ? 'SIP not registered yet' :
+    !sipReady ? (sp.sipUnavailableReason || 'Phone line not registered yet') :
     micPermission === 'denied' ? 'Microphone denied — click Allow' :
     callBusy ? 'Starting call…' : '';
 
   const handleCall = async () => {
     if (dial.length < 3 || callBusy) return;
     if (micPermission === 'denied') { await requestMic(); return; }
-    if (!sipReady) return;
+    if (!sipReady) {
+      // Never fail silently: explain and kick off a safe recovery attempt.
+      sp.retryNow();
+      return;
+    }
     setCallBusy(true);
     // Defer the (potentially expensive) JsSIP `call()` out of the click handler
     // so React can paint the busy-state first. Wide-layout side panels otherwise
@@ -296,6 +300,7 @@ export default function SoftphonePane({
       setTimeout(() => setCallBusy(false), 1500);
     }, 0);
   };
+
 
   const syncPhoneSystem = async () => {
     setSyncingPhone(true);

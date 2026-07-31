@@ -1028,8 +1028,12 @@ class JsSipProvider {
   stop() {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    this.clearRecoveryTimer();
+    this.recoveryInFlight = false;
+    this.recoveryAttempt = 0;
     if (this.keepAliveTimer) clearInterval(this.keepAliveTimer);
     this.keepAliveTimer = null;
+
     if (this.statusGraceTimer) clearTimeout(this.statusGraceTimer);
     this.statusGraceTimer = null;
     this.unbindWindowListeners();

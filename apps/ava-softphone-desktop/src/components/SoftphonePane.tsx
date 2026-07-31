@@ -21,6 +21,7 @@ import OutputDevicePicker from './OutputDevicePicker';
 import { watchA11y } from '../lib/a11yAudit';
 import pkg from '../../package.json';
 import SkeletonRows from './ui/SkeletonRows';
+import avaLogo from '../assets/ava-statistic-logo.png';
 
 const APP_VERSION: string =
   (typeof window !== 'undefined' && (window as any).electronAPI?.getVersion?.()) ||

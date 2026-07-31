@@ -380,13 +380,14 @@ function RailItem({ v, active, onClick, label, badge }: { v: ConsoleView; active
       </svg>
       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label ?? LABEL[v]}</span>
       {!!badge && badge > 0 && (
-        <span style={{
-          background: '#ef4444', color: '#fff',
+        <span className="ava-pulse-badge" style={{
+          background: c.signalGold, color: '#0b1530',
           fontSize: 10, fontWeight: 800, lineHeight: 1,
           padding: '3px 6px', borderRadius: 999, minWidth: 18,
-          textAlign: 'center', boxShadow: '0 0 0 2px rgba(239,68,68,0.25)',
+          textAlign: 'center', boxShadow: `0 0 0 2px ${c.signalGold}33`,
         }}>{badge > 99 ? '99+' : badge}</span>
       )}
+
     </button>
   );
 }

@@ -659,6 +659,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     }
     private func stopAudioKeepAlive() { audioKeepAliveTimer?.invalidate(); audioKeepAliveTimer = nil }
 
+    @objc func stopSipService(_ call: CAPPluginCall) { DispatchQueue.main.async { self.releaseRegistration("stopped"); call.resolve(self.snapshot(ok: true)) } }
     @objc func getSipServiceStatus(_ call: CAPPluginCall) { DispatchQueue.main.async { call.resolve(self.snapshot(ok: true)) } }
     @objc func triggerReregister(_ call: CAPPluginCall) {
       DispatchQueue.main.async { [weak self] in

@@ -139,8 +139,9 @@ describe("ppSipProvider — transport recovery guard", () => {
 
     // A foreground resume can immediately request init with the same config.
     // It must replace the dead UA even inside the 15-second startup window.
-    await provider.init({ ...CFG });
+    const resumedInit = provider.init({ ...CFG });
     await vi.advanceTimersByTimeAsync(800);
+    await resumedInit;
 
     expect(oldUa.stopped).toBe(true);
     expect(created.uas).toHaveLength(2);

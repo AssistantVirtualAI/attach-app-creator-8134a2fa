@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
-import { theme } from '../lib/theme';
-
-const { colors: c } = theme;
   sipProvider,
   isSdpWorkaroundEnabled,
   setSdpWorkaroundEnabled,
   SipAttempt,
 } from '../lib/sip/jssipProvider';
+import { theme } from '../lib/theme';
+
+const { colors: c } = theme;
+
 
 function fmtTime(ms: number) {
   return new Date(ms).toLocaleString();

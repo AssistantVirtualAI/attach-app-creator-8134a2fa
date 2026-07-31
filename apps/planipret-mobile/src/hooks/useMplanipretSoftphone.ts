@@ -898,7 +898,7 @@ export function useMplanipretSoftphone(enabled = true) {
   // Wrapped answer: race to claim the call before actually picking up. If we
   // lose (widget answered first), don't pick up — the winner already has audio.
   const answer = useCallback(async () => {
-    if (restCall?.id) return await restControl("answer");
+    if (restCall?.id && !hasLiveSipSession) return await restControl("answer");
     const callId = ppSipProvider.getSnapshot().callId;
     const won = await claimCall(callId, "mobile");
     if (!won) {
@@ -906,11 +906,14 @@ export function useMplanipretSoftphone(enabled = true) {
       try { ppSipProvider.hangup(); } catch {}
       return false;
     }
-    return ppSipProvider.answer(callId);
-  }, [restCall?.id, restControl]);
+    const ok = await ppSipProvider.answer(callId);
+    // Clear the REST/DB attachment so the in-call UI follows the live session.
+    if (ok && restCall?.id) setRestCall(null);
+    return ok;
+  }, [restCall?.id, restControl, hasLiveSipSession]);
 
   const hangup = useCallback(() => {
-    if (restCall?.id) {
+    if (restCall?.id && !hasLiveSipSession) {
       const id = restCall.id;
       void restControl("disconnect");
       maestroLog(() => maestroTelecom.updateCall(id, { status: "ended", ended_reason: "completed" }));
@@ -918,11 +921,13 @@ export function useMplanipretSoftphone(enabled = true) {
     }
     const callId = ppSipProvider.getSnapshot().callId;
     ppSipProvider.hangup();
+    if (restCall?.id) setRestCall(null);
     if (callId) {
       void endSession(callId, "hangup");
       maestroLog(() => maestroTelecom.updateCall(callId, { status: "ended", ended_reason: "completed" }));
     }
-  }, [restCall?.id, restControl]);
+  }, [restCall?.id, restControl, hasLiveSipSession]);
+
 
 
   const attachRestCall = useCallback((attachment: RestCallAttachment | null) => {

@@ -107,8 +107,9 @@ function RecentsListImpl({ extension, onCall }: Props) {
     },
   }, silentLoad);
 
-  if (loading) return <div style={center}>Loading recents…</div>;
-  if (err && rows.length === 0) return <div style={{ ...center, color: '#ff8a8a' }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>Retry</button></div>;
+  if (loading) return <SkeletonRows rows={6} label="Loading recents" />;
+  if (err && rows.length === 0) return <div style={{ ...center, color: c.danger }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>Retry</button></div>;
+
   const filteredRows = rows.filter((r) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;

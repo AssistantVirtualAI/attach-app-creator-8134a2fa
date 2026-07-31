@@ -132,6 +132,21 @@ describe("ppSipProvider — transport recovery guard", () => {
     expect(provider.getReconnectMetrics().recoveryOwner).toBe("none");
   });
 
+  it("does not suppress init when the current transport is disconnected", async () => {
+    const oldUa = await bootRegistered();
+    oldUa.connected = false;
+    oldUa.emit("disconnected", { reason: "ws_disconnected", code: 1001 });
+
+    // A foreground resume can immediately request init with the same config.
+    // It must replace the dead UA even inside the 15-second startup window.
+    await provider.init({ ...CFG });
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(oldUa.stopped).toBe(true);
+    expect(created.uas).toHaveLength(2);
+    expect(liveUAs()).toHaveLength(1);
+  });
+
   it("never re-schedules a reconnect at 1000ms", async () => {
     const ua = await bootRegistered();
     scheduledDelays = [];

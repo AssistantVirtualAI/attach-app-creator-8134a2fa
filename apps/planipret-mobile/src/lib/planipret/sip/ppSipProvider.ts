@@ -391,7 +391,12 @@ class PpSipProvider {
     // Connection Error" loop on iOS.
     if (this.ua && sig === this.lastSig) {
       const busyConnecting = this.snap.status === "connecting" && Date.now() - this.connectingSince < 20_000;
-      const tooSoon = Date.now() - this.lastStartAt < 15_000;
+      // A dead transport must never be protected by the startup debounce.
+      // Foreground resume after a 1001 needs to rebuild immediately instead of
+      // logging "duplicate init ignored" while no reachable Contact exists.
+      const tooSoon = this.snap.status !== "disconnected"
+        && this.snap.status !== "error"
+        && Date.now() - this.lastStartAt < 15_000;
       if (busyConnecting || tooSoon) {
         this.log("warn", `duplicate init ignored while SIP is ${this.snap.status || "starting"}`);
         return;
@@ -472,7 +477,6 @@ class PpSipProvider {
         if (transport && typeof transport._reconnect === "function") {
           transport._reconnect = () => {
             this.log("warn", "JsSIP built-in recovery suppressed; watchdog owns reconnect");
-            this.scheduleSocketReconnect("jssip_recovery_suppressed");
           };
         }
       } catch { /* private JsSIP API guard */ }

@@ -838,19 +838,20 @@ export default function SoftphonePane({
       {/* Footer */}
       <div style={{
         position: 'relative', zIndex: 1, flexShrink: 0,
-        padding: compact ? '4px 8px' : '6px 12px',
+        padding: compact ? '8px 10px' : '12px 16px',
         textAlign: 'center',
         borderTop: `1px solid ${c.border}`,
         background: c.bgCard,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
       }}>
-        <div style={{ fontSize: compact ? 9 : 10, color: c.textSub, letterSpacing: 0.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: compact ? 10 : 11, color: c.textSub, letterSpacing: 0.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {ultraCompact ? '' : 'Lemtel Communications · '}v{APP_VERSION} {ultraCompact ? '' : '· Powered by '}
           <a
             onClick={(e) => { e.preventDefault(); window.electronAPI?.openExternal?.('https://assistantvirtualai.com'); }}
             href="#"
-            style={{ color: c.gold, textDecoration: 'none', cursor: 'pointer', fontWeight: 600 }}
+            style={{ color: c.gold, textDecoration: 'none', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
+            <img src={avaLogo} alt="AVA Statistic" style={{ height: compact ? 18 : 22, width: 'auto', objectFit: 'contain' }} />
             {ultraCompact ? 'AVA Statistic' : 'AVA Statistic · assistantvirtualai.com'}
           </a>
         </div>

@@ -483,53 +483,23 @@ export default function SoftphonePane({
       )}
 
       {!sp.credError && sp.snap.status !== 'registered' && sp.snap.status !== 'idle' && (
+        <SipRecoveryBanner
+          snap={sp.snap}
+          compact={compact}
+          notice={sp.sipNotice}
+          onDismissNotice={sp.dismissSipNotice}
+          onRetry={() => sp.retryNow()}
+          onFullRestart={() => sp.restart()}
+          onDiagnose={() => window.dispatchEvent(new CustomEvent('lemtel:nav', { detail: 'settings' }))}
+        />
+      )}
+      {!sp.credError && sp.snap.status !== 'registered' && sp.snap.status !== 'idle' && (
         <div style={{
           position: 'relative', zIndex: 1,
-          margin: compact ? '8px 12px 0' : '10px 16px 0',
-          padding: '10px 12px', borderRadius: 10,
-          background: sp.snap.status === 'error'
-            ? 'rgba(239,68,68,0.10)'
-            : sp.snap.status === 'disconnected'
-              ? 'rgba(148,163,184,0.10)'
-              : 'rgba(245,158,11,0.10)',
-          border: sp.snap.status === 'error'
-            ? '1px solid rgba(239,68,68,0.35)'
-            : sp.snap.status === 'disconnected'
-              ? '1px solid rgba(148,163,184,0.35)'
-              : '1px solid rgba(245,158,11,0.35)',
+          margin: compact ? '6px 12px 0' : '6px 16px 0',
           color: '#E8EEFB', fontSize: 12,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ fontWeight: 700, fontSize: 12 }}>
-              {sp.snap.status === 'error' && '⚠️ SIP Registration Failed'}
-              {sp.snap.status === 'connecting' && '🔄 Connecting to SIP…'}
-              {sp.snap.status === 'connected' && '🔄 Connected — registering…'}
-              {sp.snap.status === 'disconnected' && '⚡ Disconnected — reconnecting…'}
-            </div>
-            <button
-              onClick={() => sp.restart()}
-              style={{
-                background: 'rgba(0,35,230,0.08)',
-                border: `1px solid ${c.border}`, borderRadius: 6,
-                color: c.primary, padding: '3px 8px', fontSize: 10, cursor: 'pointer',
-              }}
-              title="Reinitialize SIP"
-            >↻ Retry</button>
-          </div>
-          {sp.snap.errorCause && (
-            <div style={{ marginTop: 4, opacity: 0.9, fontSize: 11 }}>
-              {sp.snap.errorCause}
-              {' '}
-              <button
-                onClick={() => window.dispatchEvent(new CustomEvent('lemtel:nav', { detail: 'settings' }))}
-                style={{
-                  marginLeft: 6, background: 'transparent', border: `1px solid ${c.border}`,
-                  color: c.primary, borderRadius: 6, padding: '2px 6px', fontSize: 10, cursor: 'pointer',
-                }}
-                title="Open Diagnostics"
-              >Diagnose ↗</button>
-            </div>
-          )}
+
           {sp.snap.events && sp.snap.events.length > 0 && (
             <details style={{ marginTop: 6 }}>
               <summary style={{ cursor: 'pointer', fontSize: 10, opacity: 0.75 }}>

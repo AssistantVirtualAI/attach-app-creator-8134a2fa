@@ -14,6 +14,10 @@ import path from 'path';
 import fs from 'fs';
 import { setupTray, updateTrayStatus } from './tray';
 
+// Auto-updater: download silently in background, install on quit
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
 const APP_NAME = 'Lemtel';
 const store = new Store();
 let mainWindow: BrowserWindow | null = null;
@@ -335,11 +339,22 @@ ipcMain.handle('update-tray-status', (_e, status: string) => {
 });
 
 // ---------- Auto-updater ----------
-autoUpdater.on('update-available', () => {
-  mainWindow?.webContents.send('update-available');
+autoUpdater.on('update-available', (info) => {
+  mainWindow?.webContents.send('update-available', { version: info.version });
 });
-autoUpdater.on('update-downloaded', () => {
-  mainWindow?.webContents.send('update-downloaded');
+autoUpdater.on('download-progress', (progress) => {
+  mainWindow?.webContents.send('update-progress', {
+    percent: Math.round(progress.percent),
+    bps: progress.bytesPerSecond,
+  });
 });
-ipcMain.handle('install-update', () => autoUpdater.quitAndInstall());
+autoUpdater.on('update-downloaded', (info) => {
+  mainWindow?.webContents.send('update-downloaded', { version: info.version });
+});
+autoUpdater.on('error', (err) => {
+  mainWindow?.webContents.send('update-error', err?.message ?? String(err));
+});
+// preload uses 'updater:install' — keep both channel names for compatibility
+ipcMain.handle('updater:install', () => autoUpdater.quitAndInstall(false, true));
+ipcMain.handle('install-update',  () => autoUpdater.quitAndInstall(false, true));
 ipcMain.handle('check-for-updates', () => autoUpdater.checkForUpdates());

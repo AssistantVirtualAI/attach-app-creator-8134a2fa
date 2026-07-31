@@ -595,24 +595,22 @@ class JsSipProvider {
       });
       ua.on('disconnected', (e: any) => {
         const cause = e?.code ? `code=${e.code} reason=${e.reason || ''}` : (e?.reason || 'unknown');
-        this.logEvent('warn', `Disconnected (${cause}) — silent reconnect in 1s`);
+        this.logEvent('warn', `Disconnected (${cause}) — watchdog will recover`);
         this.setStatus('disconnected', cause);
-        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = setTimeout(() => {
-          this.logEvent('info', 'Reconnect attempt…');
-          try { ua.start(); } catch { /* noop */ }
-        }, 1000);
+        // Single-flight watchdog owns recovery — no ad-hoc ua.start() here.
+        this.scheduleRecovery(`disconnected ${cause}`);
       });
       ua.on('registered', () => {
         this.logEvent('info', 'Registered ✓');
         this.setStatus('registered');
+        this.markRecovered();
       });
       ua.on('unregistered', () => {
-        this.logEvent('warn', 'Unregistered — keep-alive will re-register');
+        this.logEvent('warn', 'Unregistered — watchdog will re-register');
         // Don't auto re-register if we're auth-blocked — that's the bug that
         // produced the 403 storm. kickReconnect() short-circuits when blocked.
         if (this.snap.authBlocked) return;
-        try { ua.register(); } catch { /* noop */ }
+        this.scheduleRecovery('unregistered');
       });
       ua.on('registrationFailed', (e: any) => {
         const code = e?.response?.status_code;
@@ -623,10 +621,15 @@ class JsSipProvider {
         if (code === 401 || code === 403 || code === 407) {
           // Stop the keep-alive/re-register loop until manual restart or new password.
           if (this.keepAliveTimer) { clearInterval(this.keepAliveTimer); this.keepAliveTimer = null; }
-          this.update({ authBlocked: { code, reason, since: Date.now() } });
+          this.clearRecoveryTimer();
+          this.recoveryInFlight = false;
+          this.update({ authBlocked: { code, reason, since: Date.now() }, recovering: false, nextRetryAt: null });
           this.logEvent('warn', `Auth blocked (${code}) — keep-alive disabled. Refresh SIP credentials to retry.`);
+        } else {
+          this.scheduleRecovery(`registrationFailed ${detail}`);
         }
       });
+
       ua.on('newRTCSession', (e: any) => this.attachSession(e.session, e.originator));
 
       try {

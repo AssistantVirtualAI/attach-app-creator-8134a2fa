@@ -1,52 +1,56 @@
-# Appels entrants en arrière-plan → boîte vocale
+# AVA Softphone Desktop — Dark-theme text fix + visual upgrade
 
-## Ce que j'ai vérifié dans le code (état actuel)
+## What I verified first
 
-1. `supabase/functions/ns-webhook-setup/index.ts` ligne 11 : `const desired = ["cdr", "message", "voicemail"]`.
-   **Le modèle `call` n'est pas abonné.** Aucun événement n'est donc émis quand un appel commence à sonner.
-2. `supabase/functions/ns-webhook-receiver/index.ts` ligne 196 : la branche qui envoie le push VoIP (`sendVoipPush`) ne s'exécute que si `type === "call.inbound"`. Comme aucun abonnement `call` n'existe, **cette branche n'est jamais atteinte** → aucun push PushKit → l'app suspendue ne se réveille jamais → l'appel va en boîte vocale. Tout le reste de la chaîne (table `planipret_voip_push_tokens`, JWT APNs, `apns-push-type: voip`, plugin `PpVoipCall`, `PpSipKeepAlive.wakeForPush`) est déjà en place et correct.
-3. `ns-webhook-setup` envoie aussi `{ event, target_url }`, alors que la doc NS-API v2 (`docs/netsapiens/webhooks.md`) impose `{ model, post-url, domain, user, subscription-geo-support }`. Les abonnements actuels peuvent donc être partiellement invalides.
-4. Le receiver lit `event.type` sur un objet unique, alors que NS poste **un tableau d'objets** dont le schéma est celui de la ressource (`call`), sans champ `type`.
-5. `docs/netsapiens/devices.md` : `device-push-enabled` doit valoir `yes` pour que la plateforme accepte qu'un client mobile vive de push plutôt que d'un REGISTER permanent.
-6. Latence documentée : les abonnements NS sont livrés par **poll DB toutes les 3 s** — le délai de sonnerie doit en tenir compte.
+I audited `apps/ava-softphone-desktop/src` before writing this plan. Two things differ from the brief:
 
-## Objectif
+1. **The hardcoded-color problem is much smaller than described.** There are ~20 matches total, and most are legitimate (status dots, gradient stops). The genuinely broken cases on the midnight theme are:
+   - `ProfileMenu.tsx` — the password/reset modal block (lines ~904-931): `#0f172a` titles, `#64748b` / `#475569` body text, `#f1f5f9` panel background, `#15803d` success text. This is the one真 invisible-text bug.
+   - `SyncStatusView.tsx` — `#b91c1c` and `#047857` badge text, too dark on midnight.
+   - `ActiveCallDock.tsx` — light-mode shadow `rgba(15,23,42,0.20)`.
+   - `SoftphonePane.tsx:1254` — a `#ffffff` literal used as icon color.
+   The remaining `#64748b` / `#334155` / `#b91c1c` values are dot fills and gradient stops in `CallControlGrid`, `QueuesView`, `CallCenterStatusBar`, `HomeDashboard` — they are backgrounds, not text, and stay.
+   The other 20+ files listed in the brief contain **no** hardcoded dark text; nothing to fix there.
 
-Réveiller l'app via PushKit dès que l'appel sonne, sans toucher aux DID, aux règles de routage existantes, ni à la config SIP qui fonctionne.
+2. **Most of the requested design system already exists.** `src/lib/theme.tsx` already emits every `--ava-*` variable (bg-gradient, glass, glass-border, accent-gradient, shadow) and `src/styles/futuristic.css` + `animations.css` already provide glass surfaces, aurora mesh, themed scrollbars, focus-visible rings, skeleton shimmer, and reduced-motion guards. `PageHeader.tsx` already has the gradient hairline, gradient icon tile, and action slot. So this is a **refinement pass on existing tokens**, not a rebuild.
 
-## Plan
+## Scope
 
-### 1. Abonnement NetSapiens au modèle `call` (conforme v2)
-- Dans `ns-webhook-setup`, passer `desired` à `["call", "cdr", "message", "voicemail"]`.
-- Corriger le corps de la requête au format documenté : `{ model, "post-url", domain, user: "*", "subscription-geo-support": "yes" }`, et faire la détection d'existant sur `model` + `post-url` (gérer le 409 « already exists » comme un succès).
-- Aucune suppression des abonnements existants : on ne crée que ce qui manque.
+### Phase 1 — Dark-theme text fixes (correctness)
+Replace only the genuinely broken values, using tokens:
+- `#0f172a` / `#000` text → `c.textIce`
+- `#475569` / `#64748b` **text** → `c.textDim`
+- `#f1f5f9` / `#f8fafc` panel bg → `rgba(255,255,255,0.06)`
+- `#15803d` → `c.success`, `#b91c1c` → `c.danger`, `#92400e` → `c.warning`
+- `rgba(15,23,42,0.20)` shadow → `var(--ava-shadow)`
+- `#ffffff` icon color → `c.textIce`
+Gold buttons keep `#0b1530` text on purpose.
 
-### 2. Normaliser la réception des événements `call`
-Dans `ns-webhook-receiver` :
-- Accepter un **tableau** d'objets en plus de l'objet unique (boucle sur les entrées).
-- Déduire le type : si l'objet porte des champs de la ressource `call` (`orig_callid`/`term_user`/`call-orig-user`…), le traiter comme `call.inbound` quand `remove !== "yes"` et que la direction est entrante vers l'extension du courtier ; ignorer les mises à jour de teardown.
-- Dédupliquer par `orig_callid` (mémoire courte en base) pour ne pas envoyer 3–4 pushs pour le même appel, puisque le modèle `call` émet à chaque changement d'état.
-- Conserver strictement la logique DND, Realtime et `sendVoipPush` déjà écrite.
+### Phase 2 — Global polish (CSS only, no component churn)
+In `src/styles/futuristic.css` / `animations.css`:
+- Slow 8s aurora shimmer on the app background (opacity 0.03–0.06, disabled under `prefers-reduced-motion`).
+- Unify scrollbars to the 6px accent-tinted thumb described in the brief.
+- Add `pulse-badge`, `slide-in-right`, card-hover-lift, button `:active` scale(0.96), and input focus glow as reusable utility classes.
+- `::placeholder` and `:focus-visible` rules aligned with the brief.
 
-### 3. Payload PushKit
-- Garder le format actuel, en garantissant la présence de `call_id`, `callerName`, `callerNumber` (le plugin `PpVoipCall` doit toujours signaler un appel CallKit à chaque push, exigence iOS 13+, sinon iOS révoque le token).
-- Ajouter un log de résultat APNs par appel pour diagnostiquer côté fonction.
+### Phase 3 — Component visual pass
+Applied as styling-only edits, one component at a time, reusing the utility classes from Phase 2:
+- `TitleBar` — 2px aurora top bar, 38px height, tightened brand row.
+- `LeftRail` — 44x44 nav tiles, active gradient + 3px left accent, gold unread badge with pulse.
+- `SoftphonePane` / `DialerKeypad` / `CallControlGrid` — glass container, mono display field, 56px keypad tiles with press scale, 64px gradient call/hangup circles, in-call control states.
+- `HomeDashboard` — greeting card, 4 stat glass cards with gradient top border, recent-calls rows with avatar initials.
+- `CallsView` / `RecordingsView` / `VoicemailView` — shared row hover/selected states and the three status-badge variants.
+- `IncomingCallToast` — green-ringed avatar pulse, slide-in-right, gradient answer/decline.
+- `ActiveCallDock` — floating glass dock, mono green timer.
+- `SettingsPage` — sectioned glass cards, tokenized inputs/toggles, gold uppercase section labels.
+- `ConsoleLayout` — page fade/translate transition, unified modal/overlay styling.
 
-### 4. Vérification `device-push-enabled`
-- Ajouter une lecture (GET) dans le diagnostic existant pour afficher `device-push-enabled` et `device-sip-registration-state` des AOR `…M`/`…W`. **Lecture seule** — aucune écriture automatique vers NetSapiens, conformément à la contrainte « no automated DID/NS writes ».
-- Si la valeur est `no`, je le signale dans l'écran de diagnostic pour correction manuelle dans le portail.
+Skeleton rows replace remaining "Loading…" strings where a list already has a loading state.
 
-### 5. Fenêtre de sonnerie
-- Vérifier (sans modifier les règles déjà appliquées) que le timeout de sonnerie utilisé par `pp-sync-answering-rules` reste ≥ 30 s, afin de couvrir : poll NS 3 s + APNs ~1 s + réveil + REGISTER + INVITE. Si un courtier est en dessous, je le signale plutôt que de réécrire silencieusement sa règle.
+## Constraints respected
+No changes to business logic, API/Supabase calls, routing, state, `data-testid` attributes, or ARIA. Every new color goes through `var(--ava-*)` or `c.*`, so all four themes (daylight/light/dark/midnight) stay correct — I will spot-check daylight as well as midnight, since a midnight-only fix can break the light themes.
 
-### 6. Tests
-- Test unitaire du normalisateur d'événements `call` (tableau, dédup, `remove: yes` ignoré).
-- Vérification `OPTIONS`/`POST` sur `ns-webhook-setup` et `ns-webhook-receiver` après déploiement, puis appel réel avec app suspendue.
-
-## Ce qui ne sera pas touché
-- Aucune écriture DID / dial-rule / assignation de numéro.
-- Aucune modification de `sipEdgePolicy`, du pinning core1, ni du flux de handoff natif ↔ JsSIP corrigé récemment.
-- Aucun changement des règles de réponse déjà synchronisées.
-
-## Détails techniques
-Fichiers concernés : `supabase/functions/ns-webhook-setup/index.ts`, `supabase/functions/ns-webhook-receiver/index.ts`, un helper `parseNsCallEvents` partagé + son test, et l'écran de diagnostic mobile pour l'affichage `device-push-enabled` (lecture seule).
+## Technical notes
+- Files touched: `src/components/**`, `src/components/console/**`, `src/styles/futuristic.css`, `src/styles/animations.css`. `src/lib/theme.tsx` only if a token is genuinely missing.
+- The desktop app is not what the Lovable preview renders, so verification is via typecheck plus the existing Vitest suite under `src/components/__tests__` and `src/components/console/__tests__`.
+- Phases land in order so the correctness fix is not blocked behind the cosmetic pass.

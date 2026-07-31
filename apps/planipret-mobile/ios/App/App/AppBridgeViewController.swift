@@ -437,6 +437,7 @@ class AppBridgeViewController: CAPBridgeViewController {
 }
 */
 
+/* stale inline VoIP plugin definition removed; standalone plugin is authoritative
 @objc(PpVoipCall)
 public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CXProviderDelegate {
     public let identifier = "PpVoipCall"; public let jsName = "PpVoipCall"
@@ -653,3 +654,4 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         try? audioSession.setActive(true)
     }
 }
+*/

@@ -609,7 +609,7 @@ export function useMplanipretSoftphone(enabled = true) {
         }
         const cfg = ppSipProvider.getConfig();
         if (cfg) {
-          stopNativeAfterWebRegistered(true);
+          // Do NOT stop native here: JsSIP is not registered yet.
           if (!acquireSipInitLock(4000)) return;
           void ppSipProvider.init(cfg).finally(() => {
             handedOffToNative = false;

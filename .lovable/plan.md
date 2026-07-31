@@ -1,47 +1,52 @@
-## Diagnostic confirmé
+# Appels entrants en arrière-plan → boîte vocale
 
-Le log ne montre **aucun VoIP push reçu ni aucun INVITE reçu pendant l’appel**. Il montre plutôt :
+## Ce que j'ai vérifié dans le code (état actuel)
 
-- l’envoi du token PushKit échoue continuellement avec `FunctionsFetchError`;
-- en arrière-plan, le service reste longtemps en `background_handoff_pending` sans inscription SIP confirmée;
-- au retour dans l’app, plusieurs REGISTER sont supprimés par le garde anti-doublon, puis les sockets JsSIP sont fermées en `1001`;
-- le natif finit par recevoir `native_register_200`, mais trop tard pour l’appel déjà envoyé vers la messagerie.
+1. `supabase/functions/ns-webhook-setup/index.ts` ligne 11 : `const desired = ["cdr", "message", "voicemail"]`.
+   **Le modèle `call` n'est pas abonné.** Aucun événement n'est donc émis quand un appel commence à sonner.
+2. `supabase/functions/ns-webhook-receiver/index.ts` ligne 196 : la branche qui envoie le push VoIP (`sendVoipPush`) ne s'exécute que si `type === "call.inbound"`. Comme aucun abonnement `call` n'existe, **cette branche n'est jamais atteinte** → aucun push PushKit → l'app suspendue ne se réveille jamais → l'appel va en boîte vocale. Tout le reste de la chaîne (table `planipret_voip_push_tokens`, JWT APNs, `apns-push-type: voip`, plugin `PpVoipCall`, `PpSipKeepAlive.wakeForPush`) est déjà en place et correct.
+3. `ns-webhook-setup` envoie aussi `{ event, target_url }`, alors que la doc NS-API v2 (`docs/netsapiens/webhooks.md`) impose `{ model, post-url, domain, user, subscription-geo-support }`. Les abonnements actuels peuvent donc être partiellement invalides.
+4. Le receiver lit `event.type` sur un objet unique, alors que NS poste **un tableau d'objets** dont le schéma est celui de la ressource (`call`), sans champ `type`.
+5. `docs/netsapiens/devices.md` : `device-push-enabled` doit valoir `yes` pour que la plateforme accepte qu'un client mobile vive de push plutôt que d'un REGISTER permanent.
+6. Latence documentée : les abonnements NS sont livrés par **poll DB toutes les 3 s** — le délai de sonnerie doit en tenir compte.
 
-Selon `docs/netsapiens/devices.md`, un mobile dont le push n’est pas disponible et dont le Device est non enregistré tombe vers l’étape suivante, typiquement la boîte vocale. Selon `docs/netsapiens/registrations.md`, la vérité réseau est l’état d’inscription du Device sur le core.
+## Objectif
 
-Il existe aussi un défaut certain dans la prise d’appel : le service Swift actuel sait répondre `180 Ringing`, mais ne sait pas établir l’appel avec un `200 OK + SDP`. Le bouton CallKit signale seulement l’action à JsSIP; si l’INVITE appartient au socket natif, `ppSipProvider.answer()` n’a aucune session correspondante et ne fait rien.
+Réveiller l'app via PushKit dès que l'appel sonne, sans toucher aux DID, aux règles de routage existantes, ni à la config SIP qui fonctionne.
 
-## Correctif ciblé
+## Plan
 
-1. **Fiabiliser l’enregistrement PushKit**
-   - Protéger `pp-voip-push-token` avec validation, réponses CORS sur toutes les erreurs et journalisation exploitable.
-   - Dédupliquer les envois côté application : un seul upload en vol par token, persistance du dernier token confirmé et retry avec backoff.
-   - Ne jamais marquer localement le token comme confirmé tant que le backend ne l’a pas réellement persisté.
+### 1. Abonnement NetSapiens au modèle `call` (conforme v2)
+- Dans `ns-webhook-setup`, passer `desired` à `["call", "cdr", "message", "voicemail"]`.
+- Corriger le corps de la requête au format documenté : `{ model, "post-url", domain, user: "*", "subscription-geo-support": "yes" }`, et faire la détection d'existant sur `model` + `post-url` (gérer le 409 « already exists » comme un succès).
+- Aucune suppression des abonnements existants : on ne crée que ce qui manque.
 
-2. **Supprimer la fenêtre sans inscription en arrière-plan**
-   - Corriger le handoff pour que le service natif commence immédiatement après la libération confirmée de JsSIP, sans attendre un deuxième événement réseau/app-state.
-   - Conserver un propriétaire SIP unique et un REGISTER single-flight afin de ne pas recréer le `1001` par doubles transports.
-   - Lors du retour au premier plan, garder le natif inscrit jusqu’au `REGISTER 200` réel de JsSIP, puis seulement fermer le natif.
+### 2. Normaliser la réception des événements `call`
+Dans `ns-webhook-receiver` :
+- Accepter un **tableau** d'objets en plus de l'objet unique (boucle sur les entrées).
+- Déduire le type : si l'objet porte des champs de la ressource `call` (`orig_callid`/`term_user`/`call-orig-user`…), le traiter comme `call.inbound` quand `remove !== "yes"` et que la direction est entrante vers l'extension du courtier ; ignorer les mises à jour de teardown.
+- Dédupliquer par `orig_callid` (mémoire courte en base) pour ne pas envoyer 3–4 pushs pour le même appel, puisque le modèle `call` émet à chaque changement d'état.
+- Conserver strictement la logique DND, Realtime et `sendVoipPush` déjà écrite.
 
-3. **Rendre la prise d’appel réelle et atomique**
-   - Ne plus afficher comme répondable un appel dont JsSIP ne possède pas l’INVITE actif.
-   - Corréler CallKit, PushKit et la session SIP par `Call-ID`.
-   - Mettre l’action Answer en attente jusqu’à l’arrivée de la session correspondante, avec expiration/CANCEL explicite; journaliser et fermer CallKit si le PBX a déjà annulé la branche.
-   - Faire retourner à `ppSipProvider.answer()` un succès/échec réel au lieu d’un no-op silencieux.
+### 3. Payload PushKit
+- Garder le format actuel, en garantissant la présence de `call_id`, `callerName`, `callerNumber` (le plugin `PpVoipCall` doit toujours signaler un appel CallKit à chaque push, exigence iOS 13+, sinon iOS révoque le token).
+- Ajouter un log de résultat APNs par appel pour diagnostiquer côté fonction.
 
-4. **Ajouter des protections de non-régression**
-   - Tests unitaires pour : upload PushKit dédupliqué, handoff sans double REGISTER, Answer avant/après INVITE, Call-ID incorrect et appel annulé.
-   - Audit de build iOS vérifiant que les plugins SIP/PushKit et leurs méthodes sont inclus après chaque `cap sync`.
-   - Logs structurés minimaux permettant de suivre `push → wake → REGISTER 200 → INVITE → Answer/200 OK` avec le même Call-ID.
+### 4. Vérification `device-push-enabled`
+- Ajouter une lecture (GET) dans le diagnostic existant pour afficher `device-push-enabled` et `device-sip-registration-state` des AOR `…M`/`…W`. **Lecture seule** — aucune écriture automatique vers NetSapiens, conformément à la contrainte « no automated DID/NS writes ».
+- Si la valeur est `no`, je le signale dans l'écran de diagnostic pour correction manuelle dans le portail.
 
-5. **Valider le scénario exact**
-   - Build/sync iOS Planiprêt uniquement.
-   - Vérifier en foreground, background et écran verrouillé : sonnerie avant messagerie, annonce d’enregistrement, décroché avec audio, rejet et fin d’appel.
-   - Confirmer l’absence de doubles REGISTER et de nouvelles boucles `1001`.
+### 5. Fenêtre de sonnerie
+- Vérifier (sans modifier les règles déjà appliquées) que le timeout de sonnerie utilisé par `pp-sync-answering-rules` reste ≥ 30 s, afin de couvrir : poll NS 3 s + APNs ~1 s + réveil + REGISTER + INVITE. Si un courtier est en dessous, je le signale plutôt que de réécrire silencieusement sa règle.
 
-## Limites strictes
+### 6. Tests
+- Test unitaire du normalisateur d'événements `call` (tableau, dédup, `remove: yes` ignoré).
+- Vérification `OPTIONS`/`POST` sur `ns-webhook-setup` et `ns-webhook-receiver` après déploiement, puis appel réel avec app suspendue.
 
-- Aucun changement aux DID.
-- Aucun changement aux answer rules, SimRing ou routage NetSapiens.
-- Aucun changement de core (`core1` reste épinglé), identifiants SIP ou autres applications.
-- Seuls le flux iOS Planiprêt, le token PushKit et sa fonction dédiée seront modifiés.
+## Ce qui ne sera pas touché
+- Aucune écriture DID / dial-rule / assignation de numéro.
+- Aucune modification de `sipEdgePolicy`, du pinning core1, ni du flux de handoff natif ↔ JsSIP corrigé récemment.
+- Aucun changement des règles de réponse déjà synchronisées.
+
+## Détails techniques
+Fichiers concernés : `supabase/functions/ns-webhook-setup/index.ts`, `supabase/functions/ns-webhook-receiver/index.ts`, un helper `parseNsCallEvents` partagé + son test, et l'écran de diagnostic mobile pour l'affichage `device-push-enabled` (lecture seule).

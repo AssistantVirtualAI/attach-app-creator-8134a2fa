@@ -1213,6 +1213,14 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         let callerName = (dict["callerName"] as? String) ?? (dict["from_number"] as? String) ?? (dict["from"] as? String) ?? "Appel entrant"
         let callerNumber = (dict["callerNumber"] as? String) ?? (dict["from_number"] as? String) ?? (dict["from_user"] as? String) ?? ""
 
+        // NetSapiens can retry a call event while iOS is waking. Preserve the
+        // first CallKit UUID so its Answer action never becomes stale.
+        if callId == activeCallId, activeCallUUID != nil {
+            NSLog("[PpVoipCall] duplicate VoIP push ignored callId=%@", callId)
+            completion()
+            return
+        }
+
         // Wake the native SIP keep-alive FIRST: iOS may have killed the WSS
         // socket while suspended, and only this push guarantees runtime.
         NotificationCenter.default.post(name: Notification.Name("PpVoipIncomingPush"), object: nil, userInfo: ["callId": callId])

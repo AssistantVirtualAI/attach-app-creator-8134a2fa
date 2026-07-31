@@ -7,11 +7,16 @@ Deno.serve(async (req) => {
     if ("error" in auth) return auth.error;
     const { admin, profile } = auth;
 
-    const target = `${Deno.env.get("SUPABASE_URL")}/functions/v1/ns-webhook-receiver`;
+    // NS cannot send custom headers on subscription posts, so the shared secret
+    // travels in the post-url query string (validated by ns-webhook-receiver).
+    const secret = Deno.env.get("NS_WEBHOOK_SECRET") ?? "";
+    const base = `${Deno.env.get("SUPABASE_URL")}/functions/v1/ns-webhook-receiver`;
+    const target = secret ? `${base}?secret=${encodeURIComponent(secret)}` : base;
     // NS rejects subscriptions without an explicit domain under a Reseller
     // scope ("Please include a domain using a Reseller scope").
     const nsDomain = String((profile as any)?.ns_domain ?? (profile as any)?.domain ?? "").trim();
     if (!nsDomain) return jsonResponse({ success: false, error: "ns_domain_missing" }, 200);
+
     // NS-API v2 models (docs/netsapiens/webhooks.md). `call` is REQUIRED to wake
     // the mobile app via VoIP push while it is suspended in the background.
     const desired = ["call", "cdr", "message", "voicemail"];

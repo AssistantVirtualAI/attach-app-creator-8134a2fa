@@ -901,8 +901,9 @@ function ProfileEditor({
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 28, color: '#16a34a',
             }}>✓</div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Password updated</div>
-            <div style={{ fontSize: 11.5, color: '#64748b', marginBottom: 14, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: c.textIce, marginBottom: 4 }}>Password updated</div>
+            <div style={{ fontSize: 11.5, color: c.textDim, marginBottom: 14, lineHeight: 1.5 }}>
+
               Your password has been changed successfully. Use it next time you sign in.
             </div>
             <button onClick={resetPwFlow} style={{ ...primaryBtn, width: '100%' }}>Done</button>
@@ -911,9 +912,10 @@ function ProfileEditor({
 
         {/* ===== Email reset confirmation ===== */}
         {emStep === 'confirm' && (
-          <div style={{ marginTop: 14, padding: 12, background: '#f1f5f9', border: `1px solid ${c.border}`, borderRadius: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a', marginBottom: 4 }}>Send reset link?</div>
-            <div style={{ fontSize: 11, color: '#475569', marginBottom: 10, lineHeight: 1.45 }}>
+          <div style={{ marginTop: 14, padding: 12, background: 'rgba(255,255,255,0.06)', border: `1px solid ${c.border}`, borderRadius: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: c.textIce, marginBottom: 4 }}>Send reset link?</div>
+            <div style={{ fontSize: 11, color: c.textDim, marginBottom: 10, lineHeight: 1.45 }}>
+
               We'll email a one-time reset link to <strong>{email}</strong>. It expires in 1 hour.
             </div>
             {emError && <div style={{ ...errBox, marginTop: 0, marginBottom: 8 }}>{emError}</div>}
@@ -928,8 +930,9 @@ function ProfileEditor({
 
         {emStep === 'sent' && (
           <div style={{ marginTop: 14, padding: 12, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#15803d', marginBottom: 4 }}>✉ Check your inbox</div>
-            <div style={{ fontSize: 11, color: '#166534', lineHeight: 1.45, marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: c.success, marginBottom: 4 }}>✉ Check your inbox</div>
+            <div style={{ fontSize: 11, color: c.mutedSilver, lineHeight: 1.45, marginBottom: 8 }}>
+
               A reset link was sent to <strong>{email}</strong>. If you don't see it within a minute, check your spam folder.
             </div>
             <button onClick={() => setEmStep('idle')} style={{ ...ghostBtn, width: '100%' }}>Close</button>

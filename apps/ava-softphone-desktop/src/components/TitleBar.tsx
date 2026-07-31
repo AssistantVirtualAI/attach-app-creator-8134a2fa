@@ -22,7 +22,7 @@ export default function TitleBar(_props: Props = {}) {
     <div
       style={{
         height: 42,
-        background: colors.deepPanel,
+        background: 'linear-gradient(90deg, var(--ava-surface, rgba(5,8,26,0.98)), var(--ava-surface-elev, rgba(8,12,32,0.98)))',
         borderBottom: `1px solid ${colors.border}`,
         color: colors.text,
         display: 'flex',
@@ -35,8 +35,21 @@ export default function TitleBar(_props: Props = {}) {
         ...dragStyle,
       }}
     >
-      {/* Left: window controls spacer (macOS traffic lights) */}
-      <div style={{ width: 70 }} />
+      {/* Aurora accent bar */}
+      <div aria-hidden style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+        background: 'linear-gradient(90deg, #0023e6, #7a4cff 50%, #21d4fd)',
+        opacity: 0.9, pointerEvents: 'none',
+      }} />
+
+      {/* Left: brand + window controls spacer (macOS traffic lights) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 70 }}>
+        <LemtelLogo size="xs" />
+        <span style={{ fontSize: 13, fontWeight: 700, color: colors.textIce, letterSpacing: 0.2 }}>
+          AVA Softphone
+        </span>
+      </div>
+
 
 
 

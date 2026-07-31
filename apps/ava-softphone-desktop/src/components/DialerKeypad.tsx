@@ -254,7 +254,7 @@ export default function DialerKeypad({
             aria-label={`Dial ${spoken}`}
             aria-keyshortcuts={key.length === 1 ? key : undefined}
             data-key={key}
-            className="lemtel-key lemtel-glass"
+            className="lemtel-key lemtel-glass ava-press"
             onClick={() => handleActivate(key, sub)}
             onKeyDown={(e) => onKeyDown(e, i)}
             onFocus={() => onFocusKey(key)}
@@ -267,16 +267,27 @@ export default function DialerKeypad({
               alignContent: 'center',
               padding: 0,
               borderRadius: t.radius,
-              background: 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.10)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+              background: 'linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04))',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 4px 14px -10px rgba(0,0,0,0.8)',
               color: '#E8EEFB',
               cursor: 'pointer',
-              transition: 'background .15s ease',
+              transition: 'background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .12s ease',
               willChange: 'transform',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.12)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'; }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget as HTMLButtonElement;
+              el.style.background = 'linear-gradient(160deg, rgba(33,212,253,0.18), rgba(0,35,230,0.10))';
+              el.style.borderColor = 'rgba(33,212,253,0.42)';
+              el.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.14), 0 0 18px -6px rgba(33,212,253,0.45)';
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget as HTMLButtonElement;
+              el.style.background = 'linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04))';
+              el.style.borderColor = 'rgba(255,255,255,0.12)';
+              el.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.10), 0 4px 14px -10px rgba(0,0,0,0.8)';
+            }}
+
           >
             <span
               className="ava-display-num"

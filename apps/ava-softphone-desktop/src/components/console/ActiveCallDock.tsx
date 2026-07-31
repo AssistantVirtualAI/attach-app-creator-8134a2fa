@@ -26,10 +26,13 @@ export default function ActiveCallDock() {
     <div style={{
       position: 'fixed', bottom: 18, left: '50%', transform: 'translateX(-50%)',
       zIndex: 9998, width: 460,
-      padding: '10px 14px', borderRadius: 14,
-      background: c.deepPanel,
+      padding: '12px 16px', borderRadius: 24,
+      background: 'var(--ava-surface-elev, rgba(12,20,48,0.96))',
+      backdropFilter: 'blur(28px) saturate(160%)',
+      WebkitBackdropFilter: 'blur(28px) saturate(160%)',
       border: `1px solid ${call.status === 'held' ? c.warning + '60' : c.success + '50'}`,
-      boxShadow: '0 12px 32px -14px rgba(15,23,42,0.20)',
+      boxShadow: 'var(--ava-shadow, 0 24px 60px -20px rgba(0,0,0,0.55))',
+
       display: 'flex', alignItems: 'center', gap: 12, color: c.textIce,
     }}>
       <span style={{
@@ -39,13 +42,20 @@ export default function ActiveCallDock() {
         animation: 'pulse 1.5s ease-in-out infinite',
       }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: c.textIce }}>
+        <div style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: c.textIce }}>
           {call.displayName || call.number}
         </div>
-        <div style={{ fontSize: 10.5, color: c.mutedSilver, fontFamily: 'JetBrains Mono, monospace' }}>
-          {call.status === 'held' ? t('dialer.onHold') : t('dialer.inCall')} · {mm}:{ss}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 10.5, color: c.mutedSilver }}>
+            {call.status === 'held' ? t('dialer.onHold') : t('dialer.inCall')}
+          </span>
+          <span style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 20, fontWeight: 800,
+            letterSpacing: 0.5, color: call.status === 'held' ? c.warning : c.success,
+          }}>{mm}:{ss}</span>
         </div>
       </div>
+
       <DockBtn label={call.muted ? t('dialer.unmute') : t('dialer.mute')} active={call.muted} accent={c.warning} onClick={() => mute(!call.muted)} hint="⌘M" />
       <DockBtn label={call.status === 'held' ? t('dialer.resume') : t('dialer.hold')} active={call.status === 'held'} accent={c.avaCyan} onClick={() => hold(call.status !== 'held')} hint="⌘H" />
       <button onClick={hangup} style={{

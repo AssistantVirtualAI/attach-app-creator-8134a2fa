@@ -330,7 +330,7 @@ function RailItem({ v, active, onClick, label, badge }: { v: ConsoleView; active
   const darkTextIce = '#f1f7ff';
   return (
     <button
-      className="lemtel-rail-item"
+      className="lemtel-rail-item ava-press"
       data-active={String(active)}
       onClick={onClick}
       aria-label={label ?? LABEL[v]}
@@ -340,9 +340,10 @@ function RailItem({ v, active, onClick, label, badge }: { v: ConsoleView; active
         padding: '10px 12px', borderRadius: 12,
         background: active
           ? (isAI
-              ? 'linear-gradient(90deg, rgba(122,76,255,0.16), rgba(33,212,253,0.05))'
-              : 'linear-gradient(90deg, rgba(0,35,230,0.14), rgba(33,212,253,0.06))')
+              ? 'linear-gradient(135deg, rgba(122,76,255,0.30), rgba(33,212,253,0.12))'
+              : 'linear-gradient(135deg, rgba(0,35,230,0.30), rgba(122,76,255,0.18))')
           : 'transparent',
+
         border: '1px solid ' + (active ? (isDark ? 'rgba(0,35,230,0.35)' : 'rgba(0,35,230,0.18)') : 'transparent'),
         color: active ? (isDark ? darkTextIce : c.textIce) : (isDark ? darkTextSub : c.textSub),
         fontSize: 13, fontWeight: active ? 700 : 600,
@@ -380,13 +381,14 @@ function RailItem({ v, active, onClick, label, badge }: { v: ConsoleView; active
       </svg>
       <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label ?? LABEL[v]}</span>
       {!!badge && badge > 0 && (
-        <span style={{
-          background: '#ef4444', color: '#fff',
+        <span className="ava-pulse-badge" style={{
+          background: c.signalGold, color: '#0b1530',
           fontSize: 10, fontWeight: 800, lineHeight: 1,
           padding: '3px 6px', borderRadius: 999, minWidth: 18,
-          textAlign: 'center', boxShadow: '0 0 0 2px rgba(239,68,68,0.25)',
+          textAlign: 'center', boxShadow: `0 0 0 2px ${c.signalGold}33`,
         }}>{badge > 99 ? '99+' : badge}</span>
       )}
+
     </button>
   );
 }

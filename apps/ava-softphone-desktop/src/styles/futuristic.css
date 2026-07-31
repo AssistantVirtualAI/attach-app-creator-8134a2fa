@@ -651,3 +651,106 @@ html[data-ava-theme="midnight"] {
   100% { background-position: -200% 0; }
 }
 .ava-skeleton { background-size: 200% 100% !important; animation: avaShimmer 1.2s linear infinite; }
+
+/* ============================================================
+   Visual upgrade layer — aurora shimmer, micro-interactions,
+   status badges, skeletons. Token-driven, theme-safe.
+   ============================================================ */
+
+/* ----- Slow aurora shimmer on the app background ----- */
+@keyframes avaAuroraDrift {
+  0%   { transform: translate3d(0,0,0) scale(1);    opacity: 0.030; }
+  50%  { transform: translate3d(2%,1%,0) scale(1.06); opacity: 0.060; }
+  100% { transform: translate3d(0,0,0) scale(1);    opacity: 0.030; }
+}
+.ava-aurora-bg { position: relative; }
+.ava-aurora-bg::before {
+  content: '';
+  position: fixed; inset: -10%;
+  pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(900px 620px at 6% -8%, var(--ava-accent, #0023e6), transparent 62%),
+    radial-gradient(820px 560px at 108% 112%, #21d4fd, transparent 58%);
+  animation: avaAuroraDrift 8s ease-in-out infinite;
+}
+
+/* ----- Scrollbars (thin, accent tinted) ----- */
+:where([data-ava-theme]) { scrollbar-width: thin; scrollbar-color: rgba(0,35,230,0.30) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,35,230,0.30); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,35,230,0.50); }
+
+/* ----- Placeholders ----- */
+::placeholder { color: var(--ava-text-subtle); opacity: 0.7; }
+
+/* ----- Micro-interactions ----- */
+.ava-press { transition: transform 80ms ease, background 150ms ease, border-color 150ms ease, box-shadow 150ms ease; }
+.ava-press:active { transform: scale(0.96); }
+
+.ava-lift { transition: transform 150ms ease, box-shadow 150ms ease; }
+.ava-lift:hover { transform: translateY(-2px); box-shadow: 0 18px 44px -18px rgba(0,0,0,0.55); }
+
+.ava-input-glow { transition: box-shadow 150ms ease, border-color 150ms ease; }
+.ava-input-glow:focus,
+.ava-input-glow:focus-within { box-shadow: 0 0 0 2px rgba(138,160,255,0.25); border-color: var(--ava-accent); outline: none; }
+
+@keyframes avaPulseBadge {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.8; transform: scale(1.08); }
+}
+.ava-pulse-badge { animation: avaPulseBadge 2s ease-in-out infinite; }
+
+@keyframes avaSlideInRight {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.ava-slide-in-right { animation: avaSlideInRight 260ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes avaFadeUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ava-page-enter { animation: avaFadeUp 150ms ease both; }
+
+/* Soft glow for presence dots (uses the dot's own color). */
+.ava-status-dot { box-shadow: 0 0 8px currentColor; }
+
+/* ----- Status badges ----- */
+.ava-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.ava-badge-answered  { background: rgba(34,211,154,0.15); color: #22d39a; border: 1px solid rgba(34,211,154,0.30); }
+.ava-badge-missed    { background: rgba(255,85,119,0.15); color: #ff5577; border: 1px solid rgba(255,85,119,0.30); }
+.ava-badge-voicemail { background: rgba(122,76,255,0.15); color: #a78bfa; border: 1px solid rgba(122,76,255,0.30); }
+
+/* ----- List rows ----- */
+.ava-row { transition: background 120ms ease, border-color 120ms ease; border-bottom: 1px solid rgba(150,180,255,0.08); }
+.ava-row:hover { background: rgba(255,255,255,0.03); }
+.ava-row[aria-selected="true"], .ava-row.is-selected {
+  background: rgba(0,35,230,0.10);
+  box-shadow: inset 3px 0 0 0 var(--ava-accent, #0023e6);
+}
+
+/* ----- Skeleton rows ----- */
+.ava-skeleton-row {
+  height: 14px; border-radius: 7px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.13) 50%, rgba(255,255,255,0.05) 100%);
+  background-size: 200% 100%;
+  animation: avaShimmer 1.2s linear infinite;
+}
+
+/* ----- Mono ----- */
+code, .mono, .ava-mono { font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ava-aurora-bg::before,
+  .ava-pulse-badge,
+  .ava-slide-in-right,
+  .ava-page-enter,
+  .ava-skeleton-row { animation: none !important; }
+  .ava-lift:hover { transform: none; }
+}

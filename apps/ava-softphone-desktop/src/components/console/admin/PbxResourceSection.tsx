@@ -5,6 +5,7 @@ import { getMeContext } from '../../../lib/avaApi';
 import PbxEditSheet, { FieldGroup } from './PbxEditSheet';
 import ConflictMergeDialog, { ConflictField } from './ConflictMergeDialog';
 import type { RuleMap } from '../../../lib/pbxValidators';
+import SkeletonRows from '../../ui/SkeletonRows';
 
 const { colors: c } = theme;
 const LEMTEL_ORG = '71755d33-ed64-4ad5-a828-61c9d2029eb7';
@@ -301,7 +302,7 @@ export default function PbxResourceSection({
         background: 'rgba(255,255,255,0.04)', borderColor: c.border,
       }}>
         {loading ? (
-          <div style={{ padding: 32, textAlign: 'center', color: c.mutedSilver, fontSize: 13 }}>Loading…</div>
+          <SkeletonRows rows={5} padding={24} />
         ) : error ? (
           <div style={{ padding: 24, color: c.danger, fontSize: 13 }}>{error}</div>
         ) : filtered.length === 0 ? (

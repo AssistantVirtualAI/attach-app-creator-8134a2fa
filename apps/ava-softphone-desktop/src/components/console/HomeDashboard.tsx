@@ -5,6 +5,7 @@ import { useDashboardStats, AttentionItem, RangeKey, DailySeries, rangeBounds } 
 import { useSyncStatus, formatAge } from '../../hooks/useSyncStatus';
 import { supabase } from '../../lib/supabaseClient';
 import { useTranslation } from '../../lib/i18n';
+import SkeletonRows from '../ui/SkeletonRows';
 
 const { colors: c } = theme;
 
@@ -730,7 +731,7 @@ function MetricDetailDrawer(props: {
 
         <div style={{ flex: 1, overflow: 'auto', padding: 16 }} aria-busy={loading} aria-live="polite">
           {loading ? (
-            <div role="status" style={{ padding: 24, textAlign: 'center', color: c.mutedSilver, fontSize: 13 }}>Loading detail…</div>
+            <SkeletonRows rows={4} padding={20} label="Loading detail" />
           ) : error ? (
             <div role="alert" style={{
               padding: 16, borderRadius: 10,

@@ -4,6 +4,7 @@ import { ava, SmsThread, SmsMessage } from '../../lib/avaApi';
 import { useRealtimeRefresh } from '../../lib/useRealtimeRefresh';
 import { useOrgId } from '../../lib/useOrgId';
 import {
+import SkeletonRows from '../ui/SkeletonRows';
   loadTemplates, saveTemplates, interpolate, filterTemplates,
   getDefaultTemplateId, setDefaultTemplate,
   MsgTemplate, TemplateCategory, CATEGORIES,
@@ -212,7 +213,7 @@ export default function MessagesView() {
               </div>
             </div>
           )}
-          {messagesLoading && <div style={{ margin: 'auto', color: c.mutedSilver, fontSize: 12 }}>Loading live message history…</div>}
+          {messagesLoading && <SkeletonRows rows={5} avatar label="Loading messages" />}
           {messagesError && <div style={{ margin: 'auto', color: c.danger, fontSize: 12 }}>{messagesError}</div>}
           {!messagesLoading && !messagesError && active && msgs.length === 0 && <div style={{ margin: 'auto', color: c.mutedSilver, fontSize: 12 }}>No live messages in this conversation yet.</div>}
           {!messagesLoading && msgs.map((m) => (

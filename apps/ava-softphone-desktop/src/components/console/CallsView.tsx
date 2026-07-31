@@ -5,6 +5,7 @@ import { useTenant } from '../../hooks/useTenant';
 import { useRealtimeRefresh } from '../../lib/useRealtimeRefresh';
 import PageHeader, { ListSkeleton, EmptyState } from './PageHeader';
 import { runTranscribeAndAnalyze, estimateQuality, isStubTranscript, type TranscriptStage, STAGE_LABEL } from '../../lib/transcriptStatus';
+import SkeletonRows from '../ui/SkeletonRows';
 
 
 const { colors: c } = theme;
@@ -324,7 +325,7 @@ export default function CallsView({ scope = 'mine' }: { scope?: 'mine' | 'org' }
               </Panel>
             )}
 
-            {!insight && <div style={{ fontSize: 12, color: c.mutedSilver }}>Loading AVA insight…</div>}
+            {!insight && <SkeletonRows rows={2} padding={8} label="Loading AVA insight" />}
             {insight && (() => {
               const transcript = { provider: insight?.transcript_provider, transcript_text: sel.transcript_text };
               const stubT = isStubTranscript(transcript);

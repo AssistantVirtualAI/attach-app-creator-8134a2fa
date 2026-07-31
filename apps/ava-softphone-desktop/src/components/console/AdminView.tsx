@@ -20,6 +20,7 @@ import AuditTrail from './admin/AuditTrail';
 import VoicemailView from './VoicemailView';
 import RecordingsView from './RecordingsView';
 import CallsView from './CallsView';
+import SkeletonRows from '../ui/SkeletonRows';
 
 const { colors: c } = theme;
 
@@ -300,7 +301,7 @@ function ExtensionsTable() {
             </span>
           </div>
         ))}
-        {loading && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>Loading…</div>}
+        {loading && <SkeletonRows rows={5} padding={20} />}
         {!loading && !error && data.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>No extensions. Click “Sync from PBX”.</div>}
         {!loading && error && <div style={{ padding: 28, textAlign: 'center', color: c.danger, fontSize: 12 }}>{error}</div>}
       </div>
@@ -598,7 +599,7 @@ function Table({ title, cols, load, row }: { title: string; cols: string[]; load
             {row(item).map((v, j) => <span key={j} style={{ fontFamily: typeof v === 'number' ? 'JetBrains Mono, monospace' : 'inherit' }}>{v}</span>)}
           </div>
         ))}
-        {loading && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>Loading…</div>}
+        {loading && <SkeletonRows rows={5} padding={20} />}
         {!loading && !error && data.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>No records yet. Click Refresh after syncing from the phone system.</div>}
         {!loading && error && <div style={{ padding: 28, textAlign: 'center', color: c.danger, fontSize: 12 }}>{error}</div>}
       </div>
@@ -609,7 +610,7 @@ function Table({ title, cols, load, row }: { title: string; cols: string[]; load
 function SyncStatus() {
   const [data, setData] = useState<any>(null);
   useEffect(() => { ava.syncStatus().then(setData); }, []);
-  if (!data) return <div style={{ color: c.mutedSilver, fontSize: 12 }}>Loading…</div>;
+  if (!data) return <SkeletonRows rows={4} padding={12} />;
   return (
     <>
       <h1 style={{ fontSize: 22, color: c.textIce, margin: '0 0 16px' }}>Sync Status</h1>
@@ -781,7 +782,7 @@ function IvrsTable() {
             <span><button onClick={() => setEditing(i)} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce }}>Edit</button></span>
           </div>
         ))}
-        {loading && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>Loading…</div>}
+        {loading && <SkeletonRows rows={5} padding={20} />}
         {!loading && !error && data.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>No IVRs. Click "Sync from PBX".</div>}
         {!loading && error && <div style={{ padding: 28, textAlign: 'center', color: c.danger, fontSize: 12 }}>{error}</div>}
       </div>
@@ -991,7 +992,7 @@ function QueuesTable() {
             <span><button onClick={() => setEditing(q)} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce }}>Edit</button></span>
           </div>
         ))}
-        {loading && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>Loading…</div>}
+        {loading && <SkeletonRows rows={5} padding={20} />}
         {!loading && !error && data.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>No queues. Click "Sync from PBX".</div>}
         {!loading && error && <div style={{ padding: 28, textAlign: 'center', color: c.danger, fontSize: 12 }}>{error}</div>}
       </div>
@@ -1116,7 +1117,7 @@ function SimpleSection({ title, headers, rows, loading, error, onRefresh, extra 
         </div>
       </header>
       <div style={{ ...theme.glass.card, padding: 0, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', borderColor: c.border }}>
-        {loading ? <div style={{ padding: 32, textAlign: 'center', color: c.mutedSilver }}>Loading…</div>
+        {loading ? <SkeletonRows rows={6} padding={24} />
           : error ? <div style={{ padding: 24, color: c.danger }}>{error}</div>
           : rows.length === 0 ? <div style={{ padding: 32, textAlign: 'center', color: c.mutedSilver }}>No records.</div>
           : (

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { theme } from '../../lib/theme';
 import { useTenant } from '../../hooks/useTenant';
+import SkeletonRows from '../ui/SkeletonRows';
 
 const { colors: c } = theme;
 
@@ -188,7 +189,7 @@ export default function QueuesView({ isAdmin, isSuperAdmin, isSupervisor }: Prop
   };
 
   if (!orgId) {
-    return <div style={{ padding: 40, color: c.mutedSilver }}>Loading workspace…</div>;
+    return <SkeletonRows rows={6} padding={32} label="Loading workspace" />;
   }
 
   return (

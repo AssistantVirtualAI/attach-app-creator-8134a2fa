@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { theme } from '../../../lib/theme';
 import { supabase } from '../../../lib/supabaseClient';
 import { validateRecord, type RuleMap } from '../../../lib/pbxValidators';
+import SkeletonRows from '../../ui/SkeletonRows';
 
 const { colors: c } = theme;
 
@@ -298,7 +299,7 @@ function QueueAgentsField({ value, onChange }: { value: any; onChange: (v: Queue
 
   return (
     <div style={{ border: `1px solid ${c.borderStrong}`, borderRadius: 10, background: c.bgElev, padding: 10, maxHeight: 280, overflow: 'auto' }}>
-      {loading && <div style={{ fontSize: 11, color: c.textSub }}>Loading extensions…</div>}
+      {loading && <SkeletonRows rows={3} padding={8} label="Loading extensions" />}
       {err && <div style={{ fontSize: 11, color: c.danger }}>{err}</div>}
       {!loading && pool.length === 0 && !err && (
         <div style={{ fontSize: 11, color: c.textSub }}>No extensions found. Sync from PBX first.</div>

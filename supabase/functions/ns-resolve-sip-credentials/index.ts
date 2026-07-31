@@ -32,25 +32,33 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 type ClientType = "mobile" | "web" | "widget";
 
-// Point WSS at the same core cluster the widget uses as its Outbound Proxy.
-const NS_SIP_WSS_URL = Deno.env.get("NS_SIP_WSS_URL") ?? "wss://voice.ava-telecom.ca:9002";
+// Registrations must land on a call-processing core node, not the portal.
+const NS_SIP_WSS_URL = Deno.env.get("NS_SIP_WSS_URL") ?? "wss://core1.cluster1.ucstack.io:9002";
+const NS_SIP_WSS_URL_2 = Deno.env.get("NS_SIP_WSS_URL_2") ?? "wss://core2.cluster1.ucstack.io:9002";
 
 /**
- * NetSapiens core nodes (core1.cluster1.ucstack.io …) accept the REGISTER and
- * then close the WebSocket with 1001 "Going Away" ~10-15s later: client
- * registrations must live on the SBC edge. Verified live 2026-05.
- * Never advertise a core node as a client WSS target.
+ * Carrier rule (2026-07): SIP clients must register to core1/core2, never to
+ * the portal server (`portal*.ucstack.io`, reached via voice.ava-telecom.ca).
+ * A registration held by the portal is not used for inbound call delivery →
+ * calls go straight to voicemail.
  */
+const isPortalWss = (u: string) => {
+  try { return /(^|\.)(portal\d*|voice)[^/]*\.(ucstack\.io|ava-telecom\.ca)$/i.test(new URL(u).hostname); }
+  catch { return /portal\d*\.|voice\.ava-telecom\.ca/i.test(u); }
+};
 const isCoreWss = (u: string) => {
-  try { return /(^|\.)(core\d*|cluster\d*)[^/]*\.ucstack\.io$/i.test(new URL(u).hostname); }
-  catch { return /ucstack\.io/i.test(u); }
+  try { return /(^|\.)core\d+\.[^/]*ucstack\.io$/i.test(new URL(u).hostname); }
+  catch { return /core\d+\./i.test(u); }
 };
 const edgeWssUrls = (candidates: (string | undefined | null)[]): string[] => {
   const kept = Array.from(new Set(candidates
     .map((u) => String(u ?? "").trim())
     .filter((u) => /^wss?:\/\//i.test(u))))
-    .filter((u) => !isCoreWss(u));
-  return kept.length ? kept : ["wss://voice.ava-telecom.ca:9002"];
+    .filter((u) => !isPortalWss(u));
+  const ordered = Array.from(new Set([...kept.filter(isCoreWss), ...kept.filter((u) => !isCoreWss(u))]));
+  if (!ordered.length) return [NS_SIP_WSS_URL, NS_SIP_WSS_URL_2];
+  if (!ordered.includes(NS_SIP_WSS_URL_2)) ordered.push(NS_SIP_WSS_URL_2);
+  return ordered;
 };
 
 function json(b: unknown, s = 200) {

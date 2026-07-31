@@ -776,3 +776,25 @@ html, body, #root {
 @media (prefers-reduced-motion: reduce) {
   .ava-toast-progress { animation: none !important; }
 }
+
+/* ----- Overlay + on-accent tokens (theme aware) ----- */
+:root, html[data-ava-theme="daylight"], html[data-ava-theme="light"] {
+  --ava-on-accent: #ffffff;
+  --ava-overlay-02: rgba(11,21,48,0.02);
+  --ava-overlay-04: rgba(11,21,48,0.04);
+  --ava-overlay-06: rgba(11,21,48,0.05);
+  --ava-overlay-08: rgba(11,21,48,0.06);
+  --ava-overlay-10: rgba(11,21,48,0.08);
+  --ava-overlay-12: rgba(11,21,48,0.10);
+  --ava-overlay-18: rgba(11,21,48,0.14);
+}
+html[data-ava-theme="dark"], html[data-ava-theme="midnight"] {
+  --ava-on-accent: #ffffff;
+  --ava-overlay-02: rgba(255,255,255,0.02);
+  --ava-overlay-04: rgba(255,255,255,0.04);
+  --ava-overlay-06: rgba(255,255,255,0.06);
+  --ava-overlay-08: rgba(255,255,255,0.08);
+  --ava-overlay-10: rgba(255,255,255,0.10);
+  --ava-overlay-12: rgba(255,255,255,0.12);
+  --ava-overlay-18: rgba(255,255,255,0.18);
+}

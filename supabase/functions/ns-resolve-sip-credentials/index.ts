@@ -425,11 +425,11 @@ Deno.serve(async (req) => {
     sip_proxy: coreServer,
     sip_core_server: coreServer,
     sip_uri: sipUri,
-    // Always edge-filtered: NS core nodes drain WSS clients (close 1001).
-    sip_ws_url: edgeWssUrls([NS_SIP_WSS_URL])[0],
-    sip_wss_url: edgeWssUrls([NS_SIP_WSS_URL])[0],
-    sip_ws_urls: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`]),
-    sip_wss_urls: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`]),
+    // Registrations must live on core1/core2 — portal hosts are filtered out.
+    sip_ws_url: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`])[0],
+    sip_wss_url: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`])[0],
+    sip_ws_urls: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`, NS_SIP_WSS_URL_2]),
+    sip_wss_urls: edgeWssUrls([NS_SIP_WSS_URL, `wss://${coreServer}:9002`, NS_SIP_WSS_URL_2]),
     display_name: brokerDisplayName,
     sip_state: sipState,
     device_registered: sipState === "registered",

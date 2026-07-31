@@ -575,9 +575,11 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     @objc func completeAnswer(_ call: CAPPluginCall) {
         let callId = call.getString("callId") ?? ""
         let ok = call.getBool("ok") ?? false
-        guard let action = pendingAnswerAction,
-              callId.isEmpty || activeCallId == nil || activeCallId == callId else {
-            call.resolve(["ok": false, "reason": "call_id_mismatch"])
+        // Push webhook IDs and the final SIP Call-ID are not guaranteed to be
+        // identical. CallKit is configured for one call only, so the pending
+        // CXAnswerCallAction is the authoritative correlation token.
+        guard let action = pendingAnswerAction else {
+            call.resolve(["ok": false, "reason": "no_pending_answer"])
             return
         }
         pendingAnswerAction = nil

@@ -4,11 +4,28 @@ copyright: "Copyright 2026 Automatisation Assistant Virtuel IA Inc."
 directories:
   output: dist-electron
 icon: assets/icon.png
+
+# Inclure uniquement les fichiers nécessaires (exclure les doublons public/)
 files:
   - dist/**/*
   - electron-compiled/**/*
   - assets/**/*
   - package.json
+  - "!assets/ava-logo.png"
+  - "!public/**/*"
+
+# Garder uniquement les locales fr + en (économie ~35 MB)
+electronLanguages:
+  - fr
+  - en-US
+  - en-GB
+  - en-AU
+  - en-CA
+
+# Exclure les modules de développement et les fichiers inutiles du bundle
+asarUnpack:
+  - "**/*.node"
+
 mac:
   category: public.app-category.business
   hardenedRuntime: true
@@ -21,6 +38,7 @@ mac:
       arch: [x64, arm64]
     - target: zip
       arch: [x64, arm64]
+
 win:
   icon: assets/icon.png
   target:
@@ -28,15 +46,18 @@ win:
       arch: [x64]
   signtoolOptions:
     publisherName: "Automatisation Assistant Virtuel IA Inc."
+
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   shortcutName: "Lemtel Telecom"
+
 linux:
   icon: assets/icon.png
   target:
-    - AppImage
+    - target: AppImage
+      arch: [x64]
   category: Office
   maintainer: "Automatisation Assistant Virtuel IA Inc. <support@assistantvirtualai.com>"
 

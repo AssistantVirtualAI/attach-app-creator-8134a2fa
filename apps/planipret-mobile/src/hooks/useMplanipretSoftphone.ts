@@ -947,23 +947,49 @@ export function useMplanipretSoftphone(enabled = true) {
 
   // Wrapped answer: race to claim the call before actually picking up. If we
   // lose (widget answered first), don't pick up — the winner already has audio.
+  // Every branch is logged so the exact route to answer() is visible in Xcode /
+  // Logcat when debugging a VoIP-push answer.
   const answer = useCallback(async () => {
-    if (restCall?.id && !hasLiveSipSession) return await restControl("answer");
+    const sipSnap = ppSipProvider.getSnapshot();
+    console.info("[answer] tapped", {
+      hasLiveSipSession,
+      sipCallState: sipSnap.callState,
+      sipCallId: sipSnap.callId || null,
+      pushCallId: pushRing?.callId ?? null,
+      restCallId: restCall?.id ?? null,
+    });
+
+    if (restCall?.id && !hasLiveSipSession) {
+      console.info("[answer] route=REST (pp-ns-calls answer)", { call_id: restCall.id });
+      const ok = await restControl("answer");
+      console.info(`[answer] REST answer ${ok ? "accepted" : "REJECTED"} by NetSapiens`);
+      return ok;
+    }
+
     // Push VoIP reçu mais INVITE pas encore arrivé : on bufferise la réponse,
-    // ppSipProvider répondra dès que la session SIP se présente.
+    // ppSipProvider répondra dès que la session SIP se présente (aucune
+    // comparaison de Call-ID : push id ≠ SIP Call-ID).
     if (!hasLiveSipSession && pushRing) {
+      console.info("[answer] route=PUSH-PENDING → forceReregister + requestAnswer", {
+        pushCallId: pushRing.callId ?? null,
+      });
       try { ppSipProvider.forceReregister(); } catch {}
-      ppSipProvider.requestAnswer(pushRing.callId || undefined);
+      const immediate = ppSipProvider.requestAnswer(pushRing.callId || undefined);
+      console.info(`[answer] requestAnswer → ${immediate ? "answered immediately" : "intent queued (30s window)"}`);
       return true;
     }
-    const callId = ppSipProvider.getSnapshot().callId;
+
+    const callId = sipSnap.callId;
+    console.info("[answer] route=SIP → claiming call", { callId });
     const won = await claimCall(callId, "mobile");
     if (!won) {
+      console.warn("[answer] claim lost → answered elsewhere (widget)");
       setAnsweredElsewhere("widget");
       try { ppSipProvider.hangup(); } catch {}
       return false;
     }
     const ok = await ppSipProvider.answer(callId);
+    console.info(`[answer] ppSipProvider.answer → ${ok ? "SIP 200 OK sent" : "FAILED"}`, { callId });
     // Clear the REST/DB attachment so the in-call UI follows the live session.
     if (ok && restCall?.id) setRestCall(null);
     return ok;
@@ -971,25 +997,28 @@ export function useMplanipretSoftphone(enabled = true) {
 
   const hangup = useCallback(() => {
     const callId = ppSipProvider.getSnapshot().callId;
-    // Always signal the PBX over REST as well: the SIP BYE can be lost when the
-    // WebSocket dropped or the session never reached "active", which leaves the
-    // call up on NetSapiens.
-    void restControl("disconnect");
-    if (restCall?.id && !hasLiveSipSession) {
-      const id = restCall.id;
-      maestroLog(() => maestroTelecom.updateCall(id, { status: "ended", ended_reason: "completed" }));
+    const restId = restCall?.id ?? null;
+    console.info("[hangup] requested", { sipCallId: callId || null, restCallId: restId, hasLiveSipSession });
+    // Always signal the PBX over REST as well, with retry + backoff: the SIP BYE
+    // can be lost when the WebSocket dropped or the session never reached
+    // "active", which would leave the call up on NetSapiens.
+    void restDisconnectWithRetry(restId);
+    if (restId && !hasLiveSipSession) {
+      maestroLog(() => maestroTelecom.updateCall(restId, { status: "ended", ended_reason: "completed" }));
       setRestCall(null);
       setPushRing(null);
       return;
     }
-    ppSipProvider.hangup();
+    try { ppSipProvider.hangup(); console.info("[hangup] SIP BYE sent"); }
+    catch (e: any) { console.warn("[hangup] SIP BYE failed", e?.message ?? e); }
     setPushRing(null);
-    if (restCall?.id) setRestCall(null);
+    if (restId) setRestCall(null);
     if (callId) {
       void endSession(callId, "hangup");
       maestroLog(() => maestroTelecom.updateCall(callId, { status: "ended", ended_reason: "completed" }));
     }
-  }, [restCall?.id, restControl, hasLiveSipSession]);
+  }, [restCall?.id, restDisconnectWithRetry, hasLiveSipSession]);
+
 
 
 

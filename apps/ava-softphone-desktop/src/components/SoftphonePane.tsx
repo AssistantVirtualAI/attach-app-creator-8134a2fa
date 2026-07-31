@@ -7,8 +7,6 @@ import SmsThreads from './SmsThreads';
 import OrgChatView from './console/OrgChatView';
 import RecordingsList from './RecordingsList';
 import CallForwarding from './CallForwarding';
-import LemtelLogo from './LemtelLogo';
-import BrandTagline from './BrandTagline';
 // ProfileMenu is rendered globally in TitleBar — no longer duplicated here.
 import { AppErrorBoundary } from './AppErrorBoundary';
 import { theme } from '../lib/theme';

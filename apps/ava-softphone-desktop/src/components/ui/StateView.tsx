@@ -48,7 +48,7 @@ export default function StateView({ mode, title, hint, icon, onRetry }: Props) {
           onClick={onRetry}
           style={{
             marginTop: 6, padding: '7px 14px', borderRadius: 8,
-            border: `1px solid ${c.border}`, background: 'rgba(255,255,255,0.04)',
+            border: `1px solid ${c.border}`, background: c.overlay04,
             color: c.textIce, fontSize: 12, fontWeight: 600, cursor: 'pointer',
           }}
         >

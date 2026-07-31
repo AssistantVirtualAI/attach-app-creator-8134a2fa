@@ -126,7 +126,7 @@ export default function AIPanel({ open, onToggle }: { open: boolean; onToggle: (
           position: 'fixed', bottom: 24, right: 24, zIndex: 60,
           height: 48, padding: '0 18px 0 14px', borderRadius: 999,
           background: `linear-gradient(135deg, ${c.avaViolet}, ${c.avaCyan})`,
-          border: '1px solid rgba(255,255,255,0.22)', cursor: 'pointer', color: '#fff',
+          border: '1px solid rgba(255,255,255,0.22)', cursor: 'pointer', color: c.onAccent,
           fontSize: 13, fontWeight: 800, letterSpacing: 0.6,
           boxShadow: '0 14px 36px -10px rgba(122,76,255,0.65), 0 0 0 6px rgba(122,76,255,0.10)',
           display: 'inline-flex', alignItems: 'center', gap: 9,
@@ -167,7 +167,7 @@ export default function AIPanel({ open, onToggle }: { open: boolean; onToggle: (
           <div style={{
             width: 30, height: 30, borderRadius: 9,
             background: `linear-gradient(135deg, ${c.avaViolet}, ${c.avaCyan})`,
-            display: 'grid', placeItems: 'center', color: '#fff',
+            display: 'grid', placeItems: 'center', color: c.onAccent,
             fontWeight: 800, fontSize: 11,
             boxShadow: '0 0 18px -4px rgba(122,76,255,0.55)',
           }}>LET</div>
@@ -254,7 +254,7 @@ export default function AIPanel({ open, onToggle }: { open: boolean; onToggle: (
         <button onClick={() => send(text)} disabled={!authed || !text.trim() || busy} style={{
           padding: '0 14px', borderRadius: 10,
           background: `linear-gradient(135deg, ${c.avaViolet}, ${c.avaCyan})`,
-          color: '#fff', border: 'none', fontWeight: 700, fontSize: 12,
+          color: c.onAccent, border: 'none', fontWeight: 700, fontSize: 12,
           cursor: (!authed || !text.trim() || busy) ? 'not-allowed' : 'pointer',
           boxShadow: '0 4px 14px -4px rgba(124,58,237,0.45)',
           opacity: (!authed || !text.trim() || busy) ? 0.5 : 1,
@@ -279,7 +279,7 @@ function Bubble({ role, children }: { role: 'user' | 'assistant' | 'system'; chi
           ? 'rgba(217,119,6,0.10)'
           : 'rgba(255,255,255,0.55)',
       border: isUser ? 'none' : `1px solid ${isSystem ? 'rgba(217,119,6,0.30)' : c.border}`,
-      color: isUser ? '#fff' : c.textIce,
+      color: isUser ? c.onAccent : c.textIce,
       fontSize: 12.5, lineHeight: 1.5,
       whiteSpace: 'pre-wrap', wordBreak: 'break-word',
       boxShadow: isUser ? '0 4px 14px -4px rgba(124,58,237,0.45)' : 'none',

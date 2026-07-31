@@ -184,7 +184,7 @@ export default function AIInsights() {
               style={{
                 padding: '6px 12px', borderRadius: 8,
                 background: working ? 'rgba(124,58,237,0.3)' : c.ai,
-                border: 'none', color: '#fff', fontSize: 11, fontWeight: 600,
+                border: 'none', color: c.onAccent, fontSize: 11, fontWeight: 600,
                 cursor: working ? 'wait' : 'pointer', boxShadow: glow.ai,
               }}
             >
@@ -229,7 +229,7 @@ export default function AIInsights() {
             <button onClick={generateNarrative} disabled={narrativeBusy} style={{
               padding: '6px 12px', borderRadius: 8,
               background: narrativeBusy ? 'rgba(124,58,237,0.3)' : c.ai,
-              border: 'none', color: '#fff', fontSize: 11, fontWeight: 700,
+              border: 'none', color: c.onAccent, fontSize: 11, fontWeight: 700,
               cursor: narrativeBusy ? 'wait' : 'pointer', boxShadow: glow.ai,
             }}>{narrativeBusy ? 'Generating…' : 'Generate'}</button>
           </div>
@@ -265,7 +265,7 @@ export default function AIInsights() {
             <div style={{ fontSize: 10, color: c.textSub, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
               Sentiment breakdown
             </div>
-            <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', background: c.overlay04 }}>
               <div style={{ width: `${(sentiments.positive / total) * 100}%`, background: c.green }} />
               <div style={{ width: `${(sentiments.neutral / total) * 100}%`, background: c.yellow }} />
               <div style={{ width: `${(sentiments.negative / total) * 100}%`, background: c.red }} />

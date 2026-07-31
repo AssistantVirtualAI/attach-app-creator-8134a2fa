@@ -5,6 +5,7 @@ import { ava, RecordingItem } from '../lib/avaApi';
 import { useRealtimeRefresh } from '../lib/useRealtimeRefresh';
 import { useOrgId } from '../lib/useOrgId';
 import { audit } from '../lib/audit';
+import SkeletonRows from './ui/SkeletonRows';
 
 const { colors: c, glow } = theme;
 
@@ -247,7 +248,7 @@ export default function RecordingsList({ onAnalyze, extension }: { onAnalyze?: (
   };
 
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 40, color: c.textSub }}>Loading recordings…</div>;
+  if (loading) return <SkeletonRows rows={5} label="Loading recordings" />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

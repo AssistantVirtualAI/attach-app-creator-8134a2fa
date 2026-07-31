@@ -67,7 +67,7 @@ export default function ConflictResolutionModal({
           Choose how to proceed — your choice is recorded in the audit log.
         </div>
         <div style={{
-          background: 'rgba(255,255,255,0.04)', border: `1px solid ${c.border}`,
+          background: c.overlay04, border: `1px solid ${c.border}`,
           borderRadius: 8, padding: 10, marginBottom: 16, fontSize: 11.5, color: c.mutedSilver,
         }}>
           <div><span style={{ color: c.mutedSilver }}>Remote id:</span> <code style={{ color: c.textIce }}>{existing?.id || existing?.pbx_uuid || '—'}</code></div>
@@ -89,7 +89,7 @@ export default function ConflictResolutionModal({
             style={{
               padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
               background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
-              border: 'none', color: '#fff', cursor: 'pointer',
+              border: 'none', color: c.onAccent, cursor: 'pointer',
             }}
           >Open existing for edit</button>
         </div>

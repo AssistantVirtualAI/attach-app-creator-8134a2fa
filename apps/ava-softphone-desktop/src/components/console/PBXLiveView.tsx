@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ava, type PbxActiveCall, type PbxSystemStatus } from '../../lib/avaApi';
 import { theme } from '../../lib/theme';
+import SkeletonRows from '../ui/SkeletonRows';
 
 const { colors: c } = theme;
 
@@ -126,7 +127,7 @@ export default function PBXLiveView() {
                   </tr>
                 ))}
                 {!calls.length && (
-                  <tr><td colSpan={6} style={{ padding: 30, color: c.mutedSilver, textAlign: 'center' }}>{loading ? 'Loading live channels…' : 'No active PBX channels right now.'}</td></tr>
+                  <tr><td colSpan={6} style={{ padding: 30, color: c.mutedSilver, textAlign: 'center' }}>{loading ? <SkeletonRows rows={4} padding={0} label="Loading live channels" /> : 'No active PBX channels right now.'}</td></tr>
                 )}
               </tbody>
             </table>
@@ -151,7 +152,7 @@ export default function PBXLiveView() {
 
 function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <div style={{ border: `1px solid ${tone}55`, borderRadius: 16, padding: '13px 14px', background: `linear-gradient(135deg, ${tone}18, rgba(255,255,255,0.02))` }}>
+    <div style={{ border: `1px solid ${tone}55`, borderRadius: 16, padding: '13px 14px', background: `linear-gradient(135deg, ${tone}18, ${c.overlay02})` }}>
       <div style={{ fontSize: 10, color: c.mutedSilver, textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 800 }}>{label}</div>
       <div style={{ color: c.textIce, fontSize: 24, fontWeight: 900, marginTop: 4 }}>{value}</div>
     </div>

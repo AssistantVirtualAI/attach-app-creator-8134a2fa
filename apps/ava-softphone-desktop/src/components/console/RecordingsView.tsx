@@ -502,7 +502,7 @@ export default function RecordingsView({ scope = 'mine' }: { scope?: 'mine' | 'o
                   : (transcript ? '↻ Re-analyze' : '✨ Transcribe & Analyze')}
               </button>
             </div>
-            <div style={{ marginBottom: 12, padding: '8px 10px', borderRadius: 8, background: analysis ? 'rgba(16,185,129,0.08)' : aiLoading ? 'rgba(35,214,255,0.08)' : 'rgba(255,255,255,0.04)', border: `1px solid ${analysis ? c.success + '55' : c.border}`, color: analysis ? c.success : c.mutedSilver, fontSize: 11, fontWeight: 700 }}>
+            <div style={{ marginBottom: 12, padding: '8px 10px', borderRadius: 8, background: analysis ? 'rgba(16,185,129,0.08)' : aiLoading ? 'rgba(35,214,255,0.08)' : c.overlay04, border: `1px solid ${analysis ? c.success + '55' : c.border}`, color: analysis ? c.success : c.mutedSilver, fontSize: 11, fontWeight: 700 }}>
               {aiLoading ? 'AI analysis: en cours' : analysis ? 'AI analysis: déjà traité — cache réutilisé' : 'AI analysis: non traité'}
             </div>
             {aiLoading && (
@@ -512,7 +512,7 @@ export default function RecordingsView({ scope = 'mine' }: { scope?: 'mine' | 'o
                   <span style={{ color: aiStage === 'transcribing' ? c.avaCyan : c.mutedSilver }}>2. Transcribe</span>
                   <span style={{ color: aiStage === 'analyzing' ? c.avaCyan : c.mutedSilver }}>3. Analyze</span>
                 </div>
-                <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                <div style={{ height: 4, borderRadius: 2, background: c.overlay06, overflow: 'hidden' }}>
                   <div style={{
                     height: '100%',
                     width: aiStage === 'fetching' ? '20%' : aiStage === 'transcribing' ? '60%' : aiStage === 'analyzing' ? '90%' : '100%',
@@ -632,7 +632,7 @@ const chip = (active: boolean): React.CSSProperties => ({
 const dot = (col: string): React.CSSProperties => ({ color: col, fontSize: 9 });
 const tag = (col: string): React.CSSProperties => ({
   fontSize: 10, padding: '3px 8px', borderRadius: 999,
-  background: 'rgba(255,255,255,0.04)', color: col,
+  background: c.overlay04, color: col,
   border: `1px solid ${col}33`, fontWeight: 600,
 });
 const miniBtn: React.CSSProperties = {

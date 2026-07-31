@@ -154,7 +154,7 @@ function Status({ conf, exec }: { conf: string; exec: string }) {
 }
 
 const primaryBtn: React.CSSProperties = {
-  padding: '9px 14px', borderRadius: 9, border: 'none', cursor: 'pointer', color: '#fff', fontWeight: 700, fontSize: 12,
+  padding: '9px 14px', borderRadius: 9, border: 'none', cursor: 'pointer', color: c.onAccent, fontWeight: 700, fontSize: 12,
   background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
 };
 const ghostBtn: React.CSSProperties = {

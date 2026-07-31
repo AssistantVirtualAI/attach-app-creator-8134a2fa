@@ -132,7 +132,7 @@ Focus on missed-call rate, busiest extensions, and one concrete improvement.`,
         <button onClick={runAi} disabled={aiLoading || loading || rows.length === 0} style={{
           padding: '8px 14px', borderRadius: 10,
           background: `linear-gradient(135deg, ${c.avaViolet}, ${c.avaCyan})`,
-          border: 'none', color: '#fff', fontSize: 12, fontWeight: 700,
+          border: 'none', color: c.onAccent, fontSize: 12, fontWeight: 700,
           cursor: aiLoading ? 'wait' : 'pointer', opacity: aiLoading ? 0.6 : 1,
         }}>{aiLoading ? t('reports.generating') : `✨ ${t('reports.avaSummary')}`}</button>
       </div>
@@ -183,7 +183,7 @@ Focus on missed-call rate, busiest extensions, and one concrete improvement.`,
             </div>
             {rows.slice(0, 25).map((r) => (
               <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 90px 90px 70px', padding: '9px 14px', borderBottom: `1px solid ${c.border}`, fontSize: 12, color: c.textIce, alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 9.5, padding: '2px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.05)', color: r.direction === 'inbound' ? c.avaCyan : c.signalGold, textAlign: 'center', fontWeight: 700, letterSpacing: 0.5 }}>{r.direction ?? '—'}</span>
+                <span style={{ fontSize: 9.5, padding: '2px 6px', borderRadius: 4, background: c.overlay04, color: r.direction === 'inbound' ? c.avaCyan : c.signalGold, textAlign: 'center', fontWeight: 700, letterSpacing: 0.5 }}>{r.direction ?? '—'}</span>
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.caller_number ?? '—'} → {r.destination_number ?? '—'}</span>
                 <span style={{ color: c.mutedSilver, fontFamily: 'JetBrains Mono, monospace' }}>{fmtDur(r.billsec ?? r.duration_seconds ?? 0)}</span>
                 <span style={{ color: r.missed_call ? c.danger : c.success, fontSize: 11 }}>{r.missed_call ? 'missed' : (r.call_status ?? 'ok')}</span>

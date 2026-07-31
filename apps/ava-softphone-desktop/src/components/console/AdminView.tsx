@@ -20,6 +20,7 @@ import AuditTrail from './admin/AuditTrail';
 import VoicemailView from './VoicemailView';
 import RecordingsView from './RecordingsView';
 import CallsView from './CallsView';
+import SkeletonRows from '../ui/SkeletonRows';
 
 const { colors: c } = theme;
 
@@ -82,7 +83,7 @@ function ModalShell({ title, onClose, width = 460, children }: { title: string; 
           <div style={{ fontSize: 15, fontWeight: 700, color: c.textIce, letterSpacing: 0.2 }}>{title}</div>
           <button onClick={onClose} aria-label="Close" style={{
             width: 28, height: 28, borderRadius: 8, border: `1px solid ${c.border}`,
-            background: 'rgba(255,255,255,0.04)', color: c.mutedSilver, cursor: 'pointer', fontSize: 14,
+            background: c.overlay04, color: c.mutedSilver, cursor: 'pointer', fontSize: 14,
           }}>✕</button>
         </div>
         {children}
@@ -266,7 +267,7 @@ function ExtensionsTable() {
             <button onClick={() => setCreating({ key: generateIdempotencyKey() })} disabled={roleLoading} style={{
               padding: '8px 14px', borderRadius: 9,
               background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
-              border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.4,
+              border: 'none', color: c.onAccent, fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.4,
               opacity: roleLoading ? 0.6 : 1,
             }}>＋ New Extension</button>
           )}
@@ -300,7 +301,7 @@ function ExtensionsTable() {
             </span>
           </div>
         ))}
-        {loading && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>Loading…</div>}
+        {loading && <SkeletonRows rows={5} padding={20} />}
         {!loading && !error && data.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>No extensions. Click “Sync from PBX”.</div>}
         {!loading && error && <div style={{ padding: 28, textAlign: 'center', color: c.danger, fontSize: 12 }}>{error}</div>}
       </div>
@@ -585,7 +586,7 @@ function Table({ title, cols, load, row }: { title: string; cols: string[]; load
           <button style={{
             padding: '8px 14px', borderRadius: 9,
             background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
-            border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            border: 'none', color: c.onAccent, fontSize: 12, fontWeight: 700, cursor: 'pointer',
           }}>+ New</button>
         </div>
       </header>
@@ -598,7 +599,7 @@ function Table({ title, cols, load, row }: { title: string; cols: string[]; load
             {row(item).map((v, j) => <span key={j} style={{ fontFamily: typeof v === 'number' ? 'JetBrains Mono, monospace' : 'inherit' }}>{v}</span>)}
           </div>
         ))}
-        {loading && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>Loading…</div>}
+        {loading && <SkeletonRows rows={5} padding={20} />}
         {!loading && !error && data.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>No records yet. Click Refresh after syncing from the phone system.</div>}
         {!loading && error && <div style={{ padding: 28, textAlign: 'center', color: c.danger, fontSize: 12 }}>{error}</div>}
       </div>
@@ -609,7 +610,7 @@ function Table({ title, cols, load, row }: { title: string; cols: string[]; load
 function SyncStatus() {
   const [data, setData] = useState<any>(null);
   useEffect(() => { ava.syncStatus().then(setData); }, []);
-  if (!data) return <div style={{ color: c.mutedSilver, fontSize: 12 }}>Loading…</div>;
+  if (!data) return <SkeletonRows rows={4} padding={12} />;
   return (
     <>
       <h1 style={{ fontSize: 22, color: c.textIce, margin: '0 0 16px' }}>Sync Status</h1>
@@ -761,7 +762,7 @@ function IvrsTable() {
         <h1 style={{ fontSize: 22, color: c.textIce, margin: 0 }}>Auto-Attendants <span style={{ fontSize: 12, color: c.mutedSilver, fontWeight: 500 }}>({data.length})</span></h1>
         <div style={{ display: 'flex', gap: 8 }}>
           {isAdmin && (
-            <button onClick={() => setCreating({ key: generateIdempotencyKey() })} disabled={roleLoading} style={{ padding: '8px 14px', borderRadius: 9, background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`, border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.4, opacity: roleLoading ? 0.6 : 1 }}>＋ New Auto-Attendant</button>
+            <button onClick={() => setCreating({ key: generateIdempotencyKey() })} disabled={roleLoading} style={{ padding: '8px 14px', borderRadius: 9, background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`, border: 'none', color: c.onAccent, fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.4, opacity: roleLoading ? 0.6 : 1 }}>＋ New Auto-Attendant</button>
           )}
           <button onClick={() => reload(true)} disabled={syncing} style={{ padding: '8px 14px', borderRadius: 9, background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce, fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: syncing ? 0.6 : 1 }}>{syncing ? 'Syncing…' : '↻ Sync from PBX'}</button>
           <button onClick={() => reload(false)} style={{ padding: '8px 14px', borderRadius: 9, background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Reload</button>
@@ -781,7 +782,7 @@ function IvrsTable() {
             <span><button onClick={() => setEditing(i)} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce }}>Edit</button></span>
           </div>
         ))}
-        {loading && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>Loading…</div>}
+        {loading && <SkeletonRows rows={5} padding={20} />}
         {!loading && !error && data.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>No IVRs. Click "Sync from PBX".</div>}
         {!loading && error && <div style={{ padding: 28, textAlign: 'center', color: c.danger, fontSize: 12 }}>{error}</div>}
       </div>
@@ -970,7 +971,7 @@ function QueuesTable() {
         <h1 style={{ fontSize: 22, color: c.textIce, margin: 0 }}>Call Queues <span style={{ fontSize: 12, color: c.mutedSilver, fontWeight: 500 }}>({data.length})</span></h1>
         <div style={{ display: 'flex', gap: 8 }}>
           {isAdmin && (
-            <button onClick={() => setCreating({ key: generateIdempotencyKey() })} disabled={roleLoading} style={{ padding: '8px 14px', borderRadius: 9, background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`, border: 'none', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.4, opacity: roleLoading ? 0.6 : 1 }}>＋ New Queue</button>
+            <button onClick={() => setCreating({ key: generateIdempotencyKey() })} disabled={roleLoading} style={{ padding: '8px 14px', borderRadius: 9, background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`, border: 'none', color: c.onAccent, fontSize: 12, fontWeight: 700, cursor: 'pointer', letterSpacing: 0.4, opacity: roleLoading ? 0.6 : 1 }}>＋ New Queue</button>
           )}
           <button onClick={() => reload(true)} disabled={syncing} style={{ padding: '8px 14px', borderRadius: 9, background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce, fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: syncing ? 0.6 : 1 }}>{syncing ? 'Syncing…' : '↻ Sync from PBX'}</button>
           <button onClick={() => reload(false)} style={{ padding: '8px 14px', borderRadius: 9, background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Reload</button>
@@ -991,7 +992,7 @@ function QueuesTable() {
             <span><button onClick={() => setEditing(q)} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce }}>Edit</button></span>
           </div>
         ))}
-        {loading && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>Loading…</div>}
+        {loading && <SkeletonRows rows={5} padding={20} />}
         {!loading && !error && data.length === 0 && <div style={{ padding: 28, textAlign: 'center', color: c.mutedSilver, fontSize: 12 }}>No queues. Click "Sync from PBX".</div>}
         {!loading && error && <div style={{ padding: 28, textAlign: 'center', color: c.danger, fontSize: 12 }}>{error}</div>}
       </div>
@@ -1115,8 +1116,8 @@ function SimpleSection({ title, headers, rows, loading, error, onRefresh, extra 
           <button onClick={onRefresh} style={{ padding: '8px 12px', borderRadius: 10, background: 'transparent', border: `1px solid ${c.border}`, color: c.textIce, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>↻ Refresh</button>
         </div>
       </header>
-      <div style={{ ...theme.glass.card, padding: 0, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', borderColor: c.border }}>
-        {loading ? <div style={{ padding: 32, textAlign: 'center', color: c.mutedSilver }}>Loading…</div>
+      <div style={{ ...theme.glass.card, padding: 0, overflow: 'hidden', background: c.overlay04, borderColor: c.border }}>
+        {loading ? <SkeletonRows rows={6} padding={24} />
           : error ? <div style={{ padding: 24, color: c.danger }}>{error}</div>
           : rows.length === 0 ? <div style={{ padding: 32, textAlign: 'center', color: c.mutedSilver }}>No records.</div>
           : (

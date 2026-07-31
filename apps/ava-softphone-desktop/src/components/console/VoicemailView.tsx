@@ -355,7 +355,7 @@ const chip = (active: boolean): React.CSSProperties => ({
 const dot = (col: string): React.CSSProperties => ({ color: col, fontSize: 9 });
 const tag = (col: string): React.CSSProperties => ({
   fontSize: 9.5, padding: '3px 7px', borderRadius: 999,
-  background: 'rgba(255,255,255,0.04)', color: col,
+  background: c.overlay04, color: col,
   border: `1px solid ${col}33`, fontWeight: 700, letterSpacing: 0.6,
 });
 const iconBtn: React.CSSProperties = {

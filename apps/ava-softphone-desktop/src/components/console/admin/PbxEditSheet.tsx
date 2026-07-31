@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { theme } from '../../../lib/theme';
 import { supabase } from '../../../lib/supabaseClient';
 import { validateRecord, type RuleMap } from '../../../lib/pbxValidators';
+import SkeletonRows from '../../ui/SkeletonRows';
 
 const { colors: c } = theme;
 
@@ -200,7 +201,7 @@ function TtsGreetingField({ value, onChange, field, fullForm }: {
         <button type="button" onClick={generate} disabled={busy || uploading}
           style={{
             padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700,
-            border: 'none', cursor: 'pointer', color: '#fff',
+            border: 'none', cursor: 'pointer', color: c.onAccent,
             background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
             opacity: (busy || uploading) ? 0.6 : 1,
           }}>{busy ? 'Generating…' : '🎙 Generate'}</button>
@@ -298,7 +299,7 @@ function QueueAgentsField({ value, onChange }: { value: any; onChange: (v: Queue
 
   return (
     <div style={{ border: `1px solid ${c.borderStrong}`, borderRadius: 10, background: c.bgElev, padding: 10, maxHeight: 280, overflow: 'auto' }}>
-      {loading && <div style={{ fontSize: 11, color: c.textSub }}>Loading extensions…</div>}
+      {loading && <SkeletonRows rows={3} padding={8} label="Loading extensions" />}
       {err && <div style={{ fontSize: 11, color: c.danger }}>{err}</div>}
       {!loading && pool.length === 0 && !err && (
         <div style={{ fontSize: 11, color: c.textSub }}>No extensions found. Sync from PBX first.</div>
@@ -528,7 +529,7 @@ export default function PbxEditSheet({
           }}>Cancel</button>
           <button onClick={handleSave} disabled={saving} style={{
             padding: '9px 20px', borderRadius: 10, border: 'none',
-            color: '#fff', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+            color: c.onAccent, fontSize: 12, fontWeight: 800, cursor: 'pointer',
             backgroundImage: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
             opacity: saving ? 0.6 : 1,
             boxShadow: '0 8px 24px -10px rgba(0,35,230,0.45)',

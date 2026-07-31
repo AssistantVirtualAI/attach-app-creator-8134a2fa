@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { theme } from '../lib/theme';
+
+const { colors: c } = theme;
 
 interface Props { userId: string; }
 
@@ -39,7 +42,7 @@ export default function CallCenterStatusBar({ userId }: Props) {
     } finally { setBusy(false); }
   };
 
-  const color = ({ available: '#22c55e', paused: '#f59e0b', on_call: '#ef4444', offline: '#64748b' } as any)[row.cc_status] || '#64748b';
+  const color = ({ available: c.success, paused: c.warning, on_call: c.danger, offline: c.textDim } as any)[row.cc_status] || c.textDim;
 
   return (
     <div style={{
@@ -60,7 +63,7 @@ export default function CallCenterStatusBar({ userId }: Props) {
 }
 
 const btn: React.CSSProperties = {
-  background: 'rgba(0,35,230,0.3)', color: '#fff', border: '1px solid rgba(0,35,230,0.5)',
+  background: 'rgba(0,35,230,0.3)', color: c.onAccent, border: '1px solid rgba(0,35,230,0.5)',
   padding: '3px 10px', borderRadius: 4, fontSize: 11, cursor: 'pointer',
 };
 const btnGhost: React.CSSProperties = { ...btn, background: 'transparent', border: '1px solid rgba(148,163,184,0.3)' };

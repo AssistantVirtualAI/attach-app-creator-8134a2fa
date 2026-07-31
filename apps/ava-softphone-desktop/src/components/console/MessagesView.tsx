@@ -8,6 +8,8 @@ import {
   getDefaultTemplateId, setDefaultTemplate,
   MsgTemplate, TemplateCategory, CATEGORIES,
 } from '../../lib/messageTemplates';
+import SkeletonRows from '../ui/SkeletonRows';
+
 
 const { colors: c } = theme;
 
@@ -170,7 +172,7 @@ export default function MessagesView() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>{t.contact}</span>
-                {t.unread > 0 && <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 999, background: c.signalGold, color: '#0b1530' }}>{t.unread}</span>}
+                {t.unread > 0 && <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 999, background: c.signalGold, color: c.text }}>{t.unread}</span>}
               </div>
               <span style={{ fontSize: 11, color: c.mutedSilver, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.lastMessage}</span>
             </button>
@@ -199,7 +201,7 @@ export default function MessagesView() {
                 borderRadius: 18,
                 background: `radial-gradient(circle at 50% 0%, ${c.lemtelBlue}1f, transparent 70%), ${c.bgCard}`,
                 border: `1px solid ${c.lemtelBlue}44`,
-                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 32px -20px ${c.lemtelBlue}88`,
+                boxShadow: `inset 0 1px 0 ${c.overlay04}, 0 12px 32px -20px ${c.lemtelBlue}88`,
               }}>
                 <div style={{
                   width: 64, height: 64, borderRadius: 18, display: 'grid', placeItems: 'center',
@@ -212,7 +214,7 @@ export default function MessagesView() {
               </div>
             </div>
           )}
-          {messagesLoading && <div style={{ margin: 'auto', color: c.mutedSilver, fontSize: 12 }}>Loading live message history…</div>}
+          {messagesLoading && <SkeletonRows rows={5} avatar label="Loading messages" />}
           {messagesError && <div style={{ margin: 'auto', color: c.danger, fontSize: 12 }}>{messagesError}</div>}
           {!messagesLoading && !messagesError && active && msgs.length === 0 && <div style={{ margin: 'auto', color: c.mutedSilver, fontSize: 12 }}>No live messages in this conversation yet.</div>}
           {!messagesLoading && msgs.map((m) => (
@@ -291,7 +293,7 @@ export default function MessagesView() {
                               background: 'transparent', border: 'none', color: c.textIce,
                               fontSize: 12, cursor: 'pointer',
                             }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = c.overlay04; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
                                 <span style={{ fontWeight: 700 }}>{tpl.label}</span>
@@ -332,8 +334,8 @@ export default function MessagesView() {
               />
               <button onClick={send} disabled={!draft.trim()} style={{
                 padding: '0 18px', borderRadius: 10,
-                background: draft.trim() ? `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})` : 'rgba(255,255,255,0.05)',
-                border: 'none', color: '#fff', fontSize: 12, fontWeight: 700,
+                background: draft.trim() ? `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})` : c.overlay04,
+                border: 'none', color: c.onAccent, fontSize: 12, fontWeight: 700,
                 cursor: draft.trim() ? 'pointer' : 'not-allowed',
               }}>Send</button>
             </div>
@@ -346,7 +348,7 @@ export default function MessagesView() {
 
 const aiBtn = (col: string): React.CSSProperties => ({
   padding: '5px 10px', borderRadius: 999,
-  background: 'rgba(255,255,255,0.03)',
+  background: c.overlay02,
   border: `1px solid ${col}55`,
   color: col, fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
 });

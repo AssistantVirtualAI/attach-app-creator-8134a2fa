@@ -87,7 +87,7 @@ export default function CommandPalette({
               color: c.textIce, fontSize: 14, outline: 'none',
             }}
           />
-          <kbd style={{ fontSize: 9.5, padding: '3px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: c.textSub }}>ESC</kbd>
+          <kbd style={{ fontSize: 9.5, padding: '3px 6px', borderRadius: 4, background: c.overlay06, color: c.textSub }}>ESC</kbd>
         </div>
         <div style={{ maxHeight: 360, overflowY: 'auto', padding: 6 }}>
           {results.length === 0 && (

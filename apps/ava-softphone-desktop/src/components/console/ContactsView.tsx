@@ -284,7 +284,7 @@ export default function ContactsView() {
           <button onClick={() => setShowAdd((v) => !v)} style={{
             padding: '8px 14px', borderRadius: 9, border: 'none', cursor: 'pointer',
             background: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
-            color: '#fff', fontSize: 12, fontWeight: 700,
+            color: c.onAccent, fontSize: 12, fontWeight: 700,
           }}>{showAdd ? 'Close' : '+ New Contact'}</button>
         </header>
 
@@ -473,7 +473,7 @@ function initials(name: string) {
 
 const avatar: React.CSSProperties = {
   width: 32, height: 32, borderRadius: '50%',
-  background: 'linear-gradient(135deg, #7A4CFF, #23D6FF)',
+  background: `linear-gradient(135deg, ${c.ai}, #23D6FF)`,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   fontSize: 12, fontWeight: 700, color: c.midnight, flexShrink: 0,
 };
@@ -487,7 +487,7 @@ const chip = (active: boolean): React.CSSProperties => ({
 });
 const tag = (col: string): React.CSSProperties => ({
   fontSize: 10, padding: '3px 8px', borderRadius: 999,
-  background: 'rgba(255,255,255,0.04)', color: col,
+  background: c.overlay04, color: col,
   border: `1px solid ${col}33`, fontWeight: 600,
 });
 const inputMini: React.CSSProperties = {

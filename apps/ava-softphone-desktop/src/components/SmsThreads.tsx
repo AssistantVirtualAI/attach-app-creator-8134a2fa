@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, SB_URL, SB_KEY } from '@/lib/supabaseClient';
 import { audit } from '@/lib/audit';
+import SkeletonRows from './ui/SkeletonRows';
+import { theme } from '../lib/theme';
+
+const { colors: c } = theme;
 
 interface Thread {
   id: string;
@@ -123,7 +127,7 @@ export default function SmsThreads() {
     }
   };
 
-  if (loading) return <div style={center}>Loading SMS…</div>;
+  if (loading) return <SkeletonRows rows={5} avatar label="Loading SMS" />;
 
   if (selected) {
     return (
@@ -143,8 +147,8 @@ export default function SmsThreads() {
             return (
               <div key={m.id} style={{ alignSelf: out ? 'flex-end' : 'flex-start', maxWidth: '80%' }}>
                 <div style={{
-                  background: out ? '#FFD700' : 'rgba(255,255,255,0.08)',
-                  color: out ? '#0a0a1a' : '#fff',
+                  background: out ? c.gold : c.overlay08,
+                  color: out ? '#0a0a1a' : c.onAccent,
                   borderRadius: 12, padding: '6px 10px', fontSize: 13, wordBreak: 'break-word',
                 }}>
                   {m.body}
@@ -156,7 +160,7 @@ export default function SmsThreads() {
             );
           })}
         </div>
-        {err && <div style={{ color: '#ff8a8a', fontSize: 11 }}>{err}</div>}
+        {err && <div style={{ color: c.danger, fontSize: 11 }}>{err}</div>}
         <div style={{ display: 'flex', gap: 6 }}>
           <input
             value={draft}
@@ -186,7 +190,7 @@ export default function SmsThreads() {
             <div style={{ fontSize: 10, opacity: 0.55 }}>{t.did_number} · {fmtTime(t.last_message_at)}</div>
           </div>
           {t.unread_count ? (
-            <span style={{ background: '#FFD700', color: '#0a0a1a', borderRadius: 10, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>
+            <span style={{ background: c.gold, color: '#0a0a1a', borderRadius: 10, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>
               {t.unread_count}
             </span>
           ) : null}
@@ -199,19 +203,19 @@ export default function SmsThreads() {
 const center: React.CSSProperties = { textAlign: 'center', padding: 40, opacity: 0.5, fontSize: 12 };
 const rowBtn: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10,
-  background: 'linear-gradient(155deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)', border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 14, padding: '8px 10px', cursor: 'pointer', color: '#E8EEFB',
+  background: `linear-gradient(155deg, ${c.overlay06} 0%, ${c.overlay02} 100%)`, border: `1px solid ${c.overlay08}`,
+  borderRadius: 14, padding: '8px 10px', cursor: 'pointer', color: c.text,
 };
 const backBtn: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff',
+  background: c.overlay08, border: 'none', color: c.onAccent,
   borderRadius: 6, padding: '4px 8px', cursor: 'pointer', fontSize: 11,
 };
 const inputBox: React.CSSProperties = {
-  flex: 1, background: 'rgba(255,255,255,0.08)',
+  flex: 1, background: c.overlay08,
   border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8,
-  color: '#fff', padding: '8px 10px', fontSize: 13, outline: 'none',
+  color: c.onAccent, padding: '8px 10px', fontSize: 13, outline: 'none',
 };
 const sendBtn: React.CSSProperties = {
-  background: '#FFD700', color: '#0a0a1a', border: 'none',
+  background: c.gold, color: '#0a0a1a', border: 'none',
   borderRadius: 8, padding: '0 14px', fontSize: 16, cursor: 'pointer', fontWeight: 700,
 };

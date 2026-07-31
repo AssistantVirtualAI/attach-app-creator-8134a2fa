@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import type { SoftphoneSnapshot } from '@/lib/sip/jssipProvider';
+import { theme } from '../lib/theme';
+
+const { colors: c } = theme;
 
 interface Props {
   snap: SoftphoneSnapshot;
@@ -65,7 +68,7 @@ export const SipRecoveryBanner: React.FC<Props> = ({
       position: 'relative', zIndex: 1,
       margin: compact ? '8px 12px 0' : '10px 16px 0',
       padding: '10px 12px', borderRadius: 10,
-      background: t.bg, border: t.border, color: '#E8EEFB', fontSize: 12,
+      background: t.bg, border: t.border, color: c.text, fontSize: 12,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ fontWeight: 700, fontSize: 12 }}>{headline(snap)}</div>
@@ -73,8 +76,8 @@ export const SipRecoveryBanner: React.FC<Props> = ({
           <button
             onClick={onRetry}
             style={{
-              background: 'rgba(0,35,230,0.18)', border: '1px solid rgba(255,255,255,0.18)',
-              borderRadius: 6, color: '#E8EEFB', padding: '3px 8px', fontSize: 10,
+              background: 'rgba(0,35,230,0.18)', border: `1px solid ${c.overlay18}`,
+              borderRadius: 6, color: c.text, padding: '3px 8px', fontSize: 10,
               cursor: 'pointer', fontWeight: 700,
             }}
             title="Retry registration now"
@@ -82,8 +85,8 @@ export const SipRecoveryBanner: React.FC<Props> = ({
           <button
             onClick={onFullRestart}
             style={{
-              background: 'transparent', border: '1px solid rgba(255,255,255,0.18)',
-              borderRadius: 6, color: '#B0BACC', padding: '3px 8px', fontSize: 10, cursor: 'pointer',
+              background: 'transparent', border: `1px solid ${c.overlay18}`,
+              borderRadius: 6, color: c.textDim, padding: '3px 8px', fontSize: 10, cursor: 'pointer',
             }}
             title="Full restart (refetch credentials)"
           >Restart</button>
@@ -92,7 +95,7 @@ export const SipRecoveryBanner: React.FC<Props> = ({
 
       <div style={{ marginTop: 4, opacity: 0.9, fontSize: 11 }}>{detail(snap)}</div>
 
-      <div style={{ marginTop: 4, fontSize: 10, color: '#B0BACC' }}>
+      <div style={{ marginTop: 4, fontSize: 10, color: c.textDim }}>
         {snap.recovering && !snap.nextRetryAt && `Reconnecting… (attempt ${snap.recoveryAttempt || 1})`}
         {!!snap.nextRetryAt && `Next automatic retry in ${secs}s · attempt ${snap.recoveryAttempt || 1}`}
         {!snap.recovering && !snap.nextRetryAt && !snap.authBlocked && 'Watchdog active'}
@@ -100,8 +103,8 @@ export const SipRecoveryBanner: React.FC<Props> = ({
           <button
             onClick={onDiagnose}
             style={{
-              marginLeft: 8, background: 'transparent', border: '1px solid rgba(255,255,255,0.18)',
-              color: '#B0BACC', borderRadius: 6, padding: '2px 6px', fontSize: 10, cursor: 'pointer',
+              marginLeft: 8, background: 'transparent', border: `1px solid ${c.overlay18}`,
+              color: c.textDim, borderRadius: 6, padding: '2px 6px', fontSize: 10, cursor: 'pointer',
             }}
           >Diagnose ↗</button>
         )}
@@ -117,7 +120,7 @@ export const SipRecoveryBanner: React.FC<Props> = ({
           {onDismissNotice && (
             <button
               onClick={onDismissNotice}
-              style={{ background: 'transparent', border: 'none', color: '#E8EEFB', cursor: 'pointer', fontSize: 12 }}
+              style={{ background: 'transparent', border: 'none', color: c.text, cursor: 'pointer', fontSize: 12 }}
             >✕</button>
           )}
         </div>

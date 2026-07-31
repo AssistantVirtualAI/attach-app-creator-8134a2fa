@@ -117,7 +117,7 @@ export default function ConflictMergeDialog({ title, conflicts, onCancel, onReso
             fontSize: 12, fontWeight: 700, cursor: 'pointer',
           }}>Cancel</button>
           <button onClick={() => onResolve(choices)} style={{
-            padding: '9px 20px', borderRadius: 10, border: 'none', color: '#fff',
+            padding: '9px 20px', borderRadius: 10, border: 'none', color: c.onAccent,
             fontSize: 12, fontWeight: 800, cursor: 'pointer',
             backgroundImage: `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})`,
             boxShadow: '0 8px 24px -10px rgba(0,35,230,0.45)',

@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { theme } from '../lib/theme';
+
+const { colors: c } = theme;
 
 type Phase = 'idle' | 'available' | 'downloading' | 'ready' | 'error';
 
@@ -22,7 +25,7 @@ export default function UpdateBanner() {
   const base: React.CSSProperties = {
     position: 'fixed', bottom: 0, left: 0, right: 0,
     padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12,
-    background: '#0023e6', color: '#fff', fontSize: 13, zIndex: 9999,
+    background: c.primary, color: c.onAccent, fontSize: 13, zIndex: 9999,
     boxShadow: '0 -2px 12px rgba(0,0,0,0.3)',
   };
 
@@ -31,7 +34,7 @@ export default function UpdateBanner() {
       <div style={base}>
         <span>⬇ Downloading update {version} — {percent}%</span>
         <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 2 }}>
-          <div style={{ width: `${percent}%`, height: '100%', background: '#fff', borderRadius: 2 }} />
+          <div style={{ width: `${percent}%`, height: '100%', background: c.onAccent, borderRadius: 2 }} />
         </div>
       </div>
     );
@@ -43,7 +46,7 @@ export default function UpdateBanner() {
         <span style={{ flex: 1 }} />
         <button
           onClick={() => window.electronAPI.installUpdate()}
-          style={{ background: '#fff', color: '#0023e6', border: 0, padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+          style={{ background: c.onAccent, color: c.primary, border: 0, padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
         >
           Restart & Update
         </button>

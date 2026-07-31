@@ -267,10 +267,10 @@ export default function DialerKeypad({
               alignContent: 'center',
               padding: 0,
               borderRadius: t.radius,
-              background: 'linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04))',
-              border: '1px solid rgba(255,255,255,0.12)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 4px 14px -10px rgba(0,0,0,0.8)',
-              color: '#E8EEFB',
+              background: `linear-gradient(160deg, rgba(255,255,255,0.09), ${c.overlay04})`,
+              border: `1px solid ${c.overlay12}`,
+              boxShadow: `inset 0 1px 0 ${c.overlay10}, 0 4px 14px -10px rgba(0,0,0,0.8)`,
+              color: c.text,
               cursor: 'pointer',
               transition: 'background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .12s ease',
               willChange: 'transform',
@@ -283,9 +283,9 @@ export default function DialerKeypad({
             }}
             onMouseLeave={(e) => {
               const el = e.currentTarget as HTMLButtonElement;
-              el.style.background = 'linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04))';
-              el.style.borderColor = 'rgba(255,255,255,0.12)';
-              el.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.10), 0 4px 14px -10px rgba(0,0,0,0.8)';
+              el.style.background = `linear-gradient(160deg, rgba(255,255,255,0.09), ${c.overlay04})`;
+              el.style.borderColor = c.overlay12;
+              el.style.boxShadow = `inset 0 1px 0 ${c.overlay10}, 0 4px 14px -10px rgba(0,0,0,0.8)`;
             }}
 
           >

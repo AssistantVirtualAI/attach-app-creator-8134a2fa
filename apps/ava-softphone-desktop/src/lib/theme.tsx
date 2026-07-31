@@ -190,10 +190,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     set('glass', t.glass);
     set('glass-border', t.glassBorder);
     set('shadow', t.shadow);
-    root.style.background = t.bg;
+    // Global background uses the themed gradient (fixed so it never scrolls).
+    root.style.background = t.bgGradient;
+    root.style.backgroundColor = t.bg;
+    root.style.backgroundAttachment = 'fixed';
     root.style.color = t.text;
-    document.body.style.background = t.bg;
+    document.body.style.background = t.bgGradient;
+    document.body.style.backgroundColor = t.bg;
+    document.body.style.backgroundAttachment = 'fixed';
     document.body.style.color = t.text;
+
   }, [mode, t]);
 
 
@@ -282,7 +288,20 @@ export const theme = {
     avaViolet: '#7a4cff',
     textIce: v('text', '#0b1530'),
     mutedSilver: v('text-muted', '#5e6c8a'),
+
+    /* Foreground used on top of saturated accent/danger/success fills.
+       Constant by design — it must stay readable in every theme. */
+    onAccent: v('on-accent', '#ffffff'),
+    /* Translucent surface overlays (theme-aware: white on dark, ink on light). */
+    overlay02: v('overlay-02', 'rgba(255,255,255,0.02)'),
+    overlay04: v('overlay-04', 'rgba(255,255,255,0.04)'),
+    overlay06: v('overlay-06', 'rgba(255,255,255,0.06)'),
+    overlay08: v('overlay-08', 'rgba(255,255,255,0.08)'),
+    overlay10: v('overlay-10', 'rgba(255,255,255,0.10)'),
+    overlay12: v('overlay-12', 'rgba(255,255,255,0.12)'),
+    overlay18: v('overlay-18', 'rgba(255,255,255,0.18)'),
   },
+
   gradients: {
     aurora: v('accent-gradient', 'linear-gradient(135deg, #0023e6 0%, #4d6dff 45%, #21d4fd 100%)'),
     auroraSubtle: 'linear-gradient(135deg, rgba(0,35,230,0.18), rgba(33,212,253,0.12))',

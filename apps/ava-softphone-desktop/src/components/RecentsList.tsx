@@ -3,6 +3,11 @@ import { ava, CallRecord } from '@/lib/avaApi';
 import { ArrowUpRight, ArrowDownLeft, PhoneMissed, PhoneCall } from './RowIcons';
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh';
 import { useOrgId } from '@/lib/useOrgId';
+import SkeletonRows from './ui/SkeletonRows';
+import { theme } from '../lib/theme';
+
+const { colors: c } = theme;
+
 
 interface Props {
   extension: string;
@@ -107,8 +112,9 @@ function RecentsListImpl({ extension, onCall }: Props) {
     },
   }, silentLoad);
 
-  if (loading) return <div style={center}>Loading recents…</div>;
-  if (err && rows.length === 0) return <div style={{ ...center, color: '#ff8a8a' }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>Retry</button></div>;
+  if (loading) return <SkeletonRows rows={6} label="Loading recents" />;
+  if (err && rows.length === 0) return <div style={{ ...center, color: c.danger }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>Retry</button></div>;
+
   const filteredRows = rows.filter((r) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
@@ -122,12 +128,12 @@ function RecentsListImpl({ extension, onCall }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {err && (
         <div style={{
-          fontSize: 11, color: '#FFD166', background: 'rgba(255,209,102,0.08)',
-          border: '1px solid rgba(255,209,102,0.25)', borderRadius: 8,
+          fontSize: 11, color: c.gold, background: `${c.gold}14`,
+          border: `1px solid ${c.gold}40`, borderRadius: 8,
           padding: '6px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
         }}>
           <span>{err}</span>
-          <button onClick={() => setErr(null)} style={{ background: 'transparent', border: 'none', color: '#FFD166', cursor: 'pointer', fontSize: 14, lineHeight: 1 }} aria-label="Dismiss">×</button>
+          <button onClick={() => setErr(null)} style={{ background: 'transparent', border: 'none', color: c.gold, cursor: 'pointer', fontSize: 14, lineHeight: 1 }} aria-label="Dismiss">×</button>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, padding: '0 2px' }}>
@@ -145,7 +151,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
         </button>
       </div>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, number, extension…" style={{ flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.06)', color: '#F5F5F7', fontSize: 11, outline: 'none' }} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, number, extension…" style={{ flex: 1, minWidth: 0, padding: '7px 9px', borderRadius: 8, border: `1px solid ${c.border}`, background: c.bgCard, color: c.text, fontSize: 11, outline: 'none' }} />
         {([7, 30] as const).map((d) => <button key={d} onClick={() => setRangeDays(d)} style={{ ...reloadCdrBtn, padding: '6px 8px', opacity: rangeDays === d ? 1 : 0.55 }}>{d}d</button>)}
       </div>
       {filteredRows.map((r) => {
@@ -153,7 +159,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
         const peer = outbound ? (r.to || '?') : (r.from || '?');
         const name = r.customer || (outbound ? null : r.from);
         const missed = r.status === 'missed';
-        const iconColor = missed ? '#EF4444' : outbound ? '#FFD700' : '#10B981';
+        const iconColor = missed ? c.danger : outbound ? c.gold : c.success;
         const initial = (name || peer || '?').toString().charAt(0).toUpperCase();
         return (
           <button key={r.id} onClick={() => onCall(peer)} className="lemtel-row">
@@ -161,8 +167,8 @@ function RecentsListImpl({ extension, onCall }: Props) {
               background: missed
                 ? 'linear-gradient(135deg, #7F1D1D 0%, #DC2626 100%)'
                 : outbound
-                  ? 'linear-gradient(135deg, #C9A84C 0%, #FFD700 100%)'
-                  : 'linear-gradient(135deg, #003DA6 0%, #7C3AED 100%)',
+                  ? `linear-gradient(135deg, #C9A84C 0%, ${c.gold} 100%)`
+                  : `linear-gradient(135deg, ${c.primary} 0%, ${c.ai} 100%)`,
             }}>
               {initial}
             </div>
@@ -170,7 +176,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
               <div style={{
                 fontSize: 13, fontWeight: 600, overflow: 'hidden',
                 textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                color: missed ? '#FCA5A5' : '#F5F5F7',
+                color: missed ? c.danger : c.text,
                 display: 'flex', alignItems: 'center', gap: 6,
               }}>
                 <span style={{ color: iconColor, display: 'inline-flex' }}>
@@ -182,7 +188,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
                 {fmtTime(r.startedAt)}{r.durationSec ? ` · ${fmtDur(r.durationSec)}` : ''}
               </div>
             </div>
-            <span style={{ color: 'rgba(255,215,0,0.6)', display: 'inline-flex' }}>
+            <span style={{ color: `${c.gold}99`, display: 'inline-flex' }}>
               <PhoneCall size={16} />
             </span>
           </button>
@@ -195,13 +201,13 @@ function RecentsListImpl({ extension, onCall }: Props) {
 
 const center: React.CSSProperties = { textAlign: 'center', padding: 48, opacity: 0.5, fontSize: 12, letterSpacing: 0.5 };
 const refreshBtn: React.CSSProperties = {
-  background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)',
-  color: '#FFD700', borderRadius: 8, width: 28, height: 28,
+  background: `${c.gold}14`, border: `1px solid ${c.gold}33`,
+  color: c.gold, borderRadius: 8, width: 28, height: 28,
   cursor: 'pointer', fontSize: 13,
 };
 const reloadCdrBtn: React.CSSProperties = {
-  background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)',
-  color: '#FFD700', borderRadius: 8, padding: '4px 10px',
+  background: `${c.gold}14`, border: `1px solid ${c.gold}40`,
+  color: c.gold, borderRadius: 8, padding: '4px 10px',
   cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
 };
 

@@ -28,7 +28,7 @@ const statusColor = (s: string) => {
   if (s === 'ok') return '#3fce8c';
   if (s === 'no-audio' || s === 'no-transcript') return '#ffd000';
   if (s === 'missing-key') return '#ff9a3c';
-  if (s === 'ai-error' || s === 'error' || s === 'timeout') return '#ff5577';
+  if (s === 'ai-error' || s === 'error' || s === 'timeout') return c.danger;
   if (s === 'forbidden') return '#b388ff';
   return '#8aa0c8';
 };
@@ -121,7 +121,7 @@ export default function AIAuditPanel() {
           style={{
             marginLeft: 'auto', minWidth: 260,
             padding: '7px 11px', borderRadius: 8,
-            border: `1px solid ${c.border}`, background: 'rgba(255,255,255,0.04)',
+            border: `1px solid ${c.border}`, background: c.overlay04,
             color: c.textIce, fontSize: 12,
           }}
         />
@@ -139,7 +139,7 @@ export default function AIAuditPanel() {
         <EmptyState icon="✨" title="No AI requests logged" hint="Every transcription and analysis request will appear here with its status and error code." />
       ) : (
         <div style={{ background: c.bgCard, border: `1px solid ${c.border}`, borderRadius: 12, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '150px 90px 1fr 100px 110px 70px 80px 80px', padding: '10px 14px', fontSize: 10, color: c.mutedSilver, textTransform: 'uppercase', letterSpacing: 0.7, background: 'rgba(255,255,255,0.03)', borderBottom: `1px solid ${c.border}` }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '150px 90px 1fr 100px 110px 70px 80px 80px', padding: '10px 14px', fontSize: 10, color: c.mutedSilver, textTransform: 'uppercase', letterSpacing: 0.7, background: c.overlay02, borderBottom: `1px solid ${c.border}` }}>
             <span>When</span><span>Type</span><span>Call / message</span><span>Error code</span><span>Provider</span><span>Latency</span><span>Status</span><span>Action</span>
           </div>
           {filtered.map((r, i) => (
@@ -162,7 +162,7 @@ export default function AIAuditPanel() {
                 <span style={{ color: c.mutedSilver, fontSize: 10.5 }}>{r.call_record_id ? `#${r.call_record_id.slice(0, 10)}` : '—'}</span>
                 {r.message && <span style={{ color: c.textSub, marginLeft: 8 }}>{r.message}</span>}
               </span>
-              <span style={{ color: r.error_code ? '#ff8a8a' : c.mutedSilver, fontSize: 10, fontFamily: 'Fira Code, monospace' }}>{r.error_code || '—'}</span>
+              <span style={{ color: r.error_code ? c.danger : c.mutedSilver, fontSize: 10, fontFamily: 'Fira Code, monospace' }}>{r.error_code || '—'}</span>
               <span style={{ color: c.mutedSilver, fontSize: 10 }}>{r.provider || '—'}{r.http_status ? ` · ${r.http_status}` : ''}</span>
               <span style={{ color: c.mutedSilver, fontSize: 10 }}>{r.latency_ms ? `${r.latency_ms}ms` : '—'}</span>
               <span style={{

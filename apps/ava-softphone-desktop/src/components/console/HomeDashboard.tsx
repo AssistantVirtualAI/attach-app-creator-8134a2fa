@@ -5,6 +5,7 @@ import { useDashboardStats, AttentionItem, RangeKey, DailySeries, rangeBounds } 
 import { useSyncStatus, formatAge } from '../../hooks/useSyncStatus';
 import { supabase } from '../../lib/supabaseClient';
 import { useTranslation } from '../../lib/i18n';
+import SkeletonRows from '../ui/SkeletonRows';
 
 const { colors: c } = theme;
 
@@ -20,9 +21,9 @@ if (typeof document !== 'undefined' && !document.getElementById(STYLE_ID)) {
   s.textContent = `
     @keyframes avaSlideInRight { from { transform: translateX(24px); opacity: 0 } to { transform: translateX(0); opacity: 1 } }
     @keyframes avaShimmer { 0% { background-position: -200px 0 } 100% { background-position: 200px 0 } }
-    .ava-stat-tile:focus-visible { outline: 3px solid #ffffff; outline-offset: 3px; box-shadow: 0 0 0 5px rgba(0,35,230,0.55), 0 10px 28px -14px rgba(8,14,32,0.45) !important; }
-    .ava-range-btn:focus-visible, .ava-quick-btn:focus-visible, .ava-drawer-close:focus-visible { outline: 3px solid #0023e6; outline-offset: 2px; }
-    .ava-spark-skel { background: linear-gradient(90deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.30) 50%, rgba(255,255,255,0.10) 100%); background-size: 400px 100%; animation: avaShimmer 1.2s linear infinite; }
+    .ava-stat-tile:focus-visible { outline: 3px solid ${c.onAccent}; outline-offset: 3px; box-shadow: 0 0 0 5px rgba(0,35,230,0.55), 0 10px 28px -14px rgba(8,14,32,0.45) !important; }
+    .ava-range-btn:focus-visible, .ava-quick-btn:focus-visible, .ava-drawer-close:focus-visible { outline: 3px solid ${c.primary}; outline-offset: 2px; }
+    .ava-spark-skel { background: linear-gradient(90deg, ${c.overlay10} 0%, rgba(255,255,255,0.30) 50%, ${c.overlay10} 100%); background-size: 400px 100%; animation: avaShimmer 1.2s linear infinite; }
   `;
   document.head.appendChild(s);
 }
@@ -49,11 +50,11 @@ type Tone = {
 // Deeper, AA-contrast tones for white text on the gradient surface.
 const tones: Record<string, Tone> = {
   cyan:   { from: '#0e7490', to: '#0891b2', ring: 'rgba(8,145,178,0.85)',  shadow: 'rgba(8,145,178,0.45)' },
-  red:    { from: '#b91c1c', to: '#dc2626', ring: 'rgba(185,28,28,0.85)',  shadow: 'rgba(185,28,28,0.45)' },
-  green:  { from: '#047857', to: '#0f9d58', ring: 'rgba(4,120,87,0.85)',   shadow: 'rgba(4,120,87,0.45)' },
-  gold:   { from: '#a16207', to: '#d4a73a', ring: 'rgba(161,98,7,0.85)',   shadow: 'rgba(161,98,7,0.45)' },
-  violet: { from: '#5b21b6', to: '#7a4cff', ring: 'rgba(91,33,182,0.85)',  shadow: 'rgba(91,33,182,0.45)' },
-  blue:   { from: '#1e3a8a', to: '#0023e6', ring: 'rgba(0,35,230,0.85)',   shadow: 'rgba(0,35,230,0.45)' },
+  red:    { from: '#b91c1c', to: c.danger, ring: 'rgba(185,28,28,0.85)',  shadow: 'rgba(185,28,28,0.45)' },
+  green:  { from: '#047857', to: c.success, ring: 'rgba(4,120,87,0.85)',   shadow: 'rgba(4,120,87,0.45)' },
+  gold:   { from: '#a16207', to: c.gold, ring: 'rgba(161,98,7,0.85)',   shadow: 'rgba(161,98,7,0.45)' },
+  violet: { from: '#5b21b6', to: c.ai, ring: 'rgba(91,33,182,0.85)',  shadow: 'rgba(91,33,182,0.45)' },
+  blue:   { from: '#1e3a8a', to: c.primary, ring: 'rgba(0,35,230,0.85)',   shadow: 'rgba(0,35,230,0.45)' },
   pink:   { from: '#9d174d', to: '#db2777', ring: 'rgba(157,23,77,0.85)',  shadow: 'rgba(157,23,77,0.45)' },
   slate:  { from: '#334155', to: '#475569', ring: 'rgba(51,65,85,0.85)',   shadow: 'rgba(51,65,85,0.45)' },
 };
@@ -81,7 +82,7 @@ function Sparkline({
     return (
       <div aria-hidden style={{
         width: '100%', height: 28, borderRadius: 6,
-        background: 'rgba(255,255,255,0.10)',
+        background: c.overlay10,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 10, color: 'rgba(255,255,255,0.7)', fontWeight: 600,
       }}>no activity</div>
@@ -126,7 +127,7 @@ function Stat({
         display: 'flex', flexDirection: 'column', gap: 6,
         position: 'relative', overflow: 'hidden',
         boxShadow: `0 10px 28px -14px ${tone.shadow}, inset 0 1px 0 rgba(255,255,255,0.35)`,
-        color: '#fff',
+        color: c.onAccent,
         cursor: interactive ? 'pointer' : 'default',
         font: 'inherit',
       }}>
@@ -136,7 +137,7 @@ function Stat({
         pointerEvents: 'none',
       }} />
       <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.6, textTransform: 'uppercase', color: 'rgba(255,255,255,0.95)', position: 'relative' }}>{label}</span>
-      <span className="tabular-nums" style={{ fontSize: 32, fontWeight: 700, color: '#fff', fontFamily: "'Space Grotesk', sans-serif", letterSpacing: -0.6, lineHeight: 1.05, position: 'relative', textShadow: '0 2px 12px rgba(0,0,0,0.20)' }}>{displayValue}</span>
+      <span className="tabular-nums" style={{ fontSize: 32, fontWeight: 700, color: c.onAccent, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: -0.6, lineHeight: 1.05, position: 'relative', textShadow: '0 2px 12px rgba(0,0,0,0.20)' }}>{displayValue}</span>
       <div style={{ position: 'relative', marginTop: 2 }}>
         <Sparkline data={series || []} loading={loading} error={error || null} />
       </div>
@@ -352,7 +353,7 @@ export default function HomeDashboard({
               background: active
                 ? `linear-gradient(135deg, ${tones.blue.from}, ${tones.cyan.to})`
                 : 'rgba(255,255,255,0.92)',
-              color: active ? '#fff' : c.textIce,
+              color: active ? c.onAccent : c.textIce,
               fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
               cursor: 'pointer',
               boxShadow: active ? `0 6px 18px -8px ${tones.blue.shadow}` : 'none',
@@ -476,23 +477,23 @@ export default function HomeDashboard({
                 border: `1px solid ${tone.ring}`,
                 borderRadius: 14,
                 boxShadow: `0 10px 24px -14px ${tone.shadow}`,
-                color: '#fff',
+                color: c.onAccent,
               }}>
                 <div style={{
                   width: 38, height: 38, borderRadius: 12,
                   background: 'rgba(255,255,255,0.22)',
                   border: '1px solid rgba(255,255,255,0.35)',
-                  display: 'grid', placeItems: 'center', color: '#fff',
+                  display: 'grid', placeItems: 'center', color: c.onAccent,
                   fontWeight: 800, fontSize: 14,
                 }}>{it.tag.charAt(0)}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#fff' }}>{it.title}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: c.onAccent }}>{it.title}</div>
                   <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.92)', marginTop: 2 }}>{it.detail}</div>
                 </div>
                 <span style={{
                   fontSize: 10, fontWeight: 800, letterSpacing: 0.8,
                   padding: '5px 10px', borderRadius: 999,
-                  background: 'rgba(255,255,255,0.22)', color: '#fff',
+                  background: 'rgba(255,255,255,0.22)', color: c.onAccent,
                   border: '1px solid rgba(255,255,255,0.45)',
                 }}>{it.tag}</span>
               </div>
@@ -524,7 +525,7 @@ const quickBtn = (tone: Tone): React.CSSProperties => ({
   background: `linear-gradient(135deg, ${tone.from}, ${tone.to})`,
   border: `1px solid ${tone.ring}`,
   borderRadius: 12,
-  color: '#fff', fontSize: 13, fontWeight: 700, letterSpacing: 0.2,
+  color: c.onAccent, fontSize: 13, fontWeight: 700, letterSpacing: 0.2,
   cursor: 'pointer',
   transition: 'all 200ms cubic-bezier(.2,.7,.2,1)',
   boxShadow: `0 8px 20px -12px ${tone.shadow}, inset 0 1px 0 rgba(255,255,255,0.3)`,
@@ -680,11 +681,11 @@ function MetricDetailDrawer(props: {
         <div style={{
           padding: '16px 18px',
           background: `linear-gradient(135deg, ${tone.from}, ${tone.to})`,
-          color: '#fff', display: 'flex', alignItems: 'center', gap: 12,
+          color: c.onAccent, display: 'flex', alignItems: 'center', gap: 12,
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.6, textTransform: 'uppercase', opacity: 0.95 }}>Detail</div>
-            <h2 id={titleId} style={{ fontSize: 17, fontWeight: 700, margin: '2px 0 0', lineHeight: 1.25, color: '#fff' }}>{title}</h2>
+            <h2 id={titleId} style={{ fontSize: 17, fontWeight: 700, margin: '2px 0 0', lineHeight: 1.25, color: c.onAccent }}>{title}</h2>
           </div>
           <button
             ref={closeBtnRef}
@@ -692,7 +693,7 @@ function MetricDetailDrawer(props: {
             aria-label="Close detail panel"
             className="ava-drawer-close"
             style={{
-              background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.45)',
+              background: c.overlay18, color: c.onAccent, border: '1px solid rgba(255,255,255,0.45)',
               borderRadius: 10, padding: '6px 10px', cursor: 'pointer', fontWeight: 700, fontSize: 12,
             }}>Close</button>
         </div>
@@ -730,7 +731,7 @@ function MetricDetailDrawer(props: {
 
         <div style={{ flex: 1, overflow: 'auto', padding: 16 }} aria-busy={loading} aria-live="polite">
           {loading ? (
-            <div role="status" style={{ padding: 24, textAlign: 'center', color: c.mutedSilver, fontSize: 13 }}>Loading detail…</div>
+            <SkeletonRows rows={4} padding={20} label="Loading detail" />
           ) : error ? (
             <div role="alert" style={{
               padding: 16, borderRadius: 10,

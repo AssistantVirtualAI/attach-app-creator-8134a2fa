@@ -72,7 +72,7 @@ function DockBtn({ label, active, accent, onClick, hint }: { label: string; acti
   return (
     <button onClick={onClick} title={hint} style={{
       padding: '7px 11px', borderRadius: 9,
-      background: active ? `${accent}22` : 'rgba(255,255,255,0.04)',
+      background: active ? `${accent}22` : c.overlay04,
       border: `1px solid ${active ? accent + '90' : c.border}`,
       color: active ? accent : c.mutedSilver,
       fontSize: 11, fontWeight: 700, cursor: 'pointer',

@@ -30,7 +30,7 @@ export default function LanguageSwitcher({ compact }: { compact?: boolean }) {
               padding: compact ? '2px 8px' : '3px 10px',
               borderRadius: 999, border: 'none', cursor: 'pointer',
               background: active ? `linear-gradient(135deg, ${c.lemtelBlue}, ${c.avaViolet})` : 'transparent',
-              color: active ? '#fff' : c.mutedSilver,
+              color: active ? c.onAccent : c.mutedSilver,
               fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase',
             }}
           >

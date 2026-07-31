@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import SkeletonRows from './ui/SkeletonRows';
 
 interface AuditEntry {
   id: string; run_id: string; event: string; status: string;
@@ -119,7 +120,7 @@ export function CallIntelligencePanel({ callId, canRegenerate = false }: { callI
 
   useEffect(() => { setLoading(true); run(false); /* eslint-disable-next-line */ }, [callId]);
 
-  if (loading) return <div className="rounded-md border p-3 text-sm opacity-70">Loading AI analysis…</div>;
+  if (loading) return <SkeletonRows rows={3} padding={12} label="Loading AI analysis" />;
 
   const sColor = data.sentiment === "positive" ? "text-emerald-500" : data.sentiment === "negative" ? "text-red-500" : "opacity-70";
 

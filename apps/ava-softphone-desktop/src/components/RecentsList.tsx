@@ -188,7 +188,7 @@ function RecentsListImpl({ extension, onCall }: Props) {
                 {fmtTime(r.startedAt)}{r.durationSec ? ` · ${fmtDur(r.durationSec)}` : ''}
               </div>
             </div>
-            <span style={{ color: 'rgba(255,215,0,0.6)', display: 'inline-flex' }}>
+            <span style={{ color: `${c.gold}99`, display: 'inline-flex' }}>
               <PhoneCall size={16} />
             </span>
           </button>
@@ -201,12 +201,12 @@ function RecentsListImpl({ extension, onCall }: Props) {
 
 const center: React.CSSProperties = { textAlign: 'center', padding: 48, opacity: 0.5, fontSize: 12, letterSpacing: 0.5 };
 const refreshBtn: React.CSSProperties = {
-  background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.2)',
+  background: `${c.gold}14`, border: `1px solid ${c.gold}33`,
   color: c.gold, borderRadius: 8, width: 28, height: 28,
   cursor: 'pointer', fontSize: 13,
 };
 const reloadCdrBtn: React.CSSProperties = {
-  background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.25)',
+  background: `${c.gold}14`, border: `1px solid ${c.gold}40`,
   color: c.gold, borderRadius: 8, padding: '4px 10px',
   cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: 0.4,
 };

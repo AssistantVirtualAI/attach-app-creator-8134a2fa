@@ -13,6 +13,7 @@ import BrandTagline from './BrandTagline';
 import { AppErrorBoundary } from './AppErrorBoundary';
 import { theme } from '../lib/theme';
 import DialerKeypad from './DialerKeypad';
+import SipRecoveryBanner from './SipRecoveryBanner';
 import { ava } from '../lib/avaApi';
 import {
   Phone, MessageCircle, LayoutGrid, Grid3x3, User,
@@ -327,7 +328,7 @@ export default function SoftphonePane({
       const number = detail?.number;
       if (!number) return;
       setDial(number);
-      setTimeout(() => { if (sp.snap.status === 'registered') sp.call(number); }, 80);
+      setTimeout(() => { if (sp.snap.status === 'registered') sp.call(number); else sp.retryNow(); }, 80);
     };
     window.addEventListener('lemtel:dial-number', onDialNumber as EventListener);
     return () => window.removeEventListener('lemtel:dial-number', onDialNumber as EventListener);
@@ -341,6 +342,7 @@ export default function SoftphonePane({
       setDial(number);
       setTimeout(() => {
         if (sp.snap.status === 'registered') sp.call(number);
+        else sp.retryNow();
       }, 1000);
     });
   }, []);

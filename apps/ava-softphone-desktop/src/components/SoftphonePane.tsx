@@ -4,6 +4,7 @@ import RecentsList from './RecentsList';
 import ContactsList from './ContactsList';
 import VoicemailList from './VoicemailList';
 import SmsThreads from './SmsThreads';
+import OrgChatView from './console/OrgChatView';
 import RecordingsList from './RecordingsList';
 import CallForwarding from './CallForwarding';
 import LemtelLogo from './LemtelLogo';
@@ -38,6 +39,7 @@ interface Creds {
 
 type Tab = 'keypad' | 'chats' | 'calls' | 'contacts' | 'speeddial';
 type CallsSubTab = 'recents' | 'recordings' | 'voicemail';
+type ChatsSubTab = 'team' | 'sms';
 
 const MAIN_TABS: Tab[] = ['contacts', 'chats', 'calls', 'keypad', 'speeddial'];
 
@@ -76,6 +78,7 @@ export default function SoftphonePane({
   const syncAfterCallRef = useRef(false);
   const [tab, setTab] = useState<Tab>('keypad');
   const [callsSubTab, setCallsSubTab] = useState<CallsSubTab>('recents');
+  const [chatsSubTab, setChatsSubTab] = useState<ChatsSubTab>('team');
   const [showAvaChat, setShowAvaChat] = useState(false);
   const [dial, setDial] = useState('');
   const [timer, setTimer] = useState(0);
@@ -638,10 +641,45 @@ export default function SoftphonePane({
           />
         )}
 
-        {/* Chats (SMS) */}
+        {/* Chats — Team Chat + SMS */}
         {!inCall && !ringing && tab === 'chats' && (
-          <div style={{ animation: 'fadeIn .25s ease-out' }}>
-            <SmsThreads />
+          <div style={{ animation: 'fadeIn .25s ease-out', display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* Sous-onglets Team / SMS */}
+            <div style={{ padding: compact ? '8px 10px 4px' : '10px 14px 6px', flexShrink: 0 }}>
+              <div style={{
+                display: 'flex', gap: 4,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 14, padding: 4,
+              }}>
+                {(['team', 'sms'] as ChatsSubTab[]).map((st) => {
+                  const active = chatsSubTab === st;
+                  const labels: Record<ChatsSubTab, string> = { team: 'Team Chat', sms: 'SMS' };
+                  return (
+                    <button
+                      key={st}
+                      onClick={() => setChatsSubTab(st)}
+                      style={{
+                        flex: 1, padding: '7px 4px', borderRadius: 10, fontSize: 11,
+                        fontWeight: active ? 800 : 600, letterSpacing: 0.5,
+                        border: 'none',
+                        background: active
+                          ? 'linear-gradient(135deg, #0023e6 0%, #2a4dff 50%, #E0A800 140%)'
+                          : 'transparent',
+                        color: active ? '#fff' : '#7C8AA8',
+                        cursor: 'pointer',
+                        transition: 'all .18s ease',
+                      }}
+                    >{labels[st]}</button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Contenu du sous-onglet */}
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              {chatsSubTab === 'team' && <OrgChatView />}
+              {chatsSubTab === 'sms' && <SmsThreads />}
+            </div>
           </div>
         )}
 

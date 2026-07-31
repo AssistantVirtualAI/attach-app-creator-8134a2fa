@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
+import { theme } from '../lib/theme';
+
+const { colors: c } = theme;
   sipProvider,
   isSdpWorkaroundEnabled,
   setSdpWorkaroundEnabled,
@@ -36,8 +39,8 @@ export default function SipDebugView() {
   }, []);
 
   const card: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: c.overlay04,
+    border: `1px solid ${c.overlay08}`,
     borderRadius: 12, padding: 14, display: 'flex', flexDirection: 'column', gap: 10,
   };
   const label: React.CSSProperties = {
@@ -60,8 +63,8 @@ export default function SipDebugView() {
             style={{
               padding: '8px 14px', borderRadius: 999, cursor: 'pointer',
               border: `1px solid ${workaround ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.15)'}`,
-              background: workaround ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.04)',
-              color: workaround ? '#86efac' : '#fff', fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
+              background: workaround ? 'rgba(34,197,94,0.18)' : c.overlay04,
+              color: workaround ? '#86efac' : c.onAccent, fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
             }}
           >{workaround ? 'ENABLED' : 'DISABLED'}</button>
         </div>
@@ -123,7 +126,7 @@ export default function SipDebugView() {
             <div key={a.id} style={{
               fontSize: 10.5, fontFamily: 'JetBrains Mono, Menlo, monospace',
               padding: '6px 8px', borderRadius: 6,
-              background: a.outcome === 'failed' ? 'rgba(244,63,94,0.12)' : 'rgba(255,255,255,0.04)',
+              background: a.outcome === 'failed' ? 'rgba(244,63,94,0.12)' : c.overlay04,
               color: a.outcome === 'failed' ? '#fda4af' : '#cfe',
               display: 'flex', justifyContent: 'space-between', gap: 8,
             }}>
@@ -141,8 +144,8 @@ export default function SipDebugView() {
 function btnStyle(): React.CSSProperties {
   return {
     padding: '6px 10px', borderRadius: 8, cursor: 'pointer',
-    background: 'rgba(255,255,255,0.06)', color: '#fff',
-    border: '1px solid rgba(255,255,255,0.12)', fontSize: 10, fontWeight: 700,
+    background: c.overlay06, color: c.onAccent,
+    border: `1px solid ${c.overlay12}`, fontSize: 10, fontWeight: 700,
     letterSpacing: 0.5, textTransform: 'uppercase',
   };
 }

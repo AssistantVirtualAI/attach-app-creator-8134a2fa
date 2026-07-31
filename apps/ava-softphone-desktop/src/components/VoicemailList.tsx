@@ -4,6 +4,9 @@ import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh';
 import { useOrgId } from '@/lib/useOrgId';
 import { audit } from '@/lib/audit';
 import SkeletonRows from './ui/SkeletonRows';
+import { theme } from '../lib/theme';
+
+const { colors: c } = theme;
 
 interface Props {
   extension: string;
@@ -86,7 +89,7 @@ export default function VoicemailList({ extension, onCall }: Props) {
   };
 
   if (loading) return <SkeletonRows rows={5} label="Loading voicemail" />;
-  if (err) return <div style={{ ...center, color: '#ff8a8a' }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>Retry</button></div>;
+  if (err) return <div style={{ ...center, color: c.danger }}>{err}<br /><button onClick={() => load()} style={refreshBtn}>Retry</button></div>;
   if (rows.length === 0) return <div style={center}>No voicemail</div>;
 
   return (
@@ -102,7 +105,7 @@ export default function VoicemailList({ extension, onCall }: Props) {
         return (
           <div key={r.id} style={rowBox}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ color: '#FFD700', fontSize: 16, width: 20 }}>✉</span>
+              <span style={{ color: c.gold, fontSize: 16, width: 20 }}>✉</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {name}
@@ -118,7 +121,7 @@ export default function VoicemailList({ extension, onCall }: Props) {
               <audio src={audio[r.id]} controls autoPlay style={{ width: '100%', marginTop: 8, height: 32 }} />
             )}
             {r.transcript && (
-              <div style={{ fontSize: 11, opacity: 0.7, marginTop: 6, padding: 6, background: 'rgba(255,255,255,0.04)', borderRadius: 6 }}>
+              <div style={{ fontSize: 11, opacity: 0.7, marginTop: 6, padding: 6, background: c.overlay04, borderRadius: 6 }}>
                 {r.transcript}
               </div>
             )}
@@ -131,14 +134,14 @@ export default function VoicemailList({ extension, onCall }: Props) {
 
 const center: React.CSSProperties = { textAlign: 'center', padding: 40, opacity: 0.5, fontSize: 12 };
 const rowBox: React.CSSProperties = {
-  background: 'linear-gradient(155deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)', border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 14, padding: 10, color: '#E8EEFB',
+  background: `linear-gradient(155deg, ${c.overlay06} 0%, ${c.overlay02} 100%)`, border: `1px solid ${c.overlay08}`,
+  borderRadius: 14, padding: 10, color: c.text,
 };
 const iconAct: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff',
+  background: c.overlay08, border: 'none', color: c.onAccent,
   borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontSize: 12,
 };
 const refreshBtn: React.CSSProperties = {
-  background: 'none', border: 'none', color: '#7C8AA8',
+  background: 'none', border: 'none', color: c.textDim,
   cursor: 'pointer', fontSize: 14,
 };

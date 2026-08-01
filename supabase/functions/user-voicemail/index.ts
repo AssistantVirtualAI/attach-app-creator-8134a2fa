@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { callAnthropic } from "../_shared/anthropic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -197,7 +198,8 @@ Deno.serve(async (req) => {
       if (!vm.audio_storage_path) return json({ error: "no_audio" }, 400);
       const { data: file, error } = await admin.storage.from("voicemail-audio").download(vm.audio_storage_path);
       if (error) throw error;
-      const transcript = await transcribeAudio(file);
+      const raw = await transcribeAudio(file);
+      const transcript = await cleanupTranscript(raw);
       await admin.from("pbx_voicemails").update({ transcript }).eq("id", payload.id);
       return json({ transcript });
     }

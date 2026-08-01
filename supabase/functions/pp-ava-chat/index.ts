@@ -245,10 +245,14 @@ Deno.serve(async (req) => {
         if (!MAESTRO_READ_ACTIONS.has(action) && body?.approved !== true) {
           return json({ reply: L("Cette action Maestro nécessite votre confirmation.", "This Maestro action requires your confirmation."), suggestions: [confirmAction] });
         }
-        const exec = await invokeFunction("maestro-actions", authHeader, { action, payload });
+        const isList = action === "list_clients" || action === "list_brokers" || action === "list_contacts";
+        const offset = Math.max(0, Number(payload.offset ?? 0) || 0);
+        const pageSize = Math.max(1, Math.min(50, Number(payload.page_size ?? MAESTRO_PAGE_SIZE)));
+        const execPayload = isList ? { ...payload, offset, page_size: pageSize } : payload;
+        const exec = await invokeFunction("maestro-actions", authHeader, { action, payload: execPayload });
         const d: any = exec.data ?? {};
         const ok = !!d.success && exec.ok;
-        await logAvaAction(admin, profile, u.user.id, `maestro_${action}`, payload, ok, d, ok ? null : (d.error ?? `HTTP ${exec.status}`));
+        await logAvaAction(admin, profile, u.user.id, `maestro_${action}`, execPayload, ok, d, ok ? null : (d.error ?? `HTTP ${exec.status}`));
 
         if (!ok) {
           const err = String(d.error ?? `HTTP ${exec.status}`);
@@ -259,16 +263,33 @@ Deno.serve(async (req) => {
           return json({ reply, result: d, suggestions: [] });
         }
 
-        if (action === "list_clients" || action === "list_brokers" || action === "list_contacts") {
+        if (isList) {
           const rows: any[] = d.clients ?? d.brokers ?? d.contacts ?? d.data ?? [];
+          const total = Number(d.total ?? rows.length);
           const title = action === "list_brokers"
             ? L("Courtiers Maestro", "Maestro brokers")
             : L("Clients Maestro", "Maestro clients");
+          const from = rows.length ? offset + 1 : 0;
+          const to = offset + rows.length;
+          const header = total > rows.length
+            ? `${title} — ${from}-${to} ${L("sur", "of")} ${total}`
+            : `${title} (${rows.length})`;
+          const suggestions = d.has_more
+            ? [{
+                id: `maestro-next-${action}-${d.next_offset}`,
+                label: L(`Voir les ${Math.min(pageSize, total - to)} suivants`, `Show next ${Math.min(pageSize, total - to)}`),
+                kind: "maestro_action",
+                payload: { ...payload, action, offset: d.next_offset, page_size: pageSize },
+              }]
+            : [];
           return json({
-            reply: `${title} (${rows.length}):\n${fmtMaestroList(rows, lang)}`,
-            result: d, suggestions: [],
+            reply: `${header}:\n${fmtMaestroList(rows, lang, offset)}`,
+            result: d,
+            pagination: { offset, page_size: pageSize, total, has_more: !!d.has_more, next_offset: d.next_offset ?? null },
+            suggestions,
           });
         }
+
         if (action === "client_profile" || action === "broker_profile") {
           const p = d.profile ?? d.data ?? d;
           const name = p?.name ?? p?.full_name ?? [p?.first_name, p?.last_name].filter(Boolean).join(" ");

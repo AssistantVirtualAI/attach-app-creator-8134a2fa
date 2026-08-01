@@ -26,10 +26,12 @@ Deno.serve(async (req) => {
 
   // Auth: caller must be a Planiprêt/super admin.
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return json({ error: "Unauthorized" }, 401);
   // Service-role callers (ops/cron) are trusted directly; otherwise require an admin JWT.
-  const isServiceRole = token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const opsKey = Deno.env.get("PP_OPS_KEY");
+  const isOps = !!opsKey && req.headers.get("x-ops-key") === opsKey;
+  const isServiceRole = isOps || token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!isServiceRole) {
+    if (!token) return json({ error: "Unauthorized" }, 401);
     const { data: userRes } = await admin.auth.getUser(token);
     const uid = userRes?.user?.id;
     if (!uid) return json({ error: "Unauthorized" }, 401);

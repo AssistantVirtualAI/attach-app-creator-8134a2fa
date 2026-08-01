@@ -437,22 +437,64 @@ export default function MAvaChat() {
                         </button>
                       </div>
                     </div>
-                    {m.suggestions && m.suggestions.length > 0 && (
-                      <div className="ml-9 flex flex-wrap gap-1.5">
-                        {m.suggestions.map((s) => (
-                          <button
-                            key={s.id}
-                            onClick={() => runSuggestion(s)}
-                            disabled={!!runningSuggestion}
-                            className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 disabled:opacity-50 transition"
-                            style={{ background: "rgba(34,211,238,0.10)", border: "1px solid rgba(34,211,238,0.30)", color: "var(--pp-brand-accent)" }}
-                          >
-                            {runningSuggestion === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
-                            {s.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    {(() => {
+                      const all = m.suggestions ?? [];
+                      const pagers = all.filter(isPagerSuggestion);
+                      const normal = all.filter((s) => !isPagerSuggestion(s));
+                      const pg = m.pagination;
+                      const prev = pagers.find((s) => s.id.startsWith("maestro-prev-"));
+                      const next = pagers.find((s) => s.id.startsWith("maestro-next-"));
+                      return (
+                        <>
+                          {(prev || next || (pg && (pg.total ?? 0) > (pg.page_size ?? 0))) && (
+                            <div
+                              className="ml-9 mt-1.5 flex items-center gap-2 rounded-xl px-2 py-1.5"
+                              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+                            >
+                              <button
+                                onClick={() => prev && runSuggestion(prev)}
+                                disabled={!prev || !!runningSuggestion}
+                                aria-label={lang === "fr" ? "Page précédente" : "Previous page"}
+                                className="w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-30 transition"
+                                style={{ background: "rgba(34,211,238,0.12)", color: "var(--pp-brand-accent)" }}
+                              >
+                                {runningSuggestion === prev?.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronLeft className="w-4 h-4" />}
+                              </button>
+                              <span className="flex-1 text-center text-[11px] font-semibold" style={{ color: "var(--pp-text-muted)" }}>
+                                {pg
+                                  ? `${(pg.offset ?? 0) + 1}–${(pg.offset ?? 0) + Math.min(pg.page_size ?? 0, Math.max(0, (pg.total ?? 0) - (pg.offset ?? 0)))} ${lang === "fr" ? "sur" : "of"} ${pg.total ?? 0}`
+                                  : lang === "fr" ? "Navigation" : "Navigation"}
+                              </span>
+                              <button
+                                onClick={() => next && runSuggestion(next)}
+                                disabled={!next || !!runningSuggestion}
+                                aria-label={lang === "fr" ? "Page suivante" : "Next page"}
+                                className="w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-30 transition"
+                                style={{ background: "rgba(34,211,238,0.12)", color: "var(--pp-brand-accent)" }}
+                              >
+                                {runningSuggestion === next?.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          )}
+                          {normal.length > 0 && (
+                            <div className="ml-9 flex flex-wrap gap-1.5">
+                              {normal.map((s) => (
+                                <button
+                                  key={s.id}
+                                  onClick={() => runSuggestion(s)}
+                                  disabled={!!runningSuggestion}
+                                  className="text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 disabled:opacity-50 transition"
+                                  style={{ background: "rgba(34,211,238,0.10)", border: "1px solid rgba(34,211,238,0.30)", color: "var(--pp-brand-accent)" }}
+                                >
+                                  {runningSuggestion === s.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                                  {s.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <div

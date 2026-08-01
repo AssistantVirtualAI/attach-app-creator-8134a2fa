@@ -235,7 +235,7 @@ export default function MAvaChat() {
         ...m.map((msg) => (msg.suggestions?.some((x) => x.id === suggestion.id)
           ? { ...msg, suggestions: msg.suggestions.filter((x) => x.id !== suggestion.id) }
           : msg)),
-        { id: `act-${Date.now()}`, role: "assistant" as const, message: replyText, suggestions: nextSuggestions, created_at: new Date().toISOString() },
+        { id: `act-${Date.now()}`, role: "assistant" as const, message: replyText, suggestions: nextSuggestions, pagination: (data as any)?.pagination ?? undefined, created_at: new Date().toISOString() },
       ]);
       if ((data as any)?.result?.ok === false || (data as any)?.result?.success === false) {
         toast.error(t("avaChat.actionFailedPrefix") + ((data as any)?.result?.error ?? t("avaChat.actionUnknownError")));

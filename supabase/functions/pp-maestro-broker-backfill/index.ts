@@ -139,17 +139,20 @@ Deno.serve(async (req) => {
         (sipUser && byExt.get(sipUser)) ||
         (extAlt && byExt.get(extAlt)) ||
         phones.map((n) => byPhone.get(n)).find(Boolean);
-      if (match && !assignments.has(match.id)) assignments.set(match.id, String(id));
+      if (match && !assignments.has(match.id)) { assignments.set(match.id, String(id)); matchedBy.set(match.id, "sip"); }
     } catch { /* ignore individual probe errors */ }
   };
 
-  for (let start = 1; start <= maxId; start += concurrency) {
-    const ids = Array.from(
-      { length: Math.min(concurrency, maxId - start + 1) },
-      (_, i) => start + i,
-    );
-    await Promise.all(ids.map(probe));
+  if (stillMissing > 0 && body.skip_sip !== true) {
+    for (let start = 1; start <= maxId; start += concurrency) {
+      const ids = Array.from(
+        { length: Math.min(concurrency, maxId - start + 1) },
+        (_, i) => start + i,
+      );
+      await Promise.all(ids.map(probe));
+    }
   }
+
 
   // 3) Persist.
   let updated = 0;

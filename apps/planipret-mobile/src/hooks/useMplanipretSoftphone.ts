@@ -56,6 +56,7 @@ import {
   type AnsweredBy,
 } from "@/lib/planipret/calls/callSessionSync";
 import { maestroTelecom } from "@/lib/planipret/maestroTelecom";
+import { postOutboundCall, postInboundCall, wasPostedToMaestro } from "@/lib/planipret/maestroCallPosting";
 
 // Fire-and-forget Maestro logging — never blocks the call flow.
 const maestroLog = (fn: () => Promise<unknown>) => {
@@ -779,6 +780,27 @@ export function useMplanipretSoftphone(enabled = true) {
     return () => { unsub(); };
   }, [snap.callId, snap.callState, snap.direction, snap.remoteNumber, brokerId]);
 
+  // Maestro call records (Scott's rules): outbound always, inbound only when
+  // the caller is not another broker's VoIP number.
+  useEffect(() => {
+    const callId = snap.callId;
+    if (!callId) return;
+    const ringing = snap.callState === "ringing-in" || snap.callState === "ringing-out" || snap.callState === "active";
+    if (!ringing) return;
+    if (snap.direction === "out") {
+      postOutboundCall({ providerCallId: callId, number: snap.remoteNumber || snap.remoteIdentity || "" });
+    } else if (snap.direction === "in") {
+      postInboundCall({ providerCallId: callId, number: snap.remoteNumber || snap.remoteIdentity || "" });
+    }
+  }, [snap.callId, snap.callState, snap.direction, snap.remoteNumber, snap.remoteIdentity]);
+
+  // Push VoIP ring arrives before the INVITE — post the inbound call as soon as
+  // we know the caller (rule 3), de-duplicated by provider_call_id.
+  useEffect(() => {
+    if (!pushRing?.callId) return;
+    postInboundCall({ providerCallId: pushRing.callId, number: pushRing.from || "" });
+  }, [pushRing?.callId, pushRing?.from]);
+
   // Mark session ended when local call ends.
   useEffect(() => {
     if (snap.callState !== "ended" || !snap.callId) return;
@@ -908,12 +930,8 @@ export function useMplanipretSoftphone(enabled = true) {
         status: "ringing-out",
         startedAt: Date.now(),
       });
-      maestroLog(() => maestroTelecom.createCall({
-        provider_call_id: callId,
-        to_user_number: destination,
-        status: "dialing",
-        direction: "outbound",
-      }));
+      // Rules 1 & 2 — always post outbound calls to Maestro.
+      postOutboundCall({ providerCallId: callId, number: destination });
     }
     return { via: "pbx", ok: true, callId };
   }, []);
@@ -1004,7 +1022,7 @@ export function useMplanipretSoftphone(enabled = true) {
     // "active", which would leave the call up on NetSapiens.
     void restDisconnectWithRetry(restId);
     if (restId && !hasLiveSipSession) {
-      maestroLog(() => maestroTelecom.updateCall(restId, { status: "ended", ended_reason: "completed" }));
+      if (wasPostedToMaestro(restId)) maestroLog(() => maestroTelecom.updateCall(restId, { status: "ended", ended_reason: "completed" }));
       setRestCall(null);
       setPushRing(null);
       return;
@@ -1015,7 +1033,7 @@ export function useMplanipretSoftphone(enabled = true) {
     if (restId) setRestCall(null);
     if (callId) {
       void endSession(callId, "hangup");
-      maestroLog(() => maestroTelecom.updateCall(callId, { status: "ended", ended_reason: "completed" }));
+      if (wasPostedToMaestro(callId)) maestroLog(() => maestroTelecom.updateCall(callId, { status: "ended", ended_reason: "completed" }));
     }
   }, [restCall?.id, restDisconnectWithRetry, hasLiveSipSession]);
 

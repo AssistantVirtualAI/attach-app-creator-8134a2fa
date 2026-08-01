@@ -114,26 +114,24 @@ Deno.serve(async (req) => {
       };
 
       if (apiKey) {
-        const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-5-20250929",
-            max_tokens: 2000,
-            system: SYSTEM_PROMPT,
-            messages: [{ role: "user", content: userContent }],
-          }),
+        const claudeRes = await callAnthropic({
+          apiKey,
+          model: "claude-sonnet-4-5-20250929",
+          max_tokens: 2000,
+          system: SYSTEM_PROMPT, // static → prompt-cached
+          messages: [{ role: "user", content: userContent }],
+          label: "ai-analyze-call",
         });
         if (!claudeRes.ok) {
-          const errText = await claudeRes.text();
+          const errText = String(claudeRes.error ?? "");
           console.error("Claude error, falling back to OpenAI", claudeRes.status, errText);
           if (openaiKey) { const r = await callOpenAI(); text = r.text; usedModel = r.model; }
           else return new Response(JSON.stringify({ success: false, error: "Claude API error", details: errText }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         } else {
-          const claudeData = await claudeRes.json();
-          text = claudeData.content?.[0]?.text ?? "{}";
+          text = claudeRes.text || "{}";
           usedModel = "claude-sonnet-4-5-20250929";
         }
+
       } else {
         const r = await callOpenAI(); text = r.text; usedModel = r.model;
       }

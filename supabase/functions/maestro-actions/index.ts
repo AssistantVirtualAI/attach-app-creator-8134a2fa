@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
         const all = Array.isArray(listRaw) ? listRaw : [];
         // Pagination: upstream only supports `limit`, so slice locally.
         const offset = Math.max(0, Number(payload.offset ?? 0) || 0);
-        const pageSize = Math.max(1, Math.min(200, Number(payload.page_size ?? payload.limit ?? all.length || 1)));
+        const pageSize = Math.max(1, Math.min(200, Number(payload.page_size ?? payload.limit ?? (all.length || 1))));
         const page = all.slice(offset, offset + pageSize);
         return j({
           success: true,

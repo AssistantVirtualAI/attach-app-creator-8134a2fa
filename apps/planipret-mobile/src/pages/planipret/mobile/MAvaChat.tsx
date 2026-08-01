@@ -452,8 +452,9 @@ export default function MAvaChat() {
                               style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
                             >
                               <button
+                                id={`maestro-prev-${m.id}`}
                                 onClick={() => prev && runSuggestion(prev)}
-                                disabled={!prev || !!runningSuggestion}
+                                disabled={!prev || pg?.prev_offset === null || !!runningSuggestion}
                                 aria-label={lang === "fr" ? "Page précédente" : "Previous page"}
                                 className="w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-30 transition"
                                 style={{ background: "rgba(34,211,238,0.12)", color: "var(--pp-brand-accent)" }}
@@ -466,8 +467,9 @@ export default function MAvaChat() {
                                   : lang === "fr" ? "Navigation" : "Navigation"}
                               </span>
                               <button
+                                id={`maestro-next-${m.id}`}
                                 onClick={() => next && runSuggestion(next)}
-                                disabled={!next || !!runningSuggestion}
+                                disabled={!next || pg?.has_more === false || !!runningSuggestion}
                                 aria-label={lang === "fr" ? "Page suivante" : "Next page"}
                                 className="w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-30 transition"
                                 style={{ background: "rgba(34,211,238,0.12)", color: "var(--pp-brand-accent)" }}

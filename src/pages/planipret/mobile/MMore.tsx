@@ -332,6 +332,7 @@ export default function MMore() {
         )}
         <div style={{ padding: 8 }}>
           <MaestroConnectCard />
+          <MaestroRelinkButton lang={lang === "fr" ? "fr" : "en"} className="mt-3" />
         </div>
       </Section>
 

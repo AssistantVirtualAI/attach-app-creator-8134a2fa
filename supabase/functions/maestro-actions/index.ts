@@ -173,23 +173,32 @@ Deno.serve(async (req) => {
         }
         let telecomUserId: string | null = null;
         let isAdmin = false;
+        let linkInfo: { matched_by: string | null; error?: string } | null = null;
         if (callerId) {
           const { data: prof } = await admin
             .from("planipret_profiles")
-            .select("id, maestro_broker_id, role")
+            .select("id, maestro_broker_id, role, email, ms365_email, extension, phone")
             .or(`user_id.eq.${callerId},id.eq.${callerId}`)
             .limit(1)
             .maybeSingle();
           telecomUserId = prof?.maestro_broker_id ? String(prof.maestro_broker_id).trim() : null;
           isAdmin = prof?.role === "admin";
+          // Not linked yet → resolve from the Maestro broker directory using
+          // the broker's Microsoft email (Scott's /users/{id}/brokers).
+          if ((!telecomUserId || !/^\d+$/.test(telecomUserId)) && prof) {
+            const linked = await linkBrokerIdByEmail(admin, prof as any);
+            linkInfo = { matched_by: linked.matched_by, error: linked.error };
+            if (linked.ok && linked.maestro_broker_id) telecomUserId = linked.maestro_broker_id;
+          }
         }
         const requested = payload.user_id !== undefined && payload.user_id !== null
           ? String(payload.user_id).trim()
           : null;
         if (requested && (isAdmin || !callerId)) telecomUserId = requested;
         if (!telecomUserId || !/^\d+$/.test(telecomUserId)) {
-          return j({ success: false, error: "maestro_user_id_unresolved" }, 400);
+          return j({ success: false, error: "maestro_user_id_unresolved", link: linkInfo }, 400);
         }
+
 
         const qs: string[] = [];
         if (payload.search) qs.push(`search=${encodeURIComponent(String(payload.search))}`);

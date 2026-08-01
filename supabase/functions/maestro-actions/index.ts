@@ -222,12 +222,22 @@ Deno.serve(async (req) => {
         const listRaw = Array.isArray(d)
           ? d
           : (d?.clients ?? d?.brokers ?? d?.data ?? d?.results ?? []);
-        const list = Array.isArray(listRaw) ? listRaw : [];
+        const all = Array.isArray(listRaw) ? listRaw : [];
+        // Pagination: upstream only supports `limit`, so slice locally.
+        const offset = Math.max(0, Number(payload.offset ?? 0) || 0);
+        const pageSize = Math.max(1, Math.min(200, Number(payload.page_size ?? payload.limit ?? all.length || 1)));
+        const page = all.slice(offset, offset + pageSize);
         return j({
           success: true,
-          [action === "list_clients" ? "clients" : "brokers"]: list.map(normalizeContact),
-          count: list.length,
+          [action === "list_clients" ? "clients" : "brokers"]: page.map(normalizeContact),
+          count: page.length,
+          total: all.length,
+          offset,
+          page_size: pageSize,
+          next_offset: offset + page.length < all.length ? offset + page.length : null,
+          has_more: offset + page.length < all.length,
         });
+
       }
       case "test": {
         const r = await fetch(`${cfg.url}/contacts?limit=1`, { headers: h });

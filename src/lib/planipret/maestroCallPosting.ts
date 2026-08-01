@@ -253,9 +253,10 @@ export function postInboundCall({ providerCallId, number }: PostArgs): void {
       return skip(id, num, "inbound", "rule_4_inbound_from_broker_voip", "broker_voip");
     }
     if (isBroker === null) {
-      // Fail-safe: unknown classification → skip rather than risk a duplicate.
-      // The CDR pipeline (ns-webhook-receiver → maestro-sync-call) still syncs.
-      return skip(id, num, "inbound", "classification_unavailable_failsafe", "unknown");
+      // Classification unavailable (directory/network failure). `POST /calls` is
+      // idempotent upstream, so posting is safer than losing the record: only a
+      // *confirmed* broker VoIP caller is skipped under rule 4.
+      return post(id, num, "inbound", "unknown");
     }
     return post(id, num, "inbound", "client");
   })());

@@ -420,6 +420,11 @@ Deno.serve(async (req) => {
           if (r.ok && (r.data as any)?.success) {
             const list = (r.data as any).clients ?? (r.data as any).brokers ?? [];
             dataBlocks.push(`${isBroker ? "Courtiers" : "Clients"} Maestro: ${JSON.stringify(list).slice(0, 3000)}`);
+          } else {
+            const err = String((r.data as any)?.error ?? `HTTP ${r.status}`);
+            dataBlocks.push(/maestro_user_id_unresolved|maestro_not_connected|maestro_not_configured/.test(err)
+              ? `Maestro: compte NON lié (${err}). Dis clairement au courtier que son compte n'est pas encore lié à Maestro et qu'il doit le connecter dans Plus → Connexions.`
+              : `Maestro: erreur lors de la récupération (${err}). Dis-le clairement au lieu de proposer un bouton.`);
           }
         } catch (e) { console.error("pp-ava-chat maestro list fail", e); }
       }

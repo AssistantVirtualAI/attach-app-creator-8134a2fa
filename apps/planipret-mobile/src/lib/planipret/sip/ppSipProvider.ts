@@ -203,6 +203,7 @@ class PpSipProvider {
   private recoveryOwnerSince = 0;
   private pendingAnswer: { callId: string; expiresAt: number } | null = null;
   private pendingDecline: { callId: string; expiresAt: number } | null = null;
+  private answerInFlight: Promise<boolean> | null = null;
 
   getReconnectMetrics(): PpSipReconnectMetrics {
     return { ...this.reconnectMetrics, recoveryOwner: this.recoveryOwner, history: [...this.reconnectMetrics.history] };
@@ -640,12 +641,11 @@ class PpSipProvider {
           this.log("info", "pending answer intent active → auto-answering INVITE", {
             pushCallId: pending.callId || null, sipCallId: callId,
           });
+          // Arbitration belongs to the hook (mobile vs widget). Never answer
+          // directly here or a late INVITE can bypass pp_claim_call.
           setTimeout(() => {
-            void this.answer().then((ok) => {
-              this.log(ok ? "info" : "error", `auto-answer ${ok ? "sent 200 OK" : "FAILED"}`, { sipCallId: callId });
-              try { window.dispatchEvent(new CustomEvent("pp:sip-auto-answered", { detail: { ok, callId } })); } catch {}
-            });
-          }, 250);
+            try { window.dispatchEvent(new CustomEvent("pp:sip-pending-answer-ready", { detail: { callId } })); } catch {}
+          }, 50);
 
         } else if (pending) {
           this.log("warn", "answer intent expired before INVITE arrived");
@@ -796,6 +796,14 @@ class PpSipProvider {
    * greeting while the UI says "answered").
    */
   async answer(_expectedCallId?: string): Promise<boolean> {
+    if (this.answerInFlight) return this.answerInFlight;
+    const run = this.answerOnce(_expectedCallId);
+    this.answerInFlight = run;
+    void run.finally(() => { if (this.answerInFlight === run) this.answerInFlight = null; });
+    return run;
+  }
+
+  private async answerOnce(_expectedCallId?: string): Promise<boolean> {
     const session = this.session;
     if (!session || this.snap.callState !== "ringing-in") return false;
     // Never reject on a Call-ID mismatch: the VoIP push id and the SIP Call-ID

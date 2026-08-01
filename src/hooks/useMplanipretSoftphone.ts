@@ -1095,6 +1095,16 @@ export function useMplanipretSoftphone(enabled = true) {
 
   useEffect(() => { answerRef.current = answer; }, [answer]);
 
+  useEffect(() => {
+    const onPendingAnswerReady = () => {
+      void answerRef.current?.().then((ok) => {
+        console.info(`[answer] arbitrated pending INVITE → ${ok ? "connected" : "not answered"}`);
+      });
+    };
+    window.addEventListener("pp:sip-pending-answer-ready", onPendingAnswerReady);
+    return () => window.removeEventListener("pp:sip-pending-answer-ready", onPendingAnswerReady);
+  }, []);
+
 
 
   const hangup = useCallback(() => {

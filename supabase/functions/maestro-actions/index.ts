@@ -159,6 +159,36 @@ Deno.serve(async (req) => {
         }
         return j({ success: false, error: "user_not_found", debug: results }, 404);
       }
+      // Link a broker's Maestro telecom id from their (Microsoft) email using
+      // GET /users/{seed}/brokers. Called after Microsoft sign-in.
+      case "link_broker_by_email": {
+        const authHeader = req.headers.get("Authorization") ?? "";
+        let callerId: string | null = null;
+        if (authHeader) {
+          const { data: u } = await admin.auth.getUser(authHeader.replace(/^Bearer\s+/i, ""));
+          callerId = u?.user?.id ?? null;
+        }
+        const targetUser = callerId ?? (payload.auth_user_id ? String(payload.auth_user_id) : null);
+        if (targetUser) {
+          const { data: prof } = await admin
+            .from("planipret_profiles")
+            .select("id, maestro_broker_id, email, ms365_email, extension, phone")
+            .or(`user_id.eq.${targetUser},id.eq.${targetUser}`)
+            .limit(1)
+            .maybeSingle();
+          if (!prof) return j({ success: false, error: "profile_not_found" }, 404);
+          const r = await linkBrokerIdByEmail(admin, prof as any, { force: payload.force === true });
+          return j({ success: r.ok, maestro_broker_id: r.maestro_broker_id, matched_by: r.matched_by, error: r.error });
+        }
+        const email = String(payload.email ?? "").trim().toLowerCase();
+        if (!email) return j({ success: false, error: "email_required" }, 400);
+        const dir = await loadBrokerDirectory(admin);
+        const hit = findByEmail(dir.entries, email);
+        return hit
+          ? j({ success: true, maestro_broker_id: hit.id, matched_by: "email", broker: hit })
+          : j({ success: false, error: dir.error ?? "no_directory_match" }, 404);
+      }
+
       case "list_clients":
       case "client_profile":
       case "list_brokers":

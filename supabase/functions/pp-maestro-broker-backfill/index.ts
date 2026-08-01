@@ -11,6 +11,8 @@
 // POST { max_id?: number, concurrency?: number, dry_run?: boolean, only_missing?: boolean }
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, json, getMaestroConfig } from "../_shared/maestro.ts";
+import { loadBrokerDirectory } from "../_shared/maestro-broker-directory.ts";
+
 
 const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 
@@ -44,10 +46,10 @@ Deno.serve(async (req) => {
   const cfg = await getMaestroConfig(admin);
   if (!cfg.url || !cfg.key) return json({ error: "maestro_not_configured" }, 400);
 
-  // 1) Load every Planiprêt profile with an extension or phone.
+  // 1) Load every Planiprêt profile with an email, extension or phone.
   let q = admin
     .from("planipret_profiles")
-    .select("id, user_id, extension, phone, maestro_broker_id");
+    .select("id, user_id, email, ms365_email, extension, phone, maestro_broker_id");
   if (onlyMissing) q = q.is("maestro_broker_id", null);
   const { data: profiles, error: profErr } = await q;
   if (profErr) return json({ error: profErr.message }, 500);
@@ -61,10 +63,61 @@ Deno.serve(async (req) => {
     if (ph.length >= 10) byPhone.set(ph.slice(-10), p);
   }
 
-  // 2) Sweep the telecom directory once.
   const assignments = new Map<string, string>(); // profileId -> brokerId
+  const matchedBy = new Map<string, string>();   // profileId -> email|extension|phone|sip
+
+  // 1b) FAST PASS — Maestro broker directory (GET /users/{seed}/brokers).
+  // One request returns every broker with their email, so brokers who sign in
+  // with Microsoft are matched exactly, without any SIP probing.
+  let dirSize = 0;
+  let dirError: string | undefined;
+  if (body.skip_directory !== true) {
+    const dir = await loadBrokerDirectory(admin, { force: true });
+    dirSize = dir.entries.length;
+    dirError = dir.error;
+    if (dir.entries.length) {
+      const byEmail = new Map<string, any>();
+      const byLocal = new Map<string, any[]>();
+      const dirByExt = new Map<string, any>();
+      const dirByPhone = new Map<string, any>();
+      for (const e of dir.entries) {
+        if (e.email) {
+          byEmail.set(e.email, e);
+          const local = e.email.split("@")[0];
+          byLocal.set(local, [...(byLocal.get(local) ?? []), e]);
+        }
+        if (e.extension) dirByExt.set(e.extension, e);
+        for (const ph of e.phones) dirByPhone.set(ph, e);
+      }
+      for (const p of profiles ?? []) {
+        if (assignments.has(p.id)) continue;
+        const emails = [p.ms365_email, p.email]
+          .map((v: any) => String(v ?? "").trim().toLowerCase())
+          .filter(Boolean);
+        let hit: any = null;
+        let how = "";
+        for (const em of emails) {
+          hit = byEmail.get(em) ?? null;
+          if (!hit) {
+            const cands = byLocal.get(em.split("@")[0]) ?? [];
+            if (cands.length === 1) hit = cands[0];
+          }
+          if (hit) { how = "email"; break; }
+        }
+        const ext = String(p.extension ?? "").trim();
+        if (!hit && ext && dirByExt.has(ext)) { hit = dirByExt.get(ext); how = "extension"; }
+        const ph = digits(p.phone);
+        if (!hit && ph.length >= 10 && dirByPhone.has(ph.slice(-10))) { hit = dirByPhone.get(ph.slice(-10)); how = "phone"; }
+        if (hit) { assignments.set(p.id, hit.id); matchedBy.set(p.id, how); }
+      }
+    }
+  }
+
+  // 2) Fallback: sweep the telecom SIP directory for whatever is left.
   const directory: Array<{ id: number; sip: string; phones: string[] }> = [];
   let probed = 0, found = 0;
+  const stillMissing = (profiles ?? []).filter((p: any) => !assignments.has(p.id)).length;
+
 
   const probe = async (id: number) => {
     probed++;
@@ -88,17 +141,20 @@ Deno.serve(async (req) => {
         (sipUser && byExt.get(sipUser)) ||
         (extAlt && byExt.get(extAlt)) ||
         phones.map((n) => byPhone.get(n)).find(Boolean);
-      if (match && !assignments.has(match.id)) assignments.set(match.id, String(id));
+      if (match && !assignments.has(match.id)) { assignments.set(match.id, String(id)); matchedBy.set(match.id, "sip"); }
     } catch { /* ignore individual probe errors */ }
   };
 
-  for (let start = 1; start <= maxId; start += concurrency) {
-    const ids = Array.from(
-      { length: Math.min(concurrency, maxId - start + 1) },
-      (_, i) => start + i,
-    );
-    await Promise.all(ids.map(probe));
+  if (stillMissing > 0 && body.skip_sip !== true) {
+    for (let start = 1; start <= maxId; start += concurrency) {
+      const ids = Array.from(
+        { length: Math.min(concurrency, maxId - start + 1) },
+        (_, i) => start + i,
+      );
+      await Promise.all(ids.map(probe));
+    }
   }
+
 
   // 3) Persist.
   let updated = 0;
@@ -115,17 +171,29 @@ Deno.serve(async (req) => {
   }
 
   const totalProfiles = (profiles ?? []).length;
+  const countBy = (k: string) => [...matchedBy.values()].filter((v) => v === k).length;
   return json({
     ok: true,
     dry_run: dryRun,
     only_missing: onlyMissing,
     profiles_considered: totalProfiles,
+    directory_size: dirSize,
+    directory_error: dirError ?? null,
+    matched_by_email: countBy("email"),
+    matched_by_extension: countBy("extension"),
+    matched_by_phone: countBy("phone"),
+    matched_by_sip: countBy("sip"),
     telecom_ids_probed: probed,
     telecom_users_found: found,
     matched: assignments.size,
     updated,
     unmatched: totalProfiles - assignments.size,
+    unmatched_sample: (profiles ?? [])
+      .filter((p: any) => !assignments.has(p.id))
+      .slice(0, 20)
+      .map((p: any) => ({ id: p.id, email: p.ms365_email ?? p.email, extension: p.extension })),
     errors: errors.slice(0, 20),
     sample: directory.slice(0, 10),
   });
 });
+

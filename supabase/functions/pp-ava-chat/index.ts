@@ -29,6 +29,18 @@ const OutputSchema = z.object({
 
 const MUTATING_MS365 = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message"]);
 const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message", "search_contact"]);
+const MAESTRO_READ_ACTIONS = new Set(["list_clients", "client_profile", "list_brokers", "broker_profile", "list_contacts"]);
+const MAESTRO_ACTIONS = new Set([...MAESTRO_READ_ACTIONS, "create_task", "create_event"]);
+
+function fmtMaestroList(rows: any[], lang: "fr" | "en") {
+  if (!rows.length) return lang === "fr" ? "Aucun résultat." : "No results.";
+  return rows.slice(0, 25).map((c: any, i: number) => {
+    const name = c.name ?? c.full_name ?? [c.first_name, c.last_name].filter(Boolean).join(" ") ?? c.email ?? `#${c.id}`;
+    const bits = [c.phone ?? c.mobile, c.email].filter(Boolean).join(" · ");
+    return `${i + 1}. ${name}${bits ? ` — ${bits}` : ""}`;
+  }).join("\n");
+}
+
 
 async function invokeFunction(name: string, authHeader: string, body: Record<string, unknown>) {
   const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${name}`, {

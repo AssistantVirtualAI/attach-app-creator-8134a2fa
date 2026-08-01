@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await admin
       .from("planipret_profiles")
-      .select("id, user_id, email, ms365_email, maestro_broker_id")
+      .select("id, user_id, email, ms365_email, extension, phone, maestro_broker_id")
       .eq("user_id", userId)
       .maybeSingle();
     if (!profile) return j({ ok: false, error: "profile_not_found" });

@@ -56,6 +56,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private var backgroundHandoffWorkItem: DispatchWorkItem?
     private var pathMonitor: NWPathMonitor?
     private var networkUp = true
+    private var lastPathChangeAt: Date?
     /// True while the WebView (JsSIP) has a live call. During a call the native
     /// stack must NEVER take the AOR over: doing so closes the JsSIP transport
     /// (WSS 1001) and kills the audio. We only keep the audio session alive.

@@ -440,10 +440,20 @@ export function useMplanipretSoftphone(enabled = true) {
     }).then((fn) => { cleanupVoipIncoming = fn; }).catch(() => undefined);
 
     onPlanipretIncomingCallAnswered((data) => {
+      // CallKit stays in "connecting" (and the app never opens on the keypad)
+      // until the pending CXAnswerCallAction is fulfilled — that only happens
+      // when we report the real outcome back through completeAnswer().
       try { ppSipProvider.forceReregister(); } catch {}
-      ppSipProvider.requestAnswer(data?.callId);
       try { window.dispatchEvent(new CustomEvent("pp:sip-callkit-answered", { detail: data })); } catch {}
+      void (async () => {
+        let ok = false;
+        try { ok = !!(await answerRef.current?.()); }
+        catch (e: any) { console.warn("[pp-voip] CallKit answer failed", e?.message ?? e); }
+        console.info(`[pp-voip] CallKit answer outcome → ${ok ? "connected" : "failed"}`);
+        void completePlanipretCallKitAnswer(data?.callId, ok);
+      })();
     }).then((fn) => { cleanupVoipAnswer = fn; }).catch(() => undefined);
+
 
     onPlanipretIncomingCallRejected((data) => {
       try { ppSipProvider.hangup(); } catch {}

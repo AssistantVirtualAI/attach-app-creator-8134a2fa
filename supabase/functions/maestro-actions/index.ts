@@ -49,6 +49,32 @@ function normalizeContact(c: any) {
   };
 }
 
+/* ------------------------------------------------------------------ *
+ * Lightweight in-memory cache for the Maestro mobile list endpoints.
+ * Chat + voice tools hit /users/{id}/clients and /users/{id}/brokers
+ * repeatedly while paginating; upstream has no offset support so we
+ * fetch the full list once and page locally from the cached copy.
+ * ------------------------------------------------------------------ */
+const LIST_CACHE_TTL_MS = 90_000;
+const listCache = new Map<string, { at: number; rows: any[] }>();
+
+function cacheGet(key: string): any[] | null {
+  const hit = listCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > LIST_CACHE_TTL_MS) { listCache.delete(key); return null; }
+  return hit.rows;
+}
+
+function cacheSet(key: string, rows: any[]) {
+  if (listCache.size > 200) listCache.clear();
+  listCache.set(key, { at: Date.now(), rows });
+}
+
+function cacheInvalidate(userId: string) {
+  for (const k of [...listCache.keys()]) if (k.startsWith(`${userId}:`)) listCache.delete(k);
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {

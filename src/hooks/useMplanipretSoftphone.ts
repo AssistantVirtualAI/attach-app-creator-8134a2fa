@@ -1069,6 +1069,9 @@ export function useMplanipretSoftphone(enabled = true) {
     return ok;
   }, [restCall?.id, restControl, hasLiveSipSession, pushRing, restAnswerLiveCall]);
 
+  useEffect(() => { answerRef.current = answer; }, [answer]);
+
+
 
   const hangup = useCallback(() => {
     const callId = ppSipProvider.getSnapshot().callId;

@@ -70,12 +70,29 @@ if (fs.existsSync(androidDir)) {
       check(manifest.includes(perm), `AndroidManifest.xml missing ${perm} — run node scripts/apply-native-config.mjs`);
     }
     check(manifest.includes("PpSipKeepAliveService"), "AndroidManifest.xml missing PpSipKeepAliveService");
+    check(
+      /android:foregroundServiceType="[^"]*phoneCall[^"]*\|[^"]*microphone|android:foregroundServiceType="[^"]*microphone[^"]*\|[^"]*phoneCall/.test(manifest),
+      'PpSipKeepAliveService must declare foregroundServiceType="phoneCall|microphone" (Android 14 mic requirement) — run node scripts/apply-native-config.mjs',
+    );
   } else {
     failures.push("android/app/src/main/AndroidManifest.xml not found");
+  }
+  const svc = path.join(androidDir, "app/src/main/java/com/planipret/mobile/PpSipKeepAliveService.java");
+  if (fs.existsSync(svc)) {
+    const java = read(svc);
+    check(
+      java.includes("FOREGROUND_SERVICE_TYPE_MICROPHONE"),
+      "PpSipKeepAliveService.java startForeground() is missing FOREGROUND_SERVICE_TYPE_MICROPHONE — run node scripts/apply-native-config.mjs",
+    );
   }
   const gs = path.join(androidDir, "app/google-services.json");
   if (!fs.existsSync(gs)) {
     notes.push("android/app/google-services.json is absent — FCM wake-up (incoming calls while the app is killed) will not work until it is added.");
+  } else {
+    const raw = read(gs);
+    if (/placeholder/i.test(raw) || /PLACEHOLDER_/.test(raw)) {
+      failures.push("android/app/google-services.json is still the Firebase placeholder — download the real file from the Firebase console before a device build.");
+    }
   }
 } else {
   notes.push("android/ not present — run `npm run cap:add:android` before a device build.");

@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
 
   // Maestro broker directory (best-effort)
   let directory: any[] = [];
-  try { directory = (await loadBrokerDirectory(admin))?.entries ?? []; } catch { /* optional */ }
+  if (!skipDirectory) { try { directory = (await loadBrokerDirectory(admin))?.entries ?? []; } catch { /* optional */ } }
   const dirByEmail = new Map<string, any>();
   const dirByExt = new Map<string, any>();
   const dirByPhone = new Map<string, any>();
@@ -150,5 +150,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return json({ ok: true, dry_run: dryRun, protected: [...protectedEmails], ...results });
+  return json({ ok: true, dry_run: dryRun, offset, limit, batch_size: (profiles ?? []).length, protected: [...protectedEmails], ...results });
 });

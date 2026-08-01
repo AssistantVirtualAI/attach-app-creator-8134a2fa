@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callAnthropic } from "../_shared/anthropic.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

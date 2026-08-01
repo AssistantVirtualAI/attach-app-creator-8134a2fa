@@ -1022,7 +1022,7 @@ export function useMplanipretSoftphone(enabled = true) {
     // "active", which would leave the call up on NetSapiens.
     void restDisconnectWithRetry(restId);
     if (restId && !hasLiveSipSession) {
-      maestroLog(() => maestroTelecom.updateCall(restId, { status: "ended", ended_reason: "completed" }));
+      if (wasPostedToMaestro(restId)) maestroLog(() => maestroTelecom.updateCall(restId, { status: "ended", ended_reason: "completed" }));
       setRestCall(null);
       setPushRing(null);
       return;

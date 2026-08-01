@@ -754,31 +754,51 @@ class PpSipProvider {
     }
   }
 
-  requestAnswer(callId?: string): boolean {
-    if (this.answer(callId)) return true;
+  async requestAnswer(callId?: string): Promise<boolean> {
+    if (await this.answer(callId)) return true;
     this.pendingAnswer = { callId: String(callId ?? ""), expiresAt: Date.now() + 30_000 };
     this.log("info", "answer intent queued until matching INVITE", { callId: callId ?? "" });
     return false;
   }
 
-  answer(_expectedCallId?: string): boolean {
+  /**
+   * Answering MUST provide its own microphone stream: when the app was woken by
+   * a VoIP push, JsSIP's internal getUserMedia races the iOS audio session and
+   * silently fails, so no 200 OK is ever sent (the caller keeps hearing the
+   * greeting while the UI says "answered").
+   */
+  async answer(_expectedCallId?: string): Promise<boolean> {
     const session = this.session;
     if (!session || this.snap.callState !== "ringing-in") return false;
     // Never reject on a Call-ID mismatch: the VoIP push id and the SIP Call-ID
     // belong to different identifier spaces on NetSapiens.
 
+    let mediaStream: MediaStream | undefined;
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
+    } catch (e: any) {
+      this.log("error", `answer: microphone unavailable (${e?.name || e?.message || e})`);
+      mediaStream = undefined;
+    }
+
     try {
       session.answer({
+        ...(mediaStream ? { mediaStream } : {}),
         mediaConstraints: { audio: true, video: false },
         rtcAnswerConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
       });
       this.pendingAnswer = null;
+      this.log("info", "200 OK sent (answer)", { withStream: !!mediaStream });
       return true;
     } catch (error) {
       this.log("error", "answer failed", error);
       return false;
     }
   }
+
   hangup() { try { this.session?.terminate(); } catch {} }
   mute() { this.session?.mute({ audio: true }); }
   unmute() { this.session?.unmute({ audio: true }); }

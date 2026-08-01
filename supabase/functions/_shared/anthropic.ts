@@ -129,7 +129,9 @@ export async function callAnthropic(opts: ClaudeCallOptions): Promise<ClaudeResu
   if (opts.tool_choice) body.tool_choice = opts.tool_choice;
   if (typeof opts.temperature === "number") body.temperature = opts.temperature;
 
-  if (opts.cache !== false) body = withPromptCache(body, opts.model, opts.cacheTtl ?? "5m");
+  // Global kill-switch: set ANTHROPIC_PROMPT_CACHE=off to fall back to plain calls.
+  const cacheDisabled = (Deno.env.get("ANTHROPIC_PROMPT_CACHE") ?? "").toLowerCase() === "off";
+  if (opts.cache !== false && !cacheDisabled) body = withPromptCache(body, opts.model, opts.cacheTtl ?? "5m");
 
   let r: Response;
   try {

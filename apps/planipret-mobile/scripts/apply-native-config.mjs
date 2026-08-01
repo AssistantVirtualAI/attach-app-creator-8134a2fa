@@ -153,7 +153,6 @@ public class PpSipKeepAlivePlugin extends Plugin {
         getContext().registerReceiver(inviteReceiver, new IntentFilter(PpSipKeepAliveService.ACTION_INCOMING_INVITE));
       }
     } catch (Exception ignored) {}
-    if ("decline".equals(userAction)) PpSipKeepAliveService.declineIncoming(c, callId);
   }
 
   @Override protected void handleOnDestroy() {
@@ -258,6 +257,7 @@ public class PpIncomingActionReceiver extends BroadcastReceiver {
       NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
       if (nm != null) nm.cancel(PpSipKeepAliveService.INCOMING_NOTIFICATION_ID);
     } catch (Exception ignored) {}
+    if ("decline".equals(userAction)) PpSipKeepAliveService.declineIncoming(c, callId);
     // Forward to plugin listeners.
     c.sendBroadcast(new Intent(PpSipKeepAliveService.ACTION_INCOMING_INVITE)
       .setPackage(c.getPackageName())

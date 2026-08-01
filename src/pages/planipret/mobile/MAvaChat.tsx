@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Send, Plus, Menu, Loader2, Sparkles, Mic, Square, Volume2, VolumeX, CheckCircle2, MessageSquare, Radio } from "lucide-react";
 import AvaVoiceAgent from "@/components/planipret/mobile/AvaVoiceAgent";
 import AvaOrb from "@/components/planipret/mobile/AvaOrb";
+import AvaMaestroStatus from "@/components/planipret/mobile/AvaMaestroStatus";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import { useAvaContext } from "@/hooks/useAvaContext";
@@ -219,7 +220,14 @@ export default function MAvaChat() {
       });
       if (error) throw error;
       const replyText = String((data as any)?.reply ?? t("avaChat.actionDone"));
-      setMessages((m) => [...m, { id: `act-${Date.now()}`, role: "assistant", message: replyText, created_at: new Date().toISOString() }]);
+      const nextSuggestions: AvaSuggestion[] = Array.isArray((data as any)?.suggestions) ? (data as any).suggestions : [];
+      setMessages((m) => [
+        // Remove the clicked suggestion so the same prompt can't be replayed.
+        ...m.map((msg) => (msg.suggestions?.some((x) => x.id === suggestion.id)
+          ? { ...msg, suggestions: msg.suggestions.filter((x) => x.id !== suggestion.id) }
+          : msg)),
+        { id: `act-${Date.now()}`, role: "assistant" as const, message: replyText, suggestions: nextSuggestions, created_at: new Date().toISOString() },
+      ]);
       if ((data as any)?.result?.ok === false || (data as any)?.result?.success === false) {
         toast.error(t("avaChat.actionFailedPrefix") + ((data as any)?.result?.error ?? t("avaChat.actionUnknownError")));
       } else {
@@ -371,6 +379,8 @@ export default function MAvaChat() {
       </div>
 
 
+
+      <AvaMaestroStatus lang={lang === "en" ? "en" : "fr"} />
 
       <div className="flex-1 min-h-0 overflow-hidden">
         <div ref={scrollRef} className="h-full overflow-y-auto px-4 py-4 pb-6 space-y-4 max-w-3xl w-full mx-auto">

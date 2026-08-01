@@ -4,6 +4,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
+import { callAnthropic } from "../_shared/anthropic.ts";
+
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 

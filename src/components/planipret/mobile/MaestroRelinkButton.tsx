@@ -37,9 +37,16 @@ export default function MaestroRelinkButton({ lang = "fr", className = "" }: Pro
     setBusy(true);
     setError(null);
     try {
-      const { data, error: err } = await supabase.functions.invoke("maestro-actions", {
+      let { data, error: err } = await supabase.functions.invoke("maestro-actions", {
         body: { action: "link_broker_by_email", payload: { force: true } },
       });
+      if (err || !(data as any)?.success) {
+        // Fallback: telecom link endpoint (Maestro Telecom broker binding).
+        const fb = await supabase.functions.invoke("maestro-telecom-link", {
+          body: { action: "link_broker_by_email" },
+        });
+        if (!fb.error && (fb.data as any)?.success) { data = fb.data; err = null as any; }
+      }
       if (err) throw err;
       const d = data as any;
       if (d?.success && d?.maestro_broker_id) {

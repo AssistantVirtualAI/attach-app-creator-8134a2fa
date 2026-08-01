@@ -202,6 +202,7 @@ class PpSipProvider {
   private recoveryOwner: PpSipRecoveryOwner = "none";
   private recoveryOwnerSince = 0;
   private pendingAnswer: { callId: string; expiresAt: number } | null = null;
+  private pendingDecline: { callId: string; expiresAt: number } | null = null;
 
   getReconnectMetrics(): PpSipReconnectMetrics {
     return { ...this.reconnectMetrics, recoveryOwner: this.recoveryOwner, history: [...this.reconnectMetrics.history] };
@@ -622,8 +623,19 @@ class PpSipProvider {
         // NOTE: the VoIP push callId (NetSapiens `1-XXXXXXXX-...`) and the SIP
         // Call-ID are two different identifier spaces — never compare them.
         // Any incoming INVITE within the 30s answer-intent window is answered.
+        const decline = this.pendingDecline;
+        if (decline && decline.expiresAt > Date.now()) {
+          this.pendingDecline = null;
+          this.pendingAnswer = null;
+          this.log("info", "pending decline intent active → rejecting INVITE", { sipCallId: callId });
+          setTimeout(() => {
+            try { session.terminate({ status_code: 603, reason_phrase: "Decline" }); } catch {}
+          }, 50);
+        } else if (decline) {
+          this.pendingDecline = null;
+        }
         const pending = this.pendingAnswer;
-        if (pending && pending.expiresAt > Date.now()) {
+        if (!decline && pending && pending.expiresAt > Date.now()) {
           this.pendingAnswer = null;
           this.log("info", "pending answer intent active → auto-answering INVITE", {
             pushCallId: pending.callId || null, sipCallId: callId,
@@ -761,6 +773,19 @@ class PpSipProvider {
     if (await this.answer(callId)) return true;
     this.pendingAnswer = { callId: String(callId ?? ""), expiresAt: Date.now() + 30_000 };
     this.log("info", "answer intent queued until matching INVITE", { callId: callId ?? "" });
+    return false;
+  }
+
+  requestDecline(callId?: string): boolean {
+    if (this.session && this.snap.callState === "ringing-in") {
+      try {
+        this.session.terminate({ status_code: 603, reason_phrase: "Decline" });
+        return true;
+      } catch { /* queue below */ }
+    }
+    this.pendingAnswer = null;
+    this.pendingDecline = { callId: String(callId ?? ""), expiresAt: Date.now() + 30_000 };
+    this.log("info", "decline intent queued until incoming INVITE", { callId: callId ?? "" });
     return false;
   }
 

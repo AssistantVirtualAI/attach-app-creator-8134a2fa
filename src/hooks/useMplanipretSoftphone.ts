@@ -394,7 +394,14 @@ export function useMplanipretSoftphone(enabled = true) {
         void ppSipProvider.requestAnswer(invite?.callId);
         void answerRef.current?.().then((ok) => console.info(`[pp-sip] notification answer → ${ok ? "connected" : "failed"}`));
       } else if (invite?.action === "decline") {
+        try { ppSipProvider.requestDecline(invite?.callId); } catch {}
+        void supabase.functions.invoke("pp-ns-calls", {
+          body: { action: "reject", call_id: invite?.callId },
+        }).catch(() => undefined);
+        void acknowledgePlanipretIncoming();
+      } else if (invite?.action === "cancelled") {
         try { ppSipProvider.hangup(); } catch {}
+        setPushRing(null);
         void acknowledgePlanipretIncoming();
       }
       try { ppSipProvider.forceReregister(); } catch {}

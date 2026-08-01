@@ -234,6 +234,52 @@ Deno.serve(async (req) => {
           result: exec.data, suggestions: [],
         }, ok ? 200 : 200);
       }
+      if (kind === "maestro_action") {
+        const action = String(payload.action ?? "");
+        if (!MAESTRO_ACTIONS.has(action)) {
+          return json({ reply: L("Action Maestro inconnue.", "Unknown Maestro action."), suggestions: [] }, 400);
+        }
+        if (!MAESTRO_READ_ACTIONS.has(action) && body?.approved !== true) {
+          return json({ reply: L("Cette action Maestro nécessite votre confirmation.", "This Maestro action requires your confirmation."), suggestions: [confirmAction] });
+        }
+        const exec = await invokeFunction("maestro-actions", authHeader, { action, payload });
+        const d: any = exec.data ?? {};
+        const ok = !!d.success && exec.ok;
+        await logAvaAction(admin, profile, u.user.id, `maestro_${action}`, payload, ok, d, ok ? null : (d.error ?? `HTTP ${exec.status}`));
+
+        if (!ok) {
+          const err = String(d.error ?? `HTTP ${exec.status}`);
+          const reply = /maestro_user_id_unresolved|maestro_not_connected|maestro_not_configured/.test(err)
+            ? L("Ton compte n'est pas encore lié à Maestro. Va dans Plus → Connexions pour connecter Maestro, puis réessaie.",
+                "Your account isn't linked to Maestro yet. Go to More → Connections to connect Maestro, then try again.")
+            : `${L("Action Maestro échouée", "Maestro action failed")}: ${err}`;
+          return json({ reply, result: d, suggestions: [] });
+        }
+
+        if (action === "list_clients" || action === "list_brokers" || action === "list_contacts") {
+          const rows: any[] = d.clients ?? d.brokers ?? d.contacts ?? d.data ?? [];
+          const title = action === "list_brokers"
+            ? L("Courtiers Maestro", "Maestro brokers")
+            : L("Clients Maestro", "Maestro clients");
+          return json({
+            reply: `${title} (${rows.length}):\n${fmtMaestroList(rows, lang)}`,
+            result: d, suggestions: [],
+          });
+        }
+        if (action === "client_profile" || action === "broker_profile") {
+          const p = d.profile ?? d.data ?? d;
+          const name = p?.name ?? p?.full_name ?? [p?.first_name, p?.last_name].filter(Boolean).join(" ");
+          const lines = [
+            name && `${L("Nom", "Name")}: ${name}`,
+            p?.email && `${L("Courriel", "Email")}: ${p.email}`,
+            (p?.phone ?? p?.mobile) && `${L("Téléphone", "Phone")}: ${p.phone ?? p.mobile}`,
+            p?.status && `${L("Statut", "Status")}: ${p.status}`,
+          ].filter(Boolean).join("\n");
+          return json({ reply: lines || L("Profil Maestro récupéré.", "Maestro profile loaded."), result: d, suggestions: [] });
+        }
+        return json({ reply: L("Action Maestro exécutée.", "Maestro action completed."), result: d, suggestions: [] });
+      }
+
       if (kind === "sms") {
         const to = String(payload.number ?? payload.to ?? "");
         const message = String(payload.text ?? payload.message ?? "");

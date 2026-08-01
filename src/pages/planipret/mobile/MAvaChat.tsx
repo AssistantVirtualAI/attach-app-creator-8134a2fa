@@ -16,7 +16,16 @@ import { useAvaContext } from "@/hooks/useAvaContext";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 type AvaSuggestion = { id: string; label: string; kind: string; payload?: Record<string, any> };
-type Msg = { id: string; role: "user" | "assistant"; message: string; created_at: string; suggestions?: AvaSuggestion[] };
+type AvaPagination = {
+  offset: number; page_size: number; total: number;
+  page?: number; page_count?: number;
+  has_more?: boolean; next_offset?: number | null;
+  has_prev?: boolean; prev_offset?: number | null;
+  action?: string; search?: string | null;
+};
+type Msg = { id: string; role: "user" | "assistant"; message: string; created_at: string; suggestions?: AvaSuggestion[]; pagination?: AvaPagination };
+
+const isPagerSuggestion = (s: AvaSuggestion) => s.id.startsWith("maestro-prev-") || s.id.startsWith("maestro-next-");
 type Session = { id: string; title: string; last_message_at: string };
 
 const MUTATING_ACTIONS = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message"]);

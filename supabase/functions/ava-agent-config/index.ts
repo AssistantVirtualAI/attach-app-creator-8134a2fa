@@ -17,6 +17,7 @@ const TOOL_NAMES = [
   "search_client", "get_client_profile", "get_client_history",
   "create_task", "create_appointment", "get_pending_tasks",
   "get_upcoming_appointments", "update_client", "create_client",
+  "list_my_clients", "get_maestro_client_profile", "list_my_brokers", "get_maestro_broker_profile",
   // M365 Mail + Calendar
   "read_emails", "get_unread_emails", "get_recent_emails",
   "send_email", "summarize_email",
@@ -82,7 +83,12 @@ TÉLÉPHONIE: make_call, get_active_calls, hangup_call, get_call_history,
 IA: analyze_call, get_hot_leads, get_coaching_summary
 MAESTRO (CRM interne uniquement): search_client, get_client_profile, get_client_history, create_task,
   create_appointment (⚠️ crée un RDV Maestro + miroir Outlook automatique si MS365 connecté),
-  get_pending_tasks, get_upcoming_appointments, update_client, create_client
+  get_pending_tasks, get_upcoming_appointments, update_client, create_client,
+  list_my_clients (liste des clients du courtier — search/limit optionnels),
+  get_maestro_client_profile (client_id), list_my_brokers (search), get_maestro_broker_profile (broker_id)
+  → Quand le courtier demande "la liste de mes clients" ou "mes dossiers Maestro", appelle list_my_clients
+    et énumère les noms. Ne dis JAMAIS que tu n'as pas accès à Maestro : si le tool renvoie
+    maestro_user_id_unresolved, dis que son compte n'est pas encore lié à Maestro.
 M365 MAIL & CALENDAR: read_emails, get_unread_emails, get_recent_emails, summarize_email, send_email, get_calendar_today, get_calendar_week, get_upcoming_meetings, create_calendar_event, move_calendar_event, cancel_calendar_event
 M365 CONTACTS: find_contact (cherche dans contacts locaux + Maestro + Microsoft People/Contacts)
 M365 TEAMS: list_teams_chats, create_teams_chat, send_teams_message

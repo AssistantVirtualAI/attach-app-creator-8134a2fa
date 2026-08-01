@@ -29,6 +29,18 @@ const OutputSchema = z.object({
 
 const MUTATING_MS365 = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message"]);
 const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_detail", "list_calendar_events", "send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message", "search_contact"]);
+const MAESTRO_READ_ACTIONS = new Set(["list_clients", "client_profile", "list_brokers", "broker_profile", "list_contacts"]);
+const MAESTRO_ACTIONS = new Set([...MAESTRO_READ_ACTIONS, "create_task", "create_event"]);
+
+function fmtMaestroList(rows: any[], lang: "fr" | "en") {
+  if (!rows.length) return lang === "fr" ? "Aucun résultat." : "No results.";
+  return rows.slice(0, 25).map((c: any, i: number) => {
+    const name = c.name ?? c.full_name ?? [c.first_name, c.last_name].filter(Boolean).join(" ") ?? c.email ?? `#${c.id}`;
+    const bits = [c.phone ?? c.mobile, c.email].filter(Boolean).join(" · ");
+    return `${i + 1}. ${name}${bits ? ` — ${bits}` : ""}`;
+  }).join("\n");
+}
+
 
 async function invokeFunction(name: string, authHeader: string, body: Record<string, unknown>) {
   const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/${name}`, {
@@ -222,6 +234,52 @@ Deno.serve(async (req) => {
           result: exec.data, suggestions: [],
         }, ok ? 200 : 200);
       }
+      if (kind === "maestro_action") {
+        const action = String(payload.action ?? "");
+        if (!MAESTRO_ACTIONS.has(action)) {
+          return json({ reply: L("Action Maestro inconnue.", "Unknown Maestro action."), suggestions: [] }, 400);
+        }
+        if (!MAESTRO_READ_ACTIONS.has(action) && body?.approved !== true) {
+          return json({ reply: L("Cette action Maestro nécessite votre confirmation.", "This Maestro action requires your confirmation."), suggestions: [confirmAction] });
+        }
+        const exec = await invokeFunction("maestro-actions", authHeader, { action, payload });
+        const d: any = exec.data ?? {};
+        const ok = !!d.success && exec.ok;
+        await logAvaAction(admin, profile, u.user.id, `maestro_${action}`, payload, ok, d, ok ? null : (d.error ?? `HTTP ${exec.status}`));
+
+        if (!ok) {
+          const err = String(d.error ?? `HTTP ${exec.status}`);
+          const reply = /maestro_user_id_unresolved|maestro_not_connected|maestro_not_configured/.test(err)
+            ? L("Ton compte n'est pas encore lié à Maestro. Va dans Plus → Connexions pour connecter Maestro, puis réessaie.",
+                "Your account isn't linked to Maestro yet. Go to More → Connections to connect Maestro, then try again.")
+            : `${L("Action Maestro échouée", "Maestro action failed")}: ${err}`;
+          return json({ reply, result: d, suggestions: [] });
+        }
+
+        if (action === "list_clients" || action === "list_brokers" || action === "list_contacts") {
+          const rows: any[] = d.clients ?? d.brokers ?? d.contacts ?? d.data ?? [];
+          const title = action === "list_brokers"
+            ? L("Courtiers Maestro", "Maestro brokers")
+            : L("Clients Maestro", "Maestro clients");
+          return json({
+            reply: `${title} (${rows.length}):\n${fmtMaestroList(rows, lang)}`,
+            result: d, suggestions: [],
+          });
+        }
+        if (action === "client_profile" || action === "broker_profile") {
+          const p = d.profile ?? d.data ?? d;
+          const name = p?.name ?? p?.full_name ?? [p?.first_name, p?.last_name].filter(Boolean).join(" ");
+          const lines = [
+            name && `${L("Nom", "Name")}: ${name}`,
+            p?.email && `${L("Courriel", "Email")}: ${p.email}`,
+            (p?.phone ?? p?.mobile) && `${L("Téléphone", "Phone")}: ${p.phone ?? p.mobile}`,
+            p?.status && `${L("Statut", "Status")}: ${p.status}`,
+          ].filter(Boolean).join("\n");
+          return json({ reply: lines || L("Profil Maestro récupéré.", "Maestro profile loaded."), result: d, suggestions: [] });
+        }
+        return json({ reply: L("Action Maestro exécutée.", "Maestro action completed."), result: d, suggestions: [] });
+      }
+
       if (kind === "sms") {
         const to = String(payload.number ?? payload.to ?? "");
         const message = String(payload.text ?? payload.message ?? "");
@@ -352,7 +410,7 @@ Deno.serve(async (req) => {
       }
 
       // Maestro clients/brokers directory (endpoints /users/{id}/clients|brokers)
-      if (/\bclients?\b|\bcourtiers?\b|\bbrokers?\b|\bdossiers?\b|\bportefeuille\b/i.test(userMessage)) {
+      if (/\bclients?\b|\bcourtiers?\b|\bbrokers?\b|\bdossiers?\b|\bportefeuille\b|\bmaestro\b|\bprospects?\b|\bpipeline\b|\bcustomers?\b|\bmes\s+clients\b|\bmy\s+clients\b|\bliste\b|\blist\b/i.test(userMessage)) {
         try {
           const isBroker = /\bcourtiers?\b|\bbrokers?\b/i.test(userMessage);
           const r = await invokeFunction("maestro-actions", authHeader, {
@@ -362,6 +420,11 @@ Deno.serve(async (req) => {
           if (r.ok && (r.data as any)?.success) {
             const list = (r.data as any).clients ?? (r.data as any).brokers ?? [];
             dataBlocks.push(`${isBroker ? "Courtiers" : "Clients"} Maestro: ${JSON.stringify(list).slice(0, 3000)}`);
+          } else {
+            const err = String((r.data as any)?.error ?? `HTTP ${r.status}`);
+            dataBlocks.push(/maestro_user_id_unresolved|maestro_not_connected|maestro_not_configured/.test(err)
+              ? `Maestro: compte NON lié (${err}). Dis clairement au courtier que son compte n'est pas encore lié à Maestro et qu'il doit le connecter dans Plus → Connexions.`
+              : `Maestro: erreur lors de la récupération (${err}). Dis-le clairement au lieu de proposer un bouton.`);
           }
         } catch (e) { console.error("pp-ava-chat maestro list fail", e); }
       }

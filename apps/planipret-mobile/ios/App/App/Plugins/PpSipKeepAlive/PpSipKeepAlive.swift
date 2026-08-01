@@ -28,6 +28,12 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var host = ""; private var port = 443; private var path = "/"; private var login = ""; private var domain = ""; private var displayName = ""; private var password = ""
     private var socket: URLSessionWebSocketTask?
+    /// Only true once the WSS handshake completed. Sending a REGISTER before
+    /// that fails with POSIX 57 "Socket is not connected" and costs a full
+    /// backoff cycle at every cold start.
+    private var socketOpen = false
+    /// Pending REGISTER requested while the socket was still connecting.
+    private var registerOnOpen = false
     private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue())
     private var timer: Timer?
     private var cseq = 1

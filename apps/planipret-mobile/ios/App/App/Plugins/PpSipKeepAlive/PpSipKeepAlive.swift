@@ -393,6 +393,15 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       }
     }
 
+    private func scheduleRegister() {
+      timer?.invalidate()
+      // Refresh once near expiry, not every minute. NetSapiens treats repeated
+      // REGISTER handshakes on one AOR as competing bindings.
+      let refreshInterval = max(60.0, Double(registerExpires) * 0.8)
+      timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in self?.sendRegister(challenge: nil) }
+      if let timer = timer { RunLoop.main.add(timer, forMode: .common) }
+    }
+
     private func receiveLoop() {
       socket?.receive { [weak self] result in
         guard let self = self else { return }

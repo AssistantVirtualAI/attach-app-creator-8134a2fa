@@ -147,7 +147,7 @@ export default function MAvaChat() {
           ? t("avaChat.smsConfirmPrompt").replace("{contact}", String(immediate.payload?.number ?? immediate.payload?.to ?? immediate.payload?.phone ?? t("avaChat.thisContact")))
           : parsedReply.text;
       const replyId = `a-${Date.now()}`;
-      setMessages((m) => [...m, { id: replyId, role: "assistant", message: replyText, suggestions: parsedReply.suggestions, created_at: new Date().toISOString() }]);
+      setMessages((m) => [...m, { id: replyId, role: "assistant", message: replyText, suggestions: parsedReply.suggestions, pagination: d.pagination ?? undefined, created_at: new Date().toISOString() }]);
       if (immediate) setPendingConfirm(immediate);
       if (speakReplies) speak(replyId, replyText);
     } catch (e: any) {

@@ -271,21 +271,39 @@ Deno.serve(async (req) => {
             : L("Clients Maestro", "Maestro clients");
           const from = rows.length ? offset + 1 : 0;
           const to = offset + rows.length;
+          const pageNo = Number(d.page ?? Math.floor(offset / pageSize) + 1);
+          const pageCount = Number(d.page_count ?? Math.max(1, Math.ceil(total / pageSize)));
           const header = total > rows.length
-            ? `${title} — ${from}-${to} ${L("sur", "of")} ${total}`
+            ? `${title} — ${from}-${to} ${L("sur", "of")} ${total} (${L("page", "page")} ${pageNo}/${pageCount})`
             : `${title} (${rows.length})`;
-          const suggestions = d.has_more
-            ? [{
-                id: `maestro-next-${action}-${d.next_offset}`,
-                label: L(`Voir les ${Math.min(pageSize, total - to)} suivants`, `Show next ${Math.min(pageSize, total - to)}`),
-                kind: "maestro_action",
-                payload: { ...payload, action, offset: d.next_offset, page_size: pageSize },
-              }]
-            : [];
+          const prevOffset = d.prev_offset ?? (offset > 0 ? Math.max(0, offset - pageSize) : null);
+          const suggestions: any[] = [];
+          if (prevOffset !== null && prevOffset !== undefined) {
+            suggestions.push({
+              id: `maestro-prev-${action}-${prevOffset}`,
+              label: L("◀ Page précédente", "◀ Previous page"),
+              kind: "maestro_action",
+              payload: { ...payload, action, offset: prevOffset, page_size: pageSize },
+            });
+          }
+          if (d.has_more) {
+            suggestions.push({
+              id: `maestro-next-${action}-${d.next_offset}`,
+              label: L("Page suivante ▶", "Next page ▶"),
+              kind: "maestro_action",
+              payload: { ...payload, action, offset: d.next_offset, page_size: pageSize },
+            });
+          }
           return json({
             reply: `${header}:\n${fmtMaestroList(rows, lang, offset)}`,
             result: d,
-            pagination: { offset, page_size: pageSize, total, has_more: !!d.has_more, next_offset: d.next_offset ?? null },
+            pagination: {
+              offset, page_size: pageSize, total,
+              page: pageNo, page_count: pageCount,
+              has_more: !!d.has_more, next_offset: d.next_offset ?? null,
+              has_prev: prevOffset !== null && prevOffset !== undefined, prev_offset: prevOffset ?? null,
+              action, search: payload.search ?? null,
+            },
             suggestions,
           });
         }

@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { normalizeNsEvents, nsCallKey, shouldProcessCall } from "../_shared/ns-call-events.ts";
+import { parseServiceAccount, sendFcmDataMessage } from "../_shared/fcm.ts";
 
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
@@ -319,7 +320,7 @@ async function processEvent(event: any) {
       });
       if (brokerProfile?.notif_calls !== false) {
         const inboundCallId = callId ? String(callId) : crypto.randomUUID();
-        await sendVoipPush(userId, {
+        const inboundPushPayload = {
           call_id: inboundCallId,
           callId: inboundCallId,
           from_number: data.from_number ?? data.from ?? "Inconnu",
@@ -330,6 +331,8 @@ async function processEvent(event: any) {
           to_number: data.to_number ?? data.to ?? ext,
           type: "incoming_call",
         });
+        await sendVoipPush(userId, inboundPushPayload);
+        await sendAndroidCallPush(userId, inboundPushPayload);
         sendPush(userId, {
           title: "📞 Appel entrant",
           body: data.from_number ?? data.from ?? "Inconnu",

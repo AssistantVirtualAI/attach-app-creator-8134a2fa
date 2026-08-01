@@ -369,17 +369,30 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       var comps = URLComponents(); comps.scheme = port == 80 ? "ws" : "wss"; comps.host = host; comps.port = port; comps.path = path.isEmpty ? "/" : path
       guard let url = comps.url else { setStatus("error", "bad_ws_url"); return }
       var req = URLRequest(url: url); req.setValue("sip", forHTTPHeaderField: "Sec-WebSocket-Protocol")
+      socketOpen = false
+      registerOnOpen = true
       socket = session.webSocketTask(with: req); socket?.resume(); setStatus("connecting", "ws_connecting"); receiveLoop()
-      DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.sendRegister(challenge: nil) }
     }
-    private func scheduleRegister() {
-      timer?.invalidate()
-      // Refresh once near expiry, not every minute. NetSapiens treats repeated
-      // REGISTER handshakes on one AOR as competing bindings.
-      let refreshInterval = max(60.0, Double(registerExpires) * 0.8)
-      timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in self?.sendRegister(challenge: nil) }
-      if let timer = timer { RunLoop.main.add(timer, forMode: .common) }
+
+    public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self, webSocketTask === self.socket else { return }
+        self.socketOpen = true
+        NSLog("[PpSipKeepAlive] ws open")
+        if self.registerOnOpen { self.registerOnOpen = false; self.sendRegister(challenge: nil, force: true) }
+      }
     }
+
+    public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self, webSocketTask === self.socket else { return }
+        self.socketOpen = false
+        self.socket = nil
+        NSLog("[PpSipKeepAlive] ws closed code=%ld", closeCode.rawValue)
+        if !self.isForeground() { self.setStatus("reconnecting", "ws_closed"); self.scheduleReconnect("ws_closed") }
+      }
+    }
+
     private func receiveLoop() {
       socket?.receive { [weak self] result in
         guard let self = self else { return }

@@ -27,14 +27,19 @@ Deno.serve(async (req) => {
   // Auth: caller must be a Planiprêt/super admin.
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   if (!token) return json({ error: "Unauthorized" }, 401);
-  const { data: userRes } = await admin.auth.getUser(token);
-  const uid = userRes?.user?.id;
-  if (!uid) return json({ error: "Unauthorized" }, 401);
-  const [{ data: isPp }, { data: isSa }] = await Promise.all([
-    admin.rpc("is_planipret_admin", { _user_id: uid }),
-    admin.rpc("is_super_admin", { _user_id: uid }),
-  ]);
-  if (!isPp && !isSa) return json({ error: "Forbidden" }, 403);
+  // Service-role callers (ops/cron) are trusted directly; otherwise require an admin JWT.
+  const isServiceRole = token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!isServiceRole) {
+    const { data: userRes } = await admin.auth.getUser(token);
+    const uid = userRes?.user?.id;
+    if (!uid) return json({ error: "Unauthorized" }, 401);
+    const [{ data: isPp }, { data: isSa }] = await Promise.all([
+      admin.rpc("is_planipret_admin", { _user_id: uid }),
+      admin.rpc("is_super_admin", { _user_id: uid }),
+    ]);
+    if (!isPp && !isSa) return json({ error: "Forbidden" }, 403);
+  }
+
 
   let body: any = {};
   try { body = await req.json(); } catch { /* defaults */ }

@@ -11,7 +11,7 @@
 // POST { max_id?: number, concurrency?: number, dry_run?: boolean, only_missing?: boolean }
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, json, getMaestroConfig } from "../_shared/maestro.ts";
-import { loadBrokerDirectory } from "../_shared/maestro-broker-directory.ts";
+import { loadBrokerDirectory, nameKey } from "../_shared/maestro-broker-directory.ts";
 
 
 const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
   // 1) Load every Planiprêt profile with an email, extension or phone.
   let q = admin
     .from("planipret_profiles")
-    .select("id, user_id, email, ms365_email, extension, phone, maestro_broker_id");
+    .select("id, user_id, email, ms365_email, extension, phone, full_name, maestro_broker_id");
   if (onlyMissing) q = q.is("maestro_broker_id", null);
   const { data: profiles, error: profErr } = await q;
   if (profErr) return json({ error: profErr.message }, 500);
@@ -89,6 +89,7 @@ Deno.serve(async (req) => {
       const byLocal = new Map<string, any[]>();
       const dirByExt = new Map<string, any>();
       const dirByPhone = new Map<string, any>();
+      const byName = new Map<string, any[]>();
       for (const e of dir.entries) {
         if (e.email) {
           byEmail.set(e.email, e);
@@ -97,6 +98,8 @@ Deno.serve(async (req) => {
         }
         if (e.extension) dirByExt.set(e.extension, e);
         for (const ph of e.phones) dirByPhone.set(ph, e);
+        const nk = nameKey(e.name);
+        if (nk) byName.set(nk, [...(byName.get(nk) ?? []), e]);
       }
       for (const p of profiles ?? []) {
         if (assignments.has(p.id)) continue;
@@ -117,6 +120,13 @@ Deno.serve(async (req) => {
         if (!hit && ext && dirByExt.has(ext)) { hit = dirByExt.get(ext); how = "extension"; }
         const ph = digits(p.phone);
         if (!hit && ph.length >= 10 && dirByPhone.has(ph.slice(-10))) { hit = dirByPhone.get(ph.slice(-10)); how = "phone"; }
+        if (!hit && p.full_name) {
+          const k = nameKey(p.full_name);
+          if (k && k.split(" ").length >= 2) {
+            const cands = (byName.get(k) ?? []);
+            if (cands.length === 1) { hit = cands[0]; how = "name"; }
+          }
+        }
         if (hit) { assignments.set(p.id, hit.id); matchedBy.set(p.id, how); }
       }
     }
@@ -180,6 +190,7 @@ Deno.serve(async (req) => {
   }
 
   const totalProfiles = (profiles ?? []).length;
+  const countByName = 0;
   const countBy = (k: string) => [...matchedBy.values()].filter((v) => v === k).length;
   return json({
     ok: true,
@@ -191,6 +202,7 @@ Deno.serve(async (req) => {
     matched_by_email: countBy("email"),
     matched_by_extension: countBy("extension"),
     matched_by_phone: countBy("phone"),
+    matched_by_name: countBy("name"),
     matched_by_sip: countBy("sip"),
     telecom_ids_probed: probed,
     telecom_users_found: found,

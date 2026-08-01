@@ -84,6 +84,10 @@ const ANDROID_PERMISSIONS = [
   "android.permission.USE_FULL_SCREEN_INTENT",
   "android.permission.FOREGROUND_SERVICE",
   "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
+  // Android 14+ refuses to keep RECORD_AUDIO granted for a background call
+  // unless the foreground service also declares the microphone type.
+  "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+  "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
   "android.permission.ACCESS_NETWORK_STATE",
   "android.permission.CHANGE_WIFI_STATE",
   "android.permission.VIBRATE",
@@ -95,7 +99,7 @@ const ANDROID_PERMISSIONS = [
 const ANDROID_SERVICE = `
         <service
             android:name=".PpSipKeepAliveService"
-            android:foregroundServiceType="phoneCall"
+            android:foregroundServiceType="phoneCall|microphone"
             android:exported="false" />
         <receiver
             android:name=".PpIncomingActionReceiver"

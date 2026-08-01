@@ -30,6 +30,10 @@ jobs:
       - name: Check imports (fails on missing local module)
         run: npm run check:imports
 
+      - name: Verify Android parity config
+        if: matrix.platform == 'android'
+        run: npm run verify:android
+
       - name: Build web bundle (${{ matrix.platform }})
         run: npx vite build
 

@@ -55,11 +55,18 @@ async function maestroFetch(ctx: Ctx, path: string, init?: RequestInit) {
 async function maestroActions(ctx: Ctx, action: string, payload: Record<string, unknown> = {}) {
   const { data: prof } = await ctx.admin
     .from("planipret_profiles")
-    .select("maestro_broker_id")
+    .select("id, maestro_broker_id, email, ms365_email, extension, phone")
     .eq("id", ctx.profile.id)
     .maybeSingle();
-  const userId = prof?.maestro_broker_id ?? ctx.profile.maestro_broker_id ?? null;
+  let userId = prof?.maestro_broker_id ?? ctx.profile.maestro_broker_id ?? null;
+  // Auto-link from the Maestro broker directory (Microsoft email) when the
+  // broker has never been matched yet.
+  if ((!userId || !/^\d+$/.test(String(userId).trim())) && prof) {
+    const linked = await linkBrokerIdByEmail(ctx.admin, prof as any);
+    if (linked.ok && linked.maestro_broker_id) userId = linked.maestro_broker_id;
+  }
   const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-actions`, {
+
     method: "POST",
     headers: {
       "Content-Type": "application/json",

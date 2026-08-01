@@ -221,6 +221,9 @@ export function useMplanipretSoftphone(enabled = true) {
   // Permet d'afficher immédiatement l'écran "ça sonne" avec Répondre/Raccrocher.
   const [pushRing, setPushRing] = useState<{ callId: string; from: string } | null>(null);
   const [nativeStatus, setNativeStatus] = useState<PpNativeSipStatus | null>(null);
+  /** Latest answer() implementation, callable from native listeners registered once. */
+  const answerRef = useRef<null | (() => Promise<boolean>)>(null);
+
   const seenCallIds = useRef<Set<string>>(new Set());
   const mobileSipConfigRef = useRef<PpSipConfig | null>(null);
   /** Mobile WebView and native iOS stack deliberately share `<ext>M`, but never concurrently. */

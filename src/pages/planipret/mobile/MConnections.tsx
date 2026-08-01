@@ -144,6 +144,8 @@ export default function MConnections() {
           )}
         </div>
 
+        <MaestroRelinkButton lang={lang === "fr" ? "fr" : "en"} className="mt-4" />
+
         <button
           onClick={() => nav("/mplanipret/maestro-sync")}
           className="mt-4 w-full rounded-xl p-3 flex items-center gap-3 text-left"

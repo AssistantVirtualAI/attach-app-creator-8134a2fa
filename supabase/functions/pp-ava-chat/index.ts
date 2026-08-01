@@ -32,14 +32,17 @@ const MS365_ACTIONS = new Set(["connection_status", "read_emails", "read_email_d
 const MAESTRO_READ_ACTIONS = new Set(["list_clients", "client_profile", "list_brokers", "broker_profile", "list_contacts"]);
 const MAESTRO_ACTIONS = new Set([...MAESTRO_READ_ACTIONS, "create_task", "create_event"]);
 
-function fmtMaestroList(rows: any[], lang: "fr" | "en") {
+const MAESTRO_PAGE_SIZE = 10;
+
+function fmtMaestroList(rows: any[], lang: "fr" | "en", offset = 0) {
   if (!rows.length) return lang === "fr" ? "Aucun résultat." : "No results.";
-  return rows.slice(0, 25).map((c: any, i: number) => {
+  return rows.map((c: any, i: number) => {
     const name = c.name ?? c.full_name ?? [c.first_name, c.last_name].filter(Boolean).join(" ") ?? c.email ?? `#${c.id}`;
     const bits = [c.phone ?? c.mobile, c.email].filter(Boolean).join(" · ");
-    return `${i + 1}. ${name}${bits ? ` — ${bits}` : ""}`;
+    return `${offset + i + 1}. ${name}${bits ? ` — ${bits}` : ""}`;
   }).join("\n");
 }
+
 
 
 async function invokeFunction(name: string, authHeader: string, body: Record<string, unknown>) {

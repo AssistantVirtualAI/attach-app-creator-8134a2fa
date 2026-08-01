@@ -14,11 +14,13 @@ import { SiriShortcutsCard } from "@/components/planipret/SiriShortcutsCard";
 import { safeEdgeFunction } from "@/lib/safeEdgeFunction";
 import MNetworkSection from "@/components/planipret/mobile/MNetworkSection";
 import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
+import MaestroRelinkButton from "@/components/planipret/mobile/MaestroRelinkButton";
 import MCallAudioSettings from "@/components/planipret/mobile/MCallAudioSettings";
 import MRingtoneSettings from "@/components/planipret/mobile/MRingtoneSettings";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { openMs365Authorize } from "@/lib/ms365OAuth";
+import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { ppSipProvider, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
 import { Radio } from "lucide-react";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
@@ -27,7 +29,7 @@ const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
 
 export default function MMore() {
-  const { profile, reloadProfile, softphone } = useOutletContext<PlanipretMobileContext>();
+  const { profile, reloadProfile } = useOutletContext<PlanipretMobileContext>();
   const { t, lang, setLang } = useMplanipretLang();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -88,7 +90,7 @@ export default function MMore() {
     })();
   }, [profile?.id]);
 
-  const { sipConnected, reregister } = softphone;
+  const { sipConnected, reregister } = useMplanipretSoftphone();
   const nsConnected = !!(profile?.ns_extension ?? profile?.extension) && sipConnected;
   const isMs365Connected = ms365Connected(profile);
 
@@ -300,13 +302,7 @@ export default function MMore() {
               className="text-[11px] font-semibold"
               style={{ color: "#2E9BDC" }}
             >{t("screens.more.ms365Link")}</button>
-            <button
-              onClick={() => navigate("/mplanipret/build-diagnostics")}
-              className="text-[11px] font-semibold"
-              style={{ color: "#F5A623" }}
-            >Build</button>
           </div>
-
         </div>
         <Row icon={<Mail className="w-4 h-4" style={{ color: "#3FA3F0" }} />} label={t("screens.more.ms365Label")}
           sub={
@@ -337,6 +333,7 @@ export default function MMore() {
         )}
         <div style={{ padding: 8 }}>
           <MaestroConnectCard />
+          <MaestroRelinkButton lang={lang === "fr" ? "fr" : "en"} className="mt-3" />
         </div>
       </Section>
 

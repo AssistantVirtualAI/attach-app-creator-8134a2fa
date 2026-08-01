@@ -459,8 +459,11 @@ export function useMplanipretSoftphone(enabled = true) {
         let ok = false;
         try { ok = !!(await answerRef.current?.()); }
         catch (e: any) { console.warn("[pp-voip] CallKit answer failed", e?.message ?? e); }
-        console.info(`[pp-voip] CallKit answer outcome → ${ok ? "connected" : "failed"}`);
-        void completePlanipretCallKitAnswer(data?.callId, ok);
+        // session.answer() only means that JsSIP accepted the command locally.
+        // CallKit may be fulfilled only after the SIP dialog is truly confirmed;
+        // the active-state effect above owns the success completion.
+        if (!ok) void completePlanipretCallKitAnswer(data?.callId, false);
+        console.info(`[pp-voip] CallKit answer command → ${ok ? "awaiting SIP confirmation" : "failed"}`);
       })();
     }).then((fn) => { cleanupVoipAnswer = fn; }).catch(() => undefined);
 
@@ -1026,13 +1029,6 @@ export function useMplanipretSoftphone(enabled = true) {
       restCallId: restCall?.id ?? null,
     });
 
-    if (restCall?.id && !hasLiveSipSession) {
-      console.info("[answer] route=REST (pp-ns-calls answer)", { call_id: restCall.id });
-      const ok = await restControl("answer");
-      console.info(`[answer] REST answer ${ok ? "accepted" : "REJECTED"} by NetSapiens`);
-      return ok;
-    }
-
     // Push VoIP reçu mais INVITE pas encore arrivé : on bufferise la réponse,
     // ppSipProvider répondra dès que la session SIP se présente (aucune
     // comparaison de Call-ID : push id ≠ SIP Call-ID).
@@ -1044,16 +1040,24 @@ export function useMplanipretSoftphone(enabled = true) {
       const immediate = await ppSipProvider.requestAnswer(pushRing.callId || undefined);
       console.info(`[answer] requestAnswer → ${immediate ? "answered immediately" : "intent queued"}`);
       if (immediate) return true;
-      // Watchdog: if the INVITE + 200 OK never materialise within 5s, pick the
-      // call up through NS-API so the caller stops hearing the greeting.
-      for (let i = 0; i < 10; i++) {
+      // A PBX REST "answer" cannot create a WebRTC media dialog and previously
+      // produced a false connected state (CallKit answered, caller still hearing
+      // the greeting, no audio/keypad). Only a confirmed SIP dialog is success.
+      for (let i = 0; i < 16; i++) {
         await new Promise((r) => window.setTimeout(r, 500));
         const st = ppSipProvider.getSnapshot().callState;
         if (st === "active") { console.info("[answer] SIP answered within watchdog window"); return true; }
         if (st === "ended") break;
       }
-      console.warn("[answer] no SIP answer after 5s → REST fallback");
-      return await restAnswerLiveCall();
+      console.warn("[answer] no confirmed SIP dialog after 8s — refusing false REST answer");
+      return false;
+    }
+
+    if (restCall?.id && !hasLiveSipSession) {
+      console.info("[answer] route=REST (pp-ns-calls answer)", { call_id: restCall.id });
+      const ok = await restControl("answer");
+      console.info(`[answer] REST answer ${ok ? "accepted" : "REJECTED"} by NetSapiens`);
+      return ok;
     }
 
     const callId = sipSnap.callId;
@@ -1067,14 +1071,20 @@ export function useMplanipretSoftphone(enabled = true) {
     }
     const ok = await ppSipProvider.answer(callId);
     console.info(`[answer] ppSipProvider.answer → ${ok ? "SIP 200 OK sent" : "FAILED"}`, { callId });
-    if (!ok) {
-      const restOk = await restAnswerLiveCall();
-      if (restOk) return true;
+    if (!ok) return false;
+    // Do not report success to CallKit on a locally accepted answer command.
+    // Wait until JsSIP receives the confirmed dialog from the PBX.
+    for (let i = 0; i < 16; i++) {
+      await new Promise((r) => window.setTimeout(r, 250));
+      const state = ppSipProvider.getSnapshot().callState;
+      if (state === "active" || state === "held") break;
+      if (state === "ended") return false;
+      if (i === 15) return false;
     }
     // Clear the REST/DB attachment so the in-call UI follows the live session.
     if (ok && restCall?.id) setRestCall(null);
     return ok;
-  }, [restCall?.id, restControl, hasLiveSipSession, pushRing, restAnswerLiveCall]);
+  }, [restCall?.id, restControl, hasLiveSipSession, pushRing]);
 
   useEffect(() => { answerRef.current = answer; }, [answer]);
 

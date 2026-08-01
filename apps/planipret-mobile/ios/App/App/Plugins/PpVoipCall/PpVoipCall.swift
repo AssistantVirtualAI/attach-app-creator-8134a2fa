@@ -188,7 +188,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
                 "callId": callId,
                 "callerName": callerName,
                 "callerNumber": callerNumber
-            ])
+            ], retainUntilConsumed: true)
             completion()
         }
     }
@@ -209,7 +209,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         notifyListeners("incomingCallAnswered", data: [
             "callUUID": action.callUUID.uuidString,
             "callId": activeCallId ?? ""
-        ])
+        ], retainUntilConsumed: true)
         pendingAnswerAction?.fulfill()
         pendingAnswerAction = action
         // Safety net: if the WebView never reports back, fulfill anyway after

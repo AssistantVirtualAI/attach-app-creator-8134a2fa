@@ -169,17 +169,29 @@ Deno.serve(async (req) => {
   }
 
   const totalProfiles = (profiles ?? []).length;
+  const countBy = (k: string) => [...matchedBy.values()].filter((v) => v === k).length;
   return json({
     ok: true,
     dry_run: dryRun,
     only_missing: onlyMissing,
     profiles_considered: totalProfiles,
+    directory_size: dirSize,
+    directory_error: dirError ?? null,
+    matched_by_email: countBy("email"),
+    matched_by_extension: countBy("extension"),
+    matched_by_phone: countBy("phone"),
+    matched_by_sip: countBy("sip"),
     telecom_ids_probed: probed,
     telecom_users_found: found,
     matched: assignments.size,
     updated,
     unmatched: totalProfiles - assignments.size,
+    unmatched_sample: (profiles ?? [])
+      .filter((p: any) => !assignments.has(p.id))
+      .slice(0, 20)
+      .map((p: any) => ({ id: p.id, email: p.ms365_email ?? p.email, extension: p.extension })),
     errors: errors.slice(0, 20),
     sample: directory.slice(0, 10),
   });
 });
+

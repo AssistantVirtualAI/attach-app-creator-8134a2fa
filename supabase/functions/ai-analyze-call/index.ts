@@ -285,26 +285,24 @@ ${String(transcript).slice(0, 18000)}`;
     // Prefer Claude, then Lovable Gateway (Gemini), then OpenAI as final fallback.
     if (apiKey) {
       modelUsed = "claude-sonnet-4-5-20250929";
-      const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({
-          model: modelUsed,
-          max_tokens: 3000,
-          system: COACHING_SYSTEM,
-          messages: [{ role: "user", content: userMsg }],
-        }),
+      const claudeRes = await callAnthropic({
+        apiKey,
+        model: modelUsed,
+        max_tokens: 3000,
+        system: COACHING_SYSTEM, // static → prompt-cached
+        messages: [{ role: "user", content: userMsg }],
+        label: "ai-analyze-call:coaching",
       });
       if (!claudeRes.ok) {
-        const errText = await claudeRes.text();
+        const errText = String(claudeRes.error ?? "");
         console.error("Claude error, trying fallbacks", claudeRes.status, errText);
         if (openaiKey) { try { await tryOpenAI(); } catch (e) { return new Response(JSON.stringify({ success: false, error: "Claude+OpenAI failed", details: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }); } }
         else return new Response(JSON.stringify({ success: false, error: "Claude API error", details: errText.slice(0, 500) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       } else {
-        const claudeData = await claudeRes.json();
-        const raw = claudeData.content?.[0]?.text ?? "{}";
+        const raw = claudeRes.text || "{}";
         try { analysis = JSON.parse(raw); } catch { analysis = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? "{}"); }
       }
+
     } else if (lovableKey) {
       modelUsed = "google/gemini-2.5-pro";
       const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

@@ -92,6 +92,63 @@ Deno.serve(async (req) => {
     }
     links.push({ id: "maestro", label: "Maestro", ok: maestroOk, detail: maestroDetail });
 
+    // --- End-to-end Maestro tool checks (chatbot + voice bot) ---
+    const authHeader = req.headers.get("Authorization") ?? "";
+
+    // 1) Chatbot: execute the real `maestro_action` tool path.
+    let chatOk = false;
+    let chatDetail = "not_run";
+    try {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/pp-ava-chat`, {
+        method: "POST",
+        headers: { Authorization: authHeader, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "chat",
+          approved: true,
+          language: "fr",
+          confirm_action: {
+            id: "e2e-maestro",
+            label: "E2E list clients",
+            kind: "maestro_action",
+            payload: { action: "list_clients", page_size: 1, offset: 0 },
+          },
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      chatOk = r.ok && !!d?.result?.success;
+      chatDetail = chatOk
+        ? `Outil exécuté (${d?.result?.total ?? d?.result?.count ?? 0} clients)`
+        : String(d?.reply ?? d?.error ?? `HTTP ${r.status}`).slice(0, 200);
+    } catch (e) {
+      chatDetail = (e as Error).message;
+    }
+    links.push({ id: "maestro_chat_tool", label: "AVA chatbot → outils Maestro", ok: chatOk, detail: chatDetail });
+
+    // 2) Voice bot: the agent config must expose the Maestro tools.
+    let voiceOk = false;
+    let voiceDetail = "not_run";
+    try {
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/ava-agent-config`, {
+        method: "POST",
+        headers: { Authorization: authHeader, "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const d = await r.json().catch(() => ({}));
+      const names: string[] = (d?.tools ?? d?.tool_names ?? []).map((t: any) => (typeof t === "string" ? t : t?.name)).filter(Boolean);
+      const required = ["list_my_clients", "get_maestro_client_profile", "list_my_brokers", "get_maestro_broker_profile"];
+      const missingTools = required.filter((n) => !names.includes(n));
+      voiceOk = r.ok && missingTools.length === 0;
+      voiceDetail = voiceOk
+        ? `${required.length} outils Maestro déclarés à l'agent vocal`
+        : names.length
+          ? `Outils manquants: ${missingTools.join(", ")}`
+          : `Config agent indisponible (HTTP ${r.status})`;
+    } catch (e) {
+      voiceDetail = (e as Error).message;
+    }
+    links.push({ id: "maestro_voice_tool", label: "AVA voice bot → outils Maestro", ok: voiceOk, detail: voiceDetail });
+
+
     // ElevenLabs key
     links.push({
       id: "elevenlabs_key",

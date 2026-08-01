@@ -257,6 +257,7 @@ public class PpIncomingActionReceiver extends BroadcastReceiver {
       NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
       if (nm != null) nm.cancel(PpSipKeepAliveService.INCOMING_NOTIFICATION_ID);
     } catch (Exception ignored) {}
+    if ("decline".equals(userAction)) PpSipKeepAliveService.declineIncoming(c, callId);
     // Forward to plugin listeners.
     c.sendBroadcast(new Intent(PpSipKeepAliveService.ACTION_INCOMING_INVITE)
       .setPackage(c.getPackageName())
@@ -314,6 +315,7 @@ public class PpSipKeepAliveService extends Service {
     PREFS_NAME = "pp_sip_keepalive",
     ACTION_STATUS = "com.planipret.mobile.PP_SIP_STATUS",
     ACTION_REREGISTER = "com.planipret.mobile.PP_SIP_REREGISTER",
+    ACTION_DECLINE_CALL = "com.planipret.mobile.PP_SIP_DECLINE_CALL",
     ACTION_INCOMING_INVITE = "com.planipret.mobile.PP_SIP_INCOMING_INVITE";
   public static final int NOTIFICATION_ID = 2201, INCOMING_NOTIFICATION_ID = 2202;
   public static final String KEY_STATUS = "status", KEY_REASON = "reason", KEY_UPDATED_AT = "updated_at", KEY_WAKE_HELD = "wake_held", KEY_WIFI_HELD = "wifi_held", KEY_LOGGED_IN = "logged_in";
@@ -331,10 +333,15 @@ public class PpSipKeepAliveService extends Service {
   private int reconnectAttempts = 0; private volatile boolean reconnectPending = false;
   private long lastRegisterSentMs = 0L;
   private long lastRegisterOkMs = 0L;
+  private volatile String activeInviteVia, activeInviteFrom, activeInviteTo, activeInviteCallId, activeInviteCSeq;
   private static final long REGISTER_DEBOUNCE_MS = 5000L;
 
   public static void start(Context c) { Intent i = new Intent(c, PpSipKeepAliveService.class); if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) c.startForegroundService(i); else c.startService(i); }
   public static void stop(Context c) { c.stopService(new Intent(c, PpSipKeepAliveService.class)); }
+  public static void declineIncoming(Context c, String callId) {
+    Intent i = new Intent(c, PpSipKeepAliveService.class).setAction(ACTION_DECLINE_CALL).putExtra("callId", callId);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) c.startForegroundService(i); else c.startService(i);
+  }
   public static void saveConfig(Context c, String host, int port, String path, String login, String domain, String displayName, String password) { c.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString("host", host).putInt("port", port).putString("path", path).putString("login", login).putString("domain", domain).putString("display_name", displayName).putString("password", password).apply(); }
   public static void saveStrategy(Context c, int backoffMinMs, int backoffMaxMs, int backoffMaxAttempts, int verifyDelayMs, int heartbeatSec, int registerExpiresSec) {
     c.getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
@@ -382,6 +389,11 @@ public class PpSipKeepAliveService extends Service {
     Notification n = buildOngoingNotification("Téléphonie prête en arrière-plan");
     if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
     else startForeground(NOTIFICATION_ID, n);
+    if (intent != null && ACTION_DECLINE_CALL.equals(intent.getAction())) {
+      String requestedCallId = intent.getStringExtra("callId");
+      executor.execute(() -> { try { sendDecline(requestedCallId); } catch (Exception ignored) {} });
+      return START_STICKY;
+    }
     emitStatus("connecting", "native_register_start");
     executor.execute(this::connectAndRegister);
     if (heartbeat != null) heartbeat.cancel(false);
@@ -438,6 +450,8 @@ public class PpSipKeepAliveService extends Service {
       String fromHdr = header(msg, "From"); String toHdr = header(msg, "To");
       String viaHdr = header(msg, "Via"); String inviteCallId = header(msg, "Call-ID");
       String inviteCSeq = header(msg, "CSeq");
+      activeInviteVia = viaHdr; activeInviteFrom = fromHdr; activeInviteTo = toHdr;
+      activeInviteCallId = inviteCallId; activeInviteCSeq = inviteCSeq;
       String fromDisplay = parseDisplay(fromHdr); String fromUser = parseUser(fromHdr);
       // Send 180 Ringing so the PBX keeps the INVITE alive while the app wakes.
       try { sendRinging(viaHdr, fromHdr, toHdr, inviteCallId, inviteCSeq); } catch (Exception ignored) {}
@@ -447,7 +461,34 @@ public class PpSipKeepAliveService extends Service {
         .putExtra("fromUser", fromUser).putExtra("fromDisplay", fromDisplay));
       // Fire the full-screen "ringing" notification with Answer / Decline actions.
       showIncomingCallNotification(inviteCallId, fromHdr, fromUser, fromDisplay);
+      return;
     }
+    if (msg.startsWith("CANCEL ")) {
+      String cancelCallId = header(msg, "Call-ID");
+      if (cancelCallId != null && cancelCallId.equals(activeInviteCallId)) {
+        clearIncomingNotification(this);
+        sendBroadcast(new Intent(ACTION_INCOMING_INVITE).setPackage(getPackageName())
+          .putExtra("callId", cancelCallId).putExtra("userAction", "cancelled"));
+        clearActiveInvite();
+      }
+    }
+  }
+
+  private void sendDecline(String requestedCallId) throws Exception {
+    if (activeInviteCallId == null || (requestedCallId != null && !requestedCallId.equals(activeInviteCallId))) return;
+    if (activeInviteVia == null || activeInviteFrom == null || activeInviteTo == null || activeInviteCSeq == null) return;
+    String toWithTag = activeInviteTo.contains(";tag=") ? activeInviteTo : activeInviteTo + ";tag=" + Long.toHexString(System.nanoTime());
+    String response = "SIP/2.0 603 Decline\r\nVia: " + activeInviteVia + "\r\nFrom: " + activeInviteFrom
+      + "\r\nTo: " + toWithTag + "\r\nCall-ID: " + activeInviteCallId + "\r\nCSeq: " + activeInviteCSeq
+      + "\r\nUser-Agent: Planipret Native KeepAlive\r\nContent-Length: 0\r\n\r\n";
+    sendFrame(response);
+    clearIncomingNotification(this);
+    clearActiveInvite();
+  }
+
+  private void clearActiveInvite() {
+    activeInviteVia = null; activeInviteFrom = null; activeInviteTo = null;
+    activeInviteCallId = null; activeInviteCSeq = null;
   }
 
   private void sendRinging(String via, String from, String to, String cid, String cseqHeader) throws Exception {
@@ -1383,7 +1424,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
                 "callId": callId,
                 "callerName": callerName,
                 "callerNumber": callerNumber
-            ])
+            ], retainUntilConsumed: true)
             completion()
         }
     }
@@ -1404,16 +1445,16 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         notifyListeners("incomingCallAnswered", data: [
             "callUUID": action.callUUID.uuidString,
             "callId": activeCallId ?? ""
-        ])
+        ], retainUntilConsumed: true)
         pendingAnswerAction?.fulfill()
         pendingAnswerAction = action
-        // Safety net: if the WebView never reports back, fulfill anyway after
-        // 12s. Failing the action would tear the call down on the PBX side.
+        // Safety net: never present a false connected CallKit call. If the
+        // WebView cannot confirm the SIP dialog, fail the answer action.
         DispatchQueue.main.asyncAfter(deadline: .now() + 12.0) { [weak self, weak action] in
             guard let self = self, let action = action, self.pendingAnswerAction === action else { return }
             self.pendingAnswerAction = nil
-            NSLog("[PpVoipCall] answer action timed out — fulfilling to keep the call up")
-            action.fulfill()
+            NSLog("[PpVoipCall] answer action timed out — SIP dialog not confirmed")
+            action.fail()
         }
     }
 

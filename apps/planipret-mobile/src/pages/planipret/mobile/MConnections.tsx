@@ -17,6 +17,7 @@ import {
 } from "@/lib/planipret/connectionRecovery";
 import { connectMs365 } from "@/lib/ms365Connect";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import MaestroCallPostingPanel from "@/components/planipret/MaestroCallPostingPanel";
 
 const TONE = {
   ok: "#2EDC78",
@@ -180,6 +181,8 @@ export default function MConnections() {
             </ul>
           )}
         </section>
+
+        <MaestroCallPostingPanel lang={lang === "fr" ? "fr" : "en"} />
       </div>
     </div>
   );

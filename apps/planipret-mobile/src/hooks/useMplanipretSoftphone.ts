@@ -56,7 +56,7 @@ import {
   type AnsweredBy,
 } from "@/lib/planipret/calls/callSessionSync";
 import { maestroTelecom } from "@/lib/planipret/maestroTelecom";
-import { postOutboundCall, postInboundCall, wasPostedToMaestro } from "@/lib/planipret/maestroCallPosting";
+import { postOutboundCall, postInboundCall, updateCallIfPosted } from "@/lib/planipret/maestroCallPosting";
 
 // Fire-and-forget Maestro logging — never blocks the call flow.
 const maestroLog = (fn: () => Promise<unknown>) => {
@@ -1022,7 +1022,7 @@ export function useMplanipretSoftphone(enabled = true) {
     // "active", which would leave the call up on NetSapiens.
     void restDisconnectWithRetry(restId);
     if (restId && !hasLiveSipSession) {
-      if (wasPostedToMaestro(restId)) maestroLog(() => maestroTelecom.updateCall(restId, { status: "ended", ended_reason: "completed" }));
+      void updateCallIfPosted(restId, { status: "ended", ended_reason: "completed" });
       setRestCall(null);
       setPushRing(null);
       return;
@@ -1033,7 +1033,7 @@ export function useMplanipretSoftphone(enabled = true) {
     if (restId) setRestCall(null);
     if (callId) {
       void endSession(callId, "hangup");
-      if (wasPostedToMaestro(callId)) maestroLog(() => maestroTelecom.updateCall(callId, { status: "ended", ended_reason: "completed" }));
+      void updateCallIfPosted(callId, { status: "ended", ended_reason: "completed" });
     }
   }, [restCall?.id, restDisconnectWithRetry, hasLiveSipSession]);
 

@@ -67,6 +67,15 @@ Deno.serve(async (req) => {
     const cfg = await getMaestroTelecomConfig(admin);
     if (!isMaestroTelecomConfigured(cfg)) return j({ ok: false, error: "not_configured" });
 
+    // PRIMARY: match the broker's Microsoft email against Maestro's broker
+    // directory (GET /users/{seed}/brokers). This is Scott's new mobile
+    // endpoint and is exact — no SIP probing, no /users/me guessing.
+    const byDirectory = await linkBrokerIdByEmail(admin, profile as any, { force: body?.force === true });
+    if (byDirectory.ok && byDirectory.maestro_broker_id) {
+      return j({ ok: true, maestro_id: byDirectory.maestro_broker_id, matched_by: byDirectory.matched_by, source: "brokers_directory" });
+    }
+
+
     const url = `${cfg.url}/users/me?machine=1`;
     const attempts: Array<{ label: string; token: string }> = [
       { label: "machine_key", token: cfg.key },

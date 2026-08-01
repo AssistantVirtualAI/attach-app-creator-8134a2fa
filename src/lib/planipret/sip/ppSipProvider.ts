@@ -629,9 +629,12 @@ class PpSipProvider {
             pushCallId: pending.callId || null, sipCallId: callId,
           });
           setTimeout(() => {
-            const ok = this.answer();
-            this.log(ok ? "info" : "error", `auto-answer ${ok ? "sent 200 OK" : "FAILED"}`, { sipCallId: callId });
+            void this.answer().then((ok) => {
+              this.log(ok ? "info" : "error", `auto-answer ${ok ? "sent 200 OK" : "FAILED"}`, { sipCallId: callId });
+              try { window.dispatchEvent(new CustomEvent("pp:sip-auto-answered", { detail: { ok, callId } })); } catch {}
+            });
           }, 250);
+
         } else if (pending) {
           this.log("warn", "answer intent expired before INVITE arrived");
           this.pendingAnswer = null;

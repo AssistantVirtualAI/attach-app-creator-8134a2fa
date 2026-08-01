@@ -330,7 +330,7 @@ async function processEvent(event: any) {
           from_user: data.from_number ?? data.from ?? "",
           to_number: data.to_number ?? data.to ?? ext,
           type: "incoming_call",
-        });
+        };
         await sendVoipPush(userId, inboundPushPayload);
         await sendAndroidCallPush(userId, inboundPushPayload);
         sendPush(userId, {

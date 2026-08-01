@@ -2,6 +2,8 @@
 // Input  : { text: string, mode: "sms" | "email", action: "fix" | "improve" | "formal" | "shorter" }
 // Output : { success: true, result: string } | { success: false, error: string }
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { claudeText } from "../_shared/anthropic.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

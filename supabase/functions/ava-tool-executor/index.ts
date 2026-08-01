@@ -4,6 +4,8 @@
 import { authBroker, corsHeaders, jsonResponse, nsBrokerFetch } from "../_shared/ns-broker.ts";
 import { normalizePhoneE164 } from "../_shared/phone-normalize.ts";
 import { linkBrokerIdByEmail } from "../_shared/maestro-broker-directory.ts";
+import { claudeText } from "../_shared/anthropic.ts";
+
 
 
 const DOMAIN = "planipret.ca";

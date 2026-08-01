@@ -27,6 +27,21 @@ export interface BrokerDirectoryEntry {
 const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
 
+/** Accent-insensitive, punctuation-free, sorted-token name key. */
+export const nameKey = (v: unknown): string =>
+  String(v ?? "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z\s]/g, " ")
+    .split(/\s+/).filter(Boolean).sort().join(" ");
+
+/** Find a directory entry by full name (unique normalized match only). */
+export function findByName(entries: BrokerDirectoryEntry[], fullName: string): BrokerDirectoryEntry | null {
+  const k = nameKey(fullName);
+  if (!k || k.split(" ").length < 2) return null;
+  const hits = entries.filter((x) => nameKey(x.name) === k);
+  return hits.length === 1 ? hits[0] : null;
+}
+
 let cache: { at: number; entries: BrokerDirectoryEntry[]; seed: string | null } | null = null;
 const CACHE_TTL_MS = 5 * 60_000;
 
@@ -146,6 +161,7 @@ export async function linkBrokerIdByEmail(
     extension?: string | null;
     phone?: string | null;
     maestro_broker_id?: string | null;
+    full_name?: string | null;
   },
   opts: { force?: boolean } = {},
 ): Promise<{ ok: boolean; maestro_broker_id: string | null; matched_by: string | null; error?: string }> {
@@ -177,6 +193,10 @@ export async function linkBrokerIdByEmail(
       if (hit) matchedBy = "phone";
     }
   }
+  if (!hit && (profile as any).full_name) {
+    hit = findByName(entries, (profile as any).full_name);
+    if (hit) matchedBy = "name";
+  }
   if (!hit) return { ok: false, maestro_broker_id: null, matched_by: null, error: "no_directory_match" };
 
   const { error: upErr } = await admin
@@ -197,7 +217,7 @@ export async function resolveMaestroIdForUser(
 ): Promise<{ maestro_broker_id: string | null; matched_by: string | null; error?: string }> {
   const { data } = await admin
     .from("planipret_profiles")
-    .select("id, user_id, email, ms365_email, extension, phone, maestro_broker_id")
+    .select("id, user_id, email, ms365_email, extension, phone, full_name, maestro_broker_id")
     .or(`user_id.eq.${userId},id.eq.${userId}`)
     .limit(1)
     .maybeSingle();

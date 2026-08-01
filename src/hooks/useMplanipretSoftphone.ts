@@ -1033,7 +1033,7 @@ export function useMplanipretSoftphone(enabled = true) {
     if (restId) setRestCall(null);
     if (callId) {
       void endSession(callId, "hangup");
-      maestroLog(() => maestroTelecom.updateCall(callId, { status: "ended", ended_reason: "completed" }));
+      if (wasPostedToMaestro(callId)) maestroLog(() => maestroTelecom.updateCall(callId, { status: "ended", ended_reason: "completed" }));
     }
   }, [restCall?.id, restDisconnectWithRetry, hasLiveSipSession]);
 

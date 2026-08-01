@@ -55,23 +55,17 @@ function normalizeContact(c: any) {
  * repeatedly while paginating; upstream has no offset support so we
  * fetch the full list once and page locally from the cached copy.
  * ------------------------------------------------------------------ */
-const LIST_CACHE_TTL_MS = 90_000;
-const listCache = new Map<string, { at: number; rows: any[] }>();
-
-function cacheGet(key: string): any[] | null {
-  const hit = listCache.get(key);
-  if (!hit) return null;
-  if (Date.now() - hit.at > LIST_CACHE_TTL_MS) { listCache.delete(key); return null; }
-  return hit.rows;
+const CACHE_TTL = 90_000; // 90 secondes
+const _listCache = new Map<string, { ts: number; data: unknown }>();
+function cacheGet(key: string) {
+  const e = _listCache.get(key);
+  return e && Date.now() - e.ts < CACHE_TTL ? e.data : null;
 }
-
-function cacheSet(key: string, rows: any[]) {
-  if (listCache.size > 200) listCache.clear();
-  listCache.set(key, { at: Date.now(), rows });
+function cacheSet(key: string, data: unknown) {
+  _listCache.set(key, { ts: Date.now(), data });
 }
-
-function cacheInvalidate(userId: string) {
-  for (const k of [...listCache.keys()]) if (k.startsWith(`${userId}:`)) listCache.delete(k);
+function cacheInvalidate(prefix: string) {
+  for (const k of [..._listCache.keys()]) if (k.startsWith(prefix)) _listCache.delete(k);
 }
 
 
@@ -277,50 +271,80 @@ Deno.serve(async (req) => {
         }
 
         const isList = action === "list_clients" || action === "list_brokers";
-        const cacheKey = `${telecomUserId}:${action}:${String(payload.search ?? "")}`;
+        const cacheKey = `${action}:${telecomUserId}:${String(payload.search ?? "")}:${Number(payload.limit ?? 25)}:${Number(payload.offset ?? 0)}`;
         const refresh = payload.refresh === true || payload.no_cache === true;
-        let all: any[] | null = isList && !refresh ? cacheGet(cacheKey) : null;
-        let cached = !!all;
 
-        if (!isList || !all) {
+        if (isList && !refresh) {
+          const cached = cacheGet(cacheKey);
+          if (cached) return j({ success: true, ...(cached as object), cached: true });
+        }
+
+        let all: any[] | null = null;
+        let totalFromResponse: number | undefined;
+
+        if (!isList) {
           const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
           if (!r.ok) {
             console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
             return j({ success: false, error: `maestro ${action} failed`, status: r.status, details: r.data }, r.status && r.status >= 400 ? r.status : 502);
           }
           const d: any = r.data;
-          if (!isList) {
-            const obj = d?.profile ?? d?.client ?? d?.broker ?? d?.data ?? d;
-            return j({ success: true, profile: normalizeContact(obj), raw: obj });
-          }
-          const listRaw = Array.isArray(d) ? d : (d?.clients ?? d?.brokers ?? d?.data ?? d?.results ?? []);
-          all = Array.isArray(listRaw) ? listRaw : [];
-          cached = false;
-          if (refresh) cacheInvalidate(telecomUserId);
-          cacheSet(cacheKey, all);
+          const obj = d?.profile ?? d?.client ?? d?.broker ?? d?.data ?? d;
+          return j({ success: true, profile: normalizeContact(obj), raw: obj });
         }
 
-        // Pagination: upstream only supports `limit`, so slice locally.
-        const offset = Math.max(0, Number(payload.offset ?? 0) || 0);
-        const pageSize = Math.max(1, Math.min(200, Number(payload.page_size ?? payload.limit ?? (all.length || 1))));
-        const page = all.slice(offset, offset + pageSize);
-        const nextOffset = offset + page.length < all.length ? offset + page.length : null;
-        const prevOffset = offset > 0 ? Math.max(0, offset - pageSize) : null;
-        return j({
-          success: true,
-          [action === "list_clients" ? "clients" : "brokers"]: page.map(normalizeContact),
-          count: page.length,
-          total: all.length,
-          offset,
-          page_size: pageSize,
-          next_offset: nextOffset,
-          prev_offset: prevOffset,
-          has_more: nextOffset !== null,
-          has_prev: prevOffset !== null,
-          page: Math.floor(offset / pageSize) + 1,
-          page_count: Math.max(1, Math.ceil(all.length / pageSize)),
-          cached,
-        });
+        const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
+        if (!r.ok) {
+          console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
+          return j({ success: false, error: `maestro ${action} failed`, status: r.status, details: r.data }, r.status && r.status >= 400 ? r.status : 502);
+        }
+        const d: any = r.data;
+        const listRaw = Array.isArray(d) ? d : (d?.clients ?? d?.brokers ?? d?.data ?? d?.results ?? []);
+        all = Array.isArray(listRaw) ? listRaw : [];
+        totalFromResponse = d?.total_count ?? d?.total;
+
+        const offset = Number(payload.offset ?? 0);
+        const limit = Number(payload.limit ?? 25);
+        const total = totalFromResponse ?? all.length;
+        const list = all.slice(offset, offset + limit);
+        const has_more = offset + list.length < total;
+        const next_offset = has_more ? offset + limit : null;
+        const prev_offset = offset > 0 ? Math.max(0, offset - limit) : null;
+        const page = Math.floor(offset / limit) + 1;
+        const page_count = Math.ceil(total / limit);
+
+        const response = action === "list_clients"
+          ? {
+              success: true,
+              clients: list.map(normalizeContact),
+              total,
+              has_more,
+              next_offset,
+              prev_offset,
+              page,
+              page_count,
+              offset,
+              limit,
+              count: list.length,
+            }
+          : {
+              success: true,
+              brokers: list.map(normalizeContact),
+              total,
+              has_more,
+              next_offset,
+              prev_offset,
+              page,
+              page_count,
+              offset,
+              limit,
+              count: list.length,
+            };
+
+        if (refresh) cacheInvalidate(`${action}:${telecomUserId}:`);
+        cacheSet(cacheKey, response);
+
+        return j({ ...response, cached: false });
 
       }
       case "test": {

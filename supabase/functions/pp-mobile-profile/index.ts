@@ -65,5 +65,31 @@ Deno.serve(async (req) => {
     console.warn("[pp-mobile-profile] missing_profile for", userId, email);
     return jsonResponse(404, { error: "missing_profile" });
   }
-  return jsonResponse(200, { profile, linked });
+
+  // Auto-link the Maestro broker id from the directory using the sign-in email.
+  // Runs on every app boot until linked, so email/password sign-in gets the
+  // same Maestro binding as Microsoft sign-in.
+  let maestro_linked: string | null = null;
+  const p: any = profile;
+  if (!p.maestro_broker_id) {
+    try {
+      const res = await linkBrokerIdByEmail(admin, {
+        id: p.id,
+        email: p.email ?? email,
+        ms365_email: p.ms365_email,
+        extension: p.extension,
+        phone: p.phone,
+        maestro_broker_id: p.maestro_broker_id,
+      });
+      if (res.ok && res.maestro_broker_id) {
+        maestro_linked = res.maestro_broker_id;
+        p.maestro_broker_id = res.maestro_broker_id;
+        console.log("[pp-mobile-profile] maestro linked", { email: p.email, id: res.maestro_broker_id, by: res.matched_by });
+      }
+    } catch (e) {
+      console.warn("[pp-mobile-profile] maestro link failed", String(e));
+    }
+  }
+
+  return jsonResponse(200, { profile, linked, maestro_linked });
 });

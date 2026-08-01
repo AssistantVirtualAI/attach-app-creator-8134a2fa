@@ -1407,13 +1407,13 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         ], retainUntilConsumed: true)
         pendingAnswerAction?.fulfill()
         pendingAnswerAction = action
-        // Safety net: if the WebView never reports back, fulfill anyway after
-        // 12s. Failing the action would tear the call down on the PBX side.
+        // Safety net: never present a false connected CallKit call. If the
+        // WebView cannot confirm the SIP dialog, fail the answer action.
         DispatchQueue.main.asyncAfter(deadline: .now() + 12.0) { [weak self, weak action] in
             guard let self = self, let action = action, self.pendingAnswerAction === action else { return }
             self.pendingAnswerAction = nil
-            NSLog("[PpVoipCall] answer action timed out — fulfilling to keep the call up")
-            action.fulfill()
+            NSLog("[PpVoipCall] answer action timed out — SIP dialog not confirmed")
+            action.fail()
         }
     }
 

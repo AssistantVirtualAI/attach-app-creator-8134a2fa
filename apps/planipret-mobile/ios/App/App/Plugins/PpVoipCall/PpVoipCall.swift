@@ -83,8 +83,8 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         ])
     }
 
-    /// Keep the single process-lifetime registry armed. Destroying/recreating
-    /// PKPushRegistry while registration is pending can starve didUpdate forever.
+    /// Keep one registry alive; replacing it while APNs registration is pending
+    /// prevents the delegate callback from ever delivering the token.
     @objc func refreshVoipPushToken(_ call: CAPPluginCall) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { call.resolve(["ok": false]); return }
@@ -153,9 +153,8 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         let callerName = (dict["callerName"] as? String) ?? (dict["from_number"] as? String) ?? (dict["from"] as? String) ?? "Appel entrant"
         let callerNumber = (dict["callerNumber"] as? String) ?? (dict["from_number"] as? String) ?? (dict["from_user"] as? String) ?? ""
 
-        // NetSapiens may retry the same call event while the device is waking.
-        // Keep the original CallKit UUID/action instead of creating a second
-        // incoming-call screen and making the first Answer button stale.
+        // NetSapiens can retry a call event while iOS is waking. Preserve the
+        // first CallKit UUID so its Answer action never becomes stale.
         if callId == activeCallId, activeCallUUID != nil {
             NSLog("[PpVoipCall] duplicate VoIP push ignored callId=%@", callId)
             completion()

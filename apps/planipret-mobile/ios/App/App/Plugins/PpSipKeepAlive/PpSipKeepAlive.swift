@@ -29,10 +29,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private var host = ""; private var port = 443; private var path = "/"; private var login = ""; private var domain = ""; private var displayName = ""; private var password = ""
     private var socket: URLSessionWebSocketTask?
     /// Only true once the WSS handshake completed. Sending a REGISTER before
-    /// that fails with POSIX 57 "Socket is not connected" and costs a full
-    /// backoff cycle at every cold start.
+    /// that fails with POSIX 57 "Socket is not connected".
     private var socketOpen = false
-    /// Pending REGISTER requested while the socket was still connecting.
     private var registerOnOpen = false
     private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue())
     private var timer: Timer?
@@ -215,17 +213,14 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// guarantees background execution through PushKit, so this is the path that
     /// must bring the AOR back before the PBX times out to voicemail.
     private func wakeForPush(_ why: String) {
-      // PushKit wakes the native process before the WebView can resolve SIP
-      // credentials. Restore the last confirmed configuration first so an
-      // incoming call can REGISTER without depending on JavaScript startup.
+      // PushKit can wake iOS before the WebView has loaded. Restore the last
+      // confirmed SIP configuration so REGISTER never depends on JS startup.
       if host.isEmpty || login.isEmpty || domain.isEmpty { restoreConfig() }
       guard !host.isEmpty, !login.isEmpty, !domain.isEmpty, !password.isEmpty else {
         setStatus("error", "missing_persisted_sip_config")
         notifyListeners("sipReregisterRequested", data: ["reason": "missing_persisted_sip_config"])
         return
       }
-      // PpVoipCall posts the native wake notification and later emits CallKit
-      // readiness to JS. Treat those as one wake, not two REGISTER handshakes.
       if let previous = lastPushWakeAt, Date().timeIntervalSince(previous) < 1.0 { return }
       lastPushWakeAt = Date()
       NSLog("[PpSipKeepAlive] VoIP push wake (%@)", why)
@@ -393,7 +388,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         if !self.isForeground() { self.setStatus("reconnecting", "ws_closed"); self.scheduleReconnect("ws_closed") }
       }
     }
-
     private func scheduleRegister() {
       timer?.invalidate()
       // Refresh once near expiry, not every minute. NetSapiens treats repeated
@@ -402,7 +396,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in self?.sendRegister(challenge: nil) }
       if let timer = timer { RunLoop.main.add(timer, forMode: .common) }
     }
-
     private func receiveLoop() {
       socket?.receive { [weak self] result in
         guard let self = self else { return }
@@ -452,9 +445,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         guard let self = self else { return }
         let up = path.status == .satisfied
         let wasUp = self.networkUp
-        // NWPathMonitor fires on every interface/flow change (dozens per minute
-        // on cellular). Only act on a real up/down transition, and never more
-        // than once every 2s.
         if up == wasUp { return }
         if let last = self.lastPathChangeAt, Date().timeIntervalSince(last) < 2.0 { return }
         self.lastPathChangeAt = Date()
@@ -556,7 +546,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private func sendRegister(challenge: String?, proxyAuth: Bool = false, force: Bool = false) {
       if isForeground() { releaseRegistration("foreground_js_owns"); return }
       if socket == nil { connect(); return }
-      // The WSS handshake is not done yet: queue instead of failing with POSIX 57.
       if !socketOpen { registerOnOpen = true; return }
       // Two REGISTERs in a row on the same WSS connection make NetSapiens see a
       // duplicate AoR and close the socket. Hold off after each send/200 OK

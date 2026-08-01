@@ -95,6 +95,87 @@ Deno.serve(async (req) => {
     // --- End-to-end Maestro tool checks (chatbot + voice bot) ---
     const authHeader = req.headers.get("Authorization") ?? "";
 
+    // 0) Broker ↔ Maestro id link (Microsoft email → GET /users/{id}/brokers)
+    let maestroId: string | null = null;
+    let linkMatchedBy: string | null = null;
+    try {
+      const { data: prof } = await admin
+        .from("planipret_profiles")
+        .select("id, email, ms365_email, extension, phone, maestro_broker_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (prof) {
+        const linked = await linkBrokerIdByEmail(admin as any, prof as any);
+        maestroId = linked.maestro_broker_id;
+        linkMatchedBy = linked.matched_by;
+        if (!linked.ok) linkMatchedBy = linked.error ?? null;
+      }
+    } catch (e) {
+      linkMatchedBy = (e as Error).message;
+    }
+    links.push({
+      id: "maestro_broker_link",
+      label: "Identifiant Maestro du courtier",
+      ok: !!maestroId,
+      detail: maestroId
+        ? `Maestro ID ${maestroId} (${linkMatchedBy ?? "lié"})`
+        : `Non lié — ${linkMatchedBy ?? "aucune correspondance dans l'annuaire Maestro"}`,
+    });
+
+    // 0b) The four new mobile endpoints, called live.
+    const endpointChecks: Array<{ id: string; label: string; action: string; payload: Record<string, unknown> }> = [
+      { id: "maestro_ep_clients", label: "GET /users/{id}/clients", action: "list_clients", payload: { page_size: 1, offset: 0 } },
+      { id: "maestro_ep_brokers", label: "GET /users/{id}/brokers", action: "list_brokers", payload: { page_size: 1, offset: 0 } },
+    ];
+    let firstClientId: string | null = null;
+    let firstBrokerId: string | null = null;
+    for (const c of endpointChecks) {
+      let ok = false;
+      let detail = "not_run";
+      try {
+        const r = await fetch(`${SUPABASE_URL}/functions/v1/maestro-actions`, {
+          method: "POST",
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: c.action, payload: c.payload }),
+        });
+        const d = await r.json().catch(() => ({}));
+        ok = r.ok && d?.success === true;
+        const list = d?.clients ?? d?.brokers ?? [];
+        if (ok && c.action === "list_clients") firstClientId = list?.[0]?.id ? String(list[0].id) : null;
+        if (ok && c.action === "list_brokers") firstBrokerId = list?.[0]?.id ? String(list[0].id) : null;
+        detail = ok ? `${d?.total ?? list.length} résultat(s)` : String(d?.error ?? `HTTP ${r.status}`).slice(0, 160);
+      } catch (e) {
+        detail = (e as Error).message;
+      }
+      links.push({ id: c.id, label: c.label, ok, detail });
+    }
+
+    for (const c of [
+      { id: "maestro_ep_client_profile", label: "GET /users/{id}/clients/{id}/profile", action: "client_profile", key: "client_id", value: firstClientId },
+      { id: "maestro_ep_broker_profile", label: "GET /users/{id}/brokers/{id}/profile", action: "broker_profile", key: "broker_id", value: firstBrokerId },
+    ]) {
+      if (!c.value) {
+        links.push({ id: c.id, label: c.label, ok: false, detail: "Aucun identifiant disponible pour tester" });
+        continue;
+      }
+      let ok = false;
+      let detail = "not_run";
+      try {
+        const r = await fetch(`${SUPABASE_URL}/functions/v1/maestro-actions`, {
+          method: "POST",
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: c.action, payload: { [c.key]: c.value } }),
+        });
+        const d = await r.json().catch(() => ({}));
+        ok = r.ok && d?.success === true && !!d?.profile;
+        detail = ok ? `Profil ${d?.profile?.name ?? c.value} récupéré` : String(d?.error ?? `HTTP ${r.status}`).slice(0, 160);
+      } catch (e) {
+        detail = (e as Error).message;
+      }
+      links.push({ id: c.id, label: c.label, ok, detail });
+    }
+
+
     // 1) Chatbot: execute the real `maestro_action` tool path.
     let chatOk = false;
     let chatDetail = "not_run";

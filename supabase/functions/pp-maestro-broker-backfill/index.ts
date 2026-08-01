@@ -1,4 +1,4 @@
-// Bulk-resolve `planipret_profiles.maestro_broker_id` for EVERY broker. (redeploy 2026-08-01)
+// Bulk-resolve `planipret_profiles.maestro_broker_id` for EVERY broker. (redeploy 2026-08-01b)
 //
 // Why: per-call resolution probes /users/{id}/sip one broker at a time and is
 // rate-limited by a 10-minute cooldown. With 350+ brokers that never converges,

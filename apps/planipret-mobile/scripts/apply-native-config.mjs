@@ -347,7 +347,7 @@ public class PpSipKeepAliveService extends Service {
 
   @Override public int onStartCommand(Intent intent, int flags, int startId) {
     Notification n = buildOngoingNotification("Téléphonie prête en arrière-plan");
-    if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
+    if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, NOTIFICATION_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
     else startForeground(NOTIFICATION_ID, n);
     emitStatus("connecting", "native_register_start");
     executor.execute(this::connectAndRegister);

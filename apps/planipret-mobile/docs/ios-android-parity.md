@@ -38,3 +38,29 @@ and `npm run ios:verify` (iOS) before every device build; both are wired into
    (in-app prompt calls `requestBatteryOptimizationExemption`).
 4. Test: app foreground / background / swiped away → incoming call must ring
    with a full-screen notification and Answer must connect audio both ways.
+
+## Pre-release checklist
+
+### iOS
+- [ ] Incoming call, app killed (PushKit + CallKit)
+- [ ] Incoming call, app backgrounded
+- [ ] Outgoing call
+- [ ] Mic stays live when backgrounding an active call
+- [ ] Call recording notice plays once
+
+### Android
+- [ ] Real `google-services.json` in `android/app/` (never the placeholder — `npm run verify:android` now fails on it)
+- [ ] `FCM_SERVICE_ACCOUNT_JSON` set in Edge Function secrets
+- [ ] Incoming call, app killed (FCM data message)
+- [ ] Incoming call, app backgrounded
+- [ ] Outgoing call
+- [ ] Mic stays live on Android 14+ (`phoneCall|microphone` foreground service type)
+- [ ] Call recording notice plays once
+
+## Firebase setup (Android)
+
+1. Create/open the Firebase project at console.firebase.google.com.
+2. Add the Android app with package `com.planipret.mobile`.
+3. Download `google-services.json` → `android/app/`.
+4. IAM → Service Accounts → Firebase Admin SDK → generate a JSON key.
+5. Store that JSON as the `FCM_SERVICE_ACCOUNT_JSON` backend secret.

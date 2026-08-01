@@ -56,6 +56,7 @@ import {
   type AnsweredBy,
 } from "@/lib/planipret/calls/callSessionSync";
 import { maestroTelecom } from "@/lib/planipret/maestroTelecom";
+import { postOutboundCall, postInboundCall, wasPostedToMaestro } from "@/lib/planipret/maestroCallPosting";
 
 // Fire-and-forget Maestro logging — never blocks the call flow.
 const maestroLog = (fn: () => Promise<unknown>) => {

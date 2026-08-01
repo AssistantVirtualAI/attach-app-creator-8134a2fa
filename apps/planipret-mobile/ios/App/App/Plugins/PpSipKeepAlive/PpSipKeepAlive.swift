@@ -28,6 +28,10 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var host = ""; private var port = 443; private var path = "/"; private var login = ""; private var domain = ""; private var displayName = ""; private var password = ""
     private var socket: URLSessionWebSocketTask?
+    /// Only true once the WSS handshake completed. Sending a REGISTER before
+    /// that fails with POSIX 57 "Socket is not connected".
+    private var socketOpen = false
+    private var registerOnOpen = false
     private lazy var session = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue())
     private var timer: Timer?
     private var cseq = 1
@@ -50,6 +54,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private var backgroundHandoffWorkItem: DispatchWorkItem?
     private var pathMonitor: NWPathMonitor?
     private var networkUp = true
+    private var lastPathChangeAt: Date?
     /// True while the WebView (JsSIP) has a live call. During a call the native
     /// stack must NEVER take the AOR over: doing so closes the JsSIP transport
     /// (WSS 1001) and kills the audio. We only keep the audio session alive.
@@ -208,17 +213,14 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// guarantees background execution through PushKit, so this is the path that
     /// must bring the AOR back before the PBX times out to voicemail.
     private func wakeForPush(_ why: String) {
-      // PushKit wakes the native process before the WebView can resolve SIP
-      // credentials. Restore the last confirmed configuration first so an
-      // incoming call can REGISTER without depending on JavaScript startup.
+      // PushKit can wake iOS before the WebView has loaded. Restore the last
+      // confirmed SIP configuration so REGISTER never depends on JS startup.
       if host.isEmpty || login.isEmpty || domain.isEmpty { restoreConfig() }
       guard !host.isEmpty, !login.isEmpty, !domain.isEmpty, !password.isEmpty else {
         setStatus("error", "missing_persisted_sip_config")
         notifyListeners("sipReregisterRequested", data: ["reason": "missing_persisted_sip_config"])
         return
       }
-      // PpVoipCall posts the native wake notification and later emits CallKit
-      // readiness to JS. Treat those as one wake, not two REGISTER handshakes.
       if let previous = lastPushWakeAt, Date().timeIntervalSince(previous) < 1.0 { return }
       lastPushWakeAt = Date()
       NSLog("[PpSipKeepAlive] VoIP push wake (%@)", why)
@@ -363,8 +365,28 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       var comps = URLComponents(); comps.scheme = port == 80 ? "ws" : "wss"; comps.host = host; comps.port = port; comps.path = path.isEmpty ? "/" : path
       guard let url = comps.url else { setStatus("error", "bad_ws_url"); return }
       var req = URLRequest(url: url); req.setValue("sip", forHTTPHeaderField: "Sec-WebSocket-Protocol")
+      socketOpen = false
+      registerOnOpen = true
       socket = session.webSocketTask(with: req); socket?.resume(); setStatus("connecting", "ws_connecting"); receiveLoop()
-      DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in self?.sendRegister(challenge: nil) }
+    }
+
+    public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self, webSocketTask === self.socket else { return }
+        self.socketOpen = true
+        NSLog("[PpSipKeepAlive] ws open")
+        if self.registerOnOpen { self.registerOnOpen = false; self.sendRegister(challenge: nil, force: true) }
+      }
+    }
+
+    public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self, webSocketTask === self.socket else { return }
+        self.socketOpen = false
+        self.socket = nil
+        NSLog("[PpSipKeepAlive] ws closed code=%ld", closeCode.rawValue)
+        if !self.isForeground() { self.setStatus("reconnecting", "ws_closed"); self.scheduleReconnect("ws_closed") }
+      }
     }
     private func scheduleRegister() {
       timer?.invalidate()
@@ -384,6 +406,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
           self.receiveLoop()
         case .failure(let err):
           self.socket = nil
+          self.socketOpen = false
           if self.isForeground() { self.setStatus("idle", "foreground_js_owns") }
           else {
             NSLog("[PpSipKeepAlive] socket closed: %@", String(describing: err))
@@ -422,16 +445,19 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         guard let self = self else { return }
         let up = path.status == .satisfied
         let wasUp = self.networkUp
+        if up == wasUp { return }
+        if let last = self.lastPathChangeAt, Date().timeIntervalSince(last) < 2.0 { return }
+        self.lastPathChangeAt = Date()
         self.networkUp = up
         NSLog("[PpSipKeepAlive] network %@", up ? "available" : "lost")
-        if up && !wasUp {
+        if up {
           self.reconnectAttempts = 0
           DispatchQueue.main.async { [weak self] in
             guard let self = self, !self.isForeground() else { return }
-            self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil
-            self.connect(); self.sendRegister(challenge: nil)
+            self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil; self.socketOpen = false
+            self.connect()
           }
-        } else if !up {
+        } else {
           self.setStatus("reconnecting", "network_lost")
         }
       }
@@ -520,6 +546,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private func sendRegister(challenge: String?, proxyAuth: Bool = false, force: Bool = false) {
       if isForeground() { releaseRegistration("foreground_js_owns"); return }
       if socket == nil { connect(); return }
+      if !socketOpen { registerOnOpen = true; return }
       // Two REGISTERs in a row on the same WSS connection make NetSapiens see a
       // duplicate AoR and close the socket. Hold off after each send/200 OK
       // (auth challenge responses are exempt: they complete the same handshake).

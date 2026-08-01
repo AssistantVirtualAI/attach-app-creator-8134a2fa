@@ -252,3 +252,5 @@ Deno.serve(async (req) => {
     return j({ error: (e as Error).message }, 500);
   }
 });
+
+// redeploy: blob refresh 2026-08-01

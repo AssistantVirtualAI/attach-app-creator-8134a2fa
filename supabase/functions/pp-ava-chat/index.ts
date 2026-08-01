@@ -410,7 +410,7 @@ Deno.serve(async (req) => {
       }
 
       // Maestro clients/brokers directory (endpoints /users/{id}/clients|brokers)
-      if (/\bclients?\b|\bcourtiers?\b|\bbrokers?\b|\bdossiers?\b|\bportefeuille\b/i.test(userMessage)) {
+      if (/\bclients?\b|\bcourtiers?\b|\bbrokers?\b|\bdossiers?\b|\bportefeuille\b|\bmaestro\b|\bprospects?\b|\bpipeline\b|\bcustomers?\b|\bmes\s+clients\b|\bmy\s+clients\b|\bliste\b|\blist\b/i.test(userMessage)) {
         try {
           const isBroker = /\bcourtiers?\b|\bbrokers?\b/i.test(userMessage);
           const r = await invokeFunction("maestro-actions", authHeader, {

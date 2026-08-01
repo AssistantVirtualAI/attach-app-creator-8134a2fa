@@ -412,6 +412,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
           self.receiveLoop()
         case .failure(let err):
           self.socket = nil
+          self.socketOpen = false
           if self.isForeground() { self.setStatus("idle", "foreground_js_owns") }
           else {
             NSLog("[PpSipKeepAlive] socket closed: %@", String(describing: err))

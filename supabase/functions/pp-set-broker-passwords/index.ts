@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
 
   // Maestro broker directory (best-effort)
   let directory: any[] = [];
-  try { directory = (await loadBrokerDirectory(admin)) ?? []; } catch { /* optional */ }
+  try { directory = (await loadBrokerDirectory(admin))?.entries ?? []; } catch { /* optional */ }
   const dirByEmail = new Map<string, any>();
   const dirByExt = new Map<string, any>();
   const dirByPhone = new Map<string, any>();

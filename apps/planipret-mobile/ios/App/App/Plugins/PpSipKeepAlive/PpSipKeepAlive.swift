@@ -451,16 +451,22 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         guard let self = self else { return }
         let up = path.status == .satisfied
         let wasUp = self.networkUp
+        // NWPathMonitor fires on every interface/flow change (dozens per minute
+        // on cellular). Only act on a real up/down transition, and never more
+        // than once every 2s.
+        if up == wasUp { return }
+        if let last = self.lastPathChangeAt, Date().timeIntervalSince(last) < 2.0 { return }
+        self.lastPathChangeAt = Date()
         self.networkUp = up
         NSLog("[PpSipKeepAlive] network %@", up ? "available" : "lost")
-        if up && !wasUp {
+        if up {
           self.reconnectAttempts = 0
           DispatchQueue.main.async { [weak self] in
             guard let self = self, !self.isForeground() else { return }
-            self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil
-            self.connect(); self.sendRegister(challenge: nil)
+            self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil; self.socketOpen = false
+            self.connect()
           }
-        } else if !up {
+        } else {
           self.setStatus("reconnecting", "network_lost")
         }
       }

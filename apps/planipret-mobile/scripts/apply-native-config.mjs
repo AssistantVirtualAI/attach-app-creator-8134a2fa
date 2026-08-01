@@ -186,6 +186,39 @@ public class PpSipKeepAlivePlugin extends Plugin {
   @PluginMethod public void getSipServiceStatus(PluginCall call) { call.resolve(readStatus().put("ok", true)); }
   @PluginMethod public void triggerReregister(PluginCall call) { PpSipKeepAliveService.requestReregister(getContext(), "manual"); call.resolve(readStatus().put("ok", true)); }
   @PluginMethod public void acknowledgeIncoming(PluginCall call) { PpSipKeepAliveService.clearIncomingNotification(getContext()); call.resolve(new JSObject().put("ok", true)); }
+  /** In-call audio routing. A call must start on the earpiece; the speaker is opt-in. */
+  @PluginMethod public void setAudioRoute(PluginCall call) {
+    String route = call.getString("route", "earpiece");
+    try {
+      android.media.AudioManager am = (android.media.AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+      if (am == null) { call.reject("no_audio_manager"); return; }
+      am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+      if ("speaker".equals(route)) {
+        try { am.stopBluetoothSco(); } catch (Exception ignored) {}
+        am.setBluetoothScoOn(false);
+        am.setSpeakerphoneOn(true);
+      } else if ("bluetooth".equals(route)) {
+        am.setSpeakerphoneOn(false);
+        try { am.startBluetoothSco(); am.setBluetoothScoOn(true); } catch (Exception ignored) {}
+      } else {
+        try { am.stopBluetoothSco(); } catch (Exception ignored) {}
+        am.setBluetoothScoOn(false);
+        am.setSpeakerphoneOn(false);
+      }
+      call.resolve(new JSObject().put("ok", true).put("route", route));
+    } catch (Exception e) { call.reject(e.getMessage()); }
+  }
+  @PluginMethod public void getAudioRoute(PluginCall call) {
+    try {
+      android.media.AudioManager am = (android.media.AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+      String route = "earpiece";
+      if (am != null) {
+        if (am.isBluetoothScoOn()) route = "bluetooth";
+        else if (am.isSpeakerphoneOn()) route = "speaker";
+      }
+      call.resolve(new JSObject().put("ok", true).put("route", route));
+    } catch (Exception e) { call.reject(e.getMessage()); }
+  }
   @PluginMethod public void requestBatteryOptimizationExemption(PluginCall call) {
     try {
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) { call.resolve(new JSObject().put("ok", true).put("ignored", true).put("requested", false)); return; }

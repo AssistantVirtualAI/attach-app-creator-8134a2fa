@@ -18,6 +18,7 @@ import {
 import { connectMs365 } from "@/lib/ms365Connect";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import MaestroCallPostingPanel from "@/components/planipret/MaestroCallPostingPanel";
+import MaestroRelinkButton from "@/components/planipret/mobile/MaestroRelinkButton";
 
 const TONE = {
   ok: "#2EDC78",

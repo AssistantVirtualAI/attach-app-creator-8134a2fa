@@ -933,6 +933,16 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       socketOpen = false
       registerOnOpen = true
       socket = session.webSocketTask(with: req); socket?.resume(); setStatus("connecting", "ws_connecting"); receiveLoop()
+      // Safety net: if didOpen never fires within 10s, drop the socket and let
+      // the reconnect watchdog take over. No REGISTER is sent in that case.
+      let pending = socket
+      DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+        guard let self = self, let pending = pending, pending === self.socket, !self.socketOpen else { return }
+        NSLog("[PpSipKeepAlive] ws open timeout - cancelling socket")
+        self.registerOnOpen = false
+        self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil
+        self.setStatus("reconnecting", "ws_open_timeout"); self.scheduleReconnect("ws_open_timeout")
+      }
     }
 
     public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
@@ -1111,7 +1121,11 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     private func sendRegister(challenge: String?, proxyAuth: Bool = false, force: Bool = false) {
       if isForeground() { releaseRegistration("foreground_js_owns"); return }
       if socket == nil { connect(); return }
-      if !socketOpen { registerOnOpen = true; return }
+      if !socketOpen {
+        registerOnOpen = true
+        if !force { NSLog("[PpSipKeepAlive] REGISTER skipped: ws_not_open") }
+        return
+      }
       // Two REGISTERs in a row on the same WSS connection make NetSapiens see a
       // duplicate AoR and close the socket. Hold off after each send/200 OK
       // (auth challenge responses are exempt: they complete the same handshake).

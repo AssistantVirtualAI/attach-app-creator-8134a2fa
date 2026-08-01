@@ -15,6 +15,8 @@ import { loadBrokerDirectory } from "../_shared/maestro-broker-directory.ts";
 const PROTECTED_EMAILS = new Set([
   "gbouillon@planipret.com",
   "mmaglieri@planipret.com",
+  "mhassoun@assistantvirtualai.com",
+  "demo@avastatistic.ca",
 ]);
 
 const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();

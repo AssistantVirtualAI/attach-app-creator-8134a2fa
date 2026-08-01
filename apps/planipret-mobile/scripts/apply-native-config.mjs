@@ -186,6 +186,39 @@ public class PpSipKeepAlivePlugin extends Plugin {
   @PluginMethod public void getSipServiceStatus(PluginCall call) { call.resolve(readStatus().put("ok", true)); }
   @PluginMethod public void triggerReregister(PluginCall call) { PpSipKeepAliveService.requestReregister(getContext(), "manual"); call.resolve(readStatus().put("ok", true)); }
   @PluginMethod public void acknowledgeIncoming(PluginCall call) { PpSipKeepAliveService.clearIncomingNotification(getContext()); call.resolve(new JSObject().put("ok", true)); }
+  /** In-call audio routing. A call must start on the earpiece; the speaker is opt-in. */
+  @PluginMethod public void setAudioRoute(PluginCall call) {
+    String route = call.getString("route", "earpiece");
+    try {
+      android.media.AudioManager am = (android.media.AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+      if (am == null) { call.reject("no_audio_manager"); return; }
+      am.setMode(android.media.AudioManager.MODE_IN_COMMUNICATION);
+      if ("speaker".equals(route)) {
+        try { am.stopBluetoothSco(); } catch (Exception ignored) {}
+        am.setBluetoothScoOn(false);
+        am.setSpeakerphoneOn(true);
+      } else if ("bluetooth".equals(route)) {
+        am.setSpeakerphoneOn(false);
+        try { am.startBluetoothSco(); am.setBluetoothScoOn(true); } catch (Exception ignored) {}
+      } else {
+        try { am.stopBluetoothSco(); } catch (Exception ignored) {}
+        am.setBluetoothScoOn(false);
+        am.setSpeakerphoneOn(false);
+      }
+      call.resolve(new JSObject().put("ok", true).put("route", route));
+    } catch (Exception e) { call.reject(e.getMessage()); }
+  }
+  @PluginMethod public void getAudioRoute(PluginCall call) {
+    try {
+      android.media.AudioManager am = (android.media.AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+      String route = "earpiece";
+      if (am != null) {
+        if (am.isBluetoothScoOn()) route = "bluetooth";
+        else if (am.isSpeakerphoneOn()) route = "speaker";
+      }
+      call.resolve(new JSObject().put("ok", true).put("route", route));
+    } catch (Exception e) { call.reject(e.getMessage()); }
+  }
   @PluginMethod public void requestBatteryOptimizationExemption(PluginCall call) {
     try {
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) { call.resolve(new JSObject().put("ok", true).put("ignored", true).put("requested", false)); return; }
@@ -551,6 +584,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       CAPPluginMethod(name: "acknowledgeIncoming", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "wakeForIncomingCall", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "setCallActive", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "setAudioRoute", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "getAudioRoute", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
       CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise)
     ]
@@ -584,6 +619,10 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// stack must NEVER take the AOR over: doing so closes the JsSIP transport
     /// (WSS 1001) and kills the audio. We only keep the audio session alive.
     private var callActive = false
+    /// "earpiece" | "speaker" | "bluetooth" — chosen by the user in the in-call UI.
+    /// A phone call MUST start on the earpiece: WebKit WebRTC otherwise defaults
+    /// to the loudspeaker as soon as the remote party answers.
+    private var preferredRoute = "earpiece"
     private var audioKeepAliveTimer: Timer?
     private let configDefaultsKey = "pp_sip_native_config_v1"
     private let passwordService = "com.planipret.mobile.sip"
@@ -669,6 +708,42 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       }
     }
     private func stopAudioKeepAlive() { audioKeepAliveTimer?.invalidate(); audioKeepAliveTimer = nil }
+
+    @objc func setAudioRoute(_ call: CAPPluginCall) {
+      let route = call.getString("route") ?? "earpiece"
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { call.resolve(["ok": false]); return }
+        self.preferredRoute = route
+        self.applyAudioRoute()
+        call.resolve(["ok": true, "route": self.preferredRoute])
+      }
+    }
+
+    @objc func getAudioRoute(_ call: CAPPluginCall) {
+      DispatchQueue.main.async { [weak self] in
+        call.resolve(["ok": true, "route": self?.currentAudioRoute() ?? "earpiece"])
+      }
+    }
+
+    private func currentAudioRoute() -> String {
+      let outs = AVAudioSession.sharedInstance().currentRoute.outputs
+      if outs.contains(where: { $0.portType == .bluetoothHFP || $0.portType == .bluetoothA2DP || $0.portType == .bluetoothLE }) { return "bluetooth" }
+      if outs.contains(where: { $0.portType == .builtInSpeaker }) { return "speaker" }
+      return "earpiece"
+    }
+
+    private func applyAudioRoute() {
+      let s = AVAudioSession.sharedInstance()
+      switch preferredRoute {
+      case "speaker":
+        try? s.overrideOutputAudioPort(.speaker)
+      case "bluetooth":
+        try? s.overrideOutputAudioPort(.none)
+        if let bt = s.availableInputs?.first(where: { $0.portType == .bluetoothHFP }) { try? s.setPreferredInput(bt) }
+      default:
+        try? s.overrideOutputAudioPort(.none)
+      }
+    }
 
     @objc func stopSipService(_ call: CAPPluginCall) { DispatchQueue.main.async { self.releaseRegistration("stopped"); call.resolve(self.snapshot(ok: true)) } }
     @objc func getSipServiceStatus(_ call: CAPPluginCall) { DispatchQueue.main.async { call.resolve(self.snapshot(ok: true)) } }
@@ -835,6 +910,9 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         : [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]
       try? s.setCategory(.playAndRecord, mode: .voiceChat, options: opts)
       try? s.setActive(true, options: [])
+      // Re-assert the user's choice: activating the session resets the override
+      // and iOS would fall back to the loudspeaker mid-call.
+      applyAudioRoute()
     }
     private func connect() {
       // A new socket means a new AoR binding: clear the 200 OK debounce.
@@ -1389,6 +1467,8 @@ CAP_PLUGIN(PpSipKeepAlive, "PpSipKeepAlive",
   CAP_PLUGIN_METHOD(acknowledgeIncoming, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(wakeForIncomingCall, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(setCallActive, CAPPluginReturnPromise);
+  CAP_PLUGIN_METHOD(setAudioRoute, CAPPluginReturnPromise);
+  CAP_PLUGIN_METHOD(getAudioRoute, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(addListener, CAPPluginReturnCallback);
   CAP_PLUGIN_METHOD(removeAllListeners, CAPPluginReturnPromise);
 )

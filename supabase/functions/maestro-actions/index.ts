@@ -55,23 +55,17 @@ function normalizeContact(c: any) {
  * repeatedly while paginating; upstream has no offset support so we
  * fetch the full list once and page locally from the cached copy.
  * ------------------------------------------------------------------ */
-const LIST_CACHE_TTL_MS = 90_000;
-const listCache = new Map<string, { at: number; rows: any[] }>();
-
-function cacheGet(key: string): any[] | null {
-  const hit = listCache.get(key);
-  if (!hit) return null;
-  if (Date.now() - hit.at > LIST_CACHE_TTL_MS) { listCache.delete(key); return null; }
-  return hit.rows;
+const CACHE_TTL = 90_000; // 90 secondes
+const _listCache = new Map<string, { ts: number; data: unknown }>();
+function cacheGet(key: string) {
+  const e = _listCache.get(key);
+  return e && Date.now() - e.ts < CACHE_TTL ? e.data : null;
 }
-
-function cacheSet(key: string, rows: any[]) {
-  if (listCache.size > 200) listCache.clear();
-  listCache.set(key, { at: Date.now(), rows });
+function cacheSet(key: string, data: unknown) {
+  _listCache.set(key, { ts: Date.now(), data });
 }
-
-function cacheInvalidate(userId: string) {
-  for (const k of [...listCache.keys()]) if (k.startsWith(`${userId}:`)) listCache.delete(k);
+function cacheInvalidate(prefix: string) {
+  for (const k of [..._listCache.keys()]) if (k.startsWith(prefix)) _listCache.delete(k);
 }
 
 

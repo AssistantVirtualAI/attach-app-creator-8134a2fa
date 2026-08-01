@@ -62,24 +62,14 @@ Réponds UNIQUEMENT avec le texte reformulé, sans explication ni guillemets.`,
 };
 
 async function callClaude(system: string, userText: string): Promise<string | null> {
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (key) {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5",
-        max_tokens: 1500,
-        system,
-        messages: [{ role: "user", content: userText }],
-      }),
-    });
-    if (r.ok) {
-      const j = await r.json();
-      return j.content?.[0]?.text ?? null;
-    }
-    console.error("[ai-text-improve] Anthropic error", await r.text());
-  }
+  // Prompt caching on the static system prompt (see _shared/anthropic.ts).
+  const res = await claudeText(system, userText, {
+    model: "claude-haiku-4-5",
+    max_tokens: 1500,
+    label: "ai-text-improve",
+  });
+  if (res) return res;
+
   // Fallback Lovable AI gateway
   const lk = Deno.env.get("LOVABLE_API_KEY");
   if (!lk) return null;

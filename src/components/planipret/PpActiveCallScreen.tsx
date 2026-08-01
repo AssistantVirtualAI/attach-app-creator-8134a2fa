@@ -73,6 +73,14 @@ export default function PpActiveCallScreen({
     if (!active) { setView("main"); setDtmfBuf(""); setTransferQuery(""); setElapsed(0); }
   }, [active]);
 
+  // A call must never start on the loudspeaker: WebKit/WebRTC defaults to it
+  // once the remote party answers, so we force the earpiece on connect.
+  useEffect(() => {
+    if (snap.callState !== "active") return;
+    setSpeakerOn(false);
+    void audioRouter.startCallAudio();
+  }, [snap.callState, snap.callId]);
+
   // Recording notice — played once per call as soon as it connects.
   // Dedup lives in the module (recordingNotice.ts), so remounting this screen
   // (navigation, re-render) never replays or skips the notice.

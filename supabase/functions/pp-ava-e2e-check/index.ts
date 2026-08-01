@@ -4,6 +4,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
+import { linkBrokerIdByEmail } from "../_shared/maestro-broker-directory.ts";
 
 const j = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });

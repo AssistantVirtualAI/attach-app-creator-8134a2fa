@@ -18,6 +18,8 @@ import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
 } from "../_shared/maestro-telecom.ts";
+import { linkBrokerIdByEmail } from "../_shared/maestro-broker-directory.ts";
+
 
 function j(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

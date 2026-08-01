@@ -11,6 +11,8 @@
 // POST { max_id?: number, concurrency?: number, dry_run?: boolean, only_missing?: boolean }
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, json, getMaestroConfig } from "../_shared/maestro.ts";
+import { loadBrokerDirectory } from "../_shared/maestro-broker-directory.ts";
+
 
 const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 

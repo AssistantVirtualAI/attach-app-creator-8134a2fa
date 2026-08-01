@@ -57,6 +57,8 @@ Deno.serve(async (req) => {
   const dryRun = body.dry_run === true;
   const onlyMissing = body.only_missing === true; // default: set for everyone
   const limit = Math.min(Math.max(Number(body.limit ?? 1000), 1), 2000);
+  const offset = Math.max(Number(body.offset ?? 0), 0);
+  const skipDirectory = body.skip_directory === true;
 
   // Protected: explicit list + the caller's own account
   const protectedEmails = new Set(PROTECTED_EMAILS);
@@ -69,7 +71,8 @@ Deno.serve(async (req) => {
     .from("planipret_profiles")
     .select("id, user_id, email, full_name, extension, phone, maestro_broker_id")
     .not("email", "is", null)
-    .limit(limit);
+    .order("email", { ascending: true })
+    .range(offset, offset + limit - 1);
   if (pErr) return json({ error: pErr.message }, 500);
 
   // Existing auth users, by email

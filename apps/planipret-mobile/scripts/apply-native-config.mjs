@@ -1388,18 +1388,25 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     }
 
     public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
-        try? AVAudioSession.sharedInstance().setActive(true)
+        // Prepare the route but let CallKit own activation (didActivate:) —
+        // activating here races the system session and yields a dead call.
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
+        // Keep the SIP transport pinned up while the WebView answers.
+        NotificationCenter.default.post(name: Notification.Name("PpVoipCallAnswered"), object: nil, userInfo: ["callId": activeCallId ?? ""])
         notifyListeners("incomingCallAnswered", data: [
             "callUUID": action.callUUID.uuidString,
             "callId": activeCallId ?? ""
         ])
-        pendingAnswerAction?.fail()
+        pendingAnswerAction?.fulfill()
         pendingAnswerAction = action
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30.0) { [weak self, weak action] in
+        // Safety net: if the WebView never reports back, fulfill anyway after
+        // 12s. Failing the action would tear the call down on the PBX side.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 12.0) { [weak self, weak action] in
             guard let self = self, let action = action, self.pendingAnswerAction === action else { return }
             self.pendingAnswerAction = nil
-            action.fail()
+            NSLog("[PpVoipCall] answer action timed out — fulfilling to keep the call up")
+            action.fulfill()
         }
     }
 

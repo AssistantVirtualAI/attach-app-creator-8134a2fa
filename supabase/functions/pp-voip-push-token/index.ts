@@ -42,8 +42,12 @@ Deno.serve(async (req) => {
   const bundleId = body?.bundleId || null;
   const environment = body?.environment || "production";
 
-  if (!/^[a-fA-F0-9]{32,512}$/.test(deviceToken)) return json({ error: "invalid_device_token" }, 400);
-  if (platform !== "ios") return json({ error: "invalid_platform" }, 400);
+  if (platform !== "ios" && platform !== "android") return json({ error: "invalid_platform" }, 400);
+  // iOS PushKit tokens are hex; Android FCM tokens are longer opaque strings.
+  const tokenValid = platform === "ios"
+    ? /^[a-fA-F0-9]{32,512}$/.test(deviceToken)
+    : /^[\w:.~-]{64,4096}$/.test(deviceToken);
+  if (!tokenValid) return json({ error: "invalid_device_token" }, 400);
   if (environment !== "production" && environment !== "sandbox") return json({ error: "invalid_environment" }, 400);
   if (extension && String(extension).length > 64) return json({ error: "invalid_extension" }, 400);
   if (bundleId && String(bundleId).length > 255) return json({ error: "invalid_bundle_id" }, 400);

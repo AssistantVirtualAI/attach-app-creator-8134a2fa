@@ -1039,7 +1039,8 @@ export function useMplanipretSoftphone(enabled = true) {
     // Push VoIP reçu mais INVITE pas encore arrivé : on bufferise la réponse,
     // ppSipProvider répondra dès que la session SIP se présente (aucune
     // comparaison de Call-ID : push id ≠ SIP Call-ID).
-    if (!hasLiveSipSession && pushRing) {
+    const liveSipNow = ["ringing-in", "ringing-out", "active", "held"].includes(sipSnap.callState);
+    if (!liveSipNow && pushRing) {
       console.info("[answer] route=PUSH-PENDING → forceReregister + requestAnswer", {
         pushCallId: pushRing.callId ?? null,
       });
@@ -1060,7 +1061,7 @@ export function useMplanipretSoftphone(enabled = true) {
       return false;
     }
 
-    if (restCall?.id && !hasLiveSipSession) {
+    if (restCall?.id && !liveSipNow) {
       console.info("[answer] route=REST (pp-ns-calls answer)", { call_id: restCall.id });
       const ok = await restControl("answer");
       console.info(`[answer] REST answer ${ok ? "accepted" : "REJECTED"} by NetSapiens`);

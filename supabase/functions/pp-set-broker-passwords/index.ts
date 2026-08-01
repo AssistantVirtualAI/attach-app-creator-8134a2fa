@@ -28,10 +28,13 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
   const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return json({ error: "Unauthorized" }, 401);
+  const adminSecret = Deno.env.get("PP_BULK_ADMIN_SECRET") || "";
+  const providedSecret = req.headers.get("x-admin-secret") || "";
+  const internal = !!adminSecret && providedSecret === adminSecret;
+  if (!token && !internal) return json({ error: "Unauthorized" }, 401);
 
   let callerId: string | null = null;
-  if (token === SERVICE_KEY) {
+  if (internal || token === SERVICE_KEY) {
     callerId = null; // internal invocation
   } else {
     const { data: userRes } = await admin.auth.getUser(token);

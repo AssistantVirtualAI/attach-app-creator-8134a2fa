@@ -909,12 +909,8 @@ export function useMplanipretSoftphone(enabled = true) {
         status: "ringing-out",
         startedAt: Date.now(),
       });
-      maestroLog(() => maestroTelecom.createCall({
-        provider_call_id: callId,
-        to_user_number: destination,
-        status: "dialing",
-        direction: "outbound",
-      }));
+      // Rules 1 & 2 — always post outbound calls to Maestro.
+      postOutboundCall({ providerCallId: callId, number: destination });
     }
     return { via: "pbx", ok: true, callId };
   }, []);

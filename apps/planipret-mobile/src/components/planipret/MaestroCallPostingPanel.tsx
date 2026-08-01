@@ -29,9 +29,9 @@ const REASONS: Record<string, { fr: string; en: string }> = {
     fr: "Règle 4 — entrant depuis un numéro VoIP de courtier (l'appelant crée l'enregistrement)",
     en: "Rule 4 — inbound from a broker VoIP number (the caller creates the record)",
   },
-  classification_unavailable_failsafe: {
-    fr: "Classification indisponible — ignoré par sécurité (le CDR sera synchronisé)",
-    en: "Classification unavailable — skipped as fail-safe (CDR sync still applies)",
+  classification_unavailable_posted: {
+    fr: "Classification indisponible — publié quand même (POST /calls est idempotent)",
+    en: "Classification unavailable — posted anyway (POST /calls is idempotent)",
   },
   post_failed: { fr: "Échec après 3 tentatives", en: "Failed after 3 attempts" },
 };

@@ -1042,12 +1042,19 @@ export function useMplanipretSoftphone(enabled = true) {
 
   const attachRestCall = useCallback((attachment: RestCallAttachment | null) => {
     if (!attachment?.id) { setRestCall(null); return; }
+    const direction = attachment.direction ?? "out";
     setRestCall({
       ...attachment,
-      direction: attachment.direction ?? "out",
+      direction,
       status: attachment.status ?? "active",
       startedAt: attachment.startedAt ?? Date.now(),
     });
+    // Scott's rules also apply to calls attached from the PBX live-call list:
+    // outbound always posts (1 & 2), inbound posts unless the caller is a
+    // broker VoIP number (3 & 4). De-duplicated by provider_call_id.
+    const number = attachment.number ?? attachment.other ?? "";
+    if (direction === "out") postOutboundCall({ providerCallId: attachment.id, number });
+    else postInboundCall({ providerCallId: attachment.id, number });
   }, []);
 
   const sipConnected = snap.status === "registered" || snap.status === "connected";

@@ -78,10 +78,12 @@ Deno.serve(async (req) => {
   // with Microsoft are matched exactly, without any SIP probing.
   let dirSize = 0;
   let dirError: string | undefined;
+  let dirSample: any[] = [];
   if (body.skip_directory !== true) {
     const dir = await loadBrokerDirectory(admin, { force: true });
     dirSize = dir.entries.length;
     dirError = dir.error;
+    dirSample = dir.entries.slice(0, 15);
     if (dir.entries.length) {
       const byEmail = new Map<string, any>();
       const byLocal = new Map<string, any[]>();
@@ -201,6 +203,7 @@ Deno.serve(async (req) => {
       .map((p: any) => ({ id: p.id, email: p.ms365_email ?? p.email, extension: p.extension })),
     errors: errors.slice(0, 20),
     sample: directory.slice(0, 10),
+    directory_sample: body.debug === true ? dirSample : undefined,
   });
 });
 

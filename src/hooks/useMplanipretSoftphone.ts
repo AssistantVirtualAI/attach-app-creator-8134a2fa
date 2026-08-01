@@ -387,6 +387,12 @@ export function useMplanipretSoftphone(enabled = true) {
       // before re-registering, so a fast JsSIP INVITE cannot beat the flag.
       if (invite?.action === "answer") {
         try { (window as any).__ppPendingAnswer = { callId: invite.callId, ts: Date.now() }; } catch {}
+        try { ppSipProvider.forceReregister(); } catch {}
+        // Android: the notification action only broadcast an intent before —
+        // nothing actually picked the call up, so the caller kept hearing the
+        // greeting. Run the full answer flow (SIP, then NS-API fallback).
+        void ppSipProvider.requestAnswer(invite?.callId);
+        void answerRef.current?.().then((ok) => console.info(`[pp-sip] notification answer → ${ok ? "connected" : "failed"}`));
       } else if (invite?.action === "decline") {
         try { ppSipProvider.hangup(); } catch {}
         void acknowledgePlanipretIncoming();
@@ -396,6 +402,7 @@ export function useMplanipretSoftphone(enabled = true) {
         window.dispatchEvent(new CustomEvent("pp:sip-incoming-invite", { detail: invite }));
       } catch {}
     }).then((fn) => { cleanupInvite = fn; }).catch(() => undefined);
+
 
 
 

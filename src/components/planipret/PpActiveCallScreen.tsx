@@ -224,7 +224,12 @@ export default function PpActiveCallScreen({
             {displayNumber && <div className="text-sm text-white/60 mt-1">{displayNumber}</div>}
             <div className="mt-3 text-sm text-white/70">{statusText}</div>
             {dtmfBuf && <div className="mt-2 text-xs text-white/50">DTMF: {dtmfBuf}</div>}
-            {snap.errorCause && <div className="mt-2 text-xs" style={{ color: "#FCA5A5" }}>{snap.errorCause}</div>}
+            {/* Internal transport states (ws_disconnected, registration_failed…)
+                are debug tokens: never show them to the user. Only human
+                readable causes are surfaced, and never during an inbound ring. */}
+            {!isIncoming && snap.errorCause && !/^[a-z0-9_.-]+$/.test(String(snap.errorCause)) && (
+              <div className="mt-2 text-xs" style={{ color: "#FCA5A5" }}>{snap.errorCause}</div>
+            )}
           </div>
         )}
 

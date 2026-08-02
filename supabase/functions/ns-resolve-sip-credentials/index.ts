@@ -381,7 +381,13 @@ Deno.serve(async (req) => {
   }
 
 
-  const resolvedId = deviceIdOf(device) || deviceName;
+  // Hard invariant: a mobile client can only ever be handed `<ext>M`.
+  const resolvedRaw = deviceIdOf(device) || deviceName;
+  const resolvedId = clientType === "mobile" ? deviceName : resolvedRaw;
+  if (resolvedRaw !== resolvedId) {
+    console.warn(`[ns-resolve] forced mobile AOR ${resolvedId} (NS returned ${resolvedRaw})`);
+  }
+
   const rawCore = (device["core-server"] ?? device["device-sip-registration-core-server"] ?? device["sip-registration-core-server"] ?? "").toString().trim();
   const coreServer = (rawCore || FALLBACK_PROXY).replace(/^https?:\/\//, "").replace(/\/+$/, "");
   const sipUri = device["device-sip-registration-uri"] ?? `sip:${resolvedId}@${domain}`;

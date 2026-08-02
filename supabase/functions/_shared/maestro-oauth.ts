@@ -133,7 +133,35 @@ export async function persistTokenSet(
   };
   if (tokens.refresh_token) patch.maestro_refresh_token = tokens.refresh_token;
   if (tokens.scope) patch.maestro_scope = tokens.scope;
-  await admin.from("planipret_profiles").update(patch).eq("user_id", userId);
+  await updateProfileByEitherKey(admin, userId, patch, "persistTokenSet");
+}
+
+/**
+ * Reads match on `user_id` OR `id`; writes MUST use the same key resolution.
+ * Filtering writes on `user_id` only silently updated zero rows when the
+ * profile row is keyed by `id`, so every refreshed token was thrown away and
+ * `maestro_token_expires_at` stayed permanently in the past.
+ */
+async function updateProfileByEitherKey(
+  admin: SupabaseClient,
+  userId: string,
+  patch: Record<string, unknown>,
+  label: string,
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("planipret_profiles")
+    .update(patch)
+    .or(`user_id.eq.${userId},id.eq.${userId}`)
+    .select("id");
+  if (error) {
+    console.error(`[maestro-oauth] ${label} update failed`, error.message);
+    return false;
+  }
+  if (!data || data.length === 0) {
+    console.error(`[maestro-oauth] ${label} matched ZERO profile rows`, { userId });
+    return false;
+  }
+  return true;
 }
 
 export async function getUserMaestroAccessToken(
@@ -161,10 +189,10 @@ export async function getUserMaestroAccessToken(
   const refreshed = await refreshAccessToken(env, prof.maestro_refresh_token as string, isMobile);
   if (!refreshed.ok || !refreshed.data) {
     console.warn("[maestro-oauth] refresh failed", refreshed.status, refreshed.error);
-    await admin.from("planipret_profiles").update({
+    await updateProfileByEitherKey(admin, userId, {
       maestro_connected: false,
       maestro_broker_token: null,
-    }).eq("user_id", userId);
+    }, "refresh-failure");
     return null;
   }
   await persistTokenSet(admin, userId, refreshed.data, isMobile);

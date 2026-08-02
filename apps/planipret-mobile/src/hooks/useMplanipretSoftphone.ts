@@ -148,17 +148,37 @@ function acquireSoftphoneOwner(instanceId: string, userId: string): boolean {
 }
 
 /** Mounted hook instances, so ownership can be handed over instead of lost. */
-const softphoneInstances = new Set<{ notify: () => void }>();
+const softphoneInstances = new Set<{ id: string; notify: () => void }>();
+
+function notifySoftphoneInstances() {
+  softphoneInstances.forEach((i) => { try { i.notify(); } catch {} });
+}
+
+/**
+ * A ringing or live call FREEZES ownership. Better a stale owner for a few
+ * seconds than no CallKit listener at all.
+ */
+function softphoneCallIsLive(): boolean {
+  try {
+    const st = ppSipProvider.getSnapshot().callState;
+    return ppSipProvider.hasActiveCall()
+      || st === "ringing-in" || st === "ringing-out"
+      || st === "active" || st === "held";
+  } catch { return false; }
+}
 
 function releaseSoftphoneOwner(instanceId: string) {
-  if (softphoneOwnerId === instanceId) {
-    softphoneOwnerId = null;
-    softphoneOwnerUserId = null;
-    // Ownership must never stay vacant: the owner holds the CallKit answer
-    // listener and the cross-device claim. Wake the remaining instances so one
-    // of them re-acquires immediately.
-    softphoneInstances.forEach((i) => { try { i.notify(); } catch {} });
+  if (softphoneOwnerId !== instanceId) return;
+  if (softphoneCallIsLive()) {
+    console.info("[pp-sip] owner release deferred: call is live", { instanceId });
+    return;
   }
+  softphoneOwnerId = null;
+  softphoneOwnerUserId = null;
+  // Ownership must never stay vacant: the owner holds the CallKit answer
+  // listener and the cross-device claim. Wake the remaining instances so one
+  // of them re-acquires immediately.
+  notifySoftphoneInstances();
 }
 
 
@@ -245,10 +265,29 @@ export function useMplanipretSoftphone(enabled = true) {
 
   // Register this instance so ownership can be transferred on unmount.
   useEffect(() => {
-    const entry = { notify: () => setOwnerTick((t) => t + 1) };
+    const entry = { id: ownerIdRef.current, notify: () => setOwnerTick((t) => t + 1) };
     softphoneInstances.add(entry);
     return () => { softphoneInstances.delete(entry); };
   }, []);
+
+  // Dedicated, non-destructive ownership takeover. Kept OUT of the SIP init
+  // effect: putting `ownerTick` there would run its cleanup (releaseSoftphoneOwner)
+  // and cascade into teardown / re-REGISTER storms on every handover.
+  useEffect(() => {
+    if (!enabled || !user) return;
+    if (softphoneOwnerId === ownerIdRef.current) return;
+    const ownerAlive = softphoneOwnerId !== null
+      && Array.from(softphoneInstances).some((i) => i.id === softphoneOwnerId);
+    if (ownerAlive) return;
+    if (softphoneOwnerId !== null) {
+      if (softphoneCallIsLive()) return;
+      console.info("[pp-sip] reclaiming orphaned softphone owner", { from: softphoneOwnerId });
+      softphoneOwnerId = null;
+      softphoneOwnerUserId = null;
+    }
+    if (!acquireSoftphoneOwner(ownerIdRef.current, user.id)) return;
+    setOwnerTick((t) => t + 1);
+  }, [enabled, user?.id, ownerTick]);
 
   // CallKit must only mark Answer fulfilled after the SIP dialog is confirmed;
   // otherwise iOS shows a connected call while NetSapiens is still ringing or
@@ -380,7 +419,7 @@ export function useMplanipretSoftphone(enabled = true) {
       window.removeEventListener("pp:sip-force-reregister", onForce as any);
       releaseSoftphoneOwner(ownerId);
     };
-  }, [enabled, user?.id, ownerTick]);
+  }, [enabled, user?.id]);
 
   // Native guard: Android keeps a foreground keep-alive service with WakeLock / WifiLock;
   // iOS receives native background refresh requests and re-registers as soon as execution resumes.

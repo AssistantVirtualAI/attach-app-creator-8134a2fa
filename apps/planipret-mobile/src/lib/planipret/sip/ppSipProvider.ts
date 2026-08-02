@@ -363,6 +363,16 @@ class PpSipProvider {
       else this.scheduleSocketReconnect(`${reason}_transport_down`);
       return false;
     }
+    // ring16: an answer intent is pending. NetSapiens closes the previous WSS
+    // branch on a fresh REGISTER, which silently drops the INVITE in flight
+    // toward that branch. The transport is up, so there is nothing to repair:
+    // never re-REGISTER while an answer is pending, priority or not.
+    if (this.pendingAnswer && this.pendingAnswer.expiresAt > Date.now()) {
+      this.log("warn", `REGISTER blocked: answer pending (${reason})`);
+      this.pushHistory("blocked", "answer_pending");
+      this.emitMetrics();
+      return false;
+    }
     const now = Date.now();
     const minGap = Math.max(5000, getPpSipReconnectConfig().reRegisterDelayMs);
     // Inbound-call recovery must never be swallowed by the debounce: that is
@@ -927,9 +937,14 @@ class PpSipProvider {
     // A suspended WKWebView can keep a stale `connected` flag after iOS has
     // discarded the underlying socket. Once Answer is pending, only a fresh
     // transport is trusted to receive the re-forked INVITE.
-    if (this.pendingAnswer) this.hardRebuild("push_answer_fresh_transport");
-    else if (live) this.guardedRegister("push_wake", { priority: true });
-    else this.hardRebuild("push_wake");
+    // ring16: a live socket must never be rebuilt while an answer is pending —
+    // that is what killed the INVITE in flight. Only a dead socket is rebuilt.
+    if (live) {
+      if (this.pendingAnswer) this.log("info", "push wake: live socket kept (answer pending)");
+      else this.guardedRegister("push_wake", { priority: true });
+    } else {
+      this.hardRebuild(this.pendingAnswer ? "push_answer_dead_transport" : "push_wake");
+    }
 
     let ok = await this.waitForRegistered(12_000);
     if (!ok && this.getSnapshot().callState !== "ringing-in") {

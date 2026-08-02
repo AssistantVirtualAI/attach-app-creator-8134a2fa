@@ -938,6 +938,11 @@ class PpSipProvider {
     }
     // The answer window only makes sense once the socket can carry an INVITE.
     if (this.pendingAnswer) this.pendingAnswer.expiresAt = Date.now() + PP_PENDING_ANSWER_TIMEOUT_MS;
+    // R5 (ring9): claim/release the shared 113M AOR on the native side so the
+    // keep-alive skips (or performs) its fallback REGISTER accordingly.
+    void import("./nativePpSipService")
+      .then((m) => m.declarePlanipretJsOwnsAor(ok))
+      .catch(() => undefined);
     this.log(ok ? "info" : "warn", `push wake → ${ok ? "registered" : "NOT registered"}`);
     return ok;
   }

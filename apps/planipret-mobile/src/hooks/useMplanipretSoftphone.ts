@@ -484,10 +484,12 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       // before re-registering, so a fast JsSIP INVITE cannot beat the flag.
       if (invite?.action === "answer") {
         try { (window as any).__ppPendingAnswer = { callId: invite.callId, ts: Date.now() }; } catch {}
-        try { ppSipProvider.forceReregister(); } catch {}
+        // Establish the sole fresh JS transport before attempting the SIP 200 OK.
+        void ppSipProvider.wakeForIncoming(String(invite?.callId ?? "")).then(() => {
+          void answerRef.current?.().then((ok) => console.info(`[pp-sip] notification answer → ${ok ? "connected" : "failed"}`));
+        });
         // Run the single arbitrated answer transaction. Calling requestAnswer()
         // here as well used to create a second 30s waiter racing CallKit/UI.
-        void answerRef.current?.().then((ok) => console.info(`[pp-sip] notification answer → ${ok ? "connected" : "failed"}`));
       } else if (invite?.action === "decline") {
         try { ppSipProvider.requestDecline(invite?.callId); } catch {}
         void supabase.functions.invoke("pp-ns-calls", {
@@ -498,12 +500,10 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         try { ppSipProvider.hangup(); } catch {}
         setPushRing(null);
         void acknowledgePlanipretIncoming();
+      } else {
+        // Native saw the INVITE first; reclaim the AOR for the JS media stack.
+        void ppSipProvider.wakeForIncoming(String(invite?.callId ?? ""));
       }
-      // R2 (ring9): the native keep-alive caught the INVITE, but only JsSIP has a
-      // WebRTC media plan — such a call is structurally unanswerable natively.
-      // Take the (shared 113M) AOR back on the JS side immediately.
-      try { ppSipProvider.forceReregister(); } catch {}
-      void ppSipProvider.wakeForIncoming(String(invite?.callId ?? ""));
       try {
         window.dispatchEvent(new CustomEvent("pp:sip-incoming-invite", { detail: invite }));
       } catch {}

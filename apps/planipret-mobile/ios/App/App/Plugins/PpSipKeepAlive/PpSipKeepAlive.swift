@@ -60,6 +60,9 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// stack must NEVER take the AOR over: doing so closes the JsSIP transport
     /// (WSS 1001) and kills the audio. We only keep the audio session alive.
     private var callActive = false
+    /// True only after CXProvider reports that CallKit activated its session.
+    /// Foreground in-app calls never receive that callback.
+    private var callKitAudioActive = false
     /// Set on VoIP push wake: while an inbound call is pending we must never
     /// release the SIP registration (that sent the caller to voicemail).
     private var incomingPendingUntil: Date? = nil
@@ -103,8 +106,14 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       // WebView can complete the SIP 200 OK while still in the background.
       NotificationCenter.default.addObserver(forName: Notification.Name("PpVoipCallAnswered"), object: nil, queue: .main) { [weak self] _ in
         guard let self = self else { return }
-        self.callActive = true
-        self.activateAudioSession()
+        self.beginBackgroundTask()
+      }
+      NotificationCenter.default.addObserver(forName: Notification.Name("PpCallKitAudioActivated"), object: nil, queue: .main) { [weak self] _ in
+        self?.callKitAudioActive = true
+        self?.applyAudioRoute()
+      }
+      NotificationCenter.default.addObserver(forName: Notification.Name("PpCallKitAudioDeactivated"), object: nil, queue: .main) { [weak self] _ in
+        self?.callKitAudioActive = false
       }
       UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
@@ -411,9 +420,9 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         ? [.allowBluetoothHFP, .allowBluetoothA2DP]
         : [.allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
       try? s.setCategory(.playAndRecord, mode: .voiceChat, options: opts)
-      // Once CallKit owns a live call, CXProvider.didActivate is the sole audio
-      // activation point. Re-activating here races WebRTC and drops remote audio.
-      if !callActive { try? s.setActive(true, options: []) }
+      // CallKit owns activation only after didActivate. In-app calls still need
+      // this plugin to activate AVAudioSession or both RTP directions are silent.
+      if !callKitAudioActive { try? s.setActive(true, options: []) }
       // Re-assert the user's choice: activating the session resets the override
       // and iOS would fall back to the loudspeaker mid-call.
       applyAudioRoute()

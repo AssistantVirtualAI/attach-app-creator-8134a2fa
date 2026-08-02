@@ -242,6 +242,10 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     }
 
     public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
-        try? audioSession.setActive(true)
+        NotificationCenter.default.post(name: Notification.Name("PpCallKitAudioActivated"), object: audioSession)
+    }
+
+    public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        NotificationCenter.default.post(name: Notification.Name("PpCallKitAudioDeactivated"), object: audioSession)
     }
 }

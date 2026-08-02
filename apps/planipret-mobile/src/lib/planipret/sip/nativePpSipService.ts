@@ -142,6 +142,18 @@ export async function onPlanipretIncomingCallRejected(cb: (data: { callUUID: str
   return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "incomingCallRejected", (data: any) => cb(data ?? {}));
 }
 
+// ring17: CallKit owns the AVAudioSession. The microphone track is only
+// guaranteed live after `didActivate`, so re-assert local audio then.
+if (platform() === "ios") {
+  void addDedupedCapListener("PpVoipCall", NativePpVoipCall, "audioSessionActivated", (data: any) => {
+    try {
+      window.dispatchEvent(new CustomEvent("pp:callkit-audio-active", { detail: data ?? {} }));
+    } catch { /* noop */ }
+  });
+}
+
+
+
 
 /**
  * iOS cannot keep a WSS socket alive while suspended: PushKit is the only

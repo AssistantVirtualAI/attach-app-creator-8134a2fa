@@ -3,7 +3,7 @@
 // store for legacy pre-per-user tokens.
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { getMaestroOAuthEnv, isMaestroOAuthConfigured } from "../_shared/maestro-oauth.ts";
+import { getMaestroOAuthEnv, getUserMaestroAccessToken, isMaestroOAuthConfigured } from "../_shared/maestro-oauth.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -49,7 +49,10 @@ Deno.serve(async (req) => {
     const brokerIdStr = rawBrokerId !== null && rawBrokerId !== undefined ? String(rawBrokerId).trim() : "";
     maestroBrokerId = /^\d+$/.test(brokerIdStr) && Number(brokerIdStr) > 0 ? brokerIdStr : null;
     maestroEmail = (prof as any)?.maestro_email ?? null;
-    if (maestroBrokerId || prof?.maestro_broker_token || (prof as any)?.maestro_connected) {
+    const validToken = prof?.maestro_broker_token
+      ? await getUserMaestroAccessToken(admin, userId)
+      : null;
+    if (validToken) {
       status = "connected";
       lastConnectedAt = (prof as any).maestro_last_sync_at ?? null;
       const expAt = (prof as any).maestro_token_expires_at ? Date.parse((prof as any).maestro_token_expires_at) : 0;
@@ -58,7 +61,7 @@ Deno.serve(async (req) => {
     } else if (!prof) {
       authReason = "no_profile_row";
     } else {
-      authReason = "no_token";
+      authReason = maestroBrokerId ? "oauth_expired_reconnect_required" : "no_token";
     }
 
   }

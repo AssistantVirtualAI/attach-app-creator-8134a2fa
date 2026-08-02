@@ -210,7 +210,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             "callUUID": action.callUUID.uuidString,
             "callId": activeCallId ?? ""
         ], retainUntilConsumed: true)
-        pendingAnswerAction?.fulfill()
+        pendingAnswerAction?.fail()
         pendingAnswerAction = action
         // Safety net: never present a false connected CallKit call. If the
         // WebView cannot confirm the SIP dialog, fail the answer action.

@@ -437,7 +437,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         if self.isForeground() { self.setStatus("idle", "foreground_js_owns"); return }
         guard self.networkUp else { self.setStatus("reconnecting", "network_down"); self.scheduleReconnect("network_down"); return }
         self.connect()
-        self.sendRegister(challenge: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + self.verifyDelayMs / 1000.0) { [weak self] in
           guard let self = self else { return }
           if self.status != "registered" && !self.isForeground() { self.scheduleReconnect("still_unregistered") }

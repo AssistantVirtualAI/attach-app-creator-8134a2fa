@@ -151,15 +151,21 @@ export async function getUserMaestroAccessToken(
   const stillFresh = expAt && expAt - Date.now() > 60_000;
   if (stillFresh) return prof.maestro_broker_token as string;
 
-  if (!prof.maestro_refresh_token) return prof.maestro_broker_token as string;
+  // Never return a token that is known to be expired. Doing so made callers
+  // repeatedly POST with the stale bearer while the UI still said connected.
+  if (!prof.maestro_refresh_token) return expAt > Date.now() ? prof.maestro_broker_token as string : null;
   const env = getMaestroOAuthEnv();
-  if (!isMaestroOAuthConfigured(env)) return prof.maestro_broker_token as string;
+  if (!isMaestroOAuthConfigured(env)) return null;
 
   const isMobile = (prof as any).maestro_oauth_client === "mobile";
   const refreshed = await refreshAccessToken(env, prof.maestro_refresh_token as string, isMobile);
   if (!refreshed.ok || !refreshed.data) {
     console.warn("[maestro-oauth] refresh failed", refreshed.status, refreshed.error);
-    return prof.maestro_broker_token as string;
+    await admin.from("planipret_profiles").update({
+      maestro_connected: false,
+      maestro_broker_token: null,
+    }).eq("user_id", userId);
+    return null;
   }
   await persistTokenSet(admin, userId, refreshed.data, isMobile);
   return refreshed.data.access_token;

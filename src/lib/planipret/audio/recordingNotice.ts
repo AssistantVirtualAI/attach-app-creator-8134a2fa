@@ -60,9 +60,6 @@ async function getNoticeUrl(): Promise<string | null> {
 export async function playRecordingNotice(callKey?: string): Promise<void> {
   const key = callKey && callKey.length ? callKey : "__default__";
   if (announced.has(key)) return;
-  announced.add(key);
-  // keep the set bounded
-  if (announced.size > 50) announced.clear();
 
   try {
     const url = await getNoticeUrl();
@@ -72,12 +69,14 @@ export async function playRecordingNotice(callKey?: string): Promise<void> {
     // Do not steal the call's audio session on iOS: keep it inline.
     (el as any).playsInline = true;
     currentEl = el;
-    await el.play().then(
-      () => log("playing", { key }),
-      (e: any) => log("play blocked", e?.message ?? e),
-    );
+    await el.play();
+    announced.add(key);
+    if (announced.size > 50) announced.clear();
+    log("playing", { key });
   } catch (e: any) {
+    announced.delete(key);
     log("failed", e?.message ?? e);
+    window.setTimeout(() => { if (!announced.has(key)) void playRecordingNotice(key); }, 750);
   }
 }
 

@@ -499,7 +499,11 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         setPushRing(null);
         void acknowledgePlanipretIncoming();
       }
+      // R2 (ring9): the native keep-alive caught the INVITE, but only JsSIP has a
+      // WebRTC media plan — such a call is structurally unanswerable natively.
+      // Take the (shared 113M) AOR back on the JS side immediately.
       try { ppSipProvider.forceReregister(); } catch {}
+      void ppSipProvider.wakeForIncoming(String(invite?.callId ?? ""));
       try {
         window.dispatchEvent(new CustomEvent("pp:sip-incoming-invite", { detail: invite }));
       } catch {}

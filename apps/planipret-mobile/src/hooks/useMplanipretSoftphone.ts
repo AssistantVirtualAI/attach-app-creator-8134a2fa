@@ -11,6 +11,8 @@
 //     ("both, with fallback" policy).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { edgeOnlyWssUrls } from "@/lib/planipret/sip/sipEdgePolicy";
+import { nativeSip } from "@/lib/native/NativeSipService";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getPpSipReconnectConfig } from "@/lib/planipret/sip/ppSipReconnectConfig";

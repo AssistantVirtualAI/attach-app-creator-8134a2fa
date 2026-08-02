@@ -58,10 +58,18 @@ export async function upsertRingingSession(args: {
 export async function claimCall(callId: string, answeredBy: AnsweredBy): Promise<boolean> {
   if (!callId) return true; // no-id calls can't be coordinated; let them proceed
   try {
-    const { data, error } = await supabase.rpc("pp_claim_call", {
+    // Answering SIP is deadline-sensitive: a slow database request must never
+    // hold the INVITE until NetSapiens advances to greeting/voicemail. Keep the
+    // cross-device arbitration, but fail open after 1.5 s so session.answer()
+    // can send its 200 OK while the INVITE is still answerable.
+    const claimRequest = supabase.rpc("pp_claim_call", {
       _call_id: callId,
       _answered_by: answeredBy,
     });
+    const timeout = new Promise<{ data: true; error: null }>((resolve) => {
+      window.setTimeout(() => resolve({ data: true, error: null }), 1_500);
+    });
+    const { data, error } = await Promise.race([claimRequest, timeout]);
     if (error) return true; // fail open — better to answer than to drop
     if (data) return true;
     // Lost claim: re-read `answered_by`. Two answer paths on the SAME device

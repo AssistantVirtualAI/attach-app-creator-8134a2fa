@@ -1101,6 +1101,18 @@ export function useMplanipretSoftphone(enabled = true) {
         return false;
       }
     }
+    // The claim request is asynchronous. Re-read the session immediately: the
+    // PBX may have ended the INVITE while arbitration was in progress. This
+    // gives the log an exact cause and avoids calling JsSIP in status 8.
+    const answerable = ppSipProvider.getSnapshot();
+    if (answerable.callState !== "ringing-in" || answerable.callId !== callId) {
+      console.warn("[answer] INVITE expired while claiming call", {
+        expectedCallId: callId,
+        currentCallId: answerable.callId || null,
+        state: answerable.callState,
+      });
+      return false;
+    }
     const ok = await ppSipProvider.answer(callId);
     console.info(`[answer] ppSipProvider.answer → ${ok ? "SIP 200 OK sent" : "FAILED"}`, { callId });
     if (!ok) return false;

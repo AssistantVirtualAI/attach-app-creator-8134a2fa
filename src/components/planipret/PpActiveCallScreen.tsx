@@ -169,9 +169,14 @@ export default function PpActiveCallScreen({
   const party = formatSipParty(snap.remoteIdentity, "fr", snap.remoteNumber);
   const displayName = party.name;
   const displayNumber = party.subtitle || null;
-  const statusText = isIncoming ? (t("call.incoming") || "Appel entrant")
-    : isOutgoingRinging ? (t("call.ringing") || "Sonnerie…")
-    : isHeld ? (t("call.onHold") || "En attente")
+  // t() renvoie la clé quand la traduction manque : on affiche alors le texte FR.
+  const tr = (key: string, fallback: string) => {
+    const v = t(key);
+    return !v || v === key ? fallback : v;
+  };
+  const statusText = isIncoming ? tr("call.incoming", "Appel entrant")
+    : isOutgoingRinging ? tr("call.ringing", "Sonnerie…")
+    : isHeld ? tr("call.onHold", "En attente")
     : fmt(elapsed);
 
   const KEYS = ["1","2","3","4","5","6","7","8","9","*","0","#"];

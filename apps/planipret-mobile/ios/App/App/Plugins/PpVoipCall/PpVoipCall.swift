@@ -26,6 +26,11 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var activeCallId: String?
     private var pendingAnswerAction: CXAnswerCallAction?
     private var answerCompleted = false
+    // ring17: NetSapiens can emit the SAME inbound call twice with two
+    // different callIds. Deduplicate on the caller number too, otherwise a
+    // second CallKit call races the first answer action.
+    private var lastPushNumber: String = ""
+    private var lastPushAt: TimeInterval = 0
     private let voipTokenDefaultsKey = "pp.voip.push-token.v1"
 
     private func apnsEnvironment() -> String {
@@ -164,6 +169,18 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             completion()
             return
         }
+        // ring17: same caller, different callId, within 45s of the first push
+        // and a CallKit call still up → same physical call, drop it.
+        let now = Date().timeIntervalSince1970
+        let digits = callerNumber.filter { $0.isNumber }
+        if !digits.isEmpty, digits == lastPushNumber, activeCallUUID != nil, now - lastPushAt < 45 {
+            NSLog("[PpVoipCall] duplicate VoIP push ignored (same caller) callId=%@", callId)
+            completion()
+            return
+        }
+        lastPushNumber = digits
+        lastPushAt = now
+
 
         // Wake the native SIP keep-alive FIRST: iOS may have killed the WSS
         // socket while suspended, and only this push guarantees runtime.
@@ -248,9 +265,13 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         NotificationCenter.default.post(name: Notification.Name("PpCallKitAudioActivated"), object: audioSession)
+        // ring17: JS must only attach/enable the microphone track AFTER CallKit
+        // owns the session, otherwise the outgoing direction stays silent.
+        notifyListeners("audioSessionActivated", data: ["callId": activeCallId ?? ""], retainUntilConsumed: true)
     }
 
     public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         NotificationCenter.default.post(name: Notification.Name("PpCallKitAudioDeactivated"), object: audioSession)
+        notifyListeners("audioSessionDeactivated", data: ["callId": activeCallId ?? ""])
     }
 }

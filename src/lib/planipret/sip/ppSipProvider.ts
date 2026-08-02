@@ -169,6 +169,7 @@ class PpSipProvider {
   };
 
   audioEl: HTMLAudioElement | null = null;
+  private callKitAudioHookInstalled = false;
   private lastSig = "";
   private lastStartAt = 0;
   private connectingSince = 0;
@@ -714,9 +715,44 @@ class PpSipProvider {
     };
     wire(session.connection);
     session.on("peerconnection", (e: any) => wire(e?.peerconnection || session.connection));
-    session.on("accepted", () => this.attachRemoteAudio(session.connection));
-    session.on("confirmed", () => this.attachRemoteAudio(session.connection));
+    session.on("accepted", () => { this.attachRemoteAudio(session.connection); this.ensureLocalAudio(); });
+    session.on("confirmed", () => { this.attachRemoteAudio(session.connection); this.ensureLocalAudio(); });
+    this.installCallKitAudioHook();
   }
+
+  /**
+   * ring17: the outgoing direction (mic → caller) is only guaranteed once
+   * CallKit has activated the AVAudioSession. Re-assert every local sender
+   * track then — WebRTC can hand us a disabled/muted track when the stream was
+   * captured before the system session was owned by CallKit.
+   */
+  private ensureLocalAudio() {
+    try {
+      const pc: RTCPeerConnection | null = (this.session as any)?.connection ?? null;
+      if (!pc) return;
+      let count = 0;
+      for (const sender of pc.getSenders?.() ?? []) {
+        const track = sender.track;
+        if (!track || track.kind !== "audio") continue;
+        if (!track.enabled) track.enabled = true;
+        count += 1;
+      }
+      this.log("info", `local audio attached (${count} track(s))`);
+    } catch (e: any) {
+      this.log("warn", `ensureLocalAudio failed: ${e?.message || e}`);
+    }
+  }
+
+  private installCallKitAudioHook() {
+    if (this.callKitAudioHookInstalled || typeof window === "undefined") return;
+    this.callKitAudioHookInstalled = true;
+    window.addEventListener("pp:callkit-audio-active", () => {
+      this.log("info", "CallKit audio session activated — re-asserting local audio");
+      this.ensureLocalAudio();
+      this.attachRemoteAudio((this.session as any)?.connection ?? null);
+    });
+  }
+
 
   /** Hidden, always-available audio sink so remote audio never depends on a screen being mounted. */
   private ensureAudioEl(): HTMLAudioElement | null {

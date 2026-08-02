@@ -53,7 +53,9 @@ type PpVoipCallPlugin = {
       | "voipPushTokenInvalidated"
       | "incomingCallAnswered"
       | "incomingCallRejected"
-      | "callKitReady",
+      | "callKitReady"
+      | "audioSessionActivated"
+      | "audioSessionDeactivated",
     cb: (data: any) => void,
   ) => Promise<ListenerHandle>;
 };
@@ -139,6 +141,18 @@ export async function onPlanipretIncomingCallRejected(cb: (data: { callUUID: str
   if (platform() !== "ios") return () => undefined;
   return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "incomingCallRejected", (data: any) => cb(data ?? {}));
 }
+
+// ring17: CallKit owns the AVAudioSession. The microphone track is only
+// guaranteed live after `didActivate`, so re-assert local audio then.
+if (platform() === "ios") {
+  void addDedupedCapListener("PpVoipCall", NativePpVoipCall, "audioSessionActivated", (data: any) => {
+    try {
+      window.dispatchEvent(new CustomEvent("pp:callkit-audio-active", { detail: data ?? {} }));
+    } catch { /* noop */ }
+  });
+}
+
+
 
 
 /**

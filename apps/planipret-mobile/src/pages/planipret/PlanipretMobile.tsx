@@ -969,6 +969,14 @@ export default function PlanipretMobile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Native SIP engine (PJSIP): register the broker's `<ext>M` device as soon as
+  // the session is known. No-op on web / when the plugin isn't linked.
+  useEffect(() => {
+    if (!profile?.user_id) return;
+    if (!Capacitor.isNativePlatform()) return;
+    void nativeSip.initialize();
+  }, [profile?.user_id]);
+
   // Bootstrap push listeners + prompt primer once the profile is loaded (native only).
   useEffect(() => {
     if (!profile?.user_id) return;

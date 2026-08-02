@@ -1152,6 +1152,12 @@ export function useMplanipretSoftphone(enabled = true) {
 
   useEffect(() => {
     const onPendingAnswerReady = () => {
+      // This is not a duplicate tap: it is the first moment a real SIP INVITE
+      // exists. The original CallKit answer promise is deliberately parked in
+      // its watchdog waiting for `active`; joining that promise here creates a
+      // deadlock because no path sends the SIP 200 OK. Release only the hook's
+      // outer mutex, then run the full claim + answer path against the INVITE.
+      answerAttemptRef.current = null;
       void answerRef.current?.().then((ok) => {
         console.info(`[answer] arbitrated pending INVITE → ${ok ? "connected" : "not answered"}`);
       });

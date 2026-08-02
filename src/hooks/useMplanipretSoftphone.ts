@@ -1212,7 +1212,8 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       console.info("[answer] route=REST (pp-ns-calls answer)", { call_id: restCall.id });
       const ok = await restControl("answer");
       console.info(`[answer] REST answer ${ok ? "accepted" : "REJECTED"} by NetSapiens`);
-      return ok;
+      if (ok) return true;
+      return await callbackAnswer(restCall.number || sipSnap.remoteNumber || "");
     }
 
     const callId = sipSnap.callId;

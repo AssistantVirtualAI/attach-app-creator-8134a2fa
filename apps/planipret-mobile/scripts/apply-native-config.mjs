@@ -1030,7 +1030,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       // ring16: once CallKit has activated the session it owns category, mode
       // and activation. Re-applying setCategory (the 2s keep-alive did it over
       // and over) makes iOS re-arbitrate the route and drop every output —
-      // that is the measured `hadOutputs=n` silence. Only re-assert the route.
+      // that is the measured 'hadOutputs=n' silence. Only re-assert the route.
       if callKitAudioActive {
         if s.category != .playAndRecord || s.mode != .voiceChat {
           try? s.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])

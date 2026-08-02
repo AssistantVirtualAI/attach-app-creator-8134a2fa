@@ -1061,6 +1061,15 @@ export function useMplanipretSoftphone(enabled = true) {
       return false;
     }
 
+    // `ringing-in` is the only state that may be answered. Treating an active
+    // or outgoing session as answerable made CallKit wait on a command that
+    // could never produce a new confirmed inbound dialog.
+    if (sipSnap.callState === "active" || sipSnap.callState === "held") return true;
+    if (sipSnap.callState !== "ringing-in") {
+      console.warn("[answer] no inbound SIP INVITE available", { state: sipSnap.callState });
+      return false;
+    }
+
     if (restCall?.id && !liveSipNow) {
       console.info("[answer] route=REST (pp-ns-calls answer)", { call_id: restCall.id });
       const ok = await restControl("answer");

@@ -1105,6 +1105,10 @@ export function useMplanipretSoftphone(enabled = true) {
     // PBX may have ended the INVITE while arbitration was in progress. This
     // gives the log an exact cause and avoids calling JsSIP in status 8.
     const answerable = ppSipProvider.getSnapshot();
+    if (answerable.callState === "active" || answerable.callState === "held") {
+      console.info("[answer] concurrent local path already confirmed the dialog", { callId });
+      return true;
+    }
     if (answerable.callState !== "ringing-in" || answerable.callId !== callId) {
       console.warn("[answer] INVITE expired while claiming call", {
         expectedCallId: callId,

@@ -33,6 +33,8 @@ import MicDeniedBanner from "@/components/planipret/mobile/MicDeniedBanner";
 import PermissionsPrimer from "@/components/planipret/mobile/PermissionsPrimer";
 import { hasSeenPrimer } from "@/lib/native/permissions/orchestrator";
 import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
+import { Capacitor } from "@capacitor/core";
+import { nativeSip } from "@/lib/native/NativeSipService";
 import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts, peekPpContacts } from "@/lib/ppContactsCache";

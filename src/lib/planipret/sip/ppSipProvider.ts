@@ -13,6 +13,8 @@ import { edgeOnlyWssUrls, isPortalWssUrl } from "./sipEdgePolicy";
 // Let the SBC finish removing the previous Contact before a replacement UA
 // REGISTERs the same AOR. Without this gap NetSapiens closes one WSS with 1001.
 const PP_SIP_UA_SWAP_DELAY_MS = 800;
+/** Must remain shorter than the native CallKit answer watchdog (32s). */
+export const PP_PENDING_ANSWER_TIMEOUT_MS = 30_000;
 
 export type PpSipStatus = "idle" | "connecting" | "connected" | "registered" | "disconnected" | "error";
 export type PpCallState = "idle" | "ringing-out" | "ringing-in" | "active" | "held" | "ended";
@@ -771,7 +773,7 @@ class PpSipProvider {
 
   async requestAnswer(callId?: string): Promise<boolean> {
     if (await this.answer(callId)) return true;
-    this.pendingAnswer = { callId: String(callId ?? ""), expiresAt: Date.now() + 30_000 };
+    this.pendingAnswer = { callId: String(callId ?? ""), expiresAt: Date.now() + PP_PENDING_ANSWER_TIMEOUT_MS };
     this.log("info", "answer intent queued until matching INVITE", { callId: callId ?? "" });
     return false;
   }

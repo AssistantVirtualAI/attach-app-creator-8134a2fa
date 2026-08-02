@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getPpSipReconnectConfig } from "@/lib/planipret/sip/ppSipReconnectConfig";
-import { ppSipProvider, type PpSipConfig, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
+import { PP_PENDING_ANSWER_TIMEOUT_MS, ppSipProvider, type PpSipConfig, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
 import { startSipStabilityMonitor } from "@/lib/planipret/sip/sipStabilityMonitor";
 import { networkMonitor, type NetSample } from "@/lib/planipret/network/networkMonitor";
 import { handoverController } from "@/lib/planipret/net/handoverController";
@@ -1051,13 +1051,14 @@ export function useMplanipretSoftphone(enabled = true) {
       // A PBX REST "answer" cannot create a WebRTC media dialog and previously
       // produced a false connected state (CallKit answered, caller still hearing
       // the greeting, no audio/keypad). Only a confirmed SIP dialog is success.
-      for (let i = 0; i < 16; i++) {
+      const attempts = Math.ceil(PP_PENDING_ANSWER_TIMEOUT_MS / 500);
+      for (let i = 0; i < attempts; i++) {
         await new Promise((r) => window.setTimeout(r, 500));
         const st = ppSipProvider.getSnapshot().callState;
         if (st === "active") { console.info("[answer] SIP answered within watchdog window"); return true; }
         if (st === "ended") break;
       }
-      console.warn("[answer] no confirmed SIP dialog after 8s — refusing false REST answer");
+      console.warn("[answer] no confirmed SIP dialog before pending-answer expiry — refusing false REST answer");
       return false;
     }
 

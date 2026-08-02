@@ -1447,9 +1447,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         ], retainUntilConsumed: true)
         pendingAnswerAction?.fail()
         pendingAnswerAction = action
-        // Safety net: never present a false connected CallKit call. If the
-        // WebView cannot confirm the SIP dialog, fail the answer action.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 12.0) { [weak self, weak action] in
+        // JS keeps the pending SIP-answer intent for 30s. Keep CallKit alive
+        // slightly longer so slow WSS registration/refork can still complete.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 32.0) { [weak self, weak action] in
             guard let self = self, let action = action, self.pendingAnswerAction === action else { return }
             self.pendingAnswerAction = nil
             NSLog("[PpVoipCall] answer action timed out — SIP dialog not confirmed")

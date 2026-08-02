@@ -150,7 +150,7 @@ async function hideSplash(reason: string) {
 async function bootstrap() {
   // Bump this on every native-affecting change so Xcode logs prove which
   // bundle the device is actually running.
-  console.log('[PP] BUILD MARKER pp-build-2026-08-02-ring17');
+  console.log('[PP] BUILD MARKER pp-build-2026-08-02-pjsip1');
   console.log('[PP] bootstrap:start', { native: Capacitor.isNativePlatform(), proto: window.location.protocol });
   // Safety net: never leave the user staring at the launch image, even if the
   // first React commit never happens (render error, slow chunk, no network).

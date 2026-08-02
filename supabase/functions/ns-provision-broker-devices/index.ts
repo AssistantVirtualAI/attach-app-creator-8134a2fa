@@ -145,8 +145,23 @@ Deno.serve(async (req) => {
       };
       const mobileStoredPassword = await readSipSecret(mobileSecretName);
       const widgetStoredPassword = await readSipSecret(widgetSecretName);
-      const mobilePassword = readableDevicePassword(mobileId) ?? mobileStoredPassword ?? await genPassword(broker.user_id, mobileId);
-      const widgetPassword = readableDevicePassword(widgetId) ?? widgetStoredPassword ?? await genPassword(broker.user_id, widgetId);
+      const mobilePassword = readableDevicePassword(mobileId)
+        ?? mobileStoredPassword
+        ?? (!hasDev(mobileId) ? await genPassword(broker.user_id, mobileId) : null);
+      const widgetPassword = readableDevicePassword(widgetId)
+        ?? widgetStoredPassword
+        ?? (!hasDev(widgetId) ? await genPassword(broker.user_id, widgetId) : null);
+      if (!mobilePassword || !widgetPassword) {
+        return {
+          broker_id: broker.id ?? broker.user_id,
+          success: false,
+          error: "existing_device_credentials_unavailable",
+          devices: {
+            mobile: { id: mobileId, credentials_available: !!mobilePassword },
+            widget: { id: widgetId, credentials_available: !!widgetPassword },
+          },
+        };
+      }
 
       const nsUser = await ensureNsUser(broker, ext, domain, mobilePassword);
       if (!nsUser.ok) return { broker_id: broker.id ?? broker.user_id, success: false, error: "ns_user_create_failed", ns_user: nsUser };

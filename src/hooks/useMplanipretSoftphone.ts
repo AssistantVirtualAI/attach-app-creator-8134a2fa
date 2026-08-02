@@ -419,7 +419,7 @@ export function useMplanipretSoftphone(enabled = true) {
       window.removeEventListener("pp:sip-force-reregister", onForce as any);
       releaseSoftphoneOwner(ownerId);
     };
-  }, [enabled, user?.id, ownerTick]);
+  }, [enabled, user?.id]);
 
   // Native guard: Android keeps a foreground keep-alive service with WakeLock / WifiLock;
   // iOS receives native background refresh requests and re-registers as soon as execution resumes.

@@ -81,6 +81,12 @@ function deviceIdOf(d: any): string | null {
   return String(id).replace(/^sip:/i, "").split("@")[0] || null;
 }
 
+function usablePassword(value: unknown): string | null {
+  const password = String(value ?? "").trim();
+  if (!password || /^\*+$/.test(password)) return null;
+  return password;
+}
+
 // Deterministic fallback for newly-created devices only. The device id is part
 // of the seed so mobile and widget never share credentials.
 async function derivePassword(userId: string, deviceId: string): Promise<string> {
@@ -313,6 +319,7 @@ Deno.serve(async (req) => {
   // Try the specific device first.
   let detail = await nsGet(`/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(deviceName)}`);
   let device: any = detail.ok ? (Array.isArray(detail.data) ? detail.data[0] : detail.data) : null;
+  let createdPassword: string | null = null;
   let availableDevices: string[] = [];
 
   let unreachable = (detail as any).unreachable === true;
@@ -345,6 +352,7 @@ Deno.serve(async (req) => {
   // not just the ones an admin re-provisioned manually.
   if (!device) {
     const selfHealPwd = await derivePassword(String(profile.user_id), deviceName);
+    createdPassword = selfHealPwd;
     const isMobile = clientType === "mobile";
     const created = await nsPost(
       `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`,
@@ -400,8 +408,23 @@ Deno.serve(async (req) => {
   // credential lookup disconnects whichever app already owns that AOR and can
   // also make two devices share a password. Only a newly self-healed device uses
   // our per-device deterministic fallback.
-  const devicePassword = String(device["device-sip-registration-password"] ?? "").trim();
-  const sipPassword = devicePassword || await derivePassword(String(profile.user_id), resolvedId);
+  const admin = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const secretName = clientType === "mobile"
+    ? `pp_sip_${profile.id}_mobile`
+    : `pp_sip_${profile.id}_widget`;
+  const { data: storedSecret } = await admin.rpc("read_planipret_sip_secret", { _name: secretName });
+  const sipPassword = usablePassword(device["device-sip-registration-password"])
+    ?? usablePassword(storedSecret)
+    ?? createdPassword;
+  if (!sipPassword) {
+    return json({
+      ok: false,
+      error: "device_credentials_unavailable",
+      client_type: clientType,
+      device_id: resolvedId,
+      action: "Les identifiants de ce device existent dans NetSapiens mais ne sont pas lisibles. Reprovisionnez uniquement ce device.",
+    }, 409);
+  }
   let repairStatus: any = null;
   repairStatus = await nsPut(
     `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(resolvedId)}`,

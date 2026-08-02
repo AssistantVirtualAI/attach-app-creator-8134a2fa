@@ -138,9 +138,13 @@ Deno.serve(async (req) => {
   }
   if (!mobileDevice) blockers.push("MOBILE_DEVICE_MISSING");
   if (!callSubscription) blockers.push("CALL_SUBSCRIPTION_MISSING");
+  if (mobileRegistered && !coreServerOk) {
+    blockers.push("REGISTERED_ON_WRONG_CORE");
+    actions.push("reregister");
+  }
 
   const healthy = mobileRegistered && !!tokenRow?.device_token && callSubscription &&
-    devicePushEnabled !== false;
+    devicePushEnabled !== false && coreServerOk;
 
 
   return jsonResponse({
@@ -153,6 +157,10 @@ Deno.serve(async (req) => {
       mobile_registered: mobileRegistered,
       registered_aors: aors,
       count: regRows.length,
+      core_server: coreServer || null,
+      core_server_ok: coreServerOk,
+      contact: regContact || null,
+      user_agent: regUserAgent || null,
     },
     push: {
       device_push_enabled: devicePushEnabled,

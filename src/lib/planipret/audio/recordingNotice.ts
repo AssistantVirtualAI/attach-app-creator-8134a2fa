@@ -74,6 +74,8 @@ export async function playRecordingNotice(callKey?: string): Promise<void> {
     if (announced.size > 50) announced.clear();
     log("playing", { key });
   } catch (e: any) {
+    // Do not consume the once-per-call slot on a blocked first attempt. CallKit
+    // may activate AVAudioSession a moment later, so retry once on that session.
     announced.delete(key);
     log("failed", e?.message ?? e);
     window.setTimeout(() => { if (!announced.has(key)) void playRecordingNotice(key); }, 750);

@@ -17,6 +17,7 @@ let cachedAt = 0;
 
 /** call keys already announced (module-level → survives re-render/navigation) */
 const announced = new Set<string>();
+const retryCount = new Map<string, number>();
 let currentEl: HTMLAudioElement | null = null;
 
 function log(msg: string, detail?: unknown) {
@@ -78,7 +79,11 @@ export async function playRecordingNotice(callKey?: string): Promise<void> {
     // may activate AVAudioSession a moment later, so retry once on that session.
     announced.delete(key);
     log("failed", e?.message ?? e);
-    window.setTimeout(() => { if (!announced.has(key)) void playRecordingNotice(key); }, 750);
+    const attempts = retryCount.get(key) ?? 0;
+    if (attempts < 2) {
+      retryCount.set(key, attempts + 1);
+      window.setTimeout(() => { if (!announced.has(key)) void playRecordingNotice(key); }, 750);
+    }
   }
 }
 
@@ -86,6 +91,8 @@ export async function playRecordingNotice(callKey?: string): Promise<void> {
 export function resetRecordingNotice(callKey?: string) {
   if (callKey) announced.delete(callKey);
   else announced.clear();
+  if (callKey) retryCount.delete(callKey);
+  else retryCount.clear();
   try { currentEl?.pause(); } catch { /* noop */ }
   currentEl = null;
 }

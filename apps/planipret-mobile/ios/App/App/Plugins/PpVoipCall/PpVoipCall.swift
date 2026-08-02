@@ -169,6 +169,18 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             completion()
             return
         }
+        // ring17: same caller, different callId, within 45s of the first push
+        // and a CallKit call still up → same physical call, drop it.
+        let now = Date().timeIntervalSince1970
+        let digits = callerNumber.filter { $0.isNumber }
+        if !digits.isEmpty, digits == lastPushNumber, activeCallUUID != nil, now - lastPushAt < 45 {
+            NSLog("[PpVoipCall] duplicate VoIP push ignored (same caller) callId=%@", callId)
+            completion()
+            return
+        }
+        lastPushNumber = digits
+        lastPushAt = now
+
 
         // Wake the native SIP keep-alive FIRST: iOS may have killed the WSS
         // socket while suspended, and only this push guarantees runtime.

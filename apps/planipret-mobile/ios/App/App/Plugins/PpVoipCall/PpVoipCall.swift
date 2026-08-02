@@ -200,6 +200,13 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     }
 
     public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+        // Never invalidate the first valid answer transaction. A duplicate
+        // CallKit callback must join/lose, not fail the action JS is completing.
+        if pendingAnswerAction != nil {
+            NSLog("[PpVoipCall] duplicate answer action ignored")
+            action.fail()
+            return
+        }
         // Prepare the route but let CallKit own activation (didActivate:) —
         // activating here races the system session and yields a dead call.
         let session = AVAudioSession.sharedInstance()
@@ -210,7 +217,6 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             "callUUID": action.callUUID.uuidString,
             "callId": activeCallId ?? ""
         ], retainUntilConsumed: true)
-        pendingAnswerAction?.fail()
         pendingAnswerAction = action
         // JS keeps the pending SIP-answer intent for 30s. Keep CallKit alive
         // slightly longer so slow WSS registration/refork can still complete.

@@ -181,6 +181,16 @@ function findDuplicate(callId: string, dedupKey: string): MaestroPostRecord | nu
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Maestro rejects non-E.164 numbers with HTTP 422 — normalise before posting. */
+function toE164(raw: string): string | undefined {
+  const digits = String(raw ?? "").replace(/[^\d]/g, "");
+  if (!digits) return undefined;
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  if (digits.length > 11) return `+${digits}`;
+  return undefined;
+}
+
 async function post(
   callId: string,
   number: string,
@@ -191,13 +201,14 @@ async function post(
   recentDedup.set(dedupKey, { callId, at: Date.now() });
   upsert(callId, { direction, number, classification, state: "pending", reason: "posting" });
 
+  const e164 = toE164(number);
   let lastError: string | null = null;
   for (let attempt = 1; attempt <= POST_MAX_ATTEMPTS; attempt++) {
     upsert(callId, { direction, number, attempts: attempt, state: "pending", reason: `posting_attempt_${attempt}` });
     try {
       await maestroTelecom.createCall({
         provider_call_id: callId,
-        to_user_number: number || undefined,
+        to_user_number: e164,
         status: direction === "outbound" ? "dialing" : "created",
         direction,
       });

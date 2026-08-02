@@ -1,5 +1,14 @@
 # Changelog — Lemtel Softphone
 
+## [2.5.1] — 2026-08-02
+
+### Corrections critiques
+- **CDRs / Enregistrements / Messagerie vocale** : Correction de l'erreur "edge function error" au chargement des pages — la fonction `invokeFusionSync` était appelée mais jamais définie dans `avaApi.ts`
+- **SIP** : Correction de la déconnexion SIP lors des changements de page — l'instance SIP est maintenant partagée via un React Context unique (`SoftphoneContext`), éliminant les doubles connexions parallèles entre `SipKeepAlive` et `SoftphonePane`
+- **Auto-update** : Correction des canaux IPC (`updater:check`, `updater:app-version`), activation de `autoDownload` et `autoInstallOnAppQuit` — les mises à jour futures seront entièrement automatiques
+
+---
+
 ## [2.5.0] — 2026-07-31
 
 ### Améliorations visuelles majeures

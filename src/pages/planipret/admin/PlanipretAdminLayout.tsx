@@ -133,7 +133,7 @@ export default function PlanipretAdminLayout() {
   const [brokerCount, setBrokerCount] = useState(0);
   const [auditScore, setAuditScore] = useState<number | null>(null);
   const { status: rtStatus } = useAdminRealtime();
-  const softphone = useMplanipretSoftphone(true, { primary: true });
+  const softphone = useMplanipretSoftphone(true, { primary: true, clientType: "web" });
   const realtimeOk = rtStatus === "live";
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [dialNumber, setDialNumber] = useState("");

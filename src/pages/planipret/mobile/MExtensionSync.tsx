@@ -25,7 +25,7 @@ export default function MExtensionSync() {
   const extension = profile?.ns_extension || profile?.extension || null;
   const domain = profile?.ns_domain || "planipret.ca";
   const linked = !!profile?.ns_linked;
-  const mobileDeviceId = profile?.ns_mobile_device_id || (extension ? `${extension}_mobile` : null);
+  const mobileDeviceId = profile?.ns_mobile_device_id || (extension ? `${extension}M` : null);
   const runResync = async (opts?: { silent?: boolean }) => {
     if (!extension) {
       toast.error(t("screens.extensionSync.noExtension"));

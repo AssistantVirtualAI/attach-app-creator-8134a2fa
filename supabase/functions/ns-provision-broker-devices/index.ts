@@ -66,6 +66,11 @@ Deno.serve(async (req) => {
     if (!caller) return json({ error: "not_authenticated" }, 401);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const readSipSecret = async (name: string) => {
+      const { data } = await admin.rpc("read_planipret_sip_secret", { _name: name });
+      const value = String(data ?? "").trim();
+      return value && !/^\*+$/.test(value) ? value : null;
+    };
     const { data: callerProfile } = await admin
       .from("planipret_profiles").select("role,user_id,id").or(`user_id.eq.${caller.id},id.eq.${caller.id}`).maybeSingle();
     let isAdmin = ["admin", "super_admin", "owner", "planipret_admin"].includes(String(callerProfile?.role ?? "").toLowerCase());
@@ -77,8 +82,8 @@ Deno.serve(async (req) => {
 
     const nsHeaders = { Authorization: `Bearer ${NS_API_KEY}`, "Content-Type": "application/json", Accept: "application/json" };
 
-    const genPassword = async (userId: string) => {
-      const enc = new TextEncoder().encode(userId + "planipret-sip-2026");
+    const genPassword = async (userId: string, deviceId: string) => {
+      const enc = new TextEncoder().encode(`${userId}:${deviceId}:planipret-sip-2026`);
       const h = await crypto.subtle.digest("SHA-256", enc);
       const hex = Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, "0")).join("");
       return `Pp${hex.substring(0, 12)}!`;
@@ -119,24 +124,49 @@ Deno.serve(async (req) => {
       const domain = broker.ns_domain || NS_DEFAULT_DOMAIN;
       if (!ext) return { broker_id: broker.user_id, success: false, error: "no_extension" };
 
-      const sipPassword = await genPassword(broker.user_id);
       // Naming convention: <ext>M / <ext>W (no underscore — Snap Mobile and the
       // web widget mangle `_` in the AOR user part). Legacy <ext>_mobile /
       // <ext>_web devices are removed once the new pair exists.
       const mobileId = mobileDeviceId(ext);
       const widgetId = webDeviceId(ext);
+      const mobileSecretName = broker.ns_sip_password_ref_mobile || `pp_sip_${broker.id ?? broker.user_id}_mobile`;
+      const widgetSecretName = `pp_sip_${broker.id ?? broker.user_id}_widget`;
       const base = `${NS_API_BASE_URL}/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`;
-
-      const nsUser = await ensureNsUser(broker, ext, domain, sipPassword);
-      if (!nsUser.ok) return { broker_id: broker.id ?? broker.user_id, success: false, error: "ns_user_create_failed", ns_user: nsUser };
 
       const listRes = await nsFetch(base, { headers: nsHeaders });
       const existing: any[] = listRes.ok ? (await listRes.json().catch(() => [])) : [];
       const arr = Array.isArray(existing) ? existing : [];
       const hasDev = (id: string) =>
         arr.some((d: any) => (d?.device ?? d?.aor ?? "").toString().replace(/^sip:/i, "").split("@")[0].trim().toLowerCase() === id.toLowerCase());
+      const readableDevicePassword = (id: string) => {
+        const row = arr.find((d: any) => (d?.device ?? d?.aor ?? "").toString().replace(/^sip:/i, "").split("@")[0].trim().toLowerCase() === id.toLowerCase());
+        const value = String(row?.["device-sip-registration-password"] ?? "").trim();
+        return value && !/^\*+$/.test(value) ? value : null;
+      };
+      const mobileStoredPassword = await readSipSecret(mobileSecretName);
+      const widgetStoredPassword = await readSipSecret(widgetSecretName);
+      const mobilePassword = readableDevicePassword(mobileId)
+        ?? mobileStoredPassword
+        ?? (!hasDev(mobileId) ? await genPassword(broker.user_id, mobileId) : null);
+      const widgetPassword = readableDevicePassword(widgetId)
+        ?? widgetStoredPassword
+        ?? (!hasDev(widgetId) ? await genPassword(broker.user_id, widgetId) : null);
+      if (!mobilePassword || !widgetPassword) {
+        return {
+          broker_id: broker.id ?? broker.user_id,
+          success: false,
+          error: "existing_device_credentials_unavailable",
+          devices: {
+            mobile: { id: mobileId, credentials_available: !!mobilePassword },
+            widget: { id: widgetId, credentials_available: !!widgetPassword },
+          },
+        };
+      }
 
-      const create = async (id: string, model: string, isMobile: boolean) => {
+      const nsUser = await ensureNsUser(broker, ext, domain, mobilePassword);
+      if (!nsUser.ok) return { broker_id: broker.id ?? broker.user_id, success: false, error: "ns_user_create_failed", ns_user: nsUser };
+
+      const create = async (id: string, model: string, isMobile: boolean, password: string) => {
         if (hasDev(id)) {
           // Device exists — patch it to ensure WSS transport, empty user-agent filter,
           // and (critically) the 1800s registration expiry + automatic NAT traversal.
@@ -145,7 +175,6 @@ Deno.serve(async (req) => {
           const r = await nsFetch(`${base}/${encodeURIComponent(id)}`, {
             method: "PUT", headers: nsHeaders,
             body: JSON.stringify({
-              "device-sip-registration-password": sipPassword,
               "transport": "WSS",
               // SIP-level transport: without this NS closes the WSS socket with
               // code 1001 right after the REGISTER 200 OK.
@@ -168,7 +197,7 @@ Deno.serve(async (req) => {
           method: "POST", headers: nsHeaders,
           body: JSON.stringify({
             device: id,
-            "device-sip-registration-password": sipPassword,
+            "device-sip-registration-password": password,
             "device-provisioning-protocol": "sip",
             "device-model": model,
             "core-server": "core1.cluster1.ucstack.io",
@@ -194,8 +223,8 @@ Deno.serve(async (req) => {
         return { created: r.ok, status: r.status, id, data };
       };
 
-      const mobile = await create(mobileId, "Mobile Softphone", true);
-      const widget = await create(widgetId, "Web Softphone", false);
+      const mobile = await create(mobileId, "Mobile Softphone", true, mobilePassword);
+      const widget = await create(widgetId, "Web Softphone", false, widgetPassword);
 
       // Rename migration: NS device names are immutable, so once <ext>M/<ext>W
       // exist we delete the legacy <ext>_mobile / <ext>_web AORs. Leaving them
@@ -211,17 +240,19 @@ Deno.serve(async (req) => {
       }
 
 
-      const secretName = `pp_sip_${broker.id ?? broker.user_id}_mobile`;
       try {
         await admin.rpc("create_planipret_sip_secret", {
-          _name: secretName, _value: sipPassword, _broker_id: broker.id ?? broker.user_id,
+           _name: mobileSecretName, _value: mobilePassword, _broker_id: broker.id ?? broker.user_id,
+        });
+        await admin.rpc("create_planipret_sip_secret", {
+          _name: widgetSecretName, _value: widgetPassword, _broker_id: broker.id ?? broker.user_id,
         });
       } catch { /* optional */ }
 
       const { error: uErr } = await admin.from("planipret_profiles").update({
         ns_mobile_device_id: mobileId,
         ns_widget_device_id: widgetId,
-        ns_sip_password_ref_mobile: secretName,
+         ns_sip_password_ref_mobile: mobileSecretName,
         ns_domain: domain,
         ns_extension: ext,
         ns_linked: true,
@@ -252,14 +283,14 @@ Deno.serve(async (req) => {
         success: ok,
         db_error: uErr?.message,
         ns_user: nsUser, mobile, widget, removed_legacy,
-        sip_credentials: { mobile_device_id: mobileId, widget_device_id: widgetId, password: sipPassword },
+         sip_credentials: { mobile_device_id: mobileId, widget_device_id: widgetId },
       };
     };
 
     // Single mode
     if (broker_id && !bulk) {
       const { data: broker } = await admin.from("planipret_profiles")
-        .select("id, user_id, full_name, email, extension, ns_extension, ns_domain")
+        .select("id, user_id, full_name, email, extension, ns_extension, ns_domain, ns_sip_password_ref_mobile")
         .or(`user_id.eq.${broker_id},id.eq.${broker_id}`).maybeSingle();
       if (!broker) return json({ error: "broker_not_found", broker_id }, 404);
       const result = await provision(broker);

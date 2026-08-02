@@ -1344,6 +1344,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var activeCallUUID: UUID?
     private var activeCallId: String?
     private var pendingAnswerAction: CXAnswerCallAction?
+    private var answerCompleted = false
     private let voipTokenDefaultsKey = "pp.voip.push-token.v1"
 
     private func apnsEnvironment() -> String {
@@ -1431,10 +1432,13 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // identical. CallKit is configured for one call only, so the pending
         // CXAnswerCallAction is the authoritative correlation token.
         guard let action = pendingAnswerAction else {
-            call.resolve(["ok": false, "reason": "no_pending_answer"])
+            // ring16: completeAnswer is idempotent. A second call after the
+            // action was already fulfilled is a duplicate, not a failure.
+            call.resolve(["ok": answerCompleted, "reason": answerCompleted ? "already_completed" : "no_pending_answer"])
             return
         }
         pendingAnswerAction = nil
+        answerCompleted = ok
         if ok { action.fulfill() } else { action.fail() }
         call.resolve(["ok": true])
     }
@@ -1534,6 +1538,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // can answer synchronously; completeAnswer() must already have the
         // authoritative CXAnswerCallAction when that callback returns.
         pendingAnswerAction = action
+        answerCompleted = false
         // Keep the SIP transport pinned up while the WebView answers.
         NotificationCenter.default.post(name: Notification.Name("PpVoipCallAnswered"), object: nil, userInfo: ["callId": activeCallId ?? ""])
         notifyListeners("incomingCallAnswered", data: [

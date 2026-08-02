@@ -175,8 +175,15 @@ export async function getUserMaestroAccessToken(
     .maybeSingle();
   if (!prof?.maestro_broker_token) return null;
 
-  const expAt = prof.maestro_token_expires_at ? Date.parse(prof.maestro_token_expires_at as string) : 0;
-  const stillFresh = expAt && expAt - Date.now() > 60_000;
+  // Maestro (Laravel Passport) can issue non-expiring tokens: the token
+  // endpoint then returns no `expires_in` and we store NULL. NULL means
+  // "no expiry", NOT "expired" — never force a refresh in that case.
+  const rawExp = prof.maestro_token_expires_at as string | null;
+  if (!rawExp) return prof.maestro_broker_token as string;
+
+  const expAt = Date.parse(rawExp);
+  if (!Number.isFinite(expAt)) return prof.maestro_broker_token as string;
+  const stillFresh = expAt - Date.now() > 60_000;
   if (stillFresh) return prof.maestro_broker_token as string;
 
   // Never return a token that is known to be expired. Doing so made callers

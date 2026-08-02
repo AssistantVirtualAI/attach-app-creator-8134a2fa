@@ -76,6 +76,17 @@ Deno.serve(async (req) => {
   }
   const regRows = devices.filter(isRegistered);
 
+  // 1b) The core server that accepted the REGISTER is the one NS uses to route
+  //     the inbound INVITE (docs/netsapiens/devices.md: device-sip-registration
+  //     -core-server "used to route inbound calls to this device"). A REGISTER
+  //     accepted by the portal node instead of a core node looks healthy but
+  //     never receives the INVITE -> straight to voicemail.
+  const mobileRow = devices.find((x) => devId(x).toLowerCase() === mobileAor.toLowerCase());
+  const coreServer = String(mobileRow?.["device-sip-registration-core-server"] ?? "").toLowerCase();
+  const coreServerOk = !coreServer || /^core\d+\./.test(coreServer);
+  const regContact = String(mobileRow?.["device-sip-registration-contact"] ?? "");
+  const regUserAgent = String(mobileRow?.["device-sip-registration-user-agent"] ?? "");
+
   // 2) Mobile device must have push enabled (docs/netsapiens/devices.md).
   //    The device LIST endpoint often omits `device-push-enabled`, so fall back
   //    to the device DETAIL endpoint before concluding anything.

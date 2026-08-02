@@ -8,6 +8,9 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { logDeepLink } from "@/lib/deepLinkDebug";
+// Import statique : le import() dynamique renvoyait un module vide dans le
+// bundle natif ("ie is not a function"), ce qui cassait « Reconnecter ».
+import { startNativeOAuthSession, canUseNativeAuthSession } from "@/lib/ms365AuthSession";
 
 type Status = "loading" | "disconnected" | "pending" | "connected" | "error";
 
@@ -156,15 +159,24 @@ export default function MaestroConnectCard() {
           // Browser.open cannot return a custom-scheme callback on iOS
           // ("Unable to display URL"): ASWebAuthenticationSession is mandatory.
           logDeepLink({ kind: "info", source: "MaestroConnect", detail: "auth path=ASWebAuthenticationSession" });
-          const { startNativeOAuthSession } = await import("@/lib/ms365AuthSession");
           let callbackUrl: string | null = null;
           try {
-            callbackUrl = await startNativeOAuthSession(url, redirectUri);
+            callbackUrl = typeof startNativeOAuthSession === "function" && canUseNativeAuthSession()
+              ? await startNativeOAuthSession(url, redirectUri)
+              : null;
           } catch (e: any) {
             logDeepLink({ kind: "error", source: "MaestroConnect", detail: `native auth session failed: ${e?.message ?? e}` });
-            throw e;
+            callbackUrl = null;
           }
-          if (!callbackUrl) return;
+          if (!callbackUrl) {
+            // Repli : navigateur in-app plutôt qu'un échec silencieux.
+            logDeepLink({ kind: "info", source: "MaestroConnect", detail: "fallback path=Browser.open (ios)" });
+            await Browser.open({ url, presentationStyle: "fullscreen" });
+            toast.info(L.opening);
+            try { localStorage.setItem("pp_maestro_just_connected", String(Date.now())); } catch {}
+            pollStatus();
+            return;
+          }
           try { localStorage.setItem("pp_maestro_callback_url", callbackUrl); } catch {}
           const callback = new URL(callbackUrl);
           window.location.href = `/auth/maestro/callback${callback.search}`;

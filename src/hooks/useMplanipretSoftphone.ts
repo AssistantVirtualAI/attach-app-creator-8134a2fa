@@ -547,13 +547,18 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // WSS socket is usually dead after suspension) instead of waiting on it.
     let cleanupVoipIncoming: (() => void) | undefined;
     onPlanipretVoipIncomingCall((data: any) => {
-      const appVisible = document.visibilityState === "visible";
-      console.log(`[pp-voip] incoming VoIP push → ${appVisible ? "JS" : "native"} SIP owns recovery`, data?.callId);
-      // The native plugin already receives PpVoipIncomingPush directly. Starting
-      // native REGISTER and rebuilding JsSIP together creates two transports for
-      // the same AOR; NetSapiens then closes one with WSS 1001. Pick one owner.
-      if (appVisible) void ppSipProvider.wakeForIncoming(String(data?.callId ?? ""));
-      else void wakePlanipretNativeSipForIncomingCall("voip_push");
+      // R1 (ring9): a VoIP push ALWAYS arrives with the app backgrounded/locked,
+      // so keying ownership on document.visibilityState always handed the AOR to
+      // the native stack — which can ring but has no WebRTC media plan and can
+      // never send the 200 OK. JsSIP owns the AOR on every push; the native
+      // keep-alive is only a fallback if the JS REGISTER fails (R4 grace window).
+      console.log("[pp-voip] incoming VoIP push → JS SIP owns recovery", data?.callId);
+      void ppSipProvider.wakeForIncoming(String(data?.callId ?? "")).then((ok) => {
+        if (!ok) {
+          console.warn("[pp-voip] JS wake failed → native SIP fallback");
+          void wakePlanipretNativeSipForIncomingCall("voip_push");
+        }
+      }).catch(() => { void wakePlanipretNativeSipForIncomingCall("voip_push"); });
       const from = String(data?.from ?? data?.handle ?? data?.caller ?? data?.callerName ?? "");
       setPushRing({ callId: String(data?.callId ?? ""), from });
       // Sécurité : si aucun INVITE n'arrive, on retire l'écran après 40 s.

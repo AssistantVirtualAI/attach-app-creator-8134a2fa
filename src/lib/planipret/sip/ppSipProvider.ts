@@ -738,9 +738,20 @@ class PpSipProvider {
       if (!stream) return;
       if (el.srcObject !== stream) el.srcObject = stream;
       el.muted = false;
+      el.defaultMuted = false;
       el.volume = 1;
-      const p = el.play();
-      if (p?.catch) p.catch(() => { setTimeout(() => el.play().catch(() => {}), 300); });
+      const ensurePlaying = () => {
+        el.muted = false;
+        el.volume = 1;
+        void el.play().catch((error) => {
+          this.log("warn", "remote audio play deferred", { error: String(error) });
+        });
+      };
+      for (const track of stream.getAudioTracks()) {
+        track.enabled = true;
+        track.addEventListener("unmute", ensurePlaying, { once: true });
+      }
+      ensurePlaying();
       this.log("info", `remote audio attached (${stream.getAudioTracks().length} track(s))`);
     } catch (e: any) {
       this.log("error", `attachRemoteAudio failed: ${e?.message || e}`);

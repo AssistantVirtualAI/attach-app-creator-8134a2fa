@@ -1230,12 +1230,13 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     if (!ok) return false;
     // Do not report success to CallKit on a locally accepted answer command.
     // Wait until JsSIP receives the confirmed dialog from the PBX.
+    // NOTE: never report failure to CallKit on watchdog expiry. The 200 OK is
+    // already sent; a late confirmation must not tear the call down.
     for (let i = 0; i < 16; i++) {
       await new Promise((r) => window.setTimeout(r, 250));
       const state = ppSipProvider.getSnapshot().callState;
       if (state === "active" || state === "held") break;
       if (state === "ended") return false;
-      // A delayed ACK must not fail the already-sent SIP 200 OK in CallKit.
     }
     // Clear the REST/DB attachment so the in-call UI follows the live session.
     if (ok && restCall?.id) setRestCall(null);

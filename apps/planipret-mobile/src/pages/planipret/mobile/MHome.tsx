@@ -70,6 +70,22 @@ export default function MHome() {
     useOutletContext<PlanipretMobileContext>();
   const navigate = useNavigate();
 
+  // Native SIP registration state (PJSIP). Falls back to "rest" when the
+  // native engine isn't available — the REST click-to-call path still works.
+  const [sipStatus, setSipStatus] = useState<"registered" | "rest" | "error">("rest");
+  const [sipExtension, setSipExtension] = useState<string | null>(null);
+  useEffect(() => {
+    const handler = (e: any) => {
+      const d = e?.detail ?? {};
+      setSipStatus(d.registered ? "registered" : d.state === "failed" ? "error" : "rest");
+      setSipExtension(d.extension ?? d.username ?? null);
+    };
+    window.addEventListener("sip-registration-state", handler);
+    return () => window.removeEventListener("sip-registration-state", handler);
+  }, []);
+
+
+
   const [period, setPeriod] = useState<Period>(() => {
     try {
       const saved = localStorage.getItem("pp.mobile.period.v2") as Period | null;

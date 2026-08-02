@@ -904,7 +904,7 @@ class PpSipProvider {
     else this.hardRebuild("push_wake");
 
     let ok = await this.waitForRegistered(12_000);
-    if (!ok && this.snap.callState !== "ringing-in") {
+    if (!ok && this.getSnapshot().callState !== "ringing-in") {
       this.log("warn", "push wake: still unregistered → hard rebuild retry");
       this.hardRebuild("push_wake_retry");
       ok = await this.waitForRegistered(12_000);
@@ -919,7 +919,8 @@ class PpSipProvider {
     const deadline = Date.now() + timeoutMs;
     return new Promise((resolve) => {
       const tick = () => {
-        if (this.snap.status === "registered" || this.snap.callState === "ringing-in") return resolve(true);
+        const cur = this.getSnapshot();
+        if (cur.status === "registered" || cur.callState === "ringing-in") return resolve(true);
         if (Date.now() >= deadline) return resolve(false);
         setTimeout(tick, 250);
       };

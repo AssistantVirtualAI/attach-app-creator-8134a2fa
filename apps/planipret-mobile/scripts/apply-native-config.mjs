@@ -773,6 +773,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       DispatchQueue.main.async { [weak self] in
         guard let self = self else { call.resolve(["ok": false]); return }
         self.preferredRoute = route
+        self.activateAudioSession()
         self.applyAudioRoute()
         call.resolve(["ok": true, "route": self.preferredRoute])
       }

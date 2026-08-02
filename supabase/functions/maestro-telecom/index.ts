@@ -67,9 +67,25 @@ Deno.serve(async (req) => {
     }
 
     const endpoint = `${url.pathname}${url.search}`;
+    let upstreamBody = method !== "GET" ? reqBody : undefined;
+    // Maestro's call-create contract distinguishes the external destination
+    // (outbound) from the external caller + internal recipient (inbound).
+    // Sending an inbound caller as `to_user_number` makes the upstream route
+    // resolve the caller as its destination and currently returns HTTP 500.
+    if (method === "POST" && /\/users\/[^/]+\/calls$/.test(url.pathname)
+      && reqBody && typeof reqBody === "object") {
+      const call = { ...(reqBody as Record<string, unknown>) };
+      if (call.direction === "inbound") {
+        const externalCaller = call.from_user_number ?? call.to_user_number;
+        delete call.to_user_number;
+        call.from_user_number = externalCaller;
+        call.to_user_id = Number.isFinite(Number(meId)) ? Number(meId) : meId;
+      }
+      upstreamBody = call;
+    }
     const r = await maestroTelecomFetch(cfg, endpoint, {
       method,
-      body: method !== "GET" ? reqBody : undefined,
+      body: upstreamBody,
       token: userToken,
     });
 

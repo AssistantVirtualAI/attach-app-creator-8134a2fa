@@ -59,6 +59,12 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
     if (busy) return;
     setBusy(true);
     try {
+      // 1) Native SIP engine (PJSIP) owns the dialog → answer/hangup for real.
+      if (nativeSip.isRegistered()) {
+        stopRef.current?.();
+        const ok = action === "answer" ? await nativeSip.answer() : await nativeSip.hangup();
+        if (ok) { onClose(); return; }
+      }
       if (action === "answer" && onAnswer) {
         // Let the softphone pick up: the full-screen in-call UI (with keypad)
         // takes over immediately — no navigation away from the call.
@@ -73,7 +79,12 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
         onClose();
         return;
       }
-      await supabase.functions.invoke("pp-ns-calls", { body: { action, call_id: call?.call_id } });
+      // 2) REST fallback: click-to-call answer / reject via NS-API.
+      await supabase.functions.invoke("pp-ns-calls", {
+        body: action === "answer"
+          ? { action: "callback", call_id: call?.call_id, destination: call?.from_number, client_type: "mobile", auto_answer: true }
+          : { action, call_id: call?.call_id },
+      });
       handleClose();
       if (action === "answer") navigate(`/mplanipret/calls?call=${call?.call_id ?? ""}`);
     } catch (e: any) {

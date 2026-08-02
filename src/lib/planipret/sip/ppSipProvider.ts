@@ -353,14 +353,26 @@ class PpSipProvider {
     }, delay);
   }
 
-  private guardedRegister(reason: string): boolean {
+  private guardedRegister(reason: string, options: { priority?: boolean } = {}): boolean {
     const ua = this.ua;
     if (!ua?.isConnected?.()) {
-      this.scheduleSocketReconnect(`${reason}_transport_down`);
+      // An inbound call cannot wait for the backoff curve: rebuild now.
+      if (options.priority) this.hardRebuild(`${reason}_transport_down`);
+      else this.scheduleSocketReconnect(`${reason}_transport_down`);
       return false;
     }
     const now = Date.now();
     const minGap = Math.max(5000, getPpSipReconnectConfig().reRegisterDelayMs);
+    // Inbound-call recovery must never be swallowed by the debounce: that is
+    // exactly what left the extension unregistered while the caller waited.
+    if (options.priority) {
+      try {
+        this.lastRegisterAttemptAt = now;
+        ua.register();
+        this.log("info", `priority REGISTER sent (${reason})`);
+        return true;
+      } catch { return false; }
+    }
     if (now - this.lastRegisterAttemptAt < minGap) {
       this.log("warn", `explicit REGISTER suppressed (${now - this.lastRegisterAttemptAt}ms < ${minGap}ms)`);
       this.pushHistory("blocked", "register_debounce");
@@ -872,6 +884,72 @@ class PpSipProvider {
     }
     return false;
   }
+  /**
+   * VoIP push wake path. After an iOS suspension the JS status often still says
+   * `registered` while the WSS is dead (observed: 1001 close + POSIX 57), so the
+   * PBX has zero contacts and the INVITE never reaches us. Trust nothing here:
+   * rebuild the transport and wait for a REAL `registered` event.
+   */
+  async wakeForIncoming(callId?: string): Promise<boolean> {
+    const cfg = this.cfg;
+    if (!cfg) return false;
+    if (this.snap.callState === "ringing-in") return true;
+    const live = !!this.ua?.isConnected?.();
+    this.log("info", "push wake → transport check", {
+      callId: callId ?? "", status: this.snap.status, socketLive: live,
+    });
+    if (live) this.guardedRegister("push_wake", { priority: true });
+    else this.hardRebuild("push_wake");
+
+    let ok = await this.waitForRegistered(12_000);
+    if (!ok && this.snap.callState !== "ringing-in") {
+      this.log("warn", "push wake: still unregistered → hard rebuild retry");
+      this.hardRebuild("push_wake_retry");
+      ok = await this.waitForRegistered(12_000);
+    }
+    // The answer window only makes sense once the socket can carry an INVITE.
+    if (this.pendingAnswer) this.pendingAnswer.expiresAt = Date.now() + PP_PENDING_ANSWER_TIMEOUT_MS;
+    this.log(ok ? "info" : "warn", `push wake → ${ok ? "registered" : "NOT registered"}`);
+    return ok;
+  }
+
+  private waitForRegistered(timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    return new Promise((resolve) => {
+      const tick = () => {
+        if (this.snap.status === "registered" || this.snap.callState === "ringing-in") return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(tick, 250);
+      };
+      tick();
+    });
+  }
+
+  /** Destroy the (possibly zombie) UA and rebuild immediately, bypassing every
+   *  debounce/backoff guard. Answer intent is preserved on purpose. */
+  private hardRebuild(reason: string) {
+    const cfg = this.cfg;
+    if (!cfg) return;
+    const ua = this.ua;
+    this.ua = null;
+    try { ua?.stop(); } catch {}
+    if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
+    if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
+    if (this.reconnectVerifyTimer) { clearTimeout(this.reconnectVerifyTimer); this.reconnectVerifyTimer = null; }
+    this.releaseRecovery(`hard_rebuild:${reason}`);
+    this.wsFailures = 0;
+    this.lastRegisterAttemptAt = 0;
+    this.lastStartAt = 0;
+    this.lastSig = "";
+    this.connectingSince = 0;
+    this.reconnectMetrics.uaRebuilds += 1;
+    this.pushHistory("socket", `hard_rebuild:${reason}`);
+    this.emitMetrics();
+    this.update({ status: "connecting" });
+    this.log("warn", `hard transport rebuild (${reason})`);
+    setTimeout(() => { void this.init(cfg); }, PP_SIP_UA_SWAP_DELAY_MS);
+  }
+
   async forceReregister() {
     try {
       const ua = this.ua;

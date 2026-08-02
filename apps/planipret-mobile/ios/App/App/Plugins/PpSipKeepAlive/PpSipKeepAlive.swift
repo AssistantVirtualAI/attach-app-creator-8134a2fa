@@ -169,6 +169,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       audioKeepAliveTimer?.invalidate()
       audioKeepAliveTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
         guard let self = self, self.callActive else { return }
+        // Never touch a CallKit-owned session from a timer.
+        if self.callKitAudioActive { return }
         self.activateAudioSession()
       }
     }
@@ -414,6 +416,18 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
 
     private func activateAudioSession() {
       let s = AVAudioSession.sharedInstance()
+      // ring16: once CallKit has activated the session it owns category, mode
+      // and activation. Re-applying setCategory (the 2s keep-alive did it over
+      // and over) makes iOS re-arbitrate the route and drop every output —
+      // that is the measured `hadOutputs=n` silence. Only re-assert the route.
+      if callKitAudioActive {
+        if s.category != .playAndRecord || s.mode != .voiceChat {
+          try? s.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+        }
+        applyAudioRoute()
+        NSLog("[PpSipKeepAlive] audio owned by CallKit outputs=%d", s.currentRoute.outputs.count)
+        return
+      }
       // During a live call we must own the session exclusively: .mixWithOthers
       // lets WebKit interrupt it when the app goes background (no audio at all).
       let opts: AVAudioSession.CategoryOptions = callActive

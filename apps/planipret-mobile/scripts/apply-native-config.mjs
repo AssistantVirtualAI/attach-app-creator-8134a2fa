@@ -666,6 +666,10 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// Set on VoIP push wake: while an inbound call is pending we must never
     /// release the SIP registration (that sent the caller to voicemail).
     private var incomingPendingUntil: Date? = nil
+    /// R3 (ring9): JsSIP (WebView) explicitly claimed the shared 113M AOR. The
+    /// native stack must then stay off it — it can ring but has no media plan.
+    private var jsOwnsAor = false
+    private var pushGraceWorkItem: DispatchWorkItem? = nil
     /// "earpiece" | "speaker" | "bluetooth" — chosen by the user in the in-call UI.
     /// A phone call MUST start on the earpiece: WebKit WebRTC otherwise defaults
     /// to the loudspeaker as soon as the remote party answers.
@@ -822,6 +826,25 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["pp_incoming_call"])
       call.resolve(["ok": true])
     }
+    /// R3 (ring9): explicit JS ownership signal for the shared AOR. Unlike
+    /// releaseRegistration("..._js_owns") this is never refused while ringing.
+    @objc func declareJsOwnsAor(_ call: CAPPluginCall) {
+      let owns = call.getBool("owns") ?? true
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { call.resolve(["ok": false]); return }
+        self.jsOwnsAor = owns
+        NSLog("[PpSipKeepAlive] jsOwnsAor=%@", owns ? "true" : "false")
+        if owns {
+          // JsSIP holds the 113M binding: cancel our fallback REGISTER and drop
+          // our own socket so NetSapiens never sees two transports on one AOR.
+          self.pushGraceWorkItem?.cancel(); self.pushGraceWorkItem = nil
+          self.timer?.invalidate(); self.timer = nil
+          self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil
+          self.setStatus("protected", "js_owns_aor")
+        }
+        call.resolve(self.snapshot(ok: true))
+      }
+    }
     @objc func wakeForIncomingCall(_ call: CAPPluginCall) {
       let why = call.getString("reason") ?? "js"
       DispatchQueue.main.async { [weak self] in
@@ -859,8 +882,20 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         notifyListeners("sipReregisterRequested", data: ["reason": "voip_push"])
         return
       }
-      if socket == nil { connect() } else { sendRegister(challenge: nil, force: true) }
+      // R4 (ring9): give JsSIP a 1.5s grace window to claim the AOR before we
+      // fall back to a native REGISTER. Do NOT lengthen it: NetSapiens only forks
+      // the INVITE to devices already registered at fork time.
+      jsOwnsAor = false
       setStatus(status == "registered" ? "registered" : "protected", "voip_push_wake")
+      pushGraceWorkItem?.cancel()
+      let work = DispatchWorkItem { [weak self] in
+        guard let self = self else { return }
+        if self.jsOwnsAor { NSLog("[PpSipKeepAlive] push grace: JS owns AOR - skipping native REGISTER"); return }
+        if self.isForeground() || self.callActive { return }
+        if self.socket == nil { self.connect() } else { self.sendRegister(challenge: nil, force: true) }
+      }
+      pushGraceWorkItem = work
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
     }
 
     private func persistConfig() {
@@ -926,6 +961,16 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     @objc private func onSceneWillEnterForeground() { onForeground() }
     private func releaseRegistration(_ why: String) {
       if !Thread.isMainThread { DispatchQueue.main.async { [weak self] in self?.releaseRegistration(why) }; return }
+      // Arm the ownership flag BEFORE the refusal point: during a ringing call we
+      // must still record that JS owns the AOR, even though we refuse to tear the
+      // socket down (ringlock1 guard — never remove it).
+      if why.hasSuffix("js_owns") { jsOwnsAor = true }
+      if let until = incomingPendingUntil, until > Date() {
+        NSLog("[PpSipKeepAlive] releaseRegistration refused (%@): inbound call pending", why)
+        setStatus("protected", "incoming_pending")
+        return
+      }
+      pushGraceWorkItem?.cancel(); pushGraceWorkItem = nil
       backgroundHandoffWorkItem?.cancel(); backgroundHandoffWorkItem = nil
       timer?.invalidate(); timer = nil
       socket?.cancel(with: .goingAway, reason: nil); socket = nil
@@ -1593,6 +1638,7 @@ CAP_PLUGIN(PpSipKeepAlive, "PpSipKeepAlive",
   CAP_PLUGIN_METHOD(acknowledgeIncoming, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(wakeForIncomingCall, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(setCallActive, CAPPluginReturnPromise);
+  CAP_PLUGIN_METHOD(declareJsOwnsAor, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(setAudioRoute, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(getAudioRoute, CAPPluginReturnPromise);
   CAP_PLUGIN_METHOD(addListener, CAPPluginReturnCallback);

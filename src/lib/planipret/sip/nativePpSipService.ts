@@ -35,6 +35,7 @@ type PpSipKeepAlivePlugin = {
   acknowledgeIncoming?: () => Promise<{ ok: boolean }>;
   wakeForIncomingCall?: (opts?: { reason?: string }) => Promise<PpNativeSipStatus>;
   setCallActive?: (opts: { active: boolean }) => Promise<PpNativeSipStatus>;
+  declareJsOwnsAor?: (opts: { owns: boolean }) => Promise<PpNativeSipStatus>;
   addListener?: (
     event: "sipServiceStatus" | "sipReregisterRequested" | "sipIncomingInvite",
     cb: (data: any) => void,
@@ -304,6 +305,18 @@ export async function onPlanipretIncomingInvite(cb: (invite: PpIncomingInvite) =
   return addDedupedCapListener("PpSipKeepAlive", NativePpSip, "sipIncomingInvite", (data: any) => cb((data ?? {}) as PpIncomingInvite));
 }
 
+
+/**
+ * R3 (ring9): tell the native keep-alive that JsSIP holds the shared 113M AOR.
+ * The legacy signal was `releaseRegistration("...js_owns")`, which the native
+ * side REFUSES while `incomingPendingUntil` is armed — i.e. exactly while the
+ * phone rings, when the handoff matters most.
+ */
+export async function declarePlanipretJsOwnsAor(owns: boolean): Promise<void> {
+  if (!isPlanipretNativeSipAvailable()) return;
+  try { await NativePpSip.declareJsOwnsAor?.({ owns }); }
+  catch { /* older native build: ignore */ }
+}
 
 export async function acknowledgePlanipretIncoming(): Promise<void> {
   if (!isNative()) return;

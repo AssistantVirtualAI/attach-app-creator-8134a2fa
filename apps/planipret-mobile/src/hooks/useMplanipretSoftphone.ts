@@ -1,6 +1,4 @@
 // Planipret mobile — softphone hook bound to the NS-API PBX.
-import { nativeSip } from "@/lib/native/NativeSipService";
-import { edgeOnlyWssUrls } from "@/lib/planipret/sip/sipEdgePolicy";
 //
 // This is fully independent from the Lemtel softphone: registration uses the
 // NS-API SIP credentials returned by the `ns-resolve-sip-credentials` edge

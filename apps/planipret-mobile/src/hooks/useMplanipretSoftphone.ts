@@ -1088,10 +1088,18 @@ export function useMplanipretSoftphone(enabled = true) {
     console.info("[answer] route=SIP → claiming call", { callId });
     const won = await claimCall(callId, "mobile");
     if (!won) {
-      console.warn("[answer] claim lost → answered elsewhere (widget)");
-      setAnsweredElsewhere("widget");
-      try { ppSipProvider.hangup(); } catch {}
-      return false;
+      // Non-destructive claim: a lost claim must never tear down a media dialog
+      // that is already live locally. Two concurrent answer paths on the SAME
+      // device used to make the loser hang up the call its twin had just picked up.
+      const liveState = ppSipProvider.getSnapshot().callState;
+      if (liveState === "active" || liveState === "held") {
+        console.warn("[answer] claim lost but local dialog is live → keeping the call", { callId, liveState });
+      } else {
+        console.warn("[answer] claim lost → answered elsewhere (widget)");
+        setAnsweredElsewhere("widget");
+        try { ppSipProvider.hangup(); } catch {}
+        return false;
+      }
     }
     const ok = await ppSipProvider.answer(callId);
     console.info(`[answer] ppSipProvider.answer → ${ok ? "SIP 200 OK sent" : "FAILED"}`, { callId });

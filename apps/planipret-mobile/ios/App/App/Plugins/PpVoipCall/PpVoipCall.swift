@@ -210,7 +210,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // Prepare the route but let CallKit own activation (didActivate:) —
         // activating here races the system session and yields a dead call.
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
+        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
         // Keep the SIP transport pinned up while the WebView answers.
         NotificationCenter.default.post(name: Notification.Name("PpVoipCallAnswered"), object: nil, userInfo: ["callId": activeCallId ?? ""])
         notifyListeners("incomingCallAnswered", data: [

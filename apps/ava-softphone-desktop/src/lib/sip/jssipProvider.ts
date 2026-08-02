@@ -268,8 +268,49 @@ class JsSipProvider {
   private onVisible = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
       this.kickReconnect('tab visible');
+      // macOS/Electron: when the app regains focus the OS may freeze the mic
+      // track. track.enabled = true is not enough — we must acquire a fresh
+      // getUserMedia() stream and replaceTrack() on the PeerConnection sender.
+      void this.refreshMicTrackOnActivate();
     }
   };
+
+  /**
+   * Called on visibilitychange (didActivate equivalent for Electron/macOS).
+   * If a call is active, re-acquire the mic and replace the sender track so
+   * macOS does not silently freeze the audio stream after app-switch.
+   */
+  private async refreshMicTrackOnActivate(): Promise<void> {
+    if (!this.session || this.snap.callState !== 'active') return;
+    try {
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      };
+      if (this.inputDeviceId) (audioConstraints as any).deviceId = { exact: this.inputDeviceId };
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
+      const newTrack = stream.getAudioTracks()[0];
+      if (!newTrack) return;
+      // Find the audio sender on the PeerConnection and replace its track
+      const pc: RTCPeerConnection | undefined =
+        (this.session?.sessionDescriptionHandler as any)?.peerConnection;
+      if (pc) {
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'audio');
+        if (sender) {
+          await sender.replaceTrack(newTrack);
+          this.logEvent('info', '[Mic] replaceTrack on activate — audio track refreshed');
+        }
+      }
+      // Honour current mute state on the new track
+      newTrack.enabled = !this.snap.muted;
+      if (!this.snap.muted) {
+        this.session?.unmute?.({ audio: true });
+      }
+    } catch (err: any) {
+      this.logEvent('warn', `[Mic] refreshMicTrackOnActivate failed: ${err?.message || err}`);
+    }
+  }
   private snap: SoftphoneSnapshot = {
     status: 'idle',
     callState: 'idle',

@@ -3,7 +3,7 @@ import { theme } from '../lib/theme';
 
 const { colors: c } = theme;
 
-type Phase = 'idle' | 'available' | 'downloading' | 'ready' | 'error';
+type Phase = 'idle' | 'available' | 'downloading' | 'ready' | 'error' | 'installing';
 
 export default function UpdateBanner() {
   const [phase, setPhase] = useState<Phase>('idle');
@@ -19,6 +19,18 @@ export default function UpdateBanner() {
     api.onUpdateDownloaded((i) => { setVersion(i.version); setPhase('ready'); });
     api.onUpdateError?.((m) => { setError(m); setPhase('error'); });
   }, []);
+
+  async function handleInstall() {
+    try {
+      setPhase('installing');
+      // quitAndInstall triggers app restart — if it returns (shouldn't happen),
+      // keep the banner in 'installing' state so the user knows it's working.
+      await window.electronAPI.installUpdate();
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+      setPhase('error');
+    }
+  }
 
   if (phase === 'idle') return null;
 
@@ -39,22 +51,48 @@ export default function UpdateBanner() {
       </div>
     );
   }
+
   if (phase === 'ready') {
     return (
       <div style={base}>
         <span>✓ Update {version} ready</span>
         <span style={{ flex: 1 }} />
         <button
-          onClick={() => window.electronAPI.installUpdate()}
-          style={{ background: c.onAccent, color: c.primary, border: 0, padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+          onClick={handleInstall}
+          style={{
+            background: c.onAccent, color: c.primary, border: 0,
+            padding: '6px 16px', borderRadius: 4, cursor: 'pointer', fontWeight: 600,
+            opacity: 1, transition: 'opacity 0.2s',
+          }}
         >
-          Restart & Update
+          Restart &amp; Update
         </button>
       </div>
     );
   }
-  if (phase === 'error') {
-    return <div style={{ ...base, background: '#b00020' }}>Update error: {error}</div>;
+
+  if (phase === 'installing') {
+    return (
+      <div style={base}>
+        <span>⟳ Restarting to apply update {version}…</span>
+      </div>
+    );
   }
+
+  if (phase === 'error') {
+    return (
+      <div style={{ ...base, background: '#b00020' }}>
+        <span>Update error: {error}</span>
+        <span style={{ flex: 1 }} />
+        <button
+          onClick={() => { setPhase('idle'); setError(''); }}
+          style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: 0, padding: '4px 10px', borderRadius: 4, cursor: 'pointer' }}
+        >
+          Dismiss
+        </button>
+      </div>
+    );
+  }
+
   return null;
 }

@@ -521,10 +521,30 @@ async function readCallRecordRows(limit = 100, opts?: { scope?: 'mine' | 'org'; 
  * Throws on non-2xx responses so callers can handle errors explicitly.
  */
 async function invokeFusionSync(body: Record<string, unknown>): Promise<any> {
-  // Use supabase.functions.invoke() so the Supabase JWT is always attached
-  // automatically (even after token refresh). Using fetch() with authToken
-  // was causing 401 Unauthorized when the token had not yet been initialized.
-  const { data, error } = await _supabase.functions.invoke(FN.fusionpbxProxy, { body });
+  // Always fetch the freshest session token before invoking the Edge Function.
+  // supabase.functions.invoke() uses the in-memory session which may not yet
+  // be populated on first render. We explicitly pass the Authorization header
+  // with the current access_token to guarantee the JWT is valid.
+  const { data: { session } } = await _supabase.auth.getSession();
+  if (!session?.access_token) {
+    // Fallback to authToken set by App.tsx if getSession() returns null
+    if (!authToken) {
+      throw new Error(`fusionpbx-proxy ${String(body.action ?? '')} — no active session (not logged in)`);
+    }
+    // Use authToken directly via fetch as last resort
+    const fnEndpoint = `${BACKEND.url}/functions/v1/${FN.fusionpbxProxy}`;
+    const res = await fetch(fnEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}`, apikey: BACKEND.anonKey },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`fusionpbx-proxy ${String(body.action ?? '')} — HTTP ${res.status}`);
+    return res.json();
+  }
+  const { data, error } = await _supabase.functions.invoke(FN.fusionpbxProxy, {
+    body,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
   if (error) {
     throw new Error(`fusionpbx-proxy ${String(body.action ?? '')} — ${error.message || String(error)}`);
   }

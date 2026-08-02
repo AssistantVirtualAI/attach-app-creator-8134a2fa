@@ -14,6 +14,7 @@
  */
 import { BACKEND, TABLES, FN, fnUrl } from './config';
 import { isMockMode } from './buildGuard';
+import { supabase as _supabase } from './supabaseClient';
 
 /**
  * MOCK is true ONLY in dev builds with VITE_AVA_MOCK=true.
@@ -520,17 +521,14 @@ async function readCallRecordRows(limit = 100, opts?: { scope?: 'mine' | 'org'; 
  * Throws on non-2xx responses so callers can handle errors explicitly.
  */
 async function invokeFusionSync(body: Record<string, unknown>): Promise<any> {
-  const res = await fetch(resolveUrl(`/fn/${FN.fusionpbxProxy}`), {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let msg = `fusionpbx-proxy ${String(body.action ?? '')} ${res.status}`;
-    try { const j = await res.json(); msg = j?.error || j?.message || msg; } catch { /* noop */ }
-    throw new Error(msg);
+  // Use supabase.functions.invoke() so the Supabase JWT is always attached
+  // automatically (even after token refresh). Using fetch() with authToken
+  // was causing 401 Unauthorized when the token had not yet been initialized.
+  const { data, error } = await _supabase.functions.invoke(FN.fusionpbxProxy, { body });
+  if (error) {
+    throw new Error(`fusionpbx-proxy ${String(body.action ?? '')} — ${error.message || String(error)}`);
   }
-  return res.json();
+  return data;
 }
 
 let cdrSyncInFlight: Promise<void> | null = null;

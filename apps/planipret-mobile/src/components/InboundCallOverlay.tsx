@@ -80,14 +80,13 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
         onClose();
         return;
       }
-      // 2) REST fallback: click-to-call answer / reject via NS-API.
-      await supabase.functions.invoke("pp-ns-calls", {
-        body: action === "answer"
-          ? { action: "callback", call_id: call?.call_id, destination: call?.from_number, client_type: "mobile", auto_answer: true }
-          : { action, call_id: call?.call_id },
-      });
+      // 2) No click-to-call on the answer path: only a real SIP dialog answers.
+      if (action === "answer") {
+        toast.error("Impossible de décrocher : téléphone non enregistré");
+        return;
+      }
+      await supabase.functions.invoke("pp-ns-calls", { body: { action, call_id: call?.call_id } });
       handleClose();
-      if (action === "answer") navigate(`/mplanipret/calls?call=${call?.call_id ?? ""}`);
     } catch (e: any) {
       toast.error(e?.message ?? "Action impossible");
     } finally {

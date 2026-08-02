@@ -1,5 +1,4 @@
 // Planipret mobile — softphone hook bound to the NS-API PBX.
-import { edgeOnlyWssUrls } from "@/lib/planipret/sip/sipEdgePolicy";
 //
 // This is fully independent from the Lemtel softphone: registration uses the
 // NS-API SIP credentials returned by the `ns-resolve-sip-credentials` edge
@@ -12,6 +11,8 @@ import { edgeOnlyWssUrls } from "@/lib/planipret/sip/sipEdgePolicy";
 //     ("both, with fallback" policy).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { edgeOnlyWssUrls } from "@/lib/planipret/sip/sipEdgePolicy";
+import { nativeSip } from "@/lib/native/NativeSipService";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getPpSipReconnectConfig } from "@/lib/planipret/sip/ppSipReconnectConfig";
@@ -227,6 +228,7 @@ function ensureGumProxy() {
 }
 
 export type OutboundResult =
+  | { via: "native"; ok: true }
   | { via: "webrtc"; ok: true }
   | { via: "pbx"; ok: true; callId?: string }
   | { via: "none"; ok: false; error: string; micState?: MicPermissionState };
@@ -1088,6 +1090,14 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       return { via: "none", ok: false, error: mic.error ?? "microphone unavailable", micState: mic.state };
     }
     try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
+
+    // 1) Native SIP engine (PJSIP) registered → real outbound INVITE, real audio.
+    if (nativeSip.isRegistered()) {
+      const ok = await nativeSip.makeCall(destination);
+      console.info(`[outbound] route=NATIVE-SIP → ${ok ? "calling" : "failed"}`, { destination });
+      if (ok) return { via: "native", ok: true };
+    }
+
     let canUseSip = registered;
     if (!canUseSip) {
       try { ppSipProvider.forceReregister(); } catch {}
@@ -1103,8 +1113,11 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         console.warn("[softphone] WebRTC call failed, falling back to PBX", e?.message ?? e);
       }
     }
+    // 2) Not registered anywhere → NS-API click-to-call (outbound only).
+    console.info("[outbound] route=CLICK-TO-CALL (not registered)", { destination });
     return await callViaPBX(destination);
   }, [registered, callViaPBX]);
+
 
   // Last-resort pickup: ask NetSapiens to answer the live ringing leg over
   // NS-API. Used when the SIP INVITE never reaches the WebView after a VoIP
@@ -1135,28 +1148,10 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     }
   }, []);
 
-  // Pickup via NS-API click-to-call. The SIP WebSocket (core*:9002) is not
-  // publicly reachable, so when no media dialog can be established we ask the
-  // PBX to bridge: it calls our mobile device (auto-answered) and connects the
-  // caller. Doc: POST /domains/{d}/users/{ext}/calls (calls.md).
-  const callbackAnswer = useCallback(async (number: string): Promise<boolean> => {
-    const n = (number || "").trim();
-    if (!n) { console.warn("[answer] callback: no caller number"); return false; }
-    try {
-      const { data, error } = await supabase.functions.invoke("pp-ns-calls", {
-        body: { action: "callback", number: n },
-      });
-      const ok = !error && (data as any)?.success !== false;
-      console.info(`[answer] route=CALLBACK (click-to-call) → ${ok ? "accepted" : "rejected"}`, {
-        number: n,
-        error: error?.message ?? (data as any)?.error ?? null,
-      });
-      return ok;
-    } catch (e: any) {
-      console.warn("[answer] callback threw", e?.message ?? e);
-      return false;
-    }
-  }, []);
+  // NOTE: no click-to-call on the ANSWER path (explicit product decision).
+  // An inbound call is picked up by the native SIP engine (PJSIP) or by the
+  // SIP dialog itself; the PBX must never call us back to bridge the caller.
+
 
   // Wrapped answer: race to claim the call before actually picking up. If we
   // lose (widget answered first), don't pick up — the winner already has audio.
@@ -1166,11 +1161,19 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     const sipSnap = ppSipProvider.getSnapshot();
     console.info("[answer] tapped", {
       hasLiveSipSession,
+      nativeRegistered: nativeSip.isRegistered(),
       sipCallState: sipSnap.callState,
       sipCallId: sipSnap.callId || null,
       pushCallId: pushRing?.callId ?? null,
       restCallId: restCall?.id ?? null,
     });
+
+    // 0) Native SIP engine (PJSIP) holds the INVITE → answer it natively.
+    if (nativeSip.isRegistered()) {
+      const ok = await nativeSip.answer();
+      console.info(`[answer] route=NATIVE-SIP → ${ok ? "answered" : "failed"}`);
+      if (ok) return true;
+    }
 
     // Push VoIP reçu mais INVITE pas encore arrivé : on bufferise la réponse,
     // ppSipProvider répondra dès que la session SIP se présente (aucune
@@ -1195,8 +1198,8 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         if (st === "active") { console.info("[answer] SIP answered within watchdog window"); return true; }
         if (st === "ended") break;
       }
-      console.warn("[answer] no confirmed SIP dialog before pending-answer expiry → NS-API click-to-call");
-      return await callbackAnswer(pushRing.from || "");
+      console.warn("[answer] no confirmed SIP dialog before pending-answer expiry → failed (no click-to-call)");
+      return false;
     }
 
     // `ringing-in` is the only state that may be answered. Treating an active
@@ -1204,17 +1207,17 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // could never produce a new confirmed inbound dialog.
     if (sipSnap.callState === "active" || sipSnap.callState === "held") return true;
     if (sipSnap.callState !== "ringing-in") {
-      console.warn("[answer] no inbound SIP INVITE available → NS-API click-to-call", { state: sipSnap.callState });
-      return await callbackAnswer(restCall?.number || sipSnap.remoteNumber || sipSnap.remoteIdentity || "");
+      console.warn("[answer] no inbound SIP INVITE available → failed (no click-to-call)", { state: sipSnap.callState });
+      return false;
     }
 
     if (restCall?.id && !liveSipNow) {
       console.info("[answer] route=REST (pp-ns-calls answer)", { call_id: restCall.id });
       const ok = await restControl("answer");
       console.info(`[answer] REST answer ${ok ? "accepted" : "REJECTED"} by NetSapiens`);
-      if (ok) return true;
-      return await callbackAnswer(restCall.number || sipSnap.remoteNumber || "");
+      return ok;
     }
+
 
     const callId = sipSnap.callId;
     console.info("[answer] route=SIP → claiming call", { callId });
@@ -1265,7 +1268,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // Clear the REST/DB attachment so the in-call UI follows the live session.
     if (ok && restCall?.id) setRestCall(null);
     return ok;
-  }, [restCall?.id, restCall?.number, restControl, hasLiveSipSession, pushRing, callbackAnswer]);
+  }, [restCall?.id, restCall?.number, restControl, hasLiveSipSession, pushRing]);
 
   const answer = useCallback((): Promise<boolean> => {
     const pending = answerAttemptRef.current;

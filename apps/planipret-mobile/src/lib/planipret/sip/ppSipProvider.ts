@@ -357,6 +357,14 @@ class PpSipProvider {
   }
 
   private guardedRegister(reason: string, options: { priority?: boolean } = {}): boolean {
+    // A native SIP engine (PJSIP) holding the AOR is the single owner: a JS
+    // REGISTER on the same AOR makes NetSapiens close the native branch (1001).
+    if (ppNativeSipOwnsAor()) {
+      this.log("warn", `REGISTER blocked: native SIP owns AOR (${reason})`);
+      this.pushHistory("blocked", "native_owns_aor");
+      this.emitMetrics();
+      return false;
+    }
     const ua = this.ua;
     if (!ua?.isConnected?.()) {
       // An inbound call cannot wait for the backoff curve: rebuild now.

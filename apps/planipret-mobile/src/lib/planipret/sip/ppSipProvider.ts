@@ -424,7 +424,9 @@ class PpSipProvider {
       }
     }
     if (this.ua) {
-      this.stop();
+      // Foreground resume can rebuild the UA at the same instant CallKit queues
+      // an answer. Preserve that intent until the re-forked INVITE arrives.
+      this.stop({ preserveCallIntent: true });
       await new Promise((resolve) => setTimeout(resolve, PP_SIP_UA_SWAP_DELAY_MS));
     }
     this.cfg = cleanCfg;
@@ -1067,7 +1069,7 @@ class PpSipProvider {
     this.stop();
   }
 
-  stop() {
+  stop(options: { preserveCallIntent?: boolean } = {}) {
     this.stopKeepAlive();
     if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
     if (this.wsWatchdogTimer) { clearTimeout(this.wsWatchdogTimer); this.wsWatchdogTimer = null; }
@@ -1077,7 +1079,10 @@ class PpSipProvider {
     try { this.ua?.stop(); } catch {}
     this.ua = null;
     this.session = null;
-    this.pendingAnswer = null;
+    if (!options.preserveCallIntent) {
+      this.pendingAnswer = null;
+      this.pendingDecline = null;
+    }
     this.update({ status: "disconnected", callState: "idle", direction: null, startedAt: null });
   }
 

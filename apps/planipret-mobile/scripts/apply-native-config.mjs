@@ -1584,10 +1584,14 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         NotificationCenter.default.post(name: Notification.Name("PpCallKitAudioActivated"), object: audioSession)
+        // ring17: JS must only attach/enable the microphone track AFTER CallKit
+        // owns the session, otherwise the outgoing direction stays silent.
+        notifyListeners("audioSessionActivated", data: ["callId": activeCallId ?? ""], retainUntilConsumed: true)
     }
 
     public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         NotificationCenter.default.post(name: Notification.Name("PpCallKitAudioDeactivated"), object: audioSession)
+        notifyListeners("audioSessionDeactivated", data: ["callId": activeCallId ?? ""])
     }
 }
 `;

@@ -17,6 +17,15 @@ const PP_SIP_UA_SWAP_DELAY_MS = 800;
 /** Must remain shorter than the native CallKit answer watchdog (32s). */
 export const PP_PENDING_ANSWER_TIMEOUT_MS = 30_000;
 
+// One owner per AOR: the native PJSIP engine announces itself with
+// `pp:sip-native-owns-aor`, after which JsSIP must never REGISTER again.
+let ppNativeAorOwner = false;
+export const ppNativeSipOwnsAor = () => ppNativeAorOwner;
+if (typeof window !== "undefined") {
+  window.addEventListener("pp:sip-native-owns-aor", () => { ppNativeAorOwner = true; });
+  window.addEventListener("pp:sip-native-released-aor", () => { ppNativeAorOwner = false; });
+}
+
 export type PpSipStatus = "idle" | "connecting" | "connected" | "registered" | "disconnected" | "error";
 export type PpCallState = "idle" | "ringing-out" | "ringing-in" | "active" | "held" | "ended";
 
@@ -357,6 +366,14 @@ class PpSipProvider {
   }
 
   private guardedRegister(reason: string, options: { priority?: boolean } = {}): boolean {
+    // A native SIP engine (PJSIP) holding the AOR is the single owner: a JS
+    // REGISTER on the same AOR makes NetSapiens close the native branch (1001).
+    if (ppNativeSipOwnsAor()) {
+      this.log("warn", `REGISTER blocked: native SIP owns AOR (${reason})`);
+      this.pushHistory("blocked", "native_owns_aor");
+      this.emitMetrics();
+      return false;
+    }
     const ua = this.ua;
     if (!ua?.isConnected?.()) {
       // An inbound call cannot wait for the backoff curve: rebuild now.

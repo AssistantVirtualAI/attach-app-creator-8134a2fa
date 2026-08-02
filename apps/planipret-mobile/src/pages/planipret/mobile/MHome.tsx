@@ -70,6 +70,22 @@ export default function MHome() {
     useOutletContext<PlanipretMobileContext>();
   const navigate = useNavigate();
 
+  // Native SIP registration state (PJSIP). Falls back to "rest" when the
+  // native engine isn't available — the REST click-to-call path still works.
+  const [sipStatus, setSipStatus] = useState<"registered" | "rest" | "error">("rest");
+  const [sipExtension, setSipExtension] = useState<string | null>(null);
+  useEffect(() => {
+    const handler = (e: any) => {
+      const d = e?.detail ?? {};
+      setSipStatus(d.registered ? "registered" : d.state === "failed" ? "error" : "rest");
+      setSipExtension(d.extension ?? d.username ?? null);
+    };
+    window.addEventListener("sip-registration-state", handler);
+    return () => window.removeEventListener("sip-registration-state", handler);
+  }, []);
+
+
+
   const [period, setPeriod] = useState<Period>(() => {
     try {
       const saved = localStorage.getItem("pp.mobile.period.v2") as Period | null;
@@ -548,15 +564,21 @@ export default function MHome() {
         lang={lang}
       />
 
-      {/* ===== SIP DEBUG SHORTCUT ===== */}
+      {/* ===== SIP STATUS + DEBUG SHORTCUT ===== */}
       <button
         type="button"
         onClick={() => navigate("/mplanipret/sip-debug")}
         className="w-full flex items-center gap-2 px-3 py-2 rounded-xl active:scale-[0.99] transition"
         style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}
       >
-        <span className="w-2 h-2 rounded-full" style={{ background: "#10B981" }} />
-        <span className="text-[12px] font-semibold flex-1 text-left">{t("screens.home.sipDebugTitle")}</span>
+        <span className="w-2 h-2 rounded-full" style={{ background: sipStatus === "error" ? "#EF4444" : "#10B981" }} />
+        <span className="text-[12px] font-semibold flex-1 text-left">
+          {sipStatus === "registered"
+            ? `En ligne — Ext ${sipExtension ?? ""}`.trim()
+            : sipStatus === "error"
+              ? "Hors ligne"
+              : "Prête (REST)"}
+        </span>
         <span className="text-[10px] opacity-70">{t("screens.home.open")}</span>
       </button>
 

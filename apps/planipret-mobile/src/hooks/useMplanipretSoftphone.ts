@@ -147,10 +147,17 @@ function acquireSoftphoneOwner(instanceId: string, userId: string): boolean {
   return false;
 }
 
+/** Mounted hook instances, so ownership can be handed over instead of lost. */
+const softphoneInstances = new Set<{ notify: () => void }>();
+
 function releaseSoftphoneOwner(instanceId: string) {
   if (softphoneOwnerId === instanceId) {
     softphoneOwnerId = null;
     softphoneOwnerUserId = null;
+    // Ownership must never stay vacant: the owner holds the CallKit answer
+    // listener and the cross-device claim. Wake the remaining instances so one
+    // of them re-acquires immediately.
+    softphoneInstances.forEach((i) => { try { i.notify(); } catch {} });
   }
 }
 
@@ -210,6 +217,8 @@ type RestCallAttachment = {
 export function useMplanipretSoftphone(enabled = true) {
   const { user } = useAuth();
   const ownerIdRef = useRef<string>(`pp-softphone-${++softphoneOwnerSeq}`);
+  // Bumped when ownership changes so gated effects re-evaluate.
+  const [ownerTick, setOwnerTick] = useState(0);
   const [snap, setSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
   const [loading, setLoading] = useState(false);
   const [net, setNet] = useState<NetSample>(networkMonitor.current());
@@ -233,6 +242,13 @@ export function useMplanipretSoftphone(enabled = true) {
 
   // Subscribe to the SIP snapshot.
   useEffect(() => ppSipProvider.subscribe(setSnap), []);
+
+  // Register this instance so ownership can be transferred on unmount.
+  useEffect(() => {
+    const entry = { notify: () => setOwnerTick((t) => t + 1) };
+    softphoneInstances.add(entry);
+    return () => { softphoneInstances.delete(entry); };
+  }, []);
 
   // CallKit must only mark Answer fulfilled after the SIP dialog is confirmed;
   // otherwise iOS shows a connected call while NetSapiens is still ringing or
@@ -269,7 +285,7 @@ export function useMplanipretSoftphone(enabled = true) {
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
-  }, [enabled, user?.id]);
+  }, [enabled, user?.id, ownerTick]);
 
   // Resolve NS-API SIP credentials and register the softphone per user.
   // Re-runs whenever the ExtensionSync page dispatches `pp:sip-ready`, so a
@@ -364,7 +380,7 @@ export function useMplanipretSoftphone(enabled = true) {
       window.removeEventListener("pp:sip-force-reregister", onForce as any);
       releaseSoftphoneOwner(ownerId);
     };
-  }, [enabled, user?.id]);
+  }, [enabled, user?.id, ownerTick]);
 
   // Native guard: Android keeps a foreground keep-alive service with WakeLock / WifiLock;
   // iOS receives native background refresh requests and re-registers as soon as execution resumes.
@@ -506,7 +522,7 @@ export function useMplanipretSoftphone(enabled = true) {
       cleanupVoipAnswer?.();
       cleanupVoipReject?.();
     };
-  }, [enabled, user?.id]);
+  }, [enabled, user?.id, ownerTick]);
 
   // Watchdog: keep the SIP registration alive. If we drift into
   // `disconnected` / `error` for more than 10s, force a re-REGISTER. If still
@@ -775,11 +791,12 @@ export function useMplanipretSoftphone(enabled = true) {
       try { removeAppStateListener(); } catch {}
     };
 
-  }, [enabled, user?.id]);
+  }, [enabled, user?.id, ownerTick]);
 
 
   // Live call quality only while a call is active.
   useEffect(() => {
+    if (softphoneOwnerId !== ownerIdRef.current) return;
     const active = snap.callState === "active" || snap.callState === "held";
     const ringing = snap.callState === "ringing-in" || snap.callState === "ringing-out";
     // Keep the native iOS audio session alive while a call is up, otherwise
@@ -788,10 +805,11 @@ export function useMplanipretSoftphone(enabled = true) {
     if (!active) { setQuality(null); return; }
     const un = callQualitySampler.subscribe(setQuality);
     return () => { un(); };
-  }, [snap.callState]);
+  }, [snap.callState, ownerTick]);
 
   // Cross-device call session sync (mobile ↔ widget via SIP Call-ID).
   useEffect(() => {
+    if (softphoneOwnerId !== ownerIdRef.current) return;
     const callId = snap.callId;
     if (!callId || !brokerId) return;
     const ringing = snap.callState === "ringing-in" || snap.callState === "ringing-out";
@@ -813,11 +831,12 @@ export function useMplanipretSoftphone(enabled = true) {
       }
     });
     return () => { unsub(); };
-  }, [snap.callId, snap.callState, snap.direction, snap.remoteNumber, brokerId]);
+  }, [snap.callId, snap.callState, snap.direction, snap.remoteNumber, brokerId, ownerTick]);
 
   // Maestro call records (Scott's rules): outbound always, inbound only when
   // the caller is not another broker's VoIP number.
   useEffect(() => {
+    if (softphoneOwnerId !== ownerIdRef.current) return;
     const callId = snap.callId;
     if (!callId) return;
     const ringing = snap.callState === "ringing-in" || snap.callState === "ringing-out" || snap.callState === "active";
@@ -827,20 +846,22 @@ export function useMplanipretSoftphone(enabled = true) {
     } else if (snap.direction === "in") {
       postInboundCall({ providerCallId: callId, number: snap.remoteNumber || snap.remoteIdentity || "" });
     }
-  }, [snap.callId, snap.callState, snap.direction, snap.remoteNumber, snap.remoteIdentity]);
+  }, [snap.callId, snap.callState, snap.direction, snap.remoteNumber, snap.remoteIdentity, ownerTick]);
 
   // Push VoIP ring arrives before the INVITE — post the inbound call as soon as
   // we know the caller (rule 3), de-duplicated by provider_call_id.
   useEffect(() => {
+    if (softphoneOwnerId !== ownerIdRef.current) return;
     if (!pushRing?.callId) return;
     postInboundCall({ providerCallId: pushRing.callId, number: pushRing.from || "" });
-  }, [pushRing?.callId, pushRing?.from]);
+  }, [pushRing?.callId, pushRing?.from, ownerTick]);
 
   // Mark session ended when local call ends.
   useEffect(() => {
+    if (softphoneOwnerId !== ownerIdRef.current) return;
     if (snap.callState !== "ended" || !snap.callId) return;
     void endSession(snap.callId, snap.errorCause || "hangup");
-  }, [snap.callState, snap.callId, snap.errorCause]);
+  }, [snap.callState, snap.callId, snap.errorCause, ownerTick]);
 
   const registered = snap.status === "registered";
 
@@ -1151,6 +1172,7 @@ export function useMplanipretSoftphone(enabled = true) {
   useEffect(() => { answerRef.current = answer; }, [answer]);
 
   useEffect(() => {
+    if (softphoneOwnerId !== ownerIdRef.current) return;
     const onPendingAnswerReady = () => {
       // This is not a duplicate tap: it is the first moment a real SIP INVITE
       // exists. The original CallKit answer promise is deliberately parked in
@@ -1164,7 +1186,7 @@ export function useMplanipretSoftphone(enabled = true) {
     };
     window.addEventListener("pp:sip-pending-answer-ready", onPendingAnswerReady);
     return () => window.removeEventListener("pp:sip-pending-answer-ready", onPendingAnswerReady);
-  }, []);
+  }, [ownerTick]);
 
 
 

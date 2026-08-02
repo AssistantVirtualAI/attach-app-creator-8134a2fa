@@ -153,13 +153,23 @@ export default function MaestroConnectCard() {
       if (isNative) {
         logDeepLink({ kind: "info", source: "MaestroConnect", detail: `opening Maestro with redirect_uri=${redirectUri}` });
         if (Capacitor.getPlatform() === "ios") {
+          // Browser.open cannot return a custom-scheme callback on iOS
+          // ("Unable to display URL"): ASWebAuthenticationSession is mandatory.
+          logDeepLink({ kind: "info", source: "MaestroConnect", detail: "auth path=ASWebAuthenticationSession" });
           const { startNativeOAuthSession } = await import("@/lib/ms365AuthSession");
-          const callbackUrl = await startNativeOAuthSession(url, redirectUri);
+          let callbackUrl: string | null = null;
+          try {
+            callbackUrl = await startNativeOAuthSession(url, redirectUri);
+          } catch (e: any) {
+            logDeepLink({ kind: "error", source: "MaestroConnect", detail: `native auth session failed: ${e?.message ?? e}` });
+            throw e;
+          }
           if (!callbackUrl) return;
           try { localStorage.setItem("pp_maestro_callback_url", callbackUrl); } catch {}
           const callback = new URL(callbackUrl);
           window.location.href = `/auth/maestro/callback${callback.search}`;
         } else {
+          logDeepLink({ kind: "info", source: "MaestroConnect", detail: "auth path=Browser.open (android)" });
           await Browser.open({ url, presentationStyle: "fullscreen" });
         }
       } else {

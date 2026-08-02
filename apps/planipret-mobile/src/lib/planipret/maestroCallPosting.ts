@@ -207,6 +207,14 @@ async function post(
     } catch (e: any) {
       lastError = String(e?.message ?? e);
       log("post_attempt_failed", { callId, dedupKey, direction, attempt, error: lastError });
+      // A dead refresh token will fail identically on every retry: stop hammering
+      // the API during a live call and surface the reconnect requirement instead.
+      if (/maestro_reconnect_required|needs_reauth|invalid_grant/i.test(lastError)) {
+        const rec = upsert(callId, { direction, number, state: "failed", reason: "needs_reauth", lastError });
+        log("post_needs_reauth", { callId, dedupKey, direction, number, classification, error: lastError });
+        try { window.dispatchEvent(new CustomEvent("pp:maestro-needs-reauth", { detail: { callId } })); } catch {}
+        return rec;
+      }
       if (attempt < POST_MAX_ATTEMPTS) await sleep(attempt * 800);
     }
   }

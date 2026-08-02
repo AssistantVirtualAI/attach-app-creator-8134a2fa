@@ -450,6 +450,9 @@ export function useMplanipretSoftphone(enabled = true) {
     onPlanipretVoipIncomingCall((data: any) => {
       console.log("[pp-voip] incoming VoIP push → waking native SIP", data?.callId);
       void wakePlanipretNativeSipForIncomingCall("voip_push");
+      // Rebuild the JS transport straight away: waiting for the "Répondre" tap
+      // left the PBX with zero registered contacts (no INVITE → voicemail).
+      void ppSipProvider.wakeForIncoming(String(data?.callId ?? ""));
       const from = String(data?.from ?? data?.handle ?? data?.caller ?? data?.callerName ?? "");
       setPushRing({ callId: String(data?.callId ?? ""), from });
       // Sécurité : si aucun INVITE n'arrive, on retire l'écran après 40 s.
@@ -1041,10 +1044,10 @@ export function useMplanipretSoftphone(enabled = true) {
     // comparaison de Call-ID : push id ≠ SIP Call-ID).
     const liveSipNow = ["ringing-in", "ringing-out", "active", "held"].includes(sipSnap.callState);
     if (!liveSipNow && pushRing) {
-      console.info("[answer] route=PUSH-PENDING → forceReregister + requestAnswer", {
+      console.info("[answer] route=PUSH-PENDING → wakeForIncoming + requestAnswer", {
         pushCallId: pushRing.callId ?? null,
       });
-      try { ppSipProvider.forceReregister(); } catch {}
+      try { await ppSipProvider.wakeForIncoming(pushRing.callId || undefined); } catch {}
       const immediate = await ppSipProvider.requestAnswer(pushRing.callId || undefined);
       console.info(`[answer] requestAnswer → ${immediate ? "answered immediately" : "intent queued"}`);
       if (immediate) return true;

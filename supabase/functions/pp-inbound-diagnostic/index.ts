@@ -108,29 +108,16 @@ Deno.serve(async (req) => {
   }
 
   // 3) Devices / registrations
-  // NOTE: /users/{ext}/subscriptions returns SIP SUBSCRIBE (presence), NOT
-  // REGISTER bindings. Real registrations live under the device sub-resource
-  // and at domain level — probe all of them.
+  // NS-API v2 has NO /registrations resource and /subscriptions is SIP
+  // SUBSCRIBE (presence), not REGISTER (docs/netsapiens/registrations.md).
+  // Registration state lives on the Device object itself.
   const devices = await get(`/domains/${d}/users/${e}/devices`);
-  const deviceIds = arrOf(devices.data)
-    .map((x: any) => String(x?.device ?? x?.aor ?? x?.name ?? "").replace(/^sip:/, "").split("@")[0])
-    .filter(Boolean);
-  const regProbes = [
-    await get(`/domains/${d}/users/${e}/registrations`),
-    await get(`/domains/${d}/registrations?user=${e}`),
-    ...(await Promise.all(
-      deviceIds.slice(0, 6).map((id) =>
-        get(`/domains/${d}/users/${e}/devices/${encodeURIComponent(id)}/registrations`)
-      ),
-    )),
-    await get(`/domains/${d}/users/${e}/subscriptions`),
-  ];
   const registrations = {
-    path: regProbes.find((p) => p.ok && arrOf(p.data).length)?.path ?? regProbes[0].path,
-    status: regProbes.find((p) => p.ok && arrOf(p.data).length)?.status ?? regProbes[0].status,
-    ok: regProbes.some((p) => p.ok),
-    data: regProbes.flatMap((p) => (p.ok ? arrOf(p.data) : [])),
-    probes: regProbes.map((p) => ({ path: p.path, status: p.status, count: p.ok ? arrOf(p.data).length : 0 })),
+    path: `/domains/${d}/users/${e}/devices`,
+    status: devices.status,
+    ok: devices.ok,
+    data: arrOf(devices.data),
+    probes: [{ path: devices.path, status: devices.status, count: arrOf(devices.data).length }],
   } as any;
 
 

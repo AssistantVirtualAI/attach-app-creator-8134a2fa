@@ -268,7 +268,9 @@ Deno.serve(async (req) => {
         : nsAction === "dtmf" ? JSON.stringify({ digit: payload.digit })
         : undefined;
       let res = await nsFetch(path, { method: "PATCH", body });
-      if (!res.ok && nsAction === "disconnect") {
+      // Decline: NS-API documents DELETE .../calls/{call-id} as the hangup /
+      // reject path, used as fallback when PATCH is refused.
+      if (!res.ok && (nsAction === "disconnect" || nsAction === "reject")) {
         res = await nsFetch(`${base}/${encodeURIComponent(callId)}`, { method: "DELETE" });
       }
       if (!res.ok && (nsAction === "transfer" || nsAction === "forward")) {

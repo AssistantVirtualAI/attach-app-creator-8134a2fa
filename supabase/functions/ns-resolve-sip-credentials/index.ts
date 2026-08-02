@@ -254,8 +254,12 @@ Deno.serve(async (req) => {
   // Fast path: Maestro Telecom returns SIP credentials directly for the broker.
   // Only take that path when it returns a complete credential set; otherwise
   // fall through to the NS-API device query below (never break the flow).
+  // NEVER for mobile: Maestro returns the generic/web AOR (<ext> or <ext>W) with
+  // a different password, which makes the mobile app register the web device.
+  // The mobile app must always own `<ext>M` only.
   const maestroBrokerId = (profile as any).maestro_broker_id as string | null;
-  if (maestroBrokerId) {
+  if (maestroBrokerId && clientType !== "mobile") {
+
     try {
       const admin = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
       const cfg = await getMaestroTelecomConfig(admin);
@@ -377,7 +381,13 @@ Deno.serve(async (req) => {
   }
 
 
-  const resolvedId = deviceIdOf(device) || deviceName;
+  // Hard invariant: a mobile client can only ever be handed `<ext>M`.
+  const resolvedRaw = deviceIdOf(device) || deviceName;
+  const resolvedId = clientType === "mobile" ? deviceName : resolvedRaw;
+  if (resolvedRaw !== resolvedId) {
+    console.warn(`[ns-resolve] forced mobile AOR ${resolvedId} (NS returned ${resolvedRaw})`);
+  }
+
   const rawCore = (device["core-server"] ?? device["device-sip-registration-core-server"] ?? device["sip-registration-core-server"] ?? "").toString().trim();
   const coreServer = (rawCore || FALLBACK_PROXY).replace(/^https?:\/\//, "").replace(/\/+$/, "");
   const sipUri = device["device-sip-registration-uri"] ?? `sip:${resolvedId}@${domain}`;

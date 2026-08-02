@@ -63,7 +63,17 @@ export async function claimCall(callId: string, answeredBy: AnsweredBy): Promise
       _answered_by: answeredBy,
     });
     if (error) return true; // fail open — better to answer than to drop
-    return Boolean(data);
+    if (data) return true;
+    // Lost claim: re-read `answered_by`. Two answer paths on the SAME device
+    // (CallKit listener + queued intent) race the RPC; the loser must not
+    // conclude "the widget answered" when this very device won 200 ms ago.
+    const { data: row } = await supabase
+      .from("planipret_call_sessions")
+      .select("answered_by")
+      .eq("call_id", callId)
+      .maybeSingle();
+    if (row?.answered_by === answeredBy) return true;
+    return false;
   } catch {
     return true;
   }

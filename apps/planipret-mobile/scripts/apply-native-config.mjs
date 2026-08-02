@@ -49,9 +49,7 @@ const IOS_ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 <dict>
 	<key>aps-environment</key>
-	<string>development</string>
-	<key>com.apple.developer.pushkit.unrestricted-voip</key>
-	<true/>
+	<string>production</string>
 </dict>
 </plist>
 `;
@@ -681,7 +679,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
 
     public override func load() {
       restoreConfig()
-      DispatchQueue.main.async { [weak self] in self?.appActive = UIApplication.shared.applicationState == .active }
+      DispatchQueue.main.async { [weak self] in self?.appActive = UIApplication.shared.applicationState != .background }
       NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
       NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
       NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
@@ -920,7 +918,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     // The cached appActive flag is refreshed only from main-thread notifications.
     private func isForeground() -> Bool {
       if Thread.isMainThread {
-        appActive = UIApplication.shared.applicationState == .active
+        appActive = UIApplication.shared.applicationState != .background
         return appActive
       }
       return appActive
@@ -975,8 +973,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       // During a live call we must own the session exclusively: .mixWithOthers
       // lets WebKit interrupt it when the app goes background (no audio at all).
       let opts: AVAudioSession.CategoryOptions = callActive
-        ? [.allowBluetooth, .allowBluetoothA2DP]
-        : [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]
+        ? [.allowBluetoothHFP, .allowBluetoothA2DP]
+        : [.allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
       try? s.setCategory(.playAndRecord, mode: .voiceChat, options: opts)
       try? s.setActive(true, options: [])
       // Re-assert the user's choice: activating the session resets the override
@@ -1461,7 +1459,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // Prepare the route but let CallKit own activation (didActivate:) —
         // activating here races the system session and yields a dead call.
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
+        try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
         // Keep the SIP transport pinned up while the WebView answers.
         NotificationCenter.default.post(name: Notification.Name("PpVoipCallAnswered"), object: nil, userInfo: ["callId": activeCallId ?? ""])
         notifyListeners("incomingCallAnswered", data: [

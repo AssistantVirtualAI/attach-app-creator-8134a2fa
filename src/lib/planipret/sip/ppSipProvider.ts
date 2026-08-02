@@ -169,6 +169,7 @@ class PpSipProvider {
   };
 
   audioEl: HTMLAudioElement | null = null;
+  private callKitAudioHookInstalled = false;
   private lastSig = "";
   private lastStartAt = 0;
   private connectingSince = 0;

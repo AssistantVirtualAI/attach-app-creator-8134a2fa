@@ -75,7 +75,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
 
     public override func load() {
       restoreConfig()
-      DispatchQueue.main.async { [weak self] in self?.appActive = UIApplication.shared.applicationState == .active }
+      DispatchQueue.main.async { [weak self] in self?.appActive = UIApplication.shared.applicationState != .background }
       NotificationCenter.default.addObserver(self, selector: #selector(onBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
       NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
       NotificationCenter.default.addObserver(self, selector: #selector(onForeground), name: UIApplication.didBecomeActiveNotification, object: nil)
@@ -314,7 +314,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     // The cached appActive flag is refreshed only from main-thread notifications.
     private func isForeground() -> Bool {
       if Thread.isMainThread {
-        appActive = UIApplication.shared.applicationState == .active
+        appActive = UIApplication.shared.applicationState != .background
         return appActive
       }
       return appActive
@@ -369,8 +369,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       // During a live call we must own the session exclusively: .mixWithOthers
       // lets WebKit interrupt it when the app goes background (no audio at all).
       let opts: AVAudioSession.CategoryOptions = callActive
-        ? [.allowBluetooth, .allowBluetoothA2DP]
-        : [.allowBluetooth, .allowBluetoothA2DP, .mixWithOthers]
+        ? [.allowBluetoothHFP, .allowBluetoothA2DP]
+        : [.allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
       try? s.setCategory(.playAndRecord, mode: .voiceChat, options: opts)
       try? s.setActive(true, options: [])
       // Re-assert the user's choice: activating the session resets the override

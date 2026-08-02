@@ -27,6 +27,7 @@ OPENSSL_TAG="${OPENSSL_TAG:-openssl-3.0.15}"
 MIN_IOS="${MIN_IOS:-14.0}"
 
 command -v xcodebuild >/dev/null || { echo "xcodebuild introuvable — ce script exige macOS + Xcode."; exit 1; }
+command -v xcrun >/dev/null || { echo "xcrun introuvable — installe Xcode et sélectionne-le avec xcode-select."; exit 1; }
 command -v libtool >/dev/null || { echo "libtool introuvable — installe les Xcode command line tools."; exit 1; }
 
 mkdir -p "$WORK" "$OUT"
@@ -124,16 +125,23 @@ build_arch () {
 
   make dep && make clean && make
 
-  # Garde-fou n°2 : la macro doit être à 1 dans la config effective.
+  # Garde-fou n°2 : la macro doit être à 1 dans la config effective. Ce test
+  # est bloquant : poursuivre produirait un xcframework importable mais sans TLS.
   if ! grep -qE '^\s*#\s*define\s+PJ_HAS_SSL_SOCK\s+1' pjlib/include/pj/compat/os_auto.h 2>/dev/null; then
-    echo "⚠ PJ_HAS_SSL_SOCK non trouvé à 1 dans os_auto.h — vérifie $log"
+    echo "❌ ARRÊT — PJ_HAS_SSL_SOCK n'est pas à 1 pour '$tag'. Journal : $log"
+    exit 1
   fi
 
   # Étape documentée : une seule archive statique par architecture.
   local dest="$WORK/libs/$tag"
   rm -rf "$dest"; mkdir -p "$dest/parts"
   find . -name '*.a' -path '*-apple-darwin_ios*' -exec cp {} "$dest/parts/" \;
-  libtool -static -o "$dest/libPJSIP.a" "$dest/parts"/*.a
+  # OpenSSL est fusionné dans l'archive livrée. Le transport TLS ne dépend donc
+  # pas d'une étape manuelle Xcode facile à oublier après la création du xcframework.
+  libtool -static -o "$dest/libPJSIP.a" \
+    "$dest/parts"/*.a \
+    "$ssl_prefix/lib/libssl.a" \
+    "$ssl_prefix/lib/libcrypto.a"
   rm -rf "$dest/parts"
   test -f "$dest/libPJSIP.a" || { echo "❌ libPJSIP.a manquant pour $tag"; exit 1; }
 }
@@ -166,6 +174,5 @@ xcodebuild -create-xcframework \
   -output "$OUT/libpjsip.xcframework"
 
 echo "✅ libpjsip.xcframework (TLS activé) → $OUT"
-echo "   Ajoute-le à la cible App (Frameworks, Libraries and Embedded Content),"
-echo "   ainsi que libssl.a / libcrypto.a de $WORK/openssl/device/lib,"
-echo "   puis: npx cap sync ios"
+echo "   OpenSSL est inclus dans chaque tranche de l'archive. Ajoute le xcframework"
+echo "   à la cible App (Frameworks, Libraries and Embedded Content), puis: npx cap sync ios"

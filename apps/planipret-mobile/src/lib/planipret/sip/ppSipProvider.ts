@@ -17,6 +17,15 @@ const PP_SIP_UA_SWAP_DELAY_MS = 800;
 /** Must remain shorter than the native CallKit answer watchdog (32s). */
 export const PP_PENDING_ANSWER_TIMEOUT_MS = 30_000;
 
+// One owner per AOR: the native PJSIP engine announces itself with
+// `pp:sip-native-owns-aor`, after which JsSIP must never REGISTER again.
+let ppNativeAorOwner = false;
+export const ppNativeSipOwnsAor = () => ppNativeAorOwner;
+if (typeof window !== "undefined") {
+  window.addEventListener("pp:sip-native-owns-aor", () => { ppNativeAorOwner = true; });
+  window.addEventListener("pp:sip-native-released-aor", () => { ppNativeAorOwner = false; });
+}
+
 export type PpSipStatus = "idle" | "connecting" | "connected" | "registered" | "disconnected" | "error";
 export type PpCallState = "idle" | "ringing-out" | "ringing-in" | "active" | "held" | "ended";
 

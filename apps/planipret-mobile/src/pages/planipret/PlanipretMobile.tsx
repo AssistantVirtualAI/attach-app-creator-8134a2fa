@@ -34,7 +34,6 @@ import PermissionsPrimer from "@/components/planipret/mobile/PermissionsPrimer";
 import { hasSeenPrimer } from "@/lib/native/permissions/orchestrator";
 import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 import { Capacitor } from "@capacitor/core";
-import { nativeSip } from "@/lib/native/NativeSipService";
 import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
@@ -970,14 +969,6 @@ export default function PlanipretMobile() {
     if (location.pathname === ROUTES.MPLANIPRET) navigate(ROUTES.MPLANIPRET_HOME, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Native SIP engine (PJSIP): register the broker's `<ext>M` device as soon as
-  // the session is known. No-op on web / when the plugin isn't linked.
-  useEffect(() => {
-    if (!profile?.user_id) return;
-    if (!Capacitor.isNativePlatform()) return;
-    void nativeSip.initialize();
-  }, [profile?.user_id]);
 
   // Bootstrap push listeners + prompt primer once the profile is loaded (native only).
   useEffect(() => {

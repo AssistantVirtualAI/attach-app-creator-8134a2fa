@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { startSelectedRingtone } from "@/lib/planipret/audio/ringtonePresets";
 import { formatSipParty } from "@/lib/planipret/sip/formatSipParty";
-import { nativeSip } from "@/lib/native/NativeSipService";
 
 export type InboundCall = { call_id?: string; from_number?: string; caller_name?: string } | null;
 
@@ -60,12 +59,6 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
     if (busy) return;
     setBusy(true);
     try {
-      // 1) Native SIP engine (PJSIP) owns the dialog → answer/hangup for real.
-      if (nativeSip.isRegistered()) {
-        stopRef.current?.();
-        const ok = action === "answer" ? await nativeSip.answer() : await nativeSip.hangup();
-        if (ok) { onClose(); return; }
-      }
       if (action === "answer" && onAnswer) {
         // Let the softphone pick up: the full-screen in-call UI (with keypad)
         // takes over immediately — no navigation away from the call.

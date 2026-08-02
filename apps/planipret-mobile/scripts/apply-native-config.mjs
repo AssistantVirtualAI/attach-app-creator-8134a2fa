@@ -1809,6 +1809,11 @@ function stripInlinePlugins(swift) {
 }
 
 
+// True when the committed PpPjsip plugin sources are present in the iOS tree.
+const PP_HAS_PJSIP = fs.existsSync(
+  path.join(appDir, "ios", "App", "App", "Plugins", "PpPjsip", "PpPjsip.swift")
+);
+
 function hasProjectReference(iosRoot, fileName) {
   const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
   if (!fs.existsSync(pbx)) return false;
@@ -1860,11 +1865,13 @@ function ensurePluginRegistration(swift) {
   const sipLine = "        bridge?.registerPluginInstance(PpSipKeepAlive())\n";
   const voipLine = "        bridge?.registerPluginInstance(PpVoipCall())\n";
   const authLine = "        bridge?.registerPluginInstance(PpAuthSession())\n";
+  const pjsipLine = "        bridge?.registerPluginInstance(PpPjsip())\n";
   const needsSip = !next.includes("PpSipKeepAlive()");
   const needsVoip = !next.includes("PpVoipCall()");
   const needsAuth = !next.includes("PpAuthSession()");
-  if (!needsSip && !needsVoip && !needsAuth) return next;
-  const lines = `${needsSip ? sipLine : ""}${needsVoip ? voipLine : ""}${needsAuth ? authLine : ""}`;
+  const needsPjsip = PP_HAS_PJSIP && !next.includes("PpPjsip()");
+  if (!needsSip && !needsVoip && !needsAuth && !needsPjsip) return next;
+  const lines = `${needsSip ? sipLine : ""}${needsVoip ? voipLine : ""}${needsAuth ? authLine : ""}${needsPjsip ? pjsipLine : ""}`;
   if (next.includes("registerPluginInstance")) {
     return next.replace(/(bridge\?\.registerPluginInstance\([^\n]+\)\n)/, `$1${lines}`);
   }
@@ -2166,6 +2173,9 @@ function patchIosNativeFiles() {
   writeIfChanged(path.join(iosApp, "Plugins", "PpVoipCall", "PpVoipCall.m"), IOS_VOIP_CALL_BRIDGE);
   writeIfChanged(path.join(iosApp, "Plugins", "PpAuthSession", "PpAuthSession.swift"), IOS_AUTH_SESSION_PLUGIN);
   writeIfChanged(path.join(iosApp, "Plugins", "PpAuthSession", "PpAuthSession.m"), IOS_AUTH_SESSION_BRIDGE);
+  // PpPjsip: sources committed under Plugins/PpPjsip (not generated here).
+  const pjsipDir = path.join(iosApp, "Plugins", "PpPjsip");
+  const hasPjsip = fs.existsSync(path.join(pjsipDir, "PpPjsip.swift"));
   const iosRoot = path.join(appDir, "ios", "App");
   ensureXcodeSourceFiles(iosRoot, [
     "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.swift",
@@ -2174,6 +2184,7 @@ function patchIosNativeFiles() {
     "App/Plugins/PpVoipCall/PpVoipCall.m",
     "App/Plugins/PpAuthSession/PpAuthSession.swift",
     "App/Plugins/PpAuthSession/PpAuthSession.m",
+    ...(hasPjsip ? ["App/Plugins/PpPjsip/PpPjsip.swift", "App/Plugins/PpPjsip/PpPjsip.m"] : []),
   ]);
   patchIosAppDelegate(iosApp);
   ensureIosBridgeController(iosApp);
@@ -2195,7 +2206,12 @@ function patchIosNativeFiles() {
   if (!bridgeText.includes("PpSipKeepAlive()") || !bridgeText.includes("PpVoipCall()") || !bridgeText.includes("PpAuthSession()") || !storyboardText.includes('customClass="AppBridgeViewController"')) {
     throw new Error("[native-config] iOS native plugins are not wired into the launch ViewController; aborting sync so SIP/VoIP/OAuth cannot ship UNIMPLEMENTED.");
   }
-  console.log("[native-config] iOS PpSipKeepAlive + PpVoipCall + PpAuthSession plugins applied.");
+  if (hasPjsip && !bridgeText.includes("PpPjsip()")) {
+    throw new Error("[native-config] PpPjsip sources present but not registered in AppBridgeViewController.");
+  }
+  console.log(
+    `[native-config] iOS PpSipKeepAlive + PpVoipCall + PpAuthSession${hasPjsip ? " + PpPjsip" : ""} plugins applied.`
+  );
 }
 
 patchCopiedWebBundles();

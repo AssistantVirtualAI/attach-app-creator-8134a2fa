@@ -12,7 +12,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { edgeOnlyWssUrls } from "@/lib/planipret/sip/sipEdgePolicy";
-import { nativeSip } from "@/lib/native/NativeSipService";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getPpSipReconnectConfig } from "@/lib/planipret/sip/ppSipReconnectConfig";
@@ -1091,13 +1090,6 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     }
     try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
 
-    // 1) Native SIP engine (PJSIP) registered → real outbound INVITE, real audio.
-    if (nativeSip.isRegistered()) {
-      const ok = await nativeSip.makeCall(destination);
-      console.info(`[outbound] route=NATIVE-SIP → ${ok ? "calling" : "failed"}`, { destination });
-      if (ok) return { via: "native", ok: true };
-    }
-
     let canUseSip = registered;
     if (!canUseSip) {
       try { ppSipProvider.forceReregister(); } catch {}
@@ -1161,19 +1153,11 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     const sipSnap = ppSipProvider.getSnapshot();
     console.info("[answer] tapped", {
       hasLiveSipSession,
-      nativeRegistered: nativeSip.isRegistered(),
       sipCallState: sipSnap.callState,
       sipCallId: sipSnap.callId || null,
       pushCallId: pushRing?.callId ?? null,
       restCallId: restCall?.id ?? null,
     });
-
-    // 0) Native SIP engine (PJSIP) holds the INVITE → answer it natively.
-    if (nativeSip.isRegistered()) {
-      const ok = await nativeSip.answer();
-      console.info(`[answer] route=NATIVE-SIP → ${ok ? "answered" : "failed"}`);
-      if (ok) return true;
-    }
 
     // Push VoIP reçu mais INVITE pas encore arrivé : on bufferise la réponse,
     // ppSipProvider répondra dès que la session SIP se présente (aucune

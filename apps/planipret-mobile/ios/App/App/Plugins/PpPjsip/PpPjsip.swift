@@ -90,7 +90,7 @@ private func ppPjsipOnRegState2(_ accId: pjsua_acc_id, _ info: UnsafeMutablePoin
     PjsipProbeEngine.shared.completeRegistration(code: code, reason: reason)
 }
 
-private func ppPjsipEnterContext(_ heap: UnsafeMutablePointer<pj_timer_heap_t>?, _ entry: UnsafeMutablePointer<pj_timer_entry>?) {
+private func ppPjsipEnterContext(_ userData: UnsafeMutableRawPointer?) {
     PjsipProbeEngine.shared.runScheduledWork()
 }
 
@@ -124,7 +124,6 @@ final class PjsipProbeEngine {
     private var completion: ((Result<[String: Any], Error>) -> Void)?
     private var scheduledWork: (() -> Void)?
     private var strings: [UnsafeMutablePointer<CChar>] = []
-    private var timerEntry = pj_timer_entry()
     private var startedAt = Date()
 
     private init() {}
@@ -266,10 +265,9 @@ final class PjsipProbeEngine {
         lock.lock()
         scheduledWork = work
         lock.unlock()
-        var delay = pj_time_val(sec: 0, msec: 0)
-        pj_timer_entry_init(&timerEntry, 0, nil, ppPjsipEnterContext)
+        // pjsua_schedule_timer2(cb, user_data, msec_delay) : délai nul, la
+        // fonction est exécutée depuis un thread PJSIP enregistré.
         pjsua_schedule_timer2(ppPjsipEnterContext, nil, 0)
-        _ = delay
     }
 
     func runScheduledWork() {

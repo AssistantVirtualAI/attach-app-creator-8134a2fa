@@ -1022,7 +1022,9 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         ? [.allowBluetoothHFP, .allowBluetoothA2DP]
         : [.allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
       try? s.setCategory(.playAndRecord, mode: .voiceChat, options: opts)
-      try? s.setActive(true, options: [])
+      // CallKit's CXProvider.didActivate owns activation during a live call.
+      // Re-activating here races WebRTC and can leave the remote route silent.
+      if !callActive { try? s.setActive(true, options: []) }
       // Re-assert the user's choice: activating the session resets the override
       // and iOS would fall back to the loudspeaker mid-call.
       applyAudioRoute()

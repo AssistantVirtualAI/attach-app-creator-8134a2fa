@@ -998,6 +998,10 @@ class PpSipProvider {
 
   async forceReregister() {
     try {
+      if (["ringing-in", "ringing-out", "active", "held"].includes(this.snap.callState)) {
+        this.log("info", "force re-register skipped while SIP dialog is live", { callState: this.snap.callState });
+        return;
+      }
       const ua = this.ua;
       if (!ua) return;
       // Only cycle the registration when we actually hold one. Calling

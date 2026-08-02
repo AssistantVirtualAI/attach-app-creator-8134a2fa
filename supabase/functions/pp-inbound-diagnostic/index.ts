@@ -108,29 +108,16 @@ Deno.serve(async (req) => {
   }
 
   // 3) Devices / registrations
-  // NOTE: /users/{ext}/subscriptions returns SIP SUBSCRIBE (presence), NOT
-  // REGISTER bindings. Real registrations live under the device sub-resource
-  // and at domain level — probe all of them.
+  // NS-API v2 has NO /registrations resource and /subscriptions is SIP
+  // SUBSCRIBE (presence), not REGISTER (docs/netsapiens/registrations.md).
+  // Registration state lives on the Device object itself.
   const devices = await get(`/domains/${d}/users/${e}/devices`);
-  const deviceIds = arrOf(devices.data)
-    .map((x: any) => String(x?.device ?? x?.aor ?? x?.name ?? "").replace(/^sip:/, "").split("@")[0])
-    .filter(Boolean);
-  const regProbes = [
-    await get(`/domains/${d}/users/${e}/registrations`),
-    await get(`/domains/${d}/registrations?user=${e}`),
-    ...(await Promise.all(
-      deviceIds.slice(0, 6).map((id) =>
-        get(`/domains/${d}/users/${e}/devices/${encodeURIComponent(id)}/registrations`)
-      ),
-    )),
-    await get(`/domains/${d}/users/${e}/subscriptions`),
-  ];
   const registrations = {
-    path: regProbes.find((p) => p.ok && arrOf(p.data).length)?.path ?? regProbes[0].path,
-    status: regProbes.find((p) => p.ok && arrOf(p.data).length)?.status ?? regProbes[0].status,
-    ok: regProbes.some((p) => p.ok),
-    data: regProbes.flatMap((p) => (p.ok ? arrOf(p.data) : [])),
-    probes: regProbes.map((p) => ({ path: p.path, status: p.status, count: p.ok ? arrOf(p.data).length : 0 })),
+    path: `/domains/${d}/users/${e}/devices`,
+    status: devices.status,
+    ok: devices.ok,
+    data: arrOf(devices.data),
+    probes: [{ path: devices.path, status: devices.status, count: arrOf(devices.data).length }],
   } as any;
 
 
@@ -220,25 +207,24 @@ Deno.serve(async (req) => {
   const ruleFwdAlways = yes(activeRule?.["forward-always"]?.enabled) || yes(activeRule?.["forward-always-enabled"]);
   if (ruleFwdAlways) { verdicts.push("RULE_FORWARD_ALWAYS"); issues.push("La règle active a un renvoi permanent activé."); }
 
-  // devices
+  // devices — a device is registered ONLY when NS says so
+  // (`device-sip-registration-state == "registered"` AND the expiry is in the
+  // future). The old heuristic treated `device-sip-registration-uri` — a field
+  // always present on every device — as proof of registration, so this
+  // diagnostic reported unregistered mobiles as registered.
   const deviceList = arrOf(devices.data).filter((x) => x && typeof x === "object");
-  const regList = arrOf(registrations.data).filter((x) => x && typeof x === "object");
   const registeredAors = new Set<string>();
-  for (const r of [...deviceList, ...regList]) {
+  for (const r of deviceList) {
     const aor = String(
-      r?.aor ?? r?.["device"] ?? r?.["aor-user"] ?? r?.["sub-user"] ?? r?.["user"] ?? r?.name ?? "",
+      r?.["device"] ?? r?.aor ?? r?.["aor-user"] ?? r?.name ?? "",
     ).replace(/^sip:/, "");
-    const exp = Number(r?.expires ?? r?.["registration-expires"] ?? r?.["expires-seconds"] ?? 0);
-    const statusStr = String(
-      r?.["registration-status"] ?? r?.["device-registration-status"] ?? r?.status ?? "",
+    const state = String(
+      r?.["device-sip-registration-state"] ?? r?.["registration-status"] ?? r?.status ?? "",
     ).toLowerCase();
-    const isReg =
-      !!(r?.["registration-time"] ?? r?.["reg-time"] ?? r?.contact ?? r?.["registration-contact"] ??
-         r?.["contact-uri"] ?? r?.["device-sip-registration-uri"] ?? r?.["registration-ip"] ??
-         r?.["ip-address"] ?? r?.["user-agent"]) ||
-      exp > 0 ||
-      statusStr.includes("register") || statusStr.includes("online") || statusStr === "active";
-    if (aor && isReg) registeredAors.add(aor.toLowerCase());
+    const expRaw = r?.["device-sip-registration-expires-datetime"];
+    const expTs = expRaw ? Date.parse(String(expRaw).replace(" ", "T")) : NaN;
+    const notExpired = !Number.isFinite(expTs) || expTs > Date.now();
+    if (aor && state === "registered" && notExpired) registeredAors.add(aor.toLowerCase());
   }
 
   if (!registeredAors.size) {

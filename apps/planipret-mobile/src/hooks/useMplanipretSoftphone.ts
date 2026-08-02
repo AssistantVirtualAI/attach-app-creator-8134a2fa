@@ -1135,6 +1135,29 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     }
   }, []);
 
+  // Pickup via NS-API click-to-call. The SIP WebSocket (core*:9002) is not
+  // publicly reachable, so when no media dialog can be established we ask the
+  // PBX to bridge: it calls our mobile device (auto-answered) and connects the
+  // caller. Doc: POST /domains/{d}/users/{ext}/calls (calls.md).
+  const callbackAnswer = useCallback(async (number: string): Promise<boolean> => {
+    const n = (number || "").trim();
+    if (!n) { console.warn("[answer] callback: no caller number"); return false; }
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-ns-calls", {
+        body: { action: "callback", number: n },
+      });
+      const ok = !error && (data as any)?.success !== false;
+      console.info(`[answer] route=CALLBACK (click-to-call) → ${ok ? "accepted" : "rejected"}`, {
+        number: n,
+        error: error?.message ?? (data as any)?.error ?? null,
+      });
+      return ok;
+    } catch (e: any) {
+      console.warn("[answer] callback threw", e?.message ?? e);
+      return false;
+    }
+  }, []);
+
   // Wrapped answer: race to claim the call before actually picking up. If we
   // lose (widget answered first), don't pick up — the winner already has audio.
   // Every branch is logged so the exact route to answer() is visible in Xcode /
@@ -1172,8 +1195,8 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         if (st === "active") { console.info("[answer] SIP answered within watchdog window"); return true; }
         if (st === "ended") break;
       }
-      console.warn("[answer] no confirmed SIP dialog before pending-answer expiry — refusing false REST answer");
-      return false;
+      console.warn("[answer] no confirmed SIP dialog before pending-answer expiry → NS-API click-to-call");
+      return await callbackAnswer(pushRing.from || "");
     }
 
     // `ringing-in` is the only state that may be answered. Treating an active
@@ -1181,15 +1204,16 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // could never produce a new confirmed inbound dialog.
     if (sipSnap.callState === "active" || sipSnap.callState === "held") return true;
     if (sipSnap.callState !== "ringing-in") {
-      console.warn("[answer] no inbound SIP INVITE available", { state: sipSnap.callState });
-      return false;
+      console.warn("[answer] no inbound SIP INVITE available → NS-API click-to-call", { state: sipSnap.callState });
+      return await callbackAnswer(restCall?.number || sipSnap.remoteNumber || sipSnap.remoteIdentity || "");
     }
 
     if (restCall?.id && !liveSipNow) {
       console.info("[answer] route=REST (pp-ns-calls answer)", { call_id: restCall.id });
       const ok = await restControl("answer");
       console.info(`[answer] REST answer ${ok ? "accepted" : "REJECTED"} by NetSapiens`);
-      return ok;
+      if (ok) return true;
+      return await callbackAnswer(restCall.number || sipSnap.remoteNumber || "");
     }
 
     const callId = sipSnap.callId;
@@ -1241,7 +1265,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // Clear the REST/DB attachment so the in-call UI follows the live session.
     if (ok && restCall?.id) setRestCall(null);
     return ok;
-  }, [restCall?.id, restControl, hasLiveSipSession, pushRing]);
+  }, [restCall?.id, restCall?.number, restControl, hasLiveSipSession, pushRing, callbackAnswer]);
 
   const answer = useCallback((): Promise<boolean> => {
     const pending = answerAttemptRef.current;

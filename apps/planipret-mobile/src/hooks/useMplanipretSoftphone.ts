@@ -1160,11 +1160,19 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     const sipSnap = ppSipProvider.getSnapshot();
     console.info("[answer] tapped", {
       hasLiveSipSession,
+      nativeRegistered: nativeSip.isRegistered(),
       sipCallState: sipSnap.callState,
       sipCallId: sipSnap.callId || null,
       pushCallId: pushRing?.callId ?? null,
       restCallId: restCall?.id ?? null,
     });
+
+    // 0) Native SIP engine (PJSIP) holds the INVITE → answer it natively.
+    if (nativeSip.isRegistered()) {
+      const ok = await nativeSip.answer();
+      console.info(`[answer] route=NATIVE-SIP → ${ok ? "answered" : "failed"}`);
+      if (ok) return true;
+    }
 
     // Push VoIP reçu mais INVITE pas encore arrivé : on bufferise la réponse,
     // ppSipProvider répondra dès que la session SIP se présente (aucune
@@ -1189,8 +1197,8 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         if (st === "active") { console.info("[answer] SIP answered within watchdog window"); return true; }
         if (st === "ended") break;
       }
-      console.warn("[answer] no confirmed SIP dialog before pending-answer expiry → NS-API click-to-call");
-      return await callbackAnswer(pushRing.from || "");
+      console.warn("[answer] no confirmed SIP dialog before pending-answer expiry → failed (no click-to-call)");
+      return false;
     }
 
     // `ringing-in` is the only state that may be answered. Treating an active
@@ -1198,17 +1206,17 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // could never produce a new confirmed inbound dialog.
     if (sipSnap.callState === "active" || sipSnap.callState === "held") return true;
     if (sipSnap.callState !== "ringing-in") {
-      console.warn("[answer] no inbound SIP INVITE available → NS-API click-to-call", { state: sipSnap.callState });
-      return await callbackAnswer(restCall?.number || sipSnap.remoteNumber || sipSnap.remoteIdentity || "");
+      console.warn("[answer] no inbound SIP INVITE available → failed (no click-to-call)", { state: sipSnap.callState });
+      return false;
     }
 
     if (restCall?.id && !liveSipNow) {
       console.info("[answer] route=REST (pp-ns-calls answer)", { call_id: restCall.id });
       const ok = await restControl("answer");
       console.info(`[answer] REST answer ${ok ? "accepted" : "REJECTED"} by NetSapiens`);
-      if (ok) return true;
-      return await callbackAnswer(restCall.number || sipSnap.remoteNumber || "");
+      return ok;
     }
+
 
     const callId = sipSnap.callId;
     console.info("[answer] route=SIP → claiming call", { callId });

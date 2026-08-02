@@ -149,6 +149,12 @@ function acquireSoftphoneOwner(instanceId: string, userId: string): boolean {
 
 /** Mounted hook instances, so ownership can be handed over instead of lost. */
 const softphoneInstances = new Set<{ id: string; notify: () => void }>();
+/** Instances that actually render the call UI. They win ownership. */
+const softphonePrimaryIds = new Set<string>();
+
+function isPrimaryOwner(): boolean {
+  return softphoneOwnerId !== null && softphonePrimaryIds.has(softphoneOwnerId);
+}
 
 function notifySoftphoneInstances() {
   softphoneInstances.forEach((i) => { try { i.notify(); } catch {} });
@@ -234,8 +240,9 @@ type RestCallAttachment = {
   startedAt?: number;
 };
 
-export function useMplanipretSoftphone(enabled = true) {
+export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolean }) {
   const { user } = useAuth();
+  const isPrimary = opts?.primary === true;
   const ownerIdRef = useRef<string>(`pp-softphone-${++softphoneOwnerSeq}`);
   // Bumped when ownership changes so gated effects re-evaluate.
   const [ownerTick, setOwnerTick] = useState(0);
@@ -265,9 +272,21 @@ export function useMplanipretSoftphone(enabled = true) {
 
   // Register this instance so ownership can be transferred on unmount.
   useEffect(() => {
-    const entry = { id: ownerIdRef.current, notify: () => setOwnerTick((t) => t + 1) };
+    const id = ownerIdRef.current;
+    const entry = { id, notify: () => setOwnerTick((t) => t + 1) };
     softphoneInstances.add(entry);
-    return () => { softphoneInstances.delete(entry); };
+    if (isPrimary) {
+      softphonePrimaryIds.add(id);
+      // A passive instance may already own the stack: wake everyone so the
+      // preemption below runs immediately.
+      notifySoftphoneInstances();
+    }
+    return () => {
+      softphoneInstances.delete(entry);
+      softphonePrimaryIds.delete(id);
+      releaseSoftphoneOwner(ownerIdRef.current);
+      if (softphoneOwnerId === ownerIdRef.current) notifySoftphoneInstances();
+    };
   }, []);
 
   // Dedicated, non-destructive ownership takeover. Kept OUT of the SIP init
@@ -275,19 +294,31 @@ export function useMplanipretSoftphone(enabled = true) {
   // and cascade into teardown / re-REGISTER storms on every handover.
   useEffect(() => {
     if (!enabled || !user) return;
-    if (softphoneOwnerId === ownerIdRef.current) return;
+    const myId = ownerIdRef.current;
+    if (softphoneOwnerId === myId) return;
+    // A passive instance never competes with a mounted primary instance.
+    if (!isPrimary && softphonePrimaryIds.size > 0 && !isPrimaryOwner()) return;
     const ownerAlive = softphoneOwnerId !== null
       && Array.from(softphoneInstances).some((i) => i.id === softphoneOwnerId);
-    if (ownerAlive) return;
-    if (softphoneOwnerId !== null) {
+    if (ownerAlive) {
+      // PREEMPTION: the live owner is passive and we render the call UI.
+      // Never during ringing: swapping the CallKit listener would lose the tap.
+      if (!(isPrimary && !isPrimaryOwner())) return;
+      if (softphoneCallIsLive()) return;
+      console.info("[pp-sip] preempting passive softphone owner", { from: softphoneOwnerId, to: myId });
+      softphoneOwnerId = null;
+      softphoneOwnerUserId = null;
+    } else if (softphoneOwnerId !== null) {
       if (softphoneCallIsLive()) return;
       console.info("[pp-sip] reclaiming orphaned softphone owner", { from: softphoneOwnerId });
       softphoneOwnerId = null;
       softphoneOwnerUserId = null;
     }
-    if (!acquireSoftphoneOwner(ownerIdRef.current, user.id)) return;
+    if (!acquireSoftphoneOwner(myId, user.id)) return;
+    console.info("[pp-sip] softphone owner acquired", { id: myId, primary: isPrimary });
+    notifySoftphoneInstances();
     setOwnerTick((t) => t + 1);
-  }, [enabled, user?.id, ownerTick]);
+  }, [enabled, user?.id, ownerTick, snap.callState, isPrimary]);
 
   // CallKit must only mark Answer fulfilled after the SIP dialog is confirmed;
   // otherwise iOS shows a connected call while NetSapiens is still ringing or
@@ -333,7 +364,11 @@ export function useMplanipretSoftphone(enabled = true) {
   useEffect(() => {
     if (!enabled || !user) { setLoading(false); return; }
     const ownerId = ownerIdRef.current;
-    if (!acquireSoftphoneOwner(ownerId, user.id)) { setLoading(false); return; }
+    // Ownership is arbitrated by the dedicated effect above (primary instances
+    // win), NOT by mount order. Acquire here only as a fallback so a lone
+    // instance still starts the stack.
+    if (softphoneOwnerId !== ownerId
+        && !acquireSoftphoneOwner(ownerId, user.id)) { setLoading(false); return; }
     let cancelled = false;
     const doInit = async (opts?: { force?: boolean }) => {
       if (!acquireSipInitLock(opts?.force ? 0 : 2500)) return;

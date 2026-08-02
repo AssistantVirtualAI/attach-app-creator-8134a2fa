@@ -111,7 +111,7 @@ async function processEvent(event: any) {
       method: "POST",
       headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: uid, ...payload }),
-    }).catch(() => {});
+    }).catch((e) => console.warn("[ns-webhook-receiver] sendPush failed", e));
   };
 
   const sendVoipPush = async (uid: string, payload: any) => {

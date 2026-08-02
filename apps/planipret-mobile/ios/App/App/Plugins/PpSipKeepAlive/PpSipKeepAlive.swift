@@ -60,14 +60,13 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// stack must NEVER take the AOR over: doing so closes the JsSIP transport
     /// (WSS 1001) and kills the audio. We only keep the audio session alive.
     private var callActive = false
-    /// True only after CXProvider reports that CallKit activated its session.
-    /// Foreground in-app calls never receive that callback.
+    /// True only while CallKit owns the activated AVAudioSession.
     private var callKitAudioActive = false
     /// Set on VoIP push wake: while an inbound call is pending we must never
     /// release the SIP registration (that sent the caller to voicemail).
     private var incomingPendingUntil: Date? = nil
-    /// The WebView owns the single mobile AOR whenever it can carry media.
-    /// Native registration is only a delayed fallback after a background push.
+    /// R3 (ring9): JsSIP (WebView) explicitly claimed the shared 113M AOR. The
+    /// native stack must then stay off it — it can ring but has no media plan.
     private var jsOwnsAor = false
     private var pushGraceWorkItem: DispatchWorkItem? = nil
     /// "earpiece" | "speaker" | "bluetooth" — chosen by the user in the in-call UI.
@@ -235,6 +234,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["pp_incoming_call"])
       call.resolve(["ok": true])
     }
+    /// R3 (ring9): explicit JS ownership signal for the shared AOR. Unlike
+    /// releaseRegistration("..._js_owns") this is never refused while ringing.
     @objc func declareJsOwnsAor(_ call: CAPPluginCall) {
       let owns = call.getBool("owns") ?? true
       DispatchQueue.main.async { [weak self] in
@@ -242,6 +243,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         self.jsOwnsAor = owns
         NSLog("[PpSipKeepAlive] jsOwnsAor=%@", owns ? "true" : "false")
         if owns {
+          // JsSIP holds the 113M binding: cancel our fallback REGISTER and drop
+          // our own socket so NetSapiens never sees two transports on one AOR.
           self.pushGraceWorkItem?.cancel(); self.pushGraceWorkItem = nil
           self.timer?.invalidate(); self.timer = nil
           self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil
@@ -287,8 +290,9 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         notifyListeners("sipReregisterRequested", data: ["reason": "voip_push"])
         return
       }
-      // Give the media-capable JsSIP stack first ownership. Native SIP only
-      // registers if JS cannot claim the AOR during this bounded grace period.
+      // R4 (ring9): give JsSIP a 1.5s grace window to claim the AOR before we
+      // fall back to a native REGISTER. Do NOT lengthen it: NetSapiens only forks
+      // the INVITE to devices already registered at fork time.
       jsOwnsAor = false
       setStatus(status == "registered" ? "registered" : "protected", "voip_push_wake")
       pushGraceWorkItem?.cancel()
@@ -365,6 +369,9 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     @objc private func onSceneWillEnterForeground() { onForeground() }
     private func releaseRegistration(_ why: String) {
       if !Thread.isMainThread { DispatchQueue.main.async { [weak self] in self?.releaseRegistration(why) }; return }
+      // Arm the ownership flag BEFORE the refusal point: during a ringing call we
+      // must still record that JS owns the AOR, even though we refuse to tear the
+      // socket down (ringlock1 guard — never remove it).
       if why.hasSuffix("js_owns") { jsOwnsAor = true }
       if let until = incomingPendingUntil, until > Date() {
         NSLog("[PpSipKeepAlive] releaseRegistration refused (%@): inbound call pending", why)
@@ -419,7 +426,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       // ring16: once CallKit has activated the session it owns category, mode
       // and activation. Re-applying setCategory (the 2s keep-alive did it over
       // and over) makes iOS re-arbitrate the route and drop every output —
-      // that is the measured `hadOutputs=n` silence. Only re-assert the route.
+      // that is the measured 'hadOutputs=n' silence. Only re-assert the route.
       if callKitAudioActive {
         if s.category != .playAndRecord || s.mode != .voiceChat {
           try? s.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
@@ -434,8 +441,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         ? [.allowBluetoothHFP, .allowBluetoothA2DP]
         : [.allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
       try? s.setCategory(.playAndRecord, mode: .voiceChat, options: opts)
-      // CallKit owns activation only after didActivate. In-app calls still need
-      // this plugin to activate AVAudioSession or both RTP directions are silent.
+      // Foreground in-app calls do not pass through CXProvider.didActivate.
       if !callKitAudioActive { try? s.setActive(true, options: []) }
       // Re-assert the user's choice: activating the session resets the override
       // and iOS would fall back to the loudspeaker mid-call.

@@ -913,7 +913,11 @@ class PpSipProvider {
     this.log("info", "push wake → transport check", {
       callId: callId ?? "", status: this.snap.status, socketLive: live,
     });
-    if (live) this.guardedRegister("push_wake", { priority: true });
+    // A suspended WKWebView can keep a stale `connected` flag after iOS has
+    // discarded the underlying socket. Once Answer is pending, only a fresh
+    // transport is trusted to receive the re-forked INVITE.
+    if (this.pendingAnswer) this.hardRebuild("push_answer_fresh_transport");
+    else if (live) this.guardedRegister("push_wake", { priority: true });
     else this.hardRebuild("push_wake");
 
     let ok = await this.waitForRegistered(12_000);
@@ -987,6 +991,10 @@ class PpSipProvider {
 
   async forceReregister() {
     try {
+      if (["ringing-in", "ringing-out", "active", "held"].includes(this.snap.callState)) {
+        this.log("info", "force re-register skipped while SIP dialog is live", { callState: this.snap.callState });
+        return;
+      }
       const ua = this.ua;
       if (!ua) return;
       // Only cycle the registration when we actually hold one. Calling

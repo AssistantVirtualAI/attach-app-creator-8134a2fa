@@ -623,6 +623,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       CAPPluginMethod(name: "acknowledgeIncoming", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "wakeForIncomingCall", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "setCallActive", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "declareJsOwnsAor", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "setAudioRoute", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "getAudioRoute", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
@@ -663,6 +664,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// stack must NEVER take the AOR over: doing so closes the JsSIP transport
     /// (WSS 1001) and kills the audio. We only keep the audio session alive.
     private var callActive = false
+    /// True only while CallKit owns the activated AVAudioSession.
+    private var callKitAudioActive = false
     /// Set on VoIP push wake: while an inbound call is pending we must never
     /// release the SIP registration (that sent the caller to voicemail).
     private var incomingPendingUntil: Date? = nil
@@ -706,8 +709,14 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       // WebView can complete the SIP 200 OK while still in the background.
       NotificationCenter.default.addObserver(forName: Notification.Name("PpVoipCallAnswered"), object: nil, queue: .main) { [weak self] _ in
         guard let self = self else { return }
-        self.callActive = true
-        self.activateAudioSession()
+        self.beginBackgroundTask()
+      }
+      NotificationCenter.default.addObserver(forName: Notification.Name("PpCallKitAudioActivated"), object: nil, queue: .main) { [weak self] _ in
+        self?.callKitAudioActive = true
+        self?.applyAudioRoute()
+      }
+      NotificationCenter.default.addObserver(forName: Notification.Name("PpCallKitAudioDeactivated"), object: nil, queue: .main) { [weak self] _ in
+        self?.callKitAudioActive = false
       }
       UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
@@ -1022,9 +1031,8 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         ? [.allowBluetoothHFP, .allowBluetoothA2DP]
         : [.allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
       try? s.setCategory(.playAndRecord, mode: .voiceChat, options: opts)
-      // CallKit's CXProvider.didActivate owns activation during a live call.
-      // Re-activating here races WebRTC and can leave the remote route silent.
-      if !callActive { try? s.setActive(true, options: []) }
+      // Foreground in-app calls do not pass through CXProvider.didActivate.
+      if !callKitAudioActive { try? s.setActive(true, options: []) }
       // Re-assert the user's choice: activating the session resets the override
       // and iOS would fall back to the loudspeaker mid-call.
       applyAudioRoute()
@@ -1539,7 +1547,11 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     }
 
     public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
-        try? audioSession.setActive(true)
+        NotificationCenter.default.post(name: Notification.Name("PpCallKitAudioActivated"), object: audioSession)
+    }
+
+    public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
+        NotificationCenter.default.post(name: Notification.Name("PpCallKitAudioDeactivated"), object: audioSession)
     }
 }
 `;

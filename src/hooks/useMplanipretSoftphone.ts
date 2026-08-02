@@ -569,7 +569,6 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       // CallKit stays in "connecting" (and the app never opens on the keypad)
       // until the pending CXAnswerCallAction is fulfilled — that only happens
       // when we report the real outcome back through completeAnswer().
-      try { ppSipProvider.forceReregister(); } catch {}
       try { window.dispatchEvent(new CustomEvent("pp:sip-callkit-answered", { detail: data })); } catch {}
       void (async () => {
         let ok = false;
@@ -1236,7 +1235,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       const state = ppSipProvider.getSnapshot().callState;
       if (state === "active" || state === "held") break;
       if (state === "ended") return false;
-      if (i === 15) return false;
+      // A delayed ACK must not fail the already-sent SIP 200 OK in CallKit.
     }
     // Clear the REST/DB attachment so the in-call UI follows the live session.
     if (ok && restCall?.id) setRestCall(null);

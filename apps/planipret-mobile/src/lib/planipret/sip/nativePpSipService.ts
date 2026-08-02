@@ -53,7 +53,9 @@ type PpVoipCallPlugin = {
       | "voipPushTokenInvalidated"
       | "incomingCallAnswered"
       | "incomingCallRejected"
-      | "callKitReady",
+      | "callKitReady"
+      | "audioSessionActivated"
+      | "audioSessionDeactivated",
     cb: (data: any) => void,
   ) => Promise<ListenerHandle>;
 };

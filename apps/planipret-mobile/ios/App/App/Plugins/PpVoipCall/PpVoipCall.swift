@@ -211,13 +211,16 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // activating here races the system session and yields a dead call.
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+        // Store the transaction BEFORE waking JS. A retained Capacitor listener
+        // can answer synchronously; completeAnswer() must already have the
+        // authoritative CXAnswerCallAction when that callback returns.
+        pendingAnswerAction = action
         // Keep the SIP transport pinned up while the WebView answers.
         NotificationCenter.default.post(name: Notification.Name("PpVoipCallAnswered"), object: nil, userInfo: ["callId": activeCallId ?? ""])
         notifyListeners("incomingCallAnswered", data: [
             "callUUID": action.callUUID.uuidString,
             "callId": activeCallId ?? ""
         ], retainUntilConsumed: true)
-        pendingAnswerAction = action
         // JS keeps the pending SIP-answer intent for 30s. Keep CallKit alive
         // slightly longer so slow WSS registration/refork can still complete.
         DispatchQueue.main.asyncAfter(deadline: .now() + 32.0) { [weak self, weak action] in

@@ -227,6 +227,7 @@ function ensureGumProxy() {
 }
 
 export type OutboundResult =
+  | { via: "native"; ok: true }
   | { via: "webrtc"; ok: true }
   | { via: "pbx"; ok: true; callId?: string }
   | { via: "none"; ok: false; error: string; micState?: MicPermissionState };

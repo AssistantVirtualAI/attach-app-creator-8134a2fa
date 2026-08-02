@@ -149,7 +149,16 @@ export default function MaestroConnectCard() {
 
       if (isNative) {
         logDeepLink({ kind: "info", source: "MaestroConnect", detail: `opening Maestro with redirect_uri=${redirectUri}` });
-        await Browser.open({ url, presentationStyle: "fullscreen" });
+        if (Capacitor.getPlatform() === "ios") {
+          const { startNativeOAuthSession } = await import("@/lib/ms365AuthSession");
+          const callbackUrl = await startNativeOAuthSession(url, redirectUri);
+          if (!callbackUrl) return;
+          try { localStorage.setItem("pp_maestro_callback_url", callbackUrl); } catch {}
+          const callback = new URL(callbackUrl);
+          window.location.href = `/auth/maestro/callback${callback.search}`;
+        } else {
+          await Browser.open({ url, presentationStyle: "fullscreen" });
+        }
       } else {
         window.location.href = url;
       }

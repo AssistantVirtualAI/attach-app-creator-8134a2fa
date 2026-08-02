@@ -17,6 +17,7 @@ let cachedAt = 0;
 
 /** call keys already announced (module-level → survives re-render/navigation) */
 const announced = new Set<string>();
+const retryCount = new Map<string, number>();
 let currentEl: HTMLAudioElement | null = null;
 
 function log(msg: string, detail?: unknown) {
@@ -60,9 +61,6 @@ async function getNoticeUrl(): Promise<string | null> {
 export async function playRecordingNotice(callKey?: string): Promise<void> {
   const key = callKey && callKey.length ? callKey : "__default__";
   if (announced.has(key)) return;
-  announced.add(key);
-  // keep the set bounded
-  if (announced.size > 50) announced.clear();
 
   try {
     const url = await getNoticeUrl();
@@ -72,12 +70,20 @@ export async function playRecordingNotice(callKey?: string): Promise<void> {
     // Do not steal the call's audio session on iOS: keep it inline.
     (el as any).playsInline = true;
     currentEl = el;
-    await el.play().then(
-      () => log("playing", { key }),
-      (e: any) => log("play blocked", e?.message ?? e),
-    );
+    await el.play();
+    announced.add(key);
+    if (announced.size > 50) announced.clear();
+    log("playing", { key });
   } catch (e: any) {
+    // Do not consume the once-per-call slot on a blocked first attempt. CallKit
+    // may activate AVAudioSession a moment later, so retry once on that session.
+    announced.delete(key);
     log("failed", e?.message ?? e);
+    const attempts = retryCount.get(key) ?? 0;
+    if (attempts < 2) {
+      retryCount.set(key, attempts + 1);
+      window.setTimeout(() => { if (!announced.has(key)) void playRecordingNotice(key); }, 750);
+    }
   }
 }
 
@@ -85,6 +91,8 @@ export async function playRecordingNotice(callKey?: string): Promise<void> {
 export function resetRecordingNotice(callKey?: string) {
   if (callKey) announced.delete(callKey);
   else announced.clear();
+  if (callKey) retryCount.delete(callKey);
+  else retryCount.clear();
   try { currentEl?.pause(); } catch { /* noop */ }
   currentEl = null;
 }

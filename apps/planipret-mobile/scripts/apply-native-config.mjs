@@ -1053,7 +1053,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         if self.isForeground() { self.setStatus("idle", "foreground_js_owns"); return }
         guard self.networkUp else { self.setStatus("reconnecting", "network_down"); self.scheduleReconnect("network_down"); return }
         self.connect()
-        self.sendRegister(challenge: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + self.verifyDelayMs / 1000.0) { [weak self] in
           guard let self = self else { return }
           if self.status != "registered" && !self.isForeground() { self.scheduleReconnect("still_unregistered") }
@@ -1446,11 +1445,11 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             "callUUID": action.callUUID.uuidString,
             "callId": activeCallId ?? ""
         ], retainUntilConsumed: true)
-        pendingAnswerAction?.fulfill()
+        pendingAnswerAction?.fail()
         pendingAnswerAction = action
-        // Safety net: never present a false connected CallKit call. If the
-        // WebView cannot confirm the SIP dialog, fail the answer action.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 12.0) { [weak self, weak action] in
+        // JS keeps the pending SIP-answer intent for 30s. Keep CallKit alive
+        // slightly longer so slow WSS registration/refork can still complete.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 32.0) { [weak self, weak action] in
             guard let self = self, let action = action, self.pendingAnswerAction === action else { return }
             self.pendingAnswerAction = nil
             NSLog("[PpVoipCall] answer action timed out — SIP dialog not confirmed")

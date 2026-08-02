@@ -96,9 +96,12 @@ export class NativeSipService {
     this.extension = String((data as any).sip_extension ?? username.replace(/[MW]$/i, ""));
 
     const proxy = String((data as any).sip_proxy ?? (data as any).sip_core_server ?? "");
-    const wsUrl = String((data as any).sip_ws_url ?? (data as any).sip_wss_url ?? "");
-    const transport = wsUrl ? "WSS" : "TCP";
-    const port = wsUrl ? Number(new URL(wsUrl).port || 9002) : 5060;
+    // Transport natif: TLS 5061 UNIQUEMENT. Aucune pile SIP native (PJSIP,
+    // liblinphone) n'implémente SIP over WebSocket (RFC 7118) — WSS 9002 est
+    // réservé à JsSIP dans la WebView. Vérifié le 2026-08-02: core1 répond
+    // en TLS 1.3 (CN valide) et renvoie un 403 Forbidden sur OPTIONS anonyme.
+    const transport = "TLS" as const;
+    const port = 5061;
 
     console.log("[SIP] Initializing native engine for:", username, transport, proxy);
 
@@ -110,7 +113,6 @@ export class NativeSipService {
         username,
         password,
         proxy,
-        wsUrl: wsUrl || undefined,
         transport,
         port,
         displayName: String((data as any).display_name ?? "Planiprêt"),

@@ -1101,6 +1101,22 @@ export function useMplanipretSoftphone(enabled = true) {
         return false;
       }
     }
+    // The claim request is asynchronous. Re-read the session immediately: the
+    // PBX may have ended the INVITE while arbitration was in progress. This
+    // gives the log an exact cause and avoids calling JsSIP in status 8.
+    const answerable = ppSipProvider.getSnapshot();
+    if (answerable.callState === "active" || answerable.callState === "held") {
+      console.info("[answer] concurrent local path already confirmed the dialog", { callId });
+      return true;
+    }
+    if (answerable.callState !== "ringing-in" || answerable.callId !== callId) {
+      console.warn("[answer] INVITE expired while claiming call", {
+        expectedCallId: callId,
+        currentCallId: answerable.callId || null,
+        state: answerable.callState,
+      });
+      return false;
+    }
     const ok = await ppSipProvider.answer(callId);
     console.info(`[answer] ppSipProvider.answer → ${ok ? "SIP 200 OK sent" : "FAILED"}`, { callId });
     if (!ok) return false;
@@ -1136,6 +1152,12 @@ export function useMplanipretSoftphone(enabled = true) {
 
   useEffect(() => {
     const onPendingAnswerReady = () => {
+      // This is not a duplicate tap: it is the first moment a real SIP INVITE
+      // exists. The original CallKit answer promise is deliberately parked in
+      // its watchdog waiting for `active`; joining that promise here creates a
+      // deadlock because no path sends the SIP 200 OK. Release only the hook's
+      // outer mutex, then run the full claim + answer path against the INVITE.
+      answerAttemptRef.current = null;
       void answerRef.current?.().then((ok) => {
         console.info(`[answer] arbitrated pending INVITE → ${ok ? "connected" : "not answered"}`);
       });

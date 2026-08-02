@@ -1135,6 +1135,29 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     }
   }, []);
 
+  // Pickup via NS-API click-to-call. The SIP WebSocket (core*:9002) is not
+  // publicly reachable, so when no media dialog can be established we ask the
+  // PBX to bridge: it calls our mobile device (auto-answered) and connects the
+  // caller. Doc: POST /domains/{d}/users/{ext}/calls (calls.md).
+  const callbackAnswer = useCallback(async (number: string): Promise<boolean> => {
+    const n = (number || "").trim();
+    if (!n) { console.warn("[answer] callback: no caller number"); return false; }
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-ns-calls", {
+        body: { action: "callback", number: n },
+      });
+      const ok = !error && (data as any)?.success !== false;
+      console.info(`[answer] route=CALLBACK (click-to-call) → ${ok ? "accepted" : "rejected"}`, {
+        number: n,
+        error: error?.message ?? (data as any)?.error ?? null,
+      });
+      return ok;
+    } catch (e: any) {
+      console.warn("[answer] callback threw", e?.message ?? e);
+      return false;
+    }
+  }, []);
+
   // Wrapped answer: race to claim the call before actually picking up. If we
   // lose (widget answered first), don't pick up — the winner already has audio.
   // Every branch is logged so the exact route to answer() is visible in Xcode /

@@ -355,9 +355,29 @@ autoUpdater.on('error', (err) => {
   mainWindow?.webContents.send('update-error', err?.message ?? String(err));
 });
 // IPC handlers — preload uses 'updater:*' namespace
-ipcMain.handle('updater:install',     () => autoUpdater.quitAndInstall(false, true));
+ipcMain.handle('updater:install', async () => {
+  // On macOS, quitAndInstall() can silently fail when the app is not signed
+  // with a valid Apple Developer certificate. We use app.relaunch() as a
+  // guaranteed fallback: schedule a relaunch BEFORE calling quitAndInstall,
+  // then force app.quit() after 800ms if the process is still alive.
+  isQuitting = true;
+  try {
+    app.relaunch();
+    autoUpdater.quitAndInstall(false, true);
+  } catch {
+    // quitAndInstall threw — fall through to forced quit below
+  }
+  // Fallback: if quitAndInstall didn't quit within 800ms, force it.
+  setTimeout(() => {
+    try { app.quit(); } catch { process.exit(0); }
+  }, 800);
+});
 ipcMain.handle('updater:check',       () => autoUpdater.checkForUpdates());
 ipcMain.handle('updater:app-version', () => app.getVersion());
 // Legacy aliases kept for compatibility
-ipcMain.handle('install-update',      () => autoUpdater.quitAndInstall(false, true));
+ipcMain.handle('install-update', async () => {
+  isQuitting = true;
+  try { app.relaunch(); autoUpdater.quitAndInstall(false, true); } catch { /* noop */ }
+  setTimeout(() => { try { app.quit(); } catch { process.exit(0); } }, 800);
+});
 ipcMain.handle('check-for-updates',   () => autoUpdater.checkForUpdates());

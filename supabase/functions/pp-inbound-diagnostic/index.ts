@@ -207,25 +207,24 @@ Deno.serve(async (req) => {
   const ruleFwdAlways = yes(activeRule?.["forward-always"]?.enabled) || yes(activeRule?.["forward-always-enabled"]);
   if (ruleFwdAlways) { verdicts.push("RULE_FORWARD_ALWAYS"); issues.push("La règle active a un renvoi permanent activé."); }
 
-  // devices
+  // devices — a device is registered ONLY when NS says so
+  // (`device-sip-registration-state == "registered"` AND the expiry is in the
+  // future). The old heuristic treated `device-sip-registration-uri` — a field
+  // always present on every device — as proof of registration, so this
+  // diagnostic reported unregistered mobiles as registered.
   const deviceList = arrOf(devices.data).filter((x) => x && typeof x === "object");
-  const regList = arrOf(registrations.data).filter((x) => x && typeof x === "object");
   const registeredAors = new Set<string>();
-  for (const r of [...deviceList, ...regList]) {
+  for (const r of deviceList) {
     const aor = String(
-      r?.aor ?? r?.["device"] ?? r?.["aor-user"] ?? r?.["sub-user"] ?? r?.["user"] ?? r?.name ?? "",
+      r?.["device"] ?? r?.aor ?? r?.["aor-user"] ?? r?.name ?? "",
     ).replace(/^sip:/, "");
-    const exp = Number(r?.expires ?? r?.["registration-expires"] ?? r?.["expires-seconds"] ?? 0);
-    const statusStr = String(
-      r?.["registration-status"] ?? r?.["device-registration-status"] ?? r?.status ?? "",
+    const state = String(
+      r?.["device-sip-registration-state"] ?? r?.["registration-status"] ?? r?.status ?? "",
     ).toLowerCase();
-    const isReg =
-      !!(r?.["registration-time"] ?? r?.["reg-time"] ?? r?.contact ?? r?.["registration-contact"] ??
-         r?.["contact-uri"] ?? r?.["device-sip-registration-uri"] ?? r?.["registration-ip"] ??
-         r?.["ip-address"] ?? r?.["user-agent"]) ||
-      exp > 0 ||
-      statusStr.includes("register") || statusStr.includes("online") || statusStr === "active";
-    if (aor && isReg) registeredAors.add(aor.toLowerCase());
+    const expRaw = r?.["device-sip-registration-expires-datetime"];
+    const expTs = expRaw ? Date.parse(String(expRaw).replace(" ", "T")) : NaN;
+    const notExpired = !Number.isFinite(expTs) || expTs > Date.now();
+    if (aor && state === "registered" && notExpired) registeredAors.add(aor.toLowerCase());
   }
 
   if (!registeredAors.size) {

@@ -1,4 +1,5 @@
 // Planipret mobile — softphone hook bound to the NS-API PBX.
+import { nativeSip } from "@/lib/native/NativeSipService";
 import { edgeOnlyWssUrls } from "@/lib/planipret/sip/sipEdgePolicy";
 //
 // This is fully independent from the Lemtel softphone: registration uses the
@@ -1267,7 +1268,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // Clear the REST/DB attachment so the in-call UI follows the live session.
     if (ok && restCall?.id) setRestCall(null);
     return ok;
-  }, [restCall?.id, restCall?.number, restControl, hasLiveSipSession, pushRing, callbackAnswer]);
+  }, [restCall?.id, restCall?.number, restControl, hasLiveSipSession, pushRing]);
 
   const answer = useCallback((): Promise<boolean> => {
     const pending = answerAttemptRef.current;

@@ -265,10 +265,29 @@ export function useMplanipretSoftphone(enabled = true) {
 
   // Register this instance so ownership can be transferred on unmount.
   useEffect(() => {
-    const entry = { notify: () => setOwnerTick((t) => t + 1) };
+    const entry = { id: ownerIdRef.current, notify: () => setOwnerTick((t) => t + 1) };
     softphoneInstances.add(entry);
     return () => { softphoneInstances.delete(entry); };
   }, []);
+
+  // Dedicated, non-destructive ownership takeover. Kept OUT of the SIP init
+  // effect: putting `ownerTick` there would run its cleanup (releaseSoftphoneOwner)
+  // and cascade into teardown / re-REGISTER storms on every handover.
+  useEffect(() => {
+    if (!enabled || !user) return;
+    if (softphoneOwnerId === ownerIdRef.current) return;
+    const ownerAlive = softphoneOwnerId !== null
+      && Array.from(softphoneInstances).some((i) => i.id === softphoneOwnerId);
+    if (ownerAlive) return;
+    if (softphoneOwnerId !== null) {
+      if (softphoneCallIsLive()) return;
+      console.info("[pp-sip] reclaiming orphaned softphone owner", { from: softphoneOwnerId });
+      softphoneOwnerId = null;
+      softphoneOwnerUserId = null;
+    }
+    if (!acquireSoftphoneOwner(ownerIdRef.current, user.id)) return;
+    setOwnerTick((t) => t + 1);
+  }, [enabled, user?.id, ownerTick]);
 
   // CallKit must only mark Answer fulfilled after the SIP dialog is confirmed;
   // otherwise iOS shows a connected call while NetSapiens is still ringing or

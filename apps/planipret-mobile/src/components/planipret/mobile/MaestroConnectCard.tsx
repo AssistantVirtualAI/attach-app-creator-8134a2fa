@@ -166,15 +166,12 @@ export default function MaestroConnectCard() {
               : null;
           } catch (e: any) {
             logDeepLink({ kind: "error", source: "MaestroConnect", detail: `native auth session failed: ${e?.message ?? e}` });
-            callbackUrl = null;
+            throw new Error(isFr ? "La session Maestro n’a pas pu s’ouvrir. Synchronisez puis réinstallez l’app iOS." : "The Maestro session could not open. Sync and reinstall the iOS app.");
           }
           if (!callbackUrl) {
-            // Repli : navigateur in-app plutôt qu'un échec silencieux.
-            logDeepLink({ kind: "info", source: "MaestroConnect", detail: "fallback path=Browser.open (ios)" });
-            await Browser.open({ url, presentationStyle: "fullscreen" });
-            toast.info(L.opening);
-            try { localStorage.setItem("pp_maestro_just_connected", String(Date.now())); } catch {}
-            pollStatus();
+            // User cancelled ASWebAuthenticationSession. Browser.open is not a
+            // valid fallback for a custom iOS scheme ("Unable to display URL").
+            logDeepLink({ kind: "info", source: "MaestroConnect", detail: "ASWebAuthenticationSession cancelled" });
             return;
           }
           try { localStorage.setItem("pp_maestro_callback_url", callbackUrl); } catch {}

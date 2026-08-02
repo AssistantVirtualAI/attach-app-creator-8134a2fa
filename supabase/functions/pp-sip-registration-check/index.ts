@@ -38,28 +38,43 @@ Deno.serve(async (req) => {
   const d = encodeURIComponent(ctx.nsDomain);
   const e = encodeURIComponent(ctx.extension);
 
-  // 1) Live REGISTER bindings (NS-API v2: registrations live under the user and
-  //    under each device — probe both, docs/netsapiens/registrations.md).
+  // 1) Live REGISTER bindings.
+  //    NS-API v2 has NO /registrations resource (docs/netsapiens/registrations.md):
+  //    every 404 we used to collect here made `mobile_registered` permanently
+  //    false, which made the app re-REGISTER on every resume — the duplicate
+  //    REGISTER on the same AOR is exactly what closes the older WSS socket
+  //    with code 1001. Registration state lives ON the device object.
   const devicesRes = await get(`/domains/${d}/users/${e}/devices`);
   const devices = arrOf(devicesRes.data);
-  const deviceIds = devices
-    .map((x: any) => String(x?.device ?? x?.aor ?? x?.name ?? "").replace(/^sip:/, "").split("@")[0])
-    .filter(Boolean);
 
-  const regProbes = [
-    await get(`/domains/${d}/users/${e}/registrations`),
-    ...(await Promise.all(
-      deviceIds.slice(0, 8).map((id) => get(`/domains/${d}/users/${e}/devices/${encodeURIComponent(id)}/registrations`)),
-    )),
-  ];
-  const regRows = regProbes.flatMap((p) => (p.ok ? arrOf(p.data) : []));
-  const aors = Array.from(new Set(
-    regRows
-      .map((r: any) => String(r?.aor ?? r?.device ?? r?.["device-aor"] ?? r?.user ?? "").replace(/^sip:/, "").split("@")[0])
-      .filter(Boolean),
-  ));
+  const devId = (x: any) => String(x?.device ?? x?.aor ?? x?.name ?? "").replace(/^sip:/, "").split("@")[0];
+  const regExpiresOk = (x: any) => {
+    const raw = x?.["device-sip-registration-expires-datetime"];
+    if (!raw) return true; // field can lag/replicate; don't invalidate on absence
+    const t = Date.parse(String(raw).replace(" ", "T"));
+    return !Number.isFinite(t) || t > Date.now();
+  };
+  const isRegistered = (x: any) =>
+    String(x?.["device-sip-registration-state"] ?? x?.registration_state ?? "").toLowerCase() === "registered" &&
+    regExpiresOk(x);
+
+  const aors = Array.from(new Set(devices.filter(isRegistered).map(devId).filter(Boolean)));
   const mobileAor = `${ctx.extension}M`;
-  const mobileRegistered = aors.some((a) => a.toLowerCase() === mobileAor.toLowerCase());
+  let mobileRegistered = aors.some((a) => a.toLowerCase() === mobileAor.toLowerCase());
+
+  // The LIST endpoint sometimes omits registration fields — confirm via DETAIL
+  // before declaring the mobile AOR unregistered (avoids false re-REGISTERs).
+  if (!mobileRegistered && devices.some((x) => devId(x).toLowerCase() === mobileAor.toLowerCase())) {
+    const detail = await get(`/domains/${d}/users/${e}/devices/${encodeURIComponent(mobileAor)}`);
+    const row = Array.isArray(detail.data)
+      ? detail.data[0]
+      : (Array.isArray(detail.data?.data) ? detail.data.data[0] : detail.data);
+    if (detail.ok && isRegistered(row)) {
+      mobileRegistered = true;
+      aors.push(mobileAor);
+    }
+  }
+  const regRows = devices.filter(isRegistered);
 
   // 2) Mobile device must have push enabled (docs/netsapiens/devices.md).
   //    The device LIST endpoint often omits `device-push-enabled`, so fall back

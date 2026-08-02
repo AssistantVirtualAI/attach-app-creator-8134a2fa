@@ -1195,8 +1195,8 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         if (st === "active") { console.info("[answer] SIP answered within watchdog window"); return true; }
         if (st === "ended") break;
       }
-      console.warn("[answer] no confirmed SIP dialog before pending-answer expiry — refusing false REST answer");
-      return false;
+      console.warn("[answer] no confirmed SIP dialog before pending-answer expiry → NS-API click-to-call");
+      return await callbackAnswer(pushRing.from || "");
     }
 
     // `ringing-in` is the only state that may be answered. Treating an active
@@ -1204,8 +1204,8 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // could never produce a new confirmed inbound dialog.
     if (sipSnap.callState === "active" || sipSnap.callState === "held") return true;
     if (sipSnap.callState !== "ringing-in") {
-      console.warn("[answer] no inbound SIP INVITE available", { state: sipSnap.callState });
-      return false;
+      console.warn("[answer] no inbound SIP INVITE available → NS-API click-to-call", { state: sipSnap.callState });
+      return await callbackAnswer(restCall?.number || sipSnap.remoteNumber || sipSnap.remoteIdentity || "");
     }
 
     if (restCall?.id && !liveSipNow) {

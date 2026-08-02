@@ -65,14 +65,14 @@ function json(b: unknown, s = 200) {
 }
 
 function normalizeClientType(v: unknown): ClientType {
-  if (v === "web" || v === "widget") return "web";
+  if (v === "web" || v === "widget") return v;
   return "mobile";
 }
 
 // Naming convention: <ext>M (mobile) / <ext>W (web+widget). No underscore —
 // Snap Mobile provisioning and the web widget mangle `_` in the AOR user part.
 function deviceNameFor(ext: string, ct: ClientType): string {
-  return ct === "web" ? webDeviceId(ext) : mobileDeviceId(ext);
+  return ct === "mobile" ? mobileDeviceId(ext) : webDeviceId(ext);
 }
 
 function deviceIdOf(d: any): string | null {
@@ -81,9 +81,10 @@ function deviceIdOf(d: any): string | null {
   return String(id).replace(/^sip:/i, "").split("@")[0] || null;
 }
 
-// Must match the deterministic password generation in ns-provision-broker-devices.
-async function derivePassword(userId: string): Promise<string> {
-  const enc = new TextEncoder().encode(userId + "planipret-sip-2026");
+// Deterministic fallback for newly-created devices only. The device id is part
+// of the seed so mobile and widget never share credentials.
+async function derivePassword(userId: string, deviceId: string): Promise<string> {
+  const enc = new TextEncoder().encode(`${userId}:${deviceId}:planipret-sip-2026`);
   const h = await crypto.subtle.digest("SHA-256", enc);
   const hex = Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, "0")).join("");
   return `Pp${hex.substring(0, 12)}!`;
@@ -343,7 +344,7 @@ Deno.serve(async (req) => {
   // the same payload as ns-provision-broker-devices. Applies to every broker,
   // not just the ones an admin re-provisioned manually.
   if (!device) {
-    const selfHealPwd = await derivePassword(String(profile.user_id));
+    const selfHealPwd = await derivePassword(String(profile.user_id), deviceName);
     const isMobile = clientType === "mobile";
     const created = await nsPost(
       `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`,
@@ -381,11 +382,13 @@ Deno.serve(async (req) => {
   }
 
 
-  // Hard invariant: a mobile client can only ever be handed `<ext>M`.
+  // Hard invariant: every client is handed exactly the AOR selected for it.
+  // Other devices on the same user (for example 113x) remain untouched and can
+  // register concurrently with their own credentials.
   const resolvedRaw = deviceIdOf(device) || deviceName;
-  const resolvedId = clientType === "mobile" ? deviceName : resolvedRaw;
+  const resolvedId = deviceName;
   if (resolvedRaw !== resolvedId) {
-    console.warn(`[ns-resolve] forced mobile AOR ${resolvedId} (NS returned ${resolvedRaw})`);
+    console.warn(`[ns-resolve] forced ${clientType} AOR ${resolvedId} (NS returned ${resolvedRaw})`);
   }
 
   const rawCore = (device["core-server"] ?? device["device-sip-registration-core-server"] ?? device["sip-registration-core-server"] ?? "").toString().trim();
@@ -393,15 +396,16 @@ Deno.serve(async (req) => {
   const sipUri = device["device-sip-registration-uri"] ?? `sip:${resolvedId}@${domain}`;
   const sipState = device["device-sip-registration-state"] ?? device["registration-state"] ?? null;
 
-  // Provide and enforce SIP credentials so JsSIP (web + iOS + Android) can register the device.
-  // device-sip-allowed-user-agent must match the User-Agent sent by JsSIP: "JsSIP/x.x.x".
-  // Leaving it empty or using a wildcard lets any softphone register.
-  const sipPassword = await derivePassword(String(profile.user_id));
+  // Preserve the password owned by this exact NS Device. Replacing it during a
+  // credential lookup disconnects whichever app already owns that AOR and can
+  // also make two devices share a password. Only a newly self-healed device uses
+  // our per-device deterministic fallback.
+  const devicePassword = String(device["device-sip-registration-password"] ?? "").trim();
+  const sipPassword = devicePassword || await derivePassword(String(profile.user_id), resolvedId);
   let repairStatus: any = null;
   repairStatus = await nsPut(
     `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(resolvedId)}`,
     {
-      "device-sip-registration-password": sipPassword,
       "core-server": coreServer,
       "device-provisioning-registration-core-server": coreServer,
       "device-srtp-enabled": "opportunistic",

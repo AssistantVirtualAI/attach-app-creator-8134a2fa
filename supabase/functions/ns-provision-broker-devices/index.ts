@@ -77,8 +77,8 @@ Deno.serve(async (req) => {
 
     const nsHeaders = { Authorization: `Bearer ${NS_API_KEY}`, "Content-Type": "application/json", Accept: "application/json" };
 
-    const genPassword = async (userId: string) => {
-      const enc = new TextEncoder().encode(userId + "planipret-sip-2026");
+    const genPassword = async (userId: string, deviceId: string) => {
+      const enc = new TextEncoder().encode(`${userId}:${deviceId}:planipret-sip-2026`);
       const h = await crypto.subtle.digest("SHA-256", enc);
       const hex = Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, "0")).join("");
       return `Pp${hex.substring(0, 12)}!`;
@@ -119,15 +119,16 @@ Deno.serve(async (req) => {
       const domain = broker.ns_domain || NS_DEFAULT_DOMAIN;
       if (!ext) return { broker_id: broker.user_id, success: false, error: "no_extension" };
 
-      const sipPassword = await genPassword(broker.user_id);
       // Naming convention: <ext>M / <ext>W (no underscore — Snap Mobile and the
       // web widget mangle `_` in the AOR user part). Legacy <ext>_mobile /
       // <ext>_web devices are removed once the new pair exists.
       const mobileId = mobileDeviceId(ext);
       const widgetId = webDeviceId(ext);
+      const mobilePassword = await genPassword(broker.user_id, mobileId);
+      const widgetPassword = await genPassword(broker.user_id, widgetId);
       const base = `${NS_API_BASE_URL}/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`;
 
-      const nsUser = await ensureNsUser(broker, ext, domain, sipPassword);
+      const nsUser = await ensureNsUser(broker, ext, domain, mobilePassword);
       if (!nsUser.ok) return { broker_id: broker.id ?? broker.user_id, success: false, error: "ns_user_create_failed", ns_user: nsUser };
 
       const listRes = await nsFetch(base, { headers: nsHeaders });
@@ -136,7 +137,7 @@ Deno.serve(async (req) => {
       const hasDev = (id: string) =>
         arr.some((d: any) => (d?.device ?? d?.aor ?? "").toString().replace(/^sip:/i, "").split("@")[0].trim().toLowerCase() === id.toLowerCase());
 
-      const create = async (id: string, model: string, isMobile: boolean) => {
+      const create = async (id: string, model: string, isMobile: boolean, password: string) => {
         if (hasDev(id)) {
           // Device exists — patch it to ensure WSS transport, empty user-agent filter,
           // and (critically) the 1800s registration expiry + automatic NAT traversal.
@@ -145,7 +146,6 @@ Deno.serve(async (req) => {
           const r = await nsFetch(`${base}/${encodeURIComponent(id)}`, {
             method: "PUT", headers: nsHeaders,
             body: JSON.stringify({
-              "device-sip-registration-password": sipPassword,
               "transport": "WSS",
               // SIP-level transport: without this NS closes the WSS socket with
               // code 1001 right after the REGISTER 200 OK.
@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
           method: "POST", headers: nsHeaders,
           body: JSON.stringify({
             device: id,
-            "device-sip-registration-password": sipPassword,
+            "device-sip-registration-password": password,
             "device-provisioning-protocol": "sip",
             "device-model": model,
             "core-server": "core1.cluster1.ucstack.io",
@@ -194,8 +194,8 @@ Deno.serve(async (req) => {
         return { created: r.ok, status: r.status, id, data };
       };
 
-      const mobile = await create(mobileId, "Mobile Softphone", true);
-      const widget = await create(widgetId, "Web Softphone", false);
+      const mobile = await create(mobileId, "Mobile Softphone", true, mobilePassword);
+      const widget = await create(widgetId, "Web Softphone", false, widgetPassword);
 
       // Rename migration: NS device names are immutable, so once <ext>M/<ext>W
       // exist we delete the legacy <ext>_mobile / <ext>_web AORs. Leaving them
@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
       const secretName = `pp_sip_${broker.id ?? broker.user_id}_mobile`;
       try {
         await admin.rpc("create_planipret_sip_secret", {
-          _name: secretName, _value: sipPassword, _broker_id: broker.id ?? broker.user_id,
+           _name: secretName, _value: mobilePassword, _broker_id: broker.id ?? broker.user_id,
         });
       } catch { /* optional */ }
 
@@ -252,7 +252,7 @@ Deno.serve(async (req) => {
         success: ok,
         db_error: uErr?.message,
         ns_user: nsUser, mobile, widget, removed_legacy,
-        sip_credentials: { mobile_device_id: mobileId, widget_device_id: widgetId, password: sipPassword },
+         sip_credentials: { mobile_device_id: mobileId, widget_device_id: widgetId },
       };
     };
 

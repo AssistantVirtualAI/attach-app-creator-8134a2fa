@@ -359,7 +359,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
 
   // Resolve NS-API SIP credentials and register the softphone per user.
   // Re-runs whenever the ExtensionSync page dispatches `pp:sip-ready`, so a
-  // freshly-created `{ext}_mobile` device actually REGISTERs and shows up in
+  // freshly-created `{ext}M` device actually REGISTERs and shows up in
   // NetSapiens with IP/User-Agent instead of empty columns.
   useEffect(() => {
     if (!enabled || !user) { setLoading(false); return; }
@@ -406,7 +406,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
           displayName: String(d.display_name || d.sip_display_name || d.sip_extension),
         };
         mobileSipConfigRef.current = sipConfig;
-        // The native keep-alive service owns the `<ext>_mobile` device, but ONLY
+        // The native keep-alive service owns the `<ext>M` device, but ONLY
         // in background. Running it while the WebView (JsSIP) is registered makes
         // NetSapiens close the sockets alternately (code 1001 loop, hundreds of
         // sockets). In foreground the JS provider is the single owner.

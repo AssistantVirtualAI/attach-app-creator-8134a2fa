@@ -789,6 +789,8 @@ class PpSipProvider {
     if (await this.answer(callId)) return true;
     this.pendingAnswer = { callId: String(callId ?? ""), expiresAt: Date.now() + PP_PENDING_ANSWER_TIMEOUT_MS };
     this.log("info", "answer intent queued until matching INVITE", { callId: callId ?? "" });
+    // No INVITE can ever arrive on a dead socket — make sure one exists.
+    void this.wakeForIncoming(callId);
     return false;
   }
 
@@ -1142,6 +1144,11 @@ class PpSipProvider {
    */
   async releaseForBackground(): Promise<void> {
     if (this.hasActiveCall() || this.snap.callState === "ringing-in" || this.snap.callState === "ringing-out") return;
+    // Never drop the registration while an inbound call is being answered.
+    if (this.pendingAnswer && this.pendingAnswer.expiresAt > Date.now()) {
+      this.log("warn", "background release skipped: answer intent in flight");
+      return;
+    }
     try { this.ua?.unregister({ all: false }); } catch { /* noop */ }
     await new Promise((r) => setTimeout(r, 250));
     this.stop();

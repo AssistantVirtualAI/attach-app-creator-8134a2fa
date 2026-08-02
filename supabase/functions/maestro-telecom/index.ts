@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
     if (!path || typeof path !== "string") return json({ error: "missing_path" }, 400);
 
     // Resolve {me} → current broker's Maestro id
+    let resolvedMeId: string | number | null = null;
     if (path.includes("{me}")) {
       const { data: prof } = await admin
         .from("planipret_profiles")
@@ -49,6 +50,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
       const meId = prof?.maestro_broker_id;
       if (!meId) return json({ ok: false, error: "no_maestro_broker_id", needs_link: true }, 200);
+      resolvedMeId = meId;
       path = path.replaceAll("{me}", encodeURIComponent(String(meId)));
     }
 
@@ -79,7 +81,9 @@ Deno.serve(async (req) => {
         const externalCaller = call.from_user_number ?? call.to_user_number;
         delete call.to_user_number;
         call.from_user_number = externalCaller;
-        call.to_user_id = Number.isFinite(Number(meId)) ? Number(meId) : meId;
+        call.to_user_id = resolvedMeId !== null && Number.isFinite(Number(resolvedMeId))
+          ? Number(resolvedMeId)
+          : resolvedMeId;
       }
       upstreamBody = call;
     }

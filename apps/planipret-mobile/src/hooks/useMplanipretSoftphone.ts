@@ -223,6 +223,8 @@ export function useMplanipretSoftphone(enabled = true) {
   const [nativeStatus, setNativeStatus] = useState<PpNativeSipStatus | null>(null);
   /** Latest answer() implementation, callable from native listeners registered once. */
   const answerRef = useRef<null | (() => Promise<boolean>)>(null);
+  /** One answer transaction at a time across CallKit, notification and in-app UI. */
+  const answerAttemptRef = useRef<Promise<boolean> | null>(null);
 
   const seenCallIds = useRef<Set<string>>(new Set());
   const mobileSipConfigRef = useRef<PpSipConfig | null>(null);
@@ -388,10 +390,8 @@ export function useMplanipretSoftphone(enabled = true) {
       if (invite?.action === "answer") {
         try { (window as any).__ppPendingAnswer = { callId: invite.callId, ts: Date.now() }; } catch {}
         try { ppSipProvider.forceReregister(); } catch {}
-        // Android: the notification action only broadcast an intent before —
-        // nothing actually picked the call up, so the caller kept hearing the
-        // greeting. Run the full answer flow (SIP, then NS-API fallback).
-        void ppSipProvider.requestAnswer(invite?.callId);
+        // Run the single arbitrated answer transaction. Calling requestAnswer()
+        // here as well used to create a second 30s waiter racing CallKit/UI.
         void answerRef.current?.().then((ok) => console.info(`[pp-sip] notification answer → ${ok ? "connected" : "failed"}`));
       } else if (invite?.action === "decline") {
         try { ppSipProvider.requestDecline(invite?.callId); } catch {}
@@ -1026,7 +1026,7 @@ export function useMplanipretSoftphone(enabled = true) {
   // lose (widget answered first), don't pick up — the winner already has audio.
   // Every branch is logged so the exact route to answer() is visible in Xcode /
   // Logcat when debugging a VoIP-push answer.
-  const answer = useCallback(async () => {
+  const answerOnce = useCallback(async () => {
     const sipSnap = ppSipProvider.getSnapshot();
     console.info("[answer] tapped", {
       hasLiveSipSession,
@@ -1103,6 +1103,20 @@ export function useMplanipretSoftphone(enabled = true) {
     if (ok && restCall?.id) setRestCall(null);
     return ok;
   }, [restCall?.id, restControl, hasLiveSipSession, pushRing]);
+
+  const answer = useCallback((): Promise<boolean> => {
+    const pending = answerAttemptRef.current;
+    if (pending) {
+      console.info("[answer] joining answer already in flight");
+      return pending;
+    }
+    const run = answerOnce();
+    answerAttemptRef.current = run;
+    void run.finally(() => {
+      if (answerAttemptRef.current === run) answerAttemptRef.current = null;
+    });
+    return run;
+  }, [answerOnce]);
 
   useEffect(() => { answerRef.current = answer; }, [answer]);
 

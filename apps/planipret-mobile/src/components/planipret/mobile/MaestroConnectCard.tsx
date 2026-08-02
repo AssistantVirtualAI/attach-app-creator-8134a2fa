@@ -42,6 +42,7 @@ export default function MaestroConnectCard() {
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const pollTimers = useRef<number[]>([]);
+  const authInFlight = useRef(false);
 
   const isFr = lang === "fr";
   const L = {
@@ -131,6 +132,8 @@ export default function MaestroConnectCard() {
 
 
   const startAuth = async () => {
+    if (authInFlight.current) return;
+    authInFlight.current = true;
     setBusy(true);
     try {
       const isNative = Capacitor.isNativePlatform();
@@ -170,6 +173,7 @@ export default function MaestroConnectCard() {
     } catch (e: any) {
       toast.error(e?.message || L.error);
     } finally {
+      authInFlight.current = false;
       setBusy(false);
     }
   };

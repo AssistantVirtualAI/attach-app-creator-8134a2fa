@@ -14,6 +14,7 @@ import { setAuthToken } from './lib/avaApi';
 import { audit } from './lib/audit';
 import { sipProvider } from './lib/sip/jssipProvider';
 import { useSoftphone } from './hooks/useSoftphone';
+import { SoftphoneProvider } from './contexts/SoftphoneContext';
 import { useTenant } from './hooks/useTenant';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useExtensionDataSync } from './hooks/useExtensionDataSync';
@@ -80,7 +81,7 @@ type Creds = {
 
 type ActiveCreds = Exclude<Creds, null>;
 
-function SipKeepAlive({ creds }: { creds: ActiveCreds }) {
+function SipKeepAlive({ creds, children }: { creds: ActiveCreds; children?: React.ReactNode }) {
   const sp = useSoftphone({
     extension: creds.extension,
     displayName: creds.displayName,
@@ -89,12 +90,11 @@ function SipKeepAlive({ creds }: { creds: ActiveCreds }) {
     accessToken: creds.accessToken,
     refreshToken: creds.refreshToken,
   });
-
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('lemtel:sip-status', { detail: sp.snap.status }));
   }, [sp.snap.status]);
-
-  return null;
+  // Expose the single SIP instance to all children via context
+  return <SoftphoneProvider value={sp}>{children ?? null}</SoftphoneProvider>;
 }
 
 function DesktopBackgroundSync({ fallbackExtension }: { fallbackExtension?: string | null }) {
@@ -282,20 +282,21 @@ function DesktopApp() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
-      <SipKeepAlive creds={creds} />
-      <DesktopBackgroundSync fallbackExtension={creds.extension} />
-      <BrightnessOverlay />
-      {!IS_EMBED && <TitleBar />}
-      <div style={{ flex: 1, overflow: 'hidden', position: 'relative', zIndex: 1 }}>
-        {mobileSettings ? (
-          <SettingsPage creds={creds} onSignOut={signOutDesktop} onBack={() => setMobileSettings(false)} />
-        ) : (
-          <SoftphonePane creds={creds} onOpenSettings={openSettingsMobile} />
-        )}
+    <SipKeepAlive creds={creds}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: t.bg, position: 'relative' }}>
+        <DesktopBackgroundSync fallbackExtension={creds.extension} />
+        <BrightnessOverlay />
+        {!IS_EMBED && <TitleBar />}
+        <div style={{ flex: 1, overflow: 'hidden', position: 'relative', zIndex: 1 }}>
+          {mobileSettings ? (
+            <SettingsPage creds={creds} onSignOut={signOutDesktop} onBack={() => setMobileSettings(false)} />
+          ) : (
+            <SoftphonePane creds={creds} onOpenSettings={openSettingsMobile} />
+          )}
+        </div>
+        {!IS_EMBED && <UpdateBanner />}
       </div>
-      {!IS_EMBED && <UpdateBanner />}
-    </div>
+    </SipKeepAlive>
   );
 }
 

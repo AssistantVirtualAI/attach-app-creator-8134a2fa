@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSoftphone } from '@/hooks/useSoftphone';
+import { useSoftphoneContextSafe } from '@/contexts/SoftphoneContext';
 import RecentsList from './RecentsList';
 import ContactsList from './ContactsList';
 import VoicemailList from './VoicemailList';
@@ -64,14 +65,25 @@ export default function SoftphonePane({
   onOpenSettings: () => void;
   hideTabs?: boolean;
 }) {
-  const sp = useSoftphone({
-    extension: creds.extension,
-    displayName: creds.displayName,
-    sipDomain: creds.sipDomain,
-    wssUrl: creds.wssUrl,
-    accessToken: creds.accessToken,
-    refreshToken: creds.refreshToken,
-  });
+  // Use the shared SIP instance from App.tsx (SipKeepAlive) when available.
+  // This prevents creating a second parallel SIP connection that would
+  // disconnect on every page navigation.
+  const ctxSp = useSoftphoneContextSafe();
+  const _localSp = useSoftphone(
+    ctxSp
+      ? { extension: '', displayName: '', sipDomain: '', wssUrl: '', accessToken: '', refreshToken: '' }
+      : {
+          extension: creds.extension,
+          displayName: creds.displayName,
+          sipDomain: creds.sipDomain,
+          wssUrl: creds.wssUrl,
+          accessToken: creds.accessToken,
+          refreshToken: creds.refreshToken,
+        }
+  );
+  // Always use the context instance if available; fall back to local only in
+  // standalone / embed mode where SipKeepAlive is not mounted.
+  const sp = ctxSp ?? _localSp;
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);

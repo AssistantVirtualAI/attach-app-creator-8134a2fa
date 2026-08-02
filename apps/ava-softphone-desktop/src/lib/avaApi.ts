@@ -515,6 +515,24 @@ async function readCallRecordRows(limit = 100, opts?: { scope?: 'mine' | 'org'; 
   return res.json();
 }
 
+/**
+ * Invoke a fusionpbx-proxy action and return the JSON response.
+ * Throws on non-2xx responses so callers can handle errors explicitly.
+ */
+async function invokeFusionSync(body: Record<string, unknown>): Promise<any> {
+  const res = await fetch(resolveUrl(`/fn/${FN.fusionpbxProxy}`), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let msg = `fusionpbx-proxy ${String(body.action ?? '')} ${res.status}`;
+    try { const j = await res.json(); msg = j?.error || j?.message || msg; } catch { /* noop */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 let cdrSyncInFlight: Promise<void> | null = null;
 let lastCdrSyncAt = 0;
 // Auto-retry state for NO_CDR_ENDPOINT — when the PBX live-CDR endpoint is

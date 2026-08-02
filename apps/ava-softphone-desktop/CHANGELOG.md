@@ -1,5 +1,12 @@
 # Changelog — Lemtel Softphone
 
+## [2.5.2] — 2026-08-02
+
+### Corrections
+- **CDRs / Enregistrements / Messagerie vocale** : Correction définitive de l'erreur 401 Unauthorized — `invokeFusionSync` utilise maintenant `supabase.functions.invoke()` qui gère le JWT automatiquement depuis la session active, même après un refresh de token
+
+---
+
 ## [2.5.1] — 2026-08-02
 
 ### Corrections critiques

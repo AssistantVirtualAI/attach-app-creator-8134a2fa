@@ -2346,6 +2346,7 @@ function patchIosNativeFiles() {
         ]
       : []),
   ]);
+  if (hasPjsip) ensurePjsipXcframework(iosRoot);
   patchIosAppDelegate(iosApp);
   ensureIosBridgeController(iosApp);
   ensureIosSceneDelegate(iosApp);

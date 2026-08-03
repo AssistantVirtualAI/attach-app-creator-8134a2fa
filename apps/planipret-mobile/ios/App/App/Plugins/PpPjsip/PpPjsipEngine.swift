@@ -113,6 +113,8 @@ final class PjsipEngine {
     private var started = false
     private var scheduledWork: (() -> Void)?
     private var strings: [UnsafeMutablePointer<CChar>] = []
+    private var pjThreadDescs: [UnsafeMutableRawPointer] = []
+
 
     // Sonde
     private var probeAccId: pjsua_acc_id = pjsua_acc_id(-1)

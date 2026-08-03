@@ -76,6 +76,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         }
         nc.addObserver(forName: Notification.Name("PpPjsipCallConnected"), object: nil, queue: .main) { [weak self] _ in
             guard let self = self, let uuid = self.activeCallUUID else { return }
+            self.nativeCallConnected = true
             self.provider?.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
         nc.addObserver(forName: Notification.Name("PpPjsipCallEnded"), object: nil, queue: .main) { [weak self] note in
@@ -87,7 +88,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             self.pendingAnswerAction?.fulfill(); self.pendingAnswerAction = nil
             self.activeCallUUID = nil; self.activeCallId = nil
             self.nativeEngineOwnsCall = false
+            self.nativeCallConnected = false
         }
+
     }
 
     private func reportNativeIncomingCall(callId: String, callerName: String, callerNumber: String) {

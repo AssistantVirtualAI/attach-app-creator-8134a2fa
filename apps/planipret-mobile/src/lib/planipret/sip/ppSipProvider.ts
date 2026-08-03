@@ -1001,7 +1001,13 @@ class PpSipProvider {
    * rebuild the transport and wait for a REAL `registered` event.
    */
   async wakeForIncoming(callId?: string): Promise<boolean> {
+    // Le réveil push sert à démarrer PJSIP, pas à re-REGISTER la WebView.
+    if (nativeOwnsAor()) {
+      this.log("warn", "push wake ignored: native PJSIP owns the AOR");
+      return false;
+    }
     if (this.wakeInFlight) {
+
       this.log("info", "joining incoming wake already in flight");
       return this.wakeInFlight;
     }

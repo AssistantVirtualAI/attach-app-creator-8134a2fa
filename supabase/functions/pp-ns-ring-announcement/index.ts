@@ -58,6 +58,37 @@ Deno.serve(async (req) => {
       return json({ probe, status: pr.status, body: (await pr.text()).slice(0, 1500) });
     }
 
+    const listUsers = async (): Promise<string[]> => {
+      const res = await nsFetch(`${base}/users`, {}, { functionName: "pp-ns-ring-announcement" });
+      const arr = await res.json().catch(() => []);
+      if (!Array.isArray(arr)) return [];
+      return arr
+        .map((u: Record<string, unknown>) => String(u?.user ?? u?.["user"] ?? ""))
+        .filter((u: string) => u && /^\d+$/.test(u));
+    };
+
+    const setUserRing = async (user: string, enabled: boolean) => {
+      const res = await nsFetch(`${base}/users/${encodeURIComponent(user)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          synchronous: "yes",
+          "music-on-ring-enabled": enabled ? "yes" : "no",
+        }),
+      }, { functionName: "pp-ns-ring-announcement" });
+      return { user, status: res.status, ok: res.ok, body: (await res.text()).slice(0, 200) };
+    };
+
+    const setDomainRing = async (enabled: boolean) => {
+      const res = await nsFetch(base, {
+        method: "PUT",
+        body: JSON.stringify({
+          synchronous: "yes",
+          "music-on-ring-enabled": enabled ? "yes" : "no",
+        }),
+      }, { functionName: "pp-ns-ring-announcement" });
+      return { status: res.status, ok: res.ok, body: (await res.text()).slice(0, 300) };
+    };
+
     const readState = async () => {
       const [dRes, mRes] = await Promise.all([
         nsFetch(base, {}, { functionName: "pp-ns-ring-announcement" }),
@@ -73,15 +104,41 @@ Deno.serve(async (req) => {
       };
     };
 
-    if (action === "status") return json({ ok: true, ...(await readState()) });
+    if (action === "status") {
+      const uRes = await nsFetch(`${base}/users`, {}, { functionName: "pp-ns-ring-announcement" });
+      const users = await uRes.json().catch(() => []);
+      const perUser = Array.isArray(users)
+        ? users.map((u: Record<string, unknown>) => ({
+            user: u?.user ?? null,
+            musicOnRingEnabled: u?.["music-on-ring-enabled"] ?? null,
+          }))
+        : [];
+      return json({ ok: true, ...(await readState()), perUser });
+    }
 
     if (action === "disable") {
-      const res = await nsFetch(base, {
-        method: "PUT",
-        body: JSON.stringify({ synchronous: "yes", "music-on-ring-enabled": "no" }),
-      }, { functionName: "pp-ns-ring-announcement" });
-      const txt = await res.text();
-      return json({ ok: res.ok, status: res.status, body: txt.slice(0, 400), state: await readState() });
+      const dom = await setDomainRing(false);
+      const users = await listUsers();
+      const results = [];
+      for (const u of users) results.push(await setUserRing(u, false));
+      return json({ ok: dom.ok, domain: dom, users: results, state: await readState() });
+    }
+
+    // Scope the notice to inbound only: OFF at the domain, ON per user.
+    if (action === "scope_users" || action === "fix") {
+      const dom = await setDomainRing(false);
+      const targets: string[] = Array.isArray(body?.users) && body.users.length
+        ? body.users.map(String)
+        : await listUsers();
+      const results = [];
+      for (const u of targets) results.push(await setUserRing(u, true));
+      return json({
+        ok: dom.ok && results.every((r) => r.ok),
+        note: "domain music-on-ring disabled (no notice on outbound), enabled per user (inbound only)",
+        domain: dom,
+        users: results,
+        state: await readState(),
+      });
     }
 
     if (action === "enable") {
@@ -110,27 +167,37 @@ Deno.serve(async (req) => {
       }, { functionName: "pp-ns-ring-announcement" });
       const upText = await up.text();
 
-      // 2) enable early media (music) while ringing
+      // 2) keep MOH at the domain but NEVER music-on-ring at the domain level
+      //    (that would play the notice on the broker's outbound calls too).
       const dom = await nsFetch(base, {
         method: "PUT",
         body: JSON.stringify({
           synchronous: "yes",
-          "music-on-ring-enabled": "yes",
+          "music-on-ring-enabled": "no",
           "music-on-hold-enabled": "yes",
           "music-on-hold-randomized-enabled": "no",
         }),
       }, { functionName: "pp-ns-ring-announcement" });
       const domText = await dom.text();
 
+      // 3) enable early media while ringing, per user (callee side only)
+      const targets: string[] = Array.isArray(body?.users) && body.users.length
+        ? body.users.map(String)
+        : await listUsers();
+      const userResults = [];
+      for (const u of targets) userResults.push(await setUserRing(u, true));
+
       return json({
         ok: up.ok && dom.ok,
         upload: { status: up.status, body: upText.slice(0, 400) },
         domain: { status: dom.status, body: domText.slice(0, 400) },
+        users: userResults,
         state: await readState(),
       });
     }
 
-    return json({ error: "unknown_action", hint: "status | enable | disable" }, 400);
+    return json({ error: "unknown_action", hint: "status | enable | disable | scope_users" }, 400);
+
   } catch (e) {
     console.error("[pp-ns-ring-announcement] error", e);
     return json({ error: (e as Error).message }, 500);

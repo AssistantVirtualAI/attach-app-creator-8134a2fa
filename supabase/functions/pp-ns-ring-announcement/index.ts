@@ -141,6 +141,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Restore the notice for ringing legs. NetSapiens only honours
+    // `music-on-ring-enabled` at the DOMAIN level (the user object ignores it),
+    // so this is the only configuration that actually plays the notice.
+    if (action === "restore" || action === "enable_domain") {
+      const dom = await setDomainRing(true);
+      return json({
+        ok: dom.ok,
+        note: "domain music-on-ring enabled — notice plays on ringing legs (iOS + Android)",
+        domain: dom,
+        state: await readState(),
+      });
+    }
+
     if (action === "enable") {
       // 1) upload the notice as domain MOH media
       const admin = createClient(
@@ -173,7 +186,7 @@ Deno.serve(async (req) => {
         method: "PUT",
         body: JSON.stringify({
           synchronous: "yes",
-          "music-on-ring-enabled": "no",
+          "music-on-ring-enabled": "yes",
           "music-on-hold-enabled": "yes",
           "music-on-hold-randomized-enabled": "no",
         }),
@@ -196,7 +209,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return json({ error: "unknown_action", hint: "status | enable | disable | scope_users" }, 400);
+    return json({ error: "unknown_action", hint: "status | enable | disable | restore | scope_users" }, 400);
 
   } catch (e) {
     console.error("[pp-ns-ring-announcement] error", e);

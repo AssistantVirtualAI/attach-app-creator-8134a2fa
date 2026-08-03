@@ -19,12 +19,17 @@ export const PP_PENDING_ANSWER_TIMEOUT_MS = 30_000;
 
 // One owner per AOR: the native PJSIP engine announces itself with
 // `pp:sip-native-owns-aor`, after which JsSIP must never REGISTER again.
-let ppNativeAorOwner = false;
-export const ppNativeSipOwnsAor = () => ppNativeAorOwner;
+// The authoritative state lives in `aorArbitration` (persisted + pre-claimed
+// on native platforms before any JsSIP UA can race it).
+export const ppNativeSipOwnsAor = () => nativeOwnsAor();
 if (typeof window !== "undefined") {
-  window.addEventListener("pp:sip-native-owns-aor", () => { ppNativeAorOwner = true; });
-  window.addEventListener("pp:sip-native-released-aor", () => { ppNativeAorOwner = false; });
+  window.addEventListener(PP_AOR_CLAIM_EVENT, () => {
+    // Tear down any live WebView registration immediately: leaving it bound
+    // makes NetSapiens close the native branch with a 1001.
+    try { ppSipProvider?.yieldAorToNative(); } catch { /* provider not built yet */ }
+  });
 }
+
 
 export type PpSipStatus = "idle" | "connecting" | "connected" | "registered" | "disconnected" | "error";
 export type PpCallState = "idle" | "ringing-out" | "ringing-in" | "active" | "held" | "ended";

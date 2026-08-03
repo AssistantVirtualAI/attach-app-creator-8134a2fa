@@ -1294,7 +1294,26 @@ class PpSipProvider {
    * the caller lands in voicemail. Removing it lets the native keep-alive
    * registration (or the VoIP push) take the call instead.
    */
+  /**
+   * Le moteur natif vient de revendiquer `<ext>M` : retirer immédiatement le
+   * Contact WebView (unregister ciblé, jamais `all:true`) puis arrêter l'UA.
+   * Sans cela NetSapiens voit deux contacts sur le même AOR et ferme la
+   * branche native avec un WSS 1001.
+   */
+  yieldAorToNative(): void {
+    if (!this.ua) return;
+    if (this.hasActiveCall() || this.snap.callState === "ringing-in" || this.snap.callState === "ringing-out") {
+      this.log("warn", "AOR handover deferred: call in progress");
+      return;
+    }
+    this.log("warn", "native PJSIP owns the AOR -> releasing JsSIP registration");
+    this.pushHistory("blocked", "aor_handover_native");
+    try { this.ua.unregister({ all: false }); } catch { /* noop */ }
+    setTimeout(() => { try { this.stop(); } catch { /* noop */ } }, 250);
+  }
+
   async releaseForBackground(): Promise<void> {
+
     if (this.hasActiveCall() || this.snap.callState === "ringing-in" || this.snap.callState === "ringing-out") return;
     // Never drop the registration while an inbound call is being answered.
     if (this.pendingAnswer && this.pendingAnswer.expiresAt > Date.now()) {

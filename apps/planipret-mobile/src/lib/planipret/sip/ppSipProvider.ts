@@ -400,11 +400,19 @@ class PpSipProvider {
     // branch on a fresh REGISTER, which silently drops the INVITE in flight
     // toward that branch. The transport is up, so there is nothing to repair:
     // never re-REGISTER while an answer is pending, priority or not.
-    if (this.pendingAnswer && this.pendingAnswer.expiresAt > Date.now()) {
-      this.log("warn", `REGISTER blocked: answer pending (${reason})`);
-      this.pushHistory("blocked", "answer_pending");
-      this.emitMetrics();
-      return false;
+    if (this.pendingAnswer) {
+      const stale = this.pendingAnswer.expiresAt <= Date.now()
+        || this.snap.callState === "idle"
+        || this.snap.callState === "ended";
+      if (stale) {
+        this.pendingAnswer = null;
+        this.log("info", "stale answer intent purged (no live call)");
+      } else {
+        this.log("warn", `REGISTER blocked: answer pending (${reason})`);
+        this.pushHistory("blocked", "answer_pending");
+        this.emitMetrics();
+        return false;
+      }
     }
     const now = Date.now();
     const minGap = Math.max(5000, getPpSipReconnectConfig().reRegisterDelayMs);

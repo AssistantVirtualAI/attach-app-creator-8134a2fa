@@ -1055,8 +1055,10 @@ class PpSipProvider {
     if (this.pendingAnswer) this.pendingAnswer.expiresAt = Date.now() + PP_PENDING_ANSWER_TIMEOUT_MS;
     // R5 (ring9): claim/release the shared 113M AOR on the native side so the
     // keep-alive skips (or performs) its fallback REGISTER accordingly.
+    // Si PJSIP possède l'AOR, le JS ne le revendique jamais.
     void import("./nativePpSipService")
-      .then((m) => m.declarePlanipretJsOwnsAor(ok))
+      .then((m) => m.declarePlanipretJsOwnsAor(ok && !nativeOwnsAor()))
+
       .catch(() => undefined);
     this.log(ok ? "info" : "warn", `push wake → ${ok ? "registered" : "NOT registered"}`);
     return ok;

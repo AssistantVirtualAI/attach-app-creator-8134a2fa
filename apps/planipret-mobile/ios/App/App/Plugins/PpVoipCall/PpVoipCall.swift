@@ -131,6 +131,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         activeCallUUID = uuid
         activeCallId = callId
         nativeEngineOwnsCall = true
+        nativeCallConnected = false
 
         let update = CXCallUpdate()
         update.remoteHandle = callerNumber.isEmpty

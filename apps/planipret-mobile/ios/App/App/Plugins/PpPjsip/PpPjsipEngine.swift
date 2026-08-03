@@ -324,15 +324,14 @@ final class PjsipEngine {
         // enregistré, pile occupée), on envoie le 200 OK depuis un thread
         // enregistré manuellement. Sans ça, CallKit affiche « en cours » alors
         // que l'appelant continue d'entendre la sonnerie.
-        thread.run { [weak self] in
-            guard let self = self else { return }
-            Thread.sleep(forTimeInterval: 1.0)
-            if done { return }
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self = self, !done else { return }
             self.registerCurrentThreadIfNeeded()
             let status = pjsua_call_answer(target, 200, nil, nil)
             NSLog("[PpPjsip] answer FALLBACK callId=%d status=%d", target, status)
             finish(status == pj_status_t(0))
         }
+
     }
 
 

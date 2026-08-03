@@ -2019,11 +2019,11 @@ function ensurePjsipXcframework(iosRoot) {
   const rel = "App/Plugins/PpPjsip/Frameworks/libpjsip.xcframework";
   const abs = path.join(iosRoot, rel);
   if (!fs.existsSync(abs)) {
-    console.warn(
-      `[native-config] ⚠️  ${rel} absent — le moteur PJSIP natif sera EXCLU du build (canImport(pjsua) = false).\n` +
-        "                 Lance: bash scripts/build-pjsip-ios.sh"
+    throw new Error(
+      `[native-config] ${rel} absent — build iOS refusé: sans ce binaire, ` +
+        "PpSipKeepAlive reçoit l'INVITE sans média et le bouton Répondre ne peut pas décrocher. " +
+        "Lance: bash scripts/build-pjsip-ios.sh"
     );
-    return false;
   }
 
   // Chemins d'en-têtes réels des tranches (device + simulateur).
@@ -2032,8 +2032,7 @@ function ensurePjsipXcframework(iosRoot) {
     .filter((slice) => fs.existsSync(path.join(abs, slice, "Headers")))
     .map((slice) => `\"$(SRCROOT)/${rel}/${slice}/Headers\"`);
   if (headerPaths.length === 0) {
-    console.warn("[native-config] ⚠️  libpjsip.xcframework sans dossier Headers — module pjsua introuvable.");
-    return false;
+    throw new Error("[native-config] libpjsip.xcframework sans dossier Headers — build iOS refusé car canImport(pjsua) serait faux.");
   }
 
   const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
@@ -2422,7 +2421,10 @@ function patchIosNativeFiles() {
         ]
       : []),
   ]);
-  if (hasPjsip) ensurePjsipXcframework(iosRoot);
+  if (!hasPjsip) {
+    throw new Error("[native-config] sources PpPjsip absentes — build iOS refusé: aucun moteur média natif ne pourrait répondre aux appels entrants.");
+  }
+  ensurePjsipXcframework(iosRoot);
   patchIosAppDelegate(iosApp);
   ensureIosBridgeController(iosApp);
   ensureIosSceneDelegate(iosApp);

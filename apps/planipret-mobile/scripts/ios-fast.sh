@@ -45,6 +45,11 @@ else
   npx cap copy ios
 fi
 
+echo "▶ Validation obligatoire du moteur PJSIP natif"
+node scripts/apply-native-config.mjs
+bash scripts/verify-pjsip-tls.sh
+node scripts/verify-ios-scene.mjs
+
 echo "▶ [4/4] Ouverture Xcode workspace"
 if command -v xed >/dev/null 2>&1; then
   xed ios/App/App.xcworkspace

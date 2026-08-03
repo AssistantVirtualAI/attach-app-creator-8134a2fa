@@ -36,6 +36,7 @@ type PpSipKeepAlivePlugin = {
   wakeForIncomingCall?: (opts?: { reason?: string }) => Promise<PpNativeSipStatus>;
   setCallActive?: (opts: { active: boolean }) => Promise<PpNativeSipStatus>;
   declareJsOwnsAor?: (opts: { owns: boolean }) => Promise<PpNativeSipStatus>;
+  declareNativeEngineOwnsAor?: (opts: { owns: boolean }) => Promise<PpNativeSipStatus>;
   addListener?: (
     event: "sipServiceStatus" | "sipReregisterRequested" | "sipIncomingInvite",
     cb: (data: any) => void,
@@ -330,6 +331,13 @@ export async function declarePlanipretJsOwnsAor(owns: boolean): Promise<void> {
   if (!isPlanipretNativeSipAvailable()) return;
   try { await NativePpSip.declareJsOwnsAor?.({ owns }); }
   catch { /* older native build: ignore */ }
+}
+
+/** Keep the legacy WSS native service passive while PJSIP/TLS owns `<ext>M`. */
+export async function declarePlanipretNativeEngineOwnsAor(owns: boolean): Promise<void> {
+  if (!isPlanipretNativeSipAvailable()) return;
+  try { await NativePpSip.declareNativeEngineOwnsAor?.({ owns }); }
+  catch { /* older native build: build guard will prevent release */ }
 }
 
 export async function acknowledgePlanipretIncoming(): Promise<void> {

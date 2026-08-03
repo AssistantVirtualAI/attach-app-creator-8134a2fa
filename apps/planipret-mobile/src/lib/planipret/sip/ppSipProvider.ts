@@ -856,6 +856,10 @@ class PpSipProvider {
 
   private resetCall() {
     this.session = null;
+    // An answer/decline intent only lives as long as the call it targets:
+    // keeping it after the call ends blocks every later REGISTER refresh.
+    this.pendingAnswer = null;
+    this.pendingDecline = null;
     this.update({
       callState: "idle",
       remoteIdentity: "",

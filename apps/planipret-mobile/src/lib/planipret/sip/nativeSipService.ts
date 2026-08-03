@@ -199,10 +199,18 @@ export class NativeSipService {
       if (state === "failed" && this.retryCount < this.maxRetries) {
         this.retryCount++;
         setTimeout(() => { pjsip.register().catch(() => { /* noop */ }); }, 30_000);
+      } else if (state === "failed") {
+        // Échec définitif du natif : rendre l'AOR à JsSIP plutôt que de
+        // laisser l'extension sans aucun REGISTER.
+        releaseAorFromNative("native_register_failed");
       }
-      if (state === "registered") this.retryCount = 0;
+      if (state === "registered") {
+        this.retryCount = 0;
+        claimAorForNative(this.username, "native_registered");
+      }
       this.setState(state);
     });
+
 
     await pjsip.addListener("incomingCall", (call: any) => {
       this.currentCallId = call?.callId ?? null;

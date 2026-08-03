@@ -372,8 +372,19 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
                 "source": "pjsip"
             ], retainUntilConsumed: true)
             action.fulfill()
+            // Le 200 OK PJSIP peut échouer (thread, média) : sans confirmation
+            // de connexion, CallKit afficherait « en cours » alors que
+            // l'appelant entend encore la sonnerie. On relance une fois, puis
+            // on termine l'appel si rien ne se confirme.
+            let uuid = action.callUUID
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                guard let self = self, self.activeCallUUID == uuid, !self.nativeCallConnected else { return }
+                NSLog("[PpVoipCall] answer not confirmed after 3s — retry PJSIP answer")
+                NotificationCenter.default.post(name: Notification.Name("PpPjsipAnswerRequested"), object: nil, userInfo: ["callId": self.activeCallId ?? ""])
+            }
             return
         }
+
 
         // Store the transaction BEFORE waking JS. A retained Capacitor listener
         // can answer synchronously; completeAnswer() must already have the

@@ -298,7 +298,30 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     // MARK: - CXProviderDelegate
     public func providerDidReset(_ provider: CXProvider) {
         pendingAnswerAction?.fail(); pendingAnswerAction = nil
+        if nativeEngineOwnsCall {
+            NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil)
+        }
+        nativeEngineOwnsCall = false
         activeCallUUID = nil; activeCallId = nil
+    }
+
+    /// Mute système (bouton CallKit) → coupe le flux micro dans PJSIP.
+    public func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
+        NotificationCenter.default.post(
+            name: Notification.Name("PpPjsipMuteRequested"), object: nil,
+            userInfo: ["muted": action.isMuted]
+        )
+        notifyListeners("callMuted", data: ["muted": action.isMuted])
+        action.fulfill()
+    }
+
+    /// Clavier CallKit → DTMF RFC 2833 côté PJSIP.
+    public func provider(_ provider: CXProvider, perform action: CXPlayDTMFCallAction) {
+        NotificationCenter.default.post(
+            name: Notification.Name("PpPjsipDtmfRequested"), object: nil,
+            userInfo: ["digits": action.digits]
+        )
+        action.fulfill()
     }
 
     public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {

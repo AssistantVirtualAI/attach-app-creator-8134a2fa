@@ -94,9 +94,30 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             nativeEngineOwnsCall = true
             activeCallId = callId
             let update = CXCallUpdate()
+            // Le push VoIP arrive souvent sans numero (NetSapiens ne le fournit
+            // pas toujours) -> CallKit affiche "Numero indisponible". L'INVITE
+            // natif, lui, porte toujours le From : on corrige le handle ici.
+            if !callerNumber.isEmpty {
+                update.remoteHandle = CXHandle(type: .phoneNumber, value: callerNumber)
+            }
             update.localizedCallerName = callerName
             provider?.reportCall(with: uuid, updated: update)
             NSLog("[PpVoipCall] PJSIP INVITE joined existing CallKit call callId=%@", callId)
+            // L'utilisateur a pu decrocher AVANT l'arrivee de l'INVITE (appel
+            // presente par le push). L'action CallKit attendait alors JsSIP qui
+            // ne repond plus : on la remplit maintenant via PJSIP.
+            if let pending = pendingAnswerAction {
+                pendingAnswerAction = nil
+                answerCompleted = true
+                NotificationCenter.default.post(name: Notification.Name("PpPjsipAnswerRequested"), object: nil, userInfo: ["callId": callId])
+                notifyListeners("incomingCallAnswered", data: [
+                    "callUUID": uuid.uuidString,
+                    "callId": callId,
+                    "source": "pjsip"
+                ], retainUntilConsumed: true)
+                pending.fulfill()
+                NSLog("[PpVoipCall] pending answer fulfilled by native INVITE callId=%@", callId)
+            }
             return
         }
 
@@ -359,6 +380,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // authoritative CXAnswerCallAction when that callback returns.
         pendingAnswerAction = action
         answerCompleted = false
+        // Si le moteur PJSIP est demarre, l'INVITE natif va arriver d'un
+        // instant a l'autre : reportNativeIncomingCall remplira cette action.
+        NotificationCenter.default.post(name: Notification.Name("PpPjsipAnswerPending"), object: nil, userInfo: ["callId": activeCallId ?? ""])
         // Keep the SIP transport pinned up while the WebView answers.
         NotificationCenter.default.post(name: Notification.Name("PpVoipCallAnswered"), object: nil, userInfo: ["callId": activeCallId ?? ""])
         notifyListeners("incomingCallAnswered", data: [

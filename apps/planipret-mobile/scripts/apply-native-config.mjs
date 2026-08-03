@@ -2071,7 +2071,7 @@ function ensurePjsipXcframework(iosRoot) {
         if (next.includes("libpjsip.xcframework")) continue;
         next = next.replace(
           new RegExp(`(${key} = )([^;]*);`),
-          (m, k, val) => `${k}${val.trim().replace(/^\(|\)$/g, "").trim() ? `(\n\t\t\t\t\t$(inherited),\n\t\t\t\t\t${includes},\n\t\t\t\t)` : `(\n\t\t\t\t\t$(inherited),\n\t\t\t\t\t${includes},\n\t\t\t\t)`};`
+          `$1(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t${includes},\n\t\t\t\t);`
         );
       } else {
         next += `\n\t\t\t\t${key} = (\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t${includes},\n\t\t\t\t);`;

@@ -1,5 +1,13 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  aorExtension,
+  claimAorForNative,
+  normalizeMobileAor,
+  preclaimNativeAor,
+  releaseAorFromNative,
+} from "./aorArbitration";
+
 
 /**
  * NativeSipService — moteur SIP natif PJSIP (iOS) pour Planiprêt Mobile.

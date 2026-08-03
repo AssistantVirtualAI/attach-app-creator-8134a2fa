@@ -139,6 +139,12 @@ final class PjsipEngine {
         nc.addObserver(forName: .ppPjsipEndRequested, object: nil, queue: nil) { [weak self] _ in
             self?.hangup(callId: nil)
         }
+        // CallKit a recu un "decrocher" avant que l'INVITE natif ne soit
+        // presente : si un appel natif existe deja, on repond immediatement.
+        nc.addObserver(forName: Notification.Name("PpPjsipAnswerPending"), object: nil, queue: nil) { [weak self] _ in
+            guard let self = self, self.activeCall >= 0 else { return }
+            self.answer(callId: nil) { _ in }
+        }
         nc.addObserver(forName: Notification.Name("PpPjsipMuteRequested"), object: nil, queue: nil) { [weak self] note in
             self?.setMute((note.userInfo?["muted"] as? Bool) ?? false)
         }

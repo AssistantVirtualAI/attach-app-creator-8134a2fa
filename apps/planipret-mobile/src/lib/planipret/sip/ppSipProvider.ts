@@ -10,6 +10,16 @@ import JsSIP from "jssip";
 import { getPpSipReconnectConfig, ppSipBackoffDelay, PP_SIP_RECONNECT_FLOOR_MS } from "./ppSipReconnectConfig";
 import { edgeOnlyWssUrls, isPortalWssUrl } from "./sipEdgePolicy";
 import { checkSipBackendRegistration } from "./sipBackendCheck";
+import {
+  PP_AOR_CLAIM_EVENT,
+  nativeOwnsAor,
+  normalizeMobileAor,
+  preclaimNativeAor,
+} from "./aorArbitration";
+
+// Résout la propriété AOR avant toute création d'UA JsSIP.
+preclaimNativeAor();
+
 
 // Let the SBC finish removing the previous Contact before a replacement UA
 // REGISTERs the same AOR. Without this gap NetSapiens closes one WSS with 1001.

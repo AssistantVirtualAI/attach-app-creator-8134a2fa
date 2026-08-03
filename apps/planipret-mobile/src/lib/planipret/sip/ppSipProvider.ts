@@ -464,7 +464,13 @@ class PpSipProvider {
       this.log("warn", `portal WSS target rejected (${rawWssUrl}) -> using core ${edgeUrls[0]}`);
     }
     const wssUrl = edgeUrls[0];
-    const cleanCfg = { ...cfg, wssUrl, wssUrls: edgeUrls };
+    // Invariant d'AOR : la WebView ne peut REGISTER que `<ext>M`.
+    const mobileAor = normalizeMobileAor(cfg.sipUsername || cfg.extension);
+    if (mobileAor && mobileAor !== cfg.sipUsername) {
+      this.log("warn", `AOR normalisé ${cfg.sipUsername} -> ${mobileAor}`);
+    }
+    const cleanCfg = { ...cfg, sipUsername: mobileAor || cfg.sipUsername, wssUrl, wssUrls: edgeUrls };
+
     const sig = `${cleanCfg.extension}|${cleanCfg.sipDomain}|${cleanCfg.wssUrl}|${cleanCfg.password}`;
     if (this.ua && sig === this.lastSig && this.snap.status === "registered") {
       return;

@@ -638,7 +638,27 @@ final class PjsipEngine {
 
     // MARK: Contexte PJSIP
 
+    /// PJLIB refuse tout appel provenant d'un thread inconnu (assertion
+    /// "Calling pjlib from unknown thread"). Les blocs exécutés sur la
+    /// DispatchQueue GCD peuvent changer de thread système à tout moment :
+    /// on enregistre donc le thread courant à la demande, avec un descripteur
+    /// conservé en mémoire pour toute la durée de vie du process.
+    func registerCurrentThreadIfNeeded() {
+        guard started else { return }
+        if pj_thread_is_registered() != 0 { return }
+        let count = max(1, MemoryLayout<pj_thread_desc>.size / MemoryLayout<Int>.size)
+        let desc = UnsafeMutablePointer<Int>.allocate(capacity: count)
+        desc.initialize(repeating: 0, count: count)
+        var handle: UnsafeMutablePointer<pj_thread_t>?
+        let status = pj_thread_register("pp-gcd", desc, &handle)
+        NSLog("[PpPjsip] pj_thread_register status=%d", status)
+        lock.lock()
+        pjThreadDescs.append(UnsafeMutableRawPointer(desc))
+        lock.unlock()
+    }
+
     private func scheduleOnPjsipThread(_ work: @escaping () -> Void) {
+        registerCurrentThreadIfNeeded()
         lock.lock()
         let previous = scheduledWork
         scheduledWork = {
@@ -648,6 +668,7 @@ final class PjsipEngine {
         lock.unlock()
         pjsua_schedule_timer2(ppPjsipEnterContext, nil, 0)
     }
+
 
     func runScheduledWork() {
         lock.lock()

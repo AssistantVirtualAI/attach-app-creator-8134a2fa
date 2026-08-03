@@ -213,10 +213,11 @@ final class PjsipProbeEngine {
         pjsua_transport_config_default(&tcfg)
         tcfg.port = 0                      // port local éphémère
         var transportId = pjsua_transport_id(-1)
-        try check(
-            pjsua_transport_create(PJSIP_TRANSPORT_TLS, &tcfg, &transportId),
-            "pjsua_transport_create(TLS)"
-        )
+        let tlsStatus = pjsua_transport_create(PJSIP_TRANSPORT_TLS, &tcfg, &transportId)
+        if tlsStatus != pj_status_t(0) {
+            logTlsFailureDiagnostics(status: tlsStatus)
+        }
+        try check(tlsStatus, "pjsua_transport_create(TLS)")
 
         try check(pjsua_start(), "pjsua_start")
         // Aucun périphérique audio ouvert : ce lot ne fait que du signalement.

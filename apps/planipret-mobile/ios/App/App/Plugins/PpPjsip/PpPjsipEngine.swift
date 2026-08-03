@@ -300,15 +300,41 @@ final class PjsipEngine {
     func answer(callId: String?, completion: @escaping (Bool) -> Void) {
         let target = resolveCall(callId)
         guard target >= 0 else { completion(false); return }
+        var done = false
+        let finish: (Bool) -> Void = { [weak self] ok in
+            guard let self = self else { return }
+            self.lock.lock()
+            let already = done
+            done = true
+            self.lock.unlock()
+            if already { return }
+            completion(ok)
+        }
         thread.run { [weak self] in
             guard let self = self else { return }
+            self.registerCurrentThreadIfNeeded()
             self.scheduleOnPjsipThread {
+                if done { return }
                 let status = pjsua_call_answer(target, 200, nil, nil)
                 NSLog("[PpPjsip] answer callId=%d status=%d", target, status)
-                completion(status == pj_status_t(0))
+                finish(status == pj_status_t(0))
             }
         }
+        // Filet de sécurité : si le timer PJSIP ne s'exécute pas (thread non
+        // enregistré, pile occupée), on envoie le 200 OK depuis un thread
+        // enregistré manuellement. Sans ça, CallKit affiche « en cours » alors
+        // que l'appelant continue d'entendre la sonnerie.
+        thread.run { [weak self] in
+            guard let self = self else { return }
+            Thread.sleep(forTimeInterval: 1.0)
+            if done { return }
+            self.registerCurrentThreadIfNeeded()
+            let status = pjsua_call_answer(target, 200, nil, nil)
+            NSLog("[PpPjsip] answer FALLBACK callId=%d status=%d", target, status)
+            finish(status == pj_status_t(0))
+        }
     }
+
 
     func hangup(callId: String?) {
         let target = resolveCall(callId)

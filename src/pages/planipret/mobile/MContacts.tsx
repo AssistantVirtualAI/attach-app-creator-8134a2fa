@@ -79,6 +79,12 @@ export default function MContacts() {
   const { t } = useMplanipretLang();
   const { openDialer } = useOutletContext<PlanipretMobileContext>();
   const navigate = useNavigate();
+  const openSmsTo = (to: string, name = "") => {
+    navigate(`/mplanipret/messages?${new URLSearchParams({ tab: "sms", to, name }).toString()}`);
+  };
+  const openEmailTo = (to: string, name = "") => {
+    navigate(`/mplanipret/messages?${new URLSearchParams({ tab: "emails", to, name }).toString()}`);
+  };
   const [tab, setTab] = useState<Tab>("personal");
   const [q, setQ] = useState("");
   const [personal, setPersonal] = useState<any[]>([]);

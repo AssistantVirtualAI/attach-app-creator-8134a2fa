@@ -318,6 +318,40 @@ final class PjsipProbeEngine {
         cb(result)
     }
 
+    /// Diagnostic complet quand le transport TLS refuse de démarrer.
+    /// Le cas le plus fréquent est PJSIP_EUNSUPTRANSPORT (220003) : le binaire
+    /// a été compilé sans OpenSSL (PJ_HAS_SSL_SOCK=0), donc `import pjsua`
+    /// fonctionne mais aucun backend SSL n'existe à l'exécution.
+    private func logTlsFailureDiagnostics(status: pj_status_t) {
+        var buf = [CChar](repeating: 0, count: 256)
+        pj_strerror(status, &buf, 256)
+        let msg = String(cString: buf)
+
+        // Backend SSL réellement disponible dans le binaire lié.
+        var ciphers = [pj_ssl_cipher](repeating: pj_ssl_cipher(0), count: 256)
+        var count = UInt32(ciphers.count)
+        let cipherStatus = pj_ssl_cipher_get_availables(&ciphers, &count)
+        let sslBackendPresent = cipherStatus == pj_status_t(0) && count > 0
+
+        NSLog("[PpPjsip] ❌ pjsua_transport_create(TLS) failed status=%d (%@)", status, msg)
+        NSLog("[PpPjsip] ── état de configuration PJSIP ──")
+        NSLog("[PpPjsip]   pjsua version        : %@", String(cString: pj_get_version()))
+        NSLog("[PpPjsip]   backend SSL présent  : %@ (ciphers=%u, status=%d)",
+              sslBackendPresent ? "OUI" : "NON", count, cipherStatus)
+        NSLog("[PpPjsip]   transport demandé    : PJSIP_TRANSPORT_TLS (5061)")
+        NSLog("[PpPjsip]   TLS est le SEUL transport natif possible — PJSIP n'a pas de transport SIP/WebSocket.")
+
+        if status == pj_status_t(PJSIP_EUNSUPTRANSPORT.rawValue) || !sslBackendPresent {
+            NSLog("[PpPjsip] 🔎 CAUSE : PJSIP_EUNSUPTRANSPORT — libpjsip.xcframework a été construit SANS OpenSSL.")
+            NSLog("[PpPjsip]    PJ_HAS_SSL_SOCK vaut 0 : configure n'a pas trouvé OpenSSL (--with-ssl absent ou prefix invalide).")
+            NSLog("[PpPjsip]    CORRECTIF : bash scripts/build-pjsip-ios.sh  (échoue désormais si SSL manque)")
+            NSLog("[PpPjsip]    puis : bash scripts/verify-pjsip-tls.sh && bash scripts/pjsip-tls-selftest.sh")
+            NSLog("[PpPjsip]    puis : npx cap sync ios")
+        } else {
+            NSLog("[PpPjsip] 🔎 CAUSE probable : configuration réseau/certificat locale, pas l'absence de TLS (backend SSL présent).")
+        }
+    }
+
     private func check(_ status: pj_status_t, _ what: String) throws {
         guard status == pj_status_t(0) else {
             var buf = [CChar](repeating: 0, count: 256)

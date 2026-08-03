@@ -32,6 +32,10 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var lastPushNumber: String = ""
     private var lastPushAt: TimeInterval = 0
     private let voipTokenDefaultsKey = "pp.voip.push-token.v1"
+    /// true quand l'appel CallKit courant est piloté par le moteur PJSIP natif
+    /// (INVITE reçu en TLS 5061) et non plus par le chemin JsSIP/WebView.
+    private var nativeEngineOwnsCall = false
+
 
     private func apnsEnvironment() -> String {
         #if DEBUG

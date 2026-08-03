@@ -10,6 +10,16 @@ import JsSIP from "jssip";
 import { getPpSipReconnectConfig, ppSipBackoffDelay, PP_SIP_RECONNECT_FLOOR_MS } from "./ppSipReconnectConfig";
 import { edgeOnlyWssUrls, isPortalWssUrl } from "./sipEdgePolicy";
 import { checkSipBackendRegistration } from "./sipBackendCheck";
+import {
+  PP_AOR_CLAIM_EVENT,
+  nativeOwnsAor,
+  normalizeMobileAor,
+  preclaimNativeAor,
+} from "./aorArbitration";
+
+// Résout la propriété AOR avant toute création d'UA JsSIP.
+preclaimNativeAor();
+
 
 // Let the SBC finish removing the previous Contact before a replacement UA
 // REGISTERs the same AOR. Without this gap NetSapiens closes one WSS with 1001.
@@ -19,12 +29,17 @@ export const PP_PENDING_ANSWER_TIMEOUT_MS = 30_000;
 
 // One owner per AOR: the native PJSIP engine announces itself with
 // `pp:sip-native-owns-aor`, after which JsSIP must never REGISTER again.
-let ppNativeAorOwner = false;
-export const ppNativeSipOwnsAor = () => ppNativeAorOwner;
+// The authoritative state lives in `aorArbitration` (persisted + pre-claimed
+// on native platforms before any JsSIP UA can race it).
+export const ppNativeSipOwnsAor = () => nativeOwnsAor();
 if (typeof window !== "undefined") {
-  window.addEventListener("pp:sip-native-owns-aor", () => { ppNativeAorOwner = true; });
-  window.addEventListener("pp:sip-native-released-aor", () => { ppNativeAorOwner = false; });
+  window.addEventListener(PP_AOR_CLAIM_EVENT, () => {
+    // Tear down any live WebView registration immediately: leaving it bound
+    // makes NetSapiens close the native branch with a 1001.
+    try { ppSipProvider?.yieldAorToNative(); } catch { /* provider not built yet */ }
+  });
 }
+
 
 export type PpSipStatus = "idle" | "connecting" | "connected" | "registered" | "disconnected" | "error";
 export type PpCallState = "idle" | "ringing-out" | "ringing-in" | "active" | "held" | "ended";
@@ -425,12 +440,23 @@ class PpSipProvider {
 
   async init(cfg: PpSipConfig) {
     if (ppSipInitInFlight) return;
+    // Arbitrage d'AOR : le moteur natif PJSIP est le seul REGISTER autorisé sur
+    // `<ext>M`. Créer un UA JsSIP ici (register:true) rouvrirait la course qui
+    // provoque les WSS 1001.
+    if (nativeOwnsAor()) {
+      this.log("warn", "JsSIP init blocked: native PJSIP owns the AOR");
+      this.pushHistory("blocked", "native_owns_aor_init");
+      this.emitMetrics();
+      if (this.ua) this.yieldAorToNative();
+      return;
+    }
     installSipParserGuard();
     const rawWssUrl = String(cfg.wssUrl ?? "").trim();
     if (!cfg.extension || !cfg.sipDomain || !rawWssUrl || rawWssUrl === "undefined" || !/^wss?:\/\//i.test(rawWssUrl) || !cfg.password) {
       this.update({ status: "error", errorCause: "invalid_config" });
       return;
     }
+
     // Registrations must live on a call-processing core node (core1/core2);
     // the portal server accepts REGISTER but does not deliver inbound calls.
     const edgeUrls = edgeOnlyWssUrls([rawWssUrl, ...(cfg.wssUrls || [])]);
@@ -438,7 +464,13 @@ class PpSipProvider {
       this.log("warn", `portal WSS target rejected (${rawWssUrl}) -> using core ${edgeUrls[0]}`);
     }
     const wssUrl = edgeUrls[0];
-    const cleanCfg = { ...cfg, wssUrl, wssUrls: edgeUrls };
+    // Invariant d'AOR : la WebView ne peut REGISTER que `<ext>M`.
+    const mobileAor = normalizeMobileAor(cfg.sipUsername || cfg.extension);
+    if (mobileAor && mobileAor !== cfg.sipUsername) {
+      this.log("warn", `AOR normalisé ${cfg.sipUsername} -> ${mobileAor}`);
+    }
+    const cleanCfg = { ...cfg, sipUsername: mobileAor || cfg.sipUsername, wssUrl, wssUrls: edgeUrls };
+
     const sig = `${cleanCfg.extension}|${cleanCfg.sipDomain}|${cleanCfg.wssUrl}|${cleanCfg.password}`;
     if (this.ua && sig === this.lastSig && this.snap.status === "registered") {
       return;
@@ -969,7 +1001,13 @@ class PpSipProvider {
    * rebuild the transport and wait for a REAL `registered` event.
    */
   async wakeForIncoming(callId?: string): Promise<boolean> {
+    // Le réveil push sert à démarrer PJSIP, pas à re-REGISTER la WebView.
+    if (nativeOwnsAor()) {
+      this.log("warn", "push wake ignored: native PJSIP owns the AOR");
+      return false;
+    }
     if (this.wakeInFlight) {
+
       this.log("info", "joining incoming wake already in flight");
       return this.wakeInFlight;
     }
@@ -1023,8 +1061,10 @@ class PpSipProvider {
     if (this.pendingAnswer) this.pendingAnswer.expiresAt = Date.now() + PP_PENDING_ANSWER_TIMEOUT_MS;
     // R5 (ring9): claim/release the shared 113M AOR on the native side so the
     // keep-alive skips (or performs) its fallback REGISTER accordingly.
+    // Si PJSIP possède l'AOR, le JS ne le revendique jamais.
     void import("./nativePpSipService")
-      .then((m) => m.declarePlanipretJsOwnsAor(ok))
+      .then((m) => m.declarePlanipretJsOwnsAor(ok && !nativeOwnsAor()))
+
       .catch(() => undefined);
     this.log(ok ? "info" : "warn", `push wake → ${ok ? "registered" : "NOT registered"}`);
     return ok;
@@ -1262,7 +1302,26 @@ class PpSipProvider {
    * the caller lands in voicemail. Removing it lets the native keep-alive
    * registration (or the VoIP push) take the call instead.
    */
+  /**
+   * Le moteur natif vient de revendiquer `<ext>M` : retirer immédiatement le
+   * Contact WebView (unregister ciblé, jamais `all:true`) puis arrêter l'UA.
+   * Sans cela NetSapiens voit deux contacts sur le même AOR et ferme la
+   * branche native avec un WSS 1001.
+   */
+  yieldAorToNative(): void {
+    if (!this.ua) return;
+    if (this.hasActiveCall() || this.snap.callState === "ringing-in" || this.snap.callState === "ringing-out") {
+      this.log("warn", "AOR handover deferred: call in progress");
+      return;
+    }
+    this.log("warn", "native PJSIP owns the AOR -> releasing JsSIP registration");
+    this.pushHistory("blocked", "aor_handover_native");
+    try { this.ua.unregister({ all: false }); } catch { /* noop */ }
+    setTimeout(() => { try { this.stop(); } catch { /* noop */ } }, 250);
+  }
+
   async releaseForBackground(): Promise<void> {
+
     if (this.hasActiveCall() || this.snap.callState === "ringing-in" || this.snap.callState === "ringing-out") return;
     // Never drop the registration while an inbound call is being answered.
     if (this.pendingAnswer && this.pendingAnswer.expiresAt > Date.now()) {

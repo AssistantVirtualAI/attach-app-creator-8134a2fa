@@ -1,5 +1,13 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  aorExtension,
+  claimAorForNative,
+  normalizeMobileAor,
+  preclaimNativeAor,
+  releaseAorFromNative,
+} from "./aorArbitration";
+
 
 /**
  * NativeSipService — moteur SIP natif PJSIP (iOS) pour Planiprêt Mobile.
@@ -96,9 +104,14 @@ export class NativeSipService {
   private async doInitialize(): Promise<boolean> {
     const pjsip = getPjsip();
     if (!pjsip) {
+      // Aucun moteur natif : JsSIP redevient légitimement propriétaire.
+      releaseAorFromNative("plugin_absent");
       this.setState("unavailable");
       return false;
     }
+    // Le natif est prioritaire dès maintenant : bloque tout REGISTER JsSIP
+    // pendant la résolution des identifiants (fenêtre de course → WSS 1001).
+    claimAorForNative(null, "native_init_start");
 
     const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
       body: { client_type: "mobile" },
@@ -108,14 +121,15 @@ export class NativeSipService {
     const password = creds.sip_password;
     if (error || !password) {
       console.error("[SIP] Aucun identifiant:", creds.error ?? error?.message);
+      releaseAorFromNative("credentials_missing");
       this.setState("failed");
       return false;
     }
 
-    const username = String(creds.sip_username ?? "");
-    // Invariant : l'AOR mobile est `<ext>M` (jamais `<ext>_mobile`).
+    // Invariant : l'AOR mobile est TOUJOURS `<ext>M` (jamais `<ext>_mobile`).
+    const username = normalizeMobileAor(String(creds.sip_username ?? creds.sip_extension ?? ""));
     this.username = username;
-    this.extension = String(creds.sip_extension ?? username.replace(/[MW]$/i, ""));
+    this.extension = String(creds.sip_extension ?? aorExtension(username));
 
     const proxy = String(creds.sip_proxy ?? creds.sip_core_server ?? "");
     const transport = "TLS" as const;
@@ -136,8 +150,13 @@ export class NativeSipService {
         displayName: String(creds.display_name ?? "Planiprêt"),
       });
 
-      // Le moteur natif possède l'AOR : JsSIP doit cesser de REGISTER.
-      emit("pp:sip-native-owns-aor", { username });
+      // Le moteur natif possède l'AOR : JsSIP doit cesser de REGISTER et
+      // retirer son Contact WebView s'il en avait déjà un.
+      claimAorForNative(username, "native_engine_ready");
+      // Le keep-alive natif ne doit pas croire que le JS possède l'AOR.
+      void import("./nativePpSipService")
+        .then((m) => m.declarePlanipretJsOwnsAor(false))
+        .catch(() => undefined);
 
       await pjsip.register();
       return true;
@@ -145,11 +164,14 @@ export class NativeSipService {
       const code = err?.code ?? err?.message ?? "error";
       if (code === "binary_missing" || code === "unavailable" || code === "UNIMPLEMENTED") {
         console.warn("[SIP] moteur natif indisponible:", code);
+        // Repli explicite : sans binaire PJSIP, JsSIP reprend l'AOR.
+        releaseAorFromNative(String(code));
         this.setState("unavailable");
         return false;
       }
       console.error("[SIP] Init échouée:", err);
       this.setState("failed");
+
       return false;
     }
   }
@@ -177,10 +199,18 @@ export class NativeSipService {
       if (state === "failed" && this.retryCount < this.maxRetries) {
         this.retryCount++;
         setTimeout(() => { pjsip.register().catch(() => { /* noop */ }); }, 30_000);
+      } else if (state === "failed") {
+        // Échec définitif du natif : rendre l'AOR à JsSIP plutôt que de
+        // laisser l'extension sans aucun REGISTER.
+        releaseAorFromNative("native_register_failed");
       }
-      if (state === "registered") this.retryCount = 0;
+      if (state === "registered") {
+        this.retryCount = 0;
+        claimAorForNative(this.username, "native_registered");
+      }
       this.setState(state);
     });
+
 
     await pjsip.addListener("incomingCall", (call: any) => {
       this.currentCallId = call?.callId ?? null;
@@ -257,3 +287,8 @@ export class NativeSipService {
 }
 
 export const nativeSip = NativeSipService.getInstance();
+
+// Arbitrage d'AOR au chargement : si le plugin PJSIP est embarqué, le natif
+// possède `<ext>M` avant que JsSIP puisse tenter le moindre REGISTER.
+preclaimNativeAor();
+

@@ -440,12 +440,23 @@ class PpSipProvider {
 
   async init(cfg: PpSipConfig) {
     if (ppSipInitInFlight) return;
+    // Arbitrage d'AOR : le moteur natif PJSIP est le seul REGISTER autorisé sur
+    // `<ext>M`. Créer un UA JsSIP ici (register:true) rouvrirait la course qui
+    // provoque les WSS 1001.
+    if (nativeOwnsAor()) {
+      this.log("warn", "JsSIP init blocked: native PJSIP owns the AOR");
+      this.pushHistory("blocked", "native_owns_aor_init");
+      this.emitMetrics();
+      if (this.ua) this.yieldAorToNative();
+      return;
+    }
     installSipParserGuard();
     const rawWssUrl = String(cfg.wssUrl ?? "").trim();
     if (!cfg.extension || !cfg.sipDomain || !rawWssUrl || rawWssUrl === "undefined" || !/^wss?:\/\//i.test(rawWssUrl) || !cfg.password) {
       this.update({ status: "error", errorCause: "invalid_config" });
       return;
     }
+
     // Registrations must live on a call-processing core node (core1/core2);
     // the portal server accepts REGISTER but does not deliver inbound calls.
     const edgeUrls = edgeOnlyWssUrls([rawWssUrl, ...(cfg.wssUrls || [])]);

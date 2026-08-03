@@ -1,7 +1,11 @@
 // Play the "this call is recorded" notice to the CALLER while the phone rings.
+// IMPORTANT: the notice must be scoped to the USERS (callees), never to the
+// domain. Domain-level `music-on-ring-enabled` also applies to OUTBOUND legs,
+// so brokers heard the notice on their own outgoing calls.
 // NetSapiens NS-API v2: upload the WAV as domain MOH media, then enable
-// `music-on-ring-enabled` on the domain (early media during ringing).
+// `music-on-ring-enabled` per user (early media during ringing of that user).
 // Explicitly authorized by the user. NO DID / phonenumber writes.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { nsFetch, getEnv } from "../_shared/planipret-ns.ts";
 

@@ -49,7 +49,9 @@ step('precheck:build', 'node', ['scripts/precheck-build.mjs']);
 
 if (existsSync(join(root, 'ios'))) {
   step('cap sync ios', 'npx', ['cap', 'sync', 'ios'], { optional: true });
-  step('apply native config', 'node', ['scripts/apply-native-config.mjs'], { optional: true });
+  step('apply native config', 'node', ['scripts/apply-native-config.mjs']);
+  step('verify PJSIP TLS binary', 'bash', ['scripts/verify-pjsip-tls.sh']);
+  step('verify iOS scene and plugins', 'node', ['scripts/verify-ios-scene.mjs']);
 } else {
   console.log(yellow('[ios:verify] ! no ios/ project — run `npx cap add ios` on a Mac; skipping cap sync'));
 }

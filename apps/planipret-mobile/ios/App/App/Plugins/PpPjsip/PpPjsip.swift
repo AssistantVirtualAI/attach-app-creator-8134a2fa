@@ -44,9 +44,12 @@ public class PpPjsip: CAPPlugin, CAPBridgedPlugin {
 
     public override func load() {
         #if canImport(pjsua)
+        NSLog("[PpPjsip] READY — native media engine linked, TLS 5061 path enabled")
         PjsipEngine.shared.eventSink = { [weak self] name, payload in
             self?.notifyListeners(name, data: payload, retainUntilConsumed: true)
         }
+        #else
+        NSLog("[PpPjsip] FATAL — plugin loaded but module pjsua is not importable; incoming calls cannot be answered natively")
         #endif
     }
 

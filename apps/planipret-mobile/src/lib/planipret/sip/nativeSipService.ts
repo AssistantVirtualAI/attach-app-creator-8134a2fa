@@ -153,9 +153,10 @@ export class NativeSipService {
       // Le moteur natif possède l'AOR : JsSIP doit cesser de REGISTER et
       // retirer son Contact WebView s'il en avait déjà un.
       claimAorForNative(username, "native_engine_ready");
-      // Le keep-alive natif ne doit pas croire que le JS possède l'AOR.
+      // Bloque explicitement le REGISTER WSS du keep-alive natif : `false`
+      // sur jsOwnsAor signifiait auparavant « AOR libre » et créait un doublon.
       void import("./nativePpSipService")
-        .then((m) => m.declarePlanipretJsOwnsAor(false))
+        .then((m) => m.declarePlanipretNativeEngineOwnsAor(true))
         .catch(() => undefined);
 
       await pjsip.register();
@@ -166,6 +167,7 @@ export class NativeSipService {
         console.warn("[SIP] moteur natif indisponible:", code);
         // Repli explicite : sans binaire PJSIP, JsSIP reprend l'AOR.
         releaseAorFromNative(String(code));
+        void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
         this.setState("unavailable");
         return false;
       }
@@ -203,6 +205,7 @@ export class NativeSipService {
         // Échec définitif du natif : rendre l'AOR à JsSIP plutôt que de
         // laisser l'extension sans aucun REGISTER.
         releaseAorFromNative("native_register_failed");
+        void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
       }
       if (state === "registered") {
         this.retryCount = 0;
@@ -214,6 +217,7 @@ export class NativeSipService {
 
     await pjsip.addListener("incomingCall", (call: any) => {
       this.currentCallId = call?.callId ?? null;
+      void import("./nativePpSipService").then((m) => m.setPlanipretNativeCallActive(true)).catch(() => undefined);
       // CallKit sonne déjà côté natif : cet event ne sert qu'à l'UI.
       emit("sip-incoming-call", {
         callId: call?.callId,
@@ -224,8 +228,10 @@ export class NativeSipService {
     });
 
     await pjsip.addListener("callState", (state: any) => {
-      if (state?.state === "disconnected" || state?.state === "ended") this.currentCallId = null;
+      const ended = state?.state === "disconnected" || state?.state === "ended";
+      if (ended) this.currentCallId = null;
       else if (state?.callId) this.currentCallId = String(state.callId);
+      void import("./nativePpSipService").then((m) => m.setPlanipretNativeCallActive(!ended)).catch(() => undefined);
       emit("sip-call-state", { ...state, engine: "pjsip" });
     });
   }

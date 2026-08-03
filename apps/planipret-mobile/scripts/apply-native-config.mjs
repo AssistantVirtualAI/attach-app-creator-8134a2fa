@@ -2184,7 +2184,15 @@ function patchIosNativeFiles() {
     "App/Plugins/PpVoipCall/PpVoipCall.m",
     "App/Plugins/PpAuthSession/PpAuthSession.swift",
     "App/Plugins/PpAuthSession/PpAuthSession.m",
-    ...(hasPjsip ? ["App/Plugins/PpPjsip/PpPjsip.swift", "App/Plugins/PpPjsip/PpPjsip.m"] : []),
+    ...(hasPjsip
+      ? [
+          "App/Plugins/PpPjsip/PpPjsip.swift",
+          "App/Plugins/PpPjsip/PpPjsip.m",
+          ...(fs.existsSync(path.join(pjsipDir, "PpPjsipEngine.swift"))
+            ? ["App/Plugins/PpPjsip/PpPjsipEngine.swift"]
+            : []),
+        ]
+      : []),
   ]);
   patchIosAppDelegate(iosApp);
   ensureIosBridgeController(iosApp);

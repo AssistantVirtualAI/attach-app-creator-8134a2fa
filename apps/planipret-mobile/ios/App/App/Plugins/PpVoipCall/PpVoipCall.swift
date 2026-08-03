@@ -313,6 +313,24 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // activating here races the system session and yields a dead call.
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+
+        // Chemin natif PJSIP : le décrochage est un simple `pjsua_call_answer`,
+        // il ne dépend ni de la WebView ni d'un REGISTER JsSIP. On remplit donc
+        // l'action tout de suite (plus de fenêtre de 32 s ni de completeAnswer).
+        if nativeEngineOwnsCall {
+            answerCompleted = true
+            pendingAnswerAction = nil
+            NotificationCenter.default.post(name: Notification.Name("PpVoipCallAnswered"), object: nil, userInfo: ["callId": activeCallId ?? ""])
+            NotificationCenter.default.post(name: Notification.Name("PpPjsipAnswerRequested"), object: nil, userInfo: ["callId": activeCallId ?? ""])
+            notifyListeners("incomingCallAnswered", data: [
+                "callUUID": action.callUUID.uuidString,
+                "callId": activeCallId ?? "",
+                "source": "pjsip"
+            ], retainUntilConsumed: true)
+            action.fulfill()
+            return
+        }
+
         // Store the transaction BEFORE waking JS. A retained Capacitor listener
         // can answer synchronously; completeAnswer() must already have the
         // authoritative CXAnswerCallAction when that callback returns.
@@ -336,11 +354,17 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         pendingAnswerAction?.fail(); pendingAnswerAction = nil
+        if nativeEngineOwnsCall {
+            // 603 Decline côté PJSIP : un 486 renverrait l'appel en messagerie.
+            NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil, userInfo: ["callId": activeCallId ?? ""])
+        }
         notifyListeners("incomingCallRejected", data: [
             "callUUID": action.callUUID.uuidString,
-            "callId": activeCallId ?? ""
+            "callId": activeCallId ?? "",
+            "source": nativeEngineOwnsCall ? "pjsip" : "jssip"
         ])
         activeCallUUID = nil; activeCallId = nil
+        nativeEngineOwnsCall = false
         action.fulfill()
     }
 

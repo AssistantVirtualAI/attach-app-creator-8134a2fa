@@ -6,6 +6,20 @@ import { parseServiceAccount, sendFcmDataMessage } from "../_shared/fcm.ts";
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
 
+/** NetSapiens n'envoie pas toujours `from_number` : le numero appelant peut
+ *  arriver sous forme d'URI SIP (`orig_from_uri`) ou de champs ANI. Sans lui,
+ *  CallKit affiche "Numero indisponible". */
+function extractCaller(data: any): string {
+  const raw = data?.from_number ?? data?.caller_number ?? data?.ani ?? data?.orig_from_user
+    ?? data?.from_user ?? data?.remote_party ?? data?.from ?? data?.orig_from_uri
+    ?? data?.["orig-from-uri"] ?? data?.from_uri ?? "";
+  const str = String(raw || "").trim();
+  if (!str) return "";
+  const m = str.match(/sip:([^@;>\s]+)/i);
+  const user = (m ? m[1] : str).replace(/^<|>$/g, "").trim();
+  return /^\+?[0-9*#]{2,}$/.test(user) ? user : user;
+}
+
 const ok = () => new Response(JSON.stringify({ received: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 function b64url(input: ArrayBuffer | string) {
@@ -308,7 +322,7 @@ async function processEvent(event: any) {
     const dndActive = isDndActive(brokerProfile);
     await admin.from("planipret_phone_calls").insert({
       user_id: userId, ns_call_id: callId ? String(callId) : null, direction: "inbound",
-      from_number: data.from_number ?? data.from ?? null,
+      from_number: extractCaller(data) || null,
       to_number: data.to_number ?? data.to ?? null,
       status: dndActive ? "voicemail" : "inbound_ringing",
       metadata: dndActive ? { dnd_auto_voicemail: true, dnd_message: brokerProfile?.dnd_message_fr } : null,
@@ -316,18 +330,19 @@ async function processEvent(event: any) {
     if (userId && !dndActive) {
       await admin.channel(`call-events:${userId}`).send({
         type: "broadcast", event: "inbound_call",
-        payload: { type: "inbound_call", call_id: callId, from_number: data.from_number ?? data.from, to_number: data.to_number ?? data.to },
+        payload: { type: "inbound_call", call_id: callId, from_number: extractCaller(data), to_number: data.to_number ?? data.to },
       });
       if (brokerProfile?.notif_calls !== false) {
         const inboundCallId = callId ? String(callId) : crypto.randomUUID();
+        const callerNum = extractCaller(data);
         const inboundPushPayload = {
           call_id: inboundCallId,
           callId: inboundCallId,
-          from_number: data.from_number ?? data.from ?? "Inconnu",
-          callerName: data.from_name ?? data.caller_name ?? data.from_number ?? data.from ?? "Appel entrant",
-          callerNumber: data.from_number ?? data.from ?? "",
-          from: data.from_number ?? data.from ?? "Inconnu",
-          from_user: data.from_number ?? data.from ?? "",
+          from_number: callerNum || "Inconnu",
+          callerName: data.from_name ?? data.caller_name ?? callerNum ?? "Appel entrant",
+          callerNumber: callerNum,
+          from: callerNum || "Inconnu",
+          from_user: callerNum,
           to_number: data.to_number ?? data.to ?? ext,
           type: "incoming_call",
         };

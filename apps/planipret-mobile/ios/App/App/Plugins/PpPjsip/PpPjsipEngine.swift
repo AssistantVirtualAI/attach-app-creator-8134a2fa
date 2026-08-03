@@ -139,6 +139,12 @@ final class PjsipEngine {
         nc.addObserver(forName: .ppPjsipEndRequested, object: nil, queue: nil) { [weak self] _ in
             self?.hangup(callId: nil)
         }
+        nc.addObserver(forName: Notification.Name("PpPjsipMuteRequested"), object: nil, queue: nil) { [weak self] note in
+            self?.setMute((note.userInfo?["muted"] as? Bool) ?? false)
+        }
+        nc.addObserver(forName: Notification.Name("PpPjsipDtmfRequested"), object: nil, queue: nil) { [weak self] note in
+            self?.sendDTMF((note.userInfo?["digits"] as? String) ?? "")
+        }
         // CallKit est seul maître de l'AVAudioSession : PJSIP n'ouvre son
         // périphérique audio qu'une fois la session activée par le système.
         nc.addObserver(forName: Notification.Name("PpCallKitAudioActivated"), object: nil, queue: nil) { [weak self] _ in

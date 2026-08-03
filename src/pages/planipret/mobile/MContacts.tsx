@@ -410,7 +410,7 @@ export default function MContacts() {
               <div
                 key={favEntry.key}
                 onClick={() => !isDir && !isFav && setSelected(c)}
-                className="pp-card flex items-center gap-3 cursor-pointer"
+                className="pp-card flex items-center gap-2 cursor-pointer"
                 style={{ padding: 12 }}
               >
                 <div className="relative">

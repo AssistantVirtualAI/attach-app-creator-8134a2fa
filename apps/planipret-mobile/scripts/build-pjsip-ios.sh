@@ -173,6 +173,19 @@ xcodebuild -create-xcframework \
   -library "$WORK/libs/simulator/libPJSIP.a" -headers "$WORK/headers" \
   -output "$OUT/libpjsip.xcframework"
 
-echo "✅ libpjsip.xcframework (TLS activé) → $OUT"
+# ---------------------------------------------------------------------------
+# 4) Vérification POST-xcodebuild des binaires livrés (bloquante)
+#    Symboles OpenSSL + transport TLS PJSIP dans chaque tranche, puis test de
+#    lancement réel de pjsua_transport_create(TLS) dans le simulateur.
+# ---------------------------------------------------------------------------
+PJSIP_WORKDIR="$WORK" bash "$APP_DIR/scripts/verify-pjsip-tls.sh" "$OUT/libpjsip.xcframework"
+
+if [ "${PJSIP_SKIP_SELFTEST:-0}" != "1" ]; then
+  PJSIP_WORKDIR="$WORK" bash "$APP_DIR/scripts/pjsip-tls-selftest.sh"
+else
+  echo "↷ self-test TLS ignoré (PJSIP_SKIP_SELFTEST=1)"
+fi
+
+echo "✅ libpjsip.xcframework (TLS activé et vérifié) → $OUT"
 echo "   OpenSSL est inclus dans chaque tranche de l'archive. Ajoute le xcframework"
 echo "   à la cible App (Frameworks, Libraries and Embedded Content), puis: npx cap sync ios"

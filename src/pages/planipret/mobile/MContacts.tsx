@@ -79,6 +79,12 @@ export default function MContacts() {
   const { t } = useMplanipretLang();
   const { openDialer } = useOutletContext<PlanipretMobileContext>();
   const navigate = useNavigate();
+  const openSmsTo = (to: string, name = "") => {
+    navigate(`/mplanipret/messages?${new URLSearchParams({ tab: "sms", to, name }).toString()}`);
+  };
+  const openEmailTo = (to: string, name = "") => {
+    navigate(`/mplanipret/messages?${new URLSearchParams({ tab: "emails", to, name }).toString()}`);
+  };
   const [tab, setTab] = useState<Tab>("personal");
   const [q, setQ] = useState("");
   const [personal, setPersonal] = useState<any[]>([]);
@@ -410,7 +416,7 @@ export default function MContacts() {
               <div
                 key={favEntry.key}
                 onClick={() => !isDir && !isFav && setSelected(c)}
-                className="pp-card flex items-center gap-3 cursor-pointer"
+                className="pp-card flex items-center gap-2 cursor-pointer"
                 style={{ padding: 12 }}
               >
                 <div className="relative">
@@ -446,7 +452,7 @@ export default function MContacts() {
                   onClick={(e) => { e.stopPropagation(); toggleFav(favEntry); }}
                   className="flex items-center justify-center active:scale-95 transition"
                   style={{
-                    width: 32, height: 32, borderRadius: "50%",
+                    width: 30, height: 30, borderRadius: "50%",
                     background: starred ? "rgba(245,158,11,0.15)" : "var(--pp-bg-elevated)",
                     border: `1px solid ${starred ? "rgba(245,158,11,0.4)" : "var(--pp-bg-border-2)"}`,
                     color: starred ? "#f59e0b" : "var(--pp-text-secondary)",
@@ -454,12 +460,31 @@ export default function MContacts() {
                   aria-label={starred ? (t("contacts.removeFavorite") || "Retirer") : (t("contacts.addFavorite") || "Ajouter")}>
                   <Star className="w-3.5 h-3.5" fill={starred ? "#f59e0b" : "none"} />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); phone && openDialer(phone); }}
-                  className="flex items-center justify-center active:scale-95 transition"
-                  style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.3)", color: "var(--pp-brand-accent)" }}
-                  aria-label={t("common.call")}>
-                  <Phone className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center" style={{ gap: 6 }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); const target = phone || c.extension; if (target) openSmsTo(target, displayName || ""); }}
+                    disabled={!(phone || c.extension)}
+                    className="flex items-center justify-center active:scale-95 transition"
+                    style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", color: "#22c55e", opacity: (phone || c.extension) ? 1 : 0.45 }}
+                    aria-label={t("contacts.sendSms") || "SMS"}>
+                    <MessageSquare className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); if (c.email) openEmailTo(c.email, displayName || ""); }}
+                    disabled={!c.email}
+                    className="flex items-center justify-center active:scale-95 transition"
+                    style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)", color: "#8b5cf6", opacity: c.email ? 1 : 0.45 }}
+                    aria-label={t("contacts.sendEmail") || "Courriel"}>
+                    <Mail className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); phone && openDialer(phone); }}
+                    disabled={!phone}
+                    className="flex items-center justify-center active:scale-95 transition"
+                    style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.3)", color: "var(--pp-brand-accent)", opacity: phone ? 1 : 0.45 }}
+                    aria-label={t("common.call")}>
+                    <Phone className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             );
           })}

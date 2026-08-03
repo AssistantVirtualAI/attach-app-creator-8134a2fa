@@ -52,8 +52,85 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             self.setupCallKit()
             self.setupPushKit()
             self.notifyListeners("callKitReady", data: ["ok": true])
+            self.observePjsipEngine()
         }
     }
+
+    // MARK: - Pont PJSIP natif → CallKit
+    /// La sonnerie système est désormais déclenchée par l'INVITE PJSIP natif.
+    /// Le push VoIP ne sert plus qu'à réveiller le process : si PJSIP présente
+    /// l'appel en premier, le chemin JsSIP n'est jamais sollicité.
+    private func observePjsipEngine() {
+        let nc = NotificationCenter.default
+        nc.addObserver(forName: Notification.Name("PpPjsipIncomingCall"), object: nil, queue: .main) { [weak self] note in
+            guard let self = self else { return }
+            let info = note.userInfo as? [String: Any] ?? [:]
+            self.reportNativeIncomingCall(
+                callId: (info["callId"] as? String) ?? UUID().uuidString,
+                callerName: (info["callerName"] as? String) ?? "Appel entrant",
+                callerNumber: (info["callerNumber"] as? String) ?? ""
+            )
+        }
+        nc.addObserver(forName: Notification.Name("PpPjsipCallConnected"), object: nil, queue: .main) { [weak self] _ in
+            guard let self = self, let uuid = self.activeCallUUID else { return }
+            self.provider?.reportOutgoingCall(with: uuid, connectedAt: Date())
+        }
+        nc.addObserver(forName: Notification.Name("PpPjsipCallEnded"), object: nil, queue: .main) { [weak self] note in
+            guard let self = self, let uuid = self.activeCallUUID else { return }
+            let code = (note.userInfo?["code"] as? Int) ?? 0
+            let reason: CXCallEndedReason = (code == 486 || code == 603) ? .declinedElsewhere
+                : (code >= 400 && code != 487) ? .failed : .remoteEnded
+            self.provider?.reportCall(with: uuid, endedAt: Date(), reason: reason)
+            self.pendingAnswerAction?.fulfill(); self.pendingAnswerAction = nil
+            self.activeCallUUID = nil; self.activeCallId = nil
+            self.nativeEngineOwnsCall = false
+        }
+    }
+
+    private func reportNativeIncomingCall(callId: String, callerName: String, callerNumber: String) {
+        // Un push VoIP a pu déjà présenter le même appel : on garde le premier
+        // UUID CallKit et on se contente d'enrichir l'affichage.
+        if let uuid = activeCallUUID {
+            nativeEngineOwnsCall = true
+            activeCallId = callId
+            let update = CXCallUpdate()
+            update.localizedCallerName = callerName
+            provider?.reportCall(with: uuid, updated: update)
+            NSLog("[PpVoipCall] PJSIP INVITE joined existing CallKit call callId=%@", callId)
+            return
+        }
+
+        let uuid = UUID()
+        activeCallUUID = uuid
+        activeCallId = callId
+        nativeEngineOwnsCall = true
+
+        let update = CXCallUpdate()
+        update.remoteHandle = callerNumber.isEmpty
+            ? CXHandle(type: .generic, value: callerName)
+            : CXHandle(type: .phoneNumber, value: callerNumber)
+        update.localizedCallerName = callerName
+        update.hasVideo = false
+        update.supportsHolding = false
+        update.supportsDTMF = true
+
+        provider?.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
+            if let error = error {
+                NSLog("[PpVoipCall] PJSIP reportNewIncomingCall failed: \(error.localizedDescription)")
+                NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil)
+                return
+            }
+            NSLog("[PpVoipCall] CallKit ringing from native PJSIP INVITE callId=%@", callId)
+            self?.notifyListeners("callKitReady", data: [
+                "callUUID": uuid.uuidString,
+                "callId": callId,
+                "callerName": callerName,
+                "callerNumber": callerNumber,
+                "source": "pjsip"
+            ], retainUntilConsumed: true)
+        }
+    }
+
 
     private func setupCallKit() {
         let cfg = CXProviderConfiguration(localizedName: "Planiprêt")

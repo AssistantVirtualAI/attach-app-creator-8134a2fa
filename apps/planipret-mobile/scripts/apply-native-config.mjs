@@ -1351,6 +1351,10 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var lastPushNumber: String = ""
     private var lastPushAt: TimeInterval = 0
     private let voipTokenDefaultsKey = "pp.voip.push-token.v1"
+    /// true quand l'appel CallKit courant est piloté par le moteur PJSIP natif
+    /// (INVITE reçu en TLS 5061) et non plus par le chemin JsSIP/WebView.
+    private var nativeEngineOwnsCall = false
+
 
     private func apnsEnvironment() -> String {
         #if DEBUG
@@ -1367,8 +1371,85 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             self.setupCallKit()
             self.setupPushKit()
             self.notifyListeners("callKitReady", data: ["ok": true])
+            self.observePjsipEngine()
         }
     }
+
+    // MARK: - Pont PJSIP natif → CallKit
+    /// La sonnerie système est désormais déclenchée par l'INVITE PJSIP natif.
+    /// Le push VoIP ne sert plus qu'à réveiller le process : si PJSIP présente
+    /// l'appel en premier, le chemin JsSIP n'est jamais sollicité.
+    private func observePjsipEngine() {
+        let nc = NotificationCenter.default
+        nc.addObserver(forName: Notification.Name("PpPjsipIncomingCall"), object: nil, queue: .main) { [weak self] note in
+            guard let self = self else { return }
+            let info = note.userInfo as? [String: Any] ?? [:]
+            self.reportNativeIncomingCall(
+                callId: (info["callId"] as? String) ?? UUID().uuidString,
+                callerName: (info["callerName"] as? String) ?? "Appel entrant",
+                callerNumber: (info["callerNumber"] as? String) ?? ""
+            )
+        }
+        nc.addObserver(forName: Notification.Name("PpPjsipCallConnected"), object: nil, queue: .main) { [weak self] _ in
+            guard let self = self, let uuid = self.activeCallUUID else { return }
+            self.provider?.reportOutgoingCall(with: uuid, connectedAt: Date())
+        }
+        nc.addObserver(forName: Notification.Name("PpPjsipCallEnded"), object: nil, queue: .main) { [weak self] note in
+            guard let self = self, let uuid = self.activeCallUUID else { return }
+            let code = (note.userInfo?["code"] as? Int) ?? 0
+            let reason: CXCallEndedReason = (code == 486 || code == 603) ? .declinedElsewhere
+                : (code >= 400 && code != 487) ? .failed : .remoteEnded
+            self.provider?.reportCall(with: uuid, endedAt: Date(), reason: reason)
+            self.pendingAnswerAction?.fulfill(); self.pendingAnswerAction = nil
+            self.activeCallUUID = nil; self.activeCallId = nil
+            self.nativeEngineOwnsCall = false
+        }
+    }
+
+    private func reportNativeIncomingCall(callId: String, callerName: String, callerNumber: String) {
+        // Un push VoIP a pu déjà présenter le même appel : on garde le premier
+        // UUID CallKit et on se contente d'enrichir l'affichage.
+        if let uuid = activeCallUUID {
+            nativeEngineOwnsCall = true
+            activeCallId = callId
+            let update = CXCallUpdate()
+            update.localizedCallerName = callerName
+            provider?.reportCall(with: uuid, updated: update)
+            NSLog("[PpVoipCall] PJSIP INVITE joined existing CallKit call callId=%@", callId)
+            return
+        }
+
+        let uuid = UUID()
+        activeCallUUID = uuid
+        activeCallId = callId
+        nativeEngineOwnsCall = true
+
+        let update = CXCallUpdate()
+        update.remoteHandle = callerNumber.isEmpty
+            ? CXHandle(type: .generic, value: callerName)
+            : CXHandle(type: .phoneNumber, value: callerNumber)
+        update.localizedCallerName = callerName
+        update.hasVideo = false
+        update.supportsHolding = false
+        update.supportsDTMF = true
+
+        provider?.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
+            if let error = error {
+                NSLog("[PpVoipCall] PJSIP reportNewIncomingCall failed: \\(error.localizedDescription)")
+                NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil)
+                return
+            }
+            NSLog("[PpVoipCall] CallKit ringing from native PJSIP INVITE callId=%@", callId)
+            self?.notifyListeners("callKitReady", data: [
+                "callUUID": uuid.uuidString,
+                "callId": callId,
+                "callerName": callerName,
+                "callerNumber": callerNumber,
+                "source": "pjsip"
+            ], retainUntilConsumed: true)
+        }
+    }
+
 
     private func setupCallKit() {
         let cfg = CXProviderConfiguration(localizedName: "Planiprêt")
@@ -1536,7 +1617,30 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     // MARK: - CXProviderDelegate
     public func providerDidReset(_ provider: CXProvider) {
         pendingAnswerAction?.fail(); pendingAnswerAction = nil
+        if nativeEngineOwnsCall {
+            NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil)
+        }
+        nativeEngineOwnsCall = false
         activeCallUUID = nil; activeCallId = nil
+    }
+
+    /// Mute système (bouton CallKit) → coupe le flux micro dans PJSIP.
+    public func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
+        NotificationCenter.default.post(
+            name: Notification.Name("PpPjsipMuteRequested"), object: nil,
+            userInfo: ["muted": action.isMuted]
+        )
+        notifyListeners("callMuted", data: ["muted": action.isMuted])
+        action.fulfill()
+    }
+
+    /// Clavier CallKit → DTMF RFC 2833 côté PJSIP.
+    public func provider(_ provider: CXProvider, perform action: CXPlayDTMFCallAction) {
+        NotificationCenter.default.post(
+            name: Notification.Name("PpPjsipDtmfRequested"), object: nil,
+            userInfo: ["digits": action.digits]
+        )
+        action.fulfill()
     }
 
     public func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
@@ -1551,6 +1655,24 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // activating here races the system session and yields a dead call.
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+
+        // Chemin natif PJSIP : le décrochage est un simple \`pjsua_call_answer\`,
+        // il ne dépend ni de la WebView ni d'un REGISTER JsSIP. On remplit donc
+        // l'action tout de suite (plus de fenêtre de 32 s ni de completeAnswer).
+        if nativeEngineOwnsCall {
+            answerCompleted = true
+            pendingAnswerAction = nil
+            NotificationCenter.default.post(name: Notification.Name("PpVoipCallAnswered"), object: nil, userInfo: ["callId": activeCallId ?? ""])
+            NotificationCenter.default.post(name: Notification.Name("PpPjsipAnswerRequested"), object: nil, userInfo: ["callId": activeCallId ?? ""])
+            notifyListeners("incomingCallAnswered", data: [
+                "callUUID": action.callUUID.uuidString,
+                "callId": activeCallId ?? "",
+                "source": "pjsip"
+            ], retainUntilConsumed: true)
+            action.fulfill()
+            return
+        }
+
         // Store the transaction BEFORE waking JS. A retained Capacitor listener
         // can answer synchronously; completeAnswer() must already have the
         // authoritative CXAnswerCallAction when that callback returns.
@@ -1574,11 +1696,17 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         pendingAnswerAction?.fail(); pendingAnswerAction = nil
+        if nativeEngineOwnsCall {
+            // 603 Decline côté PJSIP : un 486 renverrait l'appel en messagerie.
+            NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil, userInfo: ["callId": activeCallId ?? ""])
+        }
         notifyListeners("incomingCallRejected", data: [
             "callUUID": action.callUUID.uuidString,
-            "callId": activeCallId ?? ""
+            "callId": activeCallId ?? "",
+            "source": nativeEngineOwnsCall ? "pjsip" : "jssip"
         ])
         activeCallUUID = nil; activeCallId = nil
+        nativeEngineOwnsCall = false
         action.fulfill()
     }
 
@@ -2184,7 +2312,15 @@ function patchIosNativeFiles() {
     "App/Plugins/PpVoipCall/PpVoipCall.m",
     "App/Plugins/PpAuthSession/PpAuthSession.swift",
     "App/Plugins/PpAuthSession/PpAuthSession.m",
-    ...(hasPjsip ? ["App/Plugins/PpPjsip/PpPjsip.swift", "App/Plugins/PpPjsip/PpPjsip.m"] : []),
+    ...(hasPjsip
+      ? [
+          "App/Plugins/PpPjsip/PpPjsip.swift",
+          "App/Plugins/PpPjsip/PpPjsip.m",
+          ...(fs.existsSync(path.join(pjsipDir, "PpPjsipEngine.swift"))
+            ? ["App/Plugins/PpPjsip/PpPjsipEngine.swift"]
+            : []),
+        ]
+      : []),
   ]);
   patchIosAppDelegate(iosApp);
   ensureIosBridgeController(iosApp);

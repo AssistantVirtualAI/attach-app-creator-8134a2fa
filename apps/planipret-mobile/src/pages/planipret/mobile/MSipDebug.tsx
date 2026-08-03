@@ -187,9 +187,14 @@ function StabilityCard() {
 }
 
 /** Sonde PJSIP native — REGISTER TLS 5061, déclenchement manuel uniquement. */
+const PJSIP_PROBE_LAST_OK_KEY = "pp.pjsip.probe.last-ok.v1";
+
 function PjsipProbeCard() {
   const [running, setRunning] = useState(false);
   const [res, setRes] = useState<PjsipProbeResult | null>(null);
+  const [lastOk, setLastOk] = useState<string | null>(() => {
+    try { return localStorage.getItem(PJSIP_PROBE_LAST_OK_KEY); } catch { return null; }
+  });
 
   const run = async () => {
     setRunning(true);
@@ -197,14 +202,25 @@ function PjsipProbeCard() {
     try {
       const out = await runPjsipRegisterProbe();
       setRes(out);
-      if (out.ok) toast.success(`PJSIP REGISTER ${out.code} ${out.reason}`);
-      else toast.error(`PJSIP: ${out.reason}`);
+      // Validation stricte : seul un 200 OK sur le transport TLS compte.
+      const validated = out.ok && out.code === 200 && out.transport === "TLS";
+      if (validated) {
+        const stamp = new Date().toISOString();
+        try { localStorage.setItem(PJSIP_PROBE_LAST_OK_KEY, stamp); } catch { /* noop */ }
+        setLastOk(stamp);
+        toast.success(`PJSIP validé — REGISTER 200 OK en TLS ${PJSIP_PROBE_PORT} (${out.elapsedMs ?? "?"} ms)`);
+      } else if (out.ok) {
+        toast.error(`PJSIP: réponse ${out.code ?? "?"} sur ${out.transport ?? "?"} — attendu 200 OK / TLS`);
+      } else {
+        toast.error(`PJSIP: ${out.reason}`);
+      }
     } finally {
       setRunning(false);
     }
   };
 
-  const color = res ? (res.ok ? "#10B981" : "#EF4444") : "#94A3B8";
+  const validated = !!res && res.ok && res.code === 200 && res.transport === "TLS";
+  const color = res ? (validated ? "#10B981" : "#EF4444") : "#94A3B8";
 
   return (
     <section className="pp-card p-4 space-y-3">
@@ -217,9 +233,19 @@ function PjsipProbeCard() {
         (&lt;ext&gt;PROBE). N'affecte pas l'enregistrement actif.
       </p>
       {res && (
-        <div className="text-[11px] font-mono p-2 rounded" style={{ background: "var(--pp-bg-elevated)", color }}>
+        <div className="text-[11px] font-mono p-2 rounded space-y-1" style={{ background: "var(--pp-bg-elevated)", color }}>
           {res.aor ? <div className="opacity-70">{res.aor}</div> : null}
           <div>{res.code ? `SIP ${res.code} — ` : ""}{res.reason}{res.elapsedMs ? ` (${res.elapsedMs} ms)` : ""}</div>
+          <div className="font-bold">
+            {validated
+              ? `✅ VALIDÉ — 200 OK en TLS ${PJSIP_PROBE_PORT}`
+              : `❌ NON VALIDÉ — attendu 200 OK en TLS ${PJSIP_PROBE_PORT}`}
+          </div>
+        </div>
+      )}
+      {lastOk && !res && (
+        <div className="text-[11px]" style={{ color: "#10B981" }}>
+          Dernière validation TLS 5061 : {new Date(lastOk).toLocaleString("fr-CA")}
         </div>
       )}
       <button onClick={run} disabled={running}

@@ -113,6 +113,8 @@ final class PjsipEngine {
     private var started = false
     private var scheduledWork: (() -> Void)?
     private var strings: [UnsafeMutablePointer<CChar>] = []
+    private var pjThreadDescs: [UnsafeMutableRawPointer] = []
+
 
     // Sonde
     private var probeAccId: pjsua_acc_id = pjsua_acc_id(-1)
@@ -298,15 +300,40 @@ final class PjsipEngine {
     func answer(callId: String?, completion: @escaping (Bool) -> Void) {
         let target = resolveCall(callId)
         guard target >= 0 else { completion(false); return }
+        var done = false
+        let finish: (Bool) -> Void = { [weak self] ok in
+            guard let self = self else { return }
+            self.lock.lock()
+            let already = done
+            done = true
+            self.lock.unlock()
+            if already { return }
+            completion(ok)
+        }
         thread.run { [weak self] in
             guard let self = self else { return }
+            self.registerCurrentThreadIfNeeded()
             self.scheduleOnPjsipThread {
+                if done { return }
                 let status = pjsua_call_answer(target, 200, nil, nil)
                 NSLog("[PpPjsip] answer callId=%d status=%d", target, status)
-                completion(status == pj_status_t(0))
+                finish(status == pj_status_t(0))
             }
         }
+        // Filet de sécurité : si le timer PJSIP ne s'exécute pas (thread non
+        // enregistré, pile occupée), on envoie le 200 OK depuis un thread
+        // enregistré manuellement. Sans ça, CallKit affiche « en cours » alors
+        // que l'appelant continue d'entendre la sonnerie.
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self = self, !done else { return }
+            self.registerCurrentThreadIfNeeded()
+            let status = pjsua_call_answer(target, 200, nil, nil)
+            NSLog("[PpPjsip] answer FALLBACK callId=%d status=%d", target, status)
+            finish(status == pj_status_t(0))
+        }
+
     }
+
 
     func hangup(callId: String?) {
         let target = resolveCall(callId)
@@ -638,7 +665,27 @@ final class PjsipEngine {
 
     // MARK: Contexte PJSIP
 
+    /// PJLIB refuse tout appel provenant d'un thread inconnu (assertion
+    /// "Calling pjlib from unknown thread"). Les blocs exécutés sur la
+    /// DispatchQueue GCD peuvent changer de thread système à tout moment :
+    /// on enregistre donc le thread courant à la demande, avec un descripteur
+    /// conservé en mémoire pour toute la durée de vie du process.
+    func registerCurrentThreadIfNeeded() {
+        guard started else { return }
+        if pj_thread_is_registered() != 0 { return }
+        let count = max(1, MemoryLayout<pj_thread_desc>.size / MemoryLayout<Int>.size)
+        let desc = UnsafeMutablePointer<Int>.allocate(capacity: count)
+        desc.initialize(repeating: 0, count: count)
+        var handle: UnsafeMutablePointer<pj_thread_t>?
+        let status = pj_thread_register("pp-gcd", desc, &handle)
+        NSLog("[PpPjsip] pj_thread_register status=%d", status)
+        lock.lock()
+        pjThreadDescs.append(UnsafeMutableRawPointer(desc))
+        lock.unlock()
+    }
+
     private func scheduleOnPjsipThread(_ work: @escaping () -> Void) {
+        registerCurrentThreadIfNeeded()
         lock.lock()
         let previous = scheduledWork
         scheduledWork = {
@@ -648,6 +695,7 @@ final class PjsipEngine {
         lock.unlock()
         pjsua_schedule_timer2(ppPjsipEnterContext, nil, 0)
     }
+
 
     func runScheduledWork() {
         lock.lock()

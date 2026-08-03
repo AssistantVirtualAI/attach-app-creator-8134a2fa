@@ -26,6 +26,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var activeCallId: String?
     private var pendingAnswerAction: CXAnswerCallAction?
     private var answerCompleted = false
+    /// Passe à true dès que PJSIP confirme le média/la connexion de l'appel.
+    private var nativeCallConnected = false
+
     // ring17: NetSapiens can emit the SAME inbound call twice with two
     // different callIds. Deduplicate on the caller number too, otherwise a
     // second CallKit call races the first answer action.
@@ -73,6 +76,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         }
         nc.addObserver(forName: Notification.Name("PpPjsipCallConnected"), object: nil, queue: .main) { [weak self] _ in
             guard let self = self, let uuid = self.activeCallUUID else { return }
+            self.nativeCallConnected = true
             self.provider?.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
         nc.addObserver(forName: Notification.Name("PpPjsipCallEnded"), object: nil, queue: .main) { [weak self] note in
@@ -84,7 +88,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             self.pendingAnswerAction?.fulfill(); self.pendingAnswerAction = nil
             self.activeCallUUID = nil; self.activeCallId = nil
             self.nativeEngineOwnsCall = false
+            self.nativeCallConnected = false
         }
+
     }
 
     private func reportNativeIncomingCall(callId: String, callerName: String, callerNumber: String) {
@@ -125,6 +131,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         activeCallUUID = uuid
         activeCallId = callId
         nativeEngineOwnsCall = true
+        nativeCallConnected = false
 
         let update = CXCallUpdate()
         update.remoteHandle = callerNumber.isEmpty
@@ -372,8 +379,19 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
                 "source": "pjsip"
             ], retainUntilConsumed: true)
             action.fulfill()
+            // Le 200 OK PJSIP peut échouer (thread, média) : sans confirmation
+            // de connexion, CallKit afficherait « en cours » alors que
+            // l'appelant entend encore la sonnerie. On relance une fois, puis
+            // on termine l'appel si rien ne se confirme.
+            let uuid = action.callUUID
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                guard let self = self, self.activeCallUUID == uuid, !self.nativeCallConnected else { return }
+                NSLog("[PpVoipCall] answer not confirmed after 3s — retry PJSIP answer")
+                NotificationCenter.default.post(name: Notification.Name("PpPjsipAnswerRequested"), object: nil, userInfo: ["callId": self.activeCallId ?? ""])
+            }
             return
         }
+
 
         // Store the transaction BEFORE waking JS. A retained Capacitor listener
         // can answer synchronously; completeAnswer() must already have the

@@ -26,6 +26,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var activeCallId: String?
     private var pendingAnswerAction: CXAnswerCallAction?
     private var answerCompleted = false
+    /// Passe à true dès que PJSIP confirme le média/la connexion de l'appel.
+    private var nativeCallConnected = false
+
     // ring17: NetSapiens can emit the SAME inbound call twice with two
     // different callIds. Deduplicate on the caller number too, otherwise a
     // second CallKit call races the first answer action.

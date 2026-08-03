@@ -2012,6 +2012,82 @@ function ensureXcodeSourceFiles(iosRoot, relativeFiles) {
   return false;
 }
 
+// Lier libpjsip.xcframework à la cible App + exposer son module.modulemap à
+// Swift. Sans ça `#if canImport(pjsua)` est FAUX et tout le moteur PJSIP est
+// exclu à la compilation, même si l'archive est visible dans Xcode.
+function ensurePjsipXcframework(iosRoot) {
+  const rel = "App/Plugins/PpPjsip/Frameworks/libpjsip.xcframework";
+  const abs = path.join(iosRoot, rel);
+  if (!fs.existsSync(abs)) {
+    console.warn(
+      `[native-config] ⚠️  ${rel} absent — le moteur PJSIP natif sera EXCLU du build (canImport(pjsua) = false).\n` +
+        "                 Lance: bash scripts/build-pjsip-ios.sh"
+    );
+    return false;
+  }
+
+  // Chemins d'en-têtes réels des tranches (device + simulateur).
+  const headerPaths = fs
+    .readdirSync(abs)
+    .filter((slice) => fs.existsSync(path.join(abs, slice, "Headers")))
+    .map((slice) => `\"$(SRCROOT)/${rel}/${slice}/Headers\"`);
+  if (headerPaths.length === 0) {
+    console.warn("[native-config] ⚠️  libpjsip.xcframework sans dossier Headers — module pjsua introuvable.");
+    return false;
+  }
+
+  const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
+  if (!fs.existsSync(pbx)) return false;
+  let text = fs.readFileSync(pbx, "utf8");
+  const before = text;
+
+  const fileName = "libpjsip.xcframework";
+  const fileRef = xcodeId(`file:${rel}`);
+  const buildRef = xcodeId(`build:${rel}`);
+  const buildName = `${fileName} in Frameworks`;
+
+  if (!text.includes(`${fileRef} /* ${fileName} */`)) {
+    const line = `\t\t${fileRef} /* ${fileName} */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ${rel}; sourceTree = SOURCE_ROOT; };\n`;
+    text = text.replace(/(\/\* End PBXFileReference section \*\/)/, `${line}$1`);
+  }
+  if (!text.includes(`${buildRef} /* ${buildName} */`)) {
+    const line = `\t\t${buildRef} /* ${buildName} */ = {isa = PBXBuildFile; fileRef = ${fileRef} /* ${fileName} */; };\n`;
+    text = text.replace(/(\/\* End PBXBuildFile section \*\/)/, `${line}$1`);
+  }
+  text = text.replace(
+    /(isa = PBXFrameworksBuildPhase;[\s\S]*?files = \(\n)([\s\S]*?)(\s*\);)/g,
+    (match, start, files, end) =>
+      files.includes(buildRef) ? match : `${start}${files}\t\t\t\t${buildRef} /* ${buildName} */,\n${end}`
+  );
+
+  // Réglages de build: Swift ne trouve module.modulemap que via
+  // SWIFT_INCLUDE_PATHS / HEADER_SEARCH_PATHS.
+  const includes = headerPaths.join(" ");
+  text = text.replace(/(buildSettings = \{\n)([\s\S]*?)(\n\t*\};)/g, (match, start, body, end) => {
+    if (!/PRODUCT_BUNDLE_IDENTIFIER/.test(body)) return match;
+    let next = body;
+    for (const key of ["SWIFT_INCLUDE_PATHS", "HEADER_SEARCH_PATHS"]) {
+      if (next.includes(key)) {
+        if (next.includes("libpjsip.xcframework")) continue;
+        next = next.replace(
+          new RegExp(`(${key} = )([^;]*);`),
+          `$1(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t${includes},\n\t\t\t\t);`
+        );
+      } else {
+        next += `\n\t\t\t\t${key} = (\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t${includes},\n\t\t\t\t);`;
+      }
+    }
+    return `${start}${next}${end}`;
+  });
+
+  if (text !== before) {
+    fs.writeFileSync(pbx, text);
+    console.log("[native-config] libpjsip.xcframework lié à la cible App (+ chemins de module pjsua).");
+    return true;
+  }
+  return false;
+}
+
 function ensurePluginRegistration(swift) {
   let next = swift;
   const sipLine = "        bridge?.registerPluginInstance(PpSipKeepAlive())\n";
@@ -2346,6 +2422,7 @@ function patchIosNativeFiles() {
         ]
       : []),
   ]);
+  if (hasPjsip) ensurePjsipXcframework(iosRoot);
   patchIosAppDelegate(iosApp);
   ensureIosBridgeController(iosApp);
   ensureIosSceneDelegate(iosApp);

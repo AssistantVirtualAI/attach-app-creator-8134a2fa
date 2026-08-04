@@ -236,8 +236,10 @@ function PjsipProbeCard() {
         <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>Sonde PJSIP native (TLS)</span>
       </div>
       <p className="text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
-        REGISTER natif vers {PJSIP_PROBE_SERVER}:{PJSIP_PROBE_PORT} sur une AOR de test
-        (&lt;ext&gt;PROBE). N'affecte pas l'enregistrement actif.
+        Vérifie que le moteur PJSIP est lié et enregistré en TLS sur {PJSIP_PROBE_SERVER}:{PJSIP_PROBE_PORT}.
+        Si la registration native est déjà active, elle est rapportée telle quelle — aucun second
+        enregistrement n'est créé.
+
       </p>
       {res && (
         <div className="text-[11px] font-mono p-2 rounded space-y-1" style={{ background: "var(--pp-bg-elevated)", color }}>

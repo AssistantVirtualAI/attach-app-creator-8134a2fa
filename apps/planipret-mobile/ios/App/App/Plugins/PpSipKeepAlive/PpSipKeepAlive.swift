@@ -687,7 +687,14 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     }
 
     private func sendRegister(challenge: String?, proxyAuth: Bool = false, force: Bool = false) {
+      if nativeEngineOwnsAor {
+        NSLog("[PpSipKeepAlive] REGISTER skipped — PJSIP owns the AOR")
+        registerOnOpen = false
+        setStatus("idle", "pjsip_owns_aor")
+        return
+      }
       if isForeground() { releaseRegistration("foreground_js_owns"); return }
+
       if socket == nil { connect(); return }
       if !socketOpen {
         registerOnOpen = true

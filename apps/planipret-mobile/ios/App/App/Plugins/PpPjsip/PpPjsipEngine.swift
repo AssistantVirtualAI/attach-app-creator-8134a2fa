@@ -314,15 +314,19 @@ final class PjsipEngine {
                     : "sip:\(destination)@\(self.domain)"
                 var uri = ppMakePjStr(target, keep: &keep)
                 var newCall = pjsua_call_id(-1)
+                self.outgoingPending = true
                 let status = pjsua_call_make_call(self.accId, &uri, nil, nil, nil, &newCall)
                 keep.forEach { free($0) }
                 if status != pj_status_t(0) {
+                    self.outgoingPending = false
                     completion(.failure(NSError(domain: "PpPjsip", code: Int(status), userInfo: [NSLocalizedDescriptionKey: "pjsua_call_make_call failed"])))
                     return
                 }
                 self.activeCall = newCall
                 self.muted = false
                 self.outgoingCall = newCall
+                self.outgoingPending = false
+
                 NSLog("[PpPjsip] outgoing INVITE → %@ callId=%d", target, newCall)
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(

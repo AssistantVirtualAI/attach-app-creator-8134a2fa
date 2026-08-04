@@ -57,6 +57,23 @@ Deno.serve(async (req) => {
     const broker_id: string | null = body?.broker_id ?? null;
     const bulk: boolean = !!body?.bulk;
     const batch_size: number = Math.max(1, Math.min(20, Number(body?.batch_size ?? 8)));
+    /**
+     * Transport handling.
+     *
+     * A NetSapiens Device carries exactly ONE `device-sip-transport-type`, and the
+     * runtime client (`ns-resolve-sip-credentials`) already aligns it with the stack
+     * that is about to REGISTER (wss for JsSIP, tls for native PJSIP).
+     *
+     * Provisioning must therefore NOT rewrite the transport of an EXISTING device:
+     * an admin "sync devices" run would otherwise flip a live native iOS device back
+     * to WSS while PJSIP holds a TLS registration -> inbound calls stop being forked
+     * and land in voicemail. Pass `transport: "wss" | "tls"` to force a rewrite.
+     */
+    const rawTransport = String(body?.transport ?? "").trim().toLowerCase();
+    const forcedTransport: "WSS" | "TLS" | null =
+      rawTransport === "tls" || rawTransport === "sips" ? "TLS"
+        : rawTransport === "wss" || rawTransport === "ws" ? "WSS"
+        : null;
 
     // Verify caller is admin
     const authHeader = req.headers.get("Authorization") ?? "";
@@ -168,26 +185,27 @@ Deno.serve(async (req) => {
 
       const create = async (id: string, model: string, isMobile: boolean, password: string) => {
         if (hasDev(id)) {
-          // Device exists — patch it to ensure WSS transport, empty user-agent filter,
-          // and (critically) the 1800s registration expiry + automatic NAT traversal.
-          // Without this branch a bulk force:true never repaired existing devices,
-          // which kept them on the NS default 60s expiry -> straight to voicemail.
+          // Device exists — repair the expiry/NAT/push profile, but LEAVE the
+          // transport alone unless the caller explicitly forced one (see the
+          // `forcedTransport` note above): rewriting it under a live native TLS
+          // registration silently sends inbound calls to voicemail.
+          const patch: Record<string, unknown> = {
+            "device-srtp-enabled": "opportunistic",
+            "device-sip-allowed-user-agent": "",
+            "device-provisioning-registration-core-server": "core1.cluster1.ucstack.io",
+            "device-sip-registration-expiry-seconds": 1800,
+            "device-sip-nat-traversal-enabled": "automatic",
+            "device-push-enabled": isMobile ? "yes" : "no",
+          };
+          if (forcedTransport) {
+            patch["transport"] = forcedTransport;
+            patch["device-sip-transport-type"] = forcedTransport;
+          }
           const r = await nsFetch(`${base}/${encodeURIComponent(id)}`, {
             method: "PUT", headers: nsHeaders,
-            body: JSON.stringify({
-              "transport": "WSS",
-              // SIP-level transport: without this NS closes the WSS socket with
-              // code 1001 right after the REGISTER 200 OK.
-              "device-sip-transport-type": "WSS",
-              "device-srtp-enabled": "opportunistic",
-              "device-sip-allowed-user-agent": "",
-              "device-provisioning-registration-core-server": "core1.cluster1.ucstack.io",
-              "device-sip-registration-expiry-seconds": 1800,
-              "device-sip-nat-traversal-enabled": "automatic",
-              "device-push-enabled": isMobile ? "yes" : "no",
-            }),
+            body: JSON.stringify(patch),
           }).catch(() => null);
-          return { existed: true, id, patched: !!r?.ok, status: r?.status ?? 0 };
+          return { existed: true, id, patched: !!r?.ok, status: r?.status ?? 0, transport: forcedTransport ?? "unchanged" };
         }
 
         // core-server is MANDATORY — without it JsSIP/PJSIP cannot register.
@@ -211,8 +229,10 @@ Deno.serve(async (req) => {
             //   for virtually every device (replaces the legacy `server-nat` flag).
             "device-sip-registration-expiry-seconds": 1800,
             "device-sip-nat-traversal-enabled": "automatic",
-            "transport": "WSS",
-            "device-sip-transport-type": "WSS",
+            // Baseline transport at creation. The runtime resolver realigns it
+            // with whichever stack actually registers (wss = JsSIP, tls = PJSIP).
+            "transport": forcedTransport ?? "WSS",
+            "device-sip-transport-type": forcedTransport ?? "WSS",
             "device-srtp-enabled": "opportunistic",
             "device-sip-allowed-user-agent": "",
             "device-push-enabled": isMobile ? "yes" : "no",

@@ -61,10 +61,13 @@ function normalizeClientType(v: unknown): ClientType {
   return "mobile";
 }
 
-// Naming convention: <ext>M (mobile) / <ext>W (web+widget). No underscore —
-// Snap Mobile provisioning and the web widget mangle `_` in the AOR user part.
+// Naming convention (un device par client, jamais partagé) :
+//   mobile -> <ext>M   web -> <ext>W   widget -> <ext>x
+// Pas d'underscore : Snap Mobile et le widget web mangent `_` dans l'AOR.
 function deviceNameFor(ext: string, ct: ClientType): string {
-  return ct === "mobile" ? mobileDeviceId(ext) : webDeviceId(ext);
+  if (ct === "mobile") return mobileDeviceId(ext);
+  if (ct === "widget") return widgetDeviceId(ext);
+  return webDeviceId(ext);
 }
 
 function deviceIdOf(d: any): string | null {

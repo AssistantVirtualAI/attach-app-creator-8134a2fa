@@ -443,6 +443,10 @@ Deno.serve(async (req) => {
     sip_proxy: coreServer,
     sip_core_server: coreServer,
     sip_uri: sipUri,
+    // Transport actually provisioned on the NS Device for this AOR.
+    sip_transport: sipTransport,
+    sip_port: sipPortFor(sipTransport),
+    sip_tls_uri: `sip:${coreServer}:5061;transport=tls`,
     // Single pinned core node (no core1/core2 alternation).
     sip_ws_url: edgeWssUrls([NS_SIP_WSS_URL])[0],
     sip_wss_url: edgeWssUrls([NS_SIP_WSS_URL])[0],

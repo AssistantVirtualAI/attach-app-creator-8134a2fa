@@ -26,9 +26,12 @@ interface PpPjsipPlugin {
     port: number;
     transport: "TLS";
   }): Promise<{ ok: boolean; code: number; reason: string; transport: string; elapsedMs: number }>;
+  getState(): Promise<{ available?: boolean; registered?: boolean; username?: string }>;
+  isEngineLinked(): Promise<{ linked: boolean }>;
 }
 
 const PpPjsip = registerPlugin<PpPjsipPlugin>("PpPjsip");
+
 
 export type PjsipProbeResult = {
   ok: boolean;

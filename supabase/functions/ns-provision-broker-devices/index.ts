@@ -229,8 +229,10 @@ Deno.serve(async (req) => {
             //   for virtually every device (replaces the legacy `server-nat` flag).
             "device-sip-registration-expiry-seconds": 1800,
             "device-sip-nat-traversal-enabled": "automatic",
-            "transport": "WSS",
-            "device-sip-transport-type": "WSS",
+            // Baseline transport at creation. The runtime resolver realigns it
+            // with whichever stack actually registers (wss = JsSIP, tls = PJSIP).
+            "transport": forcedTransport ?? "WSS",
+            "device-sip-transport-type": forcedTransport ?? "WSS",
             "device-srtp-enabled": "opportunistic",
             "device-sip-allowed-user-agent": "",
             "device-push-enabled": isMobile ? "yes" : "no",

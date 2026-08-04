@@ -9,6 +9,7 @@ import {
   preclaimNativeAor,
   releaseAorFromNative,
 } from "./aorArbitration";
+import { pinnedCoreHost } from "./sipEdgePolicy";
 
 
 

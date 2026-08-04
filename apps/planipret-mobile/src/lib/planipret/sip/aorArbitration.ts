@@ -151,6 +151,15 @@ export async function hydratePjsipEnabled(): Promise<boolean> {
     const { Preferences } = await import("@capacitor/preferences");
     const { value } = await Preferences.get({ key: PP_PJSIP_ENABLED_KEY });
     if (value === "false" || value === "true") {
+      // Le round-trip Preferences peut finir après le preclaim/REGISTER natif.
+      // Une ancienne valeur `false` ne doit jamais reprendre la main sur un
+      // moteur qui a déjà gagné l'AOR pendant cette même initialisation.
+      if (value === "false" && nativeOwnsAor()) {
+        try { window.localStorage.setItem(PP_PJSIP_ENABLED_KEY, "true"); } catch { /* noop */ }
+        await Preferences.set({ key: PP_PJSIP_ENABLED_KEY, value: "true" });
+        console.warn("[AOR] stale pp_pjsip_enabled=false ignored after native preclaim");
+        return true;
+      }
       try { window.localStorage.setItem(PP_PJSIP_ENABLED_KEY, value); } catch { /* noop */ }
       if (value === "false") releaseAorFromNative("pp_pjsip_enabled=false");
       return value === "true";

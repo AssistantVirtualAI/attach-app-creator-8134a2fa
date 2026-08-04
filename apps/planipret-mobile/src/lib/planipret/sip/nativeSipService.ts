@@ -271,7 +271,16 @@ export class NativeSipService {
 
   private async forceDeviceTlsTransport(payload?: any, urgent = false): Promise<void> {
     const port = Number(payload?.sipPort ?? 5061);
-    const contact = String(payload?.contact ?? "");
+    const contact = String(payload?.contact ?? "").trim();
+    const registrationServer = String(payload?.registrationServer ?? payload?.server ?? "").trim();
+    // Garde : un contact vide produit `sip:@` côté NetSapiens, ce qui casse le
+    // binding du device. On n'écrit jamais un Contact incomplet.
+    const contactUsable = /^sips?:[^@\s]+@[^@\s]+/i.test(contact) || /^sips?:[^@\s]+$/i.test(contact);
+    if (!contactUsable && !registrationServer) {
+      console.warn("[SIP] reprovision TLS ignoré — contact/serveur vide", { contact, registrationServer });
+      return;
+    }
+
     // Idempotence : chaque reprovisioning provoque un cycle Expires:0 côté
     // NetSapiens, fenêtre pendant laquelle les appels partent en messagerie.
     // On ne réécrit que si le contact/port TLS a réellement changé.

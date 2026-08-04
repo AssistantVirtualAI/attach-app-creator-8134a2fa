@@ -159,8 +159,14 @@ export class NativeSipService {
         .then((m) => m.declarePlanipretNativeEngineOwnsAor(true))
         .catch(() => undefined);
 
-      await pjsip.register();
+      // `initialize` envoie déjà le REGISTER : un second appel renvoie
+      // PJSIP_EBUSY. On ne force le REGISTER que s'il échoue silencieusement.
+      await pjsip.register().catch((e: any) => {
+        const c = String(e?.code ?? e?.message ?? "");
+        if (!/EBUSY|busy|already/i.test(c)) throw e;
+      });
       return true;
+
     } catch (err: any) {
       const code = err?.code ?? err?.message ?? "error";
       if (code === "binary_missing" || code === "unavailable" || code === "UNIMPLEMENTED") {

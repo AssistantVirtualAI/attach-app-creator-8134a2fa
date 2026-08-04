@@ -715,9 +715,11 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     };
     const scheduleHandoff = (delay = 2500) => {
       if (handoffTimer) clearTimeout(handoffTimer);
+      if (nativeOwnsAor()) return;
       if (callInProgress()) { void setPlanipretNativeCallActive(true); return; }
       handoffTimer = setTimeout(() => {
         handoffTimer = null;
+        if (nativeOwnsAor()) return;
         const stillHidden = typeof document === "undefined" || document.visibilityState === "hidden";
         if (!stillHidden) return;
         if (callInProgress()) { void setPlanipretNativeCallActive(true); return; }
@@ -725,7 +727,12 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       }, delay);
     };
     const handoffToNative = async () => {
+      if (nativeOwnsAor()) {
+        console.info("[pp-sip] background handoff skipped — PJSIP owns the AOR (TLS survit via push VoIP, pas besoin du keep-alive WSS)");
+        return;
+      }
       if (callInProgress()) { void setPlanipretNativeCallActive(true); return; }
+
       // NetSapiens permits one active transport for this device AOR. Remove the
       // foreground contact first, then let native claim the same `<ext>M` AOR.
       const cfg = mobileSipConfigRef.current ?? ppSipProvider.getConfig();

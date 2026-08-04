@@ -2,11 +2,14 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import {
   aorExtension,
+  armAorWatchdog,
   claimAorForNative,
+  isPjsipEnabled,
   normalizeMobileAor,
   preclaimNativeAor,
   releaseAorFromNative,
 } from "./aorArbitration";
+
 
 
 /**
@@ -30,7 +33,9 @@ import {
 export type SipRegistrationState = "registered" | "unregistered" | "failed" | "unavailable";
 
 interface PjsipPlugin {
+  isEngineLinked(): Promise<{ linked: boolean }>;
   initialize(opts: Record<string, unknown>): Promise<{ ok: boolean; username: string }>;
+
   register(): Promise<{ ok: boolean }>;
   unregister(): Promise<{ ok: boolean }>;
   makeCall(opts: { destination: string }): Promise<{ callId: string }>;

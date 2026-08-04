@@ -469,12 +469,20 @@ final class PjsipEngine {
         default: label = "unknown"
         }
 
+        let isOutgoing = outgoingCall == callId
         emit("callState", [
             "callId": String(callId),
             "state": label,
             "code": lastCode,
+            "direction": isOutgoing ? "out" : "in",
             "remoteNumber": ppUserFromUri(remoteUri)
         ])
+
+        if isOutgoing, state == PJSIP_INV_STATE_EARLY || state == PJSIP_INV_STATE_CALLING {
+            NotificationCenter.default.post(
+                name: .ppPjsipOutgoingRinging, object: nil, userInfo: ["callId": String(callId)]
+            )
+        }
 
         if state == PJSIP_INV_STATE_CONFIRMED {
             NotificationCenter.default.post(
@@ -483,6 +491,7 @@ final class PjsipEngine {
         }
         if state == PJSIP_INV_STATE_DISCONNECTED {
             if activeCall == callId { activeCall = pjsua_call_id(-1) }
+            if outgoingCall == callId { outgoingCall = pjsua_call_id(-1) }
             audioSessionReady = false
             NotificationCenter.default.post(
                 name: .ppPjsipCallEnded, object: nil,

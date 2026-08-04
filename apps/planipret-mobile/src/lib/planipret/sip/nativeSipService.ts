@@ -170,7 +170,14 @@ export class NativeSipService {
     this.username = username;
     this.extension = String(creds.sip_extension ?? aorExtension(username));
 
-    const proxy = String(creds.sip_proxy ?? creds.sip_core_server ?? "");
+    // Same single-core invariant as the WSS path: NS sometimes reports the
+    // portal host in `core-server`; a registration held by the portal is never
+    // used for inbound delivery (calls go straight to voicemail).
+    const rawProxy = String(creds.sip_proxy ?? creds.sip_core_server ?? "");
+    const proxy = pinnedCoreHost(rawProxy);
+    if (rawProxy && !rawProxy.includes(proxy)) {
+      console.warn("[SIP] core-server", rawProxy, "rejeté (portail/non-core) → épinglé", proxy);
+    }
     const transport = "TLS" as const;
     const port = 5061;
 

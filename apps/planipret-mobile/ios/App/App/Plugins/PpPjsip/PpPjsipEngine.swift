@@ -132,6 +132,11 @@ final class PjsipEngine {
     private var domain = ""
     private var registered = false
     private var activeCall: pjsua_call_id = pjsua_call_id(-1)
+    /// Décrochage demandé (CallKit) avant l'arrivée de l'INVITE SIP.
+    private var pendingAnswerRequest = false
+    private var pendingAnswerCallId: String?
+    private var pendingAnswerCompletions: [(Bool) -> Void] = []
+
     /// Appel sortant en cours (piloté par CallKit côté PpVoipCall).
     private var outgoingCall: pjsua_call_id = pjsua_call_id(-1)
     private var muted = false
@@ -151,9 +156,10 @@ final class PjsipEngine {
         // CallKit a recu un "decrocher" avant que l'INVITE natif ne soit
         // presente : si un appel natif existe deja, on repond immediatement.
         nc.addObserver(forName: Notification.Name("PpPjsipAnswerPending"), object: nil, queue: nil) { [weak self] _ in
-            guard let self = self, self.activeCall >= 0 else { return }
-            self.answer(callId: nil) { _ in }
+            // Si l'INVITE n'est pas encore là, answer() arme pendingAnswer.
+            self?.answer(callId: nil) { _ in }
         }
+
         nc.addObserver(forName: Notification.Name("PpPjsipMuteRequested"), object: nil, queue: nil) { [weak self] note in
             self?.setMute((note.userInfo?["muted"] as? Bool) ?? false)
         }
@@ -318,7 +324,35 @@ final class PjsipEngine {
 
     func answer(callId: String?, completion: @escaping (Bool) -> Void) {
         let target = resolveCall(callId)
-        guard target >= 0 else { completion(false); return }
+        guard target >= 0 else {
+            // L'utilisateur a décroché depuis CallKit avant l'arrivée de
+            // l'INVITE SIP (push VoIP plus rapide que le réseau SIP).
+            // On mémorise l'intention : handleIncomingCall répondra 200 OK.
+            NSLog("[PpPjsip] answer avant INVITE → pendingAnswer armé")
+            lock.lock()
+            pendingAnswerRequest = true
+            pendingAnswerCallId = callId
+            pendingAnswerCompletions.append(completion)
+            lock.unlock()
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 10.0) { [weak self] in
+                guard let self = self else { return }
+                self.lock.lock()
+                let stillPending = self.pendingAnswerRequest
+                let pending = self.pendingAnswerCompletions
+                if stillPending {
+                    self.pendingAnswerRequest = false
+                    self.pendingAnswerCallId = nil
+                    self.pendingAnswerCompletions = []
+                }
+                self.lock.unlock()
+                if stillPending {
+                    NSLog("[PpPjsip] pendingAnswer timeout 10s → no_active_call")
+                    pending.forEach { $0(false) }
+                }
+            }
+            return
+        }
+
         var done = false
         let finish: (Bool) -> Void = { [weak self] ok in
             guard let self = self else { return }
@@ -455,6 +489,24 @@ final class PjsipEngine {
         // Sonnerie 180 immédiate, sinon NetSapiens bascule en messagerie.
         pjsua_call_answer(callId, 180, nil, nil)
 
+        // Décrochage déjà demandé depuis CallKit avant l'arrivée de l'INVITE :
+        // on répond 200 OK immédiatement et on libère les promesses JS.
+        lock.lock()
+        let hasPending = pendingAnswerRequest
+        let pendingCompletions = pendingAnswerCompletions
+        if hasPending {
+            pendingAnswerRequest = false
+            pendingAnswerCallId = nil
+            pendingAnswerCompletions = []
+        }
+        lock.unlock()
+        if hasPending {
+            let status = pjsua_call_answer(callId, 200, nil, nil)
+            NSLog("[PpPjsip] pendingAnswer → 200 OK callId=%d status=%d", callId, status)
+            let ok = status == pj_status_t(0)
+            pendingCompletions.forEach { $0(ok) }
+        }
+
         // CallKit sonne à partir de l'INVITE natif — plus de dépendance JsSIP.
         NotificationCenter.default.post(
             name: .ppPjsipIncomingCall,
@@ -462,6 +514,7 @@ final class PjsipEngine {
             userInfo: ["callId": String(callId), "callerNumber": number, "callerName": name]
         )
         emit("incomingCall", ["callId": String(callId), "remoteNumber": number, "remoteName": name])
+
     }
 
     func handleCallState(callId: pjsua_call_id, state: pjsip_inv_state, lastCode: Int, remoteUri: String) {

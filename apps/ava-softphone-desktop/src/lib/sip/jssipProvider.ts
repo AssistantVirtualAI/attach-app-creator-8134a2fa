@@ -513,17 +513,41 @@ class JsSipProvider {
 
   private startKeepAlive() {
     if (this.keepAliveTimer) clearInterval(this.keepAliveTimer);
+    // 20s interval: shorter than typical NAT/firewall TCP idle timeout (30-120s)
+    // so we detect dead sockets before the PBX unregisters us.
     this.keepAliveTimer = setInterval(() => {
       if (!this.ua) return;
       if (this.snap.authBlocked) return;
       try {
         const connected = this.ua.isConnected?.() ?? false;
         const registered = this.ua.isRegistered?.() ?? false;
-        if (!connected) this.kickReconnect('heartbeat: socket down');
-        else if (!registered) this.kickReconnect('heartbeat: not registered');
-        else this.markRecovered();
+        if (!connected) {
+          this.kickReconnect('heartbeat: socket down');
+        } else if (!registered) {
+          this.kickReconnect('heartbeat: not registered');
+        } else {
+          // Send a SIP OPTIONS to the PBX to probe the TCP connection.
+          // ua.isConnected() returns true even on a dead NAT-killed socket;
+          // a real round-trip OPTIONS catches that case.
+          try {
+            const server = this.config?.wssUrl?.replace(/^wss?:\/\//, '').split('/')[0] ?? '';
+            if (server && typeof (this.ua as any).sendOptions === 'function') {
+              (this.ua as any).sendOptions(`sip:${server}`, null, {
+                eventHandlers: {
+                  succeeded: () => this.markRecovered(),
+                  failed: () => this.kickReconnect('heartbeat: OPTIONS no response'),
+                },
+              });
+            } else {
+              this.markRecovered();
+            }
+          } catch {
+            // sendOptions not available in this JsSIP build — trust isConnected()
+            this.markRecovered();
+          }
+        }
       } catch { /* noop */ }
-    }, 25_000);
+    }, 20_000);
   }
 
 

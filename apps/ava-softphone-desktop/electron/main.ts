@@ -4,6 +4,7 @@ import {
   globalShortcut,
   ipcMain,
   Notification,
+  powerSaveBlocker,
   session,
   shell,
   systemPreferences,
@@ -181,7 +182,19 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
   }
 });
 
+// ---------- Power Save Blocker ----------
+// Prevent macOS/Windows from suspending the app process when it runs in the
+// background. Without this, the OS can freeze the renderer's JS timers and
+// the WebSocket SIP connection silently dies.
+let powerSaveId: number | null = null;
+function ensurePowerSaveBlocker() {
+  if (powerSaveId !== null && powerSaveBlocker.isStarted(powerSaveId)) return;
+  powerSaveId = powerSaveBlocker.start('prevent-app-suspension');
+  console.log('[main] powerSaveBlocker started:', powerSaveId);
+}
+
 app.whenReady().then(() => {
+  ensurePowerSaveBlocker();
   // Grant microphone/media permissions on the default session BEFORE any
   // window is created — required so getUserMedia() does not reject in Electron.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {

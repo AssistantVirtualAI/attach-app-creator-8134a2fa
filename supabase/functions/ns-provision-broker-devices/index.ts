@@ -185,26 +185,27 @@ Deno.serve(async (req) => {
 
       const create = async (id: string, model: string, isMobile: boolean, password: string) => {
         if (hasDev(id)) {
-          // Device exists — patch it to ensure WSS transport, empty user-agent filter,
-          // and (critically) the 1800s registration expiry + automatic NAT traversal.
-          // Without this branch a bulk force:true never repaired existing devices,
-          // which kept them on the NS default 60s expiry -> straight to voicemail.
+          // Device exists — repair the expiry/NAT/push profile, but LEAVE the
+          // transport alone unless the caller explicitly forced one (see the
+          // `forcedTransport` note above): rewriting it under a live native TLS
+          // registration silently sends inbound calls to voicemail.
+          const patch: Record<string, unknown> = {
+            "device-srtp-enabled": "opportunistic",
+            "device-sip-allowed-user-agent": "",
+            "device-provisioning-registration-core-server": "core1.cluster1.ucstack.io",
+            "device-sip-registration-expiry-seconds": 1800,
+            "device-sip-nat-traversal-enabled": "automatic",
+            "device-push-enabled": isMobile ? "yes" : "no",
+          };
+          if (forcedTransport) {
+            patch["transport"] = forcedTransport;
+            patch["device-sip-transport-type"] = forcedTransport;
+          }
           const r = await nsFetch(`${base}/${encodeURIComponent(id)}`, {
             method: "PUT", headers: nsHeaders,
-            body: JSON.stringify({
-              "transport": "WSS",
-              // SIP-level transport: without this NS closes the WSS socket with
-              // code 1001 right after the REGISTER 200 OK.
-              "device-sip-transport-type": "WSS",
-              "device-srtp-enabled": "opportunistic",
-              "device-sip-allowed-user-agent": "",
-              "device-provisioning-registration-core-server": "core1.cluster1.ucstack.io",
-              "device-sip-registration-expiry-seconds": 1800,
-              "device-sip-nat-traversal-enabled": "automatic",
-              "device-push-enabled": isMobile ? "yes" : "no",
-            }),
+            body: JSON.stringify(patch),
           }).catch(() => null);
-          return { existed: true, id, patched: !!r?.ok, status: r?.status ?? 0 };
+          return { existed: true, id, patched: !!r?.ok, status: r?.status ?? 0, transport: forcedTransport ?? "unchanged" };
         }
 
         // core-server is MANDATORY — without it JsSIP/PJSIP cannot register.

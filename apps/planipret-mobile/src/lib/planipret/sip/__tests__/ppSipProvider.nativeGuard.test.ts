@@ -1,3 +1,4 @@
+/** @vitest-environment jsdom */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 /**
@@ -79,7 +80,7 @@ describe("ppSipProvider — garde plateforme native", () => {
   afterEach(() => {
     wsSpy?.mockRestore();
     wsSpy = null;
-    provider.stop();
+    provider?.stop?.();
   });
 
   it("n'initialise jamais JsSIP sur Capacitor natif", async () => {

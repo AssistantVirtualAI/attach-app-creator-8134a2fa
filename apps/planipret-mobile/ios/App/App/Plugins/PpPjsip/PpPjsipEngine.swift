@@ -248,7 +248,12 @@ final class PjsipEngine {
         acc.contact_rewrite_method = 2
         acc.use_srtp = PJMEDIA_SRTP_OPTIONAL
         acc.srtp_secure_signaling = 0
-        acc.contact_params = ppMakePjStr(";+sip.instance=\"<\(instanceId)>\"", keep: &strings)
+        // Un seul `+sip.instance` : on laisse RFC5626 le générer avec NOTRE
+        // UUID stable au lieu d'ajouter un second param manuel (pjsua émettait
+        // sinon un doublon dont un UUID à zéros).
+        acc.use_rfc5626 = pj_bool_t(1)
+        acc.rfc5626_instance_id = ppMakePjStr(instanceId, keep: &strings)
+
 
         NSLog("[PpPjsip] production REGISTER → sip:%@:%d TLS aor=sip:%@@%@", server, Int32(port), username, domain)
         try check(pjsua_acc_add(&acc, pj_bool_t(1), &accId), "pjsua_acc_add")
@@ -601,7 +606,8 @@ final class PjsipEngine {
         acc.proxy.0 = ppMakePjStr("sip:\(server):\(port);transport=tls;lr", keep: &strings)
         acc.reg_timeout = 300
         acc.register_on_acc_add = pj_bool_t(1)
-        acc.contact_params = ppMakePjStr(";+sip.instance=\"<\(instanceId)>\"", keep: &strings)
+        acc.use_rfc5626 = pj_bool_t(1)
+        acc.rfc5626_instance_id = ppMakePjStr(instanceId, keep: &strings)
 
         NSLog("[PpPjsip] PROBE REGISTER → sip:%@:%d TLS aor=sip:%@@%@", server, Int32(port), probeUser, domain)
         try check(pjsua_acc_add(&acc, pj_bool_t(1), &probeAccId), "pjsua_acc_add(probe)")

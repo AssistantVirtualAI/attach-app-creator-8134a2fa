@@ -123,7 +123,14 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     deinit { NotificationCenter.default.removeObserver(self); timer?.invalidate(); socket?.cancel(with: .goingAway, reason: nil) }
 
     @objc func startSipService(_ call: CAPPluginCall) {
+      if nativeEngineOwnsAor {
+        NSLog("[PpSipKeepAlive] startSipService skipped — PJSIP owns the AOR")
+        releaseRegistration("pjsip_owns_aor")
+        call.resolve(["ok": true, "status": "protected", "reason": "pjsip_owns_aor"])
+        return
+      }
       host = call.getString("host") ?? call.getString("domain") ?? ""; port = call.getInt("port") ?? 443; path = call.getString("path") ?? "/"
+
       login = call.getString("login") ?? call.getString("username") ?? call.getString("extension") ?? ""
       domain = call.getString("domain") ?? ""; displayName = call.getString("displayName") ?? login; password = call.getString("password") ?? ""
       backoffMinMs = max(4000, Double(call.getInt("backoffMinMs") ?? 4000))

@@ -8,10 +8,11 @@ App name: Planiprêt Mobile
 ```bash
 cd apps/planipret-mobile
 npm install
+npm run ios:build-pjsip
 npm run audit:native
 npm run build
 npx cap add ios
-npx cap sync ios
+npm run ios:build-sync
 cd ios/App && pod install && cd ../..
 npx cap open ios
 ```

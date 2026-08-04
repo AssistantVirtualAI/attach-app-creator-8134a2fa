@@ -2040,10 +2040,13 @@ function ensurePjsipXcframework(iosRoot) {
     pjsipWarnings.push("⚠ libpjsip.xcframework sans dossier Headers → canImport(pjsua) sera faux; relancer scripts/build-pjsip-ios.sh");
   }
 
-
+  // Sans binaire sur disque, on n'injecte pas de référence (Xcode refuserait
+  // de compiler un fichier manquant) — le repli JsSIP reste opérationnel.
+  if (!present) return false;
 
   const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
   if (!fs.existsSync(pbx)) return false;
+
   let text = fs.readFileSync(pbx, "utf8");
   const before = text;
 

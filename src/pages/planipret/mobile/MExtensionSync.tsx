@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { ArrowLeft, RefreshCw, CheckCircle2, AlertTriangle, XCircle, Smartphone, Radio } from "lucide-react";
@@ -34,7 +35,7 @@ export default function MExtensionSync() {
     setBusy(true);
     setState("provisioning");
     const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
-      body: { client_type: "mobile" },
+      body: { client_type: Capacitor.isNativePlatform() ? "mobile" : "web" },
     });
     setBusy(false);
     const res = (data ?? {}) as any;

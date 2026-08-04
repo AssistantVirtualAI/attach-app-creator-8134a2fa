@@ -261,6 +261,14 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   // Permet d'afficher immédiatement l'écran "ça sonne" avec Répondre/Raccrocher.
   const [pushRing, setPushRing] = useState<{ callId: string; from: string } | null>(null);
   const [nativeStatus, setNativeStatus] = useState<PpNativeSipStatus | null>(null);
+  /**
+   * Appel piloté par le moteur PJSIP natif (iOS). Sans cet état, un appel
+   * sortant natif n'apparaissait nulle part dans l'UI : « appel lancé » puis
+   * plus rien (ni écran d'appel, ni clavier, ni raccrocher).
+   */
+  const [nativeCall, setNativeCall] = useState<
+    { callId: string; state: PpSipSnapshot["callState"]; direction: "in" | "out"; number: string; startedAt: number } | null
+  >(null);
   /** Latest answer() implementation, callable from native listeners registered once. */
   const answerRef = useRef<null | (() => Promise<boolean>)>(null);
   /** One answer transaction at a time across CallKit, notification and in-app UI. */
@@ -1007,10 +1015,66 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   // Dès qu'une vraie session SIP existe, le push n'a plus à piloter l'écran.
   useEffect(() => { if (hasLiveSipSession || snap.callState === "ended") setPushRing(null); }, [hasLiveSipSession, snap.callState]);
 
+  // Événements du moteur PJSIP natif → état d'appel affichable par l'UI.
+  useEffect(() => {
+    const onNativeCallState = (ev: Event) => {
+      const d = (ev as CustomEvent).detail ?? {};
+      const raw = String(d.state ?? "").toLowerCase();
+      const direction: "in" | "out" = d.direction === "out" ? "out" : "in";
+      if (raw === "disconnected" || raw === "ended" || raw === "failed") {
+        setNativeCall(null);
+        return;
+      }
+      const mapped: PpSipSnapshot["callState"] =
+        raw === "connected" || raw === "media" ? "active"
+          : raw === "ringing" || raw === "connecting" ? (direction === "out" ? "ringing-out" : "ringing-in")
+            : "active";
+      setNativeCall((cur) => ({
+        callId: String(d.callId ?? cur?.callId ?? ""),
+        state: mapped,
+        direction: cur?.direction ?? direction,
+        number: String(d.remoteNumber || cur?.number || ""),
+        startedAt: cur?.startedAt ?? Date.now(),
+      }));
+    };
+    const onNativeIncoming = (ev: Event) => {
+      const d = (ev as CustomEvent).detail ?? {};
+      setNativeCall({
+        callId: String(d.callId ?? ""),
+        state: "ringing-in",
+        direction: "in",
+        number: String(d.remoteNumber || d.remoteName || ""),
+        startedAt: Date.now(),
+      });
+    };
+    window.addEventListener("sip-call-state", onNativeCallState);
+    window.addEventListener("sip-incoming-call", onNativeIncoming);
+    return () => {
+      window.removeEventListener("sip-call-state", onNativeCallState);
+      window.removeEventListener("sip-incoming-call", onNativeIncoming);
+    };
+  }, []);
+
+  const hasNativeCall = !!nativeCall;
+
   const effectiveSnap = useMemo<PpSipSnapshot>(() => {
     const base: PpSipSnapshot = (nativeOwnsRegistration && snap.status !== "registered" && snap.status !== "connected")
       ? ({ ...snap, status: "registered", lastError: null } as PpSipSnapshot)
       : snap;
+    // L'appel natif PJSIP prime sur tout : c'est la seule pile qui porte
+    // réellement le média sur iOS.
+    if (nativeCall) {
+      return {
+        ...base,
+        status: "registered",
+        callState: nativeCall.state,
+        callId: nativeCall.callId || base.callId,
+        remoteIdentity: nativeCall.number || "—",
+        remoteNumber: nativeCall.number || "",
+        direction: nativeCall.direction,
+        startedAt: nativeCall.startedAt,
+      } as PpSipSnapshot;
+    }
     if (!restCall?.id || hasLiveSipSession) {
       // Écran "ça sonne" piloté par le push VoIP tant que l'INVITE n'est pas là.
       if (!hasLiveSipSession && pushRing) {
@@ -1036,7 +1100,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       startedAt: restCall.startedAt ?? base.startedAt ?? Date.now(),
       onHold: state === "held",
     };
-  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration, hasLiveSipSession, pushRing]);
+  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration, hasLiveSipSession, pushRing, nativeCall]);
 
 
   const restControl = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {
@@ -1118,8 +1182,17 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
 
     if (nativeOwnsAor() && nativeSip.isRegistered()) {
+      // L'écran d'appel doit s'ouvrir immédiatement : le premier event natif
+      // (`callState` CALLING/EARLY) peut arriver plusieurs centaines de ms
+      // après la résolution de makeCall.
+      setNativeCall({ callId: "", state: "ringing-out", direction: "out", number: destination, startedAt: Date.now() });
       const ok = await nativeSip.makeCall(destination);
-      if (ok) return { via: "webrtc", ok: true };
+      if (ok) {
+        setNativeCall((cur) => cur ? { ...cur, callId: nativeSip.getCallId() ?? cur.callId } : cur);
+        postOutboundCall({ providerCallId: nativeSip.getCallId() ?? `pjsip-${Date.now()}`, number: destination });
+        return { via: "webrtc", ok: true };
+      }
+      setNativeCall(null);
       console.warn("[softphone] native PJSIP call failed; falling back to PBX");
     }
 
@@ -1332,6 +1405,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       void nativeSip.hangup();
       setPushRing(null);
       setRestCall(null);
+      setNativeCall(null);
       console.info("[hangup] native PJSIP hangup sent");
       return;
     }
@@ -1391,22 +1465,28 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     answeredElsewhere,
     dismissAnsweredElsewhere: () => setAnsweredElsewhere(null),
     attachRestCall,
-    call: (n: string) => ppSipProvider.call(n),
+    call: (n: string) => { void placeCall(n); },
     answer,
     hangup,
     reregister: () => { try { ppSipProvider.forceReregister(); } catch {} },
-    mute: () => (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: true }) : ppSipProvider.mute(),
-    unmute: () => (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: false }) : ppSipProvider.unmute(),
+    // Pendant un appel natif PJSIP, les commandes doivent viser le moteur natif :
+    // ppSipProvider (JsSIP) n'a aucune session sur iOS.
+    mute: () => hasNativeCall ? void nativeSip.setMute(true)
+      : (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: true }) : ppSipProvider.mute(),
+    unmute: () => hasNativeCall ? void nativeSip.setMute(false)
+      : (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: false }) : ppSipProvider.unmute(),
     hold: () => (restCall?.id && !hasLiveSipSession) ? void restControl("hold") : ppSipProvider.hold(),
     unhold: () => (restCall?.id && !hasLiveSipSession) ? void restControl("unhold") : ppSipProvider.unhold(),
-    sendDTMF: (k: string) => (restCall?.id && !hasLiveSipSession) ? void restControl("dtmf", { digit: k }) : ppSipProvider.sendDTMF(k),
+    sendDTMF: (k: string) => hasNativeCall ? void nativeSip.sendDTMF(k)
+      : (restCall?.id && !hasLiveSipSession) ? void restControl("dtmf", { digit: k }) : ppSipProvider.sendDTMF(k),
     transfer: (t: string) => (restCall?.id && !hasLiveSipSession) ? void restControl("transfer", { destination: t, target: t }) : ppSipProvider.transfer(t),
+    setSpeaker: (on: boolean) => hasNativeCall ? void nativeSip.setSpeaker(on) : undefined,
     // The provider owns a persistent hidden <audio> sink; screens must not
     // detach it on unmount (that killed remote audio mid-call).
     setAudioEl: (_el: HTMLAudioElement | null) => {},
 
     forceHandover: () => handoverController.forceHandover(),
-  }), [effectiveSnap, loading, net, quality, nativeStatus, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl, hasLiveSipSession]);
+  }), [effectiveSnap, loading, net, quality, nativeStatus, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl, hasLiveSipSession, hasNativeCall]);
 
 
 }

@@ -45,3 +45,23 @@ export function edgeOnlyWssUrls(candidates: (string | null | undefined)[]): stri
   );
   return [kept[0] ?? PP_SIP_CORE_PRIMARY];
 }
+
+/** Default core host used by the NATIVE (PJSIP / TLS 5061) registration path. */
+export const PP_SIP_CORE_HOST_PRIMARY = "core1.cluster1.ucstack.io";
+export const PP_SIP_CORE_HOST_SECONDARY = "core2.cluster1.ucstack.io";
+
+/**
+ * Pin a bare host (as returned by NS `core-server`) to a call-processing core
+ * node. The native TLS path must obey the same invariant as the WSS path: a
+ * registration held by the portal is never used for inbound call delivery.
+ */
+export function pinnedCoreHost(raw: string | null | undefined): string {
+  const h = String(raw ?? "")
+    .trim()
+    .replace(/^\w+:\/\//, "")
+    .replace(/\/+$/, "")
+    .replace(/:\d+$/, "");
+  if (!h) return PP_SIP_CORE_HOST_PRIMARY;
+  if (PORTAL_HOST.test(h) || !CORE_HOST.test(h)) return PP_SIP_CORE_HOST_PRIMARY;
+  return h;
+}

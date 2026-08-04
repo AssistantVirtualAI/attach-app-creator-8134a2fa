@@ -241,6 +241,10 @@ export class NativeSipService {
    * Idempotent et throttlé à 60 s.
    */
   private lastTlsProvisionAt = 0;
+  private lastTlsProvisionSignature = "";
+  private lastTlsProvisionOk = false;
+  private tlsProvisionInFlight = false;
+
   private async forceDeviceTlsTransport(payload?: any, urgent = false): Promise<void> {
     const port = Number(payload?.sipPort ?? 5061);
     const contact = String(payload?.contact ?? "");

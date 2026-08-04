@@ -255,7 +255,10 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* empty ok */ }
   const clientType = normalizeClientType(body?.client_type);
-  const sipTransport = normalizeTransport(body?.transport);
+  // Invariant AOR/transport : `<ext>M` = app native PJSIP/TLS uniquement,
+  // `<ext>W` = navigateur JsSIP/WSS. Jamais l'inverse, sinon le dernier
+  // REGISTER reçu vole le Contact et les appels partent au mauvais client.
+  const sipTransport = clientType === "mobile" ? "tls" : "wss";
 
 
   const authHeader = req.headers.get("Authorization") ?? "";

@@ -2110,6 +2110,29 @@ function ensureXcodeSourceFiles(iosRoot, relativeFiles) {
   return false;
 }
 
+// Retire complètement un fichier source du projet Xcode (références + phase de
+// compilation). Utilisé pour purger les bridges ObjC obsolètes.
+function removeXcodeSourceFile(iosRoot, rel) {
+  const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
+  if (!fs.existsSync(pbx)) return false;
+  let text = fs.readFileSync(pbx, "utf8");
+  const before = text;
+  const fileName = path.basename(rel);
+  const fileRef = xcodeId(`file:${rel}`);
+  const buildRef = xcodeId(`build:${rel}`);
+  text = text
+    .split("\n")
+    .filter((line) => !(line.includes(fileRef) || line.includes(buildRef) || line.includes(`${fileName} in Sources`)))
+    .join("\n");
+  if (text !== before) {
+    fs.writeFileSync(pbx, text);
+    console.log(`[native-config] removed stale Xcode reference: ${rel}`);
+    return true;
+  }
+  return false;
+}
+
+
 // Lier libpjsip.xcframework à la cible App + exposer son module.modulemap à
 // Swift. Sans ça `#if canImport(pjsua)` est FAUX et tout le moteur PJSIP est
 // exclu à la compilation, même si l'archive est visible dans Xcode.

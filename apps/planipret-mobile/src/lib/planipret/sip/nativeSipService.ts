@@ -82,6 +82,9 @@ export class NativeSipService {
   private readonly maxRetries = 3;
   private currentCallId: string | null = null;
   private username: string | null = null;
+  /** Appels entrants en cours, pour détecter les manqués (jamais "connected"). */
+  private inboundCalls = new Map<string, { remoteNumber: string | null; remoteName: string | null; answered: boolean; startedAt: string }>();
+
   private extension: string | null = null;
   private initializing: Promise<boolean> | null = null;
   private listenersBound = false;

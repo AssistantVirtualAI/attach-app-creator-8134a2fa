@@ -2476,3 +2476,8 @@ patchIosNativeFiles();
 if (!verifyIosScene({ soft: process.env.PP_SCENE_CHECK_SOFT === "1" })) {
   throw new Error("[native-config] iOS UIScene/SceneDelegate patch missing after cap sync — aborting.");
 }
+
+// Avertissements non bloquants (binaire PJSIP absent → repli JsSIP actif).
+if (pjsipWarnings.length) {
+  console.warn("\n[native-config] " + pjsipWarnings.join("\n[native-config] ") + "\n");
+}

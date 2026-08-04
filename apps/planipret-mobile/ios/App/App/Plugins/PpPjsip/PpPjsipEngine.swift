@@ -891,11 +891,49 @@ final class PjsipEngine {
     }
 }
 
-/// Thread dédié et persistant : c'est lui qui appelle pjsua_create(), donc le
-/// thread reste enregistré auprès de PJLIB pour toute la durée du process.
+/// Thread dédié, unique et persistant (vrai `Thread`, pas une DispatchQueue :
+/// GCD peut changer de thread système entre deux blocs, ce qui déclenchait
+/// l'assertion PJLIB « Calling pjlib from unknown/external thread » et un
+/// SIGABRT dans `pjsua_acc_add`).
 final class PjsipWorkerThread {
-    private let queue = DispatchQueue(label: "ca.planipret.pjsip.engine")
-    func run(_ block: @escaping () -> Void) { queue.async(execute: block) }
+    /// Thread OS réellement utilisé — permet d'éviter un re-dispatch inutile.
+    static private(set) var currentThread: Thread?
+
+    private let lock = NSCondition()
+    private var pending: [() -> Void] = []
+    private var thread: Thread?
+
+    init() {
+        let t = Thread { [weak self] in self?.loop() }
+        t.name = "ca.planipret.pjsip.engine"
+        t.qualityOfService = .userInitiated
+        t.stackSize = 512 * 1024
+        thread = t
+        t.start()
+    }
+
+    private func loop() {
+        PjsipWorkerThread.currentThread = Thread.current
+        while true {
+            lock.lock()
+            while pending.isEmpty { lock.wait() }
+            let jobs = pending
+            pending.removeAll()
+            lock.unlock()
+            for job in jobs {
+                PjsipEngine.shared.registerCurrentThreadIfNeeded()
+                job()
+            }
+        }
+    }
+
+    func run(_ block: @escaping () -> Void) {
+        lock.lock()
+        pending.append(block)
+        lock.signal()
+        lock.unlock()
+    }
 }
+
 
 #endif

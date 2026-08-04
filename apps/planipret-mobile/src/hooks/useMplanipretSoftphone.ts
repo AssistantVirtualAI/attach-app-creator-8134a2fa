@@ -1405,6 +1405,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       void nativeSip.hangup();
       setPushRing(null);
       setRestCall(null);
+      setNativeCall(null);
       console.info("[hangup] native PJSIP hangup sent");
       return;
     }

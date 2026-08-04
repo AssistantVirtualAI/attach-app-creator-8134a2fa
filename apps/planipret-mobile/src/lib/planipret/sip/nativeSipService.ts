@@ -227,7 +227,16 @@ export class NativeSipService {
 
     } catch (err: any) {
       const code = String(err?.code ?? err?.message ?? err?.errorMessage ?? "error");
-      console.error("[SIP] Init échouée:", code, err);
+      // Détail complet : les erreurs Capacitor ne sérialisent pas via console.error.
+      console.error("[SIP] Init échouée:", code, JSON.stringify({
+        code: err?.code ?? null,
+        message: err?.message ?? null,
+        errorMessage: err?.errorMessage ?? null,
+        data: err?.data ?? null,
+        name: err?.name ?? null,
+        stack: String(err?.stack ?? "").split("\n").slice(0, 3).join(" | "),
+      }));
+
       // QUELLE QUE SOIT la raison (binary_missing, timeout, exception), le
       // chemin legacy JsSIP doit reprendre la main immédiatement.
       releaseAorFromNative(code);

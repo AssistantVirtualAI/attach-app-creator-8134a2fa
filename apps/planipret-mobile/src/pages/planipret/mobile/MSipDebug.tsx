@@ -116,8 +116,12 @@ export default function MSipDebug() {
 
 
       {/* 24h stability soak */}
+      {/* Interrupteur PJSIP (sans rebuild) */}
+      <PjsipToggleCard />
+
       {/* Sonde PJSIP native (manuelle) */}
       <PjsipProbeCard />
+
 
       <StabilityCard />
 

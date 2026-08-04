@@ -413,10 +413,12 @@ Deno.serve(async (req) => {
       "device-provisioning-registration-core-server": coreServer,
       "device-srtp-enabled": "opportunistic",
       "device-sip-allowed-user-agent": "",
-      // Normalize every broker's device to the same transport/NAT/push profile.
-      transport: "WSS",
-      // SIP transport at the core level — prevents the 1001 close after 200 OK.
-      "device-sip-transport-type": "WSS",
+      // ONE transport per AOR — the device is aligned on the transport the
+      // caller declared it will register with (wss for JsSIP, tls for PJSIP).
+      transport: nsTransport(sipTransport),
+      // SIP transport at the core level — a mismatch here means the PBX never
+      // forks inbound calls to the contact this client registered.
+      "device-sip-transport-type": nsTransport(sipTransport),
       "server-nat": clientType === "mobile" ? "yes" : "no",
       // Documented NS-API v2 keys — default expiry of 60s was dropping the
       // registration between re-REGISTERs; "automatic" NAT traversal keeps the

@@ -2022,28 +2022,24 @@ function ensureXcodeSourceFiles(iosRoot, relativeFiles) {
 // Lier libpjsip.xcframework à la cible App + exposer son module.modulemap à
 // Swift. Sans ça `#if canImport(pjsua)` est FAUX et tout le moteur PJSIP est
 // exclu à la compilation, même si l'archive est visible dans Xcode.
+const pjsipWarnings = [];
+
 function ensurePjsipXcframework(iosRoot) {
   const rel = "App/Plugins/PpPjsip/Frameworks/libpjsip.xcframework";
   const abs = path.join(iosRoot, rel);
-  if (!fs.existsSync(abs)) {
-    throw new Error(
-      `[native-config] ${rel} absent — build iOS refusé: sans ce binaire, ` +
-        "PpSipKeepAlive reçoit l'INVITE sans média et le bouton Répondre ne peut pas décrocher. " +
-        "Lance: bash scripts/build-pjsip-ios.sh"
-    );
+  const present = fs.existsSync(abs);
+  const hasHeaders =
+    present &&
+    fs.readdirSync(abs).some((slice) => fs.existsSync(path.join(abs, slice, "Headers")));
+
+  // Le script ne doit JAMAIS échouer si le binaire manque : le repli JsSIP
+  // prend le relais. On avertit clairement en fin d'exécution.
+  if (!present) {
+    pjsipWarnings.push(`⚠ libpjsip.xcframework absent → lancer scripts/build-pjsip-ios.sh (${rel})`);
+  } else if (!hasHeaders) {
+    pjsipWarnings.push("⚠ libpjsip.xcframework sans dossier Headers → canImport(pjsua) sera faux; relancer scripts/build-pjsip-ios.sh");
   }
 
-  // NE PAS ajouter les Headers des tranches (device + simulateur) aux chemins
-  // de recherche: les deux module.modulemap définissent le module `pjsua`, et
-  // Xcode copie déjà celui de la bonne tranche dans
-  // $(BUILT_PRODUCTS_DIR)/include -> "redefinition of module 'pjsua'".
-  // On se contente donc du dossier include généré par Xcode.
-  const hasHeaders = fs
-    .readdirSync(abs)
-    .some((slice) => fs.existsSync(path.join(abs, slice, "Headers")));
-  if (!hasHeaders) {
-    throw new Error("[native-config] libpjsip.xcframework sans dossier Headers — build iOS refusé car canImport(pjsua) serait faux.");
-  }
 
 
   const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");

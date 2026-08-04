@@ -1106,6 +1106,12 @@ class PpSipProvider {
   /** Destroy the (possibly zombie) UA and rebuild immediately, bypassing every
    *  debounce/backoff guard. Answer intent is preserved on purpose. */
   private hardRebuild(reason: string) {
+    if (ppNativeSipOwnsAor()) {
+      this.log("warn", `hard transport rebuild blocked: native SIP owns AOR (${reason})`);
+      this.pushHistory("blocked", `native_owns_aor_hard_rebuild:${reason}`);
+      this.emitMetrics();
+      return;
+    }
     const cfg = this.cfg;
     if (!cfg) return;
     const ua = this.ua;
@@ -1162,6 +1168,12 @@ class PpSipProvider {
    *  the delay never regresses to 1000ms. */
   private scheduleSocketReconnect(reason: string) {
     if (this.wsRetryTimer) return;
+    if (ppNativeSipOwnsAor()) {
+      this.log("warn", `socket reconnect blocked: native SIP owns AOR (${reason})`);
+      this.pushHistory("blocked", `native_owns_aor_reconnect:${reason}`);
+      this.emitMetrics();
+      return;
+    }
     // Exclusive lease: if JsSIP's connection_recovery currently owns recovery,
     // we must not open a competing socket.
     if (!this.acquireRecovery("watchdog", `schedule:${reason}`)) return;

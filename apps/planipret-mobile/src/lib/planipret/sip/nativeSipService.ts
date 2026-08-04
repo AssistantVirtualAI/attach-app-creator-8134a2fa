@@ -90,6 +90,8 @@ export class NativeSipService {
   private initializing: Promise<boolean> | null = null;
   private listenersBound = false;
   private lastState: SipRegistrationState = "unavailable";
+  private registrationWaiters: Array<(registered: boolean) => void> = [];
+  private registrationRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   static getInstance(): NativeSipService {
     if (!NativeSipService.instance) NativeSipService.instance = new NativeSipService();
@@ -222,7 +224,24 @@ export class NativeSipService {
         .catch(() => undefined);
 
       // `initialize` adds the account with register_on_acc_add=1 and already
-      // sends REGISTER. A second immediate request races that transaction.
+      // sends REGISTER. Do not report the native path ready until its Contact
+      // actually received 200 OK; otherwise JsSIP is skipped while PJSIP still
+      // cannot receive or answer an INVITE.
+      const registered = await this.waitForRegistration(15_000);
+      if (!registered) {
+        console.error("[SIP] REGISTER TLS absent après 15 s — restitution atomique à JsSIP");
+        if (this.registrationRetryTimer) {
+          clearTimeout(this.registrationRetryTimer);
+          this.registrationRetryTimer = null;
+        }
+        try { await pjsip.unregister(); } catch { /* noop */ }
+        releaseAorFromNative("native_register_timeout");
+        await import("./nativePpSipService")
+          .then((m) => m.declarePlanipretNativeEngineOwnsAor(false))
+          .catch(() => undefined);
+        this.setState("failed");
+        return false;
+      }
       return true;
 
     } catch (err: any) {
@@ -332,6 +351,21 @@ export class NativeSipService {
     });
   }
 
+  private waitForRegistration(timeoutMs: number): Promise<boolean> {
+    if (this.registered) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(ok);
+      };
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      this.registrationWaiters.push(finish);
+    });
+  }
+
   private async bindListeners(pjsip: PjsipPlugin) {
     if (this.listenersBound) return;
     this.listenersBound = true;
@@ -342,7 +376,13 @@ export class NativeSipService {
 
       if (state === "failed" && this.retryCount < this.maxRetries) {
         this.retryCount++;
-        setTimeout(() => { pjsip.register().catch(() => { /* noop */ }); }, 30_000);
+        if (this.registrationRetryTimer) clearTimeout(this.registrationRetryTimer);
+        this.registrationRetryTimer = setTimeout(() => {
+          this.registrationRetryTimer = null;
+          if (this.lastState === "failed" && nativeOwnsAor()) {
+            pjsip.register().catch(() => { /* noop */ });
+          }
+        }, 30_000);
       } else if (state === "failed") {
         // Ne jamais démarrer JsSIP sur le même <ext>M après un échec transitoire
         // du REGISTER TLS. Cela créait deux propriétaires, deux écrans CallKit
@@ -351,8 +391,14 @@ export class NativeSipService {
         console.warn("[SIP] REGISTER natif en échec — propriété TLS conservée");
       }
       if (state === "registered") {
+        if (this.registrationRetryTimer) {
+          clearTimeout(this.registrationRetryTimer);
+          this.registrationRetryTimer = null;
+        }
         this.retryCount = 0;
         claimAorForNative(this.username, "native_registered");
+        const waiters = this.registrationWaiters.splice(0);
+        waiters.forEach((finish) => finish(true));
       }
       this.setState(state);
     });

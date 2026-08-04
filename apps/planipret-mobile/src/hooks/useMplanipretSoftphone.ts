@@ -43,7 +43,6 @@ import {
   stopPlanipretSipKeepAlive,
   type PpNativeSipStatus,
   setPlanipretNativeCallActive,
-  declarePlanipretNativeEngineOwnsAor,
 } from "@/lib/planipret/sip/nativePpSipService";
 import { addDedupedCapListener } from "@/lib/planipret/sip/capListeners";
 import { checkSipBackendRegistration } from "@/lib/planipret/sip/sipBackendCheck";

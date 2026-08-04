@@ -8,6 +8,7 @@
 // a brand new call always plays it once.
 
 import { supabase } from "@/integrations/supabase/client";
+import { Capacitor } from "@capacitor/core";
 
 const BUCKET = "pbx-audio";
 const OBJECT = "call-recording-notice.wav";
@@ -64,8 +65,15 @@ export async function playRecordingNotice(
 ): Promise<void> {
   // Garde-fou : l'avis ne concerne QUE les appels entrants (les gens qui
   // appellent le DID d'un courtier). Un appel sortant ne doit jamais le jouer.
-  if (direction === "out") {
-    log("skipped — outbound call", { callKey });
+  if (direction !== "in") {
+    log("skipped — not an inbound call", { callKey, direction });
+    return;
+  }
+  // Sur mobile natif, la lecture locale vole la session audio (AVAudioSession /
+  // AudioManager) au milieu de l'établissement média → audio unidirectionnel un
+  // appel sur deux. L'appelant entend déjà l'avis joué par le central.
+  if (Capacitor.isNativePlatform()) {
+    log("skipped — native platform (PBX plays the notice)", { callKey });
     return;
   }
   const key = callKey && callKey.length ? callKey : "__default__";

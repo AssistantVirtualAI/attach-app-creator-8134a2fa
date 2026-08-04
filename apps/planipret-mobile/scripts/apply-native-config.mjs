@@ -882,6 +882,11 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// guarantees background execution through PushKit, so this is the path that
     /// must bring the AOR back before the PBX times out to voicemail.
     private func wakeForPush(_ why: String) {
+      if nativeEngineOwnsAor {
+        NSLog("[PpSipKeepAlive] VoIP push wake skipped — PJSIP owns the AOR")
+        releaseRegistration("pjsip_owns_aor")
+        return
+      }
       // PushKit can wake iOS before the WebView has loaded. Restore the last
       // confirmed SIP configuration so REGISTER never depends on JS startup.
       if host.isEmpty || login.isEmpty || domain.isEmpty { restoreConfig() }
@@ -1401,6 +1406,28 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             guard let self = self, let uuid = self.activeCallUUID else { return }
             self.provider?.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
+        nc.addObserver(forName: Notification.Name("PpPjsipOutgoingCall"), object: nil, queue: .main) { [weak self] note in
+            guard let self = self else { return }
+            let info = note.userInfo as? [String: Any] ?? [:]
+            let callId = (info["callId"] as? String) ?? UUID().uuidString
+            let destination = (info["destination"] as? String) ?? ""
+            let uuid = UUID()
+            self.activeCallUUID = uuid
+            self.activeCallId = callId
+            self.nativeEngineOwnsCall = true
+            let handle = CXHandle(type: .phoneNumber, value: destination)
+            let action = CXStartCallAction(call: uuid, handle: handle)
+            self.callController.request(CXTransaction(action: action)) { error in
+                if let error = error {
+                    NSLog("[PpVoipCall] outgoing CallKit transaction failed: %@", error.localizedDescription)
+                    NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil)
+                }
+            }
+        }
+        nc.addObserver(forName: Notification.Name("PpPjsipOutgoingRinging"), object: nil, queue: .main) { [weak self] _ in
+            guard let self = self, let uuid = self.activeCallUUID else { return }
+            self.provider?.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+        }
         nc.addObserver(forName: Notification.Name("PpPjsipCallEnded"), object: nil, queue: .main) { [weak self] note in
             guard let self = self, let uuid = self.activeCallUUID else { return }
             let code = (note.userInfo?["code"] as? Int) ?? 0
@@ -1723,6 +1750,21 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             NSLog("[PpVoipCall] answer action timed out — SIP dialog not confirmed")
             action.fail()
         }
+    }
+
+    public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+        guard activeCallUUID == action.callUUID else {
+            action.fail()
+            return
+        }
+        let update = CXCallUpdate()
+        update.remoteHandle = action.handle
+        update.hasVideo = false
+        update.supportsDTMF = true
+        update.supportsHolding = false
+        provider.reportCall(with: action.callUUID, updated: update)
+        provider.reportOutgoingCall(with: action.callUUID, startedConnectingAt: Date())
+        action.fulfill()
     }
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {

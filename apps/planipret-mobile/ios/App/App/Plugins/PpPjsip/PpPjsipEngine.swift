@@ -397,10 +397,12 @@ final class PjsipEngine {
         // que l'appelant continue d'entendre la sonnerie.
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self = self, !done else { return }
-            self.registerCurrentThreadIfNeeded()
-            let status = pjsua_call_answer(target, 200, nil, nil)
-            NSLog("[PpPjsip] answer FALLBACK callId=%d status=%d", target, status)
-            finish(status == pj_status_t(0))
+            self.thread.run {
+                if done { return }
+                let status = pjsua_call_answer(target, 200, nil, nil)
+                NSLog("[PpPjsip] answer FALLBACK callId=%d status=%d", target, status)
+                finish(status == pj_status_t(0))
+            }
         }
 
     }

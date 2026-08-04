@@ -1421,13 +1421,20 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
 
   const hangup = useCallback(() => {
     if (nativeOwnsAor()) {
-      void nativeSip.hangup();
+      void nativeSip.hangup().then((ok) => {
+        if (ok) return;
+        // Repli immédiat : PJSIP absent → BYE par la pile legacy.
+        releaseAorFromNative("hangup_native_failed");
+        console.warn("[hangup] PJSIP failed → legacy BYE");
+        try { ppSipProvider.hangup(); } catch {}
+      });
       setPushRing(null);
       setRestCall(null);
       setNativeCall(null);
       console.info("[hangup] native PJSIP hangup sent");
       return;
     }
+
     const callId = ppSipProvider.getSnapshot().callId;
     const restId = restCall?.id ?? null;
     console.info("[hangup] requested", { sipCallId: callId || null, restCallId: restId, hasLiveSipSession });

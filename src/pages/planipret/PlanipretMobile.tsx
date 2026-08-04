@@ -30,8 +30,7 @@ import { ROUTES } from "@/lib/routes";
 import { recordRedirect } from "@/lib/debug/navDebug";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import MicDeniedBanner from "@/components/planipret/mobile/MicDeniedBanner";
-import PermissionsPrimer from "@/components/planipret/mobile/PermissionsPrimer";
-import { hasSeenPrimer } from "@/lib/native/permissions/orchestrator";
+import { requestPermissionsAfterLogin } from "@/lib/native/requestPermissionsAfterLogin";
 import { bootstrapPushIfNative } from "@/lib/native/pushBootstrap";
 import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
@@ -506,7 +505,6 @@ export default function PlanipretMobile() {
   const [avaMode, setAvaMode] = useState<"voice" | "chat">("voice");
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const endedCallIds = useRef<Map<string, number>>(new Map());
-  const [showPrimer, setShowPrimer] = useState(false);
   const openDialer = (n?: string, autoDial = false) => { setDialerInit(n); setDialerAutoDial(autoDial); setDialerOpen(true); };
   const openSmsComposer = useCallback((detail: { number?: string; body?: string; autoSend?: boolean } = {}) => {
     const qs = new URLSearchParams();
@@ -910,7 +908,7 @@ export default function PlanipretMobile() {
     }
     // On native, show the VoIP rationale primer (which runs the permission flow).
     // On web, this is a no-op.
-    void hasSeenPrimer().then((seen) => { if (!seen) setShowPrimer(true); });
+    void requestPermissionsAfterLogin();
     toast.success(t("auth.success"));
     setLoading(true);
     await loadProfile();
@@ -927,7 +925,7 @@ export default function PlanipretMobile() {
     if (!profile?.user_id) return;
     const ext = profile?.ns_extension || profile?.extension || "";
     void bootstrapPushIfNative(ext);
-    void hasSeenPrimer().then((seen) => { if (!seen) setShowPrimer(true); });
+    void requestPermissionsAfterLogin();
     // Warm the directory/personal/shared/Maestro caches in parallel so the
     // dialer's Search tab and Contacts render from memory instantly.
     const actions: Array<"list" | "shared" | "directory" | "maestro"> = ["list", "shared", "directory"];
@@ -992,12 +990,6 @@ export default function PlanipretMobile() {
 
   return (
     <Frame>
-      {showPrimer && (
-        <PermissionsPrimer
-          extension={profile?.ns_extension || profile?.extension || ""}
-          onDone={() => setShowPrimer(false)}
-        />
-      )}
       <div className="h-full flex flex-col relative overflow-hidden" style={{ background: "var(--pp-bg-base)" }}>
 
         {/* Top brand header — AVA (left) · Planiprêt (center) · Settings (right) */}

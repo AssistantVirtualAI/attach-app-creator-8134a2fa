@@ -181,17 +181,19 @@ Deno.serve(async (req) => {
       const upText = await up.text();
 
       // 2) keep MOH at the domain but NEVER music-on-ring at the domain level
-      //    (that would play the notice on the broker's outbound calls too).
+      //    (that plays the notice on the broker's OUTBOUND calls too — this is
+      //    exactly the regression reported on 2026-08-04).
       const dom = await nsFetch(base, {
         method: "PUT",
         body: JSON.stringify({
           synchronous: "yes",
-          "music-on-ring-enabled": "yes",
+          "music-on-ring-enabled": "no",
           "music-on-hold-enabled": "yes",
           "music-on-hold-randomized-enabled": "no",
         }),
       }, { functionName: "pp-ns-ring-announcement" });
       const domText = await dom.text();
+
 
       // 3) enable early media while ringing, per user (callee side only)
       const targets: string[] = Array.isArray(body?.users) && body.users.length

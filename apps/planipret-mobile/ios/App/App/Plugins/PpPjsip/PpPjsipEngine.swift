@@ -488,6 +488,24 @@ final class PjsipEngine {
         // Sonnerie 180 immédiate, sinon NetSapiens bascule en messagerie.
         pjsua_call_answer(callId, 180, nil, nil)
 
+        // Décrochage déjà demandé depuis CallKit avant l'arrivée de l'INVITE :
+        // on répond 200 OK immédiatement et on libère les promesses JS.
+        lock.lock()
+        let hasPending = pendingAnswerRequest
+        let pendingCompletions = pendingAnswerCompletions
+        if hasPending {
+            pendingAnswerRequest = false
+            pendingAnswerCallId = nil
+            pendingAnswerCompletions = []
+        }
+        lock.unlock()
+        if hasPending {
+            let status = pjsua_call_answer(callId, 200, nil, nil)
+            NSLog("[PpPjsip] pendingAnswer → 200 OK callId=%d status=%d", callId, status)
+            let ok = status == pj_status_t(0)
+            pendingCompletions.forEach { $0(ok) }
+        }
+
         // CallKit sonne à partir de l'INVITE natif — plus de dépendance JsSIP.
         NotificationCenter.default.post(
             name: .ppPjsipIncomingCall,
@@ -495,6 +513,7 @@ final class PjsipEngine {
             userInfo: ["callId": String(callId), "callerNumber": number, "callerName": name]
         )
         emit("incomingCall", ["callId": String(callId), "remoteNumber": number, "remoteName": name])
+
     }
 
     func handleCallState(callId: pjsua_call_id, state: pjsip_inv_state, lastCode: Int, remoteUri: String) {

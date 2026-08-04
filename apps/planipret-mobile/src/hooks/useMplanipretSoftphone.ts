@@ -424,7 +424,11 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         // different JsSIP Call-ID, making Answer wait forever.
         if (clientType === "mobile" && nativeSip.isAvailable()) {
           const nativeReady = await nativeSip.initialize();
-          if (nativeReady || nativeOwnsAor()) {
+          // IMPORTANT : on ne saute le chemin legacy QUE si l'init native a
+          // réellement réussi. `nativeOwnsAor()` pouvait rester vrai à cause
+          // d'un preclaim périmé alors que PJSIP était absent du binaire, ce
+          // qui rendait l'appel entrant imprenable.
+          if (nativeReady) {
             try { ppSipProvider.yieldAorToNative(); } catch {}
             void getPlanipretVoipPushToken().then((t) => {
               if (t?.token) void uploadPlanipretVoipToken(t.token, t.bundleId, sipConfig.extension, t.environment);
@@ -432,7 +436,10 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
             console.info("[pp-sip] PJSIP is the sole <ext>M owner; legacy WSS initialization skipped");
             return;
           }
+          releaseAorFromNative("native_init_failed_fallback_legacy");
+          console.warn("[pp-sip] PJSIP init failed → legacy WSS path takes over the AOR");
         }
+
         // The native keep-alive service owns the `<ext>M` device, but ONLY
         // in background. Running it while the WebView (JsSIP) is registered makes
         // NetSapiens close the sockets alternately (code 1001 loop, hundreds of

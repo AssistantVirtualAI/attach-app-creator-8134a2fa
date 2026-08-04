@@ -34,6 +34,7 @@
     "native:android": "npm run build:android",
     "check:imports": "node scripts/check-imports.mjs",
     "ios:verify": "node scripts/ios-verify.mjs",
+    "ios:build-pjsip": "bash scripts/build-pjsip-ios.sh",
     "verify:ios:scene": "node scripts/verify-ios-scene.mjs",
     "verify:sip:bundle": "node scripts/verify-sip-bundle.mjs",
     "prebuild": "node scripts/check-imports.mjs"

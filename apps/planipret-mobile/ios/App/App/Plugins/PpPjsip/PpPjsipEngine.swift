@@ -334,7 +334,10 @@ final class PjsipEngine {
             pendingAnswerCallId = callId
             pendingAnswerCompletions.append(completion)
             lock.unlock()
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 10.0) { [weak self] in
+            // Même fenêtre que CallKit (32 s) : avec 10 s, une INVITE arrivée
+            // entre t=10 et t=32 trouvait l'intention déjà supprimée et aucun
+            // 200 OK n'était envoyé malgré l'écran système encore actif.
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 30.0) { [weak self] in
                 guard let self = self else { return }
                 self.lock.lock()
                 let stillPending = self.pendingAnswerRequest
@@ -346,7 +349,7 @@ final class PjsipEngine {
                 }
                 self.lock.unlock()
                 if stillPending {
-                    NSLog("[PpPjsip] pendingAnswer timeout 10s → no_active_call")
+                    NSLog("[PpPjsip] pendingAnswer timeout 30s → no_active_call")
                     pending.forEach { $0(false) }
                 }
             }

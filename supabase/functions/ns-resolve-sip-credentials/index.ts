@@ -254,6 +254,8 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* empty ok */ }
   const clientType = normalizeClientType(body?.client_type);
+  const sipTransport = normalizeTransport(body?.transport);
+
 
   const authHeader = req.headers.get("Authorization") ?? "";
   const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -325,7 +327,7 @@ Deno.serve(async (req) => {
     const isMobile = clientType === "mobile";
     const created = await nsPost(
       `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`,
-      deviceCreatePayload(deviceName, isMobile, selfHealPwd, FALLBACK_PROXY),
+      deviceCreatePayload(deviceName, isMobile, selfHealPwd, FALLBACK_PROXY, sipTransport),
     );
     console.log(`[ns-resolve] self-heal device ${deviceName} status=${created.status}`);
     if (created.ok || created.status === 409) {
@@ -369,7 +371,16 @@ Deno.serve(async (req) => {
   }
 
   const rawCore = (device["core-server"] ?? device["device-sip-registration-core-server"] ?? device["sip-registration-core-server"] ?? "").toString().trim();
-  const coreServer = (rawCore || FALLBACK_PROXY).replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  // Pin the SIP proxy to a call-processing core node. NS sometimes reports the
+  // portal host (portal*.ucstack.io / voice.ava-telecom.ca) here; a registration
+  // held by the portal is NOT used for inbound delivery -> straight to voicemail.
+  const rawCoreHost = rawCore.replace(/^https?:\/\//, "").replace(/\/+$/, "").replace(/:\d+$/, "");
+  const isPortalHost = /(^|\.)(portal\d*|voice)[^/]*\.(ucstack\.io|ava-telecom\.ca)$/i.test(rawCoreHost);
+  const isCoreHost = /(^|\.)core\d+\.[^/]*ucstack\.io$/i.test(rawCoreHost);
+  const coreServer = (isCoreHost && !isPortalHost) ? rawCoreHost : FALLBACK_PROXY;
+  if (rawCoreHost && coreServer !== rawCoreHost) {
+    console.warn(`[ns-resolve] core-server ${rawCoreHost} rejected (portal/non-core) -> pinned ${coreServer}`);
+  }
   const sipUri = device["device-sip-registration-uri"] ?? `sip:${resolvedId}@${domain}`;
   const sipState = device["device-sip-registration-state"] ?? device["registration-state"] ?? null;
 

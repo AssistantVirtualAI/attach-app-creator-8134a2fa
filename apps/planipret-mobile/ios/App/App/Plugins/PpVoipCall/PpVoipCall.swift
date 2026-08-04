@@ -25,6 +25,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var activeCallUUID: UUID?
     private var activeCallId: String?
     private var pendingAnswerAction: CXAnswerCallAction?
+    private var pendingAnswerBackgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var answerCompleted = false
     // ring17: NetSapiens can emit the SAME inbound call twice with two
     // different callIds. Deduplicate on the caller number too, otherwise a
@@ -35,6 +36,23 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     /// true quand l'appel CallKit courant est piloté par le moteur PJSIP natif
     /// (INVITE reçu en TLS 5061) et non plus par le chemin JsSIP/WebView.
     private var nativeEngineOwnsCall = false
+
+    private func beginAnswerBackgroundTask() {
+        endAnswerBackgroundTask()
+        pendingAnswerBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "PpVoipAnswer") { [weak self] in
+            guard let self = self else { return }
+            self.pendingAnswerAction?.fail()
+            self.pendingAnswerAction = nil
+            self.endAnswerBackgroundTask()
+        }
+    }
+
+    private func endAnswerBackgroundTask() {
+        guard pendingAnswerBackgroundTask != .invalid else { return }
+        let task = pendingAnswerBackgroundTask
+        pendingAnswerBackgroundTask = .invalid
+        UIApplication.shared.endBackgroundTask(task)
+    }
 
 
     private func apnsEnvironment() -> String {
@@ -104,6 +122,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
                 : (code >= 400 && code != 487) ? .failed : .remoteEnded
             self.provider?.reportCall(with: uuid, endedAt: Date(), reason: reason)
             self.pendingAnswerAction?.fulfill(); self.pendingAnswerAction = nil
+            self.endAnswerBackgroundTask()
             self.activeCallUUID = nil; self.activeCallId = nil
             self.nativeEngineOwnsCall = false
         }
@@ -131,7 +150,11 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             if let pending = pendingAnswerAction {
                 pendingAnswerAction = nil
                 answerCompleted = true
-                NotificationCenter.default.post(name: Notification.Name("PpPjsipAnswerRequested"), object: nil, userInfo: ["callId": callId])
+                endAnswerBackgroundTask()
+                // `PpPjsipAnswerPending` already armed the engine when CallKit
+                // was answered before this INVITE. handleIncomingCall() sends
+                // the 200 OK itself; posting AnswerRequested here would answer
+                // the same dialog twice and can leave the caller ringing.
                 notifyListeners("incomingCallAnswered", data: [
                     "callUUID": uuid.uuidString,
                     "callId": callId,
@@ -232,6 +255,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             activeCallUUID = nil
             activeCallId = nil
         }
+        endAnswerBackgroundTask()
         call.resolve(["ok": true])
     }
 
@@ -250,6 +274,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         pendingAnswerAction = nil
         answerCompleted = ok
         if ok { action.fulfill() } else { action.fail() }
+        endAnswerBackgroundTask()
         call.resolve(["ok": true])
     }
 
@@ -285,6 +310,24 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         let callId = (dict["callId"] as? String) ?? (dict["call_id"] as? String) ?? UUID().uuidString
         let callerName = (dict["callerName"] as? String) ?? (dict["from_number"] as? String) ?? (dict["from"] as? String) ?? "Appel entrant"
         let callerNumber = (dict["callerNumber"] as? String) ?? (dict["from_number"] as? String) ?? (dict["from_user"] as? String) ?? ""
+
+        // CallKit is configured for exactly one call. The webhook push and the
+        // native SIP INVITE use different IDs, and APNs retries may omit the
+        // caller number. Therefore any push received while a CallKit call is
+        // already alive belongs to that existing physical call. Never replace
+        // its UUID: doing so creates two system call screens and makes the green
+        // button target the stale UUID.
+        if let uuid = activeCallUUID {
+            let update = CXCallUpdate()
+            if !callerNumber.isEmpty {
+                update.remoteHandle = CXHandle(type: .phoneNumber, value: callerNumber)
+            }
+            update.localizedCallerName = callerName
+            provider?.reportCall(with: uuid, updated: update)
+            NSLog("[PpVoipCall] VoIP push joined active CallKit call pushCallId=%@ activeCallId=%@", callId, activeCallId ?? "")
+            completion()
+            return
+        }
 
         // NetSapiens can retry a call event while iOS is waking. Preserve the
         // first CallKit UUID so its Answer action never becomes stale.
@@ -341,6 +384,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     // MARK: - CXProviderDelegate
     public func providerDidReset(_ provider: CXProvider) {
         pendingAnswerAction?.fail(); pendingAnswerAction = nil
+        endAnswerBackgroundTask()
         if nativeEngineOwnsCall {
             NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil)
         }
@@ -372,7 +416,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // CallKit callback must join/lose, not fail the action JS is completing.
         if pendingAnswerAction != nil {
             NSLog("[PpVoipCall] duplicate answer action ignored")
-            action.fail()
+            // Do not show a failed Answer operation for a duplicate callback.
+            // The first action remains authoritative and completes with SIP.
+            action.fulfill()
             return
         }
         // Prepare the route but let CallKit own activation (didActivate:) —
@@ -402,6 +448,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // authoritative CXAnswerCallAction when that callback returns.
         pendingAnswerAction = action
         answerCompleted = false
+        beginAnswerBackgroundTask()
         // Si le moteur PJSIP est demarre, l'INVITE natif va arriver d'un
         // instant a l'autre : reportNativeIncomingCall remplira cette action.
         NotificationCenter.default.post(name: Notification.Name("PpPjsipAnswerPending"), object: nil, userInfo: ["callId": activeCallId ?? ""])
@@ -418,6 +465,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             self.pendingAnswerAction = nil
             NSLog("[PpVoipCall] answer action timed out — SIP dialog not confirmed")
             action.fail()
+            self.endAnswerBackgroundTask()
         }
     }
 
@@ -438,6 +486,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         pendingAnswerAction?.fail(); pendingAnswerAction = nil
+        endAnswerBackgroundTask()
         if nativeEngineOwnsCall {
             // 603 Decline côté PJSIP : un 486 renverrait l'appel en messagerie.
             NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil, userInfo: ["callId": activeCallId ?? ""])

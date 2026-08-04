@@ -816,30 +816,35 @@ final class PjsipEngine {
     /// on enregistre donc le thread courant à la demande, avec un descripteur
     /// conservé en mémoire pour toute la durée de vie du process.
     func registerCurrentThreadIfNeeded() {
-        guard started else { return }
+        guard pjlibReady else { return }
         if pj_thread_is_registered() != 0 { return }
         let count = max(1, MemoryLayout<pj_thread_desc>.size / MemoryLayout<Int>.size)
         let desc = UnsafeMutablePointer<Int>.allocate(capacity: count)
         desc.initialize(repeating: 0, count: count)
         var handle: UnsafeMutablePointer<pj_thread_t>?
-        let status = pj_thread_register("pp-gcd", desc, &handle)
+        let status = pj_thread_register("pp-worker", desc, &handle)
         NSLog("[PpPjsip] pj_thread_register status=%d", status)
         lock.lock()
         pjThreadDescs.append(UnsafeMutableRawPointer(desc))
         lock.unlock()
     }
 
+    /// Exécute le travail dans un contexte PJLIB valide.
+    /// Le thread worker est persistant : il suffit de l'enregistrer une fois
+    /// auprès de PJLIB, inutile de passer par un timer pjsua (qui provoquait
+    /// des exécutions hors contexte et l'assertion `pj_thread_this`).
     private func scheduleOnPjsipThread(_ work: @escaping () -> Void) {
-        registerCurrentThreadIfNeeded()
-        lock.lock()
-        let previous = scheduledWork
-        scheduledWork = {
-            previous?()
+        if Thread.current === PjsipWorkerThread.currentThread {
+            registerCurrentThreadIfNeeded()
             work()
+        } else {
+            thread.run { [weak self] in
+                self?.registerCurrentThreadIfNeeded()
+                work()
+            }
         }
-        lock.unlock()
-        pjsua_schedule_timer2(ppPjsipEnterContext, nil, 0)
     }
+
 
 
     func runScheduledWork() {

@@ -1149,7 +1149,14 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
 
     /// Exponential backoff (2s → 60s cap) until the socket is back and REGISTER succeeds.
     private func scheduleReconnect(_ why: String) {
+      if nativeEngineOwnsAor {
+        NSLog("[PpSipKeepAlive] reconnect skipped — PJSIP owns the AOR (%@)", why)
+        reconnectPending = false
+        setStatus("idle", "pjsip_owns_aor")
+        return
+      }
       if reconnectPending { return }
+
       reconnectPending = true
       reconnectAttempts = min(reconnectAttempts + 1, max(1, backoffMaxAttempts))
       let delay = min(backoffMaxMs / 1000.0, (backoffMinMs / 1000.0) * pow(2.0, Double(reconnectAttempts - 1)))

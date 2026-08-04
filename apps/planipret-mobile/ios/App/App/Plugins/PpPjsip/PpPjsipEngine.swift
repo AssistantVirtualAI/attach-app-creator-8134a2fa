@@ -118,6 +118,8 @@ final class PjsipEngine {
     private let lock = NSLock()
 
     private var started = false
+    /// `pj_thread_register` n'est utilisable qu'après `pjsua_create()`.
+    private var pjlibReady = false
     private var scheduledWork: (() -> Void)?
     private var strings: [UnsafeMutablePointer<CChar>] = []
     private var pjThreadDescs: [UnsafeMutableRawPointer] = []

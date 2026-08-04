@@ -132,6 +132,11 @@ final class PjsipEngine {
     private var domain = ""
     private var registered = false
     private var activeCall: pjsua_call_id = pjsua_call_id(-1)
+    /// Décrochage demandé (CallKit) avant l'arrivée de l'INVITE SIP.
+    private var pendingAnswerRequest = false
+    private var pendingAnswerCallId: String?
+    private var pendingAnswerCompletions: [(Bool) -> Void] = []
+
     /// Appel sortant en cours (piloté par CallKit côté PpVoipCall).
     private var outgoingCall: pjsua_call_id = pjsua_call_id(-1)
     private var muted = false

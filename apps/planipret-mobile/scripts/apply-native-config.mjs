@@ -2033,14 +2033,18 @@ function ensurePjsipXcframework(iosRoot) {
     );
   }
 
-  // Chemins d'en-têtes réels des tranches (device + simulateur).
-  const headerPaths = fs
+  // NE PAS ajouter les Headers des tranches (device + simulateur) aux chemins
+  // de recherche: les deux module.modulemap définissent le module `pjsua`, et
+  // Xcode copie déjà celui de la bonne tranche dans
+  // $(BUILT_PRODUCTS_DIR)/include -> "redefinition of module 'pjsua'".
+  // On se contente donc du dossier include généré par Xcode.
+  const hasHeaders = fs
     .readdirSync(abs)
-    .filter((slice) => fs.existsSync(path.join(abs, slice, "Headers")))
-    .map((slice) => `\"$(SRCROOT)/${rel}/${slice}/Headers\"`);
-  if (headerPaths.length === 0) {
+    .some((slice) => fs.existsSync(path.join(abs, slice, "Headers")));
+  if (!hasHeaders) {
     throw new Error("[native-config] libpjsip.xcframework sans dossier Headers — build iOS refusé car canImport(pjsua) serait faux.");
   }
+
 
   const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
   if (!fs.existsSync(pbx)) return false;

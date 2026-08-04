@@ -135,7 +135,9 @@ final class PjsipEngine {
     private var username = ""
     private var domain = ""
     private var registrationServer = ""
-    private var registrationPort = 5061
+    private var registrationPort = 5060
+    /// Transport SIP natif courant : "tcp" (défaut) ou "tls".
+    private var registrationTransport = "tcp"
     private var registered = false
     private var activeCall: pjsua_call_id = pjsua_call_id(-1)
     /// Décrochage demandé (CallKit) avant l'arrivée de l'INVITE SIP.
@@ -196,12 +198,14 @@ final class PjsipEngine {
         server: String,
         port: Int,
         displayName: String,
+        transport: String = "TCP",
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
         self.username = username
         self.domain = domain
         self.registrationServer = server
         self.registrationPort = port
+        self.registrationTransport = transport.lowercased() == "tls" ? "tls" : "tcp"
 
         thread.run { [weak self] in
             guard let self = self else { return }
@@ -250,7 +254,7 @@ final class PjsipEngine {
         pjsua_acc_config_default(&acc)
 
         acc.id = ppMakePjStr("\"\(displayName)\" <sip:\(username)@\(domain)>", keep: &strings)
-        acc.reg_uri = ppMakePjStr("sip:\(server):\(port);transport=tls", keep: &strings)
+        acc.reg_uri = ppMakePjStr("sip:\(server):\(port);transport=\(registrationTransport)", keep: &strings)
         acc.cred_count = 1
         acc.cred_info.0.realm = ppMakePjStr("*", keep: &strings)
         acc.cred_info.0.scheme = ppMakePjStr("digest", keep: &strings)
@@ -258,7 +262,7 @@ final class PjsipEngine {
         acc.cred_info.0.data_type = 0 // PJSIP_CRED_DATA_PLAIN_PASSWD
         acc.cred_info.0.data = ppMakePjStr(password, keep: &strings)
         acc.proxy_cnt = 1
-        acc.proxy.0 = ppMakePjStr("sip:\(server):\(port);transport=tls;lr", keep: &strings)
+        acc.proxy.0 = ppMakePjStr("sip:\(server):\(port);transport=\(registrationTransport);lr", keep: &strings)
         acc.reg_timeout = 300
         acc.reg_retry_interval = 15
         acc.reg_first_retry_interval = 5
@@ -274,7 +278,7 @@ final class PjsipEngine {
         acc.rfc5626_instance_id = ppMakePjStr(instanceId, keep: &strings)
 
 
-        NSLog("[PpPjsip] production REGISTER → sip:%@:%d TLS aor=sip:%@@%@", server, Int32(port), username, domain)
+        NSLog("[PpPjsip] production REGISTER → sip:%@:%d %@ aor=sip:%@@%@", server, Int32(port), registrationTransport.uppercased(), username, domain)
         try check(pjsua_acc_add(&acc, pj_bool_t(1), &accId), "pjsua_acc_add")
     }
 
@@ -369,10 +373,10 @@ final class PjsipEngine {
                 }
                 self.lock.unlock()
                 if stillPending {
-                    let contact = "sip:\(self.username)@\(self.domain);transport=tls"
+                    let contact = "sip:\(self.username)@\(self.domain);transport=\(self.registrationTransport)"
                     NSLog("[PpPjsip] pendingAnswer timeout 5s → TLS re-provision requested contact=%@", contact)
                     self.emit("registrationRepairRequested", [
-                        "transport": "tls", "sipPort": self.registrationPort,
+                        "transport": self.registrationTransport, "sipPort": self.registrationPort,
                         "contact": contact, "server": self.registrationServer,
                         "reason": "incoming_invite_missing"
                     ])
@@ -537,11 +541,11 @@ final class PjsipEngine {
         guard accId == self.accId else { return }
         registered = code == 200
         let state = registered ? "registered" : (code == 0 ? "unregistered" : "failed")
-        let contact = "sip:\(username)@\(domain);transport=tls"
+        let contact = "sip:\(username)@\(domain);transport=\(registrationTransport)"
         let payload: [String: Any] = [
             "state": state, "code": code, "reason": reason,
             "username": username, "contact": contact,
-            "transport": "tls", "sipPort": registrationPort,
+            "transport": registrationTransport, "sipPort": registrationPort,
             "server": registrationServer
         ]
         emit("registrationState", payload)
@@ -734,7 +738,7 @@ final class PjsipEngine {
         var acc = pjsua_acc_config()
         pjsua_acc_config_default(&acc)
         acc.id = ppMakePjStr("sip:\(probeUser)@\(domain)", keep: &strings)
-        acc.reg_uri = ppMakePjStr("sip:\(server):\(port);transport=tls", keep: &strings)
+        acc.reg_uri = ppMakePjStr("sip:\(server):\(port);transport=\(registrationTransport)", keep: &strings)
         acc.cred_count = 1
         acc.cred_info.0.realm = ppMakePjStr("*", keep: &strings)
         acc.cred_info.0.scheme = ppMakePjStr("digest", keep: &strings)
@@ -742,7 +746,7 @@ final class PjsipEngine {
         acc.cred_info.0.data_type = 0
         acc.cred_info.0.data = ppMakePjStr(password, keep: &strings)
         acc.proxy_cnt = 1
-        acc.proxy.0 = ppMakePjStr("sip:\(server):\(port);transport=tls;lr", keep: &strings)
+        acc.proxy.0 = ppMakePjStr("sip:\(server):\(port);transport=\(registrationTransport);lr", keep: &strings)
         acc.reg_timeout = 300
         acc.register_on_acc_add = pj_bool_t(1)
         acc.use_rfc5626 = pj_bool_t(1)
@@ -820,16 +824,31 @@ final class PjsipEngine {
         pjsua_transport_config_default(&tcfg)
         tcfg.port = 0
         var transportId = pjsua_transport_id(-1)
-        let tlsStatus = pjsua_transport_create(PJSIP_TRANSPORT_TLS, &tcfg, &transportId)
+        // TCP 5060 est le transport de base (toujours dispo côté NetSapiens).
+        let tcpStatus = pjsua_transport_create(PJSIP_TRANSPORT_TCP, &tcfg, &transportId)
+        // TLS 5061 reste optionnel : on le crée en best-effort pour permettre
+        // un basculement sécurisé sans faire échouer le démarrage.
+        var tlsTransportId = pjsua_transport_id(-1)
+        var tlsCfg = pjsua_transport_config()
+        pjsua_transport_config_default(&tlsCfg)
+        tlsCfg.port = 0
+        let tlsStatus = pjsua_transport_create(PJSIP_TRANSPORT_TLS, &tlsCfg, &tlsTransportId)
         if tlsStatus != pj_status_t(0) { logTlsFailureDiagnostics(status: tlsStatus) }
-        try check(tlsStatus, "pjsua_transport_create(TLS)")
+        if tcpStatus != pj_status_t(0) && tlsStatus == pj_status_t(0) {
+            NSLog("[PpPjsip] TCP indisponible → bascule TLS")
+            registrationTransport = "tls"
+            registrationPort = 5061
+            transportId = tlsTransportId
+        } else {
+            try check(tcpStatus, "pjsua_transport_create(TCP)")
+        }
 
         try check(pjsua_start(), "pjsua_start")
         // Périphérique nul par défaut : CallKit décidera quand ouvrir l'audio.
         pjsua_set_null_snd_dev()
 
         started = true
-        NSLog("[PpPjsip] stack started (TLS transport id=%d)", transportId)
+        NSLog("[PpPjsip] stack started (%@ transport id=%d)", registrationTransport.uppercased(), transportId)
     }
 
     // MARK: Contexte PJSIP

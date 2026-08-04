@@ -601,7 +601,15 @@ final class PjsipEngine {
         default: label = "unknown"
         }
 
-        let isOutgoing = outgoingCall == callId
+        // `outgoingPending` couvre la fenêtre où PJSIP notifie CALLING avant
+        // le retour de `pjsua_call_make_call` (sinon direction=in sur sortant).
+        var isOutgoing = outgoingCall == callId
+        if !isOutgoing, outgoingPending, outgoingCall < 0 {
+            isOutgoing = true
+            outgoingCall = callId
+            outgoingPending = false
+        }
+
         emit("callState", [
             "callId": String(callId),
             "state": label,

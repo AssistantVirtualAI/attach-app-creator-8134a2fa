@@ -26,6 +26,14 @@ for arg in "$@"; do
   esac
 done
 
+PJSIP_FW="ios/App/App/Plugins/PpPjsip/Frameworks/libpjsip.xcframework"
+if [ ! -d "$PJSIP_FW" ]; then
+  echo "▶ [0/4] libpjsip.xcframework absent — compilation automatique (~15 min)..."
+  bash scripts/build-pjsip-ios.sh
+else
+  echo "▶ [0/4] libpjsip.xcframework déjà présent — skip build PJSIP"
+fi
+
 echo "▶ [1/4] Audit parité web ↔ mobile"
 node scripts/audit-parity.mjs
 

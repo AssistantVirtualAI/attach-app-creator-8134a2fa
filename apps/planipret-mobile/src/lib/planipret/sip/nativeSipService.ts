@@ -299,7 +299,8 @@ export class NativeSipService {
         body: {
           transport: "tls",
           sip_port: port,
-          contact,
+          ...(contactUsable ? { contact } : {}),
+
           force: true,
           client_type: "mobile",
         },

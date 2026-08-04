@@ -150,7 +150,10 @@ export class NativeSipService {
     armAorWatchdog(() => this.registered);
 
     const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
-      body: { client_type: "mobile" },
+      // `transport: "tls"` aligns the NS Device object on TLS 5061 — ONE
+      // transport per AOR. Without it the PBX still advertises WSS for `<ext>M`
+      // and never forks inbound calls to the native TLS contact.
+      body: { client_type: "mobile", transport: "tls" },
     });
 
     const creds = (data ?? {}) as Record<string, string>;

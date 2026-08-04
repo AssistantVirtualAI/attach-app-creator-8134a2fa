@@ -12,6 +12,7 @@ import { edgeOnlyWssUrls } from "@/lib/planipret/sip/sipEdgePolicy";
 //     ("both, with fallback" policy).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getPpSipReconnectConfig } from "@/lib/planipret/sip/ppSipReconnectConfig";

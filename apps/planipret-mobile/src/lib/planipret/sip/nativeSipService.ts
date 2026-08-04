@@ -309,15 +309,17 @@ export class NativeSipService {
 
   async hangup(): Promise<boolean> {
     const pjsip = getPjsip();
-    if (!pjsip) return false;
+    if (!pjsip) { releaseAorFromNative("hangup_plugin_absent"); return false; }
     try {
       await pjsip.hangupCall({ callId: this.currentCallId ?? undefined });
       this.currentCallId = null;
       return true;
-    } catch {
+    } catch (err: any) {
+      if (this.isMissingBinary(err)) releaseAorFromNative("hangup_binary_missing");
       return false;
     }
   }
+
 
   async makeCall(destination: string): Promise<boolean> {
     const pjsip = getPjsip();

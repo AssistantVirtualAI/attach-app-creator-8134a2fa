@@ -33,6 +33,16 @@ fail() {
 command -v nm >/dev/null || fail "nm introuvable (Xcode command line tools requis)"
 [ -d "$XCF" ] || fail "xcframework absent : $XCF"
 
+# Une archive présente et liée ne suffit pas : Swift doit pouvoir découvrir le
+# module Clang `pjsua` dans la tranche choisie par le SDK.
+for slice in ios-arm64 ios-arm64-simulator; do
+  modulemap="$XCF/$slice/Headers/module.modulemap"
+  [ -f "$modulemap" ] || fail "module.modulemap absent de la tranche '$slice'"
+  grep -qE '^module pjsua([[:space:]]|\[)' "$modulemap" \
+    || fail "la tranche '$slice' ne déclare pas le module pjsua"
+done
+green "  ✔ module pjsua exporté dans chaque tranche"
+
 echo "▶ Vérification TLS de $XCF"
 
 # Symboles OpenSSL (backend cryptographique) — au moins un doit être présent.

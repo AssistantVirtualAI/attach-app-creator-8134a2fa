@@ -168,11 +168,16 @@ export class NativeSipService {
       return true;
 
     } catch (err: any) {
-      const code = err?.code ?? err?.message ?? "error";
-      if (code === "binary_missing" || code === "unavailable" || code === "UNIMPLEMENTED") {
-        console.warn("[SIP] moteur natif indisponible:", code);
+      // Capacitor iOS puts the reject message in `message`/`errorMessage` and
+      // the explanatory text in `code`. Inspect all fields before claiming AOR.
+      const failure = [err?.code, err?.message, err?.errorMessage]
+        .filter(Boolean)
+        .map(String)
+        .join(" ");
+      if (/binary_missing|unavailable|UNIMPLEMENTED/i.test(failure)) {
+        console.warn("[SIP] moteur natif indisponible:", failure);
         // Repli explicite : sans binaire PJSIP, JsSIP reprend l'AOR.
-        releaseAorFromNative(String(code));
+        releaseAorFromNative("native_binary_unavailable");
         void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
         this.setState("unavailable");
         return false;
@@ -249,8 +254,15 @@ export class NativeSipService {
       const res = await pjsip.answerCall({ callId: this.currentCallId ?? undefined });
       this.currentCallId = res?.callId ?? this.currentCallId;
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error("[SIP] answer échoué:", err);
+      const failure = [err?.code, err?.message, err?.errorMessage].filter(Boolean).map(String).join(" ");
+      if (/binary_missing|unavailable|UNIMPLEMENTED/i.test(failure)) {
+        this.registered = false;
+        this.setState("unavailable");
+        releaseAorFromNative("native_answer_unavailable");
+        void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
+      }
       return false;
     }
   }

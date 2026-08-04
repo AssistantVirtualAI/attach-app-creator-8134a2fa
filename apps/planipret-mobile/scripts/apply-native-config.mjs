@@ -2070,10 +2070,12 @@ function ensurePjsipXcframework(iosRoot) {
       files.includes(buildRef) ? match : `${start}${files}\t\t\t\t${buildRef} /* ${buildName} */,\n${end}`
   );
 
-  // Réglages de build: on purge les anciens chemins SRCROOT vers les Headers
-  // des tranches (cause de "redefinition of module 'pjsua'") et on pointe
-  // uniquement vers le include généré par Xcode pour l'xcframework.
+  // Une seule tranche doit être visible par SDK. Ajouter device + simulator
+  // sans condition redéfinit `pjsua`; BUILT_PRODUCTS_DIR seul est trop tard
+  // pour le dependency scan. Les chemins SDK-conditionnels évitent les deux.
   const includes = `\"$(BUILT_PRODUCTS_DIR)/include\"`;
+  const deviceHeaders = `\"$(SRCROOT)/App/Plugins/PpPjsip/Frameworks/libpjsip.xcframework/ios-arm64/Headers\"`;
+  const simulatorHeaders = `\"$(SRCROOT)/App/Plugins/PpPjsip/Frameworks/libpjsip.xcframework/ios-arm64-simulator/Headers\"`;
   text = text.replace(/(buildSettings = \{\n)([\s\S]*?)(\n\t*\};)/g, (match, start, body, end) => {
     if (!/PRODUCT_BUNDLE_IDENTIFIER/.test(body)) return match;
     let next = body;
@@ -2086,6 +2088,19 @@ function ensurePjsipXcframework(iosRoot) {
       } else {
         next += `\n\t\t\t\t${key} = (\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t${includes},\n\t\t\t\t);`;
       }
+    }
+    const conditionalPaths = [
+      [`\"HEADER_SEARCH_PATHS[sdk=iphoneos*]\"`, deviceHeaders],
+      [`\"HEADER_SEARCH_PATHS[sdk=iphonesimulator*]\"`, simulatorHeaders],
+      [`\"SWIFT_INCLUDE_PATHS[sdk=iphoneos*]\"`, deviceHeaders],
+      [`\"SWIFT_INCLUDE_PATHS[sdk=iphonesimulator*]\"`, simulatorHeaders],
+    ];
+    for (const [key, value] of conditionalPaths) {
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(`${escapedKey} = [^;]*;`);
+      const setting = `${key} = (\n\t\t\t\t\t\"$(inherited)\",\n\t\t\t\t\t${value},\n\t\t\t\t);`;
+      if (re.test(next)) next = next.replace(re, setting);
+      else next += `\n\t\t\t\t${setting}`;
     }
     return `${start}${next}${end}`;
   });

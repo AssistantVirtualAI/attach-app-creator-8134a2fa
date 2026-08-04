@@ -145,6 +145,11 @@ final class PjsipEngine {
 
     /// Appel sortant en cours (piloté par CallKit côté PpVoipCall).
     private var outgoingCall: pjsua_call_id = pjsua_call_id(-1)
+    /// Armé AVANT `pjsua_call_make_call` : le callback d'état `CALLING` peut
+    /// arriver avant que `outgoingCall` soit affecté, ce qui faisait annoncer
+    /// `direction=in` sur un appel sortant (double écran d'appel côté JS).
+    private var outgoingPending = false
+
     private var muted = false
     private var speakerOn = false
     private var audioSessionReady = false

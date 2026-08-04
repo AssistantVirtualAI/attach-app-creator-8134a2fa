@@ -91,7 +91,69 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             self.nativeCallConnected = false
         }
 
+        // Appel SORTANT natif : sans CXStartCallAction, CallKit n'active jamais
+        // la session audio (didActivate) donc pjsua n'ouvre pas le périphérique
+        // audio → "appel lancé" sans tonalité ni écran d'appel.
+        nc.addObserver(forName: Notification.Name("PpPjsipOutgoingCall"), object: nil, queue: .main) { [weak self] note in
+            guard let self = self else { return }
+            let info = note.userInfo as? [String: Any] ?? [:]
+            let callId = (info["callId"] as? String) ?? UUID().uuidString
+            let destination = (info["destination"] as? String) ?? ""
+            self.startOutgoingCallKitCall(callId: callId, destination: destination)
+        }
+        nc.addObserver(forName: Notification.Name("PpPjsipOutgoingRinging"), object: nil, queue: .main) { [weak self] _ in
+            guard let self = self, let uuid = self.activeCallUUID, !self.nativeCallConnected else { return }
+            self.provider?.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+        }
     }
+
+    private func startOutgoingCallKitCall(callId: String, destination: String) {
+        if activeCallUUID != nil {
+            activeCallId = callId
+            nativeEngineOwnsCall = true
+            return
+        }
+        let uuid = UUID()
+        activeCallUUID = uuid
+        activeCallId = callId
+        nativeEngineOwnsCall = true
+        nativeCallConnected = false
+
+        let handle = destination.isEmpty
+            ? CXHandle(type: .generic, value: "Planiprêt")
+            : CXHandle(type: .phoneNumber, value: destination)
+        let start = CXStartCallAction(call: uuid, handle: handle)
+        start.isVideo = false
+        callController.request(CXTransaction(action: start)) { [weak self] error in
+            guard let self = self else { return }
+            if let error = error {
+                NSLog("[PpVoipCall] CXStartCallAction failed: \(error.localizedDescription)")
+                self.activeCallUUID = nil; self.activeCallId = nil
+                self.nativeEngineOwnsCall = false
+                NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil)
+                return
+            }
+            NSLog("[PpVoipCall] CallKit outgoing call started callId=%@", callId)
+            self.notifyListeners("outgoingCallStarted", data: [
+                "callUUID": uuid.uuidString,
+                "callId": callId,
+                "destination": destination,
+                "source": "pjsip"
+            ], retainUntilConsumed: true)
+        }
+    }
+
+    /// CallKit accepte l'appel sortant → active la session audio.
+    public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+        let update = CXCallUpdate()
+        update.remoteHandle = action.handle
+        update.hasVideo = false
+        update.supportsDTMF = true
+        update.supportsHolding = false
+        provider.reportCall(with: action.callUUID, updated: update)
+        action.fulfill()
+    }
+
 
     private func reportNativeIncomingCall(callId: String, callerName: String, callerNumber: String) {
         // Un push VoIP a pu déjà présenter le même appel : on garde le premier

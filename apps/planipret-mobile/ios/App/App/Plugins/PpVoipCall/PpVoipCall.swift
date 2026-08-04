@@ -25,6 +25,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var activeCallUUID: UUID?
     private var activeCallId: String?
     private var pendingAnswerAction: CXAnswerCallAction?
+    private var pendingAnswerBackgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var answerCompleted = false
     // ring17: NetSapiens can emit the SAME inbound call twice with two
     // different callIds. Deduplicate on the caller number too, otherwise a
@@ -35,6 +36,23 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     /// true quand l'appel CallKit courant est piloté par le moteur PJSIP natif
     /// (INVITE reçu en TLS 5061) et non plus par le chemin JsSIP/WebView.
     private var nativeEngineOwnsCall = false
+
+    private func beginAnswerBackgroundTask() {
+        endAnswerBackgroundTask()
+        pendingAnswerBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "PpVoipAnswer") { [weak self] in
+            guard let self = self else { return }
+            self.pendingAnswerAction?.fail()
+            self.pendingAnswerAction = nil
+            self.endAnswerBackgroundTask()
+        }
+    }
+
+    private func endAnswerBackgroundTask() {
+        guard pendingAnswerBackgroundTask != .invalid else { return }
+        let task = pendingAnswerBackgroundTask
+        pendingAnswerBackgroundTask = .invalid
+        UIApplication.shared.endBackgroundTask(task)
+    }
 
 
     private func apnsEnvironment() -> String {
@@ -104,6 +122,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
                 : (code >= 400 && code != 487) ? .failed : .remoteEnded
             self.provider?.reportCall(with: uuid, endedAt: Date(), reason: reason)
             self.pendingAnswerAction?.fulfill(); self.pendingAnswerAction = nil
+            self.endAnswerBackgroundTask()
             self.activeCallUUID = nil; self.activeCallId = nil
             self.nativeEngineOwnsCall = false
         }
@@ -131,6 +150,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             if let pending = pendingAnswerAction {
                 pendingAnswerAction = nil
                 answerCompleted = true
+                endAnswerBackgroundTask()
                 // `PpPjsipAnswerPending` already armed the engine when CallKit
                 // was answered before this INVITE. handleIncomingCall() sends
                 // the 200 OK itself; posting AnswerRequested here would answer
@@ -235,6 +255,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             activeCallUUID = nil
             activeCallId = nil
         }
+        endAnswerBackgroundTask()
         call.resolve(["ok": true])
     }
 
@@ -253,6 +274,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         pendingAnswerAction = nil
         answerCompleted = ok
         if ok { action.fulfill() } else { action.fail() }
+        endAnswerBackgroundTask()
         call.resolve(["ok": true])
     }
 
@@ -362,6 +384,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     // MARK: - CXProviderDelegate
     public func providerDidReset(_ provider: CXProvider) {
         pendingAnswerAction?.fail(); pendingAnswerAction = nil
+        endAnswerBackgroundTask()
         if nativeEngineOwnsCall {
             NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil)
         }
@@ -425,6 +448,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         // authoritative CXAnswerCallAction when that callback returns.
         pendingAnswerAction = action
         answerCompleted = false
+        beginAnswerBackgroundTask()
         // Si le moteur PJSIP est demarre, l'INVITE natif va arriver d'un
         // instant a l'autre : reportNativeIncomingCall remplira cette action.
         NotificationCenter.default.post(name: Notification.Name("PpPjsipAnswerPending"), object: nil, userInfo: ["callId": activeCallId ?? ""])
@@ -441,6 +465,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             self.pendingAnswerAction = nil
             NSLog("[PpVoipCall] answer action timed out — SIP dialog not confirmed")
             action.fail()
+            self.endAnswerBackgroundTask()
         }
     }
 
@@ -461,6 +486,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
         pendingAnswerAction?.fail(); pendingAnswerAction = nil
+        endAnswerBackgroundTask()
         if nativeEngineOwnsCall {
             // 603 Decline côté PJSIP : un 486 renverrait l'appel en messagerie.
             NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil, userInfo: ["callId": activeCallId ?? ""])

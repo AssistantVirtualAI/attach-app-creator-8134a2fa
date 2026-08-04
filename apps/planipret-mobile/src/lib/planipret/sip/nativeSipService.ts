@@ -102,6 +102,19 @@ export class NativeSipService {
   }
 
   private async doInitialize(): Promise<boolean> {
+    try {
+      return await this.doInitializeInner();
+    } catch (err: any) {
+      // Filet ultime : AUCUNE exception ne doit laisser l'AOR au natif.
+      console.error("[SIP] init natif — exception non gérée:", err?.message ?? err);
+      releaseAorFromNative("native_init_exception");
+      void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
+      this.setState("unavailable");
+      return false;
+    }
+  }
+
+  private async doInitializeInner(): Promise<boolean> {
     const pjsip = getPjsip();
     if (!pjsip) {
       // Aucun moteur natif : JsSIP redevient légitimement propriétaire.
@@ -109,9 +122,23 @@ export class NativeSipService {
       this.setState("unavailable");
       return false;
     }
+    if (!isPjsipEnabled()) {
+      releaseAorFromNative("pp_pjsip_enabled=false");
+      this.setState("unavailable");
+      return false;
+    }
+    // Le moteur doit être RÉELLEMENT lié avant toute revendication.
+    const linked = await this.probeEngineLinked(pjsip);
+    if (!linked) {
+      releaseAorFromNative("engine_not_linked");
+      void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
+      this.setState("unavailable");
+      return false;
+    }
     // Le natif est prioritaire dès maintenant : bloque tout REGISTER JsSIP
     // pendant la résolution des identifiants (fenêtre de course → WSS 1001).
     claimAorForNative(null, "native_init_start");
+    armAorWatchdog(() => this.registered);
 
     const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
       body: { client_type: "mobile" },
@@ -153,6 +180,7 @@ export class NativeSipService {
       // Le moteur natif possède l'AOR : JsSIP doit cesser de REGISTER et
       // retirer son Contact WebView s'il en avait déjà un.
       claimAorForNative(username, "native_engine_ready");
+      armAorWatchdog(() => this.registered);
       // Bloque explicitement le REGISTER WSS du keep-alive natif : `false`
       // sur jsOwnsAor signifiait auparavant « AOR libre » et créait un doublon.
       void import("./nativePpSipService")
@@ -168,21 +196,29 @@ export class NativeSipService {
       return true;
 
     } catch (err: any) {
-      const code = err?.code ?? err?.message ?? "error";
-      if (code === "binary_missing" || code === "unavailable" || code === "UNIMPLEMENTED") {
-        console.warn("[SIP] moteur natif indisponible:", code);
-        // Repli explicite : sans binaire PJSIP, JsSIP reprend l'AOR.
-        releaseAorFromNative(String(code));
-        void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
-        this.setState("unavailable");
-        return false;
-      }
-      console.error("[SIP] Init échouée:", err);
-      this.setState("failed");
-
+      const code = String(err?.code ?? err?.message ?? err?.errorMessage ?? "error");
+      console.error("[SIP] Init échouée:", code, err);
+      // QUELLE QUE SOIT la raison (binary_missing, timeout, exception), le
+      // chemin legacy JsSIP doit reprendre la main immédiatement.
+      releaseAorFromNative(code);
+      void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
+      this.setState("unavailable");
       return false;
     }
   }
+
+  /** `isEngineLinked()` natif = résultat de `#if canImport(pjsua)`. */
+  private async probeEngineLinked(pjsip: PjsipPlugin): Promise<boolean> {
+    try {
+      const res = await pjsip.isEngineLinked();
+      if (!res?.linked) console.warn("[SIP] isEngineLinked=false — libpjsip.xcframework absent du binaire");
+      return !!res?.linked;
+    } catch (e: any) {
+      console.warn("[SIP] isEngineLinked indisponible:", e?.message ?? e);
+      return false;
+    }
+  }
+
 
   private setState(state: SipRegistrationState) {
     this.lastState = state;

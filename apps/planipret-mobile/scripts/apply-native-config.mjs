@@ -2070,25 +2070,26 @@ function ensurePjsipXcframework(iosRoot) {
       files.includes(buildRef) ? match : `${start}${files}\t\t\t\t${buildRef} /* ${buildName} */,\n${end}`
   );
 
-  // Réglages de build: Swift ne trouve module.modulemap que via
-  // SWIFT_INCLUDE_PATHS / HEADER_SEARCH_PATHS.
-  const includes = headerPaths.join(" ");
+  // Réglages de build: on purge les anciens chemins SRCROOT vers les Headers
+  // des tranches (cause de "redefinition of module 'pjsua'") et on pointe
+  // uniquement vers le include généré par Xcode pour l'xcframework.
+  const includes = `\"$(BUILT_PRODUCTS_DIR)/include\"`;
   text = text.replace(/(buildSettings = \{\n)([\s\S]*?)(\n\t*\};)/g, (match, start, body, end) => {
     if (!/PRODUCT_BUNDLE_IDENTIFIER/.test(body)) return match;
     let next = body;
     for (const key of ["SWIFT_INCLUDE_PATHS", "HEADER_SEARCH_PATHS"]) {
-      if (next.includes(key)) {
-        if (next.includes("libpjsip.xcframework")) continue;
-        next = next.replace(
-          new RegExp(`(${key} = )([^;]*);`),
-          `$1(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t${includes},\n\t\t\t\t);`
-        );
+      const re = new RegExp(`(${key} = )([^;]*);`);
+      if (re.test(next)) {
+        const current = next.match(re)[2];
+        if (current.includes("BUILT_PRODUCTS_DIR)/include") && !current.includes("libpjsip.xcframework")) continue;
+        next = next.replace(re, `$1(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t${includes},\n\t\t\t\t);`);
       } else {
         next += `\n\t\t\t\t${key} = (\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t${includes},\n\t\t\t\t);`;
       }
     }
     return `${start}${next}${end}`;
   });
+
 
   if (text !== before) {
     fs.writeFileSync(pbx, text);

@@ -47,7 +47,7 @@ import {
 import { addDedupedCapListener } from "@/lib/planipret/sip/capListeners";
 import { checkSipBackendRegistration } from "@/lib/planipret/sip/sipBackendCheck";
 import { nativeSip } from "@/lib/planipret/sip/nativeSipService";
-import { nativeOwnsAor } from "@/lib/planipret/sip/aorArbitration";
+import { nativeOwnsAor, releaseAorFromNative } from "@/lib/planipret/sip/aorArbitration";
 
 import {
   upsertRingingSession,
@@ -424,7 +424,11 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         // different JsSIP Call-ID, making Answer wait forever.
         if (clientType === "mobile" && nativeSip.isAvailable()) {
           const nativeReady = await nativeSip.initialize();
-          if (nativeReady || nativeOwnsAor()) {
+          // IMPORTANT : on ne saute le chemin legacy QUE si l'init native a
+          // réellement réussi. `nativeOwnsAor()` pouvait rester vrai à cause
+          // d'un preclaim périmé alors que PJSIP était absent du binaire, ce
+          // qui rendait l'appel entrant imprenable.
+          if (nativeReady) {
             try { ppSipProvider.yieldAorToNative(); } catch {}
             void getPlanipretVoipPushToken().then((t) => {
               if (t?.token) void uploadPlanipretVoipToken(t.token, t.bundleId, sipConfig.extension, t.environment);
@@ -432,7 +436,10 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
             console.info("[pp-sip] PJSIP is the sole <ext>M owner; legacy WSS initialization skipped");
             return;
           }
+          releaseAorFromNative("native_init_failed_fallback_legacy");
+          console.warn("[pp-sip] PJSIP init failed → legacy WSS path takes over the AOR");
         }
+
         // The native keep-alive service owns the `<ext>M` device, but ONLY
         // in background. Running it while the WebView (JsSIP) is registered makes
         // NetSapiens close the sockets alternately (code 1001 loop, hundreds of
@@ -1267,12 +1274,12 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       const ok = await nativeSip.answer();
       console.info(`[answer] route=PJSIP → ${ok ? "SIP 200 OK sent" : "no native INVITE"}`);
       if (ok) return true;
-      // `answer()` releases AOR ownership when Capacitor reports that the
-      // native binary/module is unavailable. Continue immediately through the
-      // live JsSIP dialog instead of returning a permanently dead button.
-      if (nativeOwnsAor()) return false;
-      console.warn("[answer] PJSIP unavailable → continuing through JsSIP fallback");
+      // Échec natif : on rend l'AOR et on retente le chemin legacy DANS LE
+      // MÊME tap (sinon l'utilisateur tape 11 fois sans jamais décrocher).
+      releaseAorFromNative("answer_native_failed");
+      console.warn("[answer] PJSIP failed → retrying legacy route immediately");
     }
+
     const sipSnap = ppSipProvider.getSnapshot();
     console.info("[answer] tapped", {
       hasLiveSipSession,
@@ -1414,13 +1421,20 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
 
   const hangup = useCallback(() => {
     if (nativeOwnsAor()) {
-      void nativeSip.hangup();
+      void nativeSip.hangup().then((ok) => {
+        if (ok) return;
+        // Repli immédiat : PJSIP absent → BYE par la pile legacy.
+        releaseAorFromNative("hangup_native_failed");
+        console.warn("[hangup] PJSIP failed → legacy BYE");
+        try { ppSipProvider.hangup(); } catch {}
+      });
       setPushRing(null);
       setRestCall(null);
       setNativeCall(null);
       console.info("[hangup] native PJSIP hangup sent");
       return;
     }
+
     const callId = ppSipProvider.getSnapshot().callId;
     const restId = restCall?.id ?? null;
     console.info("[hangup] requested", { sipCallId: callId || null, restCallId: restId, hasLiveSipSession });

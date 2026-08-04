@@ -2022,32 +2022,31 @@ function ensureXcodeSourceFiles(iosRoot, relativeFiles) {
 // Lier libpjsip.xcframework à la cible App + exposer son module.modulemap à
 // Swift. Sans ça `#if canImport(pjsua)` est FAUX et tout le moteur PJSIP est
 // exclu à la compilation, même si l'archive est visible dans Xcode.
+const pjsipWarnings = [];
+
 function ensurePjsipXcframework(iosRoot) {
   const rel = "App/Plugins/PpPjsip/Frameworks/libpjsip.xcframework";
   const abs = path.join(iosRoot, rel);
-  if (!fs.existsSync(abs)) {
-    throw new Error(
-      `[native-config] ${rel} absent — build iOS refusé: sans ce binaire, ` +
-        "PpSipKeepAlive reçoit l'INVITE sans média et le bouton Répondre ne peut pas décrocher. " +
-        "Lance: bash scripts/build-pjsip-ios.sh"
-    );
+  const present = fs.existsSync(abs);
+  const hasHeaders =
+    present &&
+    fs.readdirSync(abs).some((slice) => fs.existsSync(path.join(abs, slice, "Headers")));
+
+  // Le script ne doit JAMAIS échouer si le binaire manque : le repli JsSIP
+  // prend le relais. On avertit clairement en fin d'exécution.
+  if (!present) {
+    pjsipWarnings.push(`⚠ libpjsip.xcframework absent → lancer scripts/build-pjsip-ios.sh (${rel})`);
+  } else if (!hasHeaders) {
+    pjsipWarnings.push("⚠ libpjsip.xcframework sans dossier Headers → canImport(pjsua) sera faux; relancer scripts/build-pjsip-ios.sh");
   }
 
-  // NE PAS ajouter les Headers des tranches (device + simulateur) aux chemins
-  // de recherche: les deux module.modulemap définissent le module `pjsua`, et
-  // Xcode copie déjà celui de la bonne tranche dans
-  // $(BUILT_PRODUCTS_DIR)/include -> "redefinition of module 'pjsua'".
-  // On se contente donc du dossier include généré par Xcode.
-  const hasHeaders = fs
-    .readdirSync(abs)
-    .some((slice) => fs.existsSync(path.join(abs, slice, "Headers")));
-  if (!hasHeaders) {
-    throw new Error("[native-config] libpjsip.xcframework sans dossier Headers — build iOS refusé car canImport(pjsua) serait faux.");
-  }
-
+  // Sans binaire sur disque, on n'injecte pas de référence (Xcode refuserait
+  // de compiler un fichier manquant) — le repli JsSIP reste opérationnel.
+  if (!present) return false;
 
   const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
   if (!fs.existsSync(pbx)) return false;
+
   let text = fs.readFileSync(pbx, "utf8");
   const before = text;
 
@@ -2070,12 +2069,10 @@ function ensurePjsipXcframework(iosRoot) {
       files.includes(buildRef) ? match : `${start}${files}\t\t\t\t${buildRef} /* ${buildName} */,\n${end}`
   );
 
-  // Une seule tranche doit être visible par SDK. Ajouter device + simulator
-  // sans condition redéfinit `pjsua`; BUILT_PRODUCTS_DIR seul est trop tard
-  // pour le dependency scan. Les chemins SDK-conditionnels évitent les deux.
+  // Réglages de build: on purge les anciens chemins SRCROOT vers les Headers
+  // des tranches (cause de "redefinition of module 'pjsua'") et on pointe
+  // uniquement vers le include généré par Xcode pour l'xcframework.
   const includes = `\"$(BUILT_PRODUCTS_DIR)/include\"`;
-  const deviceHeaders = `\"$(SRCROOT)/App/Plugins/PpPjsip/Frameworks/libpjsip.xcframework/ios-arm64/Headers\"`;
-  const simulatorHeaders = `\"$(SRCROOT)/App/Plugins/PpPjsip/Frameworks/libpjsip.xcframework/ios-arm64-simulator/Headers\"`;
   text = text.replace(/(buildSettings = \{\n)([\s\S]*?)(\n\t*\};)/g, (match, start, body, end) => {
     if (!/PRODUCT_BUNDLE_IDENTIFIER/.test(body)) return match;
     let next = body;
@@ -2088,19 +2085,6 @@ function ensurePjsipXcframework(iosRoot) {
       } else {
         next += `\n\t\t\t\t${key} = (\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t${includes},\n\t\t\t\t);`;
       }
-    }
-    const conditionalPaths = [
-      [`\"HEADER_SEARCH_PATHS[sdk=iphoneos*]\"`, deviceHeaders],
-      [`\"HEADER_SEARCH_PATHS[sdk=iphonesimulator*]\"`, simulatorHeaders],
-      [`\"SWIFT_INCLUDE_PATHS[sdk=iphoneos*]\"`, deviceHeaders],
-      [`\"SWIFT_INCLUDE_PATHS[sdk=iphonesimulator*]\"`, simulatorHeaders],
-    ];
-    for (const [key, value] of conditionalPaths) {
-      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp(`${escapedKey} = [^;]*;`);
-      const setting = `${key} = (\n\t\t\t\t\t\"$(inherited)\",\n\t\t\t\t\t${value},\n\t\t\t\t);`;
-      if (re.test(next)) next = next.replace(re, setting);
-      else next += `\n\t\t\t\t${setting}`;
     }
     return `${start}${next}${end}`;
   });
@@ -2491,4 +2475,9 @@ patchIosNativeFiles();
 // SceneDelegate patch did not land.
 if (!verifyIosScene({ soft: process.env.PP_SCENE_CHECK_SOFT === "1" })) {
   throw new Error("[native-config] iOS UIScene/SceneDelegate patch missing after cap sync — aborting.");
+}
+
+// Avertissements non bloquants (binaire PJSIP absent → repli JsSIP actif).
+if (pjsipWarnings.length) {
+  console.warn("\n[native-config] " + pjsipWarnings.join("\n[native-config] ") + "\n");
 }

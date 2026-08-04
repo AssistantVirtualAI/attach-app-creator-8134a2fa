@@ -82,6 +82,9 @@ export class NativeSipService {
   private readonly maxRetries = 3;
   private currentCallId: string | null = null;
   private username: string | null = null;
+  /** Appels entrants en cours, pour détecter les manqués (jamais "connected"). */
+  private inboundCalls = new Map<string, { remoteNumber: string | null; remoteName: string | null; answered: boolean; startedAt: string }>();
+
   private extension: string | null = null;
   private initializing: Promise<boolean> | null = null;
   private listenersBound = false;
@@ -264,6 +267,8 @@ export class NativeSipService {
 
     await pjsip.addListener("incomingCall", (call: any) => {
       this.currentCallId = call?.callId ?? null;
+      const cid = call?.callId != null ? String(call.callId) : "unknown";
+      this.inboundCalls.set(cid, { remoteNumber: call?.remoteNumber ?? null, remoteName: call?.remoteName ?? null, answered: false, startedAt: new Date().toISOString() });
       void import("./nativePpSipService").then((m) => m.setPlanipretNativeCallActive(true)).catch(() => undefined);
       // CallKit sonne déjà côté natif : cet event ne sert qu'à l'UI.
       emit("sip-incoming-call", {
@@ -276,12 +281,54 @@ export class NativeSipService {
 
     await pjsip.addListener("callState", (state: any) => {
       const ended = state?.state === "disconnected" || state?.state === "ended";
-      if (ended) this.currentCallId = null;
-      else if (state?.callId) this.currentCallId = String(state.callId);
+      const cid = state?.callId != null ? String(state.callId) : "unknown";
+      const tracked = this.inboundCalls.get(cid);
+      if (tracked && (state?.state === "connected" || state?.state === "confirmed" || state?.state === "answered")) {
+        tracked.answered = true;
+      }
+      if (ended) {
+        this.currentCallId = null;
+        if (tracked) {
+          this.inboundCalls.delete(cid);
+          if (!tracked.answered) void this.logMissedCall(tracked);
+        }
+      } else if (state?.callId) this.currentCallId = String(state.callId);
       void import("./nativePpSipService").then((m) => m.setPlanipretNativeCallActive(!ended)).catch(() => undefined);
       emit("sip-call-state", { ...state, engine: "pjsip" });
     });
   }
+
+  /** Journalise un appel entrant jamais répondu dans `planipret_phone_calls`. */
+  private async logMissedCall(call: { remoteNumber: string | null; remoteName: string | null; startedAt: string }) {
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const authId = auth?.user?.id;
+      if (!authId) return;
+      const { data: profile } = await supabase
+        .from("planipret_profiles")
+        .select("id, organization_id, ns_extension")
+        .eq("user_id", authId)
+        .maybeSingle();
+      if (!profile?.organization_id) return;
+      await supabase.from("planipret_phone_calls").insert({
+        user_id: (profile as any).id ?? authId,
+        organization_id: (profile as any).organization_id,
+        extension: (profile as any).ns_extension ?? this.username ?? null,
+        direction: "missed",
+        status: "no-answer",
+        from_number: call.remoteNumber,
+        from_name: call.remoteName,
+        to_number: (profile as any).ns_extension ?? this.username ?? null,
+        started_at: call.startedAt,
+        ended_at: new Date().toISOString(),
+        duration_seconds: 0,
+        metadata: { source: "pjsip_native" },
+      } as any);
+    } catch (err) {
+      console.warn("[SIP] log missed call échoué:", err);
+    }
+  }
+
 
   /** `true` si l'erreur signifie « PJSIP absent du binaire / indisponible ». */
   private isMissingBinary(err: any): boolean {

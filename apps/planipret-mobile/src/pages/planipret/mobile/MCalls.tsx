@@ -257,8 +257,17 @@ export default function MCalls() {
         } as Call;
       });
 
+      // Les appels locaux sans CDR NS (ex. manqués PJSIP, délai NS 30-60 s)
+      // doivent rester visibles : on les fusionne au lieu de les ignorer.
+      const mergedIds = new Set(merged.map((m: any) => m.id));
+      const localOnly = (local ?? []).filter((r: any) => !r.ns_call_id && !mergedIds.has(r.id)) as Call[];
+      const all = [...merged, ...localOnly].sort(
+        (a: any, b: any) => new Date(b.started_at ?? 0).getTime() - new Date(a.started_at ?? 0).getTime()
+      );
+
       // Fallback : si NS ne renvoie rien, montrer le cache local
-      setCalls(merged.length ? merged : ((local ?? []) as Call[]));
+      setCalls(all.length ? all : ((local ?? []) as Call[]));
+
     } catch (e: any) {
       console.error("[pp-ns-cdr] list failed", e);
       toast.error(e?.message ?? "Échec chargement CDR");

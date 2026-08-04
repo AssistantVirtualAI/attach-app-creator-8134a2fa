@@ -183,7 +183,6 @@ export default function MCalls() {
   const [visibleCount, setVisibleCount] = useState(25);
   const [degraded, setDegraded] = useState<{ active: boolean; reason?: string; reopens_at?: number | null }>({ active: false });
   const recordingsSyncingRef = useRef(false);
-  const callsRefreshDebounceRef = useRef<number | null>(null);
 
   const userId = profile?.id ?? profile?.user_id;
   const profileAuthId = profile?.user_id;
@@ -380,26 +379,10 @@ export default function MCalls() {
   }, [load, loadRecordings, registerRefresh]);
 
 
-  // Realtime updates on phone_calls (for new entries + auto-refresh recordings)
-  useEffect(() => {
-    if (!userId) return;
-    const ch = supabase
-      .channel(`planipret-calls:${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_calls" }, (payload: any) => {
-        const row = payload?.new ?? payload?.old ?? {};
-        if (row.user_id && row.user_id !== userId && row.user_id !== profileAuthId && row.extension !== profileExtension) return;
-        if (callsRefreshDebounceRef.current) window.clearTimeout(callsRefreshDebounceRef.current);
-        callsRefreshDebounceRef.current = window.setTimeout(() => {
-          void load();
-          if (tab === "recordings") void loadRecordings();
-        }, 8_000); // debounce 8s — évite les refreshes trop fréquents
-      })
-      .subscribe();
-    return () => {
-      if (callsRefreshDebounceRef.current) window.clearTimeout(callsRefreshDebounceRef.current);
-      supabase.removeChannel(ch);
-    };
-  }, [userId, profileAuthId, profileExtension, tab, load, loadRecordings]);
+  // Auto-refresh on phone_calls changes is intentionally disabled so the
+  // call history stays stable while the user scrolls. Use the manual refresh
+  // button or pull-to-refresh to reload the list.
+
 
   const missedCount = useMemo(() => calls.filter(isMissed).length, [calls]);
 

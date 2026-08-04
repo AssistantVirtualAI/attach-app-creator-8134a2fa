@@ -194,10 +194,36 @@ function queueRingRuleResync(brokerId: string, reason: string, force = false) {
 
 
 /**
+ * Transport arbitration.
+ *
+ * ONE transport per AOR. A NetSapiens Device object carries a single
+ * `device-sip-transport-type`; registering the same AOR over another transport
+ * leaves the PBX bookkeeping pointing at the wrong contact and inbound calls are
+ * never forked to it (they fall through to voicemail).
+ *
+ * The client therefore declares which transport it will actually register with:
+ *  - `wss` (default) — WebView / JsSIP over wss:9002 on a core node.
+ *  - `tls` — native PJSIP over sip:5061 on a core node (iOS/Android native engine).
+ */
+type SipTransport = "wss" | "tls";
+function normalizeTransport(v: unknown): SipTransport {
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "tls" || s === "sips" ? "tls" : "wss";
+}
+const nsTransport = (t: SipTransport) => (t === "tls" ? "TLS" : "WSS");
+const sipPortFor = (t: SipTransport) => (t === "tls" ? 5061 : 9002);
+
+/**
  * Same device payload as ns-provision-broker-devices so EVERY broker ends up
  * with an identical `<ext>M` + `<ext>W` pair (no per-user drift).
  */
-function deviceCreatePayload(id: string, isMobile: boolean, password: string, coreServer: string) {
+function deviceCreatePayload(
+  id: string,
+  isMobile: boolean,
+  password: string,
+  coreServer: string,
+  transport: SipTransport = "wss",
+) {
   return {
     device: id,
     "device-sip-registration-password": password,
@@ -210,14 +236,15 @@ function deviceCreatePayload(id: string, isMobile: boolean, password: string, co
     // which marks the softphone unregistered between re-REGISTERs (calls -> voicemail).
     "device-sip-registration-expiry-seconds": 1800,
     "device-sip-nat-traversal-enabled": "automatic",
-    transport: "WSS",
-    "device-sip-transport-type": "WSS",
+    transport: nsTransport(transport),
+    "device-sip-transport-type": nsTransport(transport),
     "device-srtp-enabled": "opportunistic",
     "device-sip-allowed-user-agent": "",
     "device-push-enabled": isMobile ? "yes" : "no",
 
   };
 }
+
 
 
 Deno.serve(async (req) => {

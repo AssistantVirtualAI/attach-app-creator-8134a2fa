@@ -54,10 +54,35 @@ Deno.serve(async (req) => {
 
   const auth = await requirePlanipretBroker(req);
   if (auth instanceof Response) return auth;
-  const { ctx } = auth;
+  const { ctx, supabase } = auth;
 
-  const domain = ctx.nsDomain;
-  const ext = String(ctx.extension);
+  // Un admin Planiprêt peut diagnostiquer n'importe quel courtier via
+  // `{ extension: "113" }` ou `{ broker_user_id }`. Sinon, le courtier
+  // authentifié se diagnostique lui-même.
+  let body: any = {};
+  try { body = await req.clone().json(); } catch { /* body vide */ }
+  let target = { extension: String(ctx.extension), domain: ctx.nsDomain };
+  const wanted = String(body?.extension ?? "").trim();
+  const wantedUser = String(body?.broker_user_id ?? "").trim();
+  if (wanted || wantedUser) {
+    const { data: isAdmin } = await supabase.rpc("is_planipret_admin", { _user_id: ctx.userId });
+    if (isAdmin !== true) return jsonResponse({ ok: false, error: "forbidden_admin_only" }, 403);
+    const q = supabase
+      .from("planipret_profiles")
+      .select("extension, ns_extension, ns_domain")
+      .limit(1);
+    const { data: prof } = wantedUser
+      ? await q.eq("user_id", wantedUser).maybeSingle()
+      : await q.or(`extension.eq.${wanted},ns_extension.eq.${wanted}`).maybeSingle();
+    if (!prof?.ns_domain) return jsonResponse({ ok: false, error: "broker_not_found" }, 404);
+    target = {
+      extension: String((prof as any).extension || (prof as any).ns_extension),
+      domain: String((prof as any).ns_domain),
+    };
+  }
+
+  const domain = target.domain;
+  const ext = target.extension;
   const mobileId = `${ext}M`;
   const widgetId = `${ext}W`;
   const encDomain = encodeURIComponent(domain);

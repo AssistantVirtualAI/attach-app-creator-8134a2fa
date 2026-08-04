@@ -134,8 +134,12 @@ build_arch () {
   sdk_basename="$(basename "$sdk_path")"  # ex: iPhoneOS26.5.sdk
   echo "▶ pjproject $PJ_TAG: $tag ($sdk_basename / $arch), --with-ssl=$ssl_prefix"
 
+  # Dériver le DEVPATH depuis le chemin SDK réel
+  # ex: /Applications/Xcode.app/.../iPhoneSimulator.platform/Developer
+  local platform_dir
+  platform_dir="$(dirname "$(dirname "$sdk_path")")"  # remonte de SDKs/xxx.sdk à Developer
   make distclean >/dev/null 2>&1 || true
-  IPHONESDK="$sdk_basename" ARCH="-arch $arch" \
+  DEVPATH="$platform_dir" IPHONESDK="$sdk_basename" ARCH="-arch $arch" \
     ./configure-iphone --with-ssl="$ssl_prefix" \
       --disable-video --disable-libyuv --disable-opencore-amr 2>&1 | tee "$log"
 

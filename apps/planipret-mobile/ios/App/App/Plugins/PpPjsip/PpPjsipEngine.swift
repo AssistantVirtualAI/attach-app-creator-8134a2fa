@@ -445,9 +445,10 @@ final class PjsipEngine {
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self = self, !done else { return }
             done = true
-            self.registerCurrentThreadIfNeeded()
-            let status = pjsua_call_hangup(target, UInt32(code), nil, nil)
-            NSLog("[PpPjsip] hangup FALLBACK callId=%d status=%d", target, status)
+            self.thread.run {
+                let status = pjsua_call_hangup(target, UInt32(code), nil, nil)
+                NSLog("[PpPjsip] hangup FALLBACK callId=%d status=%d", target, status)
+            }
         }
         DispatchQueue.main.async { closeCallKit() }
     }

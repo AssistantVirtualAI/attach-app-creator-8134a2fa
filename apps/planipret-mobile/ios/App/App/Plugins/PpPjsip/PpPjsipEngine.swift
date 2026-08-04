@@ -417,7 +417,7 @@ final class PjsipEngine {
             self.scheduleOnPjsipThread {
                 if done { return }
                 done = true
-                let status = pjsua_call_hangup(target, pjsip_status_code(UInt32(code)).rawValue == 0 ? 0 : UInt32(code), nil, nil)
+                let status = pjsua_call_hangup(target, UInt32(code), nil, nil)
                 NSLog("[PpPjsip] hangup callId=%d code=%d status=%d", target, code, status)
             }
         }

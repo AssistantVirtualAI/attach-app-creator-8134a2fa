@@ -44,7 +44,14 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) return 'vendor-react';
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/scheduler/') ||
+            id.includes('node_modules/react-is/') ||
+            id.includes('node_modules/use-sync-external-store/')
+          )
+            return 'vendor-react';
           if (id.includes('node_modules/react-router')) return 'vendor-router';
           if (id.includes('@supabase')) return 'vendor-supabase';
           if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';

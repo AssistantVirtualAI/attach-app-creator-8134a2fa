@@ -389,17 +389,49 @@ final class PjsipEngine {
 
 
     func hangup(callId: String?) {
-        let target = resolveCall(callId)
-        guard target >= 0 else { return }
+        // Repli explicite : un callId JS désynchronisé ne doit jamais empêcher
+        // de raccrocher — on retombe sur l'appel actif, puis sur le sortant.
+        var target = resolveCall(callId)
+        if target < 0 { target = activeCall }
+        if target < 0 { target = outgoingCall }
+        // Appel sortant : code 0 → PJSIP choisit CANCEL ou BYE selon l'état.
+        // Appel entrant en sonnerie : 603 Decline (486 renvoie en messagerie).
+        let code = (target >= 0 && target == outgoingCall) ? 0 : 603
+        // CallKit doit se fermer même si la pile SIP ne répond pas.
+        let closeCallKit = {
+            NotificationCenter.default.post(
+                name: Notification.Name("PpPjsipCallEnded"),
+                object: nil,
+                userInfo: ["callId": target >= 0 ? String(target) : "", "reason": "local_hangup"]
+            )
+        }
+        guard target >= 0 else {
+            NSLog("[PpPjsip] hangup sans appel résolu → fermeture CallKit seule")
+            DispatchQueue.main.async { closeCallKit() }
+            return
+        }
+        var done = false
         thread.run { [weak self] in
             guard let self = self else { return }
+            self.registerCurrentThreadIfNeeded()
             self.scheduleOnPjsipThread {
-                // 603 Decline (et non 486) : NetSapiens bascule sur la
-                // messagerie sur 486, un refus explicite arrête la sonnerie.
-                pjsua_call_hangup(target, 603, nil, nil)
+                if done { return }
+                done = true
+                let status = pjsua_call_hangup(target, UInt32(code), nil, nil)
+                NSLog("[PpPjsip] hangup callId=%d code=%d status=%d", target, code, status)
             }
         }
+        // Filet de sécurité si le timer PJSIP ne s'exécute pas.
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self = self, !done else { return }
+            done = true
+            self.registerCurrentThreadIfNeeded()
+            let status = pjsua_call_hangup(target, UInt32(code), nil, nil)
+            NSLog("[PpPjsip] hangup FALLBACK callId=%d status=%d", target, status)
+        }
+        DispatchQueue.main.async { closeCallKit() }
     }
+
 
     func setMute(_ on: Bool) {
         muted = on

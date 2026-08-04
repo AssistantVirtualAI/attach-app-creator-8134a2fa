@@ -283,18 +283,29 @@ export class NativeSipService {
     });
   }
 
+  /** `true` si l'erreur signifie « PJSIP absent du binaire / indisponible ». */
+  private isMissingBinary(err: any): boolean {
+    const blob = `${err?.code ?? ""} ${err?.message ?? ""} ${err?.errorMessage ?? ""}`;
+    return /binary_missing|unavailable|UNIMPLEMENTED|not implemented/i.test(blob);
+  }
+
   async answer(): Promise<boolean> {
     const pjsip = getPjsip();
-    if (!pjsip) return false;
+    if (!pjsip) { releaseAorFromNative("answer_plugin_absent"); return false; }
     try {
       const res = await pjsip.answerCall({ callId: this.currentCallId ?? undefined });
       this.currentCallId = res?.callId ?? this.currentCallId;
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error("[SIP] answer échoué:", err);
+      if (this.isMissingBinary(err)) {
+        releaseAorFromNative("answer_binary_missing");
+        void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
+      }
       return false;
     }
   }
+
 
   async hangup(): Promise<boolean> {
     const pjsip = getPjsip();

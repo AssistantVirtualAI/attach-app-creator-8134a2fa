@@ -37,6 +37,14 @@ import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "@/lib/planipret/profileColumns";
 
+/** Hard timeout guard: never let a hung network call freeze the app shell. */
+function ppWithTimeout<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label}_timeout`)), ms);
+    p.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+  });
+}
+
 
 const ACCENT = "#2E9BDC";
 
@@ -761,7 +769,16 @@ export default function PlanipretMobile() {
       setLoading(true);
       setAccessError(null);
     }
-    const { data: { session } } = await supabase.auth.getSession();
+    let session: any = null;
+    try {
+      const r: any = await ppWithTimeout(supabase.auth.getSession(), 8000, "get_session");
+      session = r?.data?.session ?? null;
+    } catch (e) {
+      console.warn("[PlanipretMobile] getSession timeout", e);
+      setAccessError("load_failed");
+      setLoading(false);
+      return;
+    }
     const user = session?.user ?? null;
     if (!user) {
       recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "no auth session — stay inside mobile app");
@@ -794,10 +811,10 @@ export default function PlanipretMobile() {
       }
       if (!currentSession?.access_token) throw new Error("no_session");
 
-      const { data: fnData, error: fnError } = await supabase.functions.invoke("pp-mobile-profile", {
+      const { data: fnData, error: fnError }: any = await ppWithTimeout(supabase.functions.invoke("pp-mobile-profile", {
         body: { fields: "safe" },
         headers: { Authorization: `Bearer ${currentSession.access_token}` },
-      });
+      }), 10000, "profile_fn");
       if (fnError) throw fnError;
       const fnProfile = (fnData as any)?.profile ?? null;
       if (!fnProfile) throw new Error((fnData as any)?.error ?? "missing_profile");
@@ -809,7 +826,7 @@ export default function PlanipretMobile() {
 
     // 1) Stable path: direct RLS-backed profile read. Backend function is fallback only.
     try {
-      const direct = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle();
+      const direct: any = await ppWithTimeout(supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle(), 10000, "profile_query");
       data = direct.data as any;
       error = direct.error;
     } catch (directErr: any) {
@@ -933,6 +950,17 @@ export default function PlanipretMobile() {
     prefetchPpContacts(actions);
   }, [profile?.user_id, profile?.ns_extension, profile?.extension, profile?.maestro_broker_id]);
 
+
+  // Watchdog: if boot stalls (slow/blocked network on review devices), surface
+  // an actionable error screen instead of an infinite loading state.
+  useEffect(() => {
+    if (!loading) return;
+    const id = setTimeout(() => {
+      setLoading(false);
+      setAccessError((prev) => prev ?? "load_failed");
+    }, 15000);
+    return () => clearTimeout(id);
+  }, [loading]);
 
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#0A1425", color: "#2E9BDC", fontFamily: "Urbanist,sans-serif" }}>{t("common.loading")}</div>;
 

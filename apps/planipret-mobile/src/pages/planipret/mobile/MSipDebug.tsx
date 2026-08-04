@@ -281,10 +281,19 @@ function PjsipToggleCard() {
 
   const toggle = async () => {
     const next = !enabled;
+    // Désactiver PJSIP pendant qu'il détient l'AOR renvoie le device en WSS et
+    // fait sonner dans le vide : on exige une confirmation explicite.
+    if (!next && nativeOwnsAor()) {
+      const ok = window.confirm(
+        "PJSIP détient actuellement l'enregistrement SIP (TLS 5061). Le désactiver rebascule le poste en WebSocket et les appels entrants risquent d'aller à la messagerie. Continuer ?"
+      );
+      if (!ok) return;
+    }
     setEnabled(next);
     await setPjsipEnabled(next);
     toast.success(next ? "PJSIP activé (redémarrer l'app)" : "PJSIP désactivé — repli JsSIP actif");
   };
+
 
   return (
     <section className="pp-card p-3 space-y-2">

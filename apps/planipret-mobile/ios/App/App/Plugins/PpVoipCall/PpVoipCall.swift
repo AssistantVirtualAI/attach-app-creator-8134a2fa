@@ -26,9 +26,6 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
     private var activeCallId: String?
     private var pendingAnswerAction: CXAnswerCallAction?
     private var answerCompleted = false
-    /// Passe à true dès que PJSIP confirme le média/la connexion de l'appel.
-    private var nativeCallConnected = false
-
     // ring17: NetSapiens can emit the SAME inbound call twice with two
     // different callIds. Deduplicate on the caller number too, otherwise a
     // second CallKit call races the first answer action.
@@ -76,7 +73,6 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         }
         nc.addObserver(forName: Notification.Name("PpPjsipCallConnected"), object: nil, queue: .main) { [weak self] _ in
             guard let self = self, let uuid = self.activeCallUUID else { return }
-            self.nativeCallConnected = true
             self.provider?.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
         nc.addObserver(forName: Notification.Name("PpPjsipCallEnded"), object: nil, queue: .main) { [weak self] note in
@@ -88,72 +84,8 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
             self.pendingAnswerAction?.fulfill(); self.pendingAnswerAction = nil
             self.activeCallUUID = nil; self.activeCallId = nil
             self.nativeEngineOwnsCall = false
-            self.nativeCallConnected = false
-        }
-
-        // Appel SORTANT natif : sans CXStartCallAction, CallKit n'active jamais
-        // la session audio (didActivate) donc pjsua n'ouvre pas le périphérique
-        // audio → "appel lancé" sans tonalité ni écran d'appel.
-        nc.addObserver(forName: Notification.Name("PpPjsipOutgoingCall"), object: nil, queue: .main) { [weak self] note in
-            guard let self = self else { return }
-            let info = note.userInfo as? [String: Any] ?? [:]
-            let callId = (info["callId"] as? String) ?? UUID().uuidString
-            let destination = (info["destination"] as? String) ?? ""
-            self.startOutgoingCallKitCall(callId: callId, destination: destination)
-        }
-        nc.addObserver(forName: Notification.Name("PpPjsipOutgoingRinging"), object: nil, queue: .main) { [weak self] _ in
-            guard let self = self, let uuid = self.activeCallUUID, !self.nativeCallConnected else { return }
-            self.provider?.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
         }
     }
-
-    private func startOutgoingCallKitCall(callId: String, destination: String) {
-        if activeCallUUID != nil {
-            activeCallId = callId
-            nativeEngineOwnsCall = true
-            return
-        }
-        let uuid = UUID()
-        activeCallUUID = uuid
-        activeCallId = callId
-        nativeEngineOwnsCall = true
-        nativeCallConnected = false
-
-        let handle = destination.isEmpty
-            ? CXHandle(type: .generic, value: "Planiprêt")
-            : CXHandle(type: .phoneNumber, value: destination)
-        let start = CXStartCallAction(call: uuid, handle: handle)
-        start.isVideo = false
-        callController.request(CXTransaction(action: start)) { [weak self] error in
-            guard let self = self else { return }
-            if let error = error {
-                NSLog("[PpVoipCall] CXStartCallAction failed: \(error.localizedDescription)")
-                self.activeCallUUID = nil; self.activeCallId = nil
-                self.nativeEngineOwnsCall = false
-                NotificationCenter.default.post(name: Notification.Name("PpPjsipEndRequested"), object: nil)
-                return
-            }
-            NSLog("[PpVoipCall] CallKit outgoing call started callId=%@", callId)
-            self.notifyListeners("outgoingCallStarted", data: [
-                "callUUID": uuid.uuidString,
-                "callId": callId,
-                "destination": destination,
-                "source": "pjsip"
-            ], retainUntilConsumed: true)
-        }
-    }
-
-    /// CallKit accepte l'appel sortant → active la session audio.
-    public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
-        let update = CXCallUpdate()
-        update.remoteHandle = action.handle
-        update.hasVideo = false
-        update.supportsDTMF = true
-        update.supportsHolding = false
-        provider.reportCall(with: action.callUUID, updated: update)
-        action.fulfill()
-    }
-
 
     private func reportNativeIncomingCall(callId: String, callerName: String, callerNumber: String) {
         // Un push VoIP a pu déjà présenter le même appel : on garde le premier
@@ -193,7 +125,6 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         activeCallUUID = uuid
         activeCallId = callId
         nativeEngineOwnsCall = true
-        nativeCallConnected = false
 
         let update = CXCallUpdate()
         update.remoteHandle = callerNumber.isEmpty
@@ -441,19 +372,8 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
                 "source": "pjsip"
             ], retainUntilConsumed: true)
             action.fulfill()
-            // Le 200 OK PJSIP peut échouer (thread, média) : sans confirmation
-            // de connexion, CallKit afficherait « en cours » alors que
-            // l'appelant entend encore la sonnerie. On relance une fois, puis
-            // on termine l'appel si rien ne se confirme.
-            let uuid = action.callUUID
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-                guard let self = self, self.activeCallUUID == uuid, !self.nativeCallConnected else { return }
-                NSLog("[PpVoipCall] answer not confirmed after 3s — retry PJSIP answer")
-                NotificationCenter.default.post(name: Notification.Name("PpPjsipAnswerRequested"), object: nil, userInfo: ["callId": self.activeCallId ?? ""])
-            }
             return
         }
-
 
         // Store the transaction BEFORE waking JS. A retained Capacitor listener
         // can answer synchronously; completeAnswer() must already have the

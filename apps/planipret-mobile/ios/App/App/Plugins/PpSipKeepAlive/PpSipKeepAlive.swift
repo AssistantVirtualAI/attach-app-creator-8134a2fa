@@ -20,7 +20,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       CAPPluginMethod(name: "wakeForIncomingCall", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "setCallActive", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "declareJsOwnsAor", returnType: CAPPluginReturnPromise),
-       CAPPluginMethod(name: "declareNativeEngineOwnsAor", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "setAudioRoute", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "getAudioRoute", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
@@ -69,9 +68,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// R3 (ring9): JsSIP (WebView) explicitly claimed the shared 113M AOR. The
     /// native stack must then stay off it — it can ring but has no media plan.
     private var jsOwnsAor = false
-    /// PJSIP/TLS owns `<ext>M`. The legacy WSS keep-alive must remain passive,
-    /// including after a PushKit wake, or NetSapiens closes one binding (1001).
-    private var nativeEngineOwnsAor = false
     private var pushGraceWorkItem: DispatchWorkItem? = nil
     /// "earpiece" | "speaker" | "bluetooth" — chosen by the user in the in-call UI.
     /// A phone call MUST start on the earpiece: WebKit WebRTC otherwise defaults
@@ -264,24 +260,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         call.resolve(self.snapshot(ok: true))
       }
     }
-    @objc func declareNativeEngineOwnsAor(_ call: CAPPluginCall) {
-      let owns = call.getBool("owns") ?? true
-      DispatchQueue.main.async { [weak self] in
-        guard let self = self else { call.resolve(["ok": false]); return }
-        self.nativeEngineOwnsAor = owns
-        NSLog("[PpSipKeepAlive] nativeEngineOwnsAor=%@", owns ? "true" : "false")
-        if owns {
-          self.jsOwnsAor = false
-          self.pushGraceWorkItem?.cancel(); self.pushGraceWorkItem = nil
-          self.backgroundHandoffWorkItem?.cancel(); self.backgroundHandoffWorkItem = nil
-          self.timer?.invalidate(); self.timer = nil
-          self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil
-          self.socketOpen = false
-          self.setStatus("protected", "pjsip_owns_aor")
-        }
-        call.resolve(self.snapshot(ok: true))
-      }
-    }
     @objc func wakeForIncomingCall(_ call: CAPPluginCall) {
       let why = call.getString("reason") ?? "js"
       DispatchQueue.main.async { [weak self] in
@@ -300,11 +278,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// guarantees background execution through PushKit, so this is the path that
     /// must bring the AOR back before the PBX times out to voicemail.
     private func wakeForPush(_ why: String) {
-      if nativeEngineOwnsAor {
-        NSLog("[PpSipKeepAlive] VoIP push wake delegated to PJSIP — legacy WSS REGISTER blocked")
-        setStatus("protected", "pjsip_owns_aor")
-        return
-      }
       // PushKit can wake iOS before the WebView has loaded. Restore the last
       // confirmed SIP configuration so REGISTER never depends on JS startup.
       if host.isEmpty || login.isEmpty || domain.isEmpty { restoreConfig() }
@@ -332,7 +305,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       pushGraceWorkItem?.cancel()
       let work = DispatchWorkItem { [weak self] in
         guard let self = self else { return }
-        if self.jsOwnsAor || self.nativeEngineOwnsAor { NSLog("[PpSipKeepAlive] push grace: another engine owns AOR - skipping native REGISTER"); return }
+        if self.jsOwnsAor { NSLog("[PpSipKeepAlive] push grace: JS owns AOR - skipping native REGISTER"); return }
         if self.isForeground() || self.callActive { return }
         if self.socket == nil { self.connect() } else { self.sendRegister(challenge: nil, force: true) }
       }

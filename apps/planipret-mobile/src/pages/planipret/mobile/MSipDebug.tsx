@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ppSipProvider, type PpSipEvent, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
 import { exportSipStability, getSipStabilityReport, resetSipStability } from "@/lib/planipret/sip/sipStabilityMonitor";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { isPjsipEnabled, nativeOwnsAor, setPjsipEnabled } from "@/lib/planipret/sip/aorArbitration";
 import { runPjsipRegisterProbe, PJSIP_PROBE_PORT, PJSIP_PROBE_SERVER, type PjsipProbeResult } from "@/lib/native/PpPjsipProbe";
 
 const STAGES = ["idle", "connecting", "connected", "registered"] as const;
@@ -116,8 +117,12 @@ export default function MSipDebug() {
 
 
       {/* 24h stability soak */}
+      {/* Interrupteur PJSIP (sans rebuild) */}
+      <PjsipToggleCard />
+
       {/* Sonde PJSIP native (manuelle) */}
       <PjsipProbeCard />
+
 
       <StabilityCard />
 
@@ -253,6 +258,45 @@ function PjsipProbeCard() {
         style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>
         {running ? "REGISTER en cours…" : "Lancer la sonde PJSIP"}
       </button>
+    </section>
+  );
+}
+
+/**
+ * Interrupteur persistant `pp_pjsip_enabled` : permet de désactiver le moteur
+ * PJSIP natif (repli JsSIP) sans recompiler l'application.
+ */
+function PjsipToggleCard() {
+  const [enabled, setEnabled] = useState<boolean>(() => isPjsipEnabled());
+  const [owner, setOwner] = useState<string>(() => (nativeOwnsAor() ? "PJSIP (natif)" : "JsSIP (legacy)"));
+
+  useEffect(() => {
+    const tick = setInterval(() => setOwner(nativeOwnsAor() ? "PJSIP (natif)" : "JsSIP (legacy)"), 2000);
+    return () => clearInterval(tick);
+  }, []);
+
+  const toggle = async () => {
+    const next = !enabled;
+    setEnabled(next);
+    await setPjsipEnabled(next);
+    toast.success(next ? "PJSIP activé (redémarrer l'app)" : "PJSIP désactivé — repli JsSIP actif");
+  };
+
+  return (
+    <section className="pp-card p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>Moteur PJSIP natif</span>
+        <button
+          onClick={toggle}
+          className="text-[11px] font-bold px-3 py-1.5 rounded-lg"
+          style={{ background: enabled ? "#10B981" : "#94A3B8", color: "#fff" }}
+        >
+          {enabled ? "Activé" : "Désactivé"}
+        </button>
+      </div>
+      <p className="text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
+        Propriétaire de l'AOR : <span className="font-bold">{owner}</span> — clé <code>pp_pjsip_enabled</code>
+      </p>
     </section>
   );
 }

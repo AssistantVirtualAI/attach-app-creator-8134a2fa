@@ -2516,7 +2516,7 @@ function patchIosNativeFiles() {
     ...(hasPjsip
       ? [
           "App/Plugins/PpPjsip/PpPjsip.swift",
-          "App/Plugins/PpPjsip/PpPjsip.m",
+
           ...(fs.existsSync(path.join(pjsipDir, "PpPjsipEngine.swift"))
             ? ["App/Plugins/PpPjsip/PpPjsipEngine.swift"]
             : []),

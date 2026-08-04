@@ -57,6 +57,23 @@ Deno.serve(async (req) => {
     const broker_id: string | null = body?.broker_id ?? null;
     const bulk: boolean = !!body?.bulk;
     const batch_size: number = Math.max(1, Math.min(20, Number(body?.batch_size ?? 8)));
+    /**
+     * Transport handling.
+     *
+     * A NetSapiens Device carries exactly ONE `device-sip-transport-type`, and the
+     * runtime client (`ns-resolve-sip-credentials`) already aligns it with the stack
+     * that is about to REGISTER (wss for JsSIP, tls for native PJSIP).
+     *
+     * Provisioning must therefore NOT rewrite the transport of an EXISTING device:
+     * an admin "sync devices" run would otherwise flip a live native iOS device back
+     * to WSS while PJSIP holds a TLS registration -> inbound calls stop being forked
+     * and land in voicemail. Pass `transport: "wss" | "tls"` to force a rewrite.
+     */
+    const rawTransport = String(body?.transport ?? "").trim().toLowerCase();
+    const forcedTransport: "WSS" | "TLS" | null =
+      rawTransport === "tls" || rawTransport === "sips" ? "TLS"
+        : rawTransport === "wss" || rawTransport === "ws" ? "WSS"
+        : null;
 
     // Verify caller is admin
     const authHeader = req.headers.get("Authorization") ?? "";

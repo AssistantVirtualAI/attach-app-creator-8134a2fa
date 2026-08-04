@@ -125,6 +125,12 @@ Deno.serve(async (req) => {
     }
 
     // Scope the notice to inbound only: OFF at the domain, ON per user.
+    // MESURÉ le 2026-08-04 sur planipret.ca : le PUT utilisateur renvoie bien
+    // 202 Accepted mais NetSapiens NE PERSISTE PAS `music-on-ring-enabled` sur
+    // l'objet user (relecture = null). Conséquence : cette action coupe l'avis
+    // en early media pour TOUT LE MONDE. C'est le comportement voulu côté
+    // sortant ; pour le rejouer aux appelants entrants il faut passer par le
+    // routage entrant (dial-rule / DID), pas par l'objet user.
     if (action === "scope_users" || action === "fix") {
       const dom = await setDomainRing(false);
       const targets: string[] = Array.isArray(body?.users) && body.users.length
@@ -134,12 +140,14 @@ Deno.serve(async (req) => {
       for (const u of targets) results.push(await setUserRing(u, true));
       return json({
         ok: dom.ok && results.every((r) => r.ok),
-        note: "domain music-on-ring disabled (no notice on outbound), enabled per user (inbound only)",
+        note: "domain music-on-ring disabled (no notice on outbound)",
+        warning: "NetSapiens ignore music-on-ring-enabled sur l'objet user : l'avis en early media est donc coupé aussi pour les entrants",
         domain: dom,
         users: results,
         state: await readState(),
       });
     }
+
 
     // DÉPANNAGE UNIQUEMENT — remet `music-on-ring-enabled` au niveau du
     // DOMAINE. Cela rejoue l'avis sur TOUTES les jambes qui sonnent, y compris

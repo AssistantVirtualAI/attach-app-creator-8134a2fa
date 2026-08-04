@@ -1,13 +1,24 @@
 ---
-name: NS ring announcement (avis d'enregistrement)
-description: L'avis "cet appel est enregistré" joué au correspondant pendant la sonnerie via MOH + music-on-ring-enabled
+name: NetSapiens ring announcement (avis d'enregistrement)
+description: Avis d'enregistrement d'appel — entrants uniquement; music-on-ring est domain-only, ignoré sur l'objet user
 type: feature
 ---
 
-Pour jouer un message au **correspondant pendant la sonnerie** sur NetSapiens (sans toucher aux DID) :
+## Règle métier
+L'avis « cet appel est enregistré » s'adresse **uniquement aux personnes qui appellent le DID d'un courtier**.
+Un courtier ne doit **jamais** l'entendre sur ses propres appels **sortants**.
 
-- Uploader le WAV (8 kHz mono PCM16) comme média MOH du domaine : `POST /domains/{domain}/moh` avec `{ synchronous:"yes", convert:"yes", name, index:1, script, encoding:"audio/wav", base64_file }` → 200, fichier `moh-01.wav`.
-- Activer l'early media : `PUT /domains/{domain}` avec `"music-on-ring-enabled":"yes"` (+ `music-on-hold-enabled:"yes"`, `music-on-hold-randomized-enabled:"no"`).
-- Edge Function : `pp-ns-ring-announcement` (actions `status` | `enable` | `disable`, `probe` pour diagnostic).
-- Effet secondaire : le même média sert aussi de musique d'attente (hold) du domaine.
-- Fait le 2026-07-31 sur `planipret.ca`. Les greetings voicemail (index 1) restent le message standard ; index 9 = slot annonce.
+## Côté app (corrigé 2026-08-04)
+- `playRecordingNotice(callKey, direction)` — retourne immédiatement si `direction === "out"`.
+- `PpActiveCallScreen.tsx` (web + `apps/planipret-mobile`) n'appelle la fonction que si `snap.direction === "in"`.
+
+## Côté NetSapiens — mesuré, ne pas re-tester à l'aveugle
+- `music-on-ring-enabled` au niveau du **domaine** joue le média précoce sur **toutes** les jambes qui sonnent, entrantes **et sortantes** → c'était la cause du message entendu par les courtiers. Maintenant à `no`.
+- `music-on-ring-enabled` sur l'objet **user** : le `PUT` renvoie `202 Accepted` mais la valeur **n'est jamais persistée** (relecture = `null`). Le scoping par utilisateur est un **no-op**.
+- Les answer rules n'offrent **aucune** annonce pré-décrochage (seulement `call-screening`, qui fait enregistrer son nom à l'appelant — pas équivalent).
+- Conséquence de l'état actuel : plus d'avis en média précoce du tout. Pour le restaurer aux **entrants seulement**, il faut passer par le **routage entrant (dial-rule / DID)** — et toute écriture DID doit respecter l'invariant `dial-rule-translation-destination-user`.
+
+## Edge function `pp-ns-ring-announcement`
+- `status` — lit l'état domaine + par utilisateur.
+- `scope_users` / `fix` — coupe le domaine (état recommandé aujourd'hui).
+- `restore` / `enable_domain` — **dépannage uniquement**, réintroduit le message sur les sortants.

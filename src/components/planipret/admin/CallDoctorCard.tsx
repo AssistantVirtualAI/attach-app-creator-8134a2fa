@@ -63,14 +63,23 @@ export default function CallDoctorCard() {
             </p>
           </div>
         </div>
-        <button
-          onClick={run}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-60"
-        >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Stethoscope className="h-3.5 w-3.5" />}
-          Diagnostiquer
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            value={ext}
+            onChange={(e) => setExt(e.target.value)}
+            placeholder="Extension (ex. 113)"
+            inputMode="numeric"
+            className="w-36 rounded-lg border border-border bg-background px-2 py-2 text-xs"
+          />
+          <button
+            onClick={run}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-60"
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Stethoscope className="h-3.5 w-3.5" />}
+            Diagnostiquer
+          </button>
+        </div>
       </div>
 
       {report && (

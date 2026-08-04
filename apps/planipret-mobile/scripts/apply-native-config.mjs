@@ -2232,19 +2232,22 @@ function ensurePjsipXcframework(iosRoot) {
   }
 
 
-  if (!text.includes(`${fileRef} /* ${fileName} */`)) {
-    const line = `\t\t${fileRef} /* ${fileName} */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ${rel}; sourceTree = SOURCE_ROOT; };\n`;
-    text = text.replace(/(\/\* End PBXFileReference section \*\/)/, `${line}$1`);
+  if (!manuallyLinked) {
+    if (!text.includes(`${fileRef} /* ${fileName} */`)) {
+      const line = `\t\t${fileRef} /* ${fileName} */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ${rel}; sourceTree = SOURCE_ROOT; };\n`;
+      text = text.replace(/(\/\* End PBXFileReference section \*\/)/, `${line}$1`);
+    }
+    if (!text.includes(`${buildRef} /* ${buildName} */`)) {
+      const line = `\t\t${buildRef} /* ${buildName} */ = {isa = PBXBuildFile; fileRef = ${fileRef} /* ${fileName} */; };\n`;
+      text = text.replace(/(\/\* End PBXBuildFile section \*\/)/, `${line}$1`);
+    }
+    text = text.replace(
+      /(isa = PBXFrameworksBuildPhase;[\s\S]*?files = \(\n)([\s\S]*?)(\s*\);)/g,
+      (match, start, files, end) =>
+        files.includes(buildRef) ? match : `${start}${files}\t\t\t\t${buildRef} /* ${buildName} */,\n${end}`
+    );
   }
-  if (!text.includes(`${buildRef} /* ${buildName} */`)) {
-    const line = `\t\t${buildRef} /* ${buildName} */ = {isa = PBXBuildFile; fileRef = ${fileRef} /* ${fileName} */; };\n`;
-    text = text.replace(/(\/\* End PBXBuildFile section \*\/)/, `${line}$1`);
-  }
-  text = text.replace(
-    /(isa = PBXFrameworksBuildPhase;[\s\S]*?files = \(\n)([\s\S]*?)(\s*\);)/g,
-    (match, start, files, end) =>
-      files.includes(buildRef) ? match : `${start}${files}\t\t\t\t${buildRef} /* ${buildName} */,\n${end}`
-  );
+
 
   // Réglages de build: on purge les anciens chemins SRCROOT vers les Headers
   // des tranches (cause de "redefinition of module 'pjsua'") et on pointe

@@ -27,8 +27,10 @@ public class PpPjsip: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "PpPjsip"
     public let jsName = "PpPjsip"
     public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "isEngineLinked", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "registerTest", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "initialize", returnType: CAPPluginReturnPromise),
+
         CAPPluginMethod(name: "register", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "unregister", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "makeCall", returnType: CAPPluginReturnPromise),

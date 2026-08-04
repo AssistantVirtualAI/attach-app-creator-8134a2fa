@@ -355,29 +355,29 @@ autoUpdater.on('error', (err) => {
   mainWindow?.webContents.send('update-error', err?.message ?? String(err));
 });
 // IPC handlers — preload uses 'updater:*' namespace
-ipcMain.handle('updater:install', async () => {
+function doInstallUpdate() {
+  isQuitting = true;
+  // Close all windows first so macOS doesn't block the quit.
+  try { BrowserWindow.getAllWindows().forEach((w) => w.destroy()); } catch { /* noop */ }
   // On macOS, quitAndInstall() can silently fail when the app is not signed
   // with a valid Apple Developer certificate. We use app.relaunch() as a
   // guaranteed fallback: schedule a relaunch BEFORE calling quitAndInstall,
-  // then force app.quit() after 800ms if the process is still alive.
-  isQuitting = true;
+  // then force process.exit() after 1200ms if the process is still alive.
   try {
     app.relaunch();
     autoUpdater.quitAndInstall(false, true);
   } catch {
-    // quitAndInstall threw — fall through to forced quit below
+    // quitAndInstall threw — fall through to forced exit below
   }
-  // Fallback: if quitAndInstall didn't quit within 800ms, force it.
+  // Belt-and-suspenders: if quitAndInstall didn't exit within 1200ms, force it.
   setTimeout(() => {
-    try { app.quit(); } catch { process.exit(0); }
-  }, 800);
-});
+    try { app.quit(); } catch { /* noop */ }
+    setTimeout(() => process.exit(0), 300);
+  }, 1200);
+}
+ipcMain.handle('updater:install', () => { doInstallUpdate(); });
 ipcMain.handle('updater:check',       () => autoUpdater.checkForUpdates());
 ipcMain.handle('updater:app-version', () => app.getVersion());
 // Legacy aliases kept for compatibility
-ipcMain.handle('install-update', async () => {
-  isQuitting = true;
-  try { app.relaunch(); autoUpdater.quitAndInstall(false, true); } catch { /* noop */ }
-  setTimeout(() => { try { app.quit(); } catch { process.exit(0); } }, 800);
-});
+ipcMain.handle('install-update', () => { doInstallUpdate(); });
 ipcMain.handle('check-for-updates',   () => autoUpdater.checkForUpdates());

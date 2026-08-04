@@ -631,8 +631,12 @@ class JsSipProvider {
         session_timers: false,
         register_expires: 300,
         no_answer_timeout: 60,
-        connection_recovery_min_interval: 2,
-        connection_recovery_max_interval: 30,
+        // Disable JsSIP's built-in connection_recovery — it conflicts with our
+        // single-flight watchdog (scheduleRecovery/kickReconnect) and causes
+        // two parallel reconnect attempts that cancel each other ("Canceled").
+        // The watchdog alone handles all reconnection with exponential backoff.
+        connection_recovery_min_interval: 9999,
+        connection_recovery_max_interval: 9999,
         user_agent: 'Lemtel-Softphone/2.3.5',
         hackWssInTransport: true,
         hackIpInContact: true,

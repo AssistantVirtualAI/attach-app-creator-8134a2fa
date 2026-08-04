@@ -134,7 +134,14 @@ export function useSoftphone(args: UseSoftphoneArgs) {
   }, []);
 
   // Restore Supabase session from stored tokens, then fetch SIP password.
+  // GUARD: if extension is empty, this is a dummy/passthrough instance created by
+  // SoftphonePane when the shared SipKeepAlive context is already managing SIP.
+  // Skip init entirely to prevent a second sipProvider.init() that destroys the UA.
   useEffect(() => {
+    if (!args.extension) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setLoading(true);

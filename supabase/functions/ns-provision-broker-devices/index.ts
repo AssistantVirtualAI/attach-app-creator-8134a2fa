@@ -93,6 +93,11 @@ Deno.serve(async (req) => {
     let isAdmin = ["admin", "super_admin", "owner", "planipret_admin"].includes(String(callerProfile?.role ?? "").toLowerCase());
     if (!isAdmin) { try { const { data } = await admin.rpc("is_planipret_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
     if (!isAdmin) { try { const { data } = await admin.rpc("is_super_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
+    // Self-provisioning: le client mobile appelle sans broker_id juste après le
+    // 200 OK du REGISTER PJSIP pour forcer le transport TLS sur SON device.
+    if (!bulk && !broker_id && (callerProfile?.id || callerProfile?.user_id)) {
+      broker_id = String(callerProfile?.id ?? callerProfile?.user_id);
+    }
     // Allow self-provisioning: caller may provision their OWN broker record without admin role
     const selfOnly = !isAdmin && !bulk && broker_id && (callerProfile?.user_id === caller.id || callerProfile?.id === caller.id);
     if (!isAdmin && !selfOnly) return json({ error: "forbidden", detail: "admin role required for this operation" }, 403);

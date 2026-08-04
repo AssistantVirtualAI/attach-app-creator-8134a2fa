@@ -234,6 +234,28 @@ export class NativeSipService {
     }
   }
 
+  /**
+   * Force `device-sip-transport-type = TLS` sur le device `<ext>M` juste après
+   * le 200 OK du REGISTER natif. Sans ça, NetSapiens conserve le Contact WSS
+   * 9002 et route les INVITEs entrants vers JsSIP, jamais vers PJSIP/TLS.
+   * Idempotent et throttlé à 60 s.
+   */
+  private lastTlsProvisionAt = 0;
+  private async forceDeviceTlsTransport(): Promise<void> {
+    if (Date.now() - this.lastTlsProvisionAt < 60_000) return;
+    this.lastTlsProvisionAt = Date.now();
+    try {
+      const { data, error } = await supabase.functions.invoke("ns-provision-broker-devices", {
+        body: { transport: "tls", force: true, client_type: "mobile" },
+      });
+      if (error) throw error;
+      console.log("[SIP] device réaligné en TLS après REGISTER natif", data);
+    } catch (e: any) {
+      console.warn("[SIP] échec du réalignement TLS du device:", e?.message ?? e);
+      this.lastTlsProvisionAt = 0;
+    }
+  }
+
 
   private setState(state: SipRegistrationState) {
     this.lastState = state;
@@ -267,6 +289,9 @@ export class NativeSipService {
       if (state === "registered") {
         this.retryCount = 0;
         claimAorForNative(this.username, "native_registered");
+        // Le PBX garde le Contact WSS du device `<ext>M` tant qu'on ne force
+        // pas le transport : les INVITEs partiraient encore vers JsSIP:9002.
+        void this.forceDeviceTlsTransport();
       }
       this.setState(state);
     });

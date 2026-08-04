@@ -33,6 +33,23 @@ command -v libtool >/dev/null || { echo "libtool introuvable — installe les Xc
 mkdir -p "$WORK" "$OUT"
 
 # ---------------------------------------------------------------------------
+# Détecter automatiquement le SDK iOS installé (ex: iphoneos26.5)
+# xcrun --sdk iphoneos/iphonesimulator fonctionne comme alias générique
+# mais CROSS_TOP attend le nom de plateforme sans version (iPhoneOS/iPhoneSimulator)
+# ---------------------------------------------------------------------------
+IOS_SDK_PATH="$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null || true)"
+SIM_SDK_PATH="$(xcrun --sdk iphonesimulator --show-sdk-path 2>/dev/null || true)"
+if [ -z "$IOS_SDK_PATH" ] || [ -z "$SIM_SDK_PATH" ]; then
+  echo "❌ SDK iOS introuvable. Vérifie: sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer"
+  exit 1
+fi
+# Extraire le nom de plateforme sans version ni .sdk (ex: iPhoneOS)
+IOS_PLATFORM_NAME="$(basename "$IOS_SDK_PATH" | sed 's/[0-9][0-9.]*\.sdk$//' | sed 's/\.sdk$//')"
+SIM_PLATFORM_NAME="$(basename "$SIM_SDK_PATH" | sed 's/[0-9][0-9.]*\.sdk$//' | sed 's/\.sdk$//')"
+echo "▶ SDK détectés: device=$(basename "$IOS_SDK_PATH") simulator=$(basename "$SIM_SDK_PATH")"
+echo "▶ Plateformes: device=$IOS_PLATFORM_NAME simulator=$SIM_PLATFORM_NAME"
+
+# ---------------------------------------------------------------------------
 # 1) OpenSSL pour iPhoneOS.sdk arm64 et iPhoneSimulator.sdk arm64
 #    (guide OpenSSL pour iOS : Configure ios64-cross / iossimulator-arm64)
 # ---------------------------------------------------------------------------
@@ -42,21 +59,24 @@ if [ ! -d "$SSL_SRC" ]; then
 fi
 
 build_openssl () {
-  local tag="$1" sdk_name="$2" ossl_target="$3"
+  local tag="$1" sdk_alias="$2" ossl_target="$3"
   local prefix="$WORK/openssl/$tag"
   if [ -f "$prefix/lib/libssl.a" ] && [ -f "$prefix/lib/libcrypto.a" ]; then
     echo "▶ OpenSSL: $tag déjà construit → $prefix"
     return 0
   fi
-  echo "▶ OpenSSL: $tag ($sdk_name / arm64, $OPENSSL_TAG)"
   local sdk_path
-  sdk_path="$(xcrun --sdk "$sdk_name" --show-sdk-path)"
+  sdk_path="$(xcrun --sdk "$sdk_alias" --show-sdk-path)"
+  # Nom de plateforme sans version (iPhoneOS ou iPhoneSimulator)
+  local platform_name
+  platform_name="$(basename "$sdk_path" | sed 's/[0-9][0-9.]*\.sdk$//' | sed 's/\.sdk$//')"
+  echo "▶ OpenSSL: $tag ($platform_name / arm64, $OPENSSL_TAG)"
 
   rm -rf "$WORK/openssl-build-$tag"
   cp -R "$SSL_SRC" "$WORK/openssl-build-$tag"
   pushd "$WORK/openssl-build-$tag" >/dev/null
 
-  export CROSS_TOP="$(xcode-select -p)/Platforms/${sdk_name}.platform/Developer"
+  export CROSS_TOP="$(xcode-select -p)/Platforms/${platform_name}.platform/Developer"
   export CROSS_SDK="$(basename "$sdk_path")"
   export CC="$(xcrun -find clang)"
 
@@ -75,8 +95,8 @@ build_openssl () {
   test -f "$prefix/lib/libcrypto.a" || { echo "❌ OpenSSL $tag: libcrypto.a manquant"; exit 1; }
 }
 
-build_openssl device    iPhoneOS         ios64-cross
-build_openssl simulator iPhoneSimulator  iossimulator-arm64
+build_openssl device    iphoneos         ios64-cross
+build_openssl simulator iphonesimulator  iossimulator-arm64
 
 # ---------------------------------------------------------------------------
 # 2) pjproject
@@ -100,13 +120,18 @@ cat > pjlib/include/pj/config_site.h <<'EOF'
 EOF
 
 build_arch () {
-  local sdk="$1" arch="$2" tag="$3"
+  local sdk_alias="$1" arch="$2" tag="$3"
   local ssl_prefix="$WORK/openssl/$tag"
   local log="$WORK/configure-$tag.log"
-  echo "▶ pjproject $PJ_TAG: $tag ($sdk / $arch), --with-ssl=$ssl_prefix"
+  # Résoudre le chemin SDK réel (ex: /path/to/iPhoneOS26.5.sdk)
+  local sdk_path
+  sdk_path="$(xcrun --sdk "$sdk_alias" --show-sdk-path)"
+  local sdk_basename
+  sdk_basename="$(basename "$sdk_path")"  # ex: iPhoneOS26.5.sdk
+  echo "▶ pjproject $PJ_TAG: $tag ($sdk_basename / $arch), --with-ssl=$ssl_prefix"
 
   make distclean >/dev/null 2>&1 || true
-  IPHONESDK="$sdk" ARCH="-arch $arch" \
+  IPHONESDK="$sdk_basename" ARCH="-arch $arch" \
     ./configure-iphone --with-ssl="$ssl_prefix" \
       --disable-video --disable-libyuv --disable-opencore-amr 2>&1 | tee "$log"
 
@@ -146,8 +171,10 @@ build_arch () {
   test -f "$dest/libPJSIP.a" || { echo "❌ libPJSIP.a manquant pour $tag"; exit 1; }
 }
 
-build_arch iPhoneOS.sdk arm64 device
-build_arch iPhoneSimulator.sdk arm64 simulator
+# Utiliser les alias génériques xcrun (iphoneos/iphonesimulator) qui fonctionnent
+# avec toutes les versions de SDK (iphoneos26.5, iphoneos17.x, etc.)
+build_arch iphoneos arm64 device
+build_arch iphonesimulator arm64 simulator
 
 # ---------------------------------------------------------------------------
 # 3) En-têtes + xcframework

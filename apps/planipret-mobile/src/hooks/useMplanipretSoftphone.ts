@@ -47,7 +47,7 @@ import {
 import { addDedupedCapListener } from "@/lib/planipret/sip/capListeners";
 import { checkSipBackendRegistration } from "@/lib/planipret/sip/sipBackendCheck";
 import { nativeSip } from "@/lib/planipret/sip/nativeSipService";
-import { nativeOwnsAor } from "@/lib/planipret/sip/aorArbitration";
+import { nativeOwnsAor, releaseAorFromNative } from "@/lib/planipret/sip/aorArbitration";
 
 import {
   upsertRingingSession,

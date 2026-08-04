@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,7 +110,7 @@ export default function MMore() {
 
   const reconnectNs = async () => {
     setReconnecting(true);
-    const { data, error, status } = await safeEdgeFunction("ns-resolve-sip-credentials", { body: { client_type: "mobile" } });
+    const { data, error, status } = await safeEdgeFunction("ns-resolve-sip-credentials", { body: { client_type: Capacitor.isNativePlatform() ? "mobile" : "web" } });
     if (error || (data as any)?.success === false || (data as any)?.ok === false || (data as any)?.error) {
       setReconnecting(false);
       toast.error(status === 403 ? t("more.phoneUnauthorized") : ((data as any)?.error ?? error ?? t("more.connectionFailed")));

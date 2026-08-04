@@ -12,6 +12,7 @@ import { edgeOnlyWssUrls } from "@/lib/planipret/sip/sipEdgePolicy";
 //     ("both, with fallback" policy).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getPpSipReconnectConfig } from "@/lib/planipret/sip/ppSipReconnectConfig";
@@ -243,7 +244,11 @@ type RestCallAttachment = {
 export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolean; clientType?: "mobile" | "web" }) {
   const { user } = useAuth();
   const isPrimary = opts?.primary === true;
-  const clientType = opts?.clientType ?? "mobile";
+  // `<ext>M` est l'AOR EXCLUSIF de l'app native (PJSIP/TLS). Un navigateur —
+  // même sur les routes /m — doit prendre `<ext>W` en WSS, sinon son REGISTER
+  // écrase le Contact du device mobile et les INVITEs partent en WSS vers le
+  // navigateur au lieu de l'iPhone.
+  const clientType = opts?.clientType ?? (Capacitor.isNativePlatform() ? "mobile" : "web");
   const ownerIdRef = useRef<string>(`pp-softphone-${++softphoneOwnerSeq}`);
   // Bumped when ownership changes so gated effects re-evaluate.
   const [ownerTick, setOwnerTick] = useState(0);

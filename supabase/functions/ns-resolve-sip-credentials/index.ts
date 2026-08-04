@@ -206,10 +206,6 @@ function queueRingRuleResync(brokerId: string, reason: string, force = false) {
  *  - `tls` — native PJSIP over sip:5061 on a core node (iOS/Android native engine).
  */
 type SipTransport = "wss" | "tls";
-function normalizeTransport(v: unknown): SipTransport {
-  const s = String(v ?? "").trim().toLowerCase();
-  return s === "tls" || s === "sips" ? "tls" : "wss";
-}
 const nsTransport = (t: SipTransport) => (t === "tls" ? "TLS" : "WSS");
 const sipPortFor = (t: SipTransport) => (t === "tls" ? 5061 : 9002);
 
@@ -255,7 +251,10 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* empty ok */ }
   const clientType = normalizeClientType(body?.client_type);
-  const sipTransport = normalizeTransport(body?.transport);
+  // Invariant AOR/transport : `<ext>M` = app native PJSIP/TLS uniquement,
+  // `<ext>W` = navigateur JsSIP/WSS. Jamais l'inverse, sinon le dernier
+  // REGISTER reçu vole le Contact et les appels partent au mauvais client.
+  const sipTransport = clientType === "mobile" ? "tls" : "wss";
 
 
   const authHeader = req.headers.get("Authorization") ?? "";

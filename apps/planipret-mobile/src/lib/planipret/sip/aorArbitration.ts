@@ -114,6 +114,13 @@ export const PP_PJSIP_ENABLED_KEY = "pp_pjsip_enabled";
 /** Lecture synchrone (localStorage) — utilisée avant le preclaim. */
 export function isPjsipEnabled(): boolean {
   if (!isBrowser) return true;
+  // Sur iOS, un binaire qui embarque PpPjsip doit toujours utiliser le moteur
+  // natif. Une ancienne valeur `false` laissée par l'écran SIP Debug créait un
+  // interblocage : le JS lançait WSS, mais PpSipKeepAlive le refusait puisque
+  // PJSIP était réellement lié au binaire. Résultat : aucun propriétaire AOR.
+  try {
+    if (Capacitor.getPlatform() === "ios" && Capacitor.isPluginAvailable("PpPjsip")) return true;
+  } catch { /* web/bridge indisponible */ }
   try {
     return window.localStorage.getItem(PP_PJSIP_ENABLED_KEY) !== "false";
   } catch {
@@ -123,6 +130,12 @@ export function isPjsipEnabled(): boolean {
 
 /** Écrit localStorage + Preferences (survit au redémarrage de l'app). */
 export async function setPjsipEnabled(enabled: boolean): Promise<void> {
+  try {
+    if (!enabled && Capacitor.getPlatform() === "ios" && Capacitor.isPluginAvailable("PpPjsip")) {
+      enabled = true;
+      console.warn("[AOR] désactivation PJSIP refusée — moteur natif iOS obligatoire");
+    }
+  } catch { /* web/bridge indisponible */ }
   try { window.localStorage.setItem(PP_PJSIP_ENABLED_KEY, enabled ? "true" : "false"); } catch { /* noop */ }
   try {
     const { Preferences } = await import("@capacitor/preferences");
@@ -133,6 +146,16 @@ export async function setPjsipEnabled(enabled: boolean): Promise<void> {
 
 /** Recharge la valeur persistée native vers localStorage au démarrage. */
 export async function hydratePjsipEnabled(): Promise<boolean> {
+  try {
+    if (Capacitor.getPlatform() === "ios" && Capacitor.isPluginAvailable("PpPjsip")) {
+      try { window.localStorage.setItem(PP_PJSIP_ENABLED_KEY, "true"); } catch { /* noop */ }
+      try {
+        const { Preferences } = await import("@capacitor/preferences");
+        await Preferences.set({ key: PP_PJSIP_ENABLED_KEY, value: "true" });
+      } catch { /* noop */ }
+      return true;
+    }
+  } catch { /* web/bridge indisponible */ }
   // localStorage appartient au bundle courant et doit rester la source de
   // vérité. Une ancienne valeur Preferences (souvent `false` après un test de
   // diagnostic) arrivait de façon asynchrone APRÈS le REGISTER 200 OK, coupait

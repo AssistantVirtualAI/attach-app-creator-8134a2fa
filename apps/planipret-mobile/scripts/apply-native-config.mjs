@@ -614,13 +614,13 @@ import Security
 /// Vrai lorsque le moteur PJSIP natif est linké : dans ce cas il détient
 /// l'AOR \`<ext>M\` en TLS 5061 et la pile WSS de secours ne doit jamais
 /// ré-enregistrer par-dessus (sinon le Contact TLS est remplacé côté NetSapiens).
-var nativeEngineOwnsAor: Bool {
+var nativeEngineOwnsAor: Bool = {
   #if canImport(pjsua)
   return true
   #else
   return false
   #endif
-}
+}()
 
 // Planiprêt-only. DO NOT reuse in Lemtel (Verto stack).
 @objc(PpSipKeepAlive)
@@ -635,6 +635,7 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       CAPPluginMethod(name: "wakeForIncomingCall", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "setCallActive", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "declareJsOwnsAor", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "declareNativeEngineOwnsAor", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "setAudioRoute", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "getAudioRoute", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
@@ -873,6 +874,14 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
           self.setStatus("protected", "js_owns_aor")
         }
         call.resolve(self.snapshot(ok: true))
+      }
+    }
+    @objc func declareNativeEngineOwnsAor(_ call: CAPPluginCall) {
+      let owns = call.getBool("owns") ?? true
+      DispatchQueue.main.async {
+        nativeEngineOwnsAor = owns
+        NSLog("[PpSipKeepAlive] nativeEngineOwnsAor=%@", owns ? "true" : "false")
+        call.resolve(["ok": true, "status": owns ? "protected" : "idle", "reason": owns ? "pjsip_owns_aor" : "native_engine_released"])
       }
     }
     @objc func wakeForIncomingCall(_ call: CAPPluginCall) {

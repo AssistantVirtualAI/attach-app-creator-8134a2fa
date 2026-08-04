@@ -342,6 +342,15 @@ final class PjsipEngine {
     func answer(callId: String?, completion: @escaping (Bool) -> Void) {
         let target = resolveCall(callId)
         guard target >= 0 else {
+            // Une intention de réponse ne peut être mise en attente que si le
+            // compte TLS est réellement enregistré. Sinon aucun INVITE PJSIP
+            // ne peut arriver et le timer de 5 s fait échouer CallKit pour rien.
+            guard registered else {
+                NSLog("[PpPjsip] answer refusé immédiatement — compte TLS non enregistré")
+                NotificationCenter.default.post(name: .ppPjsipAnswerResult, object: nil, userInfo: ["ok": false])
+                completion(false)
+                return
+            }
             // L'utilisateur a décroché depuis CallKit avant l'arrivée de
             // l'INVITE SIP (push VoIP plus rapide que le réseau SIP).
             // On mémorise l'intention : handleIncomingCall répondra 200 OK.

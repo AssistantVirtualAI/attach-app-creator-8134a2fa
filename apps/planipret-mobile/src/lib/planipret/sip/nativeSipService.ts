@@ -287,10 +287,11 @@ export class NativeSipService {
         this.retryCount++;
         setTimeout(() => { pjsip.register().catch(() => { /* noop */ }); }, 30_000);
       } else if (state === "failed") {
-        // Échec définitif du natif : rendre l'AOR à JsSIP plutôt que de
-        // laisser l'extension sans aucun REGISTER.
-        releaseAorFromNative("native_register_failed");
-        void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
+        // Ne jamais démarrer JsSIP sur le même <ext>M après un échec transitoire
+        // du REGISTER TLS. Cela créait deux propriétaires, deux écrans CallKit
+        // et des INVITE livrés à la mauvaise pile. Le natif garde l'AOR et sera
+        // relancé au prochain cycle foreground/réseau.
+        console.warn("[SIP] REGISTER natif en échec — propriété TLS conservée");
       }
       if (state === "registered") {
         this.retryCount = 0;
@@ -450,6 +451,7 @@ export class NativeSipService {
     try {
       const snapshot = await pjsip.getState();
       this.registered = !!snapshot?.registered;
+      this.lastState = this.registered ? "registered" : "unregistered";
       this.currentCallId = snapshot?.callId || null;
       return snapshot;
     } catch {

@@ -133,10 +133,33 @@ export async function setPjsipEnabled(enabled: boolean): Promise<void> {
 
 /** Recharge la valeur persistée native vers localStorage au démarrage. */
 export async function hydratePjsipEnabled(): Promise<boolean> {
+  // localStorage appartient au bundle courant et doit rester la source de
+  // vérité. Une ancienne valeur Preferences (souvent `false` après un test de
+  // diagnostic) arrivait de façon asynchrone APRÈS le REGISTER 200 OK, coupait
+  // PJSIP et rendait soudainement l'AOR à JsSIP.
+  let localValue: string | null = null;
+  try { localValue = window.localStorage.getItem(PP_PJSIP_ENABLED_KEY); } catch { /* noop */ }
+  if (localValue === "false" || localValue === "true") {
+    try {
+      const { Preferences } = await import("@capacitor/preferences");
+      await Preferences.set({ key: PP_PJSIP_ENABLED_KEY, value: localValue });
+    } catch { /* noop */ }
+    if (localValue === "false") releaseAorFromNative("pp_pjsip_enabled=false");
+    return localValue === "true";
+  }
   try {
     const { Preferences } = await import("@capacitor/preferences");
     const { value } = await Preferences.get({ key: PP_PJSIP_ENABLED_KEY });
     if (value === "false" || value === "true") {
+      // Le round-trip Preferences peut finir après le preclaim/REGISTER natif.
+      // Une ancienne valeur `false` ne doit jamais reprendre la main sur un
+      // moteur qui a déjà gagné l'AOR pendant cette même initialisation.
+      if (value === "false" && nativeOwnsAor()) {
+        try { window.localStorage.setItem(PP_PJSIP_ENABLED_KEY, "true"); } catch { /* noop */ }
+        await Preferences.set({ key: PP_PJSIP_ENABLED_KEY, value: "true" });
+        console.warn("[AOR] stale pp_pjsip_enabled=false ignored after native preclaim");
+        return true;
+      }
       try { window.localStorage.setItem(PP_PJSIP_ENABLED_KEY, value); } catch { /* noop */ }
       if (value === "false") releaseAorFromNative("pp_pjsip_enabled=false");
       return value === "true";
@@ -158,7 +181,8 @@ function clearWatchdog() {
 
 /**
  * Armé à chaque claim : si l'état natif n'est pas "registered" 20 s plus tard,
- * l'AOR est restitué à JsSIP pour que l'appel entrant reste décrochable.
+ * on conserve l'AOR natif. Basculer automatiquement vers JsSIP crée précisément
+ * le double REGISTER WSS/TLS qui rend les appels entrants indécrochables.
  */
 export function armAorWatchdog(isRegistered: () => boolean): void {
   clearWatchdog();
@@ -168,8 +192,8 @@ export function armAorWatchdog(isRegistered: () => boolean): void {
     let registered = false;
     try { registered = !!isRegistered(); } catch { registered = false; }
     if (registered) return;
-    console.warn("[AOR] watchdog: PJSIP failed to register in 20s → releasing to JsSIP");
-    releaseAorFromNative("watchdog_no_register_20s");
+    console.warn("[AOR] watchdog: PJSIP not registered after 20s — native ownership preserved");
+    emit("pp:sip-native-registration-stalled", { username: ownedUsername, reason: "watchdog_no_register_20s" });
   }, WATCHDOG_MS);
 }
 

@@ -1266,7 +1266,12 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     if (nativeOwnsAor()) {
       const ok = await nativeSip.answer();
       console.info(`[answer] route=PJSIP → ${ok ? "SIP 200 OK sent" : "no native INVITE"}`);
-      return ok;
+      if (ok) return true;
+      // `answer()` releases AOR ownership when Capacitor reports that the
+      // native binary/module is unavailable. Continue immediately through the
+      // live JsSIP dialog instead of returning a permanently dead button.
+      if (nativeOwnsAor()) return false;
+      console.warn("[answer] PJSIP unavailable → continuing through JsSIP fallback");
     }
     const sipSnap = ppSipProvider.getSnapshot();
     console.info("[answer] tapped", {

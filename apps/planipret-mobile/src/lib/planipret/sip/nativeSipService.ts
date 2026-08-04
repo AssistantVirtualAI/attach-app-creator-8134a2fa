@@ -242,25 +242,44 @@ export class NativeSipService {
    */
   private lastTlsProvisionAt = 0;
   private async forceDeviceTlsTransport(payload?: any, urgent = false): Promise<void> {
+    const port = Number(payload?.sipPort ?? 5061);
+    const contact = String(payload?.contact ?? "");
+    // Idempotence : chaque reprovisioning provoque un cycle Expires:0 côté
+    // NetSapiens, fenêtre pendant laquelle les appels partent en messagerie.
+    // On ne réécrit que si le contact/port TLS a réellement changé.
+    const signature = `tls:${port}:${contact}`;
+    if (this.lastTlsProvisionSignature === signature && this.lastTlsProvisionOk) {
+      if (!urgent) return;
+      // Même en urgence, on ne réécrit pas plus d'une fois par minute.
+      if (Date.now() - this.lastTlsProvisionAt < 60_000) return;
+    }
     if (!urgent && Date.now() - this.lastTlsProvisionAt < 60_000) return;
+    if (this.tlsProvisionInFlight) return;
+    this.tlsProvisionInFlight = true;
     this.lastTlsProvisionAt = Date.now();
     try {
       const { data, error } = await supabase.functions.invoke("ns-provision-broker-devices", {
         body: {
           transport: "tls",
-          sip_port: Number(payload?.sipPort ?? 5061),
-          contact: String(payload?.contact ?? ""),
+          sip_port: port,
+          contact,
           force: true,
           client_type: "mobile",
         },
       });
       if (error) throw error;
+      this.lastTlsProvisionSignature = signature;
+      this.lastTlsProvisionOk = true;
       console.log("[SIP] device réaligné en TLS après REGISTER natif", data);
     } catch (e: any) {
+      this.lastTlsProvisionOk = false;
       console.warn("[SIP] échec du réalignement TLS du device:", e?.message ?? e);
       this.lastTlsProvisionAt = 0;
+    } finally {
+      this.tlsProvisionInFlight = false;
     }
   }
+
 
 
   private setState(state: SipRegistrationState) {

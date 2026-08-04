@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   mobileDeviceId,
   webDeviceId,
+  widgetDeviceId,
 } from "../_shared/pp-device-ids.ts";
 
 

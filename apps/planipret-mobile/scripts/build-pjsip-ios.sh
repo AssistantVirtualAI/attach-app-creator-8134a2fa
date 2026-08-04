@@ -80,9 +80,10 @@ build_openssl () {
   export CROSS_SDK="$(basename "$sdk_path")"
   export CC="$(xcrun -find clang)"
 
+  # ios64-cross et iossimulator-arm64 incluent déjà arm64 — ne pas le répéter
   ./Configure "$ossl_target" no-shared no-dso no-async no-tests \
     --prefix="$prefix" \
-    -mios-version-min="$MIN_IOS" -isysroot "$sdk_path" -arch arm64
+    -mios-version-min="$MIN_IOS" -isysroot "$sdk_path"
   make -j"$(sysctl -n hw.ncpu)" build_libs
   make install_dev
 

@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
 
   try {
     const body: any = await req.json().catch(() => ({}));
-    const broker_id: string | null = body?.broker_id ?? null;
+    let broker_id: string | null = body?.broker_id ?? null;
     const bulk: boolean = !!body?.bulk;
     const batch_size: number = Math.max(1, Math.min(20, Number(body?.batch_size ?? 8)));
     /**

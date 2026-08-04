@@ -17,6 +17,11 @@ extension Notification.Name {
     static let ppPjsipAnswerRequested = Notification.Name("PpPjsipAnswerRequested")
     /// CallKit demande de raccrocher / refuser l'appel natif.
     static let ppPjsipEndRequested = Notification.Name("PpPjsipEndRequested")
+    /// PJSIP a émis un INVITE sortant → CallKit doit présenter l'appel sortant
+    /// (sans quoi la session audio n'est jamais activée : pas de tonalité).
+    static let ppPjsipOutgoingCall = Notification.Name("PpPjsipOutgoingCall")
+    /// 180/183 reçu sur la jambe sortante → CallKit passe en "ringing".
+    static let ppPjsipOutgoingRinging = Notification.Name("PpPjsipOutgoingRinging")
 }
 
 // MARK: - Callbacks C (état global : aucune capture possible)

@@ -580,7 +580,7 @@ export default function MCalls() {
                             {header}
                           </div>
                         )}
-                        <CallRow call={c} onTap={() => setSelected(c)} onCall={() => openDialer(otherNumber(c))} showCallBtn={tab === "missed"} />
+                        <CallRow call={c} onTap={() => setSelected(c)} onCall={() => openDialer(otherNumber(c), true)} showCallBtn={tab === "missed"} />
                       </div>
                     );
                   })}
@@ -1021,7 +1021,7 @@ function ClaudeCoachingBlock({ analysis, coachingScore }: { analysis: any; coach
 function CallDetailSheet({
   call, userId, onClose, openDialer, onUpdated,
 }: {
-  call: Call; userId: string; onClose: () => void; openDialer: (n?: string) => void; onUpdated: (c: Call) => void;
+  call: Call; userId: string; onClose: () => void; openDialer: (n?: string, autoDial?: boolean) => void; onUpdated: (c: Call) => void;
 }) {
   const { t, lang } = useMplanipretLang();
   const [insight, setInsight] = useState<Insight | null>(null);
@@ -1293,7 +1293,7 @@ function CallDetailSheet({
           </div>
           <div className="mt-3 flex gap-2">
             <button
-              onClick={() => { openDialer(otherNumber(call)); onClose(); }}
+              onClick={() => { openDialer(otherNumber(call), true); onClose(); }}
               className="flex-1 py-2 rounded-xl text-white text-sm font-semibold flex items-center justify-center gap-2"
               style={{ background: "linear-gradient(135deg, var(--pp-brand-accent-2), var(--pp-brand-accent))" }}
             >

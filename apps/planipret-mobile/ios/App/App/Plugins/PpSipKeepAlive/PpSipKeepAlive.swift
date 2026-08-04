@@ -471,9 +471,20 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       applyAudioRoute()
     }
     private func connect() {
+      // Un seul propriétaire par AOR : si PJSIP tient la registration TLS,
+      // toute socket WSS ici crée un binding concurrent que NetSapiens résout
+      // en fermant l'autre (appels entrants → messagerie).
+      if nativeEngineOwnsAor {
+        NSLog("[PpSipKeepAlive] connect skipped — PJSIP owns the AOR")
+        registerOnOpen = false
+        socket?.cancel(with: .goingAway, reason: nil); socket = nil; socketOpen = false
+        setStatus("idle", "pjsip_owns_aor")
+        return
+      }
       // A new socket means a new AoR binding: clear the 200 OK debounce.
       lastRegisterOkTime = nil
       guard !host.isEmpty else { setStatus("error", "missing_host"); return }
+
       startPathMonitor()
       if isForeground() { return }
       if callActive { return }

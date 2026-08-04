@@ -15,6 +15,8 @@ extension Notification.Name {
     static let ppPjsipCallConnected = Notification.Name("PpPjsipCallConnected")
     /// CallKit demande de décrocher l'appel natif.
     static let ppPjsipAnswerRequested = Notification.Name("PpPjsipAnswerRequested")
+    /// Résultat réel de pjsua_call_answer; CallKit ne doit être validé qu'après.
+    static let ppPjsipAnswerResult = Notification.Name("PpPjsipAnswerResult")
     /// CallKit demande de raccrocher / refuser l'appel natif.
     static let ppPjsipEndRequested = Notification.Name("PpPjsipEndRequested")
     /// PJSIP a émis un INVITE sortant → CallKit doit présenter l'appel sortant
@@ -350,6 +352,7 @@ final class PjsipEngine {
                 self.lock.unlock()
                 if stillPending {
                     NSLog("[PpPjsip] pendingAnswer timeout 30s → no_active_call")
+                    NotificationCenter.default.post(name: .ppPjsipAnswerResult, object: nil, userInfo: ["ok": false])
                     pending.forEach { $0(false) }
                 }
             }
@@ -364,6 +367,7 @@ final class PjsipEngine {
             done = true
             self.lock.unlock()
             if already { return }
+            NotificationCenter.default.post(name: .ppPjsipAnswerResult, object: nil, userInfo: ["ok": ok])
             completion(ok)
         }
         thread.run { [weak self] in
@@ -539,6 +543,7 @@ final class PjsipEngine {
             let status = pjsua_call_answer(callId, 200, nil, nil)
             NSLog("[PpPjsip] pendingAnswer → 200 OK callId=%d status=%d", callId, status)
             let ok = status == pj_status_t(0)
+            NotificationCenter.default.post(name: .ppPjsipAnswerResult, object: nil, userInfo: ["ok": ok])
             pendingCompletions.forEach { $0(ok) }
         }
 

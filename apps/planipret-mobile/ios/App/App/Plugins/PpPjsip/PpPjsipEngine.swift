@@ -296,7 +296,14 @@ final class PjsipEngine {
                 }
                 self.activeCall = newCall
                 self.muted = false
+                self.outgoingCall = newCall
                 NSLog("[PpPjsip] outgoing INVITE → %@ callId=%d", target, newCall)
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: .ppPjsipOutgoingCall, object: nil,
+                        userInfo: ["callId": String(newCall), "destination": destination]
+                    )
+                }
                 completion(.success(String(newCall)))
             }
         }

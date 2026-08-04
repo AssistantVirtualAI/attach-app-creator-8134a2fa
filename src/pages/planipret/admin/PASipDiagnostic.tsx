@@ -253,6 +253,9 @@ export default function PASipDiagnostic() {
 
       <CallDoctorCard />
 
+      <DidAnnouncementCard />
+
+
 
       {/* Status card */}
       <div className="pp-card p-4">

@@ -2538,6 +2538,8 @@ function patchIosNativeFiles() {
   }
 
   const iosRoot = path.join(appDir, "ios", "App");
+  removeXcodeSourceFile(iosRoot, "App/Plugins/PpPjsip/PpPjsip.m");
+
   ensureXcodeSourceFiles(iosRoot, [
     "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.swift",
     "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.m",

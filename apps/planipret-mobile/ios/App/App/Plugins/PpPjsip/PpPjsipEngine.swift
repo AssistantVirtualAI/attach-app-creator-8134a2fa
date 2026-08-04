@@ -766,6 +766,7 @@ final class PjsipEngine {
         }
 
         try check(pjsua_create(), "pjsua_create")
+        pjlibReady = true
 
         var cfg = pjsua_config()
         pjsua_config_default(&cfg)

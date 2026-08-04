@@ -2222,6 +2222,16 @@ function ensurePjsipXcframework(iosRoot) {
   const buildRef = xcodeId(`build:${rel}`);
   const buildName = `${fileName} in Frameworks`;
 
+  // Le xcframework peut déjà avoir été ajouté À LA MAIN dans Xcode (autre
+  // fileRef). Dans ce cas on ne réinjecte RIEN : deux références au même
+  // binaire = "duplicate output file" / "redefinition of module 'pjsua'".
+  const manuallyLinked =
+    text.includes(fileName) && !text.includes(`${fileRef} /* ${fileName} */`);
+  if (manuallyLinked) {
+    console.log("[native-config] libpjsip.xcframework déjà lié dans Xcode — aucune ré-injection.");
+  }
+
+
   if (!text.includes(`${fileRef} /* ${fileName} */`)) {
     const line = `\t\t${fileRef} /* ${fileName} */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ${rel}; sourceTree = SOURCE_ROOT; };\n`;
     text = text.replace(/(\/\* End PBXFileReference section \*\/)/, `${line}$1`);

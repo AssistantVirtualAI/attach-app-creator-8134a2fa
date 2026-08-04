@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { PP_SIP_CORE_PRIMARY } from "@/lib/planipret/sip/sipEdgePolicy";
 import CallDoctorCard from "@/components/planipret/admin/CallDoctorCard";
+import DidAnnouncementCard from "@/components/planipret/admin/DidAnnouncementCard";
+
 
 const DICT = {
   fr: {
@@ -252,6 +254,9 @@ export default function PASipDiagnostic() {
       </div>
 
       <CallDoctorCard />
+
+      <DidAnnouncementCard />
+
 
 
       {/* Status card */}

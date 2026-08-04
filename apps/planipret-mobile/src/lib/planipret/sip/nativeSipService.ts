@@ -267,6 +267,9 @@ export class NativeSipService {
       if (state === "registered") {
         this.retryCount = 0;
         claimAorForNative(this.username, "native_registered");
+        // Le PBX garde le Contact WSS du device `<ext>M` tant qu'on ne force
+        // pas le transport : les INVITEs partiraient encore vers JsSIP:9002.
+        void this.forceDeviceTlsTransport();
       }
       this.setState(state);
     });

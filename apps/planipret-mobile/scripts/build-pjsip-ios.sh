@@ -79,15 +79,16 @@ build_openssl () {
   export CROSS_TOP="$(xcode-select -p)/Platforms/${platform_name}.platform/Developer"
   export CROSS_SDK="$(basename "$sdk_path")"
   export CC="$(xcrun -find clang)"
+  # Passer le sysroot et l'arch explicitement pour que clang trouve les headers iOS
+  export CFLAGS="-arch arm64 -isysroot $sdk_path -mios-version-min=$MIN_IOS"
+  export CXXFLAGS="$CFLAGS"
 
-  # Les cibles xcrun (ios64-xcrun, iossimulator-xcrun) gèrent elles-mêmes
-  # le sysroot et l'architecture via CROSS_TOP/CROSS_SDK/CC déjà exportés.
   ./Configure "$ossl_target" no-shared no-dso no-async no-tests \
     --prefix="$prefix"
   make -j"$(sysctl -n hw.ncpu)" build_libs
   make install_dev
 
-  unset CROSS_TOP CROSS_SDK CC
+  unset CROSS_TOP CROSS_SDK CC CFLAGS CXXFLAGS
   popd >/dev/null
 
   # OpenSSL 3.x installe parfois dans lib64 ; configure-iphone attend lib/.

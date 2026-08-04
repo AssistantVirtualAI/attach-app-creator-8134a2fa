@@ -118,6 +118,8 @@ final class PjsipEngine {
     private let lock = NSLock()
 
     private var started = false
+    /// `pj_thread_register` n'est utilisable qu'après `pjsua_create()`.
+    private var pjlibReady = false
     private var scheduledWork: (() -> Void)?
     private var strings: [UnsafeMutablePointer<CChar>] = []
     private var pjThreadDescs: [UnsafeMutableRawPointer] = []
@@ -395,10 +397,12 @@ final class PjsipEngine {
         // que l'appelant continue d'entendre la sonnerie.
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self = self, !done else { return }
-            self.registerCurrentThreadIfNeeded()
-            let status = pjsua_call_answer(target, 200, nil, nil)
-            NSLog("[PpPjsip] answer FALLBACK callId=%d status=%d", target, status)
-            finish(status == pj_status_t(0))
+            self.thread.run {
+                if done { return }
+                let status = pjsua_call_answer(target, 200, nil, nil)
+                NSLog("[PpPjsip] answer FALLBACK callId=%d status=%d", target, status)
+                finish(status == pj_status_t(0))
+            }
         }
 
     }
@@ -441,9 +445,10 @@ final class PjsipEngine {
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self = self, !done else { return }
             done = true
-            self.registerCurrentThreadIfNeeded()
-            let status = pjsua_call_hangup(target, UInt32(code), nil, nil)
-            NSLog("[PpPjsip] hangup FALLBACK callId=%d status=%d", target, status)
+            self.thread.run {
+                let status = pjsua_call_hangup(target, UInt32(code), nil, nil)
+                NSLog("[PpPjsip] hangup FALLBACK callId=%d status=%d", target, status)
+            }
         }
         DispatchQueue.main.async { closeCallKit() }
     }
@@ -764,6 +769,7 @@ final class PjsipEngine {
         }
 
         try check(pjsua_create(), "pjsua_create")
+        pjlibReady = true
 
         var cfg = pjsua_config()
         pjsua_config_default(&cfg)
@@ -813,30 +819,35 @@ final class PjsipEngine {
     /// on enregistre donc le thread courant à la demande, avec un descripteur
     /// conservé en mémoire pour toute la durée de vie du process.
     func registerCurrentThreadIfNeeded() {
-        guard started else { return }
+        guard pjlibReady else { return }
         if pj_thread_is_registered() != 0 { return }
         let count = max(1, MemoryLayout<pj_thread_desc>.size / MemoryLayout<Int>.size)
         let desc = UnsafeMutablePointer<Int>.allocate(capacity: count)
         desc.initialize(repeating: 0, count: count)
         var handle: UnsafeMutablePointer<pj_thread_t>?
-        let status = pj_thread_register("pp-gcd", desc, &handle)
+        let status = pj_thread_register("pp-worker", desc, &handle)
         NSLog("[PpPjsip] pj_thread_register status=%d", status)
         lock.lock()
         pjThreadDescs.append(UnsafeMutableRawPointer(desc))
         lock.unlock()
     }
 
+    /// Exécute le travail dans un contexte PJLIB valide.
+    /// Le thread worker est persistant : il suffit de l'enregistrer une fois
+    /// auprès de PJLIB, inutile de passer par un timer pjsua (qui provoquait
+    /// des exécutions hors contexte et l'assertion `pj_thread_this`).
     private func scheduleOnPjsipThread(_ work: @escaping () -> Void) {
-        registerCurrentThreadIfNeeded()
-        lock.lock()
-        let previous = scheduledWork
-        scheduledWork = {
-            previous?()
+        if Thread.current === PjsipWorkerThread.currentThread {
+            registerCurrentThreadIfNeeded()
             work()
+        } else {
+            thread.run { [weak self] in
+                self?.registerCurrentThreadIfNeeded()
+                work()
+            }
         }
-        lock.unlock()
-        pjsua_schedule_timer2(ppPjsipEnterContext, nil, 0)
     }
+
 
 
     func runScheduledWork() {
@@ -883,11 +894,49 @@ final class PjsipEngine {
     }
 }
 
-/// Thread dédié et persistant : c'est lui qui appelle pjsua_create(), donc le
-/// thread reste enregistré auprès de PJLIB pour toute la durée du process.
+/// Thread dédié, unique et persistant (vrai `Thread`, pas une DispatchQueue :
+/// GCD peut changer de thread système entre deux blocs, ce qui déclenchait
+/// l'assertion PJLIB « Calling pjlib from unknown/external thread » et un
+/// SIGABRT dans `pjsua_acc_add`).
 final class PjsipWorkerThread {
-    private let queue = DispatchQueue(label: "ca.planipret.pjsip.engine")
-    func run(_ block: @escaping () -> Void) { queue.async(execute: block) }
+    /// Thread OS réellement utilisé — permet d'éviter un re-dispatch inutile.
+    static private(set) var currentThread: Thread?
+
+    private let lock = NSCondition()
+    private var pending: [() -> Void] = []
+    private var thread: Thread?
+
+    init() {
+        let t = Thread { [weak self] in self?.loop() }
+        t.name = "ca.planipret.pjsip.engine"
+        t.qualityOfService = .userInitiated
+        t.stackSize = 512 * 1024
+        thread = t
+        t.start()
+    }
+
+    private func loop() {
+        PjsipWorkerThread.currentThread = Thread.current
+        while true {
+            lock.lock()
+            while pending.isEmpty { lock.wait() }
+            let jobs = pending
+            pending.removeAll()
+            lock.unlock()
+            for job in jobs {
+                PjsipEngine.shared.registerCurrentThreadIfNeeded()
+                job()
+            }
+        }
+    }
+
+    func run(_ block: @escaping () -> Void) {
+        lock.lock()
+        pending.append(block)
+        lock.signal()
+        lock.unlock()
+    }
 }
+
 
 #endif

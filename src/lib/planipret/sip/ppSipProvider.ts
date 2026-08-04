@@ -7,6 +7,7 @@
 // stats sampling, and ICE-restart support for Wi-Fi ↔ LTE handover.
 
 import JsSIP from "jssip";
+import { Capacitor } from "@capacitor/core";
 import { getPpSipReconnectConfig, ppSipBackoffDelay, PP_SIP_RECONNECT_FLOOR_MS } from "./ppSipReconnectConfig";
 import { edgeOnlyWssUrls, isPortalWssUrl } from "./sipEdgePolicy";
 import { checkSipBackendRegistration } from "./sipBackendCheck";
@@ -105,6 +106,16 @@ function sipToken(value: string): string {
     .slice(0, 48) || "pp";
 }
 
+/** "mobile" dans l'app native Capacitor, "web" dans un navigateur. */
+function ppUaTag(): "mobile" | "web" {
+  try { return Capacitor.isNativePlatform() ? "mobile" : "web"; } catch { return "web"; }
+}
+
+/** User-Agent SIP lisible côté NetSapiens pour identifier le client. */
+function ppUserAgent(): string {
+  return ppUaTag() === "mobile" ? "Planipret Mobile/1.0" : "Planipret Web/1.0";
+}
+
 function buildContactUri(cfg: PpSipConfig): string {
   // Device AORs are case-sensitive in this NetSapiens tenant (`113M`, not
   // `113m`). Do not pass the Contact user through sipToken(), which lowercases.
@@ -116,7 +127,9 @@ function buildContactUri(cfg: PpSipConfig): string {
   // NS-API v2 documents the registration URI as sip:[device]@[domain]. The
   // edge SBC belongs only in the WSS transport URL, never in the SIP AOR.
   const host = /^[a-z0-9.-]+$/.test(domain) ? domain : "planipret.ca";
-  return `sip:${user}@${host};transport=wss;pp-ua=web-${ext}`;
+  // Tag d'identification du client dans le Contact NS : `pp-ua=mobile-<ext>`
+  // pour la WebView Capacitor, `pp-ua=web-<ext>` pour le portail navigateur.
+  return `sip:${user}@${host};transport=wss;pp-ua=${ppUaTag()}-${ext}`;
 }
 
 function isKnownJsSipParserCrash(value: unknown): boolean {
@@ -501,7 +514,7 @@ class PpSipProvider {
         register_expires: reconnectConfig.registerExpiresSec,
         connection_recovery_min_interval: Math.max(3, Math.ceil(reconnectConfig.socketBackoffMinMs / 1000)),
         connection_recovery_max_interval: Math.max(3, Math.ceil(reconnectConfig.socketBackoffMaxMs / 1000)),
-        user_agent: "Planipret Softphone 1.0",
+        user_agent: ppUserAgent(),
       });
 
       try {

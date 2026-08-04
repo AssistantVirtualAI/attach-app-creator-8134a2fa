@@ -200,6 +200,7 @@ Deno.serve(async (req) => {
           if (forcedTransport) {
             patch["transport"] = forcedTransport;
             patch["device-sip-transport-type"] = forcedTransport;
+            patch["device-provisioning-sip-transport-protocol"] = forcedTransport.toLowerCase();
           }
           const r = await nsFetch(`${base}/${encodeURIComponent(id)}`, {
             method: "PUT", headers: nsHeaders,
@@ -233,6 +234,7 @@ Deno.serve(async (req) => {
             // with whichever stack actually registers (wss = JsSIP, tls = PJSIP).
             "transport": forcedTransport ?? "WSS",
             "device-sip-transport-type": forcedTransport ?? "WSS",
+            "device-provisioning-sip-transport-protocol": (forcedTransport ?? "WSS").toLowerCase(),
             "device-srtp-enabled": "opportunistic",
             "device-sip-allowed-user-agent": "",
             "device-push-enabled": isMobile ? "yes" : "no",

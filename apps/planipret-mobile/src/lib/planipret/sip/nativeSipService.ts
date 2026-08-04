@@ -206,12 +206,8 @@ export class NativeSipService {
         .then((m) => m.declarePlanipretNativeEngineOwnsAor(true))
         .catch(() => undefined);
 
-      // `initialize` envoie déjà le REGISTER : un second appel renvoie
-      // PJSIP_EBUSY. On ne force le REGISTER que s'il échoue silencieusement.
-      await pjsip.register().catch((e: any) => {
-        const c = String(e?.code ?? e?.message ?? "");
-        if (!/EBUSY|busy|already/i.test(c)) throw e;
-      });
+      // `initialize` adds the account with register_on_acc_add=1 and already
+      // sends REGISTER. A second immediate request races that transaction.
       return true;
 
     } catch (err: any) {

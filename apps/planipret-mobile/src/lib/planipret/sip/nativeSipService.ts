@@ -159,11 +159,26 @@ export class NativeSipService {
     const creds = (data ?? {}) as Record<string, string>;
     const password = creds.sip_password;
     if (error || !password) {
-      console.error("[SIP] Aucun identifiant:", creds.error ?? error?.message);
+      console.error("[SIP] Aucun identifiant:", JSON.stringify({
+        edgeError: error?.message ?? null,
+        payloadError: creds.error ?? null,
+        keys: Object.keys(creds),
+      }));
       releaseAorFromNative("credentials_missing");
       this.setState("failed");
       return false;
     }
+    // Diagnostic : le resolver DOIT renvoyer `tls`. S'il renvoie `wss`, le
+    // device `<ext>M` reste en WSS 9002 côté PBX et les INVITE n'arrivent
+    // jamais sur PJSIP. On force alors un realignement TLS explicite.
+    const resolvedTransport = String(creds.sip_transport ?? "").toLowerCase();
+    if (resolvedTransport && resolvedTransport !== "tls") {
+      console.warn(
+        `[SIP] ns-resolve-sip-credentials a renvoyé sip_transport="${resolvedTransport}" alors que TLS était demandé — realignement TLS forcé`,
+      );
+      void this.forceDeviceTlsTransport({ sipPort: 5061, contact: creds.sip_tls_uri ?? "" }, true);
+    }
+
 
     // Invariant : l'AOR mobile est TOUJOURS `<ext>M` (jamais `<ext>_mobile`).
     const username = normalizeMobileAor(String(creds.sip_username ?? creds.sip_extension ?? ""));

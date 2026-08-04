@@ -261,6 +261,14 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   // Permet d'afficher immédiatement l'écran "ça sonne" avec Répondre/Raccrocher.
   const [pushRing, setPushRing] = useState<{ callId: string; from: string } | null>(null);
   const [nativeStatus, setNativeStatus] = useState<PpNativeSipStatus | null>(null);
+  /**
+   * Appel piloté par le moteur PJSIP natif (iOS). Sans cet état, un appel
+   * sortant natif n'apparaissait nulle part dans l'UI : « appel lancé » puis
+   * plus rien (ni écran d'appel, ni clavier, ni raccrocher).
+   */
+  const [nativeCall, setNativeCall] = useState<
+    { callId: string; state: PpSipSnapshot["callState"]; direction: "in" | "out"; number: string; startedAt: number } | null
+  >(null);
   /** Latest answer() implementation, callable from native listeners registered once. */
   const answerRef = useRef<null | (() => Promise<boolean>)>(null);
   /** One answer transaction at a time across CallKit, notification and in-app UI. */

@@ -65,17 +65,14 @@ export async function playRecordingNotice(
 ): Promise<void> {
   // Garde-fou : l'avis ne concerne QUE les appels entrants (les gens qui
   // appellent le DID d'un courtier). Un appel sortant ne doit jamais le jouer.
-  if (direction !== "in") {
-    log("skipped — not an inbound call", { callKey, direction });
-    return;
-  }
-  // Sur mobile natif, la lecture locale vole la session audio (AVAudioSession /
-  // AudioManager) au milieu de l'établissement média → audio unidirectionnel un
-  // appel sur deux. L'appelant entend déjà l'avis joué par le central.
-  if (Capacitor.isNativePlatform()) {
-    log("skipped — native platform (PBX plays the notice)", { callKey });
-    return;
-  }
+  // DÉSACTIVÉ : l'avis d'enregistrement ne doit JAMAIS être joué par
+  // l'application, ni sur les appels sortants, ni après avoir répondu à un
+  // appel entrant. La lecture locale volait la session audio au moment de
+  // l'établissement média (absence de voix de l'autre côté). L'avis reste
+  // diffusé par le central aux personnes qui appellent le DID du courtier.
+  log("disabled — notice is played by the PBX only", { callKey, direction });
+  if (true) return;
+  // eslint-disable-next-line no-unreachable
   const key = callKey && callKey.length ? callKey : "__default__";
   if (announced.has(key)) return;
 

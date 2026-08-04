@@ -318,7 +318,35 @@ final class PjsipEngine {
 
     func answer(callId: String?, completion: @escaping (Bool) -> Void) {
         let target = resolveCall(callId)
-        guard target >= 0 else { completion(false); return }
+        guard target >= 0 else {
+            // L'utilisateur a décroché depuis CallKit avant l'arrivée de
+            // l'INVITE SIP (push VoIP plus rapide que le réseau SIP).
+            // On mémorise l'intention : handleIncomingCall répondra 200 OK.
+            NSLog("[PpPjsip] answer avant INVITE → pendingAnswer armé")
+            lock.lock()
+            pendingAnswerRequest = true
+            pendingAnswerCallId = callId
+            pendingAnswerCompletions.append(completion)
+            lock.unlock()
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 10.0) { [weak self] in
+                guard let self = self else { return }
+                self.lock.lock()
+                let stillPending = self.pendingAnswerRequest
+                let pending = self.pendingAnswerCompletions
+                if stillPending {
+                    self.pendingAnswerRequest = false
+                    self.pendingAnswerCallId = nil
+                    self.pendingAnswerCompletions = []
+                }
+                self.lock.unlock()
+                if stillPending {
+                    NSLog("[PpPjsip] pendingAnswer timeout 10s → no_active_call")
+                    pending.forEach { $0(false) }
+                }
+            }
+            return
+        }
+
         var done = false
         let finish: (Bool) -> Void = { [weak self] ok in
             guard let self = self else { return }

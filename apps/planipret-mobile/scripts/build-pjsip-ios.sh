@@ -80,10 +80,10 @@ build_openssl () {
   export CROSS_SDK="$(basename "$sdk_path")"
   export CC="$(xcrun -find clang)"
 
-  # ios64-cross et iossimulator-arm64 incluent déjà arm64 — ne pas le répéter
+  # Les cibles xcrun (ios64-xcrun, iossimulator-xcrun) gèrent elles-mêmes
+  # le sysroot et l'architecture via CROSS_TOP/CROSS_SDK/CC déjà exportés.
   ./Configure "$ossl_target" no-shared no-dso no-async no-tests \
-    --prefix="$prefix" \
-    -mios-version-min="$MIN_IOS" -isysroot "$sdk_path"
+    --prefix="$prefix"
   make -j"$(sysctl -n hw.ncpu)" build_libs
   make install_dev
 
@@ -96,8 +96,10 @@ build_openssl () {
   test -f "$prefix/lib/libcrypto.a" || { echo "❌ OpenSSL $tag: libcrypto.a manquant"; exit 1; }
 }
 
-build_openssl device    iphoneos         ios64-cross
-build_openssl simulator iphonesimulator  iossimulator-arm64
+# ios64-xcrun et iossimulator-xcrun sont les cibles modernes pour Xcode récent
+# (ios64-cross n'est plus reconnu depuis OpenSSL 3.x avec Xcode 15+)
+build_openssl device    iphoneos         ios64-xcrun
+build_openssl simulator iphonesimulator  iossimulator-xcrun
 
 # ---------------------------------------------------------------------------
 # 2) pjproject

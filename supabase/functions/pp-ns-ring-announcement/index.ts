@@ -141,18 +141,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Restore the notice for ringing legs. NetSapiens only honours
-    // `music-on-ring-enabled` at the DOMAIN level (the user object ignores it),
-    // so this is the only configuration that actually plays the notice.
+    // DÉPANNAGE UNIQUEMENT — remet `music-on-ring-enabled` au niveau du
+    // DOMAINE. Cela rejoue l'avis sur TOUTES les jambes qui sonnent, y compris
+    // les appels SORTANTS des courtiers. Ne pas utiliser en configuration
+    // normale : utiliser `scope_users` à la place.
     if (action === "restore" || action === "enable_domain") {
       const dom = await setDomainRing(true);
       return json({
         ok: dom.ok,
+        warning: "DÉPANNAGE : le domaine rejoue l'avis aussi sur les appels sortants des courtiers",
         note: "domain music-on-ring enabled — notice plays on ringing legs (iOS + Android)",
         domain: dom,
         state: await readState(),
       });
     }
+
 
     if (action === "enable") {
       // 1) upload the notice as domain MOH media

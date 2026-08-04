@@ -7,6 +7,17 @@ import UserNotifications
 import Network
 import Security
 
+/// Vrai lorsque le moteur PJSIP natif est linké : dans ce cas il détient
+/// l'AOR `<ext>M` en TLS 5061 et la pile WSS de secours ne doit jamais
+/// ré-enregistrer par-dessus (sinon le Contact TLS est remplacé côté NetSapiens).
+var nativeEngineOwnsAor: Bool {
+  #if canImport(pjsua)
+  return true
+  #else
+  return false
+  #endif
+}
+
 // Planiprêt-only. DO NOT reuse in Lemtel (Verto stack).
 @objc(PpSipKeepAlive)
 public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDelegate {
@@ -278,10 +289,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
     /// guarantees background execution through PushKit, so this is the path that
     /// must bring the AOR back before the PBX times out to voicemail.
     private func wakeForPush(_ why: String) {
-      // PJSIP/TLS est le propriétaire permanent de `<ext>M`. Un push VoIP ne
-      // doit jamais réveiller l'ancien REGISTER WSS par-dessus lui : ce doublon
-      // remplaçait le Contact TLS dans NetSapiens et l'INVITE n'arrivait plus au
-      // moteur capable de répondre.
       if nativeEngineOwnsAor {
         NSLog("[PpSipKeepAlive] VoIP push wake skipped — PJSIP owns the AOR")
         releaseRegistration("pjsip_owns_aor")

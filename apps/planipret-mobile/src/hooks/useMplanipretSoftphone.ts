@@ -1182,8 +1182,17 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
 
     if (nativeOwnsAor() && nativeSip.isRegistered()) {
+      // L'écran d'appel doit s'ouvrir immédiatement : le premier event natif
+      // (`callState` CALLING/EARLY) peut arriver plusieurs centaines de ms
+      // après la résolution de makeCall.
+      setNativeCall({ callId: "", state: "ringing-out", direction: "out", number: destination, startedAt: Date.now() });
       const ok = await nativeSip.makeCall(destination);
-      if (ok) return { via: "webrtc", ok: true };
+      if (ok) {
+        setNativeCall((cur) => cur ? { ...cur, callId: nativeSip.getCallId() ?? cur.callId } : cur);
+        postOutboundCall({ providerCallId: nativeSip.getCallId() ?? `pjsip-${Date.now()}`, number: destination });
+        return { via: "webrtc", ok: true };
+      }
+      setNativeCall(null);
       console.warn("[softphone] native PJSIP call failed; falling back to PBX");
     }
 

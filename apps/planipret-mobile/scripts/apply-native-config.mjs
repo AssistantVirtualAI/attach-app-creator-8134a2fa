@@ -1482,7 +1482,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
                 pendingAnswerAction = nil
                 answerCompleted = true
                 endAnswerBackgroundTask()
-                // `PpPjsipAnswerPending` already armed the engine when CallKit
+                // PpPjsipAnswerPending already armed the engine when CallKit
                 // was answered before this INVITE. handleIncomingCall() sends
                 // the 200 OK itself; posting AnswerRequested here would answer
                 // the same dialog twice and can leave the caller ringing.
@@ -2110,6 +2110,29 @@ function ensureXcodeSourceFiles(iosRoot, relativeFiles) {
   return false;
 }
 
+// Retire complètement un fichier source du projet Xcode (références + phase de
+// compilation). Utilisé pour purger les bridges ObjC obsolètes.
+function removeXcodeSourceFile(iosRoot, rel) {
+  const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
+  if (!fs.existsSync(pbx)) return false;
+  let text = fs.readFileSync(pbx, "utf8");
+  const before = text;
+  const fileName = path.basename(rel);
+  const fileRef = xcodeId(`file:${rel}`);
+  const buildRef = xcodeId(`build:${rel}`);
+  text = text
+    .split("\n")
+    .filter((line) => !(line.includes(fileRef) || line.includes(buildRef) || line.includes(`${fileName} in Sources`)))
+    .join("\n");
+  if (text !== before) {
+    fs.writeFileSync(pbx, text);
+    console.log(`[native-config] removed stale Xcode reference: ${rel}`);
+    return true;
+  }
+  return false;
+}
+
+
 // Lier libpjsip.xcframework à la cible App + exposer son module.modulemap à
 // Swift. Sans ça `#if canImport(pjsua)` est FAUX et tout le moteur PJSIP est
 // exclu à la compilation, même si l'archive est visible dans Xcode.
@@ -2505,7 +2528,18 @@ function patchIosNativeFiles() {
   // PpPjsip: sources committed under Plugins/PpPjsip (not generated here).
   const pjsipDir = path.join(iosApp, "Plugins", "PpPjsip");
   const hasPjsip = fs.existsSync(path.join(pjsipDir, "PpPjsip.swift"));
+  // Le bridge ObjC CAP_PLUGIN(PpPjsip) faisait double emploi avec
+  // CAPBridgedPlugin + registerPluginInstance : Capacitor gardait la table de
+  // méthodes ObjC (sans isEngineLinked) -> UNIMPLEMENTED et repli JsSIP.
+  const stalePjsipBridge = path.join(pjsipDir, "PpPjsip.m");
+  if (fs.existsSync(stalePjsipBridge)) {
+    fs.rmSync(stalePjsipBridge);
+    console.log("[native-config] removed stale PpPjsip.m (duplicate plugin registration).");
+  }
+
   const iosRoot = path.join(appDir, "ios", "App");
+  removeXcodeSourceFile(iosRoot, "App/Plugins/PpPjsip/PpPjsip.m");
+
   ensureXcodeSourceFiles(iosRoot, [
     "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.swift",
     "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.m",
@@ -2516,7 +2550,7 @@ function patchIosNativeFiles() {
     ...(hasPjsip
       ? [
           "App/Plugins/PpPjsip/PpPjsip.swift",
-          "App/Plugins/PpPjsip/PpPjsip.m",
+
           ...(fs.existsSync(path.join(pjsipDir, "PpPjsipEngine.swift"))
             ? ["App/Plugins/PpPjsip/PpPjsipEngine.swift"]
             : []),

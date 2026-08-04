@@ -145,6 +145,11 @@ final class PjsipEngine {
 
     /// Appel sortant en cours (piloté par CallKit côté PpVoipCall).
     private var outgoingCall: pjsua_call_id = pjsua_call_id(-1)
+    /// Armé AVANT `pjsua_call_make_call` : le callback d'état `CALLING` peut
+    /// arriver avant que `outgoingCall` soit affecté, ce qui faisait annoncer
+    /// `direction=in` sur un appel sortant (double écran d'appel côté JS).
+    private var outgoingPending = false
+
     private var muted = false
     private var speakerOn = false
     private var audioSessionReady = false
@@ -309,15 +314,19 @@ final class PjsipEngine {
                     : "sip:\(destination)@\(self.domain)"
                 var uri = ppMakePjStr(target, keep: &keep)
                 var newCall = pjsua_call_id(-1)
+                self.outgoingPending = true
                 let status = pjsua_call_make_call(self.accId, &uri, nil, nil, nil, &newCall)
                 keep.forEach { free($0) }
                 if status != pj_status_t(0) {
+                    self.outgoingPending = false
                     completion(.failure(NSError(domain: "PpPjsip", code: Int(status), userInfo: [NSLocalizedDescriptionKey: "pjsua_call_make_call failed"])))
                     return
                 }
                 self.activeCall = newCall
                 self.muted = false
                 self.outgoingCall = newCall
+                self.outgoingPending = false
+
                 NSLog("[PpPjsip] outgoing INVITE → %@ callId=%d", target, newCall)
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(
@@ -592,7 +601,15 @@ final class PjsipEngine {
         default: label = "unknown"
         }
 
-        let isOutgoing = outgoingCall == callId
+        // `outgoingPending` couvre la fenêtre où PJSIP notifie CALLING avant
+        // le retour de `pjsua_call_make_call` (sinon direction=in sur sortant).
+        var isOutgoing = outgoingCall == callId
+        if !isOutgoing, outgoingPending, outgoingCall < 0 {
+            isOutgoing = true
+            outgoingCall = callId
+            outgoingPending = false
+        }
+
         emit("callState", [
             "callId": String(callId),
             "state": label,

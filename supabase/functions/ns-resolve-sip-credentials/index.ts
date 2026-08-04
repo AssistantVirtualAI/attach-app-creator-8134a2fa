@@ -194,10 +194,36 @@ function queueRingRuleResync(brokerId: string, reason: string, force = false) {
 
 
 /**
+ * Transport arbitration.
+ *
+ * ONE transport per AOR. A NetSapiens Device object carries a single
+ * `device-sip-transport-type`; registering the same AOR over another transport
+ * leaves the PBX bookkeeping pointing at the wrong contact and inbound calls are
+ * never forked to it (they fall through to voicemail).
+ *
+ * The client therefore declares which transport it will actually register with:
+ *  - `wss` (default) — WebView / JsSIP over wss:9002 on a core node.
+ *  - `tls` — native PJSIP over sip:5061 on a core node (iOS/Android native engine).
+ */
+type SipTransport = "wss" | "tls";
+function normalizeTransport(v: unknown): SipTransport {
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "tls" || s === "sips" ? "tls" : "wss";
+}
+const nsTransport = (t: SipTransport) => (t === "tls" ? "TLS" : "WSS");
+const sipPortFor = (t: SipTransport) => (t === "tls" ? 5061 : 9002);
+
+/**
  * Same device payload as ns-provision-broker-devices so EVERY broker ends up
  * with an identical `<ext>M` + `<ext>W` pair (no per-user drift).
  */
-function deviceCreatePayload(id: string, isMobile: boolean, password: string, coreServer: string) {
+function deviceCreatePayload(
+  id: string,
+  isMobile: boolean,
+  password: string,
+  coreServer: string,
+  transport: SipTransport = "wss",
+) {
   return {
     device: id,
     "device-sip-registration-password": password,
@@ -210,14 +236,15 @@ function deviceCreatePayload(id: string, isMobile: boolean, password: string, co
     // which marks the softphone unregistered between re-REGISTERs (calls -> voicemail).
     "device-sip-registration-expiry-seconds": 1800,
     "device-sip-nat-traversal-enabled": "automatic",
-    transport: "WSS",
-    "device-sip-transport-type": "WSS",
+    transport: nsTransport(transport),
+    "device-sip-transport-type": nsTransport(transport),
     "device-srtp-enabled": "opportunistic",
     "device-sip-allowed-user-agent": "",
     "device-push-enabled": isMobile ? "yes" : "no",
 
   };
 }
+
 
 
 Deno.serve(async (req) => {
@@ -227,6 +254,8 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* empty ok */ }
   const clientType = normalizeClientType(body?.client_type);
+  const sipTransport = normalizeTransport(body?.transport);
+
 
   const authHeader = req.headers.get("Authorization") ?? "";
   const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -298,7 +327,7 @@ Deno.serve(async (req) => {
     const isMobile = clientType === "mobile";
     const created = await nsPost(
       `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices`,
-      deviceCreatePayload(deviceName, isMobile, selfHealPwd, FALLBACK_PROXY),
+      deviceCreatePayload(deviceName, isMobile, selfHealPwd, FALLBACK_PROXY, sipTransport),
     );
     console.log(`[ns-resolve] self-heal device ${deviceName} status=${created.status}`);
     if (created.ok || created.status === 409) {
@@ -342,7 +371,16 @@ Deno.serve(async (req) => {
   }
 
   const rawCore = (device["core-server"] ?? device["device-sip-registration-core-server"] ?? device["sip-registration-core-server"] ?? "").toString().trim();
-  const coreServer = (rawCore || FALLBACK_PROXY).replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  // Pin the SIP proxy to a call-processing core node. NS sometimes reports the
+  // portal host (portal*.ucstack.io / voice.ava-telecom.ca) here; a registration
+  // held by the portal is NOT used for inbound delivery -> straight to voicemail.
+  const rawCoreHost = rawCore.replace(/^https?:\/\//, "").replace(/\/+$/, "").replace(/:\d+$/, "");
+  const isPortalHost = /(^|\.)(portal\d*|voice)[^/]*\.(ucstack\.io|ava-telecom\.ca)$/i.test(rawCoreHost);
+  const isCoreHost = /(^|\.)core\d+\.[^/]*ucstack\.io$/i.test(rawCoreHost);
+  const coreServer = (isCoreHost && !isPortalHost) ? rawCoreHost : FALLBACK_PROXY;
+  if (rawCoreHost && coreServer !== rawCoreHost) {
+    console.warn(`[ns-resolve] core-server ${rawCoreHost} rejected (portal/non-core) -> pinned ${coreServer}`);
+  }
   const sipUri = device["device-sip-registration-uri"] ?? `sip:${resolvedId}@${domain}`;
   const sipState = device["device-sip-registration-state"] ?? device["registration-state"] ?? null;
 
@@ -375,10 +413,12 @@ Deno.serve(async (req) => {
       "device-provisioning-registration-core-server": coreServer,
       "device-srtp-enabled": "opportunistic",
       "device-sip-allowed-user-agent": "",
-      // Normalize every broker's device to the same transport/NAT/push profile.
-      transport: "WSS",
-      // SIP transport at the core level — prevents the 1001 close after 200 OK.
-      "device-sip-transport-type": "WSS",
+      // ONE transport per AOR — the device is aligned on the transport the
+      // caller declared it will register with (wss for JsSIP, tls for PJSIP).
+      transport: nsTransport(sipTransport),
+      // SIP transport at the core level — a mismatch here means the PBX never
+      // forks inbound calls to the contact this client registered.
+      "device-sip-transport-type": nsTransport(sipTransport),
       "server-nat": clientType === "mobile" ? "yes" : "no",
       // Documented NS-API v2 keys — default expiry of 60s was dropping the
       // registration between re-REGISTERs; "automatic" NAT traversal keeps the
@@ -403,6 +443,10 @@ Deno.serve(async (req) => {
     sip_proxy: coreServer,
     sip_core_server: coreServer,
     sip_uri: sipUri,
+    // Transport actually provisioned on the NS Device for this AOR.
+    sip_transport: sipTransport,
+    sip_port: sipPortFor(sipTransport),
+    sip_tls_uri: `sip:${coreServer}:5061;transport=tls`,
     // Single pinned core node (no core1/core2 alternation).
     sip_ws_url: edgeWssUrls([NS_SIP_WSS_URL])[0],
     sip_wss_url: edgeWssUrls([NS_SIP_WSS_URL])[0],

@@ -132,6 +132,8 @@ final class PjsipEngine {
     private var domain = ""
     private var registered = false
     private var activeCall: pjsua_call_id = pjsua_call_id(-1)
+    /// Appel sortant en cours (piloté par CallKit côté PpVoipCall).
+    private var outgoingCall: pjsua_call_id = pjsua_call_id(-1)
     private var muted = false
     private var speakerOn = false
     private var audioSessionReady = false

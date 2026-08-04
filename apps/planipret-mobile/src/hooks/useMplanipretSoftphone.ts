@@ -1273,8 +1273,13 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     if (nativeOwnsAor()) {
       const ok = await nativeSip.answer();
       console.info(`[answer] route=PJSIP → ${ok ? "SIP 200 OK sent" : "no native INVITE"}`);
-      return ok;
+      if (ok) return true;
+      // Échec natif : on rend l'AOR et on retente le chemin legacy DANS LE
+      // MÊME tap (sinon l'utilisateur tape 11 fois sans jamais décrocher).
+      releaseAorFromNative("answer_native_failed");
+      console.warn("[answer] PJSIP failed → retrying legacy route immediately");
     }
+
     const sipSnap = ppSipProvider.getSnapshot();
     console.info("[answer] tapped", {
       hasLiveSipSession,

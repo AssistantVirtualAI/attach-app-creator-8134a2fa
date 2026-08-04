@@ -33,13 +33,16 @@ const ICON = {
  */
 export default function CallDoctorCard() {
   const [loading, setLoading] = useState(false);
+  const [ext, setExt] = useState("");
   const [report, setReport] = useState<Report | null>(null);
 
   const run = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("pp-ns-call-doctor", { body: {} });
+      const body = ext.trim() ? { extension: ext.trim() } : {};
+      const { data, error } = await supabase.functions.invoke("pp-ns-call-doctor", { body });
       if (error) throw error;
+      if ((data as any)?.ok === false) throw new Error((data as any).error);
       setReport(data as Report);
     } catch (e: any) {
       toast.error(e?.message ?? "Diagnostic échoué");

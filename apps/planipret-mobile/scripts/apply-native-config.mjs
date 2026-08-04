@@ -2505,6 +2505,15 @@ function patchIosNativeFiles() {
   // PpPjsip: sources committed under Plugins/PpPjsip (not generated here).
   const pjsipDir = path.join(iosApp, "Plugins", "PpPjsip");
   const hasPjsip = fs.existsSync(path.join(pjsipDir, "PpPjsip.swift"));
+  // Le bridge ObjC CAP_PLUGIN(PpPjsip) faisait double emploi avec
+  // CAPBridgedPlugin + registerPluginInstance : Capacitor gardait la table de
+  // méthodes ObjC (sans isEngineLinked) -> UNIMPLEMENTED et repli JsSIP.
+  const stalePjsipBridge = path.join(pjsipDir, "PpPjsip.m");
+  if (fs.existsSync(stalePjsipBridge)) {
+    fs.rmSync(stalePjsipBridge);
+    console.log("[native-config] removed stale PpPjsip.m (duplicate plugin registration).");
+  }
+
   const iosRoot = path.join(appDir, "ios", "App");
   ensureXcodeSourceFiles(iosRoot, [
     "App/Plugins/PpSipKeepAlive/PpSipKeepAlive.swift",

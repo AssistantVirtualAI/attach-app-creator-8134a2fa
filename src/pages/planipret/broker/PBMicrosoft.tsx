@@ -4,7 +4,6 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } fro
 import { Mail, Inbox, Send, Calendar, Video, ExternalLink, Sparkles, X, Loader2, RefreshCw } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
-import Pagination from "@/components/planipret/admin/Pagination";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { fmtDateTime } from "@/lib/planipret/brokerFormat";
 

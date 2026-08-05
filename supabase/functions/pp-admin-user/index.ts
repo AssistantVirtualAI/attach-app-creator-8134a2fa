@@ -146,15 +146,25 @@ async function deleteNsUserFull(domain: string, extension: string) {
 /** All NS subscribers of the domain (paginated). */
 async function nsListUsers(domain: string): Promise<any[]> {
   const all: any[] = [];
-  for (let page = 1; page <= 40; page++) {
-    const r = await nsFetch(`/domains/${encodeURIComponent(domain)}/users?limit=200&page=${page}`);
+  const seen = new Set<string>();
+  // NS-API v2 paginates with `start` (offset), not `page`.
+  for (let start = 0; start < 20000; start += 200) {
+    const r = await nsFetch(`/domains/${encodeURIComponent(domain)}/users?limit=200&start=${start}`);
     const items = Array.isArray(r.data) ? r.data : (r.data?.users ?? []);
     if (!r.ok || items.length === 0) break;
-    all.push(...items);
-    if (items.length < 200) break;
+    let added = 0;
+    for (const u of items) {
+      const key = String(u?.user ?? u?.extension ?? "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      all.push(u);
+      added++;
+    }
+    if (items.length < 200 || added === 0) break;
   }
   return all;
 }
+
 
 const nsEmailOf = (u: any) => String(u?.email ?? u?.["email-address"] ?? u?.email_address ?? "").trim().toLowerCase();
 const nsExtOf = (u: any) => String(u?.user ?? u?.extension ?? u?.user_id ?? u?.id ?? "").trim();

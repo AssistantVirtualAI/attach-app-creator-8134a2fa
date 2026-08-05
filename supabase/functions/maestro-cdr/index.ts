@@ -27,6 +27,45 @@ function metaString(meta: unknown, key: string): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
+/**
+ * Rule #4 (Scott / Telecom REST API): never POST a call record for an INBOUND
+ * call coming from another broker's VoIP number/extension — the caller side
+ * already created the record (rule #2). This avoids duplicate call rows.
+ * Client → broker inbound calls are still posted.
+ */
+async function isInternalBrokerCaller(admin: any, rawFrom: string | null): Promise<boolean> {
+  const raw = String(rawFrom ?? "").trim();
+  if (!raw) return false;
+  const digits = raw.replace(/\D/g, "");
+  // Bare extension (3–6 digits) => internal leg.
+  if (digits.length > 0 && digits.length <= 6) return true;
+
+  const e164 = normalizePhone(raw);
+  const candidates = [e164, digits, digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : null]
+    .filter(Boolean) as string[];
+
+  try {
+    const { data: dids } = await admin
+      .from("planipret_did_assignments")
+      .select("extension")
+      .or(candidates.map((c) => `phone_number_e164.eq.${c},phone_number_digits.eq.${c}`).join(","))
+      .limit(1);
+    if ((dids ?? []).length > 0) return true;
+  } catch { /* non-fatal */ }
+
+  try {
+    const { data: prof } = await admin
+      .from("planipret_profiles")
+      .select("id")
+      .in("phone", candidates)
+      .limit(1);
+    if ((prof ?? []).length > 0) return true;
+  } catch { /* non-fatal */ }
+
+  return false;
+}
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -49,6 +88,17 @@ Deno.serve(async (req) => {
     if (!force && call.maestro_synced && (call as any).maestro_call_id) {
       return json({ success: true, already_synced: true });
     }
+
+    // Rule #4: inbound leg from another broker's VoIP number => the caller
+    // already posted the record. Skip to avoid duplicates.
+    if (call.direction === "inbound" && !(call as any).maestro_call_id) {
+      if (await isInternalBrokerCaller(admin, call.from_number)) {
+        console.log(`[maestro-cdr] skip internal inbound leg call=${call_id} from=${call.from_number}`);
+        await setPipelineStep(admin, call_id, "cdr", "done", { skipped: "internal_broker_inbound" });
+        return json({ success: true, skipped: "internal_broker_inbound" }, 200);
+      }
+    }
+
 
     const cfg = await getMaestroConfig(admin);
     if (!cfg.url || !cfg.key) {

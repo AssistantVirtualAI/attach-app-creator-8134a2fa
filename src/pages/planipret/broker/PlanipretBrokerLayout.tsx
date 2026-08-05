@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, BarChart3, Settings, LogOut,
+  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, BarChart3, Settings, LogOut, Search, Mail, ShieldAlert,
 } from "lucide-react";
 import MobileAuthScreen from "@/components/planipret/mobile/MobileAuthScreen";
 import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
+import { resolveBrokerAccess } from "@/lib/planipret/brokerAccess";
 
 export type BrokerCtx = { userId: string; profile: any };
 
@@ -17,7 +18,9 @@ const NAV = [
   { to: "/planipret/broker/messages",   Icon: MessageSquare,   fr: "Textos",         en: "Messages" },
   { to: "/planipret/broker/voicemail",  Icon: Voicemail,       fr: "Messagerie",     en: "Voicemail" },
   { to: "/planipret/broker/recordings", Icon: Mic,             fr: "Enregistrements", en: "Recordings" },
+  { to: "/planipret/broker/microsoft",  Icon: Mail,            fr: "Microsoft 365",  en: "Microsoft 365" },
   { to: "/planipret/broker/stats",      Icon: BarChart3,       fr: "Statistiques",   en: "Statistics" },
+  { to: "/planipret/broker/search",     Icon: Search,          fr: "Recherche",      en: "Search" },
   { to: "/planipret/broker/settings",   Icon: Settings,        fr: "Réglages",       en: "Settings" },
 ];
 
@@ -30,31 +33,48 @@ export default function PlanipretBrokerLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { lang } = useMplanipretLang();
-  const [state, setState] = useState<"checking" | "anon" | "ready">("checking");
+  const [state, setState] = useState<"checking" | "anon" | "denied" | "ready">("checking");
   const [userId, setUserId] = useState<string>("");
   const [profile, setProfile] = useState<any>(null);
+  const [denyReason, setDenyReason] = useState<string>("");
+  const [q, setQ] = useState("");
 
   const load = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user) { setState("anon"); return; }
-    const { data } = await supabase
-      .from("planipret_profiles")
-      .select("user_id, full_name, email, extension, role, language, mobile_app_enabled")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    setUserId(user.id);
-    setProfile(data ?? { full_name: user.email, email: user.email, role: "broker" });
-    setState("ready");
+    const access = await resolveBrokerAccess();
+    if (access.state === "ready") {
+      setUserId(access.userId);
+      setProfile(access.profile);
+      setState("ready");
+      return;
+    }
+    setUserId("");
+    setProfile(null);
+    if (access.state === "denied") {
+      setDenyReason(access.reason);
+      setState("denied");
+    } else {
+      setState("anon");
+    }
   };
 
   useEffect(() => { void load(); }, []);
+
+  // Re-evaluate access on every auth transition so a signed-out or swapped
+  // session can never keep rendering another broker's data.
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") { setUserId(""); setProfile(null); setState("anon"); return; }
+      if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "TOKEN_REFRESHED") { void load(); }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   const logout = async () => {
     await supabase.auth.signOut();
     setState("anon");
     navigate("/planipret/broker", { replace: true });
   };
+
 
   if (state === "checking") {
     return (

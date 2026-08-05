@@ -6,6 +6,8 @@ import { Search, Plus, Edit3, Trash2, ExternalLink, X, AlertTriangle, Eye, EyeOf
 import Pagination from "@/components/planipret/admin/Pagination";
 import DebugPanel, { type DebugEntry } from "@/components/planipret/admin/DebugPanel";
 import { TableErrorState, TableEmptyState } from "@/components/planipret/admin/TableStates";
+import NsPurgeCard from "@/components/planipret/admin/NsPurgeCard";
+
 import { getPlanipretBrokerDirectory, type PlanipretBrokerRow } from "@/lib/planipret/adminDirectory";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,

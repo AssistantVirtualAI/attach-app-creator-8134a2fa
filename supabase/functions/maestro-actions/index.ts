@@ -214,7 +214,12 @@ Deno.serve(async (req) => {
       case "list_brokers":
       case "broker_profile": {
         const tCfg = await getMaestroTelecomConfig(admin);
-        if (!isMaestroTelecomConfigured(tCfg)) return j({ success: false, error: "maestro_telecom_not_configured" }, 500);
+        // Always answer 200 on these list/profile reads: the mobile Contacts
+        // screen surfaces `error` as readable text instead of the opaque
+        // "Edge Function returned a non-2xx status code".
+        if (!isMaestroTelecomConfigured(tCfg)) {
+          return j({ success: false, clients: [], brokers: [], error: "Intégration Maestro non configurée." });
+        }
 
         // Resolve the caller's numeric Maestro telecom user id from their JWT.
         const authHeader = req.headers.get("Authorization") ?? "";

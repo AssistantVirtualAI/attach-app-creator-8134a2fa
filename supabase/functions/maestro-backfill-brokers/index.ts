@@ -1,14 +1,13 @@
 // POST /functions/v1/maestro-backfill-brokers
-// Body: { from?: number, to?: number, dry_run?: boolean }
-// Scans Maestro telecom user ids once and links every Planiprêt profile
-// (extension / phone match) to its maestro_broker_id.
-import { adminClient, corsHeaders, getMaestroConfig, json, verifyTelecomUserId } from "../_shared/maestro.ts";
+// Body: { dry_run?: boolean, force?: boolean }
+// Links every Planiprêt profile to its Maestro telecom id using the
+// broker directory (GET /users/{seed}/brokers) — email, extension, phone, name.
+import { adminClient, corsHeaders, json } from "../_shared/maestro.ts";
+import { linkBrokerIdByEmail, loadBrokerDirectory } from "../_shared/maestro-broker-directory.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -28,62 +27,44 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json().catch(() => ({}));
-  const from = Math.max(1, Number(body?.from ?? 1));
-  const to = Math.min(Math.max(from, Number(body?.to ?? 300)), from + 400);
   const dryRun = !!body?.dry_run;
+  const force = !!body?.force;
 
-  const cfg = await getMaestroConfig(admin);
-  if (!cfg.url || !cfg.key) return json({ error: "maestro_not_configured" }, 400);
-
-  // 1. Build the telecom directory once.
-  const ids = Array.from({ length: to - from + 1 }, (_, i) => from + i);
-  const directory: { id: string; ext: string; nums: string[] }[] = [];
-  for (let i = 0; i < ids.length; i += 25) {
-    const chunk = ids.slice(i, i + 25);
-    const sips = await Promise.all(chunk.map(async (id) => {
-      const sip = await verifyTelecomUserId(cfg, String(id));
-      if (!sip) return null;
-      const pu = sip.provider_user ?? {};
-      return {
-        id: String(id),
-        ext: String(sip.sip_username ?? pu.provider_external_user_id ?? "").trim(),
-        nums: [digits(pu.phone_number), digits(pu.sms_number)].filter(Boolean) as string[],
-      };
-    }));
-    for (const s of sips) if (s) directory.push(s);
+  const dir = await loadBrokerDirectory(admin, { force: true });
+  if (!dir.entries.length) {
+    return json({ success: false, error: dir.error ?? "directory_unavailable" }, 200);
   }
 
-  // 2. Match unlinked profiles.
   const { data: profiles } = await admin
     .from("planipret_profiles")
-    .select("id, full_name, email, extension, phone, maestro_broker_id");
+    .select("id, full_name, email, ms365_email, extension, phone, maestro_broker_id");
 
   const linked: any[] = [];
   const unmatched: any[] = [];
+  let already = 0;
+
   for (const p of (profiles ?? []) as any[]) {
-    if (p.maestro_broker_id) continue;
-    const ext = String(p.extension ?? "").trim();
-    const phone = digits(p.phone);
-    const hit = directory.find((d) =>
-      (ext && d.ext === ext) ||
-      (phone && d.nums.some((n) => n.endsWith(phone.slice(-10))))
-    );
-    if (!hit) { unmatched.push({ email: p.email, ext, phone }); continue; }
-    if (!dryRun) {
-      await admin.from("planipret_profiles").update({ maestro_broker_id: hit.id }).eq("id", p.id);
+    if (!force && p.maestro_broker_id) { already++; continue; }
+    if (dryRun) {
+      const r = await linkBrokerIdByEmail(admin, { ...p, id: "00000000-0000-0000-0000-000000000000" }, { force });
+      (r.ok ? linked : unmatched).push({ email: p.email, id: r.maestro_broker_id, by: r.matched_by });
+      continue;
     }
-    linked.push({ email: p.email, maestro_broker_id: hit.id, matched_ext: ext || null });
+    const r = await linkBrokerIdByEmail(admin, p, { force });
+    if (r.ok && r.maestro_broker_id) linked.push({ email: p.email, maestro_broker_id: r.maestro_broker_id, matched_by: r.matched_by });
+    else unmatched.push({ email: p.email, extension: p.extension, error: r.error });
   }
 
   return json({
     success: true,
-    scanned_range: [from, to],
-    telecom_users_found: directory.length,
+    directory_size: dir.entries.length,
+    directory_seed: dir.seed,
     profiles: profiles?.length ?? 0,
+    already_linked: already,
     linked: linked.length,
     unmatched: unmatched.length,
     dry_run: dryRun,
     linked_sample: linked.slice(0, 20),
-    unmatched_sample: unmatched.slice(0, 20),
+    unmatched_sample: unmatched.slice(0, 30),
   });
 });

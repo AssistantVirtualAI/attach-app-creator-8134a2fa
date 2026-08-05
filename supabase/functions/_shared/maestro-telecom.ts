@@ -239,8 +239,9 @@ export async function pingMaestroTelecom(admin: SupabaseClient, userId?: string 
   // anything else (200, 404, 400…) means the API reached us and accepted
   // the Bearer token, so we consider connectivity + auth as OK.
   const paths = userId
-    ? [`/users/${encodeURIComponent(userId)}/communications/recent`]
-    : [`/users/me`, `/me`, `/health`, `/`];
+    ? [`/users/${encodeURIComponent(userId)}/communications/recent`, `/user`]
+    : [`/user`];
+
   let last: Awaited<ReturnType<typeof maestroTelecomFetch>> | null = null;
   for (const p of paths) {
     const r = await maestroTelecomFetch(cfg, p, { method: "GET", maxAttempts: 1, timeoutMs: 5000 });

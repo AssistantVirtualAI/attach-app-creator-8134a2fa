@@ -138,6 +138,9 @@ export default function PlanipretAdminLayout() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [dialNumber, setDialNumber] = useState("");
   const [dialing, setDialing] = useState(false);
+  const [mobileNoticeDismissed, setMobileNoticeDismissed] = useState(() => {
+    try { return localStorage.getItem("pp_admin_mobile_notice") === "dismissed"; } catch { return false; }
+  });
 
   // Auto-sync NS-API in the background for every admin page. Idempotent via
   // module-level in-flight guard, safe to mount once at the layout.

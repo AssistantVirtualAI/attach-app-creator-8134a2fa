@@ -66,7 +66,7 @@ export default function PBMessages() {
     if (!body || !active || sending) return;
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("pp-ns-messages", {
+      const { data, error } = await supabase.functions.invoke("pp-ns-sms", {
         body: { action: "send", to: active.peer, message: body },
       });
       if (error || (data as any)?.error) throw new Error(error?.message || (data as any)?.error);

@@ -107,19 +107,50 @@ Deno.serve(async (req) => {
         return j({ success: true, event_id: d.id ?? d.event_id });
       }
       case "list_contacts": {
-        const q = payload.query ?? "";
+        // Backward compatibility for installed mobile builds: the old app calls
+        // `list_contacts`, while Maestro now exposes broker-scoped clients at
+        // GET /users/{id}/clients.
         try {
-          const r = await fetch(`${cfg.url}/contacts?search=${encodeURIComponent(q)}`, { headers: h });
-          const d = await r.json().catch(() => ({}));
-          const raw = Array.isArray(d) ? d : (Array.isArray(d?.contacts) ? d.contacts : []);
-          if (!r.ok) {
-            console.warn("maestro list_contacts non-ok", r.status, d);
-            return j({ success: false, contacts: [], fallback: true, status: r.status });
+          const authHeader = req.headers.get("Authorization") ?? "";
+          const token = authHeader.replace(/^Bearer\s+/i, "");
+          const { data: authData } = token ? await admin.auth.getUser(token) : { data: { user: null } };
+          const callerId = authData?.user?.id ?? null;
+          if (!callerId) return j({ success: false, contacts: [], error: "Session expirée. Reconnectez-vous." });
+
+          const { data: prof } = await admin
+            .from("planipret_profiles")
+            .select("id, maestro_broker_id, email, ms365_email, extension, phone, full_name")
+            .or(`user_id.eq.${callerId},id.eq.${callerId}`)
+            .limit(1)
+            .maybeSingle();
+          if (!prof) return j({ success: false, contacts: [], error: "Profil courtier introuvable." });
+
+          let telecomUserId = prof.maestro_broker_id ? String(prof.maestro_broker_id).trim() : "";
+          if (!/^\d+$/.test(telecomUserId)) {
+            const linked = await linkBrokerIdByEmail(admin, prof as any);
+            if (linked.ok && linked.maestro_broker_id) telecomUserId = linked.maestro_broker_id;
           }
-          return j({ success: true, contacts: raw });
+          if (!/^\d+$/.test(telecomUserId)) {
+            return j({ success: false, contacts: [], error: "Votre compte n'est pas encore lié à Maestro." });
+          }
+
+          const tCfg = await getMaestroTelecomConfig(admin);
+          if (!isMaestroTelecomConfigured(tCfg)) {
+            return j({ success: false, contacts: [], error: "Intégration Maestro non configurée." });
+          }
+          const q = String(payload.query ?? "").trim();
+          const path = `/users/${telecomUserId}/clients${q ? `?search=${encodeURIComponent(q)}` : ""}`;
+          const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
+          if (!r.ok) {
+            console.warn("maestro list_contacts non-ok", r.status, r.data);
+            return j({ success: false, contacts: [], error: `Maestro indisponible (HTTP ${r.status || "?"})`, status: r.status });
+          }
+          const d: any = r.data;
+          const raw = Array.isArray(d) ? d : (Array.isArray(d?.clients) ? d.clients : (Array.isArray(d?.data) ? d.data : []));
+          return j({ success: true, contacts: raw.map(normalizeContact), total: d?.total_count ?? d?.total ?? raw.length });
         } catch (err: any) {
           console.error("maestro list_contacts error", err?.message);
-          return j({ success: false, contacts: [], fallback: true, error: err?.message });
+          return j({ success: false, contacts: [], error: err?.message ?? "Erreur Maestro" });
         }
       }
       case "list_tasks": {

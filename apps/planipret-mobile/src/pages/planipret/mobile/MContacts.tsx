@@ -104,6 +104,11 @@ function presenceMeta(raw: string | undefined | null, t: (k: string) => string):
 
 export default function MContacts() {
   const { t } = useMplanipretLang();
+  /** t() renvoie la clé si la traduction manque — ce helper garantit un libellé lisible. */
+  const tr = (k: string, fallback: string) => {
+    const v = t(k);
+    return !v || v === k ? fallback : v;
+  };
   const { openDialer } = useOutletContext<PlanipretMobileContext>();
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("personal");

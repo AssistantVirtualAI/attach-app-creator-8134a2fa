@@ -214,7 +214,12 @@ Deno.serve(async (req) => {
       case "list_brokers":
       case "broker_profile": {
         const tCfg = await getMaestroTelecomConfig(admin);
-        if (!isMaestroTelecomConfigured(tCfg)) return j({ success: false, error: "maestro_telecom_not_configured" }, 500);
+        // Always answer 200 on these list/profile reads: the mobile Contacts
+        // screen surfaces `error` as readable text instead of the opaque
+        // "Edge Function returned a non-2xx status code".
+        if (!isMaestroTelecomConfigured(tCfg)) {
+          return j({ success: false, clients: [], brokers: [], error: "Intégration Maestro non configurée." });
+        }
 
         // Resolve the caller's numeric Maestro telecom user id from their JWT.
         const authHeader = req.headers.get("Authorization") ?? "";
@@ -229,14 +234,14 @@ Deno.serve(async (req) => {
         if (callerId) {
           const { data: prof } = await admin
             .from("planipret_profiles")
-            .select("id, maestro_broker_id, role, email, ms365_email, extension, phone")
+            .select("id, maestro_broker_id, role, email, ms365_email, extension, phone, full_name")
             .or(`user_id.eq.${callerId},id.eq.${callerId}`)
             .limit(1)
             .maybeSingle();
           telecomUserId = prof?.maestro_broker_id ? String(prof.maestro_broker_id).trim() : null;
           isAdmin = prof?.role === "admin";
           // Not linked yet → resolve from the Maestro broker directory using
-          // the broker's Microsoft email (Scott's /users/{id}/brokers).
+          // the broker's Microsoft email, then extension / phone / full name.
           if ((!telecomUserId || !/^\d+$/.test(telecomUserId)) && prof) {
             const linked = await linkBrokerIdByEmail(admin, prof as any);
             linkInfo = { matched_by: linked.matched_by, error: linked.error };
@@ -248,7 +253,14 @@ Deno.serve(async (req) => {
           : null;
         if (requested && (isAdmin || !callerId)) telecomUserId = requested;
         if (!telecomUserId || !/^\d+$/.test(telecomUserId)) {
-          return j({ success: false, error: "maestro_user_id_unresolved", link: linkInfo }, 400);
+          return j({
+            success: false,
+            clients: [],
+            brokers: [],
+            error: "Votre compte n'est pas encore lié à Maestro. Contactez un administrateur pour associer votre courtier Maestro.",
+            code: "maestro_user_id_unresolved",
+            link: linkInfo,
+          });
         }
 
 
@@ -286,7 +298,7 @@ Deno.serve(async (req) => {
           const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
           if (!r.ok) {
             console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
-            return j({ success: false, error: `maestro ${action} failed`, status: r.status, details: r.data }, r.status && r.status >= 400 ? r.status : 502);
+            return j({ success: false, error: `Maestro indisponible (HTTP ${r.status ?? "?"})`, status: r.status, details: r.data });
           }
           const d: any = r.data;
           const obj = d?.profile ?? d?.client ?? d?.broker ?? d?.data ?? d;
@@ -296,7 +308,7 @@ Deno.serve(async (req) => {
         const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
         if (!r.ok) {
           console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
-          return j({ success: false, error: `maestro ${action} failed`, status: r.status, details: r.data }, r.status && r.status >= 400 ? r.status : 502);
+          return j({ success: false, clients: [], brokers: [], error: `Maestro indisponible (HTTP ${r.status ?? "?"})`, status: r.status, details: r.data });
         }
         const d: any = r.data;
         const listRaw = Array.isArray(d) ? d : (d?.clients ?? d?.brokers ?? d?.data ?? d?.results ?? []);

@@ -20,7 +20,7 @@ const PlanipretBadge = ({ size = 44 }: { size?: number }) => (
 
 
 /** Auth screen for /mplanipret. Bilingual, App Store / Play Store-ready. */
-export default function MobileAuthScreen({ onLoggedIn }: { onLoggedIn: () => Promise<void> | void }) {
+export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret/home" }: { onLoggedIn: () => Promise<void> | void; msRedirect?: string }) {
   const { t, lang, toggle: toggleLang } = useMplanipretLang();
   const { theme, toggle: toggleTheme } = useMplanipretTheme();
   const insets = useSafeAreaInsets();

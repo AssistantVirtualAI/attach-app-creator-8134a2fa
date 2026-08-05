@@ -28,20 +28,59 @@ const TooltipDark = ({ active, payload, label, money = true }: any) => {
   );
 };
 
-function Kpi({ label, value, sub, yoy }: { label: string; value: string; sub?: string; yoy?: number | null }) {
+function Kpi({ label, value, sub, yoy, accent = "#2E9BDC", Icon }: {
+  label: string; value: string; sub?: string; yoy?: number | null; accent?: string; Icon?: any;
+}) {
   const up = (yoy ?? 0) >= 0;
   return (
-    <div className="pp-card" style={{ padding: 14 }}>
-      <div style={{ fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--pp-text-faint)" }}>{label}</div>
-      <div className="tabular-nums" style={{ fontSize: 20, fontWeight: 700, color: "var(--pp-text-primary)", marginTop: 2 }}>{value}</div>
-      <div className="flex items-center gap-2 mt-1">
+    <div
+      className="relative overflow-hidden rounded-xl transition-transform duration-200 hover:-translate-y-0.5"
+      style={{
+        background: `linear-gradient(150deg, ${accent}14 0%, transparent 55%), var(--pp-bg-card, var(--pp-bg-deep))`,
+        border: "1px solid var(--pp-bg-border-2)",
+        boxShadow: "0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px -18px rgba(0,0,0,.9)",
+        padding: 14,
+      }}
+    >
+      <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: accent, opacity: .85 }} />
+      <div className="flex items-start justify-between gap-2">
+        <div style={{ fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--pp-text-faint)" }}>{label}</div>
+        {Icon && (
+          <span className="rounded-md flex items-center justify-center" style={{ width: 22, height: 22, background: `${accent}1f`, color: accent }}>
+            <Icon className="w-3 h-3" />
+          </span>
+        )}
+      </div>
+      <div className="tabular-nums" style={{ fontSize: 21, fontWeight: 700, color: "var(--pp-text-primary)", marginTop: 4, letterSpacing: "-.02em" }}>{value}</div>
+      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
         {sub && <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{sub}</span>}
         {yoy != null && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: up ? "#00D4AA" : "#E84C4C" }}>
+          <span className="rounded-full px-1.5 py-0.5" style={{ fontSize: 10, fontWeight: 700, color: up ? "#00D4AA" : "#E84C4C", background: up ? "rgba(0,212,170,.12)" : "rgba(232,76,76,.12)" }}>
             {up ? "▲" : "▼"} {Math.abs(yoy).toFixed(1)}%
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+function Panel({ title, subtitle, accent = "#2E9BDC", right, children, className = "" }: {
+  title: string; subtitle?: string; accent?: string; right?: any; children: any; className?: string;
+}) {
+  return (
+    <div className={`pp-card ${className}`} style={{ padding: 16, position: "relative", overflow: "hidden" }}>
+      <span style={{ position: "absolute", left: 0, right: 0, top: 0, height: 2, background: `linear-gradient(90deg, ${accent}, transparent 70%)` }} />
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2" style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)", letterSpacing: "-.01em" }}>
+            <span style={{ width: 6, height: 6, borderRadius: 2, background: accent }} />
+            {title}
+          </h3>
+          {subtitle && <p style={{ fontSize: 10.5, color: "var(--pp-text-faint)", marginTop: 2 }}>{subtitle}</p>}
+        </div>
+        {right}
+      </div>
+      {children}
     </div>
   );
 }

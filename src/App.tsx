@@ -82,6 +82,14 @@ const PAMaestroSync = lazyWithRetry(() => import("./pages/planipret/admin/PAMaes
 const PASyncedCalls = lazyWithRetry(() => import("./pages/planipret/admin/PASyncedCalls"));
 const PATelecomMapping = lazyWithRetry(() => import("./pages/planipret/admin/PATelecomMapping"));
 const PAMaestroStatus = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroStatus"));
+const PlanipretBrokerLayout = lazyWithRetry(() => import("./pages/planipret/broker/PlanipretBrokerLayout"));
+const PBOverview = lazyWithRetry(() => import("./pages/planipret/broker/PBOverview"));
+const PBCalls = lazyWithRetry(() => import("./pages/planipret/broker/PBCalls"));
+const PBMessages = lazyWithRetry(() => import("./pages/planipret/broker/PBMessages"));
+const PBVoicemail = lazyWithRetry(() => import("./pages/planipret/broker/PBVoicemail"));
+const PBRecordings = lazyWithRetry(() => import("./pages/planipret/broker/PBRecordings"));
+const PBStats = lazyWithRetry(() => import("./pages/planipret/broker/PBStats"));
+const PBSettings = lazyWithRetry(() => import("./pages/planipret/broker/PBSettings"));
 const PlanipretPrivacy = lazyWithRetry(() => import("./pages/planipret/PlanipretPrivacy"));
 const PlanipretIntegrationsLazy = lazyWithRetry(() => import("./pages/planipret/PlanipretIntegrations"));
 import { AdminPageSkeleton, MobilePageSkeleton } from "./components/planipret/Skeletons";

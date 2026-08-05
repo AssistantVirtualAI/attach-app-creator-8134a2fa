@@ -24,7 +24,7 @@ export default function DidAnnouncementCard() {
   const [items, setItems] = useState<Item[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  const run = async (action: "status" | "enable" | "disable" | "repair_queues") => {
+  const run = async (action: "status" | "enable" | "disable" | "repair_queues" | "diagnose" | "autoheal") => {
     setLoading(action);
     try {
       const body: Record<string, string> = { action };

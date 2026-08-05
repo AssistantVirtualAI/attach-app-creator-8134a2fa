@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getMaestroTelecomConfig, isMaestroTelecomConfigured, maestroTelecomFetch } from "../_shared/maestro-telecom.ts";
 import { linkBrokerIdByEmail, loadBrokerDirectory, findByEmail } from "../_shared/maestro-broker-directory.ts";
+import { getMaestroOAuthEnv, getUserMaestroAccessToken, fetchMaestroUserProfile } from "../_shared/maestro-oauth.ts";
 
 
 async function getMaestroConfig(admin: any) {
@@ -240,6 +241,36 @@ Deno.serve(async (req) => {
           : j({ success: false, error: dir.error ?? "no_directory_match" }, 404);
       }
 
+      // Hydrate the caller's own Maestro id from their OAuth session (/users/me).
+      // This is the authoritative per-broker link: each broker signs in to
+      // Maestro and therefore only ever sees their own clients.
+      case "sync_my_maestro_id": {
+        const authHeader = req.headers.get("Authorization") ?? "";
+        const { data: u } = await admin.auth.getUser(authHeader.replace(/^Bearer\s+/i, ""));
+        const uid = u?.user?.id ?? null;
+        if (!uid) return j({ success: false, error: "unauthenticated" }, 401);
+        const { data: prof } = await admin
+          .from("planipret_profiles")
+          .select("id, maestro_broker_id")
+          .or(`user_id.eq.${uid},id.eq.${uid}`)
+          .limit(1)
+          .maybeSingle();
+        if (!prof) return j({ success: false, error: "profile_not_found" }, 404);
+        const env = getMaestroOAuthEnv();
+        const token = await getUserMaestroAccessToken(admin, uid).catch(() => null);
+        if (!token) return j({ success: false, error: "maestro_not_connected", code: "maestro_not_connected" });
+        const me = await fetchMaestroUserProfile(env, token);
+        const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
+        if (!mid) return j({ success: false, error: "maestro_me_unavailable" });
+        await admin.from("planipret_profiles")
+          .update({ maestro_broker_id: String(mid), maestro_connected: true })
+          .eq("id", (prof as any).id);
+        return j({ success: true, maestro_broker_id: String(mid) });
+      }
+
+
+
+
       case "list_clients":
       case "client_profile":
       case "list_brokers":
@@ -274,6 +305,23 @@ Deno.serve(async (req) => {
           // Not linked yet → resolve from the Maestro broker directory using
           // the broker's Microsoft email, then extension / phone / full name.
           if ((!telecomUserId || !/^\d+$/.test(telecomUserId)) && prof) {
+            // 1) Authoritative: the broker's own Maestro OAuth session.
+            try {
+              const tok = await getUserMaestroAccessToken(admin, callerId);
+              if (tok) {
+                const me = await fetchMaestroUserProfile(getMaestroOAuthEnv(), tok);
+                const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
+                if (mid && /^\d+$/.test(String(mid))) {
+                  telecomUserId = String(mid);
+                  linkInfo = { matched_by: "oauth_me" };
+                  await admin.from("planipret_profiles")
+                    .update({ maestro_broker_id: telecomUserId, maestro_connected: true })
+                    .eq("id", (prof as any).id);
+                }
+              }
+            } catch { /* fall through to directory match */ }
+          }
+          if ((!telecomUserId || !/^\d+$/.test(telecomUserId)) && prof) {
             const linked = await linkBrokerIdByEmail(admin, prof as any);
             linkInfo = { matched_by: linked.matched_by, error: linked.error };
             if (linked.ok && linked.maestro_broker_id) telecomUserId = linked.maestro_broker_id;
@@ -288,8 +336,9 @@ Deno.serve(async (req) => {
             success: false,
             clients: [],
             brokers: [],
-            error: "Votre compte n'est pas encore lié à Maestro. Contactez un administrateur pour associer votre courtier Maestro.",
-            code: "maestro_user_id_unresolved",
+            error: "Connectez votre compte Maestro dans Réglages → Maestro pour voir vos clients.",
+            code: "maestro_not_connected",
+
             link: linkInfo,
           });
         }

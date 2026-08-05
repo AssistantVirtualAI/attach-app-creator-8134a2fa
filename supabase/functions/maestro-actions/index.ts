@@ -298,7 +298,7 @@ Deno.serve(async (req) => {
           const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
           if (!r.ok) {
             console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
-            return j({ success: false, error: `maestro ${action} failed`, status: r.status, details: r.data }, r.status && r.status >= 400 ? r.status : 502);
+            return j({ success: false, error: `Maestro indisponible (HTTP ${r.status ?? "?"})`, status: r.status, details: r.data });
           }
           const d: any = r.data;
           const obj = d?.profile ?? d?.client ?? d?.broker ?? d?.data ?? d;
@@ -308,7 +308,7 @@ Deno.serve(async (req) => {
         const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
         if (!r.ok) {
           console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
-          return j({ success: false, error: `maestro ${action} failed`, status: r.status, details: r.data }, r.status && r.status >= 400 ? r.status : 502);
+          return j({ success: false, clients: [], brokers: [], error: `Maestro indisponible (HTTP ${r.status ?? "?"})`, status: r.status, details: r.data });
         }
         const d: any = r.data;
         const listRaw = Array.isArray(d) ? d : (d?.clients ?? d?.brokers ?? d?.data ?? d?.results ?? []);

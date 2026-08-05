@@ -35,10 +35,6 @@ Deno.serve(async (req) => {
     return json({ success: false, error: dir.error ?? "directory_unavailable" }, 200);
   }
 
-  if (body?.debug) {
-    return json({ success: true, directory_size: dir.entries.length, seed: dir.seed, all: dir.entries.map((e)=>[e.id,e.email,e.name].join("|")), real_emails: dir.entries.filter((e) => e.email && !/example\.(com|org|net)$/.test(e.email)).map((e)=>e.email+"|"+e.id) });
-  }
-
   const { data: profiles } = await admin
     .from("planipret_profiles")
     .select("id, full_name, email, ms365_email, extension, phone, maestro_broker_id");

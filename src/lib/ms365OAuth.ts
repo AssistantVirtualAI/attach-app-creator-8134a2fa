@@ -174,6 +174,13 @@ export async function openMs365Authorize(cfg: {
       const { canUseNativeAuthSession, startNativeAuthSession } = await import("@/lib/ms365AuthSession");
       if (canUseNativeAuthSession()) {
         const callbackUrl = await startNativeAuthSession(url, redirectUri);
+        if (!callbackUrl) {
+          // User cancelled or the session failed: drop the pending marker so
+          // the "Connexion Microsoft interrompue" banner does not linger.
+          const { clearMs365Pending } = await import("@/lib/ms365Pending");
+          clearMs365Pending();
+          return;
+        }
         if (callbackUrl) {
           const { rememberMs365CallbackUrl } = await import("@/lib/ms365CallbackStore");
           await rememberMs365CallbackUrl(callbackUrl);

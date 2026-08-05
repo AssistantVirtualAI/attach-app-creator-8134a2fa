@@ -9,6 +9,14 @@ import { Capacitor } from "@capacitor/core";
 
 const KEY = "pp_ms365_pending_started_at";
 
+/**
+ * Timestamp of the current app run. A pending marker written BEFORE this boot
+ * belongs to a previous app launch and must never surface the retry banner:
+ * on native the Preferences value survives app kills, which made the
+ * "Connexion Microsoft interrompue" banner reappear on every cold start.
+ */
+export const MS365_APP_BOOT_AT = Date.now();
+
 async function setNative(value: string) {
   if (!Capacitor.isNativePlatform()) return;
   try {

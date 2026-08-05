@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
 import { AlertTriangle, RotateCw, X } from "lucide-react";
-import { getMs365PendingStartedAt, clearMs365Pending } from "@/lib/ms365Pending";
+import { getMs365PendingStartedAt, clearMs365Pending, MS365_APP_BOOT_AT } from "@/lib/ms365Pending";
 
 /**
  * Watches for a pending Microsoft SSO attempt that never completed:
@@ -14,11 +14,13 @@ export function Ms365PendingBanner({ onRetry }: { onRetry: () => void | Promise<
   const check = useCallback(async () => {
     const startedAt = await getMs365PendingStartedAt();
     if (!startedAt) { setVisible(false); return; }
+    // Leftover from a previous app launch — drop it silently.
+    if (startedAt < MS365_APP_BOOT_AT) { clearMs365Pending(); setVisible(false); return; }
     // If the user returned within 3s the callback might still be routing;
     // wait a bit longer before showing retry.
     const age = Date.now() - startedAt;
     // Stale attempt (older than 5 min): drop it instead of nagging forever.
-    if (age > 5 * 60 * 1000) { clearMs365Pending(); setVisible(false); return; }
+    if (age > 90 * 1000) { clearMs365Pending(); setVisible(false); return; }
     setVisible(age > 4000);
   }, []);
 

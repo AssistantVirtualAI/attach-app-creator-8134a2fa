@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, BarChart3, Settings, LogOut,
+  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, BarChart3, Settings, LogOut, Search, Mail, ShieldAlert,
 } from "lucide-react";
 import MobileAuthScreen from "@/components/planipret/mobile/MobileAuthScreen";
 import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
+import { resolveBrokerAccess } from "@/lib/planipret/brokerAccess";
 
 export type BrokerCtx = { userId: string; profile: any };
 
@@ -17,7 +18,9 @@ const NAV = [
   { to: "/planipret/broker/messages",   Icon: MessageSquare,   fr: "Textos",         en: "Messages" },
   { to: "/planipret/broker/voicemail",  Icon: Voicemail,       fr: "Messagerie",     en: "Voicemail" },
   { to: "/planipret/broker/recordings", Icon: Mic,             fr: "Enregistrements", en: "Recordings" },
+  { to: "/planipret/broker/microsoft",  Icon: Mail,            fr: "Microsoft 365",  en: "Microsoft 365" },
   { to: "/planipret/broker/stats",      Icon: BarChart3,       fr: "Statistiques",   en: "Statistics" },
+  { to: "/planipret/broker/search",     Icon: Search,          fr: "Recherche",      en: "Search" },
   { to: "/planipret/broker/settings",   Icon: Settings,        fr: "Réglages",       en: "Settings" },
 ];
 
@@ -30,31 +33,48 @@ export default function PlanipretBrokerLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { lang } = useMplanipretLang();
-  const [state, setState] = useState<"checking" | "anon" | "ready">("checking");
+  const [state, setState] = useState<"checking" | "anon" | "denied" | "ready">("checking");
   const [userId, setUserId] = useState<string>("");
   const [profile, setProfile] = useState<any>(null);
+  const [denyReason, setDenyReason] = useState<string>("");
+  const [q, setQ] = useState("");
 
   const load = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user) { setState("anon"); return; }
-    const { data } = await supabase
-      .from("planipret_profiles")
-      .select("user_id, full_name, email, extension, role, language, mobile_app_enabled")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    setUserId(user.id);
-    setProfile(data ?? { full_name: user.email, email: user.email, role: "broker" });
-    setState("ready");
+    const access = await resolveBrokerAccess();
+    if (access.state === "ready") {
+      setUserId(access.userId);
+      setProfile(access.profile);
+      setState("ready");
+      return;
+    }
+    setUserId("");
+    setProfile(null);
+    if (access.state === "denied") {
+      setDenyReason(access.reason);
+      setState("denied");
+    } else {
+      setState("anon");
+    }
   };
 
   useEffect(() => { void load(); }, []);
+
+  // Re-evaluate access on every auth transition so a signed-out or swapped
+  // session can never keep rendering another broker's data.
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") { setUserId(""); setProfile(null); setState("anon"); return; }
+      if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "TOKEN_REFRESHED") { void load(); }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   const logout = async () => {
     await supabase.auth.signOut();
     setState("anon");
     navigate("/planipret/broker", { replace: true });
   };
+
 
   if (state === "checking") {
     return (
@@ -75,6 +95,28 @@ export default function PlanipretBrokerLayout() {
       </div>
     );
   }
+
+  if (state === "denied") {
+    return (
+      <div className="planipret-scope planipret-admin-scope min-h-screen flex items-center justify-center p-6">
+        <div className="pp-card max-w-md text-center" style={{ padding: 24 }}>
+          <ShieldAlert className="w-8 h-8 mx-auto mb-3" style={{ color: "#ef4444" }} />
+          <h1 className="pp-heading" style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+            {lang === "en" ? "Access denied" : "Accès refusé"}
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--pp-text-muted)", marginBottom: 16 }}>
+            {denyReason === "lemtel"
+              ? (lang === "en" ? "This account does not belong to Planiprêt." : "Ce compte n'appartient pas à Planiprêt.")
+              : (lang === "en" ? "No broker profile is linked to this account." : "Aucun profil courtier n'est lié à ce compte.")}
+          </p>
+          <button onClick={logout} className="px-3 py-2 rounded-lg text-[13px] font-semibold text-white" style={{ background: "var(--pp-brand-accent-2)" }}>
+            {lang === "en" ? "Sign out" : "Se déconnecter"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
 
   const current = NAV.find((n) => location.pathname.startsWith(n.to));
   const title = current ? (lang === "en" ? current.en : current.fr) : (lang === "en" ? "Broker portal" : "Portail courtier");
@@ -160,10 +202,20 @@ export default function PlanipretBrokerLayout() {
         <header className="pp-app-header sticky top-0 hidden md:flex items-center justify-between gap-4 px-5 xl:px-7 z-30" style={{ height: 64 }}>
           <h1 className="pp-heading truncate" style={{ fontWeight: 700, fontSize: 18 }}>{title}</h1>
           <div className="flex items-center gap-3">
+            <form
+              onSubmit={(e) => { e.preventDefault(); const v = q.trim(); if (v) navigate(`/planipret/broker/search?q=${encodeURIComponent(v)}`); }}
+              className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full"
+              style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
+              <Search className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} />
+              <input value={q} onChange={(e) => setQ(e.target.value)}
+                placeholder={lang === "en" ? "Search number, contact, keyword" : "Numéro, contact, mot-clé"}
+                className="bg-transparent outline-none text-[12.5px] w-[240px]" style={{ color: "var(--pp-text-primary)" }} />
+            </form>
             <PlanipretLangSwitch />
             <span className="capitalize hidden xl:inline" style={{ fontSize: 10.5, color: "var(--pp-text-muted)" }}>{dateLabel}</span>
           </div>
         </header>
+
         <main className="pa-main flex-1 min-w-0 p-4 md:p-7 overflow-y-auto overflow-x-hidden">
           <Outlet context={{ userId, profile } satisfies BrokerCtx} />
         </main>

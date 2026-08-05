@@ -89,6 +89,9 @@ const PBMessages = lazyWithRetry(() => import("./pages/planipret/broker/PBMessag
 const PBVoicemail = lazyWithRetry(() => import("./pages/planipret/broker/PBVoicemail"));
 const PBRecordings = lazyWithRetry(() => import("./pages/planipret/broker/PBRecordings"));
 const PBStats = lazyWithRetry(() => import("./pages/planipret/broker/PBStats"));
+const PBMicrosoft = lazyWithRetry(() => import("./pages/planipret/broker/PBMicrosoft"));
+const PBSearch = lazyWithRetry(() => import("./pages/planipret/broker/PBSearch"));
+
 const PBSettings = lazyWithRetry(() => import("./pages/planipret/broker/PBSettings"));
 const PlanipretPrivacy = lazyWithRetry(() => import("./pages/planipret/PlanipretPrivacy"));
 const PlanipretIntegrationsLazy = lazyWithRetry(() => import("./pages/planipret/PlanipretIntegrations"));
@@ -647,8 +650,11 @@ const App = () => (
                   <Route path="messages" element={<Suspense fallback={<AdminPageSkeleton />}><PBMessages /></Suspense>} />
                   <Route path="voicemail" element={<Suspense fallback={<AdminPageSkeleton />}><PBVoicemail /></Suspense>} />
                   <Route path="recordings" element={<Suspense fallback={<AdminPageSkeleton />}><PBRecordings /></Suspense>} />
+                  <Route path="microsoft" element={<Suspense fallback={<AdminPageSkeleton />}><PBMicrosoft /></Suspense>} />
                   <Route path="stats" element={<Suspense fallback={<AdminPageSkeleton />}><PBStats /></Suspense>} />
+                  <Route path="search" element={<Suspense fallback={<AdminPageSkeleton />}><PBSearch /></Suspense>} />
                   <Route path="settings" element={<Suspense fallback={<AdminPageSkeleton />}><PBSettings /></Suspense>} />
+
                 </Route>
                 <Route path="/planipret/privacy" element={<Suspense fallback={<AdminPageSkeleton />}><PlanipretPrivacy /></Suspense>} />
 

@@ -34,8 +34,15 @@ export default function DidAnnouncementCard() {
       const res = data as any;
       if (res?.success === false && res?.error) throw new Error(res.error);
       setItems(res.items ?? res.results ?? []);
-      setNote(res.note ?? null);
-      toast.success(action === "status" ? "État lu" : "Routage DID mis à jour");
+      if (action === "diagnose" || action === "autoheal") {
+        setNote(
+          `${res.checked} file(s) vérifiée(s) — ${res.broken_count} défectueuse(s)` +
+            (action === "autoheal" ? ` — ${res.fixed?.length ?? 0} réparée(s)` : ""),
+        );
+      } else {
+        setNote(res.note ?? null);
+      }
+      toast.success(action === "status" ? "État lu" : action === "diagnose" ? "Diagnostic terminé" : "Routage DID mis à jour");
     } catch (e: any) {
       toast.error(e?.message ?? "Échec du routage DID");
     } finally {

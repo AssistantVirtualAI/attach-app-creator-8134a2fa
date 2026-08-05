@@ -147,8 +147,60 @@ function userPayload(ext: string, domain: string, current: any) {
   };
 }
 
+/** Lit une file et détecte une intro non interruptible (cause: décrochage sans effet). */
+async function diagnoseQueue(domain: string, ext: string) {
+  const q = queueExt(ext);
+  const r = await ns(`/domains/${encodeURIComponent(domain)}/callqueues/${encodeURIComponent(q)}`);
+  const o = one(r.data) ?? {};
+  const missing = !r.ok;
+  const introOn = String(o["queue-intro-message-enabled"] ?? "").toLowerCase() === "yes";
+  const mohOff = String(o["music-on-hold-enabled"] ?? "").toLowerCase() !== "yes" ||
+    String(o["music-on-hold-name"] ?? "") !== MOH_NAME;
+  return {
+    extension: ext,
+    queue: q,
+    exists: r.ok,
+    intro_enabled: introOn,
+    moh_ok: !mohOff,
+    healthy: r.ok && !introOn && !mohOff,
+    needs_repair: !missing && (introOn || mohOff),
+  };
+}
+
+/** Diagnostic + réparation ciblée des files défectueuses. */
+async function autoheal(domain: string, targets: { ext: string }[], apply: boolean) {
+  const checks = [];
+  for (const { ext } of targets) checks.push(await diagnoseQueue(domain, ext));
+  const broken = checks.filter((c) => c.needs_repair);
+  const fixed = [];
+  if (apply) for (const b of broken) fixed.push(await ensureQueue(domain, b.extension));
+  return { checked: checks.length, broken_count: broken.length, broken, fixed, checks };
+}
+
+/** Auto-réparation au démarrage (cold start) — une seule fois par instance. */
+let bootHealDone = false;
+async function bootSelfHeal() {
+  if (bootHealDone || !NS_API_KEY || !SERVICE_KEY) return;
+  bootHealDone = true;
+  try {
+    const db = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE_KEY);
+    const { data: rows } = await db
+      .from("planipret_did_assignments")
+      .select("extension");
+    const targets = (rows ?? [])
+      .map((r: any) => ({ ext: String(r.extension ?? "").trim() }))
+      .filter((r) => /^[0-9]{2,10}$/.test(r.ext));
+    if (!targets.length) return;
+    const res = await autoheal(NS_DEFAULT_DOMAIN, targets, true);
+    console.log(`[boot-selfheal] files vérifiées=${res.checked} réparées=${res.broken_count}`);
+  } catch (e) {
+    console.error("[boot-selfheal] échec", String(e));
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  queueMicrotask(() => { void bootSelfHeal(); });
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
     const cronHeader = req.headers.get("x-cron-secret") ?? "";
@@ -208,6 +260,11 @@ Deno.serve(async (req) => {
     }
 
     // Répare les files existantes (coupe l'intro bloquante) sans toucher aux DID.
+    if (action === "diagnose" || action === "autoheal") {
+      const res = await autoheal(domain, targets, action === "autoheal");
+      return json({ success: true, action, domain, ...res });
+    }
+
     if (action === "repair_queues") {
       const fixed = [];
       for (const { ext } of targets) fixed.push(await ensureQueue(domain, ext));
@@ -254,7 +311,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return json({ success: false, error: `unknown action ${action}`, hint: "status | enable | disable" }, 400);
+    return json({ success: false, error: `unknown action ${action}`, hint: "status | diagnose | autoheal | repair_queues | enable | disable" }, 400);
   } catch (e) {
     return json({ success: false, error: String(e) }, 500);
   }

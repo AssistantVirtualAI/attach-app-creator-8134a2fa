@@ -24,7 +24,7 @@ export default function DidAnnouncementCard() {
   const [items, setItems] = useState<Item[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  const run = async (action: "status" | "enable" | "disable" | "repair_queues") => {
+  const run = async (action: "status" | "enable" | "disable" | "repair_queues" | "diagnose" | "autoheal") => {
     setLoading(action);
     try {
       const body: Record<string, string> = { action };
@@ -34,8 +34,15 @@ export default function DidAnnouncementCard() {
       const res = data as any;
       if (res?.success === false && res?.error) throw new Error(res.error);
       setItems(res.items ?? res.results ?? []);
-      setNote(res.note ?? null);
-      toast.success(action === "status" ? "État lu" : "Routage DID mis à jour");
+      if (action === "diagnose" || action === "autoheal") {
+        setNote(
+          `${res.checked} file(s) vérifiée(s) — ${res.broken_count} défectueuse(s)` +
+            (action === "autoheal" ? ` — ${res.fixed?.length ?? 0} réparée(s)` : ""),
+        );
+      } else {
+        setNote(res.note ?? null);
+      }
+      toast.success(action === "status" ? "État lu" : action === "diagnose" ? "Diagnostic terminé" : "Routage DID mis à jour");
     } catch (e: any) {
       toast.error(e?.message ?? "Échec du routage DID");
     } finally {
@@ -77,6 +84,22 @@ export default function DidAnnouncementCard() {
           >
             {loading === "enable" && <Loader2 className="h-3 w-3 animate-spin" />}
             Activer
+          </button>
+          <button
+            onClick={() => run("diagnose")}
+            disabled={!!loading}
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs"
+          >
+            {loading === "diagnose" && <Loader2 className="h-3 w-3 animate-spin" />}
+            Diagnostiquer
+          </button>
+          <button
+            onClick={() => run("autoheal")}
+            disabled={!!loading}
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs"
+          >
+            {loading === "autoheal" && <Loader2 className="h-3 w-3 animate-spin" />}
+            Auto-réparer
           </button>
           <button
             onClick={() => run("repair_queues")}

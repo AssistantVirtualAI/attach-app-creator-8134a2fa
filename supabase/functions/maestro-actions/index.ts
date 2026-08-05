@@ -240,24 +240,33 @@ Deno.serve(async (req) => {
           : j({ success: false, error: dir.error ?? "no_directory_match" }, 404);
       }
 
-      // Backfill: link every broker profile to its Maestro id so each broker
-      // only sees their own clients on the mobile Clients page.
-      case "link_all_brokers": {
-        const { data: profs } = await admin
+      // Hydrate the caller's own Maestro id from their OAuth session (/users/me).
+      // This is the authoritative per-broker link: each broker signs in to
+      // Maestro and therefore only ever sees their own clients.
+      case "sync_my_maestro_id": {
+        const authHeader = req.headers.get("Authorization") ?? "";
+        const { data: u } = await admin.auth.getUser(authHeader.replace(/^Bearer\s+/i, ""));
+        const uid = u?.user?.id ?? null;
+        if (!uid) return j({ success: false, error: "unauthenticated" }, 401);
+        const { data: prof } = await admin
           .from("planipret_profiles")
-          .select("id, maestro_broker_id, role, email, ms365_email, extension, phone, full_name")
-          .limit(1000);
-        const rows = Array.isArray(profs) ? profs : [];
-        let linked = 0, already = 0, failed = 0;
-        const unmatched: string[] = [];
-        for (const p of rows) {
-          const r = await linkBrokerIdByEmail(admin, p as any, { force: payload.force === true });
-          if (r.ok && r.matched_by === "already_linked") already++;
-          else if (r.ok) linked++;
-          else { failed++; if (unmatched.length < 50) unmatched.push(String((p as any).email ?? (p as any).id)); }
-        }
-        return j({ success: true, total: rows.length, linked, already, failed, unmatched });
+          .select("id, maestro_broker_id")
+          .or(`user_id.eq.${uid},id.eq.${uid}`)
+          .limit(1)
+          .maybeSingle();
+        if (!prof) return j({ success: false, error: "profile_not_found" }, 404);
+        const env = getMaestroOAuthEnv();
+        const token = await getUserMaestroAccessToken(admin, uid).catch(() => null);
+        if (!token) return j({ success: false, error: "maestro_not_connected", code: "maestro_not_connected" });
+        const me = await fetchMaestroUserProfile(env, token);
+        const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
+        if (!mid) return j({ success: false, error: "maestro_me_unavailable" });
+        await admin.from("planipret_profiles")
+          .update({ maestro_broker_id: String(mid), maestro_connected: true })
+          .eq("id", (prof as any).id);
+        return j({ success: true, maestro_broker_id: String(mid) });
       }
+
 
 
 

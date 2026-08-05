@@ -79,6 +79,14 @@ export default function DidAnnouncementCard() {
             Activer
           </button>
           <button
+            onClick={() => run("repair_queues")}
+            disabled={!!loading}
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs"
+          >
+            {loading === "repair_queues" && <Loader2 className="h-3 w-3 animate-spin" />}
+            Réparer les files
+          </button>
+          <button
             onClick={() => run("disable")}
             disabled={!!loading}
             className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs"
@@ -86,6 +94,7 @@ export default function DidAnnouncementCard() {
             {loading === "disable" && <Loader2 className="h-3 w-3 animate-spin" />}
             Désactiver
           </button>
+
         </div>
       </div>
 

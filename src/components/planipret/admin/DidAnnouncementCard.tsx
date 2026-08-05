@@ -84,6 +84,21 @@ export default function DidAnnouncementCard() {
           >
             {loading === "enable" && <Loader2 className="h-3 w-3 animate-spin" />}
             Activer
+          <button
+            onClick={() => run("diagnose")}
+            disabled={!!loading}
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs"
+          >
+            {loading === "diagnose" && <Loader2 className="h-3 w-3 animate-spin" />}
+            Diagnostiquer
+          </button>
+          <button
+            onClick={() => run("autoheal")}
+            disabled={!!loading}
+            className="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs"
+          >
+            {loading === "autoheal" && <Loader2 className="h-3 w-3 animate-spin" />}
+            Auto-réparer
           </button>
           <button
             onClick={() => run("repair_queues")}

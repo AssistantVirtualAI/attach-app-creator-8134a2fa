@@ -240,6 +240,27 @@ Deno.serve(async (req) => {
           : j({ success: false, error: dir.error ?? "no_directory_match" }, 404);
       }
 
+      // Backfill: link every broker profile to its Maestro id so each broker
+      // only sees their own clients on the mobile Clients page.
+      case "link_all_brokers": {
+        const { data: profs } = await admin
+          .from("planipret_profiles")
+          .select("id, maestro_broker_id, role, email, ms365_email, extension, phone, full_name")
+          .limit(1000);
+        const rows = Array.isArray(profs) ? profs : [];
+        let linked = 0, already = 0, failed = 0;
+        const unmatched: string[] = [];
+        for (const p of rows) {
+          const r = await linkBrokerIdByEmail(admin, p as any, { force: payload.force === true });
+          if (r.ok && r.matched_by === "already_linked") already++;
+          else if (r.ok) linked++;
+          else { failed++; if (unmatched.length < 50) unmatched.push(String((p as any).email ?? (p as any).id)); }
+        }
+        return j({ success: true, total: rows.length, linked, already, failed, unmatched });
+      }
+
+
+
       case "list_clients":
       case "client_profile":
       case "list_brokers":

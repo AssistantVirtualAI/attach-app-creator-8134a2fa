@@ -82,6 +82,14 @@ const PAMaestroSync = lazyWithRetry(() => import("./pages/planipret/admin/PAMaes
 const PASyncedCalls = lazyWithRetry(() => import("./pages/planipret/admin/PASyncedCalls"));
 const PATelecomMapping = lazyWithRetry(() => import("./pages/planipret/admin/PATelecomMapping"));
 const PAMaestroStatus = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroStatus"));
+const PlanipretBrokerLayout = lazyWithRetry(() => import("./pages/planipret/broker/PlanipretBrokerLayout"));
+const PBOverview = lazyWithRetry(() => import("./pages/planipret/broker/PBOverview"));
+const PBCalls = lazyWithRetry(() => import("./pages/planipret/broker/PBCalls"));
+const PBMessages = lazyWithRetry(() => import("./pages/planipret/broker/PBMessages"));
+const PBVoicemail = lazyWithRetry(() => import("./pages/planipret/broker/PBVoicemail"));
+const PBRecordings = lazyWithRetry(() => import("./pages/planipret/broker/PBRecordings"));
+const PBStats = lazyWithRetry(() => import("./pages/planipret/broker/PBStats"));
+const PBSettings = lazyWithRetry(() => import("./pages/planipret/broker/PBSettings"));
 const PlanipretPrivacy = lazyWithRetry(() => import("./pages/planipret/PlanipretPrivacy"));
 const PlanipretIntegrationsLazy = lazyWithRetry(() => import("./pages/planipret/PlanipretIntegrations"));
 import { AdminPageSkeleton, MobilePageSkeleton } from "./components/planipret/Skeletons";
@@ -621,7 +629,29 @@ const App = () => (
                   <Route path="telecom-mapping" element={<Suspense fallback={<AdminPageSkeleton />}><PATelecomMapping /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
                 </Route>
+
+                {/* Planipret Broker portal (per-broker view of their own data) */}
+                <Route
+                  path="/planipret/broker"
+                  element={
+                    <AppSeparationGuard app="planipret">
+                      <Suspense fallback={<AdminPageSkeleton />}>
+                        <PlanipretBrokerLayout />
+                      </Suspense>
+                    </AppSeparationGuard>
+                  }
+                >
+                  <Route index element={<Suspense fallback={<AdminPageSkeleton />}><PBOverview /></Suspense>} />
+                  <Route path="overview" element={<Suspense fallback={<AdminPageSkeleton />}><PBOverview /></Suspense>} />
+                  <Route path="calls" element={<Suspense fallback={<AdminPageSkeleton />}><PBCalls /></Suspense>} />
+                  <Route path="messages" element={<Suspense fallback={<AdminPageSkeleton />}><PBMessages /></Suspense>} />
+                  <Route path="voicemail" element={<Suspense fallback={<AdminPageSkeleton />}><PBVoicemail /></Suspense>} />
+                  <Route path="recordings" element={<Suspense fallback={<AdminPageSkeleton />}><PBRecordings /></Suspense>} />
+                  <Route path="stats" element={<Suspense fallback={<AdminPageSkeleton />}><PBStats /></Suspense>} />
+                  <Route path="settings" element={<Suspense fallback={<AdminPageSkeleton />}><PBSettings /></Suspense>} />
+                </Route>
                 <Route path="/planipret/privacy" element={<Suspense fallback={<AdminPageSkeleton />}><PlanipretPrivacy /></Suspense>} />
+
 
                 {/* Protected routes */}
                 <Route

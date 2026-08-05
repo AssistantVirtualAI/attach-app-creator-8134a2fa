@@ -89,6 +89,17 @@ Deno.serve(async (req) => {
       return json({ success: true, already_synced: true });
     }
 
+    // Rule #4: inbound leg from another broker's VoIP number => the caller
+    // already posted the record. Skip to avoid duplicates.
+    if (call.direction === "inbound" && !(call as any).maestro_call_id) {
+      if (await isInternalBrokerCaller(admin, call.from_number)) {
+        console.log(`[maestro-cdr] skip internal inbound leg call=${call_id} from=${call.from_number}`);
+        await setPipelineStep(admin, call_id, "cdr", "done", { skipped: "internal_broker_inbound" });
+        return json({ success: true, skipped: "internal_broker_inbound" }, 200);
+      }
+    }
+
+
     const cfg = await getMaestroConfig(admin);
     if (!cfg.url || !cfg.key) {
       await updateCallPipeline(admin, call_id, { step: "error", error: "maestro_not_configured" });

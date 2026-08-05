@@ -69,7 +69,7 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
   const signInWithMicrosoft = async () => {
     setLoading(true);
     try {
-      await startMicrosoftSignIn("/mplanipret/home", {
+      await startMicrosoftSignIn(msRedirect, {
         loginHint: email.trim() || undefined,
         prompt: "login",
       });

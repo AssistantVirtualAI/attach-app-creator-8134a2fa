@@ -410,7 +410,9 @@ function SectionTable({ lang, title, rows, money }: { lang: Lang; title: string;
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{fmtNum(r.cy_deals)}</td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "#00D4AA" }}>{r.cy_commission ? fmtMoney(r.cy_commission) : "—"}</td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-faint)" }}>
-                  {totalVol ? fmtPct((Number(r.cy_volume || 0) / totalVol) * 100) : (r.extra?.pct != null ? fmtPct(r.extra.pct) : "—")}
+                  {r.extra?.pct != null ? fmtPct(r.extra.pct)
+                    : r.extra?.pct_cy != null ? fmtPct(r.extra.pct_cy)
+                    : totalVol ? fmtPct((Number(r.cy_volume || 0) / totalVol) * 100) : "—"}
                 </td>
               </tr>
             ))}

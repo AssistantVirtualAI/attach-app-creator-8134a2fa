@@ -130,6 +130,7 @@ export default function PBCalls() {
         {total > PAGE_SIZE && (
           <div className="px-4 py-3" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
             <Pagination page={page} pageSize={PAGE_SIZE} total={total}
+              onPageSizeChange={() => {}}
               onPageChange={(p: number) => patch({ page: String(p) }, false)} />
           </div>
         )}

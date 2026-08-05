@@ -571,10 +571,39 @@
   --pp-shadow-md: 0 8px 24px -12px rgba(15,27,61,0.12), 0 2px 6px -2px rgba(15,27,61,0.06);
   --pp-shadow-lg: 0 24px 48px -16px rgba(15,27,61,0.18);
 
+  /* shadcn/Tailwind semantic tokens forced to the light finance palette so
+     Card/Button/Badge match the admin portal even when the app runs in dark. */
+  --background: 210 33% 98%;
+  --foreground: 224 60% 15%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 60% 15%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 224 60% 15%;
+  --primary: 209 46% 43%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 214 32% 95%;
+  --secondary-foreground: 224 60% 15%;
+  --muted: 214 32% 95%;
+  --muted-foreground: 216 19% 44%;
+  --accent: 214 32% 93%;
+  --accent-foreground: 224 60% 15%;
+  --destructive: 351 51% 46%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 209 46% 43%;
+
   background: var(--pp-bg-base);
   color: var(--pp-text-primary);
   font-family: 'Epilogue', 'Inter', system-ui, sans-serif;
 }
+/* Headings inside shadcn cards must not inherit the pp heading color rule
+   when the card is a light surface — keep them readable. */
+.planipret-admin-scope .bg-card,
+.planipret-admin-scope [class*="bg-card"] {
+  color: hsl(var(--card-foreground));
+}
+
 .planipret-admin-scope h1,
 .planipret-admin-scope h2,
 .planipret-admin-scope h3,

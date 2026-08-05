@@ -8504,6 +8504,69 @@ export type Database = {
           },
         ]
       }
+      planipret_commission_stats: {
+        Row: {
+          broker_name: string
+          broker_user_id: string | null
+          created_at: string
+          cy_commission: number | null
+          cy_deals: number | null
+          cy_volume: number | null
+          dimension: string | null
+          extra: Json
+          fiscal_year: number
+          id: string
+          py_commission: number | null
+          py_deals: number | null
+          py_volume: number | null
+          rank: number | null
+          section: string
+          source_file: string | null
+          sub_dimension: string | null
+          updated_at: string
+        }
+        Insert: {
+          broker_name: string
+          broker_user_id?: string | null
+          created_at?: string
+          cy_commission?: number | null
+          cy_deals?: number | null
+          cy_volume?: number | null
+          dimension?: string | null
+          extra?: Json
+          fiscal_year?: number
+          id?: string
+          py_commission?: number | null
+          py_deals?: number | null
+          py_volume?: number | null
+          rank?: number | null
+          section: string
+          source_file?: string | null
+          sub_dimension?: string | null
+          updated_at?: string
+        }
+        Update: {
+          broker_name?: string
+          broker_user_id?: string | null
+          created_at?: string
+          cy_commission?: number | null
+          cy_deals?: number | null
+          cy_volume?: number | null
+          dimension?: string | null
+          extra?: Json
+          fiscal_year?: number
+          id?: string
+          py_commission?: number | null
+          py_deals?: number | null
+          py_volume?: number | null
+          rank?: number | null
+          section?: string
+          source_file?: string | null
+          sub_dimension?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       planipret_consent_settings: {
         Row: {
           consent_delay_seconds: number

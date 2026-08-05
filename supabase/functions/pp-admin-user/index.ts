@@ -118,6 +118,49 @@ async function ensureNsUser(fullName: string, email: string, extension: string, 
   return { ok: verify.ok || created.ok || created.status === 409, created: created.ok, status: verify.status || created.status, data: created.data };
 }
 
+/** Full removal from the phone system: devices first, then the subscriber. */
+async function deleteNsUserFull(domain: string, extension: string) {
+  const out: any = { extension, devices_deleted: 0, user_status: null, ok: false };
+  try {
+    const devs = await nsFetch(`/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}/devices`);
+    const list = Array.isArray(devs.data) ? devs.data : (devs.data?.devices ?? []);
+    for (const d of list) {
+      const id = String(d?.device ?? d?.aor ?? d?.["device-sip-registration-user"] ?? "").replace(/^sip:/, "").split("@")[0];
+      if (!id) continue;
+      const r = await nsFetch(
+        `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}/devices/${encodeURIComponent(id)}`,
+        { method: "DELETE" },
+      );
+      if (r.ok || r.status === 404) out.devices_deleted++;
+    }
+  } catch { /* best effort */ }
+  const del = await nsFetch(
+    `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}`,
+    { method: "DELETE" },
+  );
+  out.user_status = del.status;
+  out.ok = del.ok || del.status === 404;
+  return out;
+}
+
+/** All NS subscribers of the domain (paginated). */
+async function nsListUsers(domain: string): Promise<any[]> {
+  const all: any[] = [];
+  for (let page = 1; page <= 40; page++) {
+    const r = await nsFetch(`/domains/${encodeURIComponent(domain)}/users?limit=200&page=${page}`);
+    const items = Array.isArray(r.data) ? r.data : (r.data?.users ?? []);
+    if (!r.ok || items.length === 0) break;
+    all.push(...items);
+    if (items.length < 200) break;
+  }
+  return all;
+}
+
+const nsEmailOf = (u: any) => String(u?.email ?? u?.["email-address"] ?? u?.email_address ?? "").trim().toLowerCase();
+const nsExtOf = (u: any) => String(u?.user ?? u?.extension ?? u?.user_id ?? u?.id ?? "").trim();
+
+
+
 function randomPassword(len = 22): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
   const buf = new Uint8Array(len);

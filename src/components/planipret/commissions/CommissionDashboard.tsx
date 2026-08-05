@@ -145,6 +145,29 @@ export default function CommissionDashboard({
   const productData = useMemo(() => aggregate(filtered, "product_mix"), [filtered]);
   const termData = useMemo(() => aggregate(filtered, "term_mix"), [filtered]);
   const matrixData = useMemo(() => aggregate(filtered, "matrix", true), [filtered]);
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    (["broker", "lender", "quarter", "productType", "term", "commissionType"] as const).forEach((k) => { if (filters[k] !== "all") n++; });
+    if (filters.search.trim()) n++;
+    return n;
+  }, [filters]);
+
+  const leaderboard = useMemo(() => {
+    const names = brokerNames(filtered);
+    const items = names.map((name) => {
+      const br = filtered.filter((r) => r.broker_name === name);
+      return {
+        name,
+        volume: Number(kpiOf(br, "volume")?.cy ?? 0),
+        commission: Number(kpiOf(br, "commission")?.cy ?? 0),
+        deals: Number(kpiOf(br, "deals")?.cy ?? 0),
+        pct: 0,
+      };
+    }).sort((a, b) => b.volume - a.volume);
+    const max = Math.max(1, ...items.map((i) => i.volume));
+    return items.map((i) => ({ ...i, pct: Math.max(3, (i.volume / max) * 100) }));
+  }, [filtered]);
+
   const clubData = useMemo(() => filtered.filter((r) => r.section === "club"), [filtered]);
   const teamData = useMemo(() => filtered.filter((r) => r.section === "team"), [filtered]);
 
@@ -496,8 +519,7 @@ function SectionTable({ lang, title, rows, money }: { lang: Lang; title: string;
   if (!rows.length) return null;
   const totalVol = rows.reduce((s, r) => s + Number(r.cy_volume || 0), 0);
   return (
-    <div className="pp-card" style={{ padding: 16 }}>
-      <h3 className="pp-heading mb-3" style={{ fontSize: 13, fontWeight: 600 }}>{title}</h3>
+    <Panel title={title} accent="#4AC9E3" subtitle={`${rows.length} ${T(lang, "éléments", "items")}`}>
       <div className="overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead>
@@ -511,9 +533,21 @@ function SectionTable({ lang, title, rows, money }: { lang: Lang; title: string;
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.key ?? r.id} style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
-                <td className="py-1.5" style={{ color: "var(--pp-text-primary)" }}>{r.dimension}</td>
+            {rows.map((r, i) => {
+              const share = totalVol ? (Number(r.cy_volume || 0) / totalVol) * 100 : 0;
+              return (
+              <tr key={r.key ?? r.id} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+                <td className="py-2" style={{ color: "var(--pp-text-primary)" }}>
+                  <div className="flex items-center gap-2">
+                    <span style={{ width: 6, height: 6, borderRadius: 2, background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                    <span className="truncate">{r.dimension}</span>
+                  </div>
+                  {share > 0 && (
+                    <div className="mt-1 rounded-full overflow-hidden" style={{ height: 3, background: "var(--pp-bg-deep)", maxWidth: 220 }}>
+                      <div style={{ width: `${share}%`, height: "100%", background: CHART_COLORS[i % CHART_COLORS.length], opacity: .8 }} />
+                    </div>
+                  )}
+                </td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{money ? fmtMoney(r.cy_volume) : fmtNum(r.cy_volume)}</td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-faint)" }}>{r.py_volume ? fmtMoney(r.py_volume) : "—"}</td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{fmtNum(r.cy_deals)}</td>
@@ -524,11 +558,12 @@ function SectionTable({ lang, title, rows, money }: { lang: Lang; title: string;
                     : totalVol ? fmtPct((Number(r.cy_volume || 0) / totalVol) * 100) : "—"}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -543,15 +578,15 @@ function KanbanView({ lang, filtered }: { lang: Lang; filtered: CommissionRow[] 
             : aggregate(filtered, sec).sort((a, b) => b.cy_volume - a.cy_volume);
           if (!items.length) return null;
           return (
-            <div key={sec} className="pp-card flex-shrink-0" style={{ padding: 12, width: 260 }}>
+            <div key={sec} className="pp-card flex-shrink-0" style={{ padding: 12, width: 268 }}>
               <div className="flex items-center justify-between mb-2">
                 <h4 style={{ fontSize: 12, fontWeight: 700, color: "var(--pp-text-primary)" }}>{SECTION_LABELS[sec]?.[lang] ?? sec}</h4>
                 <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{items.length}</span>
               </div>
               <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
-                {items.map((r: any) => (
-                  <div key={r.key ?? r.id} className="rounded-lg p-2.5"
-                    style={{ background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }}>
+                {items.map((r: any, idx: number) => (
+                  <div key={r.key ?? r.id} className="rounded-lg p-2.5 transition-transform duration-150 hover:-translate-y-0.5"
+                    style={{ background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)", borderLeft: `3px solid ${CHART_COLORS[idx % CHART_COLORS.length]}` }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--pp-text-primary)" }}>{r.dimension}</div>
                     <div className="flex items-center justify-between mt-1">
                       <span style={{ fontSize: 11, color: "var(--pp-text-muted)" }} className="tabular-nums">

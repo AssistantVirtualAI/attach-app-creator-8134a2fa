@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
-import { Download, LayoutGrid, Table2, Search, RefreshCw } from "lucide-react";
+import { Download, LayoutGrid, Table2, Search, RefreshCw, DollarSign, Briefcase, Wallet, Gauge, TrendingUp, Users, Filter, Trophy } from "lucide-react";
 import {
   type CommissionRow, type CommissionFilters, emptyFilters, fetchCommissionRows,
   aggregate, applyFilters, brokerNames, lenderNames, globalTotals, kpiOf,
@@ -28,20 +28,59 @@ const TooltipDark = ({ active, payload, label, money = true }: any) => {
   );
 };
 
-function Kpi({ label, value, sub, yoy }: { label: string; value: string; sub?: string; yoy?: number | null }) {
+function Kpi({ label, value, sub, yoy, accent = "#2E9BDC", Icon }: {
+  label: string; value: string; sub?: string; yoy?: number | null; accent?: string; Icon?: any;
+}) {
   const up = (yoy ?? 0) >= 0;
   return (
-    <div className="pp-card" style={{ padding: 14 }}>
-      <div style={{ fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--pp-text-faint)" }}>{label}</div>
-      <div className="tabular-nums" style={{ fontSize: 20, fontWeight: 700, color: "var(--pp-text-primary)", marginTop: 2 }}>{value}</div>
-      <div className="flex items-center gap-2 mt-1">
+    <div
+      className="relative overflow-hidden rounded-xl transition-transform duration-200 hover:-translate-y-0.5"
+      style={{
+        background: `linear-gradient(150deg, ${accent}14 0%, transparent 55%), var(--pp-bg-card, var(--pp-bg-deep))`,
+        border: "1px solid var(--pp-bg-border-2)",
+        boxShadow: "0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px -18px rgba(0,0,0,.9)",
+        padding: 14,
+      }}
+    >
+      <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: accent, opacity: .85 }} />
+      <div className="flex items-start justify-between gap-2">
+        <div style={{ fontSize: 10, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--pp-text-faint)" }}>{label}</div>
+        {Icon && (
+          <span className="rounded-md flex items-center justify-center" style={{ width: 22, height: 22, background: `${accent}1f`, color: accent }}>
+            <Icon className="w-3 h-3" />
+          </span>
+        )}
+      </div>
+      <div className="tabular-nums" style={{ fontSize: 21, fontWeight: 700, color: "var(--pp-text-primary)", marginTop: 4, letterSpacing: "-.02em" }}>{value}</div>
+      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
         {sub && <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{sub}</span>}
         {yoy != null && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: up ? "#00D4AA" : "#E84C4C" }}>
+          <span className="rounded-full px-1.5 py-0.5" style={{ fontSize: 10, fontWeight: 700, color: up ? "#00D4AA" : "#E84C4C", background: up ? "rgba(0,212,170,.12)" : "rgba(232,76,76,.12)" }}>
             {up ? "▲" : "▼"} {Math.abs(yoy).toFixed(1)}%
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+function Panel({ title, subtitle, accent = "#2E9BDC", right, children, className = "" }: {
+  title: string; subtitle?: string; accent?: string; right?: any; children: any; className?: string;
+}) {
+  return (
+    <div className={`pp-card ${className}`} style={{ padding: 16, position: "relative", overflow: "hidden" }}>
+      <span style={{ position: "absolute", left: 0, right: 0, top: 0, height: 2, background: `linear-gradient(90deg, ${accent}, transparent 70%)` }} />
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2" style={{ fontSize: 13, fontWeight: 700, color: "var(--pp-text-primary)", letterSpacing: "-.01em" }}>
+            <span style={{ width: 6, height: 6, borderRadius: 2, background: accent }} />
+            {title}
+          </h3>
+          {subtitle && <p style={{ fontSize: 10.5, color: "var(--pp-text-faint)", marginTop: 2 }}>{subtitle}</p>}
+        </div>
+        {right}
+      </div>
+      {children}
     </div>
   );
 }
@@ -106,6 +145,29 @@ export default function CommissionDashboard({
   const productData = useMemo(() => aggregate(filtered, "product_mix"), [filtered]);
   const termData = useMemo(() => aggregate(filtered, "term_mix"), [filtered]);
   const matrixData = useMemo(() => aggregate(filtered, "matrix", true), [filtered]);
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    (["broker", "lender", "quarter", "productType", "term", "commissionType"] as const).forEach((k) => { if (filters[k] !== "all") n++; });
+    if (filters.search.trim()) n++;
+    return n;
+  }, [filters]);
+
+  const leaderboard = useMemo(() => {
+    const names = brokerNames(filtered);
+    const items = names.map((name) => {
+      const br = filtered.filter((r) => r.broker_name === name);
+      return {
+        name,
+        volume: Number(kpiOf(br, "volume")?.cy ?? 0),
+        commission: Number(kpiOf(br, "commission")?.cy ?? 0),
+        deals: Number(kpiOf(br, "deals")?.cy ?? 0),
+        pct: 0,
+      };
+    }).sort((a, b) => b.volume - a.volume);
+    const max = Math.max(1, ...items.map((i) => i.volume));
+    return items.map((i) => ({ ...i, pct: Math.max(3, (i.volume / max) * 100) }));
+  }, [filtered]);
+
   const clubData = useMemo(() => filtered.filter((r) => r.section === "club"), [filtered]);
   const teamData = useMemo(() => filtered.filter((r) => r.section === "team"), [filtered]);
 
@@ -127,15 +189,37 @@ export default function CommissionDashboard({
   const set = (k: keyof CommissionFilters, v: any) => setFilters((f) => ({ ...f, [k]: v }));
 
   if (loading) {
-    return <div className="pp-card" style={{ padding: 24, color: "var(--pp-text-muted)" }}>{T(lang, "Chargement des statistiques…", "Loading statistics…")}</div>;
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-xl animate-pulse" style={{ height: 92, background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }} />
+          ))}
+        </div>
+        <div className="rounded-xl animate-pulse" style={{ height: 64, background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }} />
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="rounded-xl animate-pulse xl:col-span-2" style={{ height: 320, background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }} />
+          <div className="rounded-xl animate-pulse" style={{ height: 320, background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }} />
+        </div>
+      </div>
+    );
   }
   if (err) {
     return <div className="pp-card" style={{ padding: 24, color: "#E84C4C" }}>{err}</div>;
   }
   if (!rows.length) {
     return (
-      <div className="pp-card" style={{ padding: 24, color: "var(--pp-text-muted)" }}>
-        {T(lang, "Aucune donnée de commission disponible pour ce compte.", "No commission data available for this account.")}
+      <div className="pp-card flex flex-col items-center text-center gap-2" style={{ padding: 40 }}>
+        <span className="rounded-xl flex items-center justify-center" style={{ width: 44, height: 44, background: "rgba(46,155,220,.12)", color: "#2E9BDC" }}>
+          <TrendingUp className="w-5 h-5" />
+        </span>
+        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>
+          {T(lang, "Aucune donnée de commission", "No commission data")}
+        </p>
+        <p style={{ fontSize: 11.5, color: "var(--pp-text-faint)", maxWidth: 380 }}>
+          {T(lang, "Les statistiques apparaîtront dès qu'un tableau de bord de commissions sera importé pour ce compte.",
+                   "Statistics will appear as soon as a commission dashboard is imported for this account.")}
+        </p>
       </div>
     );
   }
@@ -144,16 +228,32 @@ export default function CommissionDashboard({
     <div className="space-y-4">
       {/* Global overview strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label={T(lang, "Volume", "Volume")} value={fmtMoney(totals.volume)} sub={`PY ${fmtMoney(totals.py_volume)}`} yoy={totals.volumeYoy} />
-        <Kpi label={T(lang, "Transactions", "Deals")} value={fmtNum(totals.deals)} sub={`PY ${fmtNum(totals.py_deals)}`} yoy={totals.dealsYoy} />
-        <Kpi label="Commission" value={fmtMoney(totals.commission)} sub={`PY ${fmtMoney(totals.py_commission)}`} yoy={totals.commissionYoy} />
-        <Kpi label={T(lang, "Volume moyen / dossier", "Avg deal size")} value={fmtMoney(totals.avgDeal)} />
-        <Kpi label={T(lang, "Commission moy. / dossier", "Avg comm. / deal")} value={fmtMoney(totals.avgCommission)} />
-        <Kpi label="BPS" value={fmtBps(totals.bps)} sub={`PY ${fmtBps(totals.pyBps)}`} />
+        <Kpi Icon={DollarSign} accent="#2E9BDC" label={T(lang, "Volume", "Volume")} value={fmtMoney(totals.volume)} sub={`PY ${fmtMoney(totals.py_volume)}`} yoy={totals.volumeYoy} />
+        <Kpi Icon={Briefcase} accent="#9B7FE8" label={T(lang, "Transactions", "Deals")} value={fmtNum(totals.deals)} sub={`PY ${fmtNum(totals.py_deals)}`} yoy={totals.dealsYoy} />
+        <Kpi Icon={Wallet} accent="#00D4AA" label="Commission" value={fmtMoney(totals.commission)} sub={`PY ${fmtMoney(totals.py_commission)}`} yoy={totals.commissionYoy} />
+        <Kpi Icon={TrendingUp} accent="#E8A33C" label={T(lang, "Volume moyen / dossier", "Avg deal size")} value={fmtMoney(totals.avgDeal)} />
+        <Kpi Icon={Wallet} accent="#4AC9E3" label={T(lang, "Commission moy. / dossier", "Avg comm. / deal")} value={fmtMoney(totals.avgCommission)} />
+        <Kpi Icon={Gauge} accent="#E86CB0" label="BPS" value={fmtBps(totals.bps)} sub={`PY ${fmtBps(totals.pyBps)}`} />
       </div>
 
       {/* Filters */}
-      <div className="pp-card" style={{ padding: 14 }}>
+      <div className="pp-card sticky top-2 z-20" style={{ padding: 14, backdropFilter: "blur(10px)" }}>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="rounded-md flex items-center justify-center" style={{ width: 20, height: 20, background: "rgba(46,155,220,.14)", color: "#2E9BDC" }}>
+            <Filter className="w-3 h-3" />
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "var(--pp-text-muted)" }}>
+            {T(lang, "Filtres & vues", "Filters & views")}
+          </span>
+          {activeFilterCount > 0 && (
+            <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10, fontWeight: 700, background: "rgba(46,155,220,.16)", color: "#2E9BDC" }}>
+              {activeFilterCount}
+            </span>
+          )}
+          <span className="ml-auto" style={{ fontSize: 10.5, color: "var(--pp-text-faint)" }}>
+            {fmtNum(filtered.length)} {T(lang, "lignes", "rows")} · {totals.brokers} {T(lang, "courtier(s)", "broker(s)")}
+          </span>
+        </div>
         <div className="flex flex-wrap items-end gap-3">
           {scope === "admin" && (
             <Select label={T(lang, "Courtier", "Broker")} value={filters.broker} onChange={(v) => set("broker", v)}
@@ -210,8 +310,9 @@ export default function CommissionDashboard({
 
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="pp-card xl:col-span-2" style={{ padding: 16 }}>
-          <h3 className="pp-heading mb-2" style={{ fontSize: 13, fontWeight: 600 }}>{T(lang, "Volume par prêteur (CY vs PY)", "Volume by lender (CY vs PY)")}</h3>
+        <Panel className="xl:col-span-2" accent="#2E9BDC"
+          title={T(lang, "Volume par prêteur", "Volume by lender")}
+          subtitle={T(lang, "Année courante vs année précédente — top 12", "Current vs prior year — top 12")}>
           <div style={{ width: "100%", height: 280 }}>
             <ResponsiveContainer>
               <BarChart data={lenderData.map((r) => ({ name: r.dimension, CY: r.cy_volume, PY: r.py_volume, Commission: r.cy_commission }))}
@@ -226,10 +327,10 @@ export default function CommissionDashboard({
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Panel>
 
-        <div className="pp-card" style={{ padding: 16 }}>
-          <h3 className="pp-heading mb-2" style={{ fontSize: 13, fontWeight: 600 }}>{T(lang, "Commission par type", "Commission by type")}</h3>
+        <Panel accent="#00D4AA" title={T(lang, "Commission par type", "Commission by type")}
+          subtitle={T(lang, "Base, bonis et performance", "Base, bonus and performance")}>
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer>
               <PieChart>
@@ -242,10 +343,10 @@ export default function CommissionDashboard({
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Panel>
 
-        <div className="pp-card xl:col-span-2" style={{ padding: 16 }}>
-          <h3 className="pp-heading mb-2" style={{ fontSize: 13, fontWeight: 600 }}>{T(lang, "Évolution trimestrielle", "Quarterly trend")}</h3>
+        <Panel className="xl:col-span-2" accent="#9B7FE8" title={T(lang, "Évolution trimestrielle", "Quarterly trend")}
+          subtitle={T(lang, "Volume par trimestre, CY vs PY", "Volume per quarter, CY vs PY")}>
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer>
               <AreaChart data={quarterData.map((r) => ({ name: r.dimension, CY: r.cy_volume, PY: r.py_volume }))} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
@@ -265,10 +366,10 @@ export default function CommissionDashboard({
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Panel>
 
-        <div className="pp-card" style={{ padding: 16 }}>
-          <h3 className="pp-heading mb-2" style={{ fontSize: 13, fontWeight: 600 }}>{T(lang, "Mix produit", "Product mix")}</h3>
+        <Panel accent="#E8A33C" title={T(lang, "Mix produit", "Product mix")}
+          subtitle={T(lang, "Répartition du volume par type de prêt", "Volume split by product type")}>
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer>
               <BarChart data={productData.map((r) => ({ name: r.dimension, Volume: r.cy_volume }))} layout="vertical" margin={{ top: 8, right: 16, left: 40, bottom: 0 }}>
@@ -282,8 +383,39 @@ export default function CommissionDashboard({
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Panel>
       </div>
+
+      {/* Leaderboard (admin, multi-broker) */}
+      {scope === "admin" && leaderboard.length > 1 && (
+        <Panel accent="#E8A33C" title={T(lang, "Classement des courtiers", "Broker leaderboard")}
+          subtitle={T(lang, "Volume et commissions par courtier", "Volume and commissions per broker")}
+          right={<Trophy className="w-4 h-4" style={{ color: "#E8A33C" }} />}>
+          <div className="space-y-2.5">
+            {leaderboard.map((b, i) => (
+              <div key={b.name} className="flex items-center gap-3">
+                <span className="rounded-lg flex items-center justify-center shrink-0" style={{
+                  width: 24, height: 24, fontSize: 11, fontWeight: 800,
+                  background: i === 0 ? "rgba(232,163,60,.18)" : "var(--pp-bg-deep)",
+                  color: i === 0 ? "#E8A33C" : "var(--pp-text-muted)",
+                  border: "1px solid var(--pp-bg-border-2)",
+                }}>{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate" style={{ fontSize: 12, fontWeight: 600, color: "var(--pp-text-primary)" }}>{b.name}</span>
+                    <span className="tabular-nums shrink-0" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+                      {fmtMoney(b.volume)} · <span style={{ color: "#00D4AA" }}>{fmtMoney(b.commission)}</span>
+                    </span>
+                  </div>
+                  <div className="mt-1 rounded-full overflow-hidden" style={{ height: 5, background: "var(--pp-bg-deep)" }}>
+                    <div style={{ width: `${b.pct}%`, height: "100%", background: `linear-gradient(90deg, ${CHART_COLORS[i % CHART_COLORS.length]}, ${CHART_COLORS[i % CHART_COLORS.length]}80)` }} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
 
       {/* Views */}
       {view === "table" ? (
@@ -387,8 +519,7 @@ function SectionTable({ lang, title, rows, money }: { lang: Lang; title: string;
   if (!rows.length) return null;
   const totalVol = rows.reduce((s, r) => s + Number(r.cy_volume || 0), 0);
   return (
-    <div className="pp-card" style={{ padding: 16 }}>
-      <h3 className="pp-heading mb-3" style={{ fontSize: 13, fontWeight: 600 }}>{title}</h3>
+    <Panel title={title} accent="#4AC9E3" subtitle={`${rows.length} ${T(lang, "éléments", "items")}`}>
       <div className="overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead>
@@ -402,9 +533,21 @@ function SectionTable({ lang, title, rows, money }: { lang: Lang; title: string;
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.key ?? r.id} style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
-                <td className="py-1.5" style={{ color: "var(--pp-text-primary)" }}>{r.dimension}</td>
+            {rows.map((r, i) => {
+              const share = totalVol ? (Number(r.cy_volume || 0) / totalVol) * 100 : 0;
+              return (
+              <tr key={r.key ?? r.id} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+                <td className="py-2" style={{ color: "var(--pp-text-primary)" }}>
+                  <div className="flex items-center gap-2">
+                    <span style={{ width: 6, height: 6, borderRadius: 2, background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                    <span className="truncate">{r.dimension}</span>
+                  </div>
+                  {share > 0 && (
+                    <div className="mt-1 rounded-full overflow-hidden" style={{ height: 3, background: "var(--pp-bg-deep)", maxWidth: 220 }}>
+                      <div style={{ width: `${share}%`, height: "100%", background: CHART_COLORS[i % CHART_COLORS.length], opacity: .8 }} />
+                    </div>
+                  )}
+                </td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{money ? fmtMoney(r.cy_volume) : fmtNum(r.cy_volume)}</td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-faint)" }}>{r.py_volume ? fmtMoney(r.py_volume) : "—"}</td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{fmtNum(r.cy_deals)}</td>
@@ -415,11 +558,12 @@ function SectionTable({ lang, title, rows, money }: { lang: Lang; title: string;
                     : totalVol ? fmtPct((Number(r.cy_volume || 0) / totalVol) * 100) : "—"}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -434,15 +578,15 @@ function KanbanView({ lang, filtered }: { lang: Lang; filtered: CommissionRow[] 
             : aggregate(filtered, sec).sort((a, b) => b.cy_volume - a.cy_volume);
           if (!items.length) return null;
           return (
-            <div key={sec} className="pp-card flex-shrink-0" style={{ padding: 12, width: 260 }}>
+            <div key={sec} className="pp-card flex-shrink-0" style={{ padding: 12, width: 268 }}>
               <div className="flex items-center justify-between mb-2">
                 <h4 style={{ fontSize: 12, fontWeight: 700, color: "var(--pp-text-primary)" }}>{SECTION_LABELS[sec]?.[lang] ?? sec}</h4>
                 <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{items.length}</span>
               </div>
               <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
-                {items.map((r: any) => (
-                  <div key={r.key ?? r.id} className="rounded-lg p-2.5"
-                    style={{ background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }}>
+                {items.map((r: any, idx: number) => (
+                  <div key={r.key ?? r.id} className="rounded-lg p-2.5 transition-transform duration-150 hover:-translate-y-0.5"
+                    style={{ background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)", borderLeft: `3px solid ${CHART_COLORS[idx % CHART_COLORS.length]}` }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--pp-text-primary)" }}>{r.dimension}</div>
                     <div className="flex items-center justify-between mt-1">
                       <span style={{ fontSize: 11, color: "var(--pp-text-muted)" }} className="tabular-nums">

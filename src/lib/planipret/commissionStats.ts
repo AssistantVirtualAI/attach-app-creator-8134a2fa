@@ -39,12 +39,13 @@ export const emptyFilters: CommissionFilters = {
   term: "all", commissionType: "all", search: "", fiscalYear: "all",
 };
 
-export async function fetchCommissionRows(brokerName?: string): Promise<CommissionRow[]> {
+export async function fetchCommissionRows(scope?: { brokerUserId?: string | null; brokerName?: string | null }): Promise<CommissionRow[]> {
   let q = (supabase.from("planipret_commission_stats" as any) as any)
     .select("*")
     .order("section", { ascending: true })
     .order("rank", { ascending: true, nullsFirst: false });
-  if (brokerName) q = q.eq("broker_name", brokerName);
+  if (scope?.brokerUserId) q = q.eq("broker_user_id", scope.brokerUserId);
+  else if (scope?.brokerName) q = q.eq("broker_name", scope.brokerName);
   const { data, error } = await q;
   if (error) throw error;
   return (data ?? []) as CommissionRow[];

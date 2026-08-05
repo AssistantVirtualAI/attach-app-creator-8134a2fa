@@ -207,7 +207,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Répare les files existantes (coupe l'intro bloquante) sans toucher aux DID.
+    if (action === "repair_queues") {
+      const fixed = [];
+      for (const { ext } of targets) fixed.push(await ensureQueue(domain, ext));
+      return json({ success: true, action, domain, note: "Intro de file désactivée; avis joué en musique d'attente (coupe au décrochage).", fixed });
+    }
+
     if (action === "enable" || action === "disable") {
+
       const results = [];
       for (const { pn, ext } of targets) {
         const q = queueExt(ext);

@@ -89,6 +89,9 @@ const PBMessages = lazyWithRetry(() => import("./pages/planipret/broker/PBMessag
 const PBVoicemail = lazyWithRetry(() => import("./pages/planipret/broker/PBVoicemail"));
 const PBRecordings = lazyWithRetry(() => import("./pages/planipret/broker/PBRecordings"));
 const PBStats = lazyWithRetry(() => import("./pages/planipret/broker/PBStats"));
+const PBMicrosoft = lazyWithRetry(() => import("./pages/planipret/broker/PBMicrosoft"));
+const PBSearch = lazyWithRetry(() => import("./pages/planipret/broker/PBSearch"));
+
 const PBSettings = lazyWithRetry(() => import("./pages/planipret/broker/PBSettings"));
 const PlanipretPrivacy = lazyWithRetry(() => import("./pages/planipret/PlanipretPrivacy"));
 const PlanipretIntegrationsLazy = lazyWithRetry(() => import("./pages/planipret/PlanipretIntegrations"));

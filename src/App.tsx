@@ -59,6 +59,7 @@ const SoftphoneSetup = lazyWithRetry(() => import("./pages/lemtel/SoftphoneSetup
 const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin/PlanipretAdminLayout"));
 const PAOverview = lazyWithRetry(() => import("./pages/planipret/admin/PAOverview"));
 const PAUsers = lazyWithRetry(() => import("./pages/planipret/admin/PAUsers"));
+const PACommissions = lazyWithRetry(() => import("./pages/planipret/admin/PACommissions"));
 const PACalls = lazyWithRetry(() => import("./pages/planipret/admin/PACalls"));
 const PAMessages = lazyWithRetry(() => import("./pages/planipret/admin/PAMessages"));
 const PAVoicemails = lazyWithRetry(() => import("./pages/planipret/admin/PAVoicemails"));
@@ -89,6 +90,7 @@ const PBMessages = lazyWithRetry(() => import("./pages/planipret/broker/PBMessag
 const PBVoicemail = lazyWithRetry(() => import("./pages/planipret/broker/PBVoicemail"));
 const PBRecordings = lazyWithRetry(() => import("./pages/planipret/broker/PBRecordings"));
 const PBStats = lazyWithRetry(() => import("./pages/planipret/broker/PBStats"));
+const PBCommissions = lazyWithRetry(() => import("./pages/planipret/broker/PBCommissions"));
 const PBMicrosoft = lazyWithRetry(() => import("./pages/planipret/broker/PBMicrosoft"));
 const PBSearch = lazyWithRetry(() => import("./pages/planipret/broker/PBSearch"));
 
@@ -631,6 +633,7 @@ const App = () => (
                   <Route path="synced-calls" element={<Suspense fallback={<AdminPageSkeleton />}><PASyncedCalls /></Suspense>} />
                   <Route path="telecom-mapping" element={<Suspense fallback={<AdminPageSkeleton />}><PATelecomMapping /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
+                  <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
                 </Route>
 
                 {/* Planipret Broker portal (per-broker view of their own data) */}
@@ -652,6 +655,7 @@ const App = () => (
                   <Route path="recordings" element={<Suspense fallback={<AdminPageSkeleton />}><PBRecordings /></Suspense>} />
                   <Route path="microsoft" element={<Suspense fallback={<AdminPageSkeleton />}><PBMicrosoft /></Suspense>} />
                   <Route path="stats" element={<Suspense fallback={<AdminPageSkeleton />}><PBStats /></Suspense>} />
+                  <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PBCommissions /></Suspense>} />
                   <Route path="search" element={<Suspense fallback={<AdminPageSkeleton />}><PBSearch /></Suspense>} />
                   <Route path="settings" element={<Suspense fallback={<AdminPageSkeleton />}><PBSettings /></Suspense>} />
 

@@ -23,9 +23,9 @@ import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "diagnostics" | "maestroSync" | "syncedCalls" | "telecomMapping";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "diagnostics" | "maestroSync" | "syncedCalls" | "telecomMapping" | "commissions";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "syncedCalls" | "telecomMapping";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "syncedCalls" | "telecomMapping" | "commissions";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -52,6 +52,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/messages",   key: "messages",    Icon: MessageSquare },
       { to: "/planipret/admin/recordings", key: "recordings",  Icon: Mic },
       { to: "/planipret/admin/synced-calls", key: "syncedCalls", Icon: BarChart3 },
+      { to: "/planipret/admin/commissions", key: "commissions", Icon: BarChart3 },
     ],
   },
   {
@@ -115,6 +116,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/diagnostics": "diagnostics",
   "/planipret/admin/maestro-sync": "maestroSync",
   "/planipret/admin/synced-calls": "syncedCalls",
+  "/planipret/admin/commissions": "commissions",
   "/planipret/admin/telecom-mapping": "telecomMapping",
 };
 

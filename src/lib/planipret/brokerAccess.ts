@@ -15,7 +15,7 @@ export type BrokerAccess =
   | { state: "ready"; userId: string; profile: any };
 
 const PROFILE_FIELDS =
-  "user_id, full_name, email, extension, role, language, mobile_app_enabled, maestro_broker_id, ms365_connected";
+  "user_id, full_name, email, extension, role, language, mobile_app_enabled, maestro_broker_id";
 
 export async function resolveBrokerAccess(): Promise<BrokerAccess> {
   const { data: { session } } = await supabase.auth.getSession();

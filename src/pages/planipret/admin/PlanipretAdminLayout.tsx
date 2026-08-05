@@ -181,7 +181,19 @@ export default function PlanipretAdminLayout() {
     const loadProfile = async (user: any) => {
       const { data } = await supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_SAFE_COLUMNS).eq("user_id", user.id).maybeSingle();
       if (cancelled) return;
-      if (data && data.role && data.role !== "admin") { navigate("/mplanipret", { replace: true }); return; }
+      // Un profil courtier ne doit pas éjecter un admin/super admin réel :
+      // on vérifie les rôles serveur avant de renvoyer vers l'app mobile.
+      if (data && data.role && data.role !== "admin") {
+        const [superRes, ppAdminRes] = await Promise.all([
+          supabase.rpc("is_super_admin", { _user_id: user.id }),
+          supabase.rpc("is_planipret_admin", { _user_id: user.id }),
+        ]);
+        if (cancelled) return;
+        if (superRes.data !== true && ppAdminRes.data !== true) {
+          navigate("/mplanipret", { replace: true });
+          return;
+        }
+      }
       setUserEmail((user.email ?? "").toLowerCase());
       setProfile(data ?? { full_name: user.email, role: "admin" });
       setLoading(false);

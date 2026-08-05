@@ -142,16 +142,32 @@ export async function persistTokenSet(
  * profile row is keyed by `id`, so every refreshed token was thrown away and
  * `maestro_token_expires_at` stayed permanently in the past.
  */
+async function resolveProfileId(admin: SupabaseClient, userId: string): Promise<string | null> {
+  const byUser = await admin.from("planipret_profiles").select("id").eq("user_id", userId).limit(1);
+  const hit = (byUser.data ?? [])[0];
+  if (hit?.id) return hit.id as string;
+  const byId = await admin.from("planipret_profiles").select("id").eq("id", userId).limit(1);
+  return ((byId.data ?? [])[0]?.id as string) ?? null;
+}
+
 async function updateProfileByEitherKey(
   admin: SupabaseClient,
   userId: string,
   patch: Record<string, unknown>,
   label: string,
 ): Promise<boolean> {
+  // NB: an UPDATE filtered with `.or(user_id.eq,id.eq)` fails on PostgREST with
+  // "column planipret_profiles.user_id does not exist", which silently dropped
+  // every freshly issued token. Resolve the primary key first, then update on it.
+  const profileId = await resolveProfileId(admin, userId);
+  if (!profileId) {
+    console.error(`[maestro-oauth] ${label} matched ZERO profile rows`, { userId });
+    return false;
+  }
   const { data, error } = await admin
     .from("planipret_profiles")
     .update(patch)
-    .or(`user_id.eq.${userId},id.eq.${userId}`)
+    .eq("id", profileId)
     .select("id");
   if (error) {
     console.error(`[maestro-oauth] ${label} update failed`, error.message);
@@ -168,12 +184,15 @@ export async function getUserMaestroAccessToken(
   admin: SupabaseClient,
   userId: string,
 ): Promise<string | null> {
+  const profileId = await resolveProfileId(admin, userId);
+  if (!profileId) return null;
   const { data: prof } = await admin
     .from("planipret_profiles")
     .select("maestro_broker_token, maestro_refresh_token, maestro_token_expires_at, maestro_oauth_client")
-    .or(`user_id.eq.${userId},id.eq.${userId}`)
+    .eq("id", profileId)
     .maybeSingle();
   if (!prof?.maestro_broker_token) return null;
+
 
   // Maestro (Laravel Passport) can issue non-expiring tokens: the token
   // endpoint then returns no `expires_in` and we store NULL. NULL means

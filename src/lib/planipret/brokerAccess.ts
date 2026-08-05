@@ -71,7 +71,7 @@ export function searchFilter(table: string, term: string): string {
     return `from_number.ilike.%${t}%,to_number.ilike.%${t}%,body.ilike.%${t}%`;
   }
   if (table === "planipret_voicemails") {
-    return `from_number.ilike.%${t}%,from_name.ilike.%${t}%,transcription.ilike.%${t}%`;
+    return `from_number.ilike.%${t}%,from_name.ilike.%${t}%,transcript.ilike.%${t}%`;
   }
   return `from_number.ilike.%${t}%,to_number.ilike.%${t}%,from_name.ilike.%${t}%,to_name.ilike.%${t}%,ai_summary.ilike.%${t}%`;
 }

@@ -66,10 +66,12 @@ export default function CommissionDashboard({
   lang = "fr",
   scope = "admin",
   brokerName,
+  brokerUserId,
 }: {
   lang?: Lang;
   scope?: "admin" | "broker";
   brokerName?: string;
+  brokerUserId?: string;
 }) {
   const [rows, setRows] = useState<CommissionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,12 +82,12 @@ export default function CommissionDashboard({
   const load = async () => {
     setLoading(true); setErr(null);
     try {
-      setRows(await fetchCommissionRows(scope === "broker" ? brokerName : undefined));
+      setRows(await fetchCommissionRows(scope === "broker" ? { brokerUserId, brokerName } : undefined));
     } catch (e: any) {
       setErr(e?.message ?? "Erreur");
     } finally { setLoading(false); }
   };
-  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [scope, brokerName]);
+  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [scope, brokerName, brokerUserId]);
 
   const filtered = useMemo(() => applyFilters(rows, filters), [rows, filters]);
   const totals = useMemo(() => globalTotals(filtered), [filtered]);

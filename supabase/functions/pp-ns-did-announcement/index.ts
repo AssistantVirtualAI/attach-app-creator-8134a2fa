@@ -81,6 +81,12 @@ async function ensureQueue(domain: string, ext: string) {
   const q = queueExt(ext);
   const base = `/domains/${encodeURIComponent(domain)}/callqueues`;
   const read = await ns(`${base}/${encodeURIComponent(q)}`);
+  // IMPORTANT (incident 2026-08-05) : `queue-intro-message` est joué AVANT que
+  // la file ne sonne les agents et n'est PAS interruptible — le courtier voyait
+  // l'appel, décrochait, et l'intro continuait jusqu'au timeout → boîte vocale,
+  // avec un compteur d'appel actif côté mobile. L'avis doit donc être joué en
+  // MUSIQUE D'ATTENTE (média de sonnerie) : le caller l'entend pendant que les
+  // agents sonnent, et il coupe net au décrochage.
   const payload: Record<string, unknown> = {
     synchronous: "yes",
     "call-queue": q,
@@ -89,12 +95,12 @@ async function ensureQueue(domain: string, ext: string) {
     "queue-type": "Ring All",
     "music-on-hold-enabled": "yes",
     "music-on-hold-name": MOH_NAME,
-    "queue-intro-message-enabled": "yes",
-    "queue-intro-message-name": MOH_NAME,
+    "queue-intro-message-enabled": "no",
     "queue-max-wait-seconds": 45,
     "queue-forward-timeout-destination": `vmail_${ext}`,
     enabled: "yes",
   };
+
   const write = read.ok
     ? await ns(`${base}/${encodeURIComponent(q)}`, { method: "PUT", body: JSON.stringify(payload) })
     : await ns(base, { method: "POST", body: JSON.stringify({ ...payload, "call-queue": q }) });
@@ -201,7 +207,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Répare les files existantes (coupe l'intro bloquante) sans toucher aux DID.
+    if (action === "repair_queues") {
+      const fixed = [];
+      for (const { ext } of targets) fixed.push(await ensureQueue(domain, ext));
+      return json({ success: true, action, domain, note: "Intro de file désactivée; avis joué en musique d'attente (coupe au décrochage).", fixed });
+    }
+
     if (action === "enable" || action === "disable") {
+
       const results = [];
       for (const { pn, ext } of targets) {
         const q = queueExt(ext);

@@ -22,3 +22,11 @@ Un courtier ne doit **jamais** l'entendre sur ses propres appels **sortants**.
 - `status` — lit l'état domaine + par utilisateur.
 - `scope_users` / `fix` — coupe le domaine (état recommandé aujourd'hui).
 - `restore` / `enable_domain` — **dépannage uniquement**, réintroduit le message sur les sortants.
+
+## Incident 2026-08-05 — intro de file bloquante
+`queue-intro-message` est joué **avant** que la file sonne les agents et **n'est pas interruptible** :
+le courtier voyait l'appel, décrochait, l'intro continuait, puis timeout → boîte vocale, avec compteur
+d'appel actif côté mobile (incohérence « un appel sur deux »).
+Correctif : `queue-intro-message-enabled: "no"`, l'avis est joué en **musique d'attente**
+(`music-on-hold-name = ava-recording-notice`) — média de sonnerie, coupe net au décrochage.
+Action `repair_queues` de `pp-ns-did-announcement` (bouton « Réparer les files ») pour corriger les files existantes.

@@ -621,7 +621,29 @@ const App = () => (
                   <Route path="telecom-mapping" element={<Suspense fallback={<AdminPageSkeleton />}><PATelecomMapping /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
                 </Route>
+
+                {/* Planipret Broker portal (per-broker view of their own data) */}
+                <Route
+                  path="/planipret/broker"
+                  element={
+                    <AppSeparationGuard app="planipret">
+                      <Suspense fallback={<AdminPageSkeleton />}>
+                        <PlanipretBrokerLayout />
+                      </Suspense>
+                    </AppSeparationGuard>
+                  }
+                >
+                  <Route index element={<Suspense fallback={<AdminPageSkeleton />}><PBOverview /></Suspense>} />
+                  <Route path="overview" element={<Suspense fallback={<AdminPageSkeleton />}><PBOverview /></Suspense>} />
+                  <Route path="calls" element={<Suspense fallback={<AdminPageSkeleton />}><PBCalls /></Suspense>} />
+                  <Route path="messages" element={<Suspense fallback={<AdminPageSkeleton />}><PBMessages /></Suspense>} />
+                  <Route path="voicemail" element={<Suspense fallback={<AdminPageSkeleton />}><PBVoicemail /></Suspense>} />
+                  <Route path="recordings" element={<Suspense fallback={<AdminPageSkeleton />}><PBRecordings /></Suspense>} />
+                  <Route path="stats" element={<Suspense fallback={<AdminPageSkeleton />}><PBStats /></Suspense>} />
+                  <Route path="settings" element={<Suspense fallback={<AdminPageSkeleton />}><PBSettings /></Suspense>} />
+                </Route>
                 <Route path="/planipret/privacy" element={<Suspense fallback={<AdminPageSkeleton />}><PlanipretPrivacy /></Suspense>} />
+
 
                 {/* Protected routes */}
                 <Route

@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
   }
 
   if (body?.debug) {
-    return json({ success: true, directory_size: dir.entries.length, seed: dir.seed, sample: dir.entries.slice(0, 8), real_emails: dir.entries.filter((e) => e.email && !/example\.(com|org|net)$/.test(e.email)).slice(0, 30) });
+    return json({ success: true, directory_size: dir.entries.length, seed: dir.seed, sample: dir.entries.slice(0, 8), real_emails: dir.entries.filter((e) => e.email && !/example\.(com|org|net)$/.test(e.email)).map((e)=>e.email+"|"+e.id) });
   }
 
   const { data: profiles } = await admin

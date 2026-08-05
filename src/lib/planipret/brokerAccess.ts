@@ -53,9 +53,9 @@ export function brokerSelect(
   userId: string,
   columns = "*",
   opts?: { count?: "exact" },
-) {
+): any {
   if (!userId) throw new Error("brokerSelect called without an authenticated broker id");
-  return supabase.from(table).select(columns, opts as any).eq("user_id", userId);
+  return (supabase.from(table) as any).select(columns, opts as any).eq("user_id", userId);
 }
 
 /** Guard used before mutating a row loaded in a detail view. */

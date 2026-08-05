@@ -54,13 +54,16 @@ Deno.serve(async (req) => {
       const result = await upstream.json().catch(() => ({}));
       const key = action === "maestro_clients" ? "clients" : "brokers";
       if (!upstream.ok || result?.success === false) {
-        return jsonResponse({ error: result?.error ?? "Maestro indisponible", [key]: [] });
+        return jsonResponse({ error: result?.error ?? "Maestro indisponible", [key]: [], contacts: [] });
       }
-      return jsonResponse({ ok: true, success: true, [key]: Array.isArray(result?.[key]) ? result[key] : [] });
+      const rows = Array.isArray(result?.[key]) ? result[key] : [];
+      // Older mobile builds read `contacts` (ppContactsCache.keyFor); expose both.
+      return jsonResponse({ ok: true, success: true, count: rows.length, [key]: rows, contacts: rows });
     } catch (error) {
       return jsonResponse({
         error: error instanceof Error ? error.message : "Maestro indisponible",
         [action === "maestro_clients" ? "clients" : "brokers"]: [],
+        contacts: [],
       });
     }
   }

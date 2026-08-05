@@ -504,25 +504,119 @@ Deno.serve(async (req) => {
         .eq("user_id", user_id)
         .maybeSingle();
 
+      let nsResult: any = null;
       if (target) {
         const domain = target.ns_domain || NS_DEFAULT_DOMAIN;
         const ext = String(target.ns_extension || target.extension || "");
-        if (ext) {
-          await nsFetch(
-            `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}`,
-            { method: "DELETE" },
-          ).catch(() => null);
-        }
+        if (ext) nsResult = await deleteNsUserFull(domain, ext).catch(() => null);
       }
 
       await admin.from("planipret_profiles").delete().eq("user_id", user_id);
       await admin.auth.admin.deleteUser(user_id).catch(() => null);
       await logAudit(admin, req, {
         admin_id: profile.id, action: "USER_DELETE",
-        resource_type: "user", resource_id: user_id,
+        resource_type: "user", resource_id: user_id, metadata: { ns: nsResult },
       });
-      return jsonResponse({ success: true });
+      return jsonResponse({ success: true, ns: nsResult });
     }
+
+    // Bulk removal (portal + phone system) by email and/or extension.
+    // payload: { emails?: string[], extensions?: string[], domain?, dry_run? }
+    if (action === "bulk_delete") {
+      const domain = String(payload?.domain || NS_DEFAULT_DOMAIN);
+      const dryRun = payload?.dry_run === true;
+      const emails: string[] = (payload?.emails ?? []).map((e: string) => String(e).trim().toLowerCase()).filter(Boolean);
+      const extensions: string[] = (payload?.extensions ?? []).map((e: any) => String(e).trim()).filter(Boolean);
+      if (emails.length === 0 && extensions.length === 0) {
+        return jsonResponse({ success: false, error: "emails ou extensions requis" }, 400);
+      }
+
+      const nsUsers = await nsListUsers(domain);
+      const byEmail = new Map<string, any>();
+      for (const u of nsUsers) { const e = nsEmailOf(u); if (e) byEmail.set(e, u); }
+
+      const targets = new Map<string, { extension: string; email: string }>();
+      for (const ext of extensions) targets.set(ext, { extension: ext, email: "" });
+      for (const email of emails) {
+        const u = byEmail.get(email);
+        if (u) { const ext = nsExtOf(u); if (ext) targets.set(ext, { extension: ext, email }); }
+      }
+
+      const results: any[] = [];
+      for (const t of targets.values()) {
+        if (dryRun) { results.push({ ...t, dry_run: true }); continue; }
+        const ns = await deleteNsUserFull(domain, t.extension).catch((e) => ({ ok: false, error: String(e) }));
+        results.push({ ...t, ns });
+      }
+
+      // Portal-side cleanup (profiles + auth users) for the given emails.
+      let profilesDeleted = 0;
+      let authDeleted = 0;
+      if (!dryRun && emails.length > 0) {
+        const { data: profs } = await admin
+          .from("planipret_profiles").select("user_id, email").in("email", emails);
+        for (const p of profs ?? []) {
+          if (p.user_id) { await admin.auth.admin.deleteUser(p.user_id).catch(() => null); authDeleted++; }
+        }
+        const { count } = await admin
+          .from("planipret_profiles").delete({ count: "exact" }).in("email", emails);
+        profilesDeleted = count ?? (profs?.length ?? 0);
+      }
+
+      await logAudit(admin, req, {
+        admin_id: profile.id, action: "USER_BULK_DELETE",
+        metadata: { domain, dry_run: dryRun, requested: emails.length + extensions.length, ns_deleted: results.length, profilesDeleted, authDeleted },
+      });
+      return jsonResponse({
+        success: true, domain, dry_run: dryRun,
+        requested: emails.length + extensions.length,
+        ns_found: results.length, ns_results: results,
+        profiles_deleted: profilesDeleted, auth_deleted: authDeleted,
+      });
+    }
+
+    // Find NS subscribers that no longer exist in the portal (orphans left
+    // behind by portal-only deletions), and optionally delete them.
+    if (action === "purge_ns_orphans") {
+      const domain = String(payload?.domain || NS_DEFAULT_DOMAIN);
+      const confirm = payload?.confirm === true;
+      const nsUsers = await nsListUsers(domain);
+      const { data: profs } = await admin
+        .from("planipret_profiles").select("email, extension, ns_extension");
+      const keepExt = new Set<string>();
+      const keepEmail = new Set<string>();
+      for (const p of profs ?? []) {
+        if (p.extension) keepExt.add(String(p.extension));
+        if (p.ns_extension) keepExt.add(String(p.ns_extension));
+        if (p.email) keepEmail.add(String(p.email).toLowerCase());
+      }
+      const orphans = nsUsers.filter((u) => {
+        const ext = nsExtOf(u);
+        const email = nsEmailOf(u);
+        if (!ext || /^\d{7,}$/.test(ext)) return false;
+        if (keepExt.has(ext)) return false;
+        if (email && keepEmail.has(email)) return false;
+        return true;
+      }).map((u) => ({ extension: nsExtOf(u), email: nsEmailOf(u) }));
+
+      const results: any[] = [];
+      if (confirm) {
+        for (const o of orphans) {
+          const ns = await deleteNsUserFull(domain, o.extension).catch((e) => ({ ok: false, error: String(e) }));
+          results.push({ ...o, ns });
+        }
+        await logAudit(admin, req, {
+          admin_id: profile.id, action: "NS_PURGE_ORPHANS",
+          metadata: { domain, count: results.length },
+        });
+      }
+      return jsonResponse({
+        success: true, domain, confirm,
+        ns_total: nsUsers.length, orphans_count: orphans.length,
+        orphans: orphans.slice(0, 500), deleted: results.length,
+      });
+    }
+
 
     if (action === "reset_password") {
       const { email } = payload ?? {};

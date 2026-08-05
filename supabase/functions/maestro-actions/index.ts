@@ -304,6 +304,23 @@ Deno.serve(async (req) => {
           // Not linked yet → resolve from the Maestro broker directory using
           // the broker's Microsoft email, then extension / phone / full name.
           if ((!telecomUserId || !/^\d+$/.test(telecomUserId)) && prof) {
+            // 1) Authoritative: the broker's own Maestro OAuth session.
+            try {
+              const tok = await getUserMaestroAccessToken(admin, callerId);
+              if (tok) {
+                const me = await fetchMaestroUserProfile(getMaestroOAuthEnv(), tok);
+                const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
+                if (mid && /^\d+$/.test(String(mid))) {
+                  telecomUserId = String(mid);
+                  linkInfo = { matched_by: "oauth_me" };
+                  await admin.from("planipret_profiles")
+                    .update({ maestro_broker_id: telecomUserId, maestro_connected: true })
+                    .eq("id", (prof as any).id);
+                }
+              }
+            } catch { /* fall through to directory match */ }
+          }
+          if ((!telecomUserId || !/^\d+$/.test(telecomUserId)) && prof) {
             const linked = await linkBrokerIdByEmail(admin, prof as any);
             linkInfo = { matched_by: linked.matched_by, error: linked.error };
             if (linked.ok && linked.maestro_broker_id) telecomUserId = linked.maestro_broker_id;
@@ -318,8 +335,9 @@ Deno.serve(async (req) => {
             success: false,
             clients: [],
             brokers: [],
-            error: "Votre compte n'est pas encore lié à Maestro. Contactez un administrateur pour associer votre courtier Maestro.",
-            code: "maestro_user_id_unresolved",
+            error: "Connectez votre compte Maestro dans Réglages → Maestro pour voir vos clients.",
+            code: "maestro_not_connected",
+
             link: linkInfo,
           });
         }

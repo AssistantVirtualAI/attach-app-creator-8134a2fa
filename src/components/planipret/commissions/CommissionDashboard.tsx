@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
-import { Download, LayoutGrid, Table2, Search, RefreshCw } from "lucide-react";
+import { Download, LayoutGrid, Table2, Search, RefreshCw, DollarSign, Briefcase, Wallet, Gauge, TrendingUp, Users, Filter, Trophy } from "lucide-react";
 import {
   type CommissionRow, type CommissionFilters, emptyFilters, fetchCommissionRows,
   aggregate, applyFilters, brokerNames, lenderNames, globalTotals, kpiOf,
@@ -166,15 +166,37 @@ export default function CommissionDashboard({
   const set = (k: keyof CommissionFilters, v: any) => setFilters((f) => ({ ...f, [k]: v }));
 
   if (loading) {
-    return <div className="pp-card" style={{ padding: 24, color: "var(--pp-text-muted)" }}>{T(lang, "Chargement des statistiques…", "Loading statistics…")}</div>;
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-xl animate-pulse" style={{ height: 92, background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }} />
+          ))}
+        </div>
+        <div className="rounded-xl animate-pulse" style={{ height: 64, background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }} />
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="rounded-xl animate-pulse xl:col-span-2" style={{ height: 320, background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }} />
+          <div className="rounded-xl animate-pulse" style={{ height: 320, background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }} />
+        </div>
+      </div>
+    );
   }
   if (err) {
     return <div className="pp-card" style={{ padding: 24, color: "#E84C4C" }}>{err}</div>;
   }
   if (!rows.length) {
     return (
-      <div className="pp-card" style={{ padding: 24, color: "var(--pp-text-muted)" }}>
-        {T(lang, "Aucune donnée de commission disponible pour ce compte.", "No commission data available for this account.")}
+      <div className="pp-card flex flex-col items-center text-center gap-2" style={{ padding: 40 }}>
+        <span className="rounded-xl flex items-center justify-center" style={{ width: 44, height: 44, background: "rgba(46,155,220,.12)", color: "#2E9BDC" }}>
+          <TrendingUp className="w-5 h-5" />
+        </span>
+        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>
+          {T(lang, "Aucune donnée de commission", "No commission data")}
+        </p>
+        <p style={{ fontSize: 11.5, color: "var(--pp-text-faint)", maxWidth: 380 }}>
+          {T(lang, "Les statistiques apparaîtront dès qu'un tableau de bord de commissions sera importé pour ce compte.",
+                   "Statistics will appear as soon as a commission dashboard is imported for this account.")}
+        </p>
       </div>
     );
   }
@@ -183,16 +205,32 @@ export default function CommissionDashboard({
     <div className="space-y-4">
       {/* Global overview strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label={T(lang, "Volume", "Volume")} value={fmtMoney(totals.volume)} sub={`PY ${fmtMoney(totals.py_volume)}`} yoy={totals.volumeYoy} />
-        <Kpi label={T(lang, "Transactions", "Deals")} value={fmtNum(totals.deals)} sub={`PY ${fmtNum(totals.py_deals)}`} yoy={totals.dealsYoy} />
-        <Kpi label="Commission" value={fmtMoney(totals.commission)} sub={`PY ${fmtMoney(totals.py_commission)}`} yoy={totals.commissionYoy} />
-        <Kpi label={T(lang, "Volume moyen / dossier", "Avg deal size")} value={fmtMoney(totals.avgDeal)} />
-        <Kpi label={T(lang, "Commission moy. / dossier", "Avg comm. / deal")} value={fmtMoney(totals.avgCommission)} />
-        <Kpi label="BPS" value={fmtBps(totals.bps)} sub={`PY ${fmtBps(totals.pyBps)}`} />
+        <Kpi Icon={DollarSign} accent="#2E9BDC" label={T(lang, "Volume", "Volume")} value={fmtMoney(totals.volume)} sub={`PY ${fmtMoney(totals.py_volume)}`} yoy={totals.volumeYoy} />
+        <Kpi Icon={Briefcase} accent="#9B7FE8" label={T(lang, "Transactions", "Deals")} value={fmtNum(totals.deals)} sub={`PY ${fmtNum(totals.py_deals)}`} yoy={totals.dealsYoy} />
+        <Kpi Icon={Wallet} accent="#00D4AA" label="Commission" value={fmtMoney(totals.commission)} sub={`PY ${fmtMoney(totals.py_commission)}`} yoy={totals.commissionYoy} />
+        <Kpi Icon={TrendingUp} accent="#E8A33C" label={T(lang, "Volume moyen / dossier", "Avg deal size")} value={fmtMoney(totals.avgDeal)} />
+        <Kpi Icon={Wallet} accent="#4AC9E3" label={T(lang, "Commission moy. / dossier", "Avg comm. / deal")} value={fmtMoney(totals.avgCommission)} />
+        <Kpi Icon={Gauge} accent="#E86CB0" label="BPS" value={fmtBps(totals.bps)} sub={`PY ${fmtBps(totals.pyBps)}`} />
       </div>
 
       {/* Filters */}
-      <div className="pp-card" style={{ padding: 14 }}>
+      <div className="pp-card sticky top-2 z-20" style={{ padding: 14, backdropFilter: "blur(10px)" }}>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="rounded-md flex items-center justify-center" style={{ width: 20, height: 20, background: "rgba(46,155,220,.14)", color: "#2E9BDC" }}>
+            <Filter className="w-3 h-3" />
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "var(--pp-text-muted)" }}>
+            {T(lang, "Filtres & vues", "Filters & views")}
+          </span>
+          {activeFilterCount > 0 && (
+            <span className="rounded-full px-2 py-0.5" style={{ fontSize: 10, fontWeight: 700, background: "rgba(46,155,220,.16)", color: "#2E9BDC" }}>
+              {activeFilterCount}
+            </span>
+          )}
+          <span className="ml-auto" style={{ fontSize: 10.5, color: "var(--pp-text-faint)" }}>
+            {fmtNum(filtered.length)} {T(lang, "lignes", "rows")} · {totals.brokers} {T(lang, "courtier(s)", "broker(s)")}
+          </span>
+        </div>
         <div className="flex flex-wrap items-end gap-3">
           {scope === "admin" && (
             <Select label={T(lang, "Courtier", "Broker")} value={filters.broker} onChange={(v) => set("broker", v)}
@@ -249,8 +287,9 @@ export default function CommissionDashboard({
 
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="pp-card xl:col-span-2" style={{ padding: 16 }}>
-          <h3 className="pp-heading mb-2" style={{ fontSize: 13, fontWeight: 600 }}>{T(lang, "Volume par prêteur (CY vs PY)", "Volume by lender (CY vs PY)")}</h3>
+        <Panel className="xl:col-span-2" accent="#2E9BDC"
+          title={T(lang, "Volume par prêteur", "Volume by lender")}
+          subtitle={T(lang, "Année courante vs année précédente — top 12", "Current vs prior year — top 12")}>
           <div style={{ width: "100%", height: 280 }}>
             <ResponsiveContainer>
               <BarChart data={lenderData.map((r) => ({ name: r.dimension, CY: r.cy_volume, PY: r.py_volume, Commission: r.cy_commission }))}
@@ -265,10 +304,10 @@ export default function CommissionDashboard({
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Panel>
 
-        <div className="pp-card" style={{ padding: 16 }}>
-          <h3 className="pp-heading mb-2" style={{ fontSize: 13, fontWeight: 600 }}>{T(lang, "Commission par type", "Commission by type")}</h3>
+        <Panel accent="#00D4AA" title={T(lang, "Commission par type", "Commission by type")}
+          subtitle={T(lang, "Base, bonis et performance", "Base, bonus and performance")}>
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer>
               <PieChart>
@@ -281,10 +320,10 @@ export default function CommissionDashboard({
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Panel>
 
-        <div className="pp-card xl:col-span-2" style={{ padding: 16 }}>
-          <h3 className="pp-heading mb-2" style={{ fontSize: 13, fontWeight: 600 }}>{T(lang, "Évolution trimestrielle", "Quarterly trend")}</h3>
+        <Panel className="xl:col-span-2" accent="#9B7FE8" title={T(lang, "Évolution trimestrielle", "Quarterly trend")}
+          subtitle={T(lang, "Volume par trimestre, CY vs PY", "Volume per quarter, CY vs PY")}>
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer>
               <AreaChart data={quarterData.map((r) => ({ name: r.dimension, CY: r.cy_volume, PY: r.py_volume }))} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
@@ -304,10 +343,10 @@ export default function CommissionDashboard({
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Panel>
 
-        <div className="pp-card" style={{ padding: 16 }}>
-          <h3 className="pp-heading mb-2" style={{ fontSize: 13, fontWeight: 600 }}>{T(lang, "Mix produit", "Product mix")}</h3>
+        <Panel accent="#E8A33C" title={T(lang, "Mix produit", "Product mix")}
+          subtitle={T(lang, "Répartition du volume par type de prêt", "Volume split by product type")}>
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer>
               <BarChart data={productData.map((r) => ({ name: r.dimension, Volume: r.cy_volume }))} layout="vertical" margin={{ top: 8, right: 16, left: 40, bottom: 0 }}>
@@ -321,8 +360,39 @@ export default function CommissionDashboard({
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </Panel>
       </div>
+
+      {/* Leaderboard (admin, multi-broker) */}
+      {scope === "admin" && leaderboard.length > 1 && (
+        <Panel accent="#E8A33C" title={T(lang, "Classement des courtiers", "Broker leaderboard")}
+          subtitle={T(lang, "Volume et commissions par courtier", "Volume and commissions per broker")}
+          right={<Trophy className="w-4 h-4" style={{ color: "#E8A33C" }} />}>
+          <div className="space-y-2.5">
+            {leaderboard.map((b, i) => (
+              <div key={b.name} className="flex items-center gap-3">
+                <span className="rounded-lg flex items-center justify-center shrink-0" style={{
+                  width: 24, height: 24, fontSize: 11, fontWeight: 800,
+                  background: i === 0 ? "rgba(232,163,60,.18)" : "var(--pp-bg-deep)",
+                  color: i === 0 ? "#E8A33C" : "var(--pp-text-muted)",
+                  border: "1px solid var(--pp-bg-border-2)",
+                }}>{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate" style={{ fontSize: 12, fontWeight: 600, color: "var(--pp-text-primary)" }}>{b.name}</span>
+                    <span className="tabular-nums shrink-0" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+                      {fmtMoney(b.volume)} · <span style={{ color: "#00D4AA" }}>{fmtMoney(b.commission)}</span>
+                    </span>
+                  </div>
+                  <div className="mt-1 rounded-full overflow-hidden" style={{ height: 5, background: "var(--pp-bg-deep)" }}>
+                    <div style={{ width: `${b.pct}%`, height: "100%", background: `linear-gradient(90deg, ${CHART_COLORS[i % CHART_COLORS.length]}, ${CHART_COLORS[i % CHART_COLORS.length]}80)` }} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
 
       {/* Views */}
       {view === "table" ? (

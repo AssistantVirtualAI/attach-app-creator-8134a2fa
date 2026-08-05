@@ -84,6 +84,7 @@ export default function DidAnnouncementCard() {
           >
             {loading === "enable" && <Loader2 className="h-3 w-3 animate-spin" />}
             Activer
+          </button>
           <button
             onClick={() => run("diagnose")}
             disabled={!!loading}

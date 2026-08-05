@@ -958,6 +958,10 @@ export default function PAUsers() {
         </div>
       )}
 
+      <NsPurgeCard />
+
+
+
       {/* Filters */}
       <div className="flex items-center gap-2">
         {([

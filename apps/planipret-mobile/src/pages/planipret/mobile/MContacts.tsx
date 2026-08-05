@@ -435,10 +435,11 @@ export default function MContacts() {
       {/* Pill tabs */}
       <div className="flex gap-1 p-1 mb-4" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)", borderRadius: 12 }}>
         {([
-          { id: "personal", label: t("contacts.personal") || "Personnels", Icon: Users },
-          { id: "favorites", label: t("contacts.favorites") || "Favoris", Icon: Star },
-          { id: "directory", label: t("contacts.directory") || "Annuaire", Icon: BookUser },
-          { id: "clients", label: t("contacts.clients") || "Clients", Icon: Briefcase },
+          // `t()` renvoie la clé quand la traduction manque → fallback explicite.
+          { id: "personal", label: tr("contacts.personal", "Personnels"), Icon: Users },
+          { id: "favorites", label: tr("contacts.favorites", "Favoris"), Icon: Star },
+          { id: "directory", label: tr("contacts.directory", "Répertoire"), Icon: BookUser },
+          { id: "clients", label: tr("contacts.clients", "Clients"), Icon: Briefcase },
         ] as const).map((p) => {
           const active = tab === p.id;
           return (

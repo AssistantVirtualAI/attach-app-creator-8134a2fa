@@ -96,6 +96,28 @@ export default function PlanipretBrokerLayout() {
     );
   }
 
+  if (state === "denied") {
+    return (
+      <div className="planipret-scope planipret-admin-scope min-h-screen flex items-center justify-center p-6">
+        <div className="pp-card max-w-md text-center" style={{ padding: 24 }}>
+          <ShieldAlert className="w-8 h-8 mx-auto mb-3" style={{ color: "#ef4444" }} />
+          <h1 className="pp-heading" style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+            {lang === "en" ? "Access denied" : "Accès refusé"}
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--pp-text-muted)", marginBottom: 16 }}>
+            {denyReason === "lemtel"
+              ? (lang === "en" ? "This account does not belong to Planiprêt." : "Ce compte n'appartient pas à Planiprêt.")
+              : (lang === "en" ? "No broker profile is linked to this account." : "Aucun profil courtier n'est lié à ce compte.")}
+          </p>
+          <button onClick={logout} className="px-3 py-2 rounded-lg text-[13px] font-semibold text-white" style={{ background: "var(--pp-brand-accent-2)" }}>
+            {lang === "en" ? "Sign out" : "Se déconnecter"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+
   const current = NAV.find((n) => location.pathname.startsWith(n.to));
   const title = current ? (lang === "en" ? current.en : current.fr) : (lang === "en" ? "Broker portal" : "Portail courtier");
   const dateLabel = new Date().toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });

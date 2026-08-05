@@ -138,6 +138,9 @@ export default function PlanipretAdminLayout() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [dialNumber, setDialNumber] = useState("");
   const [dialing, setDialing] = useState(false);
+  const [mobileNoticeDismissed, setMobileNoticeDismissed] = useState(() => {
+    try { return localStorage.getItem("pp_admin_mobile_notice") === "dismissed"; } catch { return false; }
+  });
 
   // Auto-sync NS-API in the background for every admin page. Idempotent via
   // module-level in-flight guard, safe to mount once at the layout.
@@ -304,21 +307,38 @@ export default function PlanipretAdminLayout() {
   return (
     <div className="planipret-scope planipret-admin-scope min-h-screen flex"
       style={{ background: "var(--pp-bg-base)", fontFamily: "'Epilogue', sans-serif" }}>
-      {/* Mobile redirect notice */}
-      <div className="md:hidden fixed inset-0 z-50 flex items-center justify-center p-6"
-        style={{ background: "var(--pp-bg-base)" }}>
-        <div className="text-center max-w-xs pp-card" style={{ padding: 24 }}>
-          <h2 className="pp-heading" style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
-            {tt("adminPortal.mobileNoticeTitle")}
-          </h2>
-          <p style={{ fontSize: 13, color: "var(--pp-text-secondary)", marginBottom: 16 }}>
-            {tt("adminPortal.mobileNoticeBody")}
-          </p>
-          <button onClick={() => navigate("/mplanipret")} className="pp-btn-primary">
-            {tt("adminPortal.openMobileApp")}
-          </button>
+      {/* Mobile redirect notice (dismissible) */}
+      {!mobileNoticeDismissed && (
+        <div className="md:hidden fixed inset-0 z-50 flex items-center justify-center p-6"
+          style={{ background: "var(--pp-bg-base)" }}>
+          <div className="text-center max-w-xs pp-card" style={{ padding: 24 }}>
+            <h2 className="pp-heading" style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
+              {tt("adminPortal.mobileNoticeTitle")}
+            </h2>
+            <p style={{ fontSize: 13, color: "var(--pp-text-secondary)", marginBottom: 16 }}>
+              {tt("adminPortal.mobileNoticeBody")}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => navigate("/mplanipret")} className="pp-btn-primary">
+                {tt("adminPortal.openMobileApp")}
+              </button>
+              <button
+                onClick={() => {
+                  try { localStorage.setItem("pp_admin_mobile_notice", "dismissed"); } catch { /* noop */ }
+                  setMobileNoticeDismissed(true);
+                }}
+                style={{
+                  fontSize: 13, padding: "8px 12px", borderRadius: 10,
+                  border: "1px solid var(--pp-bg-border)", background: "transparent",
+                  color: "var(--pp-text-secondary)",
+                }}
+              >
+                Continuer sur mobile
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
 
       {/* Sidebar */}

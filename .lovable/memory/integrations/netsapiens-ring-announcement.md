@@ -42,3 +42,11 @@ Action `repair_queues` de `pp-ns-did-announcement` (bouton « Réparer les files
   le self-heal au boot ne tourne que si l'en-tête `x-selfheal: 1` est présent (sinon IDLE_TIMEOUT) ;
   `status`/`enable`/`disable` acceptent `offset`/`limit` pour traiter par lots.
 - État au 2026-08-06 : tous les DID étaient en `to-user-residential` (aucun avis). Poste 111 activé et validé.
+
+## État final 2026-08-06 (config retenue — pas de file d'attente)
+- **Aucune file** : tous les DID sont en `to-user-residential` (routage direct vers le poste). L'ext 111 a été remise en direct.
+- Le média du domaine `moh-01.wav` = **avis 4,3 s + tonalité de retour d'appel générée (440+480 Hz, 2 s ON / 4 s OFF)**, durée totale 44 s — action `build_ringback` de `pp-ns-ring-announcement`.
+- `music-on-ring-enabled` = `yes` au **domaine** → l'avis remplace la sonnerie 4 s puis la tonalité prend le relais.
+- `ring-no-answer-timeout-seconds` = **29 s** sur les 100 utilisateurs du domaine (action `set_ring_timeout`).
+- `listUsers()` pagine désormais (`start`/`limit`) ; le domaine compte exactement 100 postes numériques (max ext 1144).
+- **Compromis assumé** : le domaine étant la seule bascule persistante, l'avis est aussi entendu par le courtier sur ses appels **sortants**. Aucun moyen NS de le scoper aux entrants sans file d'attente.

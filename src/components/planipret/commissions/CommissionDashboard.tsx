@@ -444,7 +444,7 @@ export default function CommissionDashboard({
           <SectionTable lang={lang} title={SECTION_LABELS.quarter[lang]} rows={quarterData} money />
           <SectionTable lang={lang} title={SECTION_LABELS.commission_type[lang]} rows={typeData} money />
           <SectionTable lang={lang} title={SECTION_LABELS.product_mix[lang]} rows={productData} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.term_mix[lang]} rows={termData} money />
+          <SectionTable lang={lang} title={SECTION_LABELS.term_mix[lang]} rows={termData} money labelFn={(v) => termLabel(String(v), lang)} />
 
           {/* Matrix heat table */}
           {matrixTypes.length > 0 && (

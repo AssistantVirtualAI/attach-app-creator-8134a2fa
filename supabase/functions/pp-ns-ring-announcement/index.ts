@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
     const listUsers = async (): Promise<string[]> => {
       const out: string[] = [];
       const limit = 100;
-      for (let start = 0; start < 2000; start += limit) {
+      for (let start = 1; start < 3000; start += limit) {
         const res = await nsFetch(
           `${base}/users?limit=${limit}&start=${start}`,
           {},

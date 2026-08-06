@@ -531,12 +531,13 @@ export default function CommissionDashboard({
       {/* Views */}
       {view === "table" ? (
         <div className="space-y-4">
-          <SectionTable lang={lang} title={SECTION_LABELS.productivity[lang]} rows={aggregate(filtered, "productivity").sort((a, b) => b.cy_volume - a.cy_volume)} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.lender[lang]} rows={aggregate(filtered, "lender").sort((a, b) => b.cy_volume - a.cy_volume)} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.quarter[lang]} rows={quarterData} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.commission_type[lang]} rows={typeData} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.product_mix[lang]} rows={productData} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.term_mix[lang]} rows={termData} money labelFn={(v) => termLabel(String(v), lang)} />
+          <SectionTable lang={lang} accent="#E8A33C" title={SECTION_LABELS.productivity[lang]} rows={aggregate(filtered, "productivity").sort((a, b) => b.cy_volume - a.cy_volume)} money />
+          <SectionTable lang={lang} accent="#2E9BDC" title={SECTION_LABELS.lender[lang]} rows={aggregate(filtered, "lender").sort((a, b) => b.cy_volume - a.cy_volume)} money />
+          <SectionTable lang={lang} accent="#9B7FE8" title={SECTION_LABELS.quarter[lang]} rows={quarterData} money />
+          <SectionTable lang={lang} accent="#00D4AA" title={SECTION_LABELS.commission_type[lang]} rows={typeData} money />
+          <SectionTable lang={lang} accent="#E86CB0" title={SECTION_LABELS.product_mix[lang]} rows={productData} money />
+          <SectionTable lang={lang} accent="#4AC9E3" title={SECTION_LABELS.term_mix[lang]} rows={termData} money labelFn={(v) => termLabel(String(v), lang)} />
+
 
           {/* Matrix heat table */}
           {matrixTypes.length > 0 && (

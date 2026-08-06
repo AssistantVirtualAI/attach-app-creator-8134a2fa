@@ -60,6 +60,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
     items: [
       { to: "/planipret/admin/integrations",    key: "integrations",    Icon: Plug,        badge: "integrations" },
       { to: "/planipret/admin/mobile-devices",  key: "mobileDevices",   Icon: Smartphone },
+      { to: "/planipret/admin/mobile-app",      key: "mobileApp",       Icon: Rocket },
       { to: "/planipret/admin/hold-music",      key: "holdMusic",       Icon: Music },
       { to: "/planipret/admin/sip-diagnostic",  key: "sipDiagnostic",   Icon: PlugZap },
       { to: "/planipret/admin/diagnostics",     key: "diagnostics",     Icon: Gauge },

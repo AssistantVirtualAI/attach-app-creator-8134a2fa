@@ -1128,11 +1128,11 @@ export default function PlanipretMobile() {
         )}
 
 
-        {/* Tab bar (5 tabs) */}
-        <nav className="absolute bottom-[22px] inset-x-0 grid grid-cols-5 z-10 pp-mobile-tabbar"
-          style={{ height: 84 }}>
+        {/* Tab bar (onglets pilotés depuis le portail) */}
+        <nav className="absolute bottom-[22px] inset-x-0 grid z-10 pp-mobile-tabbar"
+          style={{ height: 84, gridTemplateColumns: `repeat(${visibleTabs.length || 1}, minmax(0, 1fr))` }}>
 
-          {TABS.map((tabItem) => {
+          {visibleTabs.map((tabItem) => {
             const badge = tabItem.to.endsWith("/messages") ? unreadMsg : 0;
             const isAva = tabItem.to.endsWith("/ava");
             return (

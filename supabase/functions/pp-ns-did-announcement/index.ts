@@ -89,6 +89,7 @@ async function ensureQueue(domain: string, ext: string) {
   // agents sonnent, et il coupe net au décrochage.
   const payload: Record<string, unknown> = {
     synchronous: "yes",
+    queue: q,
     "call-queue": q,
     name: `Avis ${ext}`,
     description: `Annonce d'enregistrement — entrants du courtier ${ext}`,
@@ -103,7 +104,7 @@ async function ensureQueue(domain: string, ext: string) {
 
   const write = read.ok
     ? await ns(`${base}/${encodeURIComponent(q)}`, { method: "PUT", body: JSON.stringify(payload) })
-    : await ns(base, { method: "POST", body: JSON.stringify({ ...payload, "call-queue": q }) });
+    : await ns(base, { method: "POST", body: JSON.stringify({ ...payload, queue: q, "call-queue": q }) });
 
   // Agent unique = le courtier (ses propres devices sonnent).
   const agents = await ns(`${base}/${encodeURIComponent(q)}/agents`);
@@ -113,7 +114,7 @@ async function ensureQueue(domain: string, ext: string) {
   if (!present) {
     agentWrite = await ns(`${base}/${encodeURIComponent(q)}/agents`, {
       method: "POST",
-      body: JSON.stringify({ synchronous: "yes", user: ext, "device-id": ext, enabled: "yes" }),
+      body: JSON.stringify({ synchronous: "yes", queue: q, user: ext, device: `sip:${ext}@${domain}`, "device-id": ext, enabled: "yes" }),
     });
   }
   return { queue: q, created: !read.ok, write: { status: write.status, ok: write.ok, error: write.ok ? undefined : write.data }, agent: agentWrite ? { status: agentWrite.status, ok: agentWrite.ok, error: agentWrite.ok ? undefined : agentWrite.data } : { skipped: true } };

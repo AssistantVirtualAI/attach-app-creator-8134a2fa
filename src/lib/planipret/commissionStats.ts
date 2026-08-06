@@ -52,7 +52,18 @@ export async function fetchCommissionRows(scope?: { brokerUserId?: string | null
   else if (scope?.brokerName) q = q.eq("broker_name", scope.brokerName);
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []) as CommissionRow[];
+  return (data ?? []).map((row: any) => ({
+    ...row,
+    fiscal_year: Number(row.fiscal_year ?? 0),
+    rank: row.rank == null ? null : Number(row.rank),
+    cy_volume: Number(row.cy_volume ?? 0),
+    py_volume: Number(row.py_volume ?? 0),
+    cy_deals: Number(row.cy_deals ?? 0),
+    py_deals: Number(row.py_deals ?? 0),
+    cy_commission: Number(row.cy_commission ?? 0),
+    py_commission: Number(row.py_commission ?? 0),
+    extra: row.extra && typeof row.extra === "object" ? row.extra : {},
+  })) as CommissionRow[];
 }
 
 /* ---------- formatting ---------- */
@@ -115,7 +126,16 @@ export function aggregate(rows: CommissionRow[], section: string, withSub = fals
     const key = withSub ? `${r.dimension}||${r.sub_dimension}` : String(r.dimension);
     const cur = map.get(key);
     if (!cur) {
-      map.set(key, { ...r, key });
+      map.set(key, {
+        ...r,
+        key,
+        cy_volume: Number(r.cy_volume || 0),
+        py_volume: Number(r.py_volume || 0),
+        cy_deals: Number(r.cy_deals || 0),
+        py_deals: Number(r.py_deals || 0),
+        cy_commission: Number(r.cy_commission || 0),
+        py_commission: Number(r.py_commission || 0),
+      });
     } else {
       cur.cy_volume += Number(r.cy_volume || 0);
       cur.py_volume += Number(r.py_volume || 0);

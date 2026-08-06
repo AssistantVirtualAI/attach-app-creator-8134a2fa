@@ -306,6 +306,14 @@ export default function CommissionDashboard({
               style={{ background: "var(--pp-brand-accent-2)" }}>
               <Download className="w-3.5 h-3.5" /> CSV
             </button>
+            {canEdit && (
+              <button onClick={() => { setEditRow(null); setDialogOpen(true); }}
+                className="px-2.5 py-1.5 rounded-lg text-[12px] flex items-center gap-1.5 text-white"
+                style={{ background: "#00A37A" }}>
+                <Plus className="w-3.5 h-3.5" /> {T(lang, "Ajouter", "Add")}
+              </button>
+            )}
+
             <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--pp-bg-border-2)" }}>
               <button onClick={() => setView("table")} className="px-2.5 py-1.5 text-[12px] flex items-center gap-1.5"
                 style={{ background: view === "table" ? "var(--pp-brand-accent-2)" : "transparent", color: view === "table" ? "#fff" : "var(--pp-text-muted)" }}>

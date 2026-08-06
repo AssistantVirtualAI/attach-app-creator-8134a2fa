@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  PieChart, Pie, Cell, AreaChart, Area,
+  PieChart, Pie, Cell, AreaChart, Area, LineChart, Line,
 } from "recharts";
 import { Download, LayoutGrid, Table2, Search, RefreshCw, DollarSign, Briefcase, Wallet, Gauge, TrendingUp, Users, Filter, Trophy, Plus, Pencil, Trash2 } from "lucide-react";
 import {
@@ -104,6 +104,21 @@ function Select({ value, onChange, options, label }: { value: string; onChange: 
   );
 }
 
+function ChartValues({ items, valueKey = "CY", compareKey }: { items: Array<Record<string, any>>; valueKey?: string; compareKey?: string }) {
+  if (!items.length) return null;
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+      {items.slice(0, 12).map((item, index) => (
+        <div key={`${item.name}-${index}`} className="rounded-lg px-2.5 py-2" style={{ background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }}>
+          <div className="truncate" style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{item.name}</div>
+          <div className="tabular-nums" style={{ fontSize: 12, fontWeight: 700, color: CHART_COLORS[index % CHART_COLORS.length] }}>{fmtMoney(item[valueKey])}</div>
+          {compareKey && <div className="tabular-nums" style={{ fontSize: 9.5, color: "var(--pp-text-faint)" }}>PY {fmtMoney(item[compareKey])}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function CommissionDashboard({
   lang = "fr",
   scope = "admin",
@@ -144,6 +159,12 @@ export default function CommissionDashboard({
   const totals = useMemo(() => globalTotals(filtered), [filtered]);
   const brokers = useMemo(() => brokerNames(rows), [rows]);
   const lenders = useMemo(() => lenderNames(rows), [rows]);
+  const productTypes = useMemo(() => Array.from(new Set(rows
+    .filter((r) => r.section === "product_mix" || r.section === "matrix")
+    .map((r) => String(r.dimension ?? "").trim()).filter(Boolean))).sort(), [rows]);
+  const commissionTypes = useMemo(() => Array.from(new Set(rows
+    .filter((r) => r.section === "commission_type")
+    .map((r) => String(r.dimension ?? "").trim()).filter(Boolean))).sort(), [rows]);
 
   const lenderData = useMemo(
     () => aggregate(filtered, "lender").sort((a, b) => b.cy_volume - a.cy_volume).slice(0, 12),
@@ -157,6 +178,26 @@ export default function CommissionDashboard({
   const productData = useMemo(() => aggregate(filtered, "product_mix"), [filtered]);
   const termData = useMemo(() => aggregate(filtered, "term_mix"), [filtered]);
   const matrixData = useMemo(() => aggregate(filtered, "matrix", true), [filtered]);
+  const finite = (value: unknown) => {
+    const number = Number(value ?? 0);
+    return Number.isFinite(number) ? number : 0;
+  };
+  const lenderChartData = useMemo(() => lenderData.map((r) => ({
+    name: String(r.dimension ?? "—"), CY: finite(r.cy_volume), PY: finite(r.py_volume),
+  })), [lenderData]);
+  const commissionChartData = useMemo(() => typeData.map((r) => ({
+    name: String(r.dimension ?? "—"), CY: finite(r.cy_commission), PY: finite(r.py_commission),
+  })), [typeData]);
+  const quarterChartData = useMemo(() => quarterData.map((r) => ({
+    name: String(r.dimension ?? "—"), CY: finite(r.cy_volume), PY: finite(r.py_volume),
+    deals: finite(r.cy_deals), commission: finite(r.cy_commission),
+  })), [quarterData]);
+  const productChartData = useMemo(() => productData.map((r) => ({
+    name: String(r.dimension ?? "—"), Volume: finite(r.cy_volume), Deals: finite(r.cy_deals),
+  })), [productData]);
+  const termChartData = useMemo(() => termData.map((r) => ({
+    name: termLabel(String(r.dimension ?? ""), lang), CY: finite(r.cy_volume), PY: finite(r.py_volume),
+  })), [termData, lang]);
   const activeFilterCount = useMemo(() => {
     let n = 0;
     (["broker", "lender", "quarter", "productType", "term", "commissionType"] as const).forEach((k) => { if (filters[k] !== "all") n++; });
@@ -283,11 +324,11 @@ export default function CommissionDashboard({
           <Select label={T(lang, "Trimestre", "Quarter")} value={filters.quarter} onChange={(v) => set("quarter", v)}
             options={[{ v: "all", l: T(lang, "Tous", "All") }, ...["Q1", "Q2", "Q3", "Q4"].map((q) => ({ v: q, l: q }))]} />
           <Select label={T(lang, "Type de prêt", "Product type")} value={filters.productType} onChange={(v) => set("productType", v)}
-            options={[{ v: "all", l: T(lang, "Tous", "All") }, ...["Taux Fixe", "Taux Variable", "Marge Hypothécaire"].map((p) => ({ v: p, l: p }))]} />
+            options={[{ v: "all", l: T(lang, "Tous", "All") }, ...productTypes.map((p) => ({ v: p, l: p }))]} />
           <Select label={T(lang, "Terme", "Term")} value={filters.term} onChange={(v) => set("term", v)}
             options={[{ v: "all", l: T(lang, "Tous", "All") }, ...["0", "1", "2", "3", "4", "5"].map((p) => ({ v: p, l: `${p} ${T(lang, "an(s)", "yr")}` }))]} />
           <Select label={T(lang, "Type commission", "Commission type")} value={filters.commissionType} onChange={(v) => set("commissionType", v)}
-            options={[{ v: "all", l: T(lang, "Tous", "All") }, ...["base", "bonus", "bonus2", "perform"].map((p) => ({ v: p, l: p }))]} />
+            options={[{ v: "all", l: T(lang, "Tous", "All") }, ...commissionTypes.map((p) => ({ v: p, l: p }))]} />
 
           <label className="flex flex-col gap-1 flex-1 min-w-[180px]">
             <span style={{ fontSize: 10, color: "var(--pp-text-faint)", textTransform: "uppercase", letterSpacing: ".05em" }}>{T(lang, "Recherche", "Search")}</span>
@@ -342,18 +383,19 @@ export default function CommissionDashboard({
           subtitle={T(lang, "Année courante vs année précédente — top 12", "Current vs prior year — top 12")}>
           <div style={{ width: "100%", height: 280 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={lenderData.map((r) => ({ name: r.dimension, CY: r.cy_volume, PY: r.py_volume, Commission: r.cy_commission }))}
+              <BarChart data={lenderChartData}
                 margin={{ top: 8, right: 8, left: -8, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="name" stroke="#4A7FA5" fontSize={10} angle={-30} textAnchor="end" interval={0} height={60} />
                 <YAxis stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />
                 <Tooltip content={<TooltipDark />} cursor={{ fill: "rgba(46,155,220,0.06)" }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="CY" fill="#2E9BDC" radius={[5, 5, 0, 0]} />
-                <Bar dataKey="PY" fill="#4A7FA5" radius={[5, 5, 0, 0]} />
+                <Bar dataKey="CY" fill="#2E9BDC" radius={[5, 5, 0, 0]} isAnimationActive={false} minPointSize={2} />
+                <Bar dataKey="PY" fill="#4A7FA5" radius={[5, 5, 0, 0]} isAnimationActive={false} minPointSize={2} />
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <ChartValues items={lenderChartData} compareKey="PY" />
         </Panel>
 
         <Panel accent="#00D4AA" title={T(lang, "Commission par type", "Commission by type")}
@@ -361,22 +403,23 @@ export default function CommissionDashboard({
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
-                <Pie data={typeData.map((r) => ({ name: r.dimension, value: r.cy_commission }))} dataKey="value" nameKey="name"
-                  cx="50%" cy="50%" innerRadius={55} outerRadius={88} paddingAngle={3} stroke="none">
-                  {typeData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                <Pie data={commissionChartData.map((r) => ({ name: r.name, value: r.CY }))} dataKey="value" nameKey="name"
+                  cx="50%" cy="50%" innerRadius={55} outerRadius={88} paddingAngle={3} stroke="none" isAnimationActive={false}>
+                  {commissionChartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                 </Pie>
                 <Tooltip content={<TooltipDark />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
+          <ChartValues items={commissionChartData} compareKey="PY" />
         </Panel>
 
         <Panel className="xl:col-span-2" accent="#9B7FE8" title={T(lang, "Évolution trimestrielle", "Quarterly trend")}
           subtitle={T(lang, "Volume par trimestre, CY vs PY", "Volume per quarter, CY vs PY")}>
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <AreaChart data={quarterData.map((r) => ({ name: r.dimension, CY: r.cy_volume, PY: r.py_volume }))} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+              <AreaChart data={quarterChartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="cyGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#2E9BDC" stopOpacity={0.5} />
@@ -388,26 +431,67 @@ export default function CommissionDashboard({
                 <YAxis stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />
                 <Tooltip content={<TooltipDark />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Area type="monotone" dataKey="CY" stroke="#2E9BDC" fill="url(#cyGrad)" strokeWidth={2} />
-                <Area type="monotone" dataKey="PY" stroke="#9B7FE8" fill="transparent" strokeWidth={2} strokeDasharray="4 4" />
+                <Area type="monotone" dataKey="CY" stroke="#2E9BDC" fill="url(#cyGrad)" strokeWidth={2} isAnimationActive={false} />
+                <Area type="monotone" dataKey="PY" stroke="#9B7FE8" fill="transparent" strokeWidth={2} strokeDasharray="4 4" isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          <ChartValues items={quarterChartData} compareKey="PY" />
         </Panel>
 
         <Panel accent="#E8A33C" title={T(lang, "Mix produit", "Product mix")}
           subtitle={T(lang, "Répartition du volume par type de prêt", "Volume split by product type")}>
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={productData.map((r) => ({ name: r.dimension, Volume: r.cy_volume }))} layout="vertical" margin={{ top: 8, right: 16, left: 40, bottom: 0 }}>
+              <BarChart data={productChartData} layout="vertical" margin={{ top: 8, right: 16, left: 40, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis type="number" stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />
                 <YAxis type="category" dataKey="name" stroke="#4A7FA5" fontSize={10} width={110} />
                 <Tooltip content={<TooltipDark />} cursor={{ fill: "rgba(46,155,220,0.06)" }} />
-                <Bar dataKey="Volume" radius={[0, 6, 6, 0]}>
-                  {productData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                <Bar dataKey="Volume" radius={[0, 6, 6, 0]} isAnimationActive={false} minPointSize={2}>
+                  {productChartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                 </Bar>
               </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <ChartValues items={productChartData} valueKey="Volume" />
+        </Panel>
+      </div>
+
+      {/* Supplemental analytics */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Panel accent="#4AC9E3" title={T(lang, "Mix des termes", "Term mix")}
+          subtitle={T(lang, "Volume par durée — année courante et précédente", "Volume by term — current and prior year")}>
+          <div style={{ width: "100%", height: 250 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <BarChart data={termChartData} margin={{ top: 8, right: 8, left: -8, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="name" stroke="#4A7FA5" fontSize={10} />
+                <YAxis stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />
+                <Tooltip content={<TooltipDark />} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="CY" fill="#4AC9E3" radius={[4, 4, 0, 0]} isAnimationActive={false} minPointSize={2} />
+                <Bar dataKey="PY" fill="#4A7FA5" radius={[4, 4, 0, 0]} isAnimationActive={false} minPointSize={2} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <ChartValues items={termChartData} compareKey="PY" />
+        </Panel>
+
+        <Panel accent="#E86CB0" title={T(lang, "Dossiers et commissions", "Deals and commissions")}
+          subtitle={T(lang, "Performance trimestrielle combinée", "Combined quarterly performance")}>
+          <div style={{ width: "100%", height: 250 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <LineChart data={quarterChartData} margin={{ top: 8, right: 16, left: -8, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="name" stroke="#4A7FA5" fontSize={10} />
+                <YAxis yAxisId="money" stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />
+                <YAxis yAxisId="deals" orientation="right" stroke="#E86CB0" fontSize={10} />
+                <Tooltip content={<TooltipDark />} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line yAxisId="money" type="monotone" dataKey="commission" name={T(lang, "Commission", "Commission")} stroke="#00D4AA" strokeWidth={3} dot={{ r: 4 }} isAnimationActive={false} />
+                <Line yAxisId="deals" type="monotone" dataKey="deals" name={T(lang, "Dossiers", "Deals")} stroke="#E86CB0" strokeWidth={2} dot={{ r: 4 }} isAnimationActive={false} />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </Panel>

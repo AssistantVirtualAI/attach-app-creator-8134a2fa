@@ -531,38 +531,68 @@ export default function CommissionDashboard({
       {/* Views */}
       {view === "table" ? (
         <div className="space-y-4">
-          <SectionTable lang={lang} title={SECTION_LABELS.productivity[lang]} rows={aggregate(filtered, "productivity").sort((a, b) => b.cy_volume - a.cy_volume)} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.lender[lang]} rows={aggregate(filtered, "lender").sort((a, b) => b.cy_volume - a.cy_volume)} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.quarter[lang]} rows={quarterData} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.commission_type[lang]} rows={typeData} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.product_mix[lang]} rows={productData} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.term_mix[lang]} rows={termData} money labelFn={(v) => termLabel(String(v), lang)} />
+          <SectionTable lang={lang} accent="#E8A33C" title={SECTION_LABELS.productivity[lang]} rows={aggregate(filtered, "productivity").sort((a, b) => b.cy_volume - a.cy_volume)} money />
+          <SectionTable lang={lang} accent="#2E9BDC" title={SECTION_LABELS.lender[lang]} rows={aggregate(filtered, "lender").sort((a, b) => b.cy_volume - a.cy_volume)} money />
+          <SectionTable lang={lang} accent="#9B7FE8" title={SECTION_LABELS.quarter[lang]} rows={quarterData} money />
+          <SectionTable lang={lang} accent="#00D4AA" title={SECTION_LABELS.commission_type[lang]} rows={typeData} money />
+          <SectionTable lang={lang} accent="#E86CB0" title={SECTION_LABELS.product_mix[lang]} rows={productData} money />
+          <SectionTable lang={lang} accent="#4AC9E3" title={SECTION_LABELS.term_mix[lang]} rows={termData} money labelFn={(v) => termLabel(String(v), lang)} />
+
 
           {/* Matrix heat table */}
-          {matrixTypes.length > 0 && (
-            <div className="pp-card" style={{ padding: 16 }}>
-              <h3 className="pp-heading mb-3" style={{ fontSize: 13, fontWeight: 600 }}>{SECTION_LABELS.matrix[lang]}</h3>
+          {matrixTypes.length > 0 && (() => {
+            const colTotal = (term: string) => matrixTypes.reduce((s, ty) => s + matrixVal(ty, term), 0);
+            const grand = matrixTerms.reduce((s, t) => s + colTotal(t), 0);
+            return (
+            <Panel accent="#2E9BDC" title={SECTION_LABELS.matrix[lang]}
+              subtitle={T(lang, "Volume par type de prêt et durée de terme", "Volume by product type and term")}
+              right={
+                <div className="hidden sm:flex items-center gap-2" style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>
+                  <span>{T(lang, "Faible", "Low")}</span>
+                  <span style={{ width: 72, height: 8, borderRadius: 4, background: "linear-gradient(90deg, rgba(46,155,220,.08), rgba(46,155,220,.6))" }} />
+                  <span>{T(lang, "Élevé", "High")}</span>
+                </div>
+              }>
+              <div style={{ width: "100%", height: 140, marginBottom: 10 }}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                  <BarChart data={matrixTerms.map((t) => ({ name: termLabel(t, lang), Volume: colTotal(t) }))}
+                    margin={{ top: 4, right: 4, left: -14, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis dataKey="name" stroke="#4A7FA5" fontSize={9} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#4A7FA5" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(v) => fmtCompact(v)} width={44} />
+                    <Tooltip content={<TooltipDark />} cursor={{ fill: "rgba(46,155,220,0.06)" }} />
+                    <Bar dataKey="Volume" radius={[4, 4, 0, 0]} isAnimationActive={false} minPointSize={2}>
+                      {matrixTerms.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
               <div className="pa-scroll overflow-x-auto">
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr style={{ color: "var(--pp-text-faint)" }}>
                       <th className="text-left py-1.5 pr-3">{T(lang, "Type", "Type")}</th>
-                      {matrixTerms.map((t) => <th key={t} className="text-right py-1.5 px-2">{t}</th>)}
+                      {matrixTerms.map((t) => <th key={t} className="text-right py-1.5 px-2">{termLabel(t, lang)}</th>)}
                       <th className="text-right py-1.5 pl-2">Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {matrixTypes.map((ty) => {
+                    {matrixTypes.map((ty, ri) => {
                       const total = matrixTerms.reduce((s, t) => s + matrixVal(ty, t), 0);
                       return (
                         <tr key={ty} style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
-                          <td className="py-1.5 pr-3" style={{ color: "var(--pp-text-primary)" }}>{ty}</td>
+                          <td className="py-1.5 pr-3" style={{ color: "var(--pp-text-primary)" }}>
+                            <span className="flex items-center gap-2">
+                              <span style={{ width: 6, height: 6, borderRadius: 2, background: CHART_COLORS[ri % CHART_COLORS.length] }} />
+                              {ty}
+                            </span>
+                          </td>
                           {matrixTerms.map((t) => {
                             const v = matrixVal(ty, t);
                             return (
                               <td key={t} className="text-right py-1.5 px-2 tabular-nums"
-                                style={{ background: v ? `rgba(46,155,220,${0.08 + 0.5 * (v / matrixMax)})` : "transparent", color: "var(--pp-text-muted)" }}>
-                                {v ? fmtMoney(v) : "—"}
+                                style={{ background: v ? `rgba(46,155,220,${0.08 + 0.5 * (v / matrixMax)})` : "transparent", color: v ? "var(--pp-text-primary)" : "var(--pp-text-faint)" }}>
+                                {v ? fmtCompact(v) : "—"}
                               </td>
                             );
                           })}
@@ -571,60 +601,107 @@ export default function CommissionDashboard({
                       );
                     })}
                   </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: "2px solid var(--pp-bg-border-2)" }}>
+                      <td className="py-2 pr-3" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>Total</td>
+                      {matrixTerms.map((t) => (
+                        <td key={t} className="text-right py-2 px-2 tabular-nums" style={{ color: "var(--pp-text-muted)", fontWeight: 600 }}>{fmtCompact(colTotal(t))}</td>
+                      ))}
+                      <td className="text-right py-2 pl-2 tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>{fmtMoney(grand)}</td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
-            </div>
-          )}
+            </Panel>
+            );
+          })()}
+
 
           {(clubData.length > 0 || teamData.length > 0) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {clubData.length > 0 && (
-                <div className="pp-card" style={{ padding: 16 }}>
-                  <h3 className="pp-heading mb-3" style={{ fontSize: 13, fontWeight: 600 }}>{SECTION_LABELS.club[lang]}</h3>
-                  <div className="space-y-1.5">
-                    {clubData.map((r) => (
-                      <div key={r.id} className="flex items-center justify-between text-[12px]" style={{ borderTop: "1px solid var(--pp-bg-border-2)", paddingTop: 6 }}>
-                        <span style={{ color: "var(--pp-text-muted)" }}>{r.broker_name} · {r.dimension}</span>
-                        <span className="tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>
-                          {r.cy_volume ? fmtMoney(r.cy_volume) : (r.extra?.current ?? "—")}
-                          {r.extra?.yoy != null && r.extra?.yoy !== "" && <span style={{ color: "#00D4AA", marginLeft: 8 }}>{typeof r.extra.yoy === "number" ? fmtPct(r.extra.yoy) : r.extra.yoy}</span>}
-                        </span>
+              {clubData.length > 0 && (() => {
+                const maxClub = Math.max(1, ...clubData.map((r) => Number(r.cy_volume || 0)));
+                return (
+                <Panel accent="#E8A33C" title={SECTION_LABELS.club[lang]}
+                  subtitle={T(lang, "Saison août – juillet", "Season August – July")}
+                  right={<Trophy className="w-4 h-4" style={{ color: "#E8A33C" }} />}>
+                  <div className="space-y-2.5">
+                    {clubData.map((r, i) => {
+                      const v = Number(r.cy_volume || 0);
+                      const color = CHART_COLORS[i % CHART_COLORS.length];
+                      return (
+                      <div key={r.id}>
+                        <div className="flex items-center justify-between gap-2 text-[12px]">
+                          <span className="truncate" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>{r.dimension}</span>
+                          <span className="tabular-nums shrink-0" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>
+                            {v ? fmtMoney(v) : (r.extra?.current ?? "—")}
+                            {r.extra?.yoy != null && r.extra?.yoy !== "" && (
+                              <span style={{ color: "#00D4AA", marginLeft: 8, fontSize: 11 }}>{typeof r.extra.yoy === "number" ? fmtPct(r.extra.yoy) : r.extra.yoy}</span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 mt-0.5">
+                          <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{r.broker_name}</span>
+                          {!!r.cy_deals && <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{fmtNum(r.cy_deals)} {T(lang, "dossiers", "deals")}</span>}
+                        </div>
+                        {v > 0 && (
+                          <div className="mt-1 rounded-full overflow-hidden" style={{ height: 5, background: "var(--pp-bg-deep)" }}>
+                            <div style={{ width: `${Math.max(3, (v / maxClub) * 100)}%`, height: "100%", background: `linear-gradient(90deg, ${color}, ${color}66)` }} />
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                </div>
-              )}
+                </Panel>
+                );
+              })()}
               {teamData.length > 0 && (
-                <div className="pp-card" style={{ padding: 16 }}>
-                  <h3 className="pp-heading mb-3" style={{ fontSize: 13, fontWeight: 600 }}>{SECTION_LABELS.team[lang]}</h3>
+                <Panel accent="#9B7FE8" title={SECTION_LABELS.team[lang]}
+                  subtitle={T(lang, "Part du courtier dans l'équipe", "Broker share of the team")}
+                  right={<Users className="w-4 h-4" style={{ color: "#9B7FE8" }} />}>
                   <table className="w-full text-[12px]">
                     <thead><tr style={{ color: "var(--pp-text-faint)" }}>
                       <th className="text-left py-1.5">{T(lang, "Métrique", "Metric")}</th>
                       <th className="text-right py-1.5">{T(lang, "Courtier", "Broker")}</th>
                       <th className="text-right py-1.5">{T(lang, "Équipe", "Team")}</th>
-                      <th className="text-right py-1.5">Part</th>
+                      <th className="text-right py-1.5 w-[130px]">Part</th>
                     </tr></thead>
                     <tbody>
-                      {teamData.map((r) => (
-                        <tr key={r.id} style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
-                          <td className="py-1.5" style={{ color: "var(--pp-text-primary)" }}>{r.dimension}</td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>
+                      {teamData.map((r, i) => {
+                        const shareNum = typeof r.extra?.share === "number"
+                          ? r.extra.share
+                          : (Number(r.extra?.team || 0) ? (Number(r.extra?.broker || 0) / Number(r.extra?.team || 1)) * 100 : 0);
+                        const color = CHART_COLORS[i % CHART_COLORS.length];
+                        return (
+                        <tr key={r.id} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+                          <td className="py-2" style={{ color: "var(--pp-text-primary)" }}>{r.dimension}</td>
+                          <td className="py-2 text-right tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>
                             {r.extra?.broker != null ? (typeof r.extra.broker === "number" ? fmtNum(r.extra.broker) : r.extra.broker) : "—"}
                           </td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>
+                          <td className="py-2 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>
                             {r.extra?.team != null ? (typeof r.extra.team === "number" ? fmtNum(r.extra.team) : r.extra.team) : "—"}
                           </td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>
-                            {r.extra?.share != null ? (typeof r.extra.share === "number" ? fmtPct(r.extra.share) : r.extra.share) : "—"}
+                          <td className="py-2 pl-3">
+                            <div className="flex items-center gap-2 justify-end">
+                              <div className="rounded-full overflow-hidden flex-1" style={{ height: 5, background: "var(--pp-bg-deep)", maxWidth: 70 }}>
+                                <div style={{ width: `${Math.min(100, Math.max(3, shareNum))}%`, height: "100%", background: color }} />
+                              </div>
+                              <span className="tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>
+                                {r.extra?.share != null ? (typeof r.extra.share === "number" ? fmtPct(r.extra.share) : r.extra.share) : fmtPct(shareNum)}
+                              </span>
+                            </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
-                </div>
+                </Panel>
               )}
             </div>
           )}
+
 
           {canEdit && (
             <Panel accent="#00D4AA"
@@ -698,18 +775,72 @@ export default function CommissionDashboard({
 }
 
 
-function SectionTable({ lang, title, rows, money, labelFn }: { lang: Lang; title: string; rows: any[]; money?: boolean; labelFn?: (v: any) => string }) {
-  if (!rows.length) return null;
-  const totalVol = rows.reduce((s, r) => s + Number(r.cy_volume || 0), 0);
+function Delta({ cy, py }: { cy: any; py: any }) {
+  const c = Number(cy || 0), p = Number(py || 0);
+  if (!p) return <span style={{ fontSize: 10.5, color: "var(--pp-text-faint)" }}>—</span>;
+  const d = ((c - p) / Math.abs(p)) * 100;
+  const up = d >= 0;
   return (
-    <Panel title={title} accent="#4AC9E3" subtitle={`${rows.length} ${T(lang, "éléments", "items")}`}>
+    <span className="rounded-full px-1.5 py-0.5 tabular-nums" style={{
+      fontSize: 10, fontWeight: 700,
+      color: up ? "#00D4AA" : "#E84C4C",
+      background: up ? "rgba(0,212,170,.12)" : "rgba(232,76,76,.12)",
+    }}>{up ? "▲" : "▼"} {Math.abs(d).toFixed(1)}%</span>
+  );
+}
+
+function SectionTable({ lang, title, rows, money, labelFn, accent = "#4AC9E3" }: {
+  lang: Lang; title: string; rows: any[]; money?: boolean; labelFn?: (v: any) => string; accent?: string;
+}) {
+  if (!rows.length) return null;
+  const num = (v: any) => { const n = Number(v ?? 0); return Number.isFinite(n) ? n : 0; };
+  const totalVol = rows.reduce((s, r) => s + num(r.cy_volume), 0);
+  const totalPy = rows.reduce((s, r) => s + num(r.py_volume), 0);
+  const totalDeals = rows.reduce((s, r) => s + num(r.cy_deals), 0);
+  const totalComm = rows.reduce((s, r) => s + num(r.cy_commission), 0);
+  const maxVol = Math.max(1, ...rows.map((r) => num(r.cy_volume)));
+  const chartData = rows.slice(0, 14).map((r) => ({
+    name: labelFn ? labelFn(r.dimension) : String(r.dimension ?? "—"),
+    CY: num(r.cy_volume), PY: num(r.py_volume),
+  }));
+  const hasChart = chartData.some((d) => d.CY || d.PY);
+
+  return (
+    <Panel title={title} accent={accent} subtitle={`${rows.length} ${T(lang, "éléments", "items")} · ${fmtMoney(totalVol)} · ${fmtNum(totalDeals)} ${T(lang, "dossiers", "deals")}`}
+      right={
+        <div className="hidden sm:flex items-center gap-3">
+          <div className="text-right">
+            <div style={{ fontSize: 9.5, color: "var(--pp-text-faint)", textTransform: "uppercase", letterSpacing: ".06em" }}>Commission</div>
+            <div className="tabular-nums" style={{ fontSize: 13, fontWeight: 700, color: "#00D4AA" }}>{fmtMoney(totalComm)}</div>
+          </div>
+          <Delta cy={totalVol} py={totalPy} />
+        </div>
+      }>
+      {hasChart && (
+        <div style={{ width: "100%", height: 132, marginBottom: 10 }}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <BarChart data={chartData} margin={{ top: 4, right: 4, left: -14, bottom: 0 }} barCategoryGap="22%">
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <XAxis dataKey="name" stroke="#4A7FA5" fontSize={9} tickLine={false} axisLine={false} interval={0} height={26} />
+              <YAxis stroke="#4A7FA5" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(v) => fmtCompact(v)} width={44} />
+              <Tooltip content={<TooltipDark />} cursor={{ fill: "rgba(46,155,220,0.06)" }} />
+              <Bar dataKey="PY" name="PY" fill="#3A5A78" radius={[3, 3, 0, 0]} isAnimationActive={false} minPointSize={2} />
+              <Bar dataKey="CY" name="CY" radius={[3, 3, 0, 0]} isAnimationActive={false} minPointSize={2}>
+                {chartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead>
             <tr style={{ color: "var(--pp-text-faint)" }}>
+              <th className="text-left py-1.5 w-8">#</th>
               <th className="text-left py-1.5">{T(lang, "Libellé", "Label")}</th>
               <th className="text-right py-1.5">Volume CY</th>
               <th className="text-right py-1.5">Volume PY</th>
+              <th className="text-right py-1.5">YoY</th>
               <th className="text-right py-1.5">{T(lang, "Dossiers", "Deals")}</th>
               <th className="text-right py-1.5">Commission</th>
               <th className="text-right py-1.5">%</th>
@@ -717,38 +848,55 @@ function SectionTable({ lang, title, rows, money, labelFn }: { lang: Lang; title
           </thead>
           <tbody>
             {rows.map((r, i) => {
-              const share = totalVol ? (Number(r.cy_volume || 0) / totalVol) * 100 : 0;
+              const share = totalVol ? (num(r.cy_volume) / totalVol) * 100 : 0;
+              const bar = (num(r.cy_volume) / maxVol) * 100;
+              const color = CHART_COLORS[i % CHART_COLORS.length];
               return (
               <tr key={r.key ?? r.id} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+                <td className="py-2 tabular-nums" style={{ color: "var(--pp-text-faint)", fontSize: 10.5 }}>{i + 1}</td>
                 <td className="py-2" style={{ color: "var(--pp-text-primary)" }}>
                   <div className="flex items-center gap-2">
-                    <span style={{ width: 6, height: 6, borderRadius: 2, background: CHART_COLORS[i % CHART_COLORS.length] }} />
+                    <span style={{ width: 6, height: 6, borderRadius: 2, background: color }} />
                     <span className="truncate">{labelFn ? labelFn(r.dimension) : r.dimension}</span>
                   </div>
-                  {share > 0 && (
-                    <div className="mt-1 rounded-full overflow-hidden" style={{ height: 3, background: "var(--pp-bg-deep)", maxWidth: 220 }}>
-                      <div style={{ width: `${share}%`, height: "100%", background: CHART_COLORS[i % CHART_COLORS.length], opacity: .8 }} />
+                  {bar > 0 && (
+                    <div className="mt-1 rounded-full overflow-hidden" style={{ height: 4, background: "var(--pp-bg-deep)", maxWidth: 220 }}>
+                      <div style={{ width: `${Math.max(2, bar)}%`, height: "100%", background: `linear-gradient(90deg, ${color}, ${color}66)` }} />
                     </div>
                   )}
                 </td>
-                <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{money ? fmtMoney(r.cy_volume) : fmtNum(r.cy_volume)}</td>
+                <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>{money ? fmtMoney(r.cy_volume) : fmtNum(r.cy_volume)}</td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-faint)" }}>{r.py_volume ? fmtMoney(r.py_volume) : "—"}</td>
+                <td className="py-1.5 text-right"><Delta cy={r.cy_volume} py={r.py_volume} /></td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{fmtNum(r.cy_deals)}</td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "#00D4AA" }}>{r.cy_commission ? fmtMoney(r.cy_commission) : "—"}</td>
                 <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-faint)" }}>
                   {r.extra?.pct != null ? fmtPct(r.extra.pct)
                     : r.extra?.pct_cy != null ? fmtPct(r.extra.pct_cy)
-                    : totalVol ? fmtPct((Number(r.cy_volume || 0) / totalVol) * 100) : "—"}
+                    : totalVol ? fmtPct(share) : "—"}
                 </td>
               </tr>
               );
             })}
           </tbody>
+          <tfoot>
+            <tr style={{ borderTop: "2px solid var(--pp-bg-border-2)" }}>
+              <td />
+              <td className="py-2" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>Total</td>
+              <td className="py-2 text-right tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>{fmtMoney(totalVol)}</td>
+              <td className="py-2 text-right tabular-nums" style={{ color: "var(--pp-text-faint)" }}>{totalPy ? fmtMoney(totalPy) : "—"}</td>
+              <td className="py-2 text-right"><Delta cy={totalVol} py={totalPy} /></td>
+              <td className="py-2 text-right tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>{fmtNum(totalDeals)}</td>
+              <td className="py-2 text-right tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>{totalComm ? fmtMoney(totalComm) : "—"}</td>
+              <td className="py-2 text-right tabular-nums" style={{ color: "var(--pp-text-faint)" }}>100%</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </Panel>
   );
 }
+
 
 function KanbanView({ lang, filtered }: { lang: Lang; filtered: CommissionRow[] }) {
   const sections = ["lender", "quarter", "commission_type", "product_mix", "term_mix", "club"];

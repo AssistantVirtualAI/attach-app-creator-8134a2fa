@@ -120,6 +120,15 @@ export default function CommissionDashboard({
   const [err, setErr] = useState<string | null>(null);
   const [filters, setFilters] = useState<CommissionFilters>({ ...emptyFilters });
   const [view, setView] = useState<"table" | "kanban">("table");
+  const [canEdit, setCanEdit] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editRow, setEditRow] = useState<CommissionRow | null>(null);
+
+  useEffect(() => {
+    if (scope !== "admin") { setCanEdit(false); return; }
+    void isCommissionEditor().then(setCanEdit).catch(() => setCanEdit(false));
+  }, [scope]);
+
 
   const load = async () => {
     setLoading(true); setErr(null);

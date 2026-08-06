@@ -186,6 +186,7 @@ export const SECTION_LABELS: Record<string, { fr: string; en: string }> = {
   matrix: { fr: "Matrice type × terme", en: "Type × term matrix" },
   club: { fr: "Club Excellence", en: "Club Excellence" },
   team: { fr: "Comparaison équipe", en: "Team comparison" },
+  productivity: { fr: "Productivité du courtier", en: "Broker productivity" },
 };
 
 export const CHART_COLORS = ["#2E9BDC", "#00D4AA", "#9B7FE8", "#E8A33C", "#E84C4C", "#4AC9E3", "#7FD46B", "#E86CB0"];

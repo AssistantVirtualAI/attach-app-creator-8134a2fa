@@ -30,3 +30,15 @@ d'appel actif côté mobile (incohérence « un appel sur deux »).
 Correctif : `queue-intro-message-enabled: "no"`, l'avis est joué en **musique d'attente**
 (`music-on-hold-name = ava-recording-notice`) — média de sonnerie, coupe net au décrochage.
 Action `repair_queues` de `pp-ns-did-announcement` (bouton « Réparer les files ») pour corriger les files existantes.
+
+## Champs réels des files (mesurés 2026-08-06)
+- Création/MAJ file : `queue` (obligatoire), `callqueue-dispatch-type: "Ring All"`,
+  `callqueue-agent-dispatch-timeout-seconds`, `callqueue-max-wait-timeout-minutes`.
+  Les clés `queue-type` / `music-on-hold-*` / `queue-intro-*` sont **ignorées** (400 ou silencieux).
+- Agent : POST `.../callqueues/{q}/agents` avec `queue`, `user`, `device: sip:{ext}@{domain}`.
+- **Aucune MOH par file** : la file hérite du MOH du **domaine** (`GET /domains/{d}/moh`),
+  dont l'unique fichier est `moh-01.wav` = l'avis d'enregistrement.
+- `pp-ns-did-announcement` : `enable` ne repointe plus un DID si la file n'existe pas ;
+  le self-heal au boot ne tourne que si l'en-tête `x-selfheal: 1` est présent (sinon IDLE_TIMEOUT) ;
+  `status`/`enable`/`disable` acceptent `offset`/`limit` pour traiter par lots.
+- État au 2026-08-06 : tous les DID étaient en `to-user-residential` (aucun avis). Poste 111 activé et validé.

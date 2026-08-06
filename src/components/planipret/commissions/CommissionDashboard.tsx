@@ -200,6 +200,13 @@ export default function CommissionDashboard({
 
   const set = (k: keyof CommissionFilters, v: any) => setFilters((f) => ({ ...f, [k]: v }));
 
+  const handleDelete = async (r: CommissionRow) => {
+    if (!window.confirm(T(lang, `Supprimer cette ligne (${r.dimension ?? r.section}) ?`, `Delete this row (${r.dimension ?? r.section})?`))) return;
+    try { await deleteCommissionRow(r.id); await load(); }
+    catch (e: any) { setErr(e?.message ?? "Erreur"); }
+  };
+
+
   if (loading) {
     return (
       <div className="space-y-4">

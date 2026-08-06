@@ -560,7 +560,7 @@ function SectionTable({ lang, title, rows, money, labelFn }: { lang: Lang; title
                 <td className="py-2" style={{ color: "var(--pp-text-primary)" }}>
                   <div className="flex items-center gap-2">
                     <span style={{ width: 6, height: 6, borderRadius: 2, background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                    <span className="truncate">{r.dimension}</span>
+                    <span className="truncate">{labelFn ? labelFn(r.dimension) : r.dimension}</span>
                   </div>
                   {share > 0 && (
                     <div className="mt-1 rounded-full overflow-hidden" style={{ height: 3, background: "var(--pp-bg-deep)", maxWidth: 220 }}>

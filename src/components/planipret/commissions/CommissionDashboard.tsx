@@ -619,53 +619,89 @@ export default function CommissionDashboard({
 
           {(clubData.length > 0 || teamData.length > 0) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {clubData.length > 0 && (
-                <div className="pp-card" style={{ padding: 16 }}>
-                  <h3 className="pp-heading mb-3" style={{ fontSize: 13, fontWeight: 600 }}>{SECTION_LABELS.club[lang]}</h3>
-                  <div className="space-y-1.5">
-                    {clubData.map((r) => (
-                      <div key={r.id} className="flex items-center justify-between text-[12px]" style={{ borderTop: "1px solid var(--pp-bg-border-2)", paddingTop: 6 }}>
-                        <span style={{ color: "var(--pp-text-muted)" }}>{r.broker_name} · {r.dimension}</span>
-                        <span className="tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>
-                          {r.cy_volume ? fmtMoney(r.cy_volume) : (r.extra?.current ?? "—")}
-                          {r.extra?.yoy != null && r.extra?.yoy !== "" && <span style={{ color: "#00D4AA", marginLeft: 8 }}>{typeof r.extra.yoy === "number" ? fmtPct(r.extra.yoy) : r.extra.yoy}</span>}
-                        </span>
+              {clubData.length > 0 && (() => {
+                const maxClub = Math.max(1, ...clubData.map((r) => Number(r.cy_volume || 0)));
+                return (
+                <Panel accent="#E8A33C" title={SECTION_LABELS.club[lang]}
+                  subtitle={T(lang, "Saison août – juillet", "Season August – July")}
+                  right={<Trophy className="w-4 h-4" style={{ color: "#E8A33C" }} />}>
+                  <div className="space-y-2.5">
+                    {clubData.map((r, i) => {
+                      const v = Number(r.cy_volume || 0);
+                      const color = CHART_COLORS[i % CHART_COLORS.length];
+                      return (
+                      <div key={r.id}>
+                        <div className="flex items-center justify-between gap-2 text-[12px]">
+                          <span className="truncate" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>{r.dimension}</span>
+                          <span className="tabular-nums shrink-0" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>
+                            {v ? fmtMoney(v) : (r.extra?.current ?? "—")}
+                            {r.extra?.yoy != null && r.extra?.yoy !== "" && (
+                              <span style={{ color: "#00D4AA", marginLeft: 8, fontSize: 11 }}>{typeof r.extra.yoy === "number" ? fmtPct(r.extra.yoy) : r.extra.yoy}</span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 mt-0.5">
+                          <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{r.broker_name}</span>
+                          {!!r.cy_deals && <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{fmtNum(r.cy_deals)} {T(lang, "dossiers", "deals")}</span>}
+                        </div>
+                        {v > 0 && (
+                          <div className="mt-1 rounded-full overflow-hidden" style={{ height: 5, background: "var(--pp-bg-deep)" }}>
+                            <div style={{ width: `${Math.max(3, (v / maxClub) * 100)}%`, height: "100%", background: `linear-gradient(90deg, ${color}, ${color}66)` }} />
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
-                </div>
-              )}
+                </Panel>
+                );
+              })()}
               {teamData.length > 0 && (
-                <div className="pp-card" style={{ padding: 16 }}>
-                  <h3 className="pp-heading mb-3" style={{ fontSize: 13, fontWeight: 600 }}>{SECTION_LABELS.team[lang]}</h3>
+                <Panel accent="#9B7FE8" title={SECTION_LABELS.team[lang]}
+                  subtitle={T(lang, "Part du courtier dans l'équipe", "Broker share of the team")}
+                  right={<Users className="w-4 h-4" style={{ color: "#9B7FE8" }} />}>
                   <table className="w-full text-[12px]">
                     <thead><tr style={{ color: "var(--pp-text-faint)" }}>
                       <th className="text-left py-1.5">{T(lang, "Métrique", "Metric")}</th>
                       <th className="text-right py-1.5">{T(lang, "Courtier", "Broker")}</th>
                       <th className="text-right py-1.5">{T(lang, "Équipe", "Team")}</th>
-                      <th className="text-right py-1.5">Part</th>
+                      <th className="text-right py-1.5 w-[130px]">Part</th>
                     </tr></thead>
                     <tbody>
-                      {teamData.map((r) => (
-                        <tr key={r.id} style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
-                          <td className="py-1.5" style={{ color: "var(--pp-text-primary)" }}>{r.dimension}</td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>
+                      {teamData.map((r, i) => {
+                        const shareNum = typeof r.extra?.share === "number"
+                          ? r.extra.share
+                          : (Number(r.extra?.team || 0) ? (Number(r.extra?.broker || 0) / Number(r.extra?.team || 1)) * 100 : 0);
+                        const color = CHART_COLORS[i % CHART_COLORS.length];
+                        return (
+                        <tr key={r.id} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+                          <td className="py-2" style={{ color: "var(--pp-text-primary)" }}>{r.dimension}</td>
+                          <td className="py-2 text-right tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>
                             {r.extra?.broker != null ? (typeof r.extra.broker === "number" ? fmtNum(r.extra.broker) : r.extra.broker) : "—"}
                           </td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>
+                          <td className="py-2 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>
                             {r.extra?.team != null ? (typeof r.extra.team === "number" ? fmtNum(r.extra.team) : r.extra.team) : "—"}
                           </td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>
-                            {r.extra?.share != null ? (typeof r.extra.share === "number" ? fmtPct(r.extra.share) : r.extra.share) : "—"}
+                          <td className="py-2 pl-3">
+                            <div className="flex items-center gap-2 justify-end">
+                              <div className="rounded-full overflow-hidden flex-1" style={{ height: 5, background: "var(--pp-bg-deep)", maxWidth: 70 }}>
+                                <div style={{ width: `${Math.min(100, Math.max(3, shareNum))}%`, height: "100%", background: color }} />
+                              </div>
+                              <span className="tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>
+                                {r.extra?.share != null ? (typeof r.extra.share === "number" ? fmtPct(r.extra.share) : r.extra.share) : fmtPct(shareNum)}
+                              </span>
+                            </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
-                </div>
+                </Panel>
               )}
             </div>
           )}
+
 
           {canEdit && (
             <Panel accent="#00D4AA"

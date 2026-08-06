@@ -341,7 +341,7 @@ export default function CommissionDashboard({
           title={T(lang, "Volume par prêteur", "Volume by lender")}
           subtitle={T(lang, "Année courante vs année précédente — top 12", "Current vs prior year — top 12")}>
           <div style={{ width: "100%", height: 280 }}>
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={lenderData.map((r) => ({ name: r.dimension, CY: r.cy_volume, PY: r.py_volume, Commission: r.cy_commission }))}
                 margin={{ top: 8, right: 8, left: -8, bottom: 40 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -359,7 +359,7 @@ export default function CommissionDashboard({
         <Panel accent="#00D4AA" title={T(lang, "Commission par type", "Commission by type")}
           subtitle={T(lang, "Base, bonis et performance", "Base, bonus and performance")}>
           <div style={{ width: "100%", height: 240 }}>
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie data={typeData.map((r) => ({ name: r.dimension, value: r.cy_commission }))} dataKey="value" nameKey="name"
                   cx="50%" cy="50%" innerRadius={55} outerRadius={88} paddingAngle={3} stroke="none">
@@ -375,7 +375,7 @@ export default function CommissionDashboard({
         <Panel className="xl:col-span-2" accent="#9B7FE8" title={T(lang, "Évolution trimestrielle", "Quarterly trend")}
           subtitle={T(lang, "Volume par trimestre, CY vs PY", "Volume per quarter, CY vs PY")}>
           <div style={{ width: "100%", height: 240 }}>
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <AreaChart data={quarterData.map((r) => ({ name: r.dimension, CY: r.cy_volume, PY: r.py_volume }))} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="cyGrad" x1="0" y1="0" x2="0" y2="1">
@@ -398,7 +398,7 @@ export default function CommissionDashboard({
         <Panel accent="#E8A33C" title={T(lang, "Mix produit", "Product mix")}
           subtitle={T(lang, "Répartition du volume par type de prêt", "Volume split by product type")}>
           <div style={{ width: "100%", height: 240 }}>
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={productData.map((r) => ({ name: r.dimension, Volume: r.cy_volume }))} layout="vertical" margin={{ top: 8, right: 16, left: 40, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                 <XAxis type="number" stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />

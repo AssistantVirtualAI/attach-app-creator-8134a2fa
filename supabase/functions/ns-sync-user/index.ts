@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
         "voicemail-transcription-enabled": "Deepgram",
         "email-send-alert-new-voicemail-enabled": "yes",
         "email-send-alert-new-missed-call-enabled": "yes",
-        "ring-no-answer-timeout-seconds": 25,
+        "ring-no-answer-timeout-seconds": 30,
       };
     };
 

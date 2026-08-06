@@ -104,6 +104,21 @@ function Select({ value, onChange, options, label }: { value: string; onChange: 
   );
 }
 
+function ChartValues({ items, valueKey = "CY", compareKey }: { items: Array<Record<string, any>>; valueKey?: string; compareKey?: string }) {
+  if (!items.length) return null;
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+      {items.slice(0, 12).map((item, index) => (
+        <div key={`${item.name}-${index}`} className="rounded-lg px-2.5 py-2" style={{ background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }}>
+          <div className="truncate" style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{item.name}</div>
+          <div className="tabular-nums" style={{ fontSize: 12, fontWeight: 700, color: CHART_COLORS[index % CHART_COLORS.length] }}>{fmtMoney(item[valueKey])}</div>
+          {compareKey && <div className="tabular-nums" style={{ fontSize: 9.5, color: "var(--pp-text-faint)" }}>PY {fmtMoney(item[compareKey])}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function CommissionDashboard({
   lang = "fr",
   scope = "admin",
@@ -374,6 +389,7 @@ export default function CommissionDashboard({
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <ChartValues items={lenderChartData} compareKey="PY" />
         </Panel>
 
         <Panel accent="#00D4AA" title={T(lang, "Commission par type", "Commission by type")}
@@ -390,6 +406,7 @@ export default function CommissionDashboard({
               </PieChart>
             </ResponsiveContainer>
           </div>
+          <ChartValues items={commissionChartData} compareKey="PY" />
         </Panel>
 
         <Panel className="xl:col-span-2" accent="#9B7FE8" title={T(lang, "Évolution trimestrielle", "Quarterly trend")}
@@ -413,6 +430,7 @@ export default function CommissionDashboard({
               </AreaChart>
             </ResponsiveContainer>
           </div>
+          <ChartValues items={quarterChartData} compareKey="PY" />
         </Panel>
 
         <Panel accent="#E8A33C" title={T(lang, "Mix produit", "Product mix")}
@@ -430,6 +448,7 @@ export default function CommissionDashboard({
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <ChartValues items={productChartData} valueKey="Volume" />
         </Panel>
       </div>
 
@@ -450,6 +469,7 @@ export default function CommissionDashboard({
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <ChartValues items={termChartData} compareKey="PY" />
         </Panel>
 
         <Panel accent="#E86CB0" title={T(lang, "Dossiers et commissions", "Deals and commissions")}

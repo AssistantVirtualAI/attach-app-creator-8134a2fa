@@ -37,6 +37,7 @@ import { listDeviceContacts } from "@/lib/native/permissions/contacts";
 import { tokenize, matchAllTokens } from "@/lib/textNormalize";
 import { prefetchPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "@/lib/planipret/profileColumns";
+import { useRemoteConfig } from "@/hooks/useRemoteConfig";
 
 /** Hard timeout guard: never let a hung network call freeze the app shell. */
 function ppWithTimeout<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T> {

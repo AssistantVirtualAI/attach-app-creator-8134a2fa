@@ -165,6 +165,7 @@ async function diagnoseQueue(domain: string, ext: string) {
     moh_ok: !mohOff,
     healthy: r.ok && !introOn && !mohOff,
     needs_repair: !missing && (introOn || mohOff),
+    raw: o,
   };
 }
 

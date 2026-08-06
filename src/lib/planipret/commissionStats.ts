@@ -21,7 +21,11 @@ export type CommissionRow = {
   py_commission: number;
   extra: Record<string, any>;
   source_file: string | null;
+  entry_source?: string | null;
+  updated_by?: string | null;
+  updated_at?: string | null;
 };
+
 
 export type CommissionFilters = {
   broker: string;      // "all" or broker_name
@@ -165,3 +169,86 @@ export const SECTION_LABELS: Record<string, { fr: string; en: string }> = {
 };
 
 export const CHART_COLORS = ["#2E9BDC", "#00D4AA", "#9B7FE8", "#E8A33C", "#E84C4C", "#4AC9E3", "#7FD46B", "#E86CB0"];
+
+/* ---------- term normalization / display ---------- */
+export const TERM_VALUES = ["0", "1", "2", "3", "4", "5", "Other"];
+
+export function normalizeTerm(v?: string | null): string {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  if (/open|var/i.test(s) && /0/.test(s)) return "0";
+  const m = s.match(/^(\d+)\s*(yr|an|ans|year|years)?$/i);
+  if (m) return m[1];
+  if (/other/i.test(s)) return "Other";
+  return s;
+}
+
+export function termLabel(v: string, lang: "fr" | "en") {
+  const t = normalizeTerm(v);
+  if (t === "0") return lang === "en" ? "0 (open/variable)" : "0 an (ouvert/variable)";
+  if (t === "Other") return lang === "en" ? "Other" : "Autres";
+  if (/^\d+$/.test(t)) return lang === "en" ? `${t} yr` : `${t} an${Number(t) > 1 ? "s" : ""}`;
+  return v;
+}
+
+/* ---------- manual entry (admins only, enforced by RLS) ---------- */
+export type CommissionInput = {
+  id?: string;
+  broker_name: string;
+  broker_user_id?: string | null;
+  fiscal_year: number;
+  section: string;
+  dimension: string | null;
+  sub_dimension?: string | null;
+  rank?: number | null;
+  cy_volume?: number;
+  py_volume?: number;
+  cy_deals?: number;
+  py_deals?: number;
+  cy_commission?: number;
+  py_commission?: number;
+  extra?: Record<string, any>;
+};
+
+export async function saveCommissionRow(input: CommissionInput): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  const payload: Record<string, any> = {
+    broker_name: input.broker_name.trim(),
+    broker_user_id: input.broker_user_id ?? null,
+    fiscal_year: input.fiscal_year,
+    section: input.section,
+    dimension: input.dimension?.trim() || null,
+    sub_dimension: input.sub_dimension?.trim() || null,
+    rank: input.rank ?? null,
+    cy_volume: Number(input.cy_volume || 0),
+    py_volume: Number(input.py_volume || 0),
+    cy_deals: Number(input.cy_deals || 0),
+    py_deals: Number(input.py_deals || 0),
+    cy_commission: Number(input.cy_commission || 0),
+    py_commission: Number(input.py_commission || 0),
+    extra: input.extra ?? {},
+    entry_source: "manual",
+    updated_by: user?.id ?? null,
+  };
+  const table = supabase.from("planipret_commission_stats" as any) as any;
+  const { error } = input.id
+    ? await table.update(payload).eq("id", input.id)
+    : await table.insert(payload);
+  if (error) throw error;
+}
+
+export async function deleteCommissionRow(id: string): Promise<void> {
+  const { error } = await (supabase.from("planipret_commission_stats" as any) as any).delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function isCommissionEditor(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const [{ data: admin }, { data: sa }] = await Promise.all([
+    supabase.rpc("is_planipret_admin", { _user_id: user.id }),
+    supabase.rpc("is_super_admin", { _user_id: user.id }),
+  ]);
+  return Boolean(admin || sa);
+}
+

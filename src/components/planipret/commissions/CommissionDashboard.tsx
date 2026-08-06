@@ -3,12 +3,15 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
-import { Download, LayoutGrid, Table2, Search, RefreshCw, DollarSign, Briefcase, Wallet, Gauge, TrendingUp, Users, Filter, Trophy } from "lucide-react";
+import { Download, LayoutGrid, Table2, Search, RefreshCw, DollarSign, Briefcase, Wallet, Gauge, TrendingUp, Users, Filter, Trophy, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   type CommissionRow, type CommissionFilters, emptyFilters, fetchCommissionRows,
   aggregate, applyFilters, brokerNames, lenderNames, globalTotals, kpiOf,
   fmtMoney, fmtNum, fmtPct, fmtBps, fmtCompact, toCsv, SECTION_LABELS, CHART_COLORS,
+  isCommissionEditor, deleteCommissionRow, termLabel,
 } from "@/lib/planipret/commissionStats";
+import CommissionEntryDialog from "./CommissionEntryDialog";
+
 
 type Lang = "fr" | "en";
 const T = (lang: Lang, fr: string, en: string) => (lang === "en" ? en : fr);
@@ -117,6 +120,15 @@ export default function CommissionDashboard({
   const [err, setErr] = useState<string | null>(null);
   const [filters, setFilters] = useState<CommissionFilters>({ ...emptyFilters });
   const [view, setView] = useState<"table" | "kanban">("table");
+  const [canEdit, setCanEdit] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editRow, setEditRow] = useState<CommissionRow | null>(null);
+
+  useEffect(() => {
+    if (scope !== "admin") { setCanEdit(false); return; }
+    void isCommissionEditor().then(setCanEdit).catch(() => setCanEdit(false));
+  }, [scope]);
+
 
   const load = async () => {
     setLoading(true); setErr(null);
@@ -187,6 +199,13 @@ export default function CommissionDashboard({
   };
 
   const set = (k: keyof CommissionFilters, v: any) => setFilters((f) => ({ ...f, [k]: v }));
+
+  const handleDelete = async (r: CommissionRow) => {
+    if (!window.confirm(T(lang, `Supprimer cette ligne (${r.dimension ?? r.section}) ?`, `Delete this row (${r.dimension ?? r.section})?`))) return;
+    try { await deleteCommissionRow(r.id); await load(); }
+    catch (e: any) { setErr(e?.message ?? "Erreur"); }
+  };
+
 
   if (loading) {
     return (
@@ -294,6 +313,14 @@ export default function CommissionDashboard({
               style={{ background: "var(--pp-brand-accent-2)" }}>
               <Download className="w-3.5 h-3.5" /> CSV
             </button>
+            {canEdit && (
+              <button onClick={() => { setEditRow(null); setDialogOpen(true); }}
+                className="px-2.5 py-1.5 rounded-lg text-[12px] flex items-center gap-1.5 text-white"
+                style={{ background: "#00A37A" }}>
+                <Plus className="w-3.5 h-3.5" /> {T(lang, "Ajouter", "Add")}
+              </button>
+            )}
+
             <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--pp-bg-border-2)" }}>
               <button onClick={() => setView("table")} className="px-2.5 py-1.5 text-[12px] flex items-center gap-1.5"
                 style={{ background: view === "table" ? "var(--pp-brand-accent-2)" : "transparent", color: view === "table" ? "#fff" : "var(--pp-text-muted)" }}>
@@ -424,7 +451,7 @@ export default function CommissionDashboard({
           <SectionTable lang={lang} title={SECTION_LABELS.quarter[lang]} rows={quarterData} money />
           <SectionTable lang={lang} title={SECTION_LABELS.commission_type[lang]} rows={typeData} money />
           <SectionTable lang={lang} title={SECTION_LABELS.product_mix[lang]} rows={productData} money />
-          <SectionTable lang={lang} title={SECTION_LABELS.term_mix[lang]} rows={termData} money />
+          <SectionTable lang={lang} title={SECTION_LABELS.term_mix[lang]} rows={termData} money labelFn={(v) => termLabel(String(v), lang)} />
 
           {/* Matrix heat table */}
           {matrixTypes.length > 0 && (
@@ -496,9 +523,15 @@ export default function CommissionDashboard({
                       {teamData.map((r) => (
                         <tr key={r.id} style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
                           <td className="py-1.5" style={{ color: "var(--pp-text-primary)" }}>{r.dimension}</td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{r.extra?.broker}</td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{r.extra?.team}</td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>{r.extra?.share}</td>
+                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>
+                            {r.extra?.broker != null ? (typeof r.extra.broker === "number" ? fmtNum(r.extra.broker) : r.extra.broker) : "—"}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>
+                            {r.extra?.team != null ? (typeof r.extra.team === "number" ? fmtNum(r.extra.team) : r.extra.team) : "—"}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>
+                            {r.extra?.share != null ? (typeof r.extra.share === "number" ? fmtPct(r.extra.share) : r.extra.share) : "—"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -507,15 +540,80 @@ export default function CommissionDashboard({
               )}
             </div>
           )}
+
+          {canEdit && (
+            <Panel accent="#00D4AA"
+              title={T(lang, "Données brutes — saisie manuelle", "Raw data — manual entry")}
+              subtitle={T(lang, "Modifier ou supprimer n'importe quelle valeur", "Edit or delete any value")}
+              right={
+                <button onClick={() => { setEditRow(null); setDialogOpen(true); }}
+                  className="px-2.5 py-1.5 rounded-lg text-[12px] flex items-center gap-1.5 text-white" style={{ background: "#00A37A" }}>
+                  <Plus className="w-3.5 h-3.5" /> {T(lang, "Ajouter", "Add")}
+                </button>
+              }>
+              <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                <table className="w-full text-[12px]">
+                  <thead className="sticky top-0" style={{ background: "var(--pp-bg-deep)" }}>
+                    <tr style={{ color: "var(--pp-text-faint)" }}>
+                      <th className="text-left py-1.5 pr-2">{T(lang, "Courtier", "Broker")}</th>
+                      <th className="text-left py-1.5 pr-2">Section</th>
+                      <th className="text-left py-1.5 pr-2">{T(lang, "Libellé", "Label")}</th>
+                      <th className="text-left py-1.5 pr-2">{T(lang, "Sous-lib.", "Sub")}</th>
+                      <th className="text-right py-1.5 px-2">Vol. CY</th>
+                      <th className="text-right py-1.5 px-2">Vol. PY</th>
+                      <th className="text-right py-1.5 px-2">{T(lang, "Doss.", "Deals")}</th>
+                      <th className="text-right py-1.5 px-2">Comm. CY</th>
+                      <th className="text-right py-1.5 pl-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((r) => (
+                      <tr key={r.id} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+                        <td className="py-1.5 pr-2" style={{ color: "var(--pp-text-primary)" }}>{r.broker_name}</td>
+                        <td className="py-1.5 pr-2" style={{ color: "var(--pp-text-faint)" }}>{SECTION_LABELS[String(r.section)]?.[lang] ?? r.section}</td>
+                        <td className="py-1.5 pr-2" style={{ color: "var(--pp-text-muted)" }}>{r.dimension ?? "—"}</td>
+                        <td className="py-1.5 pr-2" style={{ color: "var(--pp-text-faint)" }}>{r.sub_dimension ?? "—"}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{r.cy_volume ? fmtMoney(r.cy_volume) : "—"}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: "var(--pp-text-faint)" }}>{r.py_volume ? fmtMoney(r.py_volume) : "—"}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{r.cy_deals ? fmtNum(r.cy_deals) : "—"}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: "#00D4AA" }}>{r.cy_commission ? fmtMoney(r.cy_commission) : "—"}</td>
+                        <td className="py-1.5 pl-2 text-right whitespace-nowrap">
+                          <button onClick={() => { setEditRow(r); setDialogOpen(true); }} className="p-1 rounded-md" style={{ color: "var(--pp-text-muted)" }}>
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => void handleDelete(r)} className="p-1 rounded-md" style={{ color: "#E84C4C" }}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          )}
         </div>
       ) : (
         <KanbanView lang={lang} filtered={filtered} />
+      )}
+
+      {canEdit && (
+        <CommissionEntryDialog
+          lang={lang}
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          onSaved={() => void load()}
+          row={editRow}
+          brokers={brokers}
+          defaultBroker={filters.broker !== "all" ? filters.broker : undefined}
+        />
       )}
     </div>
   );
 }
 
-function SectionTable({ lang, title, rows, money }: { lang: Lang; title: string; rows: any[]; money?: boolean }) {
+
+function SectionTable({ lang, title, rows, money, labelFn }: { lang: Lang; title: string; rows: any[]; money?: boolean; labelFn?: (v: any) => string }) {
   if (!rows.length) return null;
   const totalVol = rows.reduce((s, r) => s + Number(r.cy_volume || 0), 0);
   return (
@@ -540,7 +638,7 @@ function SectionTable({ lang, title, rows, money }: { lang: Lang; title: string;
                 <td className="py-2" style={{ color: "var(--pp-text-primary)" }}>
                   <div className="flex items-center gap-2">
                     <span style={{ width: 6, height: 6, borderRadius: 2, background: CHART_COLORS[i % CHART_COLORS.length] }} />
-                    <span className="truncate">{r.dimension}</span>
+                    <span className="truncate">{labelFn ? labelFn(r.dimension) : r.dimension}</span>
                   </div>
                   {share > 0 && (
                     <div className="mt-1 rounded-full overflow-hidden" style={{ height: 3, background: "var(--pp-bg-deep)", maxWidth: 220 }}>

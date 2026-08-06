@@ -145,26 +145,25 @@ function userPayload(ext: string, domain: string, current: any) {
   };
 }
 
-/** Lit une file et détecte une intro non interruptible (cause: décrochage sans effet). */
+/** Lit une file et vérifie qu'elle est apte à sonner le courtier avec l'avis. */
 async function diagnoseQueue(domain: string, ext: string) {
   const q = queueExt(ext);
   const r = await ns(`/domains/${encodeURIComponent(domain)}/callqueues/${encodeURIComponent(q)}`);
   const o = one(r.data) ?? {};
-  const missing = !r.ok;
-  const introOn = String(o["queue-intro-message-enabled"] ?? "").toLowerCase() === "yes";
-  const mohOff = String(o["music-on-hold-enabled"] ?? "").toLowerCase() !== "yes" ||
-    String(o["music-on-hold-name"] ?? "") !== MOH_NAME;
+  const dispatchOk = String(o["callqueue-dispatch-type"] ?? "") === "Ring All";
+  const hasAgent = Number(o["callqueue-count-agents-total"] ?? 0) >= 1;
+  const healthy = r.ok && dispatchOk && hasAgent;
   return {
     extension: ext,
     queue: q,
     exists: r.ok,
-    intro_enabled: introOn,
-    moh_ok: !mohOff,
-    healthy: r.ok && !introOn && !mohOff,
-    needs_repair: !missing && (introOn || mohOff),
-    raw: o,
+    dispatch_ok: dispatchOk,
+    has_agent: hasAgent,
+    healthy,
+    needs_repair: r.ok && !healthy,
   };
 }
+
 
 /** Diagnostic + réparation ciblée des files défectueuses. */
 async function autoheal(domain: string, targets: { ext: string }[], apply: boolean) {

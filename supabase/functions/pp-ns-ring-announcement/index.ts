@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
 
     if (probe) {
       const pr = await nsFetch(String(probe), {}, { functionName: "pp-ns-ring-announcement" });
-      return json({ probe, status: pr.status, body: (await pr.text()).slice(0, 1500) });
+      return json({ probe, status: pr.status, body: (await pr.text()).slice(0, 8000) });
     }
 
     const listUsers = async (): Promise<string[]> => {

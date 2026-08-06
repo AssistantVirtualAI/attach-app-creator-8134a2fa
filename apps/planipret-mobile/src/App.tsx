@@ -184,6 +184,7 @@ export default function App() {
                   <Route path="*" element={<Navigate to="/mplanipret" replace />} />
                 </Routes>
               </LazyRouteBoundary>
+              </RemoteConfigGate>
             </PlanipretErrorBoundary>
           </TooltipProvider>
         </ThemeProvider>

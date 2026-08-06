@@ -274,6 +274,15 @@ Deno.serve(async (req) => {
       return json({ success: true, action, domain, ...res });
     }
 
+    // Outil de mise au point : PUT arbitraire sur une file + relecture.
+    if (action === "probe_queue") {
+      const q = queueExt(String(body?.extension ?? "111"));
+      const base = `/domains/${encodeURIComponent(domain)}/callqueues/${encodeURIComponent(q)}`;
+      const put = await ns(base, { method: "PUT", body: JSON.stringify({ synchronous: "yes", queue: q, ...(body?.payload ?? {}) }) });
+      const back = await ns(base);
+      return json({ success: true, put: { status: put.status, data: put.data }, read: one(back.data) });
+    }
+
     if (action === "repair_queues") {
       const fixed = [];
       for (const { ext } of targets) fixed.push(await ensureQueue(domain, ext));

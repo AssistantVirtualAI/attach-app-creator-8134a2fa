@@ -283,8 +283,17 @@ Deno.serve(async (req) => {
       const results = [];
       for (const { pn, ext } of targets) {
         const q = queueExt(ext);
-        let queueInfo: unknown = null;
-        if (action === "enable") queueInfo = await ensureQueue(domain, ext);
+        let queueInfo: any = null;
+        if (action === "enable") {
+          queueInfo = await ensureQueue(domain, ext);
+          // SÉCURITÉ : ne jamais repointer un DID vers une file qui n'existe pas.
+          const check = await ns(`/domains/${encodeURIComponent(domain)}/callqueues/${encodeURIComponent(q)}`);
+          if (!check.ok) {
+            results.push({ phone_number: pn, extension: ext, queue: q, queue_setup: queueInfo, skipped: "queue introuvable — DID inchangé", ok: false });
+            continue;
+          }
+        }
+
 
         const cur = await ns(pnPath(domain, pn));
         const payload = action === "enable"

@@ -226,13 +226,18 @@ Deno.serve(async (req) => {
       .order("phone_number_digits", { ascending: true });
     if (error) return json({ success: false, error: error.message }, 500);
 
-    const targets = (rows ?? [])
+    const offset = Number.isFinite(Number(body?.offset)) ? Math.max(0, Number(body?.offset)) : 0;
+    const limit = Number.isFinite(Number(body?.limit)) && Number(body?.limit) > 0 ? Number(body.limit) : 0;
+
+    const allTargets = (rows ?? [])
       .map((r: any) => ({
         pn: pbxId(r.phone_number_digits || r.phone_number_e164),
         ext: String(r.extension ?? "").trim(),
       }))
       .filter((r) => r.pn && /^[0-9]{2,10}$/.test(r.ext))
       .filter((r) => !onlyExt || r.ext === onlyExt);
+
+    const targets = limit ? allTargets.slice(offset, offset + limit) : allTargets.slice(offset);
 
     if (action === "status") {
       const items = [];

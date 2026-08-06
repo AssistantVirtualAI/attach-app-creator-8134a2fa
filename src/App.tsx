@@ -635,6 +635,7 @@ const App = () => (
                   <Route path="telecom-mapping" element={<Suspense fallback={<AdminPageSkeleton />}><PATelecomMapping /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
+                  <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />
                 </Route>
 
                 {/* Planipret Broker portal (per-broker view of their own data) */}

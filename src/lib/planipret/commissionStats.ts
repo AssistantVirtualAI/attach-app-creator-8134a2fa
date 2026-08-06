@@ -52,18 +52,26 @@ export async function fetchCommissionRows(scope?: { brokerUserId?: string | null
   else if (scope?.brokerName) q = q.eq("broker_name", scope.brokerName);
   const { data, error } = await q;
   if (error) throw error;
-  return (data ?? []).map((row: any) => ({
-    ...row,
-    fiscal_year: Number(row.fiscal_year ?? 0),
-    rank: row.rank == null ? null : Number(row.rank),
-    cy_volume: Number(row.cy_volume ?? 0),
-    py_volume: Number(row.py_volume ?? 0),
-    cy_deals: Number(row.cy_deals ?? 0),
-    py_deals: Number(row.py_deals ?? 0),
-    cy_commission: Number(row.cy_commission ?? 0),
-    py_commission: Number(row.py_commission ?? 0),
-    extra: row.extra && typeof row.extra === "object" ? row.extra : {},
-  })) as CommissionRow[];
+  return (data ?? []).map((row: any) => {
+    const section = String(row.section ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+    const isTerm = section === "term_mix";
+    const isMatrix = section === "matrix";
+    return {
+      ...row,
+      section,
+      dimension: isTerm ? normalizeTerm(row.dimension) : String(row.dimension ?? "").trim() || null,
+      sub_dimension: isMatrix ? normalizeTerm(row.sub_dimension) : String(row.sub_dimension ?? "").trim() || null,
+      fiscal_year: Number(row.fiscal_year ?? 0),
+      rank: row.rank == null ? null : Number(row.rank),
+      cy_volume: Number(row.cy_volume ?? 0),
+      py_volume: Number(row.py_volume ?? 0),
+      cy_deals: Number(row.cy_deals ?? 0),
+      py_deals: Number(row.py_deals ?? 0),
+      cy_commission: Number(row.cy_commission ?? 0),
+      py_commission: Number(row.py_commission ?? 0),
+      extra: row.extra && typeof row.extra === "object" ? row.extra : {},
+    };
+  }) as CommissionRow[];
 }
 
 /* ---------- formatting ---------- */
@@ -88,7 +96,12 @@ export function lenderNames(rows: CommissionRow[]) {
 
 export function kpiOf(rows: CommissionRow[], key: string) {
   const r = rows.find((x) => x.section === "kpi" && x.dimension === key);
-  return r ? { label: r.extra?.label ?? key, cy: r.extra?.cy ?? null, py: r.extra?.py ?? null, yoy: r.extra?.yoy ?? null } : null;
+  return r ? {
+    label: r.extra?.label ?? key,
+    cy: r.extra?.cy == null ? null : Number(r.extra.cy),
+    py: r.extra?.py == null ? null : Number(r.extra.py),
+    yoy: r.extra?.yoy == null ? null : Number(r.extra.yoy),
+  } : null;
 }
 
 /** Global KPI totals across the selected scope (sums lender + quarter based facts). */
@@ -156,8 +169,8 @@ export function applyFilters(rows: CommissionRow[], f: CommissionFilters): Commi
     if (f.lender !== "all" && r.section === "lender" && r.dimension !== f.lender) return false;
     if (f.quarter !== "all" && r.section === "quarter" && r.dimension !== f.quarter) return false;
     if (f.productType !== "all" && (r.section === "product_mix" || r.section === "matrix") && r.dimension !== f.productType) return false;
-    if (f.term !== "all" && r.section === "matrix" && String(r.sub_dimension) !== f.term) return false;
-    if (f.term !== "all" && r.section === "term_mix" && !String(r.dimension).startsWith(f.term)) return false;
+    if (f.term !== "all" && r.section === "matrix" && normalizeTerm(r.sub_dimension) !== f.term) return false;
+    if (f.term !== "all" && r.section === "term_mix" && normalizeTerm(r.dimension) !== f.term) return false;
     if (f.commissionType !== "all" && r.section === "commission_type" && r.dimension !== f.commissionType) return false;
     if (s) {
       const hay = `${r.broker_name} ${r.section} ${r.dimension ?? ""} ${r.sub_dimension ?? ""}`.toLowerCase();

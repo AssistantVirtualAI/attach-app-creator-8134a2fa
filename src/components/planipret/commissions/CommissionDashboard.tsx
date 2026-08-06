@@ -159,6 +159,12 @@ export default function CommissionDashboard({
   const totals = useMemo(() => globalTotals(filtered), [filtered]);
   const brokers = useMemo(() => brokerNames(rows), [rows]);
   const lenders = useMemo(() => lenderNames(rows), [rows]);
+  const productTypes = useMemo(() => Array.from(new Set(rows
+    .filter((r) => r.section === "product_mix" || r.section === "matrix")
+    .map((r) => String(r.dimension ?? "").trim()).filter(Boolean))).sort(), [rows]);
+  const commissionTypes = useMemo(() => Array.from(new Set(rows
+    .filter((r) => r.section === "commission_type")
+    .map((r) => String(r.dimension ?? "").trim()).filter(Boolean))).sort(), [rows]);
 
   const lenderData = useMemo(
     () => aggregate(filtered, "lender").sort((a, b) => b.cy_volume - a.cy_volume).slice(0, 12),
@@ -318,11 +324,11 @@ export default function CommissionDashboard({
           <Select label={T(lang, "Trimestre", "Quarter")} value={filters.quarter} onChange={(v) => set("quarter", v)}
             options={[{ v: "all", l: T(lang, "Tous", "All") }, ...["Q1", "Q2", "Q3", "Q4"].map((q) => ({ v: q, l: q }))]} />
           <Select label={T(lang, "Type de prêt", "Product type")} value={filters.productType} onChange={(v) => set("productType", v)}
-            options={[{ v: "all", l: T(lang, "Tous", "All") }, ...["Taux Fixe", "Taux Variable", "Marge Hypothécaire"].map((p) => ({ v: p, l: p }))]} />
+            options={[{ v: "all", l: T(lang, "Tous", "All") }, ...productTypes.map((p) => ({ v: p, l: p }))]} />
           <Select label={T(lang, "Terme", "Term")} value={filters.term} onChange={(v) => set("term", v)}
             options={[{ v: "all", l: T(lang, "Tous", "All") }, ...["0", "1", "2", "3", "4", "5"].map((p) => ({ v: p, l: `${p} ${T(lang, "an(s)", "yr")}` }))]} />
           <Select label={T(lang, "Type commission", "Commission type")} value={filters.commissionType} onChange={(v) => set("commissionType", v)}
-            options={[{ v: "all", l: T(lang, "Tous", "All") }, ...["base", "bonus", "bonus2", "perform"].map((p) => ({ v: p, l: p }))]} />
+            options={[{ v: "all", l: T(lang, "Tous", "All") }, ...commissionTypes.map((p) => ({ v: p, l: p }))]} />
 
           <label className="flex flex-col gap-1 flex-1 min-w-[180px]">
             <span style={{ fontSize: 10, color: "var(--pp-text-faint)", textTransform: "uppercase", letterSpacing: ".05em" }}>{T(lang, "Recherche", "Search")}</span>

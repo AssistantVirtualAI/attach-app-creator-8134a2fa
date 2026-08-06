@@ -390,6 +390,7 @@ export default function PlanipretAdminLayout() {
                   : (key === "diagnostics" ? (lang === "en" ? "Diagnostics" : "Diagnostic")
                     : key === "maestroSync" ? (lang === "en" ? "Maestro sync" : "Sync Maestro")
                     : key === "telecomMapping" ? (lang === "en" ? "Telecom mapping" : "Mapping Telecom")
+                    : key === "mobileApp" ? (lang === "en" ? "Mobile app" : "Application mobile")
                     : key === "avaToolsAudit" ? (lang === "en" ? "AVA tools audit" : "Audit outils AVA")
                     : key);
                 return (

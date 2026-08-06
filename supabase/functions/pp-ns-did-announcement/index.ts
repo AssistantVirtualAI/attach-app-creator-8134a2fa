@@ -116,7 +116,7 @@ async function ensureQueue(domain: string, ext: string) {
       body: JSON.stringify({ synchronous: "yes", user: ext, "device-id": ext, enabled: "yes" }),
     });
   }
-  return { queue: q, created: !read.ok, write: { status: write.status, ok: write.ok }, agent: agentWrite ? { status: agentWrite.status, ok: agentWrite.ok } : { skipped: true } };
+  return { queue: q, created: !read.ok, write: { status: write.status, ok: write.ok, error: write.ok ? undefined : write.data }, agent: agentWrite ? { status: agentWrite.status, ok: agentWrite.ok, error: agentWrite.ok ? undefined : agentWrite.data } : { skipped: true } };
 }
 
 /** DID → file d'attente (avis) ; l'invariant destination-user reste rempli. */

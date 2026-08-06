@@ -540,30 +540,59 @@ export default function CommissionDashboard({
 
 
           {/* Matrix heat table */}
-          {matrixTypes.length > 0 && (
-            <div className="pp-card" style={{ padding: 16 }}>
-              <h3 className="pp-heading mb-3" style={{ fontSize: 13, fontWeight: 600 }}>{SECTION_LABELS.matrix[lang]}</h3>
+          {matrixTypes.length > 0 && (() => {
+            const colTotal = (term: string) => matrixTypes.reduce((s, ty) => s + matrixVal(ty, term), 0);
+            const grand = matrixTerms.reduce((s, t) => s + colTotal(t), 0);
+            return (
+            <Panel accent="#2E9BDC" title={SECTION_LABELS.matrix[lang]}
+              subtitle={T(lang, "Volume par type de prêt et durée de terme", "Volume by product type and term")}
+              right={
+                <div className="hidden sm:flex items-center gap-2" style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>
+                  <span>{T(lang, "Faible", "Low")}</span>
+                  <span style={{ width: 72, height: 8, borderRadius: 4, background: "linear-gradient(90deg, rgba(46,155,220,.08), rgba(46,155,220,.6))" }} />
+                  <span>{T(lang, "Élevé", "High")}</span>
+                </div>
+              }>
+              <div style={{ width: "100%", height: 140, marginBottom: 10 }}>
+                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                  <BarChart data={matrixTerms.map((t) => ({ name: termLabel(t, lang), Volume: colTotal(t) }))}
+                    margin={{ top: 4, right: 4, left: -14, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis dataKey="name" stroke="#4A7FA5" fontSize={9} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#4A7FA5" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(v) => fmtCompact(v)} width={44} />
+                    <Tooltip content={<TooltipDark />} cursor={{ fill: "rgba(46,155,220,0.06)" }} />
+                    <Bar dataKey="Volume" radius={[4, 4, 0, 0]} isAnimationActive={false} minPointSize={2}>
+                      {matrixTerms.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
               <div className="pa-scroll overflow-x-auto">
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr style={{ color: "var(--pp-text-faint)" }}>
                       <th className="text-left py-1.5 pr-3">{T(lang, "Type", "Type")}</th>
-                      {matrixTerms.map((t) => <th key={t} className="text-right py-1.5 px-2">{t}</th>)}
+                      {matrixTerms.map((t) => <th key={t} className="text-right py-1.5 px-2">{termLabel(t, lang)}</th>)}
                       <th className="text-right py-1.5 pl-2">Total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {matrixTypes.map((ty) => {
+                    {matrixTypes.map((ty, ri) => {
                       const total = matrixTerms.reduce((s, t) => s + matrixVal(ty, t), 0);
                       return (
                         <tr key={ty} style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
-                          <td className="py-1.5 pr-3" style={{ color: "var(--pp-text-primary)" }}>{ty}</td>
+                          <td className="py-1.5 pr-3" style={{ color: "var(--pp-text-primary)" }}>
+                            <span className="flex items-center gap-2">
+                              <span style={{ width: 6, height: 6, borderRadius: 2, background: CHART_COLORS[ri % CHART_COLORS.length] }} />
+                              {ty}
+                            </span>
+                          </td>
                           {matrixTerms.map((t) => {
                             const v = matrixVal(ty, t);
                             return (
                               <td key={t} className="text-right py-1.5 px-2 tabular-nums"
-                                style={{ background: v ? `rgba(46,155,220,${0.08 + 0.5 * (v / matrixMax)})` : "transparent", color: "var(--pp-text-muted)" }}>
-                                {v ? fmtMoney(v) : "—"}
+                                style={{ background: v ? `rgba(46,155,220,${0.08 + 0.5 * (v / matrixMax)})` : "transparent", color: v ? "var(--pp-text-primary)" : "var(--pp-text-faint)" }}>
+                                {v ? fmtCompact(v) : "—"}
                               </td>
                             );
                           })}
@@ -572,10 +601,21 @@ export default function CommissionDashboard({
                       );
                     })}
                   </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: "2px solid var(--pp-bg-border-2)" }}>
+                      <td className="py-2 pr-3" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>Total</td>
+                      {matrixTerms.map((t) => (
+                        <td key={t} className="text-right py-2 px-2 tabular-nums" style={{ color: "var(--pp-text-muted)", fontWeight: 600 }}>{fmtCompact(colTotal(t))}</td>
+                      ))}
+                      <td className="text-right py-2 pl-2 tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>{fmtMoney(grand)}</td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
-            </div>
-          )}
+            </Panel>
+            );
+          })()}
+
 
           {(clubData.length > 0 || teamData.length > 0) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

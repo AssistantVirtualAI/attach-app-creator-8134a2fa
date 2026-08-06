@@ -8513,6 +8513,7 @@ export type Database = {
           cy_deals: number | null
           cy_volume: number | null
           dimension: string | null
+          entry_source: string
           extra: Json
           fiscal_year: number
           id: string
@@ -8524,6 +8525,7 @@ export type Database = {
           source_file: string | null
           sub_dimension: string | null
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
           broker_name: string
@@ -8533,6 +8535,7 @@ export type Database = {
           cy_deals?: number | null
           cy_volume?: number | null
           dimension?: string | null
+          entry_source?: string
           extra?: Json
           fiscal_year?: number
           id?: string
@@ -8544,6 +8547,7 @@ export type Database = {
           source_file?: string | null
           sub_dimension?: string | null
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           broker_name?: string
@@ -8553,6 +8557,7 @@ export type Database = {
           cy_deals?: number | null
           cy_volume?: number | null
           dimension?: string | null
+          entry_source?: string
           extra?: Json
           fiscal_year?: number
           id?: string
@@ -8564,6 +8569,7 @@ export type Database = {
           source_file?: string | null
           sub_dimension?: string | null
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }

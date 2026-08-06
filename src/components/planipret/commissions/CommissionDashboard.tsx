@@ -119,6 +119,70 @@ function ChartValues({ items, valueKey = "CY", compareKey }: { items: Array<Reco
   );
 }
 
+function VisualBars({ items, valueKey = "CY", compareKey, horizontal = false }: {
+  items: Array<Record<string, any>>; valueKey?: string; compareKey?: string; horizontal?: boolean;
+}) {
+  const values = items.flatMap((item) => [Number(item[valueKey] ?? 0), compareKey ? Number(item[compareKey] ?? 0) : 0]);
+  const max = Math.max(1, ...values.filter(Number.isFinite));
+  if (!items.length) return null;
+  if (horizontal) return (
+    <div className="space-y-3 py-2" style={{ minHeight: 210 }}>
+      {items.slice(0, 12).map((item, index) => {
+        const value = Number(item[valueKey] ?? 0);
+        return <div key={`${item.name}-${index}`}>
+          <div className="flex justify-between gap-3 mb-1" style={{ fontSize: 10, color: "var(--pp-text-muted)" }}>
+            <span className="truncate">{item.name}</span><strong className="tabular-nums">{fmtCompact(value)}</strong>
+          </div>
+          <div className="rounded-full overflow-hidden" style={{ height: 10, background: "var(--pp-bg-deep)" }}>
+            <div style={{ width: `${Math.max(value ? 2 : 0, value / max * 100)}%`, height: "100%", background: CHART_COLORS[index % CHART_COLORS.length], borderRadius: 999 }} />
+          </div>
+        </div>;
+      })}
+    </div>
+  );
+  return (
+    <div className="flex items-end gap-2 px-1 pt-6 pb-2" style={{ height: 240, borderBottom: "1px solid var(--pp-bg-border-2)" }}>
+      {items.slice(0, 12).map((item, index) => {
+        const value = Number(item[valueKey] ?? 0);
+        const compare = compareKey ? Number(item[compareKey] ?? 0) : 0;
+        return (
+          <div key={`${item.name}-${index}`} className="flex-1 min-w-0 h-full flex flex-col justify-end">
+            <div className="flex items-end justify-center gap-1 flex-1 min-h-0">
+              <div title={`${valueKey}: ${fmtMoney(value)}`} style={{ width: compareKey ? "42%" : "70%", minHeight: value ? 3 : 0, height: `${value / max * 100}%`, background: CHART_COLORS[index % CHART_COLORS.length], borderRadius: "4px 4px 0 0" }} />
+              {compareKey && <div title={`${compareKey}: ${fmtMoney(compare)}`} style={{ width: "42%", minHeight: compare ? 3 : 0, height: `${compare / max * 100}%`, background: "#4A7FA5", borderRadius: "4px 4px 0 0" }} />}
+            </div>
+            <div className="truncate text-center mt-2" title={String(item.name)} style={{ fontSize: 9, color: "var(--pp-text-faint)" }}>{item.name}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function VisualTrend({ items, primaryKey = "CY", compareKey = "PY" }: {
+  items: Array<Record<string, any>>; primaryKey?: string; compareKey?: string;
+}) {
+  const width = 700, height = 210, pad = 24;
+  const all = items.flatMap((item) => [Number(item[primaryKey] ?? 0), Number(item[compareKey] ?? 0)]);
+  const max = Math.max(1, ...all.filter(Number.isFinite));
+  const points = (key: string) => items.map((item, i) => {
+    const x = items.length <= 1 ? width / 2 : pad + i * ((width - pad * 2) / (items.length - 1));
+    const y = height - pad - (Number(item[key] ?? 0) / max) * (height - pad * 2);
+    return `${x},${y}`;
+  }).join(" ");
+  if (!items.length) return null;
+  return (
+    <div style={{ height: 240 }}>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="210" preserveAspectRatio="none" role="img">
+        {[0, 1, 2, 3].map((i) => <line key={i} x1={pad} x2={width - pad} y1={pad + i * 52} y2={pad + i * 52} stroke="var(--pp-bg-border-2)" />)}
+        <polyline points={points(primaryKey)} fill="none" stroke="#2E9BDC" strokeWidth="5" strokeLinejoin="round" />
+        <polyline points={points(compareKey)} fill="none" stroke="#9B7FE8" strokeWidth="4" strokeDasharray="10 8" strokeLinejoin="round" />
+      </svg>
+      <div className="flex justify-around" style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{items.map((item, i) => <span key={i}>{item.name}</span>)}</div>
+    </div>
+  );
+}
+
 export default function CommissionDashboard({
   lang = "fr",
   scope = "admin",
@@ -381,79 +445,25 @@ export default function CommissionDashboard({
         <Panel className="xl:col-span-2" accent="#2E9BDC"
           title={T(lang, "Volume par prêteur", "Volume by lender")}
           subtitle={T(lang, "Année courante vs année précédente — top 12", "Current vs prior year — top 12")}>
-          <div style={{ width: "100%", height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={lenderChartData}
-                margin={{ top: 8, right: 8, left: -8, bottom: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="name" stroke="#4A7FA5" fontSize={10} angle={-30} textAnchor="end" interval={0} height={60} />
-                <YAxis stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />
-                <Tooltip content={<TooltipDark />} cursor={{ fill: "rgba(46,155,220,0.06)" }} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="CY" fill="#2E9BDC" radius={[5, 5, 0, 0]} isAnimationActive={false} minPointSize={2} />
-                <Bar dataKey="PY" fill="#4A7FA5" radius={[5, 5, 0, 0]} isAnimationActive={false} minPointSize={2} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <VisualBars items={lenderChartData} compareKey="PY" />
           <ChartValues items={lenderChartData} compareKey="PY" />
         </Panel>
 
         <Panel accent="#00D4AA" title={T(lang, "Commission par type", "Commission by type")}
           subtitle={T(lang, "Base, bonis et performance", "Base, bonus and performance")}>
-          <div style={{ width: "100%", height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <PieChart>
-                <Pie data={commissionChartData.map((r) => ({ name: r.name, value: r.CY }))} dataKey="value" nameKey="name"
-                  cx="50%" cy="50%" innerRadius={55} outerRadius={88} paddingAngle={3} stroke="none" isAnimationActive={false}>
-                  {commissionChartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                </Pie>
-                <Tooltip content={<TooltipDark />} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          <VisualBars items={commissionChartData} compareKey="PY" />
           <ChartValues items={commissionChartData} compareKey="PY" />
         </Panel>
 
         <Panel className="xl:col-span-2" accent="#9B7FE8" title={T(lang, "Évolution trimestrielle", "Quarterly trend")}
           subtitle={T(lang, "Volume par trimestre, CY vs PY", "Volume per quarter, CY vs PY")}>
-          <div style={{ width: "100%", height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <AreaChart data={quarterChartData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="cyGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2E9BDC" stopOpacity={0.5} />
-                    <stop offset="100%" stopColor="#2E9BDC" stopOpacity={0.03} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="name" stroke="#4A7FA5" fontSize={10} />
-                <YAxis stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />
-                <Tooltip content={<TooltipDark />} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Area type="monotone" dataKey="CY" stroke="#2E9BDC" fill="url(#cyGrad)" strokeWidth={2} isAnimationActive={false} />
-                <Area type="monotone" dataKey="PY" stroke="#9B7FE8" fill="transparent" strokeWidth={2} strokeDasharray="4 4" isAnimationActive={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <VisualTrend items={quarterChartData} />
           <ChartValues items={quarterChartData} compareKey="PY" />
         </Panel>
 
         <Panel accent="#E8A33C" title={T(lang, "Mix produit", "Product mix")}
           subtitle={T(lang, "Répartition du volume par type de prêt", "Volume split by product type")}>
-          <div style={{ width: "100%", height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={productChartData} layout="vertical" margin={{ top: 8, right: 16, left: 40, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis type="number" stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />
-                <YAxis type="category" dataKey="name" stroke="#4A7FA5" fontSize={10} width={110} />
-                <Tooltip content={<TooltipDark />} cursor={{ fill: "rgba(46,155,220,0.06)" }} />
-                <Bar dataKey="Volume" radius={[0, 6, 6, 0]} isAnimationActive={false} minPointSize={2}>
-                  {productChartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <VisualBars items={productChartData} valueKey="Volume" horizontal />
           <ChartValues items={productChartData} valueKey="Volume" />
         </Panel>
       </div>
@@ -462,38 +472,13 @@ export default function CommissionDashboard({
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Panel accent="#4AC9E3" title={T(lang, "Mix des termes", "Term mix")}
           subtitle={T(lang, "Volume par durée — année courante et précédente", "Volume by term — current and prior year")}>
-          <div style={{ width: "100%", height: 250 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={termChartData} margin={{ top: 8, right: 8, left: -8, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="name" stroke="#4A7FA5" fontSize={10} />
-                <YAxis stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />
-                <Tooltip content={<TooltipDark />} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="CY" fill="#4AC9E3" radius={[4, 4, 0, 0]} isAnimationActive={false} minPointSize={2} />
-                <Bar dataKey="PY" fill="#4A7FA5" radius={[4, 4, 0, 0]} isAnimationActive={false} minPointSize={2} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <VisualBars items={termChartData} compareKey="PY" />
           <ChartValues items={termChartData} compareKey="PY" />
         </Panel>
 
         <Panel accent="#E86CB0" title={T(lang, "Dossiers et commissions", "Deals and commissions")}
           subtitle={T(lang, "Performance trimestrielle combinée", "Combined quarterly performance")}>
-          <div style={{ width: "100%", height: 250 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <LineChart data={quarterChartData} margin={{ top: 8, right: 16, left: -8, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="name" stroke="#4A7FA5" fontSize={10} />
-                <YAxis yAxisId="money" stroke="#4A7FA5" fontSize={10} tickFormatter={(v) => fmtCompact(v)} />
-                <YAxis yAxisId="deals" orientation="right" stroke="#E86CB0" fontSize={10} />
-                <Tooltip content={<TooltipDark />} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line yAxisId="money" type="monotone" dataKey="commission" name={T(lang, "Commission", "Commission")} stroke="#00D4AA" strokeWidth={3} dot={{ r: 4 }} isAnimationActive={false} />
-                <Line yAxisId="deals" type="monotone" dataKey="deals" name={T(lang, "Dossiers", "Deals")} stroke="#E86CB0" strokeWidth={2} dot={{ r: 4 }} isAnimationActive={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <VisualTrend items={quarterChartData} primaryKey="commission" compareKey="deals" />
         </Panel>
       </div>
 
@@ -816,22 +801,7 @@ function SectionTable({ lang, title, rows, money, labelFn, accent = "#4AC9E3" }:
           <Delta cy={totalVol} py={totalPy} />
         </div>
       }>
-      {hasChart && (
-        <div style={{ width: "100%", height: 132, marginBottom: 10 }}>
-          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-            <BarChart data={chartData} margin={{ top: 4, right: 4, left: -14, bottom: 0 }} barCategoryGap="22%">
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="name" stroke="#4A7FA5" fontSize={9} tickLine={false} axisLine={false} interval={0} height={26} />
-              <YAxis stroke="#4A7FA5" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(v) => fmtCompact(v)} width={44} />
-              <Tooltip content={<TooltipDark />} cursor={{ fill: "rgba(46,155,220,0.06)" }} />
-              <Bar dataKey="PY" name="PY" fill="#3A5A78" radius={[3, 3, 0, 0]} isAnimationActive={false} minPointSize={2} />
-              <Bar dataKey="CY" name="CY" radius={[3, 3, 0, 0]} isAnimationActive={false} minPointSize={2}>
-                {chartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {hasChart && <div className="mb-3"><VisualBars items={chartData} compareKey="PY" /></div>}
       <div className="overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead>

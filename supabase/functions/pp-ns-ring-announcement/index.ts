@@ -112,14 +112,29 @@ Deno.serve(async (req) => {
       return json({ probe, status: pr.status, body: (await pr.text()).slice(0, 8000) });
     }
 
+    // NS renvoie au maximum 100 objets par page : on pagine jusqu'à épuisement.
     const listUsers = async (): Promise<string[]> => {
-      const res = await nsFetch(`${base}/users`, {}, { functionName: "pp-ns-ring-announcement" });
-      const arr = await res.json().catch(() => []);
-      if (!Array.isArray(arr)) return [];
-      return arr
-        .map((u: Record<string, unknown>) => String(u?.user ?? u?.["user"] ?? ""))
-        .filter((u: string) => u && /^\d+$/.test(u));
+      const out: string[] = [];
+      const limit = 100;
+      for (let start = 0; start < 2000; start += limit) {
+        const res = await nsFetch(
+          `${base}/users?limit=${limit}&start=${start}`,
+          {},
+          { functionName: "pp-ns-ring-announcement" },
+        );
+        const arr = await res.json().catch(() => []);
+        if (!Array.isArray(arr) || arr.length === 0) break;
+        const page = arr
+          .map((u: Record<string, unknown>) => String(u?.user ?? ""))
+          .filter((u: string) => u && /^\d+$/.test(u));
+        const before = out.length;
+        for (const u of page) if (!out.includes(u)) out.push(u);
+        if (out.length === before) break; // page identique = pagination non supportée
+        if (arr.length < limit) break;
+      }
+      return out;
     };
+
 
     const setUserRing = async (user: string, enabled: boolean) => {
       const res = await nsFetch(`${base}/users/${encodeURIComponent(user)}`, {

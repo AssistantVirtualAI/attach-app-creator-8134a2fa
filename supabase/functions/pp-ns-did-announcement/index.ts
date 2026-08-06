@@ -274,6 +274,14 @@ Deno.serve(async (req) => {
       return json({ success: true, action, domain, ...res });
     }
 
+    // Lecture brute (GET only) pour mise au point.
+    if (action === "ns_get") {
+      const path = String(body?.path ?? "");
+      if (!path.startsWith("/domains/")) return json({ success: false, error: "path invalide" }, 400);
+      const r = await ns(path);
+      return json({ success: true, status: r.status, data: r.data });
+    }
+
     // Outil de mise au point : PUT arbitraire sur une file + relecture.
     if (action === "probe_queue") {
       const q = queueExt(String(body?.extension ?? "111"));

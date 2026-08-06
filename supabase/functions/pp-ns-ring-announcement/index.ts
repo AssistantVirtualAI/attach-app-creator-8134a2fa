@@ -165,6 +165,41 @@ Deno.serve(async (req) => {
     }
 
 
+    // Remplace UNIQUEMENT le média d'attente (l'avis d'enregistrement).
+    // Aucune écriture sur le domaine, les users ou les DID.
+    if (action === "upload" || action === "replace_media") {
+      const admin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const dl = await admin.storage.from(bucket).download(object);
+      if (dl.error || !dl.data) return json({ error: "audio_not_found", details: dl.error?.message }, 404);
+      const bytes = new Uint8Array(await dl.data.arrayBuffer());
+      const base64 = toBase64(bytes);
+
+      const up = await nsFetch(`${base}/moh`, {
+        method: "POST",
+        body: JSON.stringify({
+          synchronous: "yes",
+          convert: "yes",
+          name,
+          description: "Avis d'enregistrement d'appel (AVA)",
+          index: 1,
+          script: "Avis d'enregistrement d'appel (AVA)",
+          encoding: "audio/wav",
+          base64_file: base64,
+        }),
+      }, { functionName: "pp-ns-ring-announcement" });
+      const upText = await up.text();
+      return json({
+        ok: up.ok,
+        name,
+        bytes: bytes.length,
+        upload: { status: up.status, body: upText.slice(0, 400) },
+        state: await readState(),
+      });
+    }
+
     if (action === "enable") {
       // 1) upload the notice as domain MOH media
       const admin = createClient(

@@ -516,9 +516,15 @@ export default function CommissionDashboard({
                       {teamData.map((r) => (
                         <tr key={r.id} style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
                           <td className="py-1.5" style={{ color: "var(--pp-text-primary)" }}>{r.dimension}</td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{r.extra?.broker}</td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{r.extra?.team}</td>
-                          <td className="py-1.5 text-right tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>{r.extra?.share}</td>
+                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>
+                            {r.extra?.broker != null ? (typeof r.extra.broker === "number" ? fmtNum(r.extra.broker) : r.extra.broker) : "—"}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>
+                            {r.extra?.team != null ? (typeof r.extra.team === "number" ? fmtNum(r.extra.team) : r.extra.team) : "—"}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums" style={{ color: "#00D4AA", fontWeight: 700 }}>
+                            {r.extra?.share != null ? (typeof r.extra.share === "number" ? fmtPct(r.extra.share) : r.extra.share) : "—"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -527,13 +533,78 @@ export default function CommissionDashboard({
               )}
             </div>
           )}
+
+          {canEdit && (
+            <Panel accent="#00D4AA"
+              title={T(lang, "Données brutes — saisie manuelle", "Raw data — manual entry")}
+              subtitle={T(lang, "Modifier ou supprimer n'importe quelle valeur", "Edit or delete any value")}
+              right={
+                <button onClick={() => { setEditRow(null); setDialogOpen(true); }}
+                  className="px-2.5 py-1.5 rounded-lg text-[12px] flex items-center gap-1.5 text-white" style={{ background: "#00A37A" }}>
+                  <Plus className="w-3.5 h-3.5" /> {T(lang, "Ajouter", "Add")}
+                </button>
+              }>
+              <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
+                <table className="w-full text-[12px]">
+                  <thead className="sticky top-0" style={{ background: "var(--pp-bg-deep)" }}>
+                    <tr style={{ color: "var(--pp-text-faint)" }}>
+                      <th className="text-left py-1.5 pr-2">{T(lang, "Courtier", "Broker")}</th>
+                      <th className="text-left py-1.5 pr-2">Section</th>
+                      <th className="text-left py-1.5 pr-2">{T(lang, "Libellé", "Label")}</th>
+                      <th className="text-left py-1.5 pr-2">{T(lang, "Sous-lib.", "Sub")}</th>
+                      <th className="text-right py-1.5 px-2">Vol. CY</th>
+                      <th className="text-right py-1.5 px-2">Vol. PY</th>
+                      <th className="text-right py-1.5 px-2">{T(lang, "Doss.", "Deals")}</th>
+                      <th className="text-right py-1.5 px-2">Comm. CY</th>
+                      <th className="text-right py-1.5 pl-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((r) => (
+                      <tr key={r.id} className="transition-colors hover:bg-white/[0.03]" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+                        <td className="py-1.5 pr-2" style={{ color: "var(--pp-text-primary)" }}>{r.broker_name}</td>
+                        <td className="py-1.5 pr-2" style={{ color: "var(--pp-text-faint)" }}>{SECTION_LABELS[String(r.section)]?.[lang] ?? r.section}</td>
+                        <td className="py-1.5 pr-2" style={{ color: "var(--pp-text-muted)" }}>{r.dimension ?? "—"}</td>
+                        <td className="py-1.5 pr-2" style={{ color: "var(--pp-text-faint)" }}>{r.sub_dimension ?? "—"}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{r.cy_volume ? fmtMoney(r.cy_volume) : "—"}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: "var(--pp-text-faint)" }}>{r.py_volume ? fmtMoney(r.py_volume) : "—"}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: "var(--pp-text-muted)" }}>{r.cy_deals ? fmtNum(r.cy_deals) : "—"}</td>
+                        <td className="py-1.5 px-2 text-right tabular-nums" style={{ color: "#00D4AA" }}>{r.cy_commission ? fmtMoney(r.cy_commission) : "—"}</td>
+                        <td className="py-1.5 pl-2 text-right whitespace-nowrap">
+                          <button onClick={() => { setEditRow(r); setDialogOpen(true); }} className="p-1 rounded-md" style={{ color: "var(--pp-text-muted)" }}>
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => void handleDelete(r)} className="p-1 rounded-md" style={{ color: "#E84C4C" }}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          )}
         </div>
       ) : (
         <KanbanView lang={lang} filtered={filtered} />
       )}
+
+      {canEdit && (
+        <CommissionEntryDialog
+          lang={lang}
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          onSaved={() => void load()}
+          row={editRow}
+          brokers={brokers}
+          defaultBroker={filters.broker !== "all" ? filters.broker : undefined}
+        />
+      )}
     </div>
   );
 }
+
 
 function SectionTable({ lang, title, rows, money, labelFn }: { lang: Lang; title: string; rows: any[]; money?: boolean; labelFn?: (v: any) => string }) {
   if (!rows.length) return null;

@@ -489,6 +489,9 @@ export default function PlanipretMobile() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, lang, setLang } = useMplanipretLang();
+  // Onglets pilotés à distance depuis le portail admin (aucun rebuild requis).
+  const { isEnabled: isFeatureEnabled } = useRemoteConfig();
+  const visibleTabs = TABS.filter((tb) => !tb.flag || isFeatureEnabled(tb.flag));
   const [profile, setProfile] = useState<any>(null);
   // REST-only call control: outbound calls ring the broker's registered mobile device.
   // Wait for the profile before SIP init so cold starts do not race auth/profile boot.

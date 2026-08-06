@@ -141,6 +141,7 @@ export default function App() {
             <Toaster position="top-center" richColors />
             <NativeBootMarker />
             <PlanipretErrorBoundary>
+              <RemoteConfigGate>
               <LazyRouteBoundary>
                 <NativeDeepLinkBridge />
                 <Routes>

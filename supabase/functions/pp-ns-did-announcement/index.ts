@@ -200,7 +200,9 @@ async function bootSelfHeal() {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  queueMicrotask(() => { void bootSelfHeal(); });
+  // Self-heal au démarrage : uniquement sur demande explicite (cron/admin),
+  // sinon il monopolise le worker et fait expirer les requêtes de lecture.
+  if (req.headers.get("x-selfheal") === "1") queueMicrotask(() => { void bootSelfHeal(); });
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
     const cronHeader = req.headers.get("x-cron-secret") ?? "";

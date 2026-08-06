@@ -311,7 +311,71 @@ Deno.serve(async (req) => {
       });
     }
 
-    return json({ error: "unknown_action", hint: "status | enable | disable | restore | scope_users" }, 400);
+    // Média « avis 4 s puis sonnerie » : l'avis est joué en média précoce
+    // AVANT la sonnerie, puis une vraie tonalité de retour d'appel prend le
+    // relais jusqu'au renvoi vers la boîte vocale. Aucune file d'attente.
+    if (action === "build_ringback") {
+      const admin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const dl = await admin.storage.from(bucket).download(object);
+      if (dl.error || !dl.data) return json({ error: "audio_not_found", details: dl.error?.message }, 404);
+      const src = parseWav(new Uint8Array(await dl.data.arrayBuffer()));
+      const tail = Number(body?.ringback_seconds ?? 40);
+      const noticeSeconds = src.data.length / (src.rate * src.channels * 2);
+      const pcm = new Uint8Array(src.data.length + ringbackPcm(src.rate, src.channels, tail).length);
+      pcm.set(src.data, 0);
+      pcm.set(ringbackPcm(src.rate, src.channels, tail), src.data.length);
+      const wav = buildWav(src.rate, src.channels, pcm);
+
+      await admin.storage.from(bucket).upload("call-recording-notice-ringback.wav", wav, {
+        contentType: "audio/wav", upsert: true,
+      });
+
+      const up = await nsFetch(`${base}/moh`, {
+        method: "POST",
+        body: JSON.stringify({
+          synchronous: "yes",
+          convert: "yes",
+          name,
+          description: "Avis d'enregistrement + tonalité de sonnerie (AVA)",
+          index: 1,
+          script: "Avis d'enregistrement d'appel (AVA)",
+          encoding: "audio/wav",
+          base64_file: toBase64(wav),
+        }),
+      }, { functionName: "pp-ns-ring-announcement" });
+
+      return json({
+        ok: up.ok,
+        notice_seconds: Math.round(noticeSeconds * 10) / 10,
+        ringback_seconds: tail,
+        sample_rate: src.rate,
+        channels: src.channels,
+        upload: { status: up.status, body: (await up.text()).slice(0, 400) },
+      });
+    }
+
+    // Durée de sonnerie avant boîte vocale (avis 4 s inclus).
+    if (action === "set_ring_timeout") {
+      const secs = Number(body?.seconds ?? 29);
+      const targets: string[] = Array.isArray(body?.users) && body.users.length
+        ? body.users.map(String)
+        : await listUsers();
+      const results = [];
+      for (const u of targets) {
+        const r = await nsFetch(`${base}/users/${encodeURIComponent(u)}`, {
+          method: "PUT",
+          body: JSON.stringify({ synchronous: "yes", "ring-no-answer-timeout-seconds": secs }),
+        }, { functionName: "pp-ns-ring-announcement" });
+        results.push({ user: u, status: r.status, ok: r.ok });
+      }
+      return json({ ok: results.every((r) => r.ok), seconds: secs, count: results.length, results });
+    }
+
+    return json({ error: "unknown_action", hint: "status | enable | disable | restore | scope_users | build_ringback | set_ring_timeout" }, 400);
+
 
   } catch (e) {
     console.error("[pp-ns-ring-announcement] error", e);

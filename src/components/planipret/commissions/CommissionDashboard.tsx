@@ -535,7 +535,7 @@ export default function CommissionDashboard({
   );
 }
 
-function SectionTable({ lang, title, rows, money }: { lang: Lang; title: string; rows: any[]; money?: boolean }) {
+function SectionTable({ lang, title, rows, money, labelFn }: { lang: Lang; title: string; rows: any[]; money?: boolean; labelFn?: (v: any) => string }) {
   if (!rows.length) return null;
   const totalVol = rows.reduce((s, r) => s + Number(r.cy_volume || 0), 0);
   return (

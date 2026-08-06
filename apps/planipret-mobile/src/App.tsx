@@ -16,6 +16,7 @@ import { PlanipretErrorBoundary } from '@/components/PlanipretErrorBoundary';
 import { LazyRouteBoundary } from '@/components/LazyRouteBoundary';
 import { lazyWithRetry } from '@/lib/lazyWithRetry';
 import { scheduleIdlePrefetch, CORE_MOBILE_TAB_PATHS } from '@/lib/routePrefetch';
+import RemoteConfigGate from '@/components/planipret/mobile/RemoteConfigGate';
 
 // Do not start route prefetching while React is still mounting on iOS WKWebView.
 // It can race lazy route resolution during cold native startup and leave the

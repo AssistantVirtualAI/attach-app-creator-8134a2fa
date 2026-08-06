@@ -21,7 +21,11 @@ export type CommissionRow = {
   py_commission: number;
   extra: Record<string, any>;
   source_file: string | null;
+  entry_source?: string | null;
+  updated_by?: string | null;
+  updated_at?: string | null;
 };
+
 
 export type CommissionFilters = {
   broker: string;      // "all" or broker_name

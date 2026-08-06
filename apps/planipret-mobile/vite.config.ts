@@ -19,6 +19,12 @@ function readCapacitorVersion(): string {
 
 const capacitorVersion = readCapacitorVersion();
 
+// L'updater OTA n'est présent que dans les builds natifs. Quand le paquet
+// n'est pas installé, on l'alias vers un stub pour ne pas casser le build web.
+const hasCapgoUpdater = fs.existsSync(
+  path.resolve(__dirname, 'node_modules/@capgo/capacitor-updater/package.json'),
+);
+
 export default defineConfig({
   plugins: [react()],
   resolve: {

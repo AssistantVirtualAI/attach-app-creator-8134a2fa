@@ -3,12 +3,15 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell, AreaChart, Area,
 } from "recharts";
-import { Download, LayoutGrid, Table2, Search, RefreshCw, DollarSign, Briefcase, Wallet, Gauge, TrendingUp, Users, Filter, Trophy } from "lucide-react";
+import { Download, LayoutGrid, Table2, Search, RefreshCw, DollarSign, Briefcase, Wallet, Gauge, TrendingUp, Users, Filter, Trophy, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   type CommissionRow, type CommissionFilters, emptyFilters, fetchCommissionRows,
   aggregate, applyFilters, brokerNames, lenderNames, globalTotals, kpiOf,
   fmtMoney, fmtNum, fmtPct, fmtBps, fmtCompact, toCsv, SECTION_LABELS, CHART_COLORS,
+  isCommissionEditor, deleteCommissionRow, termLabel,
 } from "@/lib/planipret/commissionStats";
+import CommissionEntryDialog from "./CommissionEntryDialog";
+
 
 type Lang = "fr" | "en";
 const T = (lang: Lang, fr: string, en: string) => (lang === "en" ? en : fr);

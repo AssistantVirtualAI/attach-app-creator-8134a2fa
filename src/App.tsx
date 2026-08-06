@@ -60,6 +60,7 @@ const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin
 const PAOverview = lazyWithRetry(() => import("./pages/planipret/admin/PAOverview"));
 const PAUsers = lazyWithRetry(() => import("./pages/planipret/admin/PAUsers"));
 const PACommissions = lazyWithRetry(() => import("./pages/planipret/admin/PACommissions"));
+const PAMobileApp = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileApp"));
 const PACalls = lazyWithRetry(() => import("./pages/planipret/admin/PACalls"));
 const PAMessages = lazyWithRetry(() => import("./pages/planipret/admin/PAMessages"));
 const PAVoicemails = lazyWithRetry(() => import("./pages/planipret/admin/PAVoicemails"));

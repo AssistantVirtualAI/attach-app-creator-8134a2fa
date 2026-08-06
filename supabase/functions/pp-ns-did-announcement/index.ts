@@ -81,35 +81,32 @@ async function ensureQueue(domain: string, ext: string) {
   const q = queueExt(ext);
   const base = `/domains/${encodeURIComponent(domain)}/callqueues`;
   const read = await ns(`${base}/${encodeURIComponent(q)}`);
-  // IMPORTANT (incident 2026-08-05) : `queue-intro-message` est joué AVANT que
-  // la file ne sonne les agents et n'est PAS interruptible — le courtier voyait
-  // l'appel, décrochait, et l'intro continuait jusqu'au timeout → boîte vocale,
-  // avec un compteur d'appel actif côté mobile. L'avis doit donc être joué en
-  // MUSIQUE D'ATTENTE (média de sonnerie) : le caller l'entend pendant que les
-  // agents sonnent, et il coupe net au décrochage.
+  // La musique d'attente vient du MOH du DOMAINE (`/domains/{d}/moh`), où le
+  // fichier unique est l'avis d'enregistrement : la file n'expose aucun champ
+  // MOH propre. L'avis est donc joué pendant que les agents sonnent et coupe
+  // net au décrochage (contrairement à l'intro de file, non interruptible).
   const payload: Record<string, unknown> = {
     synchronous: "yes",
     queue: q,
-    "call-queue": q,
-    name: `Avis ${ext}`,
     description: `Annonce d'enregistrement — entrants du courtier ${ext}`,
-    "queue-type": "Ring All",
-    "music-on-hold-enabled": "yes",
-    "music-on-hold-name": MOH_NAME,
-    "queue-intro-message-enabled": "no",
-    "queue-max-wait-seconds": 45,
-    "queue-forward-timeout-destination": `vmail_${ext}`,
-    enabled: "yes",
+    "callqueue-dispatch-type": "Ring All",
+    "callqueue-calculate-statistics": "yes",
+    "callqueue-agent-dispatch-timeout-seconds": 30,
+    "callqueue-max-wait-timeout-minutes": 1,
+    "callqueue-require-available-agents-to-accept-new-callers": "no",
+    "callqueue-force-full-intro-playback": "no",
   };
 
   const write = read.ok
     ? await ns(`${base}/${encodeURIComponent(q)}`, { method: "PUT", body: JSON.stringify(payload) })
-    : await ns(base, { method: "POST", body: JSON.stringify({ ...payload, queue: q, "call-queue": q }) });
+    : await ns(base, { method: "POST", body: JSON.stringify({ ...payload, "call-queue": q }) });
 
   // Agent unique = le courtier (ses propres devices sonnent).
   const agents = await ns(`${base}/${encodeURIComponent(q)}/agents`);
   const list = Array.isArray(agents.data) ? agents.data : [];
-  const present = list.some((a: any) => String(a?.user ?? a?.agent ?? "") === ext);
+  const present = list.some((a: any) =>
+    String(a?.["callqueue-agent-id"] ?? a?.user ?? a?.agent ?? "").split("@")[0].replace("sip:", "") === ext);
+
   let agentWrite: any = null;
   if (!present) {
     agentWrite = await ns(`${base}/${encodeURIComponent(q)}/agents`, {

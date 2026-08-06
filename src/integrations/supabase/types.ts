@@ -3037,6 +3037,141 @@ export type Database = {
         }
         Relationships: []
       }
+      mobile_app_config: {
+        Row: {
+          app_key: string
+          channel: string
+          created_at: string
+          flags: Json
+          id: string
+          maintenance_message: string | null
+          maintenance_mode: boolean
+          messages: Json
+          min_version: string | null
+          published_at: string | null
+          published_by: string | null
+          recommended_version: string | null
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          app_key: string
+          channel?: string
+          created_at?: string
+          flags?: Json
+          id?: string
+          maintenance_message?: string | null
+          maintenance_mode?: boolean
+          messages?: Json
+          min_version?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          recommended_version?: string | null
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          app_key?: string
+          channel?: string
+          created_at?: string
+          flags?: Json
+          id?: string
+          maintenance_message?: string | null
+          maintenance_mode?: boolean
+          messages?: Json
+          min_version?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          recommended_version?: string | null
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      mobile_app_config_audit: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          app_key: string
+          channel: string
+          created_at: string
+          id: string
+          payload: Json | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          app_key: string
+          channel: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          app_key?: string
+          channel?: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+        }
+        Relationships: []
+      }
+      mobile_app_releases: {
+        Row: {
+          app_key: string
+          bundle_path: string
+          bundle_sha256: string | null
+          bundle_size: number | null
+          channel: string
+          created_at: string
+          id: string
+          is_active: boolean
+          native_version_min: string | null
+          notes: string | null
+          published_by: string | null
+          rolled_back_at: string | null
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          app_key: string
+          bundle_path: string
+          bundle_sha256?: string | null
+          bundle_size?: number | null
+          channel?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          native_version_min?: string | null
+          notes?: string | null
+          published_by?: string | null
+          rolled_back_at?: string | null
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          app_key?: string
+          bundle_path?: string
+          bundle_sha256?: string | null
+          bundle_size?: number | null
+          channel?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          native_version_min?: string | null
+          notes?: string | null
+          published_by?: string | null
+          rolled_back_at?: string | null
+          updated_at?: string
+          version?: string
+        }
+        Relationships: []
+      }
       mobile_push_tokens: {
         Row: {
           created_at: string

@@ -28,6 +28,60 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
+/** Parse minimal d'un WAV PCM : renvoie params + données brutes. */
+function parseWav(bytes: Uint8Array) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (String.fromCharCode(...bytes.subarray(0, 4)) !== "RIFF") throw new Error("not_a_wav");
+  let pos = 12;
+  let fmt: { channels: number; rate: number; bits: number; format: number } | null = null;
+  let data: Uint8Array | null = null;
+  while (pos + 8 <= bytes.length) {
+    const id = String.fromCharCode(...bytes.subarray(pos, pos + 4));
+    const size = dv.getUint32(pos + 4, true);
+    const body = bytes.subarray(pos + 8, pos + 8 + size);
+    if (id === "fmt ") {
+      const b = new DataView(body.buffer, body.byteOffset, body.byteLength);
+      fmt = { format: b.getUint16(0, true), channels: b.getUint16(2, true), rate: b.getUint32(4, true), bits: b.getUint16(14, true) };
+    } else if (id === "data") {
+      data = body;
+    }
+    pos += 8 + size + (size % 2);
+  }
+  if (!fmt || !data) throw new Error("wav_missing_chunks");
+  if (fmt.format !== 1 || fmt.bits !== 16) throw new Error(`unsupported_wav format=${fmt.format} bits=${fmt.bits}`);
+  return { ...fmt, data };
+}
+
+/** Tonalité de retour d'appel nord-américaine : 440+480 Hz, 2 s ON / 4 s OFF. */
+function ringbackPcm(rate: number, channels: number, seconds: number): Uint8Array {
+  const frames = Math.floor(rate * seconds);
+  const out = new Uint8Array(frames * channels * 2);
+  const dv = new DataView(out.buffer);
+  for (let i = 0; i < frames; i++) {
+    const t = i / rate;
+    const on = t % 6 < 2;
+    const s = on
+      ? Math.round(8000 * (Math.sin(2 * Math.PI * 440 * t) + Math.sin(2 * Math.PI * 480 * t)))
+      : 0;
+    for (let c = 0; c < channels; c++) dv.setInt16((i * channels + c) * 2, s, true);
+  }
+  return out;
+}
+
+function buildWav(rate: number, channels: number, pcm: Uint8Array): Uint8Array {
+  const out = new Uint8Array(44 + pcm.length);
+  const dv = new DataView(out.buffer);
+  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) out[o + i] = s.charCodeAt(i); };
+  w(0, "RIFF"); dv.setUint32(4, 36 + pcm.length, true); w(8, "WAVEfmt ");
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, channels, true);
+  dv.setUint32(24, rate, true); dv.setUint32(28, rate * channels * 2, true);
+  dv.setUint16(32, channels * 2, true); dv.setUint16(34, 16, true);
+  w(36, "data"); dv.setUint32(40, pcm.length, true);
+  out.set(pcm, 44);
+  return out;
+}
+
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,

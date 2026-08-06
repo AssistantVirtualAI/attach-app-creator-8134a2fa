@@ -40,7 +40,8 @@
     "prebuild": "node scripts/check-imports.mjs",
     "ios:oneclick": "bash scripts/ios-oneclick.sh",
     "ios:oneclick:rebuild": "bash scripts/ios-oneclick.sh --rebuild-pjsip",
-    "verify:aor:mobile": "node scripts/verify-aor-mobile.mjs"
+    "verify:aor:mobile": "node scripts/verify-aor-mobile.mjs",
+    "ota:bundle": "PP_SKIP_AUTOSYNC=1 npm run build && node scripts/build-ota-bundle.mjs"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^6.1.0",
@@ -57,10 +58,10 @@
     "@capacitor/local-notifications": "^6.1.0",
     "@capacitor/network": "^6.0.2",
     "@capacitor/preferences": "^6.0.2",
-    "capacitor-pjsip": "file:./capacitor-pjsip",
     "@capacitor/push-notifications": "^6.0.2",
     "@capacitor/splash-screen": "^6.0.2",
     "@capacitor/status-bar": "^6.0.1",
+    "@capgo/capacitor-updater": "^6.3.0",
     "@elevenlabs/client": "^0.12.0",
     "@radix-ui/react-alert-dialog": "^1.1.4",
     "@radix-ui/react-dialog": "^1.1.4",
@@ -70,6 +71,7 @@
     "@radix-ui/react-tooltip": "^1.1.4",
     "@supabase/supabase-js": "^2.76.1",
     "@tanstack/react-query": "^5.60.5",
+    "capacitor-pjsip": "file:./capacitor-pjsip",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^11.15.0",

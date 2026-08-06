@@ -92,11 +92,11 @@ const PlanipretBadge = () => (
 export type PlanipretMobileContext = { profile: any; reloadProfile: () => Promise<void>; openDialer: (number?: string, autoDial?: boolean) => void; openAva: () => void; registerRefresh: (fn: (() => Promise<void> | void) | null) => void; softphone: ReturnType<typeof useMplanipretSoftphone> };
 
 const TABS = [
-  { to: "/mplanipret/home", labelKey: "tabs.home", Icon: Home },
-  { to: "/mplanipret/calls", labelKey: "tabs.calls", Icon: Phone },
-  { to: "/mplanipret/ava", labelKey: "tabs.ava", Icon: Bot },
-  { to: "/mplanipret/messages", labelKey: "tabs.messages", Icon: MessageSquare },
-  { to: "/mplanipret/contacts", labelKey: "tabs.contacts", Icon: Users },
+  { to: "/mplanipret/home", labelKey: "tabs.home", Icon: Home, flag: null },
+  { to: "/mplanipret/calls", labelKey: "tabs.calls", Icon: Phone, flag: null },
+  { to: "/mplanipret/ava", labelKey: "tabs.ava", Icon: Bot, flag: "tab_ava" },
+  { to: "/mplanipret/messages", labelKey: "tabs.messages", Icon: MessageSquare, flag: "tab_messages" },
+  { to: "/mplanipret/contacts", labelKey: "tabs.contacts", Icon: Users, flag: "tab_contacts" },
 ];
 
 

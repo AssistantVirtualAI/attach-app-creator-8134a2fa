@@ -447,6 +447,7 @@ export default function CommissionDashboard({
       {/* Views */}
       {view === "table" ? (
         <div className="space-y-4">
+          <SectionTable lang={lang} title={SECTION_LABELS.productivity[lang]} rows={aggregate(filtered, "productivity").sort((a, b) => b.cy_volume - a.cy_volume)} money />
           <SectionTable lang={lang} title={SECTION_LABELS.lender[lang]} rows={aggregate(filtered, "lender").sort((a, b) => b.cy_volume - a.cy_volume)} money />
           <SectionTable lang={lang} title={SECTION_LABELS.quarter[lang]} rows={quarterData} money />
           <SectionTable lang={lang} title={SECTION_LABELS.commission_type[lang]} rows={typeData} money />

@@ -9995,8 +9995,10 @@ export type Database = {
           ava_preferred_lang: string
           ava_sessions_count: number
           ava_voice_id: string | null
+          ava_voice_model: string | null
           ava_voice_name: string | null
           ava_voice_similarity: number | null
+          ava_voice_speaker_boost: boolean
           ava_voice_speed: number | null
           ava_voice_stability: number | null
           ava_voice_style: number | null
@@ -10098,8 +10100,10 @@ export type Database = {
           ava_preferred_lang?: string
           ava_sessions_count?: number
           ava_voice_id?: string | null
+          ava_voice_model?: string | null
           ava_voice_name?: string | null
           ava_voice_similarity?: number | null
+          ava_voice_speaker_boost?: boolean
           ava_voice_speed?: number | null
           ava_voice_stability?: number | null
           ava_voice_style?: number | null
@@ -10201,8 +10205,10 @@ export type Database = {
           ava_preferred_lang?: string
           ava_sessions_count?: number
           ava_voice_id?: string | null
+          ava_voice_model?: string | null
           ava_voice_name?: string | null
           ava_voice_similarity?: number | null
+          ava_voice_speaker_boost?: boolean
           ava_voice_speed?: number | null
           ava_voice_stability?: number | null
           ava_voice_style?: number | null

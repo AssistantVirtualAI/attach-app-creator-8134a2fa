@@ -52,9 +52,6 @@ Deno.serve(async (req) => {
     "/v1/user/subscription",
     "/v1/convai/agents?page_size=5",
   ];
-  for (const p of checks) results.push({ name: `elevenlabs:GET ${p}`, ...(await el(p)) , ok: (await Promise.resolve(true)) && undefined as any });
-  // redo properly (avoid double fetch above)
-  results.splice(results.length - checks.length, checks.length);
   for (const p of checks) {
     const r = await el(p);
     results.push({ name: `elevenlabs:GET ${p}`, ok: r.ok, ms: r.ms, detail: `HTTP ${r.status} — ${r.size} bytes` });

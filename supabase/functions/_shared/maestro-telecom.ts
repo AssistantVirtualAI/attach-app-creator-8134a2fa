@@ -1,6 +1,6 @@
 // Shared helper for calling the Maestro Telecom REST API from Planiprêt edge
 // functions. Config is stored in `planipret_integration_secrets` under provider
-// `maestro_telecom` and falls back to env vars for local development.
+// `maestro_telecom` and falls back to production environment variables.
 //
 // Features:
 //  - Exponential backoff retry (0/408/429/5xx) with jitter, bounded attempts
@@ -11,7 +11,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export interface MaestroTelecomConfig {
-  url: string;   // e.g. https://client-dev.planipret.com/telecom/api/v1 (no trailing slash)
+  url: string;   // https://courtier.planipret.com/telecom/api/v1 (no trailing slash)
   key: string;   // machine API key (Bearer)
 }
 
@@ -47,7 +47,7 @@ export async function getMaestroTelecomConfig(admin: SupabaseClient): Promise<Ma
     url: (apiUrl
       || Deno.env.get("MAESTRO_TELECOM_BASE_URL")
       || Deno.env.get("MAESTRO_TELECOM_API_URL")
-      || "https://client-dev.planipret.com/telecom/api/v1").replace(/\/$/, ""),
+      || "https://courtier.planipret.com/telecom/api/v1").replace(/\/$/, ""),
     key: apiKey
       || Deno.env.get("MAESTRO_MACHINE_API_KEY")
       || Deno.env.get("MAESTRO_TELECOM_API_KEY")

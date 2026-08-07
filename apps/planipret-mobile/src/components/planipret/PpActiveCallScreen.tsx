@@ -57,8 +57,11 @@ export default function PpActiveCallScreen({
   const {
     snap, answer, hangup, mute, unmute, hold, unhold, sendDTMF, transfer, setAudioEl,
     multiLineSupported, callSecond, hangupSecond, swapLines, mergeLines,
+    answerSecond, declineSecond,
   } = softphone;
   const { minimized } = useCallUi();
+  const waitingCall = snap.second?.state === "ringing-in";
+
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [elapsed, setElapsed] = useState(0);

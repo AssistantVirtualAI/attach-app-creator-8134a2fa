@@ -36,6 +36,21 @@ export default function PlanipretPrivacy() {
           et <strong>Maestro</strong> (CRM hypothécaire — sur consentement). Aucune donnée n'est vendue à des tiers marketing.
         </Section>
 
+        <Section n="3b" title="Intelligence artificielle tierce (AI / third-party AI)">
+          L'assistant AVA (clavardage et agent vocal) utilise des fournisseurs d'IA tiers :
+          <strong> OpenAI</strong> et <strong>Google (Gemini)</strong> pour la génération de texte et les résumés,
+          et <strong>ElevenLabs</strong> pour la voix. Ce qui est transmis : le texte que vous saisissez dans AVA,
+          les transcriptions d'appels et, lorsque pertinent, le prénom/nom et le numéro du contact concerné.
+          Ne sont jamais transmis : vos identifiants, mots de passe, jetons d'accès Microsoft 365 ou Maestro.
+          Ces fournisseurs traitent les données uniquement pour produire la réponse et ne les utilisent pas
+          pour entraîner leurs modèles. Vous pouvez éviter tout traitement IA en n'utilisant pas l'onglet AVA.
+          <br /><br />
+          <em>English — Third-party AI:</em> the AVA assistant sends your typed messages, call transcripts and the
+          related contact name/number to OpenAI and Google (Gemini) for text generation, and to ElevenLabs for voice.
+          Credentials and access tokens are never shared. Data is not used to train third-party models.
+        </Section>
+
+
         <Section n="4" title="Durée de conservation">
           Appels et messages : 365 jours · Messages vocaux : 180 jours · Transcriptions et analyses IA : 730 jours ·
           Journal d'audit : 730 jours · Enregistrements audio : 90 jours. Les données sont supprimées automatiquement

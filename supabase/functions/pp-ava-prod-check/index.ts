@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
   out.maestro_base_url = base;
   out.maestro_key_present = !!machineKey;
   try {
-    const r = await fetch(`${base}/users/1?machine=1`, {
+    const r = await fetch(`${base}/users/393?machine=1`, {
       headers: { Authorization: `Bearer ${machineKey}`, Accept: "application/json" },
     });
     out.maestro_status = r.status;

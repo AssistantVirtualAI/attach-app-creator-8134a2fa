@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { X, Mic, Send, Settings, AlertTriangle, Sparkles, PhoneOutgoing, MessageSquare, Search, Calendar, Mail, Bot, Map } from "lucide-react";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import AvaOrb, { useAnalyserLevel } from "@/components/planipret/mobile/AvaOrb";
+import AiConsentGate, { hasAiConsent } from "@/components/planipret/mobile/AiConsentGate";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { getAvaToolLabel } from "@/lib/i18n/avaToolLabels";

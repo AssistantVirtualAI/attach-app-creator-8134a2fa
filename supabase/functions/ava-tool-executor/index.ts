@@ -93,6 +93,34 @@ async function maestroActions(ctx: Ctx, action: string, payload: Record<string, 
   return await r.json().catch(() => ({ success: false, error: "invalid_response" }));
 }
 
+/**
+ * Resolve the caller's numeric Maestro telecom user id (production API is
+ * scoped per user: /users/{id}/...). Auto-links from the broker directory
+ * when the profile has never been matched.
+ */
+async function maestroUserId(ctx: Ctx): Promise<string | null> {
+  const { data: prof } = await ctx.admin
+    .from("planipret_profiles")
+    .select("id, maestro_broker_id, email, ms365_email, extension, phone, full_name")
+    .eq("id", ctx.profile.id)
+    .maybeSingle();
+  let uid = prof?.maestro_broker_id ?? ctx.profile.maestro_broker_id ?? null;
+  if ((!uid || !/^\d+$/.test(String(uid).trim())) && prof) {
+    try {
+      const linked = await linkBrokerIdByEmail(ctx.admin, prof as any);
+      if (linked.ok && linked.maestro_broker_id) uid = linked.maestro_broker_id;
+    } catch { /* noop */ }
+  }
+  uid = uid ? String(uid).trim() : null;
+  return uid && /^\d+$/.test(uid) ? uid : null;
+}
+
+const MAESTRO_NOT_LINKED = {
+  success: false,
+  error: "maestro_not_connected",
+  message: "Compte Maestro non lié. Connectez Maestro dans Réglages → Maestro.",
+};
+
 async function broadcastNav(ctx: Ctx, route: string, extra?: any) {
   // Use Supabase Realtime broadcast so the mobile app can navigate live.
   try {

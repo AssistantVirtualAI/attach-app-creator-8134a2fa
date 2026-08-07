@@ -112,6 +112,8 @@ export default function MContacts() {
   const { openDialer } = useOutletContext<PlanipretMobileContext>();
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("personal");
+  const [syncingM365, setSyncingM365] = useState(false);
+
   const [q, setQ] = useState("");
   const [personal, setPersonal] = useState<any[]>(() => {
     const cached = peekPpContacts("list");

@@ -179,7 +179,9 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: "ava_not_enabled_for_user" }, 403);
   }
 
-  const agentId = p.elevenlabs_agent_id || DEFAULT_AGENT_ID;
+  // Agent partagé : TOUS les courtiers utilisent le même agent ConvAI.
+  // La personnalisation se fait par variables dynamiques (prénom, courriel).
+  const agentId = DEFAULT_AGENT_ID || p.elevenlabs_agent_id;
   if (!agentId) {
     return jsonResponse({
       success: false,
@@ -198,7 +200,8 @@ Deno.serve(async (req) => {
   }
 
   const firstName = (p.full_name ?? "courtier").split(" ")[0];
-  const voiceId = p.ava_voice_id || Deno.env.get("ELEVENLABS_AVA_VOICE_ID") || DEFAULT_VOICE_ID;
+  // Voix partagée : une seule voix pour tout le monde.
+  const voiceId = Deno.env.get("ELEVENLABS_AVA_VOICE_ID") || DEFAULT_VOICE_ID;
 
   // Probe ElevenLabs to detect which overrides the agent allows.
   // Sending disallowed overrides closes the WS right after connect.

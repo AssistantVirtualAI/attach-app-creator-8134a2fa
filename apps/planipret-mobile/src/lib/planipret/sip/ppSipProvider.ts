@@ -694,8 +694,21 @@ class PpSipProvider {
           this.attachSecondSession(e.session);
           return;
         }
+        // Appel entrant pendant un appel en cours = appel en attente.
+        // Sans cette branche, le nouvel INVITE écrasait la session active et
+        // l'appel courant était perdu.
+        if (e.originator === "remote" && this.session && this.isLineBusy()) {
+          if (this.secondSession) {
+            // Deux lignes déjà occupées → 486 Busy Here.
+            try { e.session.terminate({ status_code: 486, reason_phrase: "Busy Here" }); } catch {}
+            return;
+          }
+          this.attachSecondSession(e.session, true);
+          return;
+        }
         this.attachSession(e.session, e.originator);
       });
+
 
       this.ua = ua;
       ua.start();
@@ -1229,17 +1242,26 @@ class PpSipProvider {
     } catch {}
   }
 
-  private attachSecondSession(session: any) {
+  private attachSecondSession(session: any, incoming = false) {
     this.secondSession = session;
     const remoteUri = session.remote_identity?.uri?.user || "";
     const remoteName = session.remote_identity?.display_name || remoteUri;
     const patchSecond = (p: Partial<NonNullable<PpSipSnapshot["second"]>>) => {
-      const cur = this.snap.second ?? { state: "ringing-out" as PpCallState, number: remoteUri, name: remoteName, startedAt: null };
+      const cur = this.snap.second ?? {
+        state: (incoming ? "ringing-in" : "ringing-out") as PpCallState,
+        number: remoteUri, name: remoteName, startedAt: null,
+      };
       this.update({ second: { ...cur, ...p } });
     };
-    patchSecond({ number: remoteUri || this.snap.second?.number || "", name: remoteName || this.snap.second?.name || "" });
+    if (incoming) {
+      this.log("info", "call waiting: 2nd INVITE parked on line 2", { from: remoteUri });
+      this.update({ second: { state: "ringing-in", number: remoteUri, name: remoteName, startedAt: null } });
+      try { navigator.vibrate?.([180, 120, 180]); } catch {}
+    } else {
+      patchSecond({ number: remoteUri || this.snap.second?.number || "", name: remoteName || this.snap.second?.name || "" });
+    }
 
-    session.on("progress", () => patchSecond({ state: "ringing-out" }));
+    session.on("progress", () => { if (!incoming) patchSecond({ state: "ringing-out" }); });
     session.on("confirmed", () => {
       patchSecond({ state: "active", startedAt: Date.now() });
       this.attachSecondaryAudio((session as any).connection);
@@ -1256,6 +1278,53 @@ class PpSipProvider {
     session.on("failed", ended);
     session.on("ended", ended);
   }
+
+  /** true quand la ligne 1 porte un appel réel (sonnerie sortante incluse). */
+  private isLineBusy() {
+    const s = this.snap.callState;
+    return s === "active" || s === "held" || s === "ringing-out" || s === "ringing-in";
+  }
+
+  /**
+   * Appel en attente : répond au 2e appel entrant en mettant automatiquement
+   * le premier en attente. La ligne 1 n'est jamais raccrochée.
+   */
+  async answerSecond(): Promise<boolean> {
+    const second = this.secondSession;
+    if (!second || this.snap.second?.state !== "ringing-in") return false;
+    try { if (!this.snap.onHold) this.session?.hold(); } catch {}
+    let mediaStream: MediaStream | undefined;
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
+    } catch (e: any) {
+      this.log("warn", `answerSecond: mic unavailable (${e?.name || e})`);
+    }
+    try {
+      second.answer({
+        ...(mediaStream ? { mediaStream } : {}),
+        mediaConstraints: { audio: true, video: false },
+        rtcAnswerConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
+      });
+      this.update({ second: { ...(this.snap.second!), state: "active", startedAt: Date.now() } });
+      this.log("info", "call waiting answered on line 2");
+      return true;
+    } catch (e: any) {
+      this.log("error", `answerSecond failed: ${e?.message || e}`);
+      try { this.session?.unhold(); } catch {}
+      return false;
+    }
+  }
+
+  /** Refuse l'appel en attente sans toucher à l'appel en cours. */
+  declineSecond() {
+    try { this.secondSession?.terminate({ status_code: 486, reason_phrase: "Busy Here" }); } catch {}
+    this.secondSession = null;
+    this.update({ second: null });
+  }
+
 
 
   // ---- Quality/handover helpers used by the audio & network modules ----

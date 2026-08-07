@@ -57,8 +57,11 @@ export default function PpActiveCallScreen({
   const {
     snap, answer, hangup, mute, unmute, hold, unhold, sendDTMF, transfer, setAudioEl,
     multiLineSupported, callSecond, hangupSecond, swapLines, mergeLines,
+    answerSecond, declineSecond,
   } = softphone;
   const { minimized } = useCallUi();
+  const waitingCall = snap.second?.state === "ringing-in";
+
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -90,8 +93,8 @@ export default function PpActiveCallScreen({
     if (!active) { setView("main"); setDtmfBuf(""); setTransferQuery(""); setElapsed(0); setLineError(null); callUi.reset(); }
   }, [active]);
 
-  // Un appel entrant doit toujours revenir en plein écran.
-  useEffect(() => { if (snap.callState === "ringing-in") callUi.restore(); }, [snap.callState]);
+  // Un appel entrant — ou un appel en attente — doit revenir en plein écran.
+  useEffect(() => { if (snap.callState === "ringing-in" || waitingCall) callUi.restore(); }, [snap.callState, waitingCall]);
 
 
   // A call must never start on the loudspeaker: WebKit/WebRTC defaults to it
@@ -366,7 +369,29 @@ export default function PpActiveCallScreen({
         {/* Deuxième ligne / conférence */}
         {view === "main" && !isIncoming && (snap.second || snap.conference || multiLineSupported) && (
           <div className="shrink-0 px-4 pb-2">
-            {snap.second && (
+            {waitingCall && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl mb-2"
+                style={{ background: "rgba(34,197,94,0.14)", border: "1px solid rgba(34,197,94,0.45)" }}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center animate-pulse" style={{ background: "rgba(34,197,94,0.28)" }}>
+                  <Phone className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{snap.second!.name || snap.second!.number}</div>
+                  <div className="text-[11px] text-white/70">Appel en attente</div>
+                </div>
+                <button onClick={() => declineSecond()} aria-label="Refuser le 2e appel"
+                  className="w-10 h-10 rounded-full flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #B91C1C, #E84C4C)" }}>
+                  <PhoneOff className="w-4 h-4" />
+                </button>
+                <button onClick={() => void answerSecond()} aria-label="Répondre au 2e appel"
+                  className="w-10 h-10 rounded-full flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #15803D, #22C55E)" }}>
+                  <Phone className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            {snap.second && !waitingCall && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-2xl mb-2"
                 style={{ background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.30)" }}>
                 <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(46,155,220,0.25)" }}>
@@ -384,18 +409,20 @@ export default function PpActiveCallScreen({
                 </button>
               </div>
             )}
+
             {lineError && <div className="text-[11px] mb-2 px-1" style={{ color: "#FCA5A5" }}>{lineError}</div>}
             <div className="flex gap-2">
               {!snap.second && multiLineSupported && snap.callState !== "ringing-out" && (
                 <LineBtn icon={<UserPlus className="w-4 h-4" />} label="Ajouter un appel" onClick={() => { setLineError(null); setTransferQuery(""); setView("addcall"); }} />
               )}
-              {snap.second && !snap.conference && (
+              {snap.second && !snap.conference && !waitingCall && (
                 <>
                   <LineBtn icon={<ArrowLeftRight className="w-4 h-4" />} label="Permuter" onClick={() => swapLines()} />
                   <LineBtn
                     icon={<Users className="w-4 h-4" />}
                     label={merging ? "Fusion…" : "Fusionner"}
-                    disabled={merging || snap.second.state === "ringing-out"}
+                    disabled={merging || snap.second.state !== "active"}
+
                     onClick={async () => {
                       setMerging(true); setLineError(null);
                       try { await mergeLines(); } catch (e: any) { setLineError(e?.message || "Fusion impossible"); }

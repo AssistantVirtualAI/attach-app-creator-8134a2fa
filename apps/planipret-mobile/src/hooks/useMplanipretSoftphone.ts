@@ -1569,6 +1569,8 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     multiLineSupported: hasLiveSipSession && !hasNativeCall,
     callSecond: (n: string) => ppSipProvider.callSecond(n),
     hangupSecond: () => ppSipProvider.hangupSecond(),
+    answerSecond: () => ppSipProvider.answerSecond(),
+    declineSecond: () => ppSipProvider.declineSecond(),
     swapLines: () => ppSipProvider.swapLines(),
     mergeLines: () => ppSipProvider.mergeLines(),
 

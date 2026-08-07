@@ -80,6 +80,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
   const { lang } = useMplanipretLang();
   const L = useCallback((fr: string, en: string) => (lang === "en" ? en : fr), [lang]);
   const toolLabel = useCallback((name: string) => getAvaToolLabel(name, lang), [lang]);
+  const [aiConsent, setAiConsentState] = useState<boolean>(() => hasAiConsent());
   const [voiceSheetOpen, setVoiceSheetOpen] = useState(false);
   const [state, setState] = useState<AgentState>("idle");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);

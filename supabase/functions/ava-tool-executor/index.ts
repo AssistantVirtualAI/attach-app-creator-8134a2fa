@@ -644,10 +644,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
         const overdue = (Array.isArray(tasks) ? tasks : []).filter((t: any) => t.due_date && new Date(t.due_date).getTime() < now).length;
         return { success: true, tasks, overdue_count: overdue, source: "maestro" };
       } catch (_) {
-        const { data: tasks } = await ctx.admin.from("planipret_tasks")
-          .select("*").eq("profile_id", ctx.profile.id).eq("status", "pending")
-          .order("due_date", { ascending: true }).limit(limit);
-        return { success: true, tasks: tasks ?? [], overdue_count: 0, source: "local", message: "Tâches Maestro indisponibles — tâches locales affichées." };
+        return { success: true, tasks: [], overdue_count: 0, source: "none", message: "Maestro n'expose pas encore les tâches en production." };
       }
     } catch (e) { return { success: false, error: String(e) }; }
   },

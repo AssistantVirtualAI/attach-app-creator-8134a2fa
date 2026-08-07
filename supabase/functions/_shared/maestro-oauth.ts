@@ -19,8 +19,9 @@ export interface MaestroOAuthEnv {
 
 export function getMaestroOAuthEnv(): MaestroOAuthEnv {
   return {
-    authUrl:        Deno.env.get("MAESTRO_OAUTH_AUTHORIZE_URL")       ?? "",
-    tokenUrl:       Deno.env.get("MAESTRO_OAUTH_TOKEN_URL")           ?? "",
+    // Production OAuth host (staging is dev.planipret.com)
+    authUrl:        Deno.env.get("MAESTRO_OAUTH_AUTHORIZE_URL")       ?? "https://courtier.planipret.com/fr/oauth/authorize",
+    tokenUrl:       Deno.env.get("MAESTRO_OAUTH_TOKEN_URL")           ?? "https://courtier.planipret.com/fr/oauth/token",
     clientId:       Deno.env.get("MAESTRO_OAUTH_CLIENT_ID")           ?? "2",
     clientSecret:   Deno.env.get("MAESTRO_OAUTH_CLIENT_SECRET")       ?? "",
     scope:          Deno.env.get("MAESTRO_OAUTH_SCOPE")               ?? "api",

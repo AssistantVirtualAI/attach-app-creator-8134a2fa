@@ -264,6 +264,20 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, audio_base64: btoa(bin), mime: "audio/mpeg" });
     }
 
+    // ---- ConvAI agents list (admin only) ----------------------------------
+    if (action === "agents") {
+      if (!isAdmin) return jsonResponse({ success: false, error: "forbidden" }, 403);
+      if (!ELEVENLABS_API_KEY) return jsonResponse({ success: false, error: "elevenlabs_not_configured" }, 400);
+      const r = await el(`/v1/convai/agents?page_size=100`);
+      const txt = await r.text();
+      if (!r.ok) return jsonResponse({ success: false, error: "agents_list_failed", status: r.status, details: txt }, r.status);
+      const j = JSON.parse(txt);
+      return jsonResponse({
+        success: true,
+        agents: (j?.agents ?? []).map((a: any) => ({ agent_id: a.agent_id, name: a.name ?? a.agent_id })),
+      });
+    }
+
     // ---- ConvAI agent settings (admin only) -------------------------------
     if (action === "agent_get" || action === "agent_update") {
       if (!isAdmin) return jsonResponse({ success: false, error: "forbidden" }, 403);
@@ -274,7 +288,15 @@ Deno.serve(async (req) => {
           .from("planipret_profiles").select("elevenlabs_agent_id").eq("id", targetId).maybeSingle();
         agentId = String(p?.elevenlabs_agent_id ?? "").trim();
       }
+      // Fallback: no agent linked to this broker yet → use the workspace agent.
+      if (!agentId) {
+        try {
+          const r = await el(`/v1/convai/agents?page_size=1`);
+          if (r.ok) agentId = String((await r.json())?.agents?.[0]?.agent_id ?? "").trim();
+        } catch { /* ignore */ }
+      }
       if (!agentId) return jsonResponse({ success: false, error: "no_agent_for_broker" }, 400);
+
 
       if (action === "agent_get") {
         const r = await el(`/v1/convai/agents/${encodeURIComponent(agentId)}`);

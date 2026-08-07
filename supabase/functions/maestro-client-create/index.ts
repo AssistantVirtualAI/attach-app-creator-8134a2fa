@@ -18,11 +18,19 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const phone = normalizePhone(body.phone);
     if (!phone) return json({ success: false, error: "phone_required" }, 400);
-    const userIdHeader = req.headers.get("x-user-id");
-
     const admin = adminClient();
+    let userIdHeader = req.headers.get("x-user-id");
+    if (!userIdHeader) {
+      const authHeader = req.headers.get("Authorization") ?? "";
+      if (authHeader) {
+        const { data: u } = await admin.auth.getUser(authHeader.replace(/^Bearer\s+/i, ""));
+        userIdHeader = u?.user?.id ?? null;
+      }
+    }
+
     const cfg = await getMaestroConfig(admin);
     if (!cfg.url || !cfg.key) return json({ success: false, error: "maestro_not_configured" }, 200);
+
 
     const auth = await getBrokerAuth(admin, userIdHeader);
     const payload = {

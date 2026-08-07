@@ -17,13 +17,19 @@ Deno.serve(async (req) => {
   const NS_API_KEY = Deno.env.get("NS_API_KEY");
   const NS_BASE = Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2";
 
-  const authHeader = req.headers.get("Authorization") ?? "";
-  if (!authHeader.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+  const setupToken = Deno.env.get("APPREVIEW_SETUP_TOKEN");
+  const providedToken = req.headers.get("x-setup-token");
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-  const { data: userData } = await admin.auth.getUser(authHeader.replace(/^Bearer\s+/i, ""));
-  if (!userData?.user) return json({ error: "Unauthorized" }, 401);
-  const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: userData.user.id });
-  if (isAdmin !== true) return json({ error: "Forbidden" }, 403);
+
+  if (!(setupToken && providedToken && providedToken === setupToken)) {
+    const authHeader = req.headers.get("Authorization") ?? "";
+    if (!authHeader.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+    const { data: userData } = await admin.auth.getUser(authHeader.replace(/^Bearer\s+/i, ""));
+    if (!userData?.user) return json({ error: "Unauthorized" }, 401);
+    const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: userData.user.id });
+    if (isAdmin !== true) return json({ error: "Forbidden" }, 403);
+  }
+
   if (!NS_API_KEY) return json({ error: "ns_api_key_missing" }, 500);
 
   const body = await req.json().catch(() => ({} as any));

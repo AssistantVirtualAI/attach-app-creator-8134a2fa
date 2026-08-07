@@ -172,12 +172,19 @@ Deno.serve(async (req) => {
     if (action === "threads") {
       const limit = (pick("limit") as string) ?? "50";
       const res = await nsFetch(`${userBase}/messagesessions?limit=${limit}`, { method: "GET" });
+      let threads: any[] = [];
+      let nsWarning: { status: number; body: string } | null = null;
       if (!res.ok) {
-        const txt = await res.text();
-        return jsonResponse({ error: "NS-API threads fetch failed", status: res.status, body: txt }, 502);
+        // Fail-soft: an extension without messaging provisioned must show an
+        // empty inbox, not a blocking error screen.
+        const txt = await res.text().catch(() => "");
+        console.warn(`[pp-ns-sms] messagesessions ${res.status}:`, txt.slice(0, 300));
+        nsWarning = { status: res.status, body: txt.slice(0, 300) };
+      } else {
+        const raw = await res.json().catch(() => null);
+        threads = Array.isArray(raw) ? raw : (raw?.messagesessions ?? raw?.data ?? []);
       }
-      const raw = await res.json();
-      const threads = Array.isArray(raw) ? raw : (raw?.messagesessions ?? raw?.data ?? []);
+
 
       // Best-effort Maestro inbox enrichment.
       let maestroInbox: any[] = [];

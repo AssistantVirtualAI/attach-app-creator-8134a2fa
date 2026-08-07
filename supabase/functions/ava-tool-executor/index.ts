@@ -661,8 +661,8 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
         return { success: true, appointments: result?.data ?? result?.appointments ?? result ?? [], source: "maestro" };
       } catch (_) {
         // Repli sur le calendrier Microsoft 365 du courtier.
-        const j = await msAction(ctx, "get_calendar_week", { days });
-        return { success: true, appointments: j?.events ?? j?.value ?? [], source: "m365", message: "Agenda Maestro indisponible — calendrier Microsoft 365 utilisé." };
+        const cal = await TOOLS.get_calendar_week(ctx, {});
+        return { success: true, appointments: (cal as any)?.events ?? [], source: "m365", message: "Agenda Maestro indisponible — calendrier Microsoft 365 utilisé." };
       }
     } catch (e) { return { success: false, error: String(e) }; }
   },

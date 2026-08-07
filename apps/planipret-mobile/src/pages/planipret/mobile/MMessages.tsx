@@ -1680,7 +1680,16 @@ function Composer({
   accent?: "brand" | "agent"; inputRef?: React.RefObject<HTMLInputElement>; autoFocus?: boolean;
 }) {
   const { t } = useMplanipretLang();
-  const sentByPointerRef = useRef(false);
+  const lastSendAtRef = useRef(0);
+  // Anti double-envoi : un seul déclenchement par 1,2 s, quelle que soit la
+  // source (pointerdown, click fantôme, touche Entrée).
+  const trigger = () => {
+    if (!text.trim() || sending) return;
+    const now = Date.now();
+    if (now - lastSendAtRef.current < 1200) return;
+    lastSendAtRef.current = now;
+    onSend();
+  };
   const accentBg =
     accent === "agent"
       ? "linear-gradient(135deg, var(--pp-agent), #6C3CE1)"

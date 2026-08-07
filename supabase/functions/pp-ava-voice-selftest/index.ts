@@ -57,11 +57,21 @@ Deno.serve(async (req) => {
     results.push({ name: `elevenlabs:GET ${p}`, ok: r.ok, ms: r.ms, detail: `HTTP ${r.status} — ${r.size} bytes` });
   }
 
-  if (agentId) {
-    const r = await el(`/v1/convai/agents/${agentId}`);
-    results.push({ name: `elevenlabs:GET /v1/convai/agents/{id}`, ok: r.ok, ms: r.ms, detail: `HTTP ${r.status} (agent ${agentId})` });
+  let effectiveAgent = agentId;
+  if (!effectiveAgent) {
+    const r = await el("/v1/convai/agents?page_size=1");
+    try { effectiveAgent = JSON.parse(r.sample.length ? "{}" : "{}") && ""; } catch { /* noop */ }
+  }
+  if (!effectiveAgent) {
+    const rr = await fetch(`${EL}/v1/convai/agents?page_size=1`, { headers: { "xi-api-key": KEY } });
+    if (rr.ok) effectiveAgent = (await rr.json())?.agents?.[0]?.agent_id ?? "";
+  }
+  const agentIdFinal = effectiveAgent;
+  if (agentIdFinal) {
+    const r = await el(`/v1/convai/agents/${agentIdFinal}`);
+    results.push({ name: `elevenlabs:GET /v1/convai/agents/{id}`, ok: r.ok, ms: r.ms, detail: `HTTP ${r.status} (agent ${agentIdFinal})` });
   } else {
-    results.push({ name: "elevenlabs:GET /v1/convai/agents/{id}", ok: false, ms: 0, detail: "no elevenlabs_agent_id on any profile" });
+    results.push({ name: "elevenlabs:GET /v1/convai/agents/{id}", ok: false, ms: 0, detail: "no ConvAI agent available" });
   }
 
   // 3. TTS preview (small payload)

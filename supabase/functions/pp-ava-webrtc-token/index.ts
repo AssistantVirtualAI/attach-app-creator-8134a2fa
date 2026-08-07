@@ -48,14 +48,15 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { data: prof } = await admin
       .from("planipret_profiles")
-      .select("elevenlabs_agent_id, voice_agent_enabled, full_name, extension")
+      .select("elevenlabs_agent_id, voice_agent_enabled, full_name, extension, email")
       .eq("user_id", userRes.user.id)
       .maybeSingle();
 
     if (!prof) return json({ error: "profile_not_found" }, 404);
     if (!prof.voice_agent_enabled) return json({ error: "voice_agent_disabled" }, 403);
 
-    const agentId = prof.elevenlabs_agent_id || ELEVENLABS_DEFAULT_AGENT_ID;
+    // Agent partagé : tous les courtiers se connectent au même agent ConvAI.
+    const agentId = ELEVENLABS_DEFAULT_AGENT_ID || prof.elevenlabs_agent_id;
     if (!agentId) return json({ error: "agent_not_provisioned" }, 409);
 
     // Accept ?type=webrtc|websocket|both — signed URLs are single-use so
@@ -116,11 +117,13 @@ Deno.serve(async (req) => {
     const brokerName = prof.full_name ?? "Courtier";
     const brokerFirstName = brokerName.trim().split(/\s+/)[0] ?? brokerName;
     const brokerExtension = prof.extension ?? "";
+    const brokerEmail = prof.email ?? "";
 
     const dynamicVars: Record<string, string> = {
       ava_broker_name: brokerName,
       ava_broker_first_name: brokerFirstName,
       ava_broker_extension: brokerExtension,
+      ava_broker_email: brokerEmail,
     };
     if (avaSession) {
       dynamicVars.ava_session_token = avaSession;
@@ -131,7 +134,7 @@ Deno.serve(async (req) => {
       token: tokenData?.token ?? null,
       signed_url: signedData?.signed_url ?? null,
       agent_id: agentId,
-      broker: { name: brokerName, first_name: brokerFirstName, extension: brokerExtension },
+      broker: { name: brokerName, first_name: brokerFirstName, extension: brokerExtension, email: brokerEmail },
       ava_session_token: avaSession,
       dynamic_variables: dynamicVars,
     });

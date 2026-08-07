@@ -446,16 +446,11 @@ Deno.serve(async (req) => {
           })
           .select("id")
           .maybeSingle();
-        if (logged?.id) {
-          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-sync-message`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({ message_id: logged.id }),
-          }).catch(() => {});
-        }
+        // Pas de mirror vers maestro-sync-message ici : ce chemin est le repli
+        // NS-API (Maestro indisponible), et `POST /users/{id}/messages`
+        // enverrait un second SMS réel.
+        void logged;
+
       } catch (logErr) {
         console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
       }

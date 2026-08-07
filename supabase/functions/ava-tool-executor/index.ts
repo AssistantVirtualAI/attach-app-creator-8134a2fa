@@ -460,28 +460,72 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   // ===== MAESTRO =====
   async search_client(ctx, p) {
     try {
+      const query = String(p?.query ?? "").trim();
+      if (!query) return { success: false, error: "query_required" };
       // Cache first
       const { data: cached } = await ctx.admin.from("planipret_maestro_clients")
-        .select("*").or(`name.ilike.%${p.query}%,phone.ilike.%${p.query}%,email.ilike.%${p.query}%`).limit(5);
+        .select("*").or(`name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`).limit(5);
       if (cached?.length) return { success: true, found: true, clients: cached, source: "cache" };
-      const result = await maestroFetch(ctx, `/api/v1/clients/lookup?phone=${encodeURIComponent(p.query)}`);
-      return { success: true, found: !!result?.client, clients: result?.client ? [result.client] : [] };
+
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+
+      // Production: phone lookup is a POST, name/email search goes through the
+      // per-user client list.
+      const digits = query.replace(/[^\d+]/g, "");
+      if (digits.length >= 7) {
+        try {
+          const result = await maestroFetch(ctx, `/users/${uid}/clients/lookup-by-phone`, {
+            method: "POST",
+            body: JSON.stringify({ phone: digits }),
+          });
+          const client = result?.client ?? result?.data ?? (Array.isArray(result) ? result[0] : null);
+          if (client) return { success: true, found: true, clients: [client], source: "maestro" };
+        } catch { /* fall through to list search */ }
+      }
+      const r = await maestroActions(ctx, "list_clients", { search: query, limit: 5 });
+      const clients = r?.clients ?? [];
+      return r?.success
+        ? { success: true, found: clients.length > 0, clients, source: "maestro" }
+        : { success: false, error: r?.error ?? "maestro_search_failed" };
     } catch (e) {
       return { success: false, error: String(e) };
     }
   },
 
   async get_client_profile(ctx, p) {
-    try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}`);
-      return { success: true, profile: result };
-    } catch (e) { return { success: false, error: String(e) }; }
+    if (!p?.client_id) return { success: false, error: "client_id_required" };
+    const r = await maestroActions(ctx, "client_profile", { client_id: p.client_id });
+    return r?.success
+      ? { success: true, profile: r.profile ?? r.raw ?? r.data ?? null }
+      : { success: false, error: r?.error ?? "maestro_client_profile_failed" };
   },
 
   async get_client_history(ctx, p) {
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}/communications?limit=${p?.limit ?? 20}`);
-      return { success: true, communications: result?.data ?? result, count: (result?.data ?? result)?.length ?? 0 };
+      if (!p?.client_id) return { success: false, error: "client_id_required" };
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      const limit = p?.limit ?? 20;
+      try {
+        const result = await maestroFetch(ctx, `/users/${uid}/clients/${encodeURIComponent(p.client_id)}/communications?limit=${limit}`);
+        const list = result?.data ?? result?.communications ?? result;
+        return { success: true, communications: list, count: Array.isArray(list) ? list.length : 0, source: "maestro" };
+      } catch (_) {
+        // Maestro n'expose pas encore l'historique en prod → repli sur nos données locales.
+        const { data: calls } = await ctx.admin.from("planipret_phone_calls")
+          .select("id, direction, created_at, duration_seconds, ai_summary, from_number, to_number")
+          .eq("maestro_client_id", String(p.client_id))
+          .order("created_at", { ascending: false })
+          .limit(limit);
+        return {
+          success: true,
+          communications: calls ?? [],
+          count: (calls ?? []).length,
+          source: "local",
+          message: "Historique Maestro indisponible — données locales Planiprêt utilisées.",
+        };
+      }
     } catch (e) { return { success: false, error: String(e) }; }
   },
 

@@ -93,6 +93,34 @@ async function maestroActions(ctx: Ctx, action: string, payload: Record<string, 
   return await r.json().catch(() => ({ success: false, error: "invalid_response" }));
 }
 
+/**
+ * Resolve the caller's numeric Maestro telecom user id (production API is
+ * scoped per user: /users/{id}/...). Auto-links from the broker directory
+ * when the profile has never been matched.
+ */
+async function maestroUserId(ctx: Ctx): Promise<string | null> {
+  const { data: prof } = await ctx.admin
+    .from("planipret_profiles")
+    .select("id, maestro_broker_id, email, ms365_email, extension, phone, full_name")
+    .eq("id", ctx.profile.id)
+    .maybeSingle();
+  let uid = prof?.maestro_broker_id ?? ctx.profile.maestro_broker_id ?? null;
+  if ((!uid || !/^\d+$/.test(String(uid).trim())) && prof) {
+    try {
+      const linked = await linkBrokerIdByEmail(ctx.admin, prof as any);
+      if (linked.ok && linked.maestro_broker_id) uid = linked.maestro_broker_id;
+    } catch { /* noop */ }
+  }
+  uid = uid ? String(uid).trim() : null;
+  return uid && /^\d+$/.test(uid) ? uid : null;
+}
+
+const MAESTRO_NOT_LINKED = {
+  success: false,
+  error: "maestro_not_connected",
+  message: "Compte Maestro non lié. Connectez Maestro dans Réglages → Maestro.",
+};
+
 async function broadcastNav(ctx: Ctx, route: string, extra?: any) {
   // Use Supabase Realtime broadcast so the mobile app can navigate live.
   try {
@@ -432,28 +460,72 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   // ===== MAESTRO =====
   async search_client(ctx, p) {
     try {
+      const query = String(p?.query ?? "").trim();
+      if (!query) return { success: false, error: "query_required" };
       // Cache first
       const { data: cached } = await ctx.admin.from("planipret_maestro_clients")
-        .select("*").or(`name.ilike.%${p.query}%,phone.ilike.%${p.query}%,email.ilike.%${p.query}%`).limit(5);
+        .select("*").or(`name.ilike.%${query}%,phone.ilike.%${query}%,email.ilike.%${query}%`).limit(5);
       if (cached?.length) return { success: true, found: true, clients: cached, source: "cache" };
-      const result = await maestroFetch(ctx, `/api/v1/clients/lookup?phone=${encodeURIComponent(p.query)}`);
-      return { success: true, found: !!result?.client, clients: result?.client ? [result.client] : [] };
+
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+
+      // Production: phone lookup is a POST, name/email search goes through the
+      // per-user client list.
+      const digits = query.replace(/[^\d+]/g, "");
+      if (digits.length >= 7) {
+        try {
+          const result = await maestroFetch(ctx, `/users/${uid}/clients/lookup-by-phone`, {
+            method: "POST",
+            body: JSON.stringify({ phone: digits }),
+          });
+          const client = result?.client ?? result?.data ?? (Array.isArray(result) ? result[0] : null);
+          if (client) return { success: true, found: true, clients: [client], source: "maestro" };
+        } catch { /* fall through to list search */ }
+      }
+      const r = await maestroActions(ctx, "list_clients", { search: query, limit: 5 });
+      const clients = r?.clients ?? [];
+      return r?.success
+        ? { success: true, found: clients.length > 0, clients, source: "maestro" }
+        : { success: false, error: r?.error ?? "maestro_search_failed" };
     } catch (e) {
       return { success: false, error: String(e) };
     }
   },
 
   async get_client_profile(ctx, p) {
-    try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}`);
-      return { success: true, profile: result };
-    } catch (e) { return { success: false, error: String(e) }; }
+    if (!p?.client_id) return { success: false, error: "client_id_required" };
+    const r = await maestroActions(ctx, "client_profile", { client_id: p.client_id });
+    return r?.success
+      ? { success: true, profile: r.profile ?? r.raw ?? r.data ?? null }
+      : { success: false, error: r?.error ?? "maestro_client_profile_failed" };
   },
 
   async get_client_history(ctx, p) {
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}/communications?limit=${p?.limit ?? 20}`);
-      return { success: true, communications: result?.data ?? result, count: (result?.data ?? result)?.length ?? 0 };
+      if (!p?.client_id) return { success: false, error: "client_id_required" };
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      const limit = p?.limit ?? 20;
+      try {
+        const result = await maestroFetch(ctx, `/users/${uid}/clients/${encodeURIComponent(p.client_id)}/communications?limit=${limit}`);
+        const list = result?.data ?? result?.communications ?? result;
+        return { success: true, communications: list, count: Array.isArray(list) ? list.length : 0, source: "maestro" };
+      } catch (_) {
+        // Maestro n'expose pas encore l'historique en prod → repli sur nos données locales.
+        const { data: calls } = await ctx.admin.from("planipret_phone_calls")
+          .select("id, direction, created_at, duration_seconds, ai_summary, from_number, to_number")
+          .eq("maestro_client_id", String(p.client_id))
+          .order("created_at", { ascending: false })
+          .limit(limit);
+        return {
+          success: true,
+          communications: calls ?? [],
+          count: (calls ?? []).length,
+          source: "local",
+          message: "Historique Maestro indisponible — données locales Planiprêt utilisées.",
+        };
+      }
     } catch (e) { return { success: false, error: String(e) }; }
   },
 
@@ -562,29 +634,45 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   async get_pending_tasks(ctx, p) {
     try {
-      const brokerId = ctx.profile.maestro_broker_id ?? "me";
-      const result = await maestroFetch(ctx, `/api/v1/tasks?assigned_to=${brokerId}&status=pending&limit=${p?.limit ?? 10}`);
-      const tasks = result?.data ?? result ?? [];
-      const now = Date.now();
-      const overdue = tasks.filter((t: any) => t.due_date && new Date(t.due_date).getTime() < now).length;
-      return { success: true, tasks, overdue_count: overdue };
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      const limit = p?.limit ?? 10;
+      try {
+        const result = await maestroFetch(ctx, `/users/${uid}/tasks?status=pending&limit=${limit}`);
+        const tasks = result?.data ?? result?.tasks ?? result ?? [];
+        const now = Date.now();
+        const overdue = (Array.isArray(tasks) ? tasks : []).filter((t: any) => t.due_date && new Date(t.due_date).getTime() < now).length;
+        return { success: true, tasks, overdue_count: overdue, source: "maestro" };
+      } catch (_) {
+        return { success: true, tasks: [], overdue_count: 0, source: "none", message: "Maestro n'expose pas encore les tâches en production." };
+      }
     } catch (e) { return { success: false, error: String(e) }; }
   },
 
   async get_upcoming_appointments(ctx, p) {
     try {
-      const brokerId = ctx.profile.maestro_broker_id ?? "me";
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
       const days = p?.days ?? 7;
       const from = new Date().toISOString();
       const to = new Date(Date.now() + days * 86400000).toISOString();
-      const result = await maestroFetch(ctx, `/api/v1/calendar?broker_id=${brokerId}&from=${from}&to=${to}`);
-      return { success: true, appointments: result?.data ?? result ?? [] };
+      try {
+        const result = await maestroFetch(ctx, `/users/${uid}/appointments?from=${from}&to=${to}`);
+        return { success: true, appointments: result?.data ?? result?.appointments ?? result ?? [], source: "maestro" };
+      } catch (_) {
+        // Repli sur le calendrier Microsoft 365 du courtier.
+        const cal = await TOOLS.get_calendar_week(ctx, {});
+        return { success: true, appointments: (cal as any)?.events ?? [], source: "m365", message: "Agenda Maestro indisponible — calendrier Microsoft 365 utilisé." };
+      }
     } catch (e) { return { success: false, error: String(e) }; }
   },
 
   async update_client(ctx, p) {
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}`, {
+      if (!p?.client_id) return { success: false, error: "client_id_required" };
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      const result = await maestroFetch(ctx, `/users/${uid}/clients/${encodeURIComponent(p.client_id)}`, {
         method: "PATCH", body: JSON.stringify(p.updates ?? {}),
       });
       return { success: true, message: "Profil mis à jour", result };
@@ -593,14 +681,16 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   async create_client(ctx, p) {
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients`, {
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      const result = await maestroFetch(ctx, `/users/${uid}/clients`, {
         method: "POST",
         body: JSON.stringify({
           phone: p.phone, first_name: p.first_name, last_name: p.last_name,
-          notes: p.notes, broker_id: ctx.profile.maestro_broker_id,
+          notes: p.notes,
         }),
       });
-      return { success: true, client_id: result?.id, message: "Nouveau prospect créé" };
+      return { success: true, client_id: result?.id ?? result?.client?.id, message: "Nouveau prospect créé" };
     } catch (e) { return { success: false, error: String(e) }; }
   },
 
@@ -1170,17 +1260,25 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       p.sentiment ? `_Sentiment: ${p.sentiment}_` : null,
     ].filter(Boolean).join("\n\n");
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${clientId}/communications`, {
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      // Production Maestro: les résumés d'appels sont poussés sur /users/{id}/calls.
+      const result = await maestroFetch(ctx, `/users/${uid}/calls`, {
         method: "POST",
         body: JSON.stringify({
-          channel: "call",
+          client_id: clientId,
           direction: call.direction ?? "outbound",
+          from: call.from_number,
+          to: call.to_number,
           summary: p.summary ?? "",
           notes: noteBody,
           sentiment: p.sentiment,
+          duration: call.duration_seconds,
           duration_seconds: call.duration_seconds,
           occurred_at: call.created_at,
+          started_at: call.created_at,
           external_call_id: call.id,
+          recording_url: call.recording_url ?? undefined,
         }),
       });
       // Marque local pour éviter les doublons
@@ -1192,7 +1290,9 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   async push_client_note(ctx, p) {
     if (!p?.client_id || !p?.note) return { success: false, error: "client_id_and_note_required" };
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}/notes`, {
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      const result = await maestroFetch(ctx, `/users/${uid}/clients/${encodeURIComponent(p.client_id)}/notes`, {
         method: "POST",
         body: JSON.stringify({ content: p.note, type: p.type ?? "general" }),
       });
@@ -1202,20 +1302,30 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   async push_communication_log(ctx, p) {
     if (!p?.client_id) return { success: false, error: "client_id_required" };
+    const channel = p.channel ?? "note";
     const payload: any = {
-      channel: p.channel ?? "note",
+      client_id: p.client_id,
+      channel,
       direction: p.direction ?? "outbound",
       summary: p.summary ?? "",
       notes: p.notes ?? p.coaching ?? "",
+      body: p.notes ?? p.summary ?? "",
+      duration: p.duration_seconds,
       duration_seconds: p.duration_seconds,
       occurred_at: p.occurred_at ?? new Date().toISOString(),
     };
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}/communications`, {
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      // SMS → /users/{id}/messages, tout le reste → /users/{id}/calls (prod).
+      const path = channel === "sms" || channel === "message"
+        ? `/users/${uid}/messages`
+        : `/users/${uid}/calls`;
+      const result = await maestroFetch(ctx, path, {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      return { success: true, communication_id: result?.id, message: `Communication ${payload.channel} enregistrée dans Maestro.` };
+      return { success: true, communication_id: result?.id, message: `Communication ${channel} enregistrée dans Maestro.` };
     } catch (e) { return { success: false, error: String(e), message: `Push communication Maestro échoué : ${e}` }; }
   },
 };

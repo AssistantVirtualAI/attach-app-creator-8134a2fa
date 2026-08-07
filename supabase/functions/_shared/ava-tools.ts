@@ -160,6 +160,24 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       notes: { type: "string", description: "Notes (optionnel)" },
     }, ["phone"]),
 
+    // Maestro — endpoints production par courtier (/users/{id}/...)
+    mk("list_my_clients", "Liste les clients Maestro du courtier connecté (endpoint production /users/{id}/clients).", {
+      search: { type: "string", description: "Recherche par nom, téléphone ou email (optionnel)" },
+      limit: { type: "number", description: "Nombre (défaut: 25)" },
+    }),
+    mk("get_maestro_client_profile", "Profil détaillé d'un client Maestro du courtier (/users/{id}/clients/{client_id}/profile).", {
+      client_id: { type: "string", description: "ID du client Maestro" },
+    }, ["client_id"]),
+    mk("list_my_brokers", "Liste les courtiers/collègues Maestro visibles (/users/{id}/brokers).", {
+      search: { type: "string", description: "Recherche (optionnel)" },
+      limit: { type: "number", description: "Nombre (défaut: 25)" },
+    }),
+    mk("get_maestro_broker_profile", "Profil d'un courtier Maestro (/users/{id}/brokers/{broker_id}/profile).", {
+      broker_id: { type: "string", description: "ID du courtier Maestro" },
+    }, ["broker_id"]),
+
+
+
     // Microsoft 365
     mk("read_emails", "Lit les derniers courriels M365.", {
       limit: { type: "number", description: "Nombre (défaut: 10)" },
@@ -216,6 +234,35 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       call_id: { type: "string", description: "ID de l'appel" },
       open_tab: { type: "string", description: "recording | transcript | coaching (optionnel)" },
     }, ["call_id"]),
+    mk("open_dialer", "Ouvre le composeur d'appel dans l'app avec un numéro pré-rempli.", {
+      phone: { type: "string", description: "Numéro E.164" },
+      name: { type: "string", description: "Nom affiché (optionnel)" },
+    }, ["phone"]),
+    mk("open_sms_composer", "Ouvre l'écran SMS avec destinataire et texte pré-remplis.", {
+      phone: { type: "string", description: "Numéro E.164" },
+      message: { type: "string", description: "Texte pré-rempli (optionnel)" },
+    }, ["phone"]),
+    mk("open_email_composer", "Ouvre le composeur de courriel M365 pré-rempli.", {
+      to: { type: "string", description: "Adresse courriel" },
+      subject: { type: "string", description: "Objet (optionnel)" },
+      body: { type: "string", description: "Corps (optionnel)" },
+    }, ["to"]),
+    mk("create_calendar_event", "Crée un événement dans le calendrier Microsoft 365.", {
+      subject: { type: "string", description: "Titre" },
+      start_datetime: { type: "string", description: "ISO 8601" },
+      duration_minutes: { type: "number", description: "Durée (défaut: 60)" },
+      attendees: { type: "string", description: "Courriels séparés par virgule (optionnel)" },
+      body: { type: "string", description: "Description (optionnel)" },
+    }, ["subject", "start_datetime"]),
+    mk("move_calendar_event", "Déplace un événement du calendrier M365.", {
+      event_id: { type: "string", description: "ID de l'événement" },
+      start_datetime: { type: "string", description: "Nouvelle date/heure ISO 8601" },
+      duration_minutes: { type: "number", description: "Durée (optionnel)" },
+    }, ["event_id", "start_datetime"]),
+    mk("cancel_calendar_event", "Annule un événement du calendrier M365.", {
+      event_id: { type: "string", description: "ID de l'événement" },
+      comment: { type: "string", description: "Message d'annulation (optionnel)" },
+    }, ["event_id"]),
     mk("get_sms_conversations", "Liste les dernières conversations SMS.", {
       limit: { type: "number", description: "Nombre (défaut: 10)" },
     }),

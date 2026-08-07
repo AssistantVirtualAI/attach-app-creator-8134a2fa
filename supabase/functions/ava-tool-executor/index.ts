@@ -31,16 +31,28 @@ async function logTool(ctx: Ctx, sessionId: string, toolName: string, params: an
 }
 
 async function maestroFetch(ctx: Ctx, path: string, init?: RequestInit) {
-  const base = (Deno.env.get("MAESTRO_API_URL") ?? "").replace(/\/$/, "");
+  const base = (Deno.env.get("MAESTRO_TELECOM_BASE_URL") ?? Deno.env.get("MAESTRO_TELECOM_API_URL") ?? Deno.env.get("MAESTRO_API_URL") ?? "https://client.planipret.com/telecom/api/v1").replace(/\/$/, "");
   if (!base) throw new Error("maestro_not_configured");
   const { data: profileWithToken } = await ctx.admin
     .from("planipret_profiles")
     .select("maestro_broker_token, maestro_broker_id")
     .eq("id", ctx.profile.id)
     .maybeSingle();
-  const token = profileWithToken?.maestro_broker_token ?? Deno.env.get("MAESTRO_API_KEY") ?? "";
+  let token = profileWithToken?.maestro_broker_token ?? "";
+  let machine = false;
+  if (!token) {
+    // Fall back to the production machine key stored in the DB (env copies can be stale).
+    const { data: cfg } = await ctx.admin
+      .from("planipret_integration_secrets")
+      .select("config")
+      .eq("provider", "maestro_telecom")
+      .maybeSingle();
+    token = (cfg as any)?.config?.api_key ?? Deno.env.get("MAESTRO_API_KEY") ?? "";
+    machine = true;
+  }
   if (!token) throw new Error("maestro_not_connected");
-  const r = await fetch(`${base}${path}`, {
+  const sep = path.includes("?") ? "&" : "?";
+  const r = await fetch(`${base}${path}${machine ? `${sep}machine=1` : ""}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,

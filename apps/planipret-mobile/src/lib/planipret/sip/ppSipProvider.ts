@@ -694,8 +694,21 @@ class PpSipProvider {
           this.attachSecondSession(e.session);
           return;
         }
+        // Appel entrant pendant un appel en cours = appel en attente.
+        // Sans cette branche, le nouvel INVITE écrasait la session active et
+        // l'appel courant était perdu.
+        if (e.originator === "remote" && this.session && this.isLineBusy()) {
+          if (this.secondSession) {
+            // Deux lignes déjà occupées → 486 Busy Here.
+            try { e.session.terminate({ status_code: 486, reason_phrase: "Busy Here" }); } catch {}
+            return;
+          }
+          this.attachSecondSession(e.session, true);
+          return;
+        }
         this.attachSession(e.session, e.originator);
       });
+
 
       this.ua = ua;
       ua.start();

@@ -160,6 +160,24 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       notes: { type: "string", description: "Notes (optionnel)" },
     }, ["phone"]),
 
+    // Maestro — endpoints production par courtier (/users/{id}/...)
+    mk("list_my_clients", "Liste les clients Maestro du courtier connecté (endpoint production /users/{id}/clients).", {
+      search: { type: "string", description: "Recherche par nom, téléphone ou email (optionnel)" },
+      limit: { type: "number", description: "Nombre (défaut: 25)" },
+    }),
+    mk("get_maestro_client_profile", "Profil détaillé d'un client Maestro du courtier (/users/{id}/clients/{client_id}/profile).", {
+      client_id: { type: "string", description: "ID du client Maestro" },
+    }, ["client_id"]),
+    mk("list_my_brokers", "Liste les courtiers/collègues Maestro visibles (/users/{id}/brokers).", {
+      search: { type: "string", description: "Recherche (optionnel)" },
+      limit: { type: "number", description: "Nombre (défaut: 25)" },
+    }),
+    mk("get_maestro_broker_profile", "Profil d'un courtier Maestro (/users/{id}/brokers/{broker_id}/profile).", {
+      broker_id: { type: "string", description: "ID du courtier Maestro" },
+    }, ["broker_id"]),
+
+
+
     // Microsoft 365
     mk("read_emails", "Lit les derniers courriels M365.", {
       limit: { type: "number", description: "Nombre (défaut: 10)" },

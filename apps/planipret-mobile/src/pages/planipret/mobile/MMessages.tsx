@@ -1713,20 +1713,12 @@ function Composer({
         type="button"
         // iOS/Android : le tap ferme d'abord le clavier, la mise en page bouge et
         // le `click` n'atteint jamais le bouton. On déclenche donc sur pointerdown
-        // (en empêchant le blur) et on neutralise le click qui suit.
+        // (en empêchant le blur) et on neutralise le click/tap qui suit.
         onPointerDown={(e) => {
           e.preventDefault();
-          if (sentByPointerRef.current) return;
-          if (!text.trim() || sending) return;
-          sentByPointerRef.current = true;
-          window.setTimeout(() => { sentByPointerRef.current = false; }, 600);
-          onSend();
+          trigger();
         }}
-        onClick={() => {
-          if (sentByPointerRef.current) return;
-          if (!text.trim() || sending) return;
-          onSend();
-        }}
+        onClick={(e) => { e.preventDefault(); trigger(); }}
         disabled={!text.trim() || sending}
         aria-label={t("common.send")}
         className="w-9 h-9 rounded-full flex items-center justify-center text-white disabled:opacity-50 shrink-0 touch-manipulation"
@@ -1734,6 +1726,7 @@ function Composer({
       >
         {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
       </button>
+
 
     </div>
   );

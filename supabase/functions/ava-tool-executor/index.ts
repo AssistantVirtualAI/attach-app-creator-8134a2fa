@@ -1263,17 +1263,25 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       p.sentiment ? `_Sentiment: ${p.sentiment}_` : null,
     ].filter(Boolean).join("\n\n");
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${clientId}/communications`, {
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      // Production Maestro: les résumés d'appels sont poussés sur /users/{id}/calls.
+      const result = await maestroFetch(ctx, `/users/${uid}/calls`, {
         method: "POST",
         body: JSON.stringify({
-          channel: "call",
+          client_id: clientId,
           direction: call.direction ?? "outbound",
+          from: call.from_number,
+          to: call.to_number,
           summary: p.summary ?? "",
           notes: noteBody,
           sentiment: p.sentiment,
+          duration: call.duration_seconds,
           duration_seconds: call.duration_seconds,
           occurred_at: call.created_at,
+          started_at: call.created_at,
           external_call_id: call.id,
+          recording_url: call.recording_url ?? undefined,
         }),
       });
       // Marque local pour éviter les doublons
@@ -1285,7 +1293,9 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   async push_client_note(ctx, p) {
     if (!p?.client_id || !p?.note) return { success: false, error: "client_id_and_note_required" };
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}/notes`, {
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      const result = await maestroFetch(ctx, `/users/${uid}/clients/${encodeURIComponent(p.client_id)}/notes`, {
         method: "POST",
         body: JSON.stringify({ content: p.note, type: p.type ?? "general" }),
       });
@@ -1295,20 +1305,30 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   async push_communication_log(ctx, p) {
     if (!p?.client_id) return { success: false, error: "client_id_required" };
+    const channel = p.channel ?? "note";
     const payload: any = {
-      channel: p.channel ?? "note",
+      client_id: p.client_id,
+      channel,
       direction: p.direction ?? "outbound",
       summary: p.summary ?? "",
       notes: p.notes ?? p.coaching ?? "",
+      body: p.notes ?? p.summary ?? "",
+      duration: p.duration_seconds,
       duration_seconds: p.duration_seconds,
       occurred_at: p.occurred_at ?? new Date().toISOString(),
     };
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}/communications`, {
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      // SMS → /users/{id}/messages, tout le reste → /users/{id}/calls (prod).
+      const path = channel === "sms" || channel === "message"
+        ? `/users/${uid}/messages`
+        : `/users/${uid}/calls`;
+      const result = await maestroFetch(ctx, path, {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      return { success: true, communication_id: result?.id, message: `Communication ${payload.channel} enregistrée dans Maestro.` };
+      return { success: true, communication_id: result?.id, message: `Communication ${channel} enregistrée dans Maestro.` };
     } catch (e) { return { success: false, error: String(e), message: `Push communication Maestro échoué : ${e}` }; }
   },
 };

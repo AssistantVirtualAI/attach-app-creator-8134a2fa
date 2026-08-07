@@ -366,7 +366,29 @@ export default function PpActiveCallScreen({
         {/* Deuxième ligne / conférence */}
         {view === "main" && !isIncoming && (snap.second || snap.conference || multiLineSupported) && (
           <div className="shrink-0 px-4 pb-2">
-            {snap.second && (
+            {waitingCall && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl mb-2"
+                style={{ background: "rgba(34,197,94,0.14)", border: "1px solid rgba(34,197,94,0.45)" }}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center animate-pulse" style={{ background: "rgba(34,197,94,0.28)" }}>
+                  <Phone className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{snap.second!.name || snap.second!.number}</div>
+                  <div className="text-[11px] text-white/70">Appel en attente</div>
+                </div>
+                <button onClick={() => declineSecond()} aria-label="Refuser le 2e appel"
+                  className="w-10 h-10 rounded-full flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #B91C1C, #E84C4C)" }}>
+                  <PhoneOff className="w-4 h-4" />
+                </button>
+                <button onClick={() => void answerSecond()} aria-label="Répondre au 2e appel"
+                  className="w-10 h-10 rounded-full flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #15803D, #22C55E)" }}>
+                  <Phone className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            {snap.second && !waitingCall && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-2xl mb-2"
                 style={{ background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.30)" }}>
                 <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(46,155,220,0.25)" }}>
@@ -383,6 +405,8 @@ export default function PpActiveCallScreen({
                   Fin ligne 2
                 </button>
               </div>
+            )}
+
             )}
             {lineError && <div className="text-[11px] mb-2 px-1" style={{ color: "#FCA5A5" }}>{lineError}</div>}
             <div className="flex gap-2">

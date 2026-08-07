@@ -274,7 +274,43 @@ Deno.serve(async (req) => {
       const fromNumber = normalizeE164(from);
       if (!fromNumber) {
         return jsonResponse({ ok: false, error: "Aucun numéro SMS (DID) assigné à ce courtier — contactez un administrateur pour attribuer un DID." }, 200);
+
+      // ---- Garde d'idempotence -------------------------------------------
+      // AVA (chatbot/voicebot) peut rejouer un tool call, et un double tap
+      // mobile peut envoyer deux fois. On refuse tout SMS identique
+      // (même courtier, même destinataire, même texte) dans les 90 dernières
+      // secondes et on renvoie le succès du premier envoi.
+      try {
+        const since = new Date(Date.now() - 90_000).toISOString();
+        const { data: dup } = await supabase
+          .from("planipret_phone_messages")
+          .select("id, ns_thread_id, sent_at")
+          .eq("user_id", ctx.userId)
+          .eq("direction", "outbound")
+          .eq("to_number", destination)
+          .eq("body", message)
+          .gte("sent_at", since)
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (dup?.id) {
+          console.warn("[pp-ns-sms] duplicate suppressed", { to: destination, dup_id: dup.id });
+          return jsonResponse({
+            ok: true,
+            success: true,
+            duplicate: true,
+            message_id: dup.id,
+            thread_id: dup.ns_thread_id ?? thread_id ?? null,
+            to: destination,
+            from: fromNumber,
+            note: "SMS identique déjà envoyé il y a moins de 90 s — envoi ignoré.",
+          }, 200);
+        }
+      } catch (dupErr) {
+        console.warn("[pp-ns-sms] dedupe check failed (non-fatal):", dupErr);
       }
+
+
 
 
       // NS-API v2 SMS: POST /users/{ext}/messagesessions/messages creates the

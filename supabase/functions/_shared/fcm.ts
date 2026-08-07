@@ -165,7 +165,6 @@ export async function sendFcmNotification(
               notification: {
                 channel_id: opts.channelId ?? "planipret_default",
                 default_sound: true,
-866
               },
             },
           },

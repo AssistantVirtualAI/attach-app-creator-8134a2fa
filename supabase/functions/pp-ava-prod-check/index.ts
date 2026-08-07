@@ -13,7 +13,20 @@ Deno.serve(async (req) => {
 
   // --- Maestro telecom (production) ---
   const base = (Deno.env.get("MAESTRO_TELECOM_BASE_URL") ?? "").replace(/\/$/, "");
-  const machineKey = Deno.env.get("MAESTRO_MACHINE_API_KEY") ?? Deno.env.get("MAESTRO_TELECOM_API_KEY") ?? "";
+  let machineKey = "";
+  let keySource = "none";
+  try {
+    const admin = (await import("npm:@supabase/supabase-js@2")).createClient(
+      Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data } = await admin.from("planipret_integration_secrets")
+      .select("config").eq("provider", "maestro_telecom").maybeSingle();
+    if ((data as any)?.config?.api_key) { machineKey = (data as any).config.api_key; keySource = "db"; }
+  } catch { /* ignore */ }
+  if (!machineKey) {
+    machineKey = Deno.env.get("MAESTRO_MACHINE_API_KEY") ?? Deno.env.get("MAESTRO_TELECOM_API_KEY") ?? "";
+    keySource = machineKey ? "env" : "none";
+  }
+  out.maestro_key_source = keySource;
   out.maestro_base_url = base;
   out.maestro_key_present = !!machineKey;
   try {

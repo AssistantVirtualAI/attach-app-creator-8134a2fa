@@ -274,6 +274,9 @@ Deno.serve(async (req) => {
       const fromNumber = normalizeE164(from);
       if (!fromNumber) {
         return jsonResponse({ ok: false, error: "Aucun numéro SMS (DID) assigné à ce courtier — contactez un administrateur pour attribuer un DID." }, 200);
+      }
+
+
 
       // ---- Garde d'idempotence -------------------------------------------
       // AVA (chatbot/voicebot) peut rejouer un tool call, et un double tap

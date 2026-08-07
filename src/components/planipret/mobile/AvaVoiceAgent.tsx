@@ -482,7 +482,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initAttempt, lang]);
+  }, [initAttempt, lang, aiConsent]);
 
   const retryConnection = useCallback(() => {
     sessionRowIdRef.current = null;

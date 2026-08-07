@@ -487,6 +487,46 @@ Deno.serve(async (req) => {
         if (!cr.ok) return j({ success: false, error: cd?.error?.message ?? "create_chat_failed", details: cd }, 200);
         return j({ success: true, chat_id: cd.id, chatType: cd.chatType });
       }
+      case "upsert_contact": {
+        // Creates or updates a contact in the broker's personal Outlook address book.
+        const first = String(payload.first_name ?? "").trim();
+        const last = String(payload.last_name ?? "").trim();
+        const display = String(payload.display_name ?? `${first} ${last}`.trim()).trim();
+        const email = String(payload.email ?? "").trim();
+        const mobile = String(payload.mobile_phone ?? payload.phone ?? "").trim();
+        const business = String(payload.business_phone ?? "").trim();
+        const externalId = String(payload.external_id ?? "").trim();
+        if (!display && !email && !mobile) return j({ success: false, error: "contact_identity_required" }, 400);
+
+        // Find an existing contact: by external id marker, then email, then display name.
+        let existingId: string | null = null;
+        const findBy = async (filter: string) => {
+          const r = await graph(admin, profile, `/me/contacts?$filter=${encodeURIComponent(filter)}&$top=1&$select=id`);
+          const d = await r.json().catch(() => ({}));
+          return r.ok ? (d?.value?.[0]?.id ?? null) : null;
+        };
+        if (email) existingId = await findBy(`emailAddresses/any(a:a/address eq '${email.replace(/'/g, "''")}')`);
+        if (!existingId && display) existingId = await findBy(`displayName eq '${display.replace(/'/g, "''")}'`);
+
+        const contact: Record<string, unknown> = {
+          givenName: first || undefined,
+          surname: last || undefined,
+          displayName: display || undefined,
+          mobilePhone: mobile || undefined,
+          businessPhones: business ? [business] : undefined,
+          emailAddresses: email ? [{ address: email, name: display || email }] : undefined,
+          companyName: payload.company ?? undefined,
+          personalNotes: externalId ? `Maestro ID: ${externalId}` : undefined,
+        };
+        Object.keys(contact).forEach((k) => contact[k] === undefined && delete contact[k]);
+
+        const r = existingId
+          ? await graph(admin, profile, `/me/contacts/${existingId}`, { method: "PATCH", body: JSON.stringify(contact) })
+          : await graph(admin, profile, `/me/contacts`, { method: "POST", body: JSON.stringify(contact) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) return j({ success: false, error: d?.error?.message ?? "upsert_contact_failed", details: d });
+        return j({ success: true, contact_id: d?.id ?? existingId, updated: !!existingId });
+      }
       default:
         return j({ success: false, error: "Action inconnue" }, 400);
     }

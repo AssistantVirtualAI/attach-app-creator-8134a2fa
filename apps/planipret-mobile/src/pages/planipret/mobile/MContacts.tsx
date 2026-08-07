@@ -729,7 +729,26 @@ function CreateContactSheet({ onClose, onCreated }: { onClose: () => void; onCre
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast.success(t("contacts.created") || "Contact créé");
+
+      // Maestro's API is read-only for client creation: try it, and if it is
+      // refused, open the prefilled Maestro web form so the broker can finish.
+      if (form.phone) {
+        try {
+          const { data: mc } = await supabase.functions.invoke("maestro-client-create", {
+            body: { phone: form.phone, first_name: form.first_name, last_name: form.last_name, email: form.email },
+          });
+          if ((mc as any)?.success) {
+            toast.success("Client créé dans Maestro");
+          } else if ((mc as any)?.web_url) {
+            toast.info("Terminer la création dans Maestro", {
+              description: "Le formulaire s'ouvre prérempli.",
+              action: { label: "Ouvrir", onClick: () => window.open((mc as any).web_url, "_blank") },
+            });
+          }
+        } catch { /* non bloquant */ }
+      }
       onCreated();
+
     } catch (e: any) {
       toast.error(t("contacts.createFailed") || "Échec création", { description: e?.message });
     } finally {

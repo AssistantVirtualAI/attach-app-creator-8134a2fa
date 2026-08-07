@@ -91,6 +91,22 @@ export async function registerPushListeners(extension?: string) {
           from: data.from ?? data.callerName ?? notif.title ?? "Unknown caller",
         });
       }
+      else if (notif.title) {
+        // Foreground pushes are not surfaced by the OS — mirror them locally so
+        // SMS / voicemail / AI alerts always appear on the device.
+        try {
+          const { LocalNotifications } = await import("@capacitor/local-notifications");
+          await LocalNotifications.schedule({
+            notifications: [{
+              id: Math.floor(Math.random() * 1_000_000_000),
+              title: notif.title,
+              body: notif.body ?? "",
+              channelId: data.category === "sms" ? "sms" : data.category === "voicemail" ? "voicemail" : "planipret_default",
+              extra: data,
+            }],
+          });
+        } catch { /* ignore */ }
+      }
     });
 
     PushNotifications.addListener("pushNotificationActionPerformed", (action) => {

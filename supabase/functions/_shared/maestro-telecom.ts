@@ -11,7 +11,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export interface MaestroTelecomConfig {
-  url: string;   // https://courtier.planipret.com/telecom/api/v1 (no trailing slash)
+  url: string;   // https://client.planipret.com/telecom/api/v1 (no trailing slash)
   key: string;   // machine API key (Bearer)
 }
 
@@ -47,7 +47,7 @@ export async function getMaestroTelecomConfig(admin: SupabaseClient): Promise<Ma
     url: (apiUrl
       || Deno.env.get("MAESTRO_TELECOM_BASE_URL")
       || Deno.env.get("MAESTRO_TELECOM_API_URL")
-      || "https://courtier.planipret.com/telecom/api/v1").replace(/\/$/, ""),
+      || "https://client.planipret.com/telecom/api/v1").replace(/\/$/, ""),
     key: apiKey
       || Deno.env.get("MAESTRO_MACHINE_API_KEY")
       || Deno.env.get("MAESTRO_TELECOM_API_KEY")

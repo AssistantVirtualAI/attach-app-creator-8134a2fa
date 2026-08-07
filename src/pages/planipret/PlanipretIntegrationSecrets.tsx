@@ -24,7 +24,7 @@ const MAESTRO_FIELDS = [
   { key: "api_key", label: "API Key", secret: true },
 ];
 const MAESTRO_TELECOM_FIELDS = [
-  { key: "api_url", label: "API URL (production : https://courtier.planipret.com/telecom/api/v1)" },
+  { key: "api_url", label: "API URL (production : https://client.planipret.com/telecom/api/v1)" },
   { key: "api_key", label: "Machine API Key", secret: true },
 ];
 

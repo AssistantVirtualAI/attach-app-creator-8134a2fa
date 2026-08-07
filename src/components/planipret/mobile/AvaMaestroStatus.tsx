@@ -11,9 +11,12 @@ type Status = {
   healthy: boolean;
 };
 
+const REVIEW_EMAILS = ["demo@avastatistic.ca"];
+
 export default function AvaMaestroStatus({ lang = "fr" }: { lang?: "fr" | "en" }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hidden, setHidden] = useState(false);
   const [open, setOpen] = useState(false);
   const L = (fr: string, en: string) => (lang === "en" ? en : fr);
 
@@ -30,7 +33,20 @@ export default function AvaMaestroStatus({ lang = "fr" }: { lang?: "fr" | "en" }
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase.auth.getUser();
+      const email = (data?.user?.email ?? "").toLowerCase();
+      if (cancelled) return;
+      if (REVIEW_EMAILS.includes(email)) { setHidden(true); setLoading(false); return; }
+      void load();
+    })();
+    return () => { cancelled = true; };
+  }, [load]);
+
+  if (hidden) return null;
+
 
   const ok = !!status?.healthy;
   const tone = loading ? "var(--pp-text-muted)" : ok ? "#10b981" : "#f59e0b";

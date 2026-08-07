@@ -96,6 +96,9 @@ export async function registerPushListeners(extension?: string) {
         const act = action.actionId === "decline" ? "decline" : "answer";
         try { window.location.assign(`/mplanipret/calls?incoming=${encodeURIComponent(callId)}&action=${act}`); } catch { /* ignore */ }
       }
+      else if (data.deep_link) {
+        try { window.location.assign(data.deep_link); } catch { /* ignore */ }
+      }
     });
 
     try {

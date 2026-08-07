@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
     if (!already) {
       out.attach = await call(`${userBase}/smsnumbers`, {
         method: "POST",
-        body: JSON.stringify({ "from-number": digits, number: digits, user: ext, domain }),
+        body: JSON.stringify({ "from-number": digits, number: digits, application: "user", user: ext, domain }),
       });
       out.smsnumbers_after = await call(`${userBase}/smsnumbers`);
     } else {

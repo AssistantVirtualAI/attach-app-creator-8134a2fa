@@ -38,9 +38,21 @@ async function maestroFetch(ctx: Ctx, path: string, init?: RequestInit) {
     .select("maestro_broker_token, maestro_broker_id")
     .eq("id", ctx.profile.id)
     .maybeSingle();
-  const token = profileWithToken?.maestro_broker_token ?? Deno.env.get("MAESTRO_API_KEY") ?? "";
+  let token = profileWithToken?.maestro_broker_token ?? "";
+  let machine = false;
+  if (!token) {
+    // Fall back to the production machine key stored in the DB (env copies can be stale).
+    const { data: cfg } = await ctx.admin
+      .from("planipret_integration_secrets")
+      .select("config")
+      .eq("provider", "maestro_telecom")
+      .maybeSingle();
+    token = (cfg as any)?.config?.api_key ?? Deno.env.get("MAESTRO_API_KEY") ?? "";
+    machine = true;
+  }
   if (!token) throw new Error("maestro_not_connected");
-  const r = await fetch(`${base}${path}`, {
+  const sep = path.includes("?") ? "&" : "?";
+  const r = await fetch(`${base}${path}${machine ? `${sep}machine=1` : ""}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,

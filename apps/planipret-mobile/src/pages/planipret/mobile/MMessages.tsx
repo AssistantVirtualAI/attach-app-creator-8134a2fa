@@ -1680,6 +1680,7 @@ function Composer({
   accent?: "brand" | "agent"; inputRef?: React.RefObject<HTMLInputElement>; autoFocus?: boolean;
 }) {
   const { t } = useMplanipretLang();
+  const sentByPointerRef = useRef(false);
   const accentBg =
     accent === "agent"
       ? "linear-gradient(135deg, var(--pp-agent), #6C3CE1)"

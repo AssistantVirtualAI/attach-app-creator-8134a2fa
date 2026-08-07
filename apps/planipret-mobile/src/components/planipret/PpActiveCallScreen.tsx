@@ -93,8 +93,8 @@ export default function PpActiveCallScreen({
     if (!active) { setView("main"); setDtmfBuf(""); setTransferQuery(""); setElapsed(0); setLineError(null); callUi.reset(); }
   }, [active]);
 
-  // Un appel entrant doit toujours revenir en plein écran.
-  useEffect(() => { if (snap.callState === "ringing-in") callUi.restore(); }, [snap.callState]);
+  // Un appel entrant — ou un appel en attente — doit revenir en plein écran.
+  useEffect(() => { if (snap.callState === "ringing-in" || waitingCall) callUi.restore(); }, [snap.callState, waitingCall]);
 
 
   // A call must never start on the loudspeaker: WebKit/WebRTC defaults to it

@@ -634,29 +634,48 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   async get_pending_tasks(ctx, p) {
     try {
-      const brokerId = ctx.profile.maestro_broker_id ?? "me";
-      const result = await maestroFetch(ctx, `/api/v1/tasks?assigned_to=${brokerId}&status=pending&limit=${p?.limit ?? 10}`);
-      const tasks = result?.data ?? result ?? [];
-      const now = Date.now();
-      const overdue = tasks.filter((t: any) => t.due_date && new Date(t.due_date).getTime() < now).length;
-      return { success: true, tasks, overdue_count: overdue };
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      const limit = p?.limit ?? 10;
+      try {
+        const result = await maestroFetch(ctx, `/users/${uid}/tasks?status=pending&limit=${limit}`);
+        const tasks = result?.data ?? result?.tasks ?? result ?? [];
+        const now = Date.now();
+        const overdue = (Array.isArray(tasks) ? tasks : []).filter((t: any) => t.due_date && new Date(t.due_date).getTime() < now).length;
+        return { success: true, tasks, overdue_count: overdue, source: "maestro" };
+      } catch (_) {
+        const { data: tasks } = await ctx.admin.from("planipret_tasks")
+          .select("*").eq("profile_id", ctx.profile.id).eq("status", "pending")
+          .order("due_date", { ascending: true }).limit(limit);
+        return { success: true, tasks: tasks ?? [], overdue_count: 0, source: "local", message: "Tâches Maestro indisponibles — tâches locales affichées." };
+      }
     } catch (e) { return { success: false, error: String(e) }; }
   },
 
   async get_upcoming_appointments(ctx, p) {
     try {
-      const brokerId = ctx.profile.maestro_broker_id ?? "me";
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
       const days = p?.days ?? 7;
       const from = new Date().toISOString();
       const to = new Date(Date.now() + days * 86400000).toISOString();
-      const result = await maestroFetch(ctx, `/api/v1/calendar?broker_id=${brokerId}&from=${from}&to=${to}`);
-      return { success: true, appointments: result?.data ?? result ?? [] };
+      try {
+        const result = await maestroFetch(ctx, `/users/${uid}/appointments?from=${from}&to=${to}`);
+        return { success: true, appointments: result?.data ?? result?.appointments ?? result ?? [], source: "maestro" };
+      } catch (_) {
+        // Repli sur le calendrier Microsoft 365 du courtier.
+        const j = await msAction(ctx, "get_calendar_week", { days });
+        return { success: true, appointments: j?.events ?? j?.value ?? [], source: "m365", message: "Agenda Maestro indisponible — calendrier Microsoft 365 utilisé." };
+      }
     } catch (e) { return { success: false, error: String(e) }; }
   },
 
   async update_client(ctx, p) {
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients/${p.client_id}`, {
+      if (!p?.client_id) return { success: false, error: "client_id_required" };
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      const result = await maestroFetch(ctx, `/users/${uid}/clients/${encodeURIComponent(p.client_id)}`, {
         method: "PATCH", body: JSON.stringify(p.updates ?? {}),
       });
       return { success: true, message: "Profil mis à jour", result };
@@ -665,14 +684,16 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   async create_client(ctx, p) {
     try {
-      const result = await maestroFetch(ctx, `/api/v1/clients`, {
+      const uid = await maestroUserId(ctx);
+      if (!uid) return MAESTRO_NOT_LINKED;
+      const result = await maestroFetch(ctx, `/users/${uid}/clients`, {
         method: "POST",
         body: JSON.stringify({
           phone: p.phone, first_name: p.first_name, last_name: p.last_name,
-          notes: p.notes, broker_id: ctx.profile.maestro_broker_id,
+          notes: p.notes,
         }),
       });
-      return { success: true, client_id: result?.id, message: "Nouveau prospect créé" };
+      return { success: true, client_id: result?.id ?? result?.client?.id, message: "Nouveau prospect créé" };
     } catch (e) { return { success: false, error: String(e) }; }
   },
 

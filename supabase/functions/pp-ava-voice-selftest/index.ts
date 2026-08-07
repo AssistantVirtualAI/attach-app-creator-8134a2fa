@@ -59,10 +59,6 @@ Deno.serve(async (req) => {
 
   let effectiveAgent = agentId;
   if (!effectiveAgent) {
-    const r = await el("/v1/convai/agents?page_size=1");
-    try { effectiveAgent = JSON.parse(r.sample.length ? "{}" : "{}") && ""; } catch { /* noop */ }
-  }
-  if (!effectiveAgent) {
     const rr = await fetch(`${EL}/v1/convai/agents?page_size=1`, { headers: { "xi-api-key": KEY } });
     if (rr.ok) effectiveAgent = (await rr.json())?.agents?.[0]?.agent_id ?? "";
   }

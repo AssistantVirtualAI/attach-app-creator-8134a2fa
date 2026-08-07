@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
           }
         } catch { /* ignore */ }
       }
-      return jsonResponse({ ok: true, count: threads.length, threads, maestro_inbox: maestroInbox });
+      return jsonResponse({ ok: true, count: threads.length, threads, maestro_inbox: maestroInbox, ns_warning: nsWarning });
     }
 
     if (action === "messages") {

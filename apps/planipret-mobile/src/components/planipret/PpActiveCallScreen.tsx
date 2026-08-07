@@ -407,19 +407,19 @@ export default function PpActiveCallScreen({
               </div>
             )}
 
-            )}
             {lineError && <div className="text-[11px] mb-2 px-1" style={{ color: "#FCA5A5" }}>{lineError}</div>}
             <div className="flex gap-2">
               {!snap.second && multiLineSupported && snap.callState !== "ringing-out" && (
                 <LineBtn icon={<UserPlus className="w-4 h-4" />} label="Ajouter un appel" onClick={() => { setLineError(null); setTransferQuery(""); setView("addcall"); }} />
               )}
-              {snap.second && !snap.conference && (
+              {snap.second && !snap.conference && !waitingCall && (
                 <>
                   <LineBtn icon={<ArrowLeftRight className="w-4 h-4" />} label="Permuter" onClick={() => swapLines()} />
                   <LineBtn
                     icon={<Users className="w-4 h-4" />}
                     label={merging ? "Fusion…" : "Fusionner"}
-                    disabled={merging || snap.second.state === "ringing-out"}
+                    disabled={merging || snap.second.state !== "active"}
+
                     onClick={async () => {
                       setMerging(true); setLineError(null);
                       try { await mergeLines(); } catch (e: any) { setLineError(e?.message || "Fusion impossible"); }

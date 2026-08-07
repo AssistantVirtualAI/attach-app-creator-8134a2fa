@@ -1709,7 +1709,7 @@ function Composer({
         value={text}
         onChange={(e) => setText(e.target.value)}
         enterKeyHint="send"
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); trigger(); } }}
         placeholder={placeholder ?? t("messages.yourMessage")}
         className="flex-1 px-3 py-2 rounded-full text-sm outline-none"
         style={{

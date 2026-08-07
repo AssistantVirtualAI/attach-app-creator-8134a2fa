@@ -209,12 +209,16 @@ Deno.serve(async (req) => {
         `${userBase}/messagesessions/${encodeURIComponent(threadId)}/messages?limit=${limit}`,
         { method: "GET" }
       );
+      let messages: any[] = [];
       if (!res.ok) {
-        const txt = await res.text();
-        return jsonResponse({ error: "NS-API messages fetch failed", status: res.status, body: txt }, 502);
+        const txt = await res.text().catch(() => "");
+        console.warn(`[pp-ns-sms] messages ${res.status}:`, txt.slice(0, 300));
+      } else {
+        const raw = await res.json().catch(() => null);
+        messages = Array.isArray(raw) ? raw : (raw?.messages ?? raw?.data ?? []);
       }
-      const raw = await res.json();
-      const messages = Array.isArray(raw) ? raw : (raw?.messages ?? raw?.data ?? []);
+
+
 
       // Best-effort Maestro conversation enrichment (needs a phone hint).
       let maestroMessages: any[] = [];

@@ -42,8 +42,54 @@ Deno.serve(async (req) => {
 
     if (!res.ok) {
       await maestroAudit(admin, "client_create_failed", { phone, status: res.status, data: res.data });
+      // The Maestro API is read-only for client creation (405/403/404). Fall back
+      // to a prefilled web form URL the broker can open to finish the creation,
+      // and mirror the contact into their Outlook address book right away.
+      const readOnly = [403, 404, 405, 501].includes(Number(res.status));
+      if (readOnly) {
+        const portal = (Deno.env.get("MAESTRO_PORTAL_URL") ?? "https://courtier.planipret.com").replace(/\/$/, "");
+        const q = new URLSearchParams({
+          phone,
+          ...(body.first_name ? { first_name: String(body.first_name) } : {}),
+          ...(body.last_name ? { last_name: String(body.last_name) } : {}),
+          ...(body.email ? { email: String(body.email) } : {}),
+        });
+        let m365: any = null;
+        if (userIdHeader) {
+          try {
+            const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+                Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+              },
+              body: JSON.stringify({
+                action: "upsert_contact",
+                _user_id: userIdHeader,
+                payload: {
+                  first_name: body.first_name ?? null,
+                  last_name: body.last_name ?? null,
+                  email: body.email ?? null,
+                  mobile_phone: phone,
+                },
+              }),
+            });
+            m365 = await r.json().catch(() => null);
+          } catch (_) { /* non blocking */ }
+        }
+        return json({
+          success: false,
+          error: "maestro_read_only",
+          message: "L'API Maestro ne permet pas la création de client. Ouvrez le formulaire prérempli pour terminer.",
+          web_url: `${portal}/fr/clients/new?${q.toString()}`,
+          m365_contact: m365?.success ? { id: m365.contact_id, updated: m365.updated } : null,
+          status: res.status,
+        }, 200);
+      }
       return json({ success: false, error: "create_failed", status: res.status, details: res.data }, 200);
     }
+
 
     const clientId = res.data?.id ?? res.data?.client_id;
     if (body.call_id && clientId) {

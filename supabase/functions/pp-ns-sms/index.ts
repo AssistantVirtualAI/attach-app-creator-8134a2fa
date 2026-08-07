@@ -22,7 +22,7 @@ import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
   maestroTelecomFetch,
-  maestroTelecomMirror,
+  
 } from "../_shared/maestro-telecom.ts";
 
 function normalizeE164(raw: unknown): string | null {
@@ -404,15 +404,12 @@ Deno.serve(async (req) => {
         console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
       }
 
-      // Mirror the outbound SMS to Maestro Telecom — fire-and-forget.
-      if (ctx.maestroBrokerId) {
-        maestroTelecomMirror(supabase, `/users/${encodeURIComponent(ctx.maestroBrokerId)}/messages`, {
-          method: "POST",
-          body: { to_user_number: destination, message },
-          action: "sms.send",
-          userId: ctx.userId,
-        });
-      }
+      // NE PAS miroiter vers Maestro `POST /users/{id}/messages` : cet endpoint
+      // ENVOIE réellement un SMS depuis le numéro Maestro (+1 438 842 7217),
+      // ce qui produisait un double SMS chez le client (DID courtier + Maestro).
+      // NS-API reste la seule voie d'envoi ; l'historique est journalisé
+      // localement dans planipret_phone_messages.
+
 
       return jsonResponse({ ok: true, result, from: fromNumber, to: destination, thread_id: resolvedThreadId });
     }

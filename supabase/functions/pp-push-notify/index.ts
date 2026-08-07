@@ -1,6 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import webpush from "npm:web-push@3.6.7";
+import { sendNativeAlertPush } from "../_shared/native-push.ts";
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

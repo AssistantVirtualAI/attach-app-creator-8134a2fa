@@ -277,6 +277,45 @@ Deno.serve(async (req) => {
       }
 
 
+
+      // ---- Garde d'idempotence -------------------------------------------
+      // AVA (chatbot/voicebot) peut rejouer un tool call, et un double tap
+      // mobile peut envoyer deux fois. On refuse tout SMS identique
+      // (même courtier, même destinataire, même texte) dans les 90 dernières
+      // secondes et on renvoie le succès du premier envoi.
+      try {
+        const since = new Date(Date.now() - 90_000).toISOString();
+        const { data: dup } = await supabase
+          .from("planipret_phone_messages")
+          .select("id, ns_thread_id, sent_at")
+          .eq("user_id", ctx.userId)
+          .eq("direction", "outbound")
+          .eq("to_number", destination)
+          .eq("body", message)
+          .gte("sent_at", since)
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (dup?.id) {
+          console.warn("[pp-ns-sms] duplicate suppressed", { to: destination, dup_id: dup.id });
+          return jsonResponse({
+            ok: true,
+            success: true,
+            duplicate: true,
+            message_id: dup.id,
+            thread_id: dup.ns_thread_id ?? thread_id ?? null,
+            to: destination,
+            from: fromNumber,
+            note: "SMS identique déjà envoyé il y a moins de 90 s — envoi ignoré.",
+          }, 200);
+        }
+      } catch (dupErr) {
+        console.warn("[pp-ns-sms] dedupe check failed (non-fatal):", dupErr);
+      }
+
+
+
+
       // NS-API v2 SMS: POST /users/{ext}/messagesessions/messages creates the
       // session (if needed) and sends the message in one shot. This is the
       // endpoint NetSapiens actually accepts — POSTing to /messagesessions

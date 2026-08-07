@@ -1680,7 +1680,16 @@ function Composer({
   accent?: "brand" | "agent"; inputRef?: React.RefObject<HTMLInputElement>; autoFocus?: boolean;
 }) {
   const { t } = useMplanipretLang();
-  const sentByPointerRef = useRef(false);
+  const lastSendAtRef = useRef(0);
+  // Anti double-envoi : un seul déclenchement par 1,2 s, quelle que soit la
+  // source (pointerdown, click fantôme, touche Entrée).
+  const trigger = () => {
+    if (!text.trim() || sending) return;
+    const now = Date.now();
+    if (now - lastSendAtRef.current < 1200) return;
+    lastSendAtRef.current = now;
+    onSend();
+  };
   const accentBg =
     accent === "agent"
       ? "linear-gradient(135deg, var(--pp-agent), #6C3CE1)"
@@ -1700,7 +1709,7 @@ function Composer({
         value={text}
         onChange={(e) => setText(e.target.value)}
         enterKeyHint="send"
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); trigger(); } }}
         placeholder={placeholder ?? t("messages.yourMessage")}
         className="flex-1 px-3 py-2 rounded-full text-sm outline-none"
         style={{
@@ -1713,20 +1722,12 @@ function Composer({
         type="button"
         // iOS/Android : le tap ferme d'abord le clavier, la mise en page bouge et
         // le `click` n'atteint jamais le bouton. On déclenche donc sur pointerdown
-        // (en empêchant le blur) et on neutralise le click qui suit.
+        // (en empêchant le blur) et on neutralise le click/tap qui suit.
         onPointerDown={(e) => {
           e.preventDefault();
-          if (sentByPointerRef.current) return;
-          if (!text.trim() || sending) return;
-          sentByPointerRef.current = true;
-          window.setTimeout(() => { sentByPointerRef.current = false; }, 600);
-          onSend();
+          trigger();
         }}
-        onClick={() => {
-          if (sentByPointerRef.current) return;
-          if (!text.trim() || sending) return;
-          onSend();
-        }}
+        onClick={(e) => { e.preventDefault(); trigger(); }}
         disabled={!text.trim() || sending}
         aria-label={t("common.send")}
         className="w-9 h-9 rounded-full flex items-center justify-center text-white disabled:opacity-50 shrink-0 touch-manipulation"
@@ -1734,6 +1735,7 @@ function Composer({
       >
         {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
       </button>
+
 
     </div>
   );

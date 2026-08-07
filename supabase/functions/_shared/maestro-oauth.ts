@@ -229,7 +229,7 @@ export async function fetchMaestroUserProfile(env: MaestroOAuthEnv, accessToken:
   const root = (
     Deno.env.get("MAESTRO_TELECOM_BASE_URL")
     ?? Deno.env.get("MAESTRO_API_BASE_URL")
-    ?? "https://courtier.planipret.com/telecom/api/v1"
+    ?? "https://client-dev.planipret.com/telecom/api/v1"
   ).replace(/\/$/, "");
   // Confirmed with Scott: with an OAuth access token (no machine=1),
   // GET /user returns the authenticated broker profile { id, first_name, last_name, email }.

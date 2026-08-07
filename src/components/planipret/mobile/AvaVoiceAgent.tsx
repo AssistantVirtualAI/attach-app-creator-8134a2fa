@@ -248,6 +248,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
   }, [sessionId, userId]);
 
   useEffect(() => {
+    if (!aiConsent) return;
     let cancelled = false;
     (async () => {
       try {

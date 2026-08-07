@@ -26,9 +26,10 @@ Deno.serve(async (req) => {
 
     const auth = await getBrokerAuth(admin, userIdHeader);
     const res = await maestroFetch(cfg, {
-      method: "GET",
-      path: `/api/v1/clients/lookup?phone=${encodeURIComponent(phone)}`,
+      method: "POST",
+      path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId ?? ""))}/lookup-by-phone`,
       token: auth.token,
+      body: { phone },
     });
 
     if (res.status === 404 || (res.ok && !res.data)) {

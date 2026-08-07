@@ -553,6 +553,14 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
   // ─── render ────────────────────────────────────────────────────
   const ToolIcon = currentTool ? TOOL_ICONS[currentTool] ?? Sparkles : null;
 
+  if (!aiConsent) {
+    return (
+      <div className="absolute inset-0 z-[60]" style={{ background: "rgba(4,11,22,0.97)" }}>
+        <AiConsentGate onAccept={() => setAiConsentState(true)} onDecline={() => (onFallbackToChat ? onFallbackToChat() : onClose())} />
+      </div>
+    );
+  }
+
   return (
     <div className="absolute inset-0 z-[60] flex flex-col" style={{ background: "rgba(4,11,22,0.97)", backdropFilter: "blur(20px)", paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}>
       {/* Top bar */}

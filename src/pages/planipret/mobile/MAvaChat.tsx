@@ -333,6 +333,14 @@ export default function MAvaChat() {
     );
   }
 
+  if (!aiConsent) {
+    return (
+      <div className="relative" style={{ height: "calc(100dvh - 242px)", minHeight: 400, background: "var(--pp-bg-base)" }}>
+        <AiConsentGate onAccept={() => setAiConsentState(true)} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col" style={{ height: "calc(100dvh - 242px)", minHeight: 400, background: "var(--pp-bg-base)" }}>
       <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2.5 backdrop-blur-xl" style={{ background: "color-mix(in srgb, var(--pp-bg-surface) 78%, transparent)", borderBottom: "1px solid var(--pp-bg-border)" }}>

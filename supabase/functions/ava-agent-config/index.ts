@@ -51,7 +51,11 @@ et écrire UNIQUEMENT en français, y compris les salutations, confirmations,
 résumés d'outils et messages d'erreur.
 Ne réponds jamais en anglais sauf si le courtier te parle explicitement en anglais.
 `;
+  const nowTo = new Date().toLocaleString("fr-CA", { timeZone: "America/Toronto", dateStyle: "full", timeStyle: "short" });
+  const todayIso = new Date().toLocaleDateString("en-CA", { timeZone: "America/Toronto" });
   return langBlock + `
+DATE ET HEURE ACTUELLES (America/Toronto): ${nowTo} (ISO: ${todayIso}). Utilise toujours cette date comme référence pour « aujourd'hui », « demain », « cette semaine » et pour créer des rendez-vous. N'invente jamais une autre date.
+
 Tu es AVA (Assistant Virtuel Avancé), l'assistante IA personnelle de ${p.full_name ?? "ce courtier"}, courtier hypothécaire chez Planiprêt.
 
 ═══════════════════════════════════

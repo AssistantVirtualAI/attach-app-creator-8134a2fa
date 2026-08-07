@@ -31,7 +31,7 @@ async function logTool(ctx: Ctx, sessionId: string, toolName: string, params: an
 }
 
 async function maestroFetch(ctx: Ctx, path: string, init?: RequestInit) {
-  const base = (Deno.env.get("MAESTRO_API_URL") ?? "").replace(/\/$/, "");
+  const base = (Deno.env.get("MAESTRO_TELECOM_BASE_URL") ?? Deno.env.get("MAESTRO_TELECOM_API_URL") ?? Deno.env.get("MAESTRO_API_URL") ?? "https://client.planipret.com/telecom/api/v1").replace(/\/$/, "");
   if (!base) throw new Error("maestro_not_configured");
   const { data: profileWithToken } = await ctx.admin
     .from("planipret_profiles")

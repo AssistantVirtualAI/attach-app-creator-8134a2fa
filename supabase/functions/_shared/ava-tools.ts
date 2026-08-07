@@ -234,6 +234,35 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       call_id: { type: "string", description: "ID de l'appel" },
       open_tab: { type: "string", description: "recording | transcript | coaching (optionnel)" },
     }, ["call_id"]),
+    mk("open_dialer", "Ouvre le composeur d'appel dans l'app avec un numéro pré-rempli.", {
+      phone: { type: "string", description: "Numéro E.164" },
+      name: { type: "string", description: "Nom affiché (optionnel)" },
+    }, ["phone"]),
+    mk("open_sms_composer", "Ouvre l'écran SMS avec destinataire et texte pré-remplis.", {
+      phone: { type: "string", description: "Numéro E.164" },
+      message: { type: "string", description: "Texte pré-rempli (optionnel)" },
+    }, ["phone"]),
+    mk("open_email_composer", "Ouvre le composeur de courriel M365 pré-rempli.", {
+      to: { type: "string", description: "Adresse courriel" },
+      subject: { type: "string", description: "Objet (optionnel)" },
+      body: { type: "string", description: "Corps (optionnel)" },
+    }, ["to"]),
+    mk("create_calendar_event", "Crée un événement dans le calendrier Microsoft 365.", {
+      subject: { type: "string", description: "Titre" },
+      start_datetime: { type: "string", description: "ISO 8601" },
+      duration_minutes: { type: "number", description: "Durée (défaut: 60)" },
+      attendees: { type: "string", description: "Courriels séparés par virgule (optionnel)" },
+      body: { type: "string", description: "Description (optionnel)" },
+    }, ["subject", "start_datetime"]),
+    mk("move_calendar_event", "Déplace un événement du calendrier M365.", {
+      event_id: { type: "string", description: "ID de l'événement" },
+      start_datetime: { type: "string", description: "Nouvelle date/heure ISO 8601" },
+      duration_minutes: { type: "number", description: "Durée (optionnel)" },
+    }, ["event_id", "start_datetime"]),
+    mk("cancel_calendar_event", "Annule un événement du calendrier M365.", {
+      event_id: { type: "string", description: "ID de l'événement" },
+      comment: { type: "string", description: "Message d'annulation (optionnel)" },
+    }, ["event_id"]),
     mk("get_sms_conversations", "Liste les dernières conversations SMS.", {
       limit: { type: "number", description: "Nombre (défaut: 10)" },
     }),

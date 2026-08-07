@@ -316,7 +316,63 @@ Deno.serve(async (req) => {
 
 
 
+      // ---- Voie 1 : Maestro Telecom (source de vérité de l'historique) ----
+      // Scott (Maestro) : `POST /users/{id}/messages` ENVOIE réellement le SMS.
+      // On l'utilise donc comme unique voie d'envoi quand le courtier est lié,
+      // en forçant son DID comme expéditeur. NS-API sert de repli.
+      if (ctx.maestroBrokerId) {
+        try {
+          const cfg = await getMaestroTelecomConfig(supabase);
+          if (isMaestroTelecomConfigured(cfg)) {
+            const r = await maestroTelecomFetch<any>(
+              cfg,
+              `/users/${encodeURIComponent(ctx.maestroBrokerId)}/messages`,
+              {
+                method: "POST",
+                body: {
+                  to_user_number: destination,
+                  message,
+                  // Force l'affichage du DID du courtier plutôt qu'un numéro Maestro générique.
+                  from: fromNumber,
+                  from_number: fromNumber,
+                  from_did: fromNumber,
+                },
+              },
+            );
+            if (r.ok) {
+              try {
+                await supabase.from("planipret_phone_messages").insert({
+                  user_id: ctx.userId,
+                  direction: "outbound",
+                  to_number: destination,
+                  from_number: fromNumber,
+                  body: message,
+                  type,
+                  ns_thread_id: thread_id ?? null,
+                  sent_at: new Date().toISOString(),
+                });
+              } catch (logErr) {
+                console.warn("[pp-ns-sms] maestro log insert failed (non-fatal):", logErr);
+              }
+              return jsonResponse({
+                ok: true,
+                via: "maestro",
+                result: r.data,
+                from: fromNumber,
+                to: destination,
+                thread_id: thread_id ?? null,
+              });
+            }
+            console.warn("[pp-ns-sms] Maestro send failed, fallback NS-API", r.status, r.error);
+          }
+        } catch (e) {
+          console.warn("[pp-ns-sms] Maestro send error, fallback NS-API:", e);
+        }
+      }
+
+      // ---- Voie 2 (repli) : NS-API v2 -------------------------------------
       // NS-API v2 SMS: POST /users/{ext}/messagesessions/messages creates the
+
       // session (if needed) and sends the message in one shot. This is the
       // endpoint NetSapiens actually accepts — POSTing to /messagesessions
       // directly returns HTTP 500 on most tenants.
@@ -390,16 +446,11 @@ Deno.serve(async (req) => {
           })
           .select("id")
           .maybeSingle();
-        if (logged?.id) {
-          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-sync-message`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({ message_id: logged.id }),
-          }).catch(() => {});
-        }
+        // Pas de mirror vers maestro-sync-message ici : ce chemin est le repli
+        // NS-API (Maestro indisponible), et `POST /users/{id}/messages`
+        // enverrait un second SMS réel.
+        void logged;
+
       } catch (logErr) {
         console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
       }

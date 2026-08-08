@@ -218,9 +218,18 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
     mk("search_ms365_contacts", "Cherche un contact dans l'annuaire Microsoft 365 (People/Contacts). Utilise pour trouver un email, un numéro de téléphone ou vérifier si quelqu'un existe.", {
       query: { type: "string", description: "Nom, prénom ou email à rechercher" },
     }, ["query"]),
-    mk("find_contact", "Cherche un contact dans les contacts Planiprêt ET l'annuaire M365. Retourne nom, email, téléphone.", {
-      query: { type: "string", description: "Nom ou email à chercher" },
+    mk("find_contact", "Cherche une personne PARTOUT : contacts du cellulaire du courtier, annuaire de l'entreprise (extensions et contacts partagés), clients Maestro, contacts Outlook/M365. Accepte prénom seul, nom de famille seul, nom complet dans n'importe quel ordre, courriel, entreprise ou numéro. Utilise cet outil avant d'appeler ou d'écrire à quelqu'un dont tu n'as pas le numéro.", {
+      query: { type: "string", description: "Prénom, nom, nom complet, courriel, entreprise ou numéro" },
+      limit: { type: "number", description: "Nombre max de résultats (défaut 10)" },
     }, ["query"]),
+    mk("search_directory", "Recherche unifiée identique à find_contact, avec filtre optionnel par source.", {
+      query: { type: "string", description: "Texte recherché" },
+      sources: { type: "string", description: "Filtre optionnel séparé par virgules : device, directory, maestro, microsoft" },
+      limit: { type: "number", description: "Nombre max de résultats (défaut 10)" },
+    }, ["query"]),
+    mk("list_company_directory", "Liste l'annuaire de l'entreprise (collègues, extensions, contacts partagés).", {
+      limit: { type: "number", description: "Nombre max d'entrées (défaut 50)" },
+    }),
 
     // Navigation & stats
     mk("navigate_to", "Navigue vers une page de l'app Planiprêt.", {

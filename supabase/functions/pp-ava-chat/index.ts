@@ -99,7 +99,8 @@ function wantsSendEmail(text: string) {
 }
 
 function wantsContactLookup(text: string) {
-  return /(contact|répertoire|repertoire|directory|courriel de|email de|adresse de|coordonn[ée]es|num[ée]ro de)/i.test(text)
+  return /(contact|répertoire|repertoire|directory|annuaire|courriel de|email de|adresse de|coordonn[ée]es|num[ée]ro de)/i.test(text)
+    || /\b(appelle|appeler|call|t[ée]l[ée]phone[rz]?|texte[rz]?|texto|sms|message)\b/i.test(text)
     || wantsSendEmail(text);
 }
 
@@ -108,47 +109,56 @@ function extractNameTokens(text: string): { emails: string[]; names: string[] } 
   const quoted = Array.from(text.matchAll(/["“']([^"”']{2,60})["”']/g)).map(m => m[1]);
   const caps = Array.from(text.matchAll(/\b([A-ZÉÈÀÂÊÎÔÛÇ][a-zéèàâêîôûç'\-]{1,}(?:\s+[A-ZÉÈÀÂÊÎÔÛÇ][a-zéèàâêîôûç'\-]{1,}){0,2})\b/g)).map(m => m[1]);
   const stop = new Set(["Bonjour", "Salut", "Hello", "Envoie", "Envoyer", "Envoi", "Courriel", "Email", "Mail", "Contact", "Ava", "AVA", "Microsoft", "Teams", "Outlook"]);
-  const names = Array.from(new Set([...quoted, ...caps.filter(n => !stop.has(n.split(" ")[0]))])).slice(0, 5);
+  // Also catch lowercase names right after an action verb ("appelle jean tremblay").
+  const afterVerb = Array.from(
+    text.matchAll(/\b(?:appelle[rz]?|appeler|call|t[ée]l[ée]phone[rz]?|texte[rz]?|envoie|écris|ecris)\s+(?:un\s+)?(?:sms|texto|message|courriel|email)?\s*(?:à|a|to)?\s*([\p{L}'\-]{2,}(?:\s+[\p{L}'\-]{2,}){0,2})/giu),
+  ).map((m) => m[1].trim());
+  const names = Array.from(new Set([...quoted, ...afterVerb, ...caps.filter(n => !stop.has(n.split(" ")[0]))])).slice(0, 5);
   return { emails: Array.from(new Set(emails)).slice(0, 5), names };
 }
 
+/**
+ * Unified directory lookup — delegates to pp-contact-search so the chatbot sees
+ * the exact same universe as the ElevenLabs voice agent: device contacts,
+ * company directory (extensions + shared), Maestro clients and Outlook/M365.
+ */
 async function searchDirectory(
-  admin: ReturnType<typeof createClient>,
+  _admin: ReturnType<typeof createClient>,
   userId: string,
   tokens: { emails: string[]; names: string[] },
 ) {
+  const queries = Array.from(new Set([...tokens.emails, ...tokens.names])).slice(0, 5);
+  if (!queries.length) return [];
+  const settled = await Promise.allSettled(queries.map(async (q) => {
+    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-contact-search`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: q, limit: 5, _user_id: userId }),
+    });
+    const j = await r.json().catch(() => ({}));
+    return Array.isArray(j?.contacts) ? j.contacts : [];
+  }));
+
   const results: any[] = [];
   const seen = new Set<string>();
-  const push = (r: any) => {
-    const k = `${(r.email ?? "").toLowerCase()}|${(r.phone ?? "").toString()}|${(r.full_name ?? "").toLowerCase()}`;
-    if (seen.has(k)) return;
-    seen.add(k);
-    results.push(r);
-  };
-  for (const em of tokens.emails) {
-    const { data } = await admin.from("planipret_contacts")
-      .select("full_name, email, phone_display")
-      .eq("user_id", userId).ilike("email", em).limit(3);
-    (data ?? []).forEach((r: any) => push({ full_name: r.full_name, email: r.email, phone: r.phone_display, source: "contacts" }));
-  }
-  for (const name of tokens.names) {
-    const pattern = `%${name}%`;
-    const [{ data: c }, { data: mc }] = await Promise.all([
-      admin.from("planipret_contacts")
-        .select("full_name, email, phone_display")
-        .eq("user_id", userId).ilike("full_name", pattern).limit(3),
-      admin.from("planipret_maestro_clients")
-        .select("first_name, last_name, email, phone, mobile")
-        .or(`first_name.ilike.${pattern},last_name.ilike.${pattern}`)
-        .limit(3),
-    ]);
-    (c ?? []).forEach((r: any) => push({ full_name: r.full_name, email: r.email, phone: r.phone_display, source: "contacts" }));
-    (mc ?? []).forEach((r: any) => push({
-      full_name: `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim(),
-      email: r.email,
-      phone: r.phone ?? r.mobile,
-      source: "maestro",
-    }));
+  for (const s of settled) {
+    if (s.status !== "fulfilled") continue;
+    for (const c of s.value) {
+      const k = `${(c.email ?? "").toLowerCase()}|${(c.phone ?? "")}|${(c.name ?? "").toLowerCase()}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      results.push({
+        full_name: c.name,
+        email: c.email ?? null,
+        phone: c.phone ?? c.extension ?? null,
+        extension: c.extension ?? null,
+        company: c.company ?? null,
+        source: c.source,
+      });
+    }
   }
   return results.slice(0, 10);
 }

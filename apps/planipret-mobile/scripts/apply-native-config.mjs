@@ -2768,6 +2768,9 @@ patchAndroidManifest();
 patchAndroidNativeFiles();
 patchIosNativeFiles();
 
+// Version / build number alignés iOS + Android depuis package.json.
+await import("./apply-version.mjs").then((m) => m.applyVersion());
+
 // Guard: cap sync can regenerate native files — fail loudly if the UIScene /
 // SceneDelegate patch did not land.
 if (!verifyIosScene({ soft: process.env.PP_SCENE_CHECK_SOFT === "1" })) {

@@ -511,9 +511,49 @@ Deno.serve(async (req) => {
             console.warn("[pp-ns-sms] maestro sync failed (non-fatal):", syncErr);
           }
         }
-        return jsonResponse({ ok: true, via: "ns", result, message_id: messageId, from: fromNumber, to: destination, thread_id: resolvedThreadId });
+
+        // ---- Vérification post-envoi ---------------------------------------
+        // On relit la ligne réellement persistée pour confirmer (a) qu'elle est
+        // bien dans l'historique du courtier et (b) que le DID affiché est le
+        // DID NetSapiens attendu.
+        const verification: Record<string, unknown> = {
+          saved: false,
+          did_match: false,
+          expected_from: fromNumber,
+          stored_from: null,
+          thread_id: resolvedThreadId,
+          message_id: messageId,
+        };
+        if (messageId) {
+          try {
+            const { data: check } = await supabase
+              .from("planipret_phone_messages")
+              .select("id, from_number, to_number, thread_id, sent_at, direction")
+              .eq("id", messageId)
+              .maybeSingle();
+            if (check) {
+              verification.saved = true;
+              verification.stored_from = check.from_number;
+              verification.stored_to = check.to_number;
+              verification.sent_at = check.sent_at;
+              verification.thread_id = check.thread_id ?? resolvedThreadId;
+              verification.did_match = digitsOnly(check.from_number ?? "") === digitsOnly(fromNumber);
+            }
+          } catch (vErr) {
+            verification.error = String((vErr as Error).message ?? vErr);
+          }
+        }
+        if (!verification.saved) verification.warning = "message_not_persisted";
+        else if (!verification.did_match) verification.warning = "did_mismatch";
+
+        return jsonResponse({
+          ok: true, via: "ns", result, message_id: messageId,
+          from: fromNumber, to: destination, thread_id: resolvedThreadId,
+          verification,
+        });
 
       }
+
 
       console.error("[pp-ns-sms] NS send failed", res.status, nsError ?? lastText?.slice(0, 200));
 

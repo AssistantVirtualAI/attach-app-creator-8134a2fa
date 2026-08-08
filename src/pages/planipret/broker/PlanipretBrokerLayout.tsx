@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, BarChart3, TrendingUp, Settings, LogOut, Search, Mail, ShieldAlert, Users,
+  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, BarChart3, TrendingUp, Settings, LogOut, Mail, ShieldAlert, Users,
 } from "lucide-react";
 import MobileAuthScreen from "@/components/planipret/mobile/MobileAuthScreen";
 import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { resolveBrokerAccess } from "@/lib/planipret/brokerAccess";
+import BrokerOmniSearch from "@/components/planipret/broker/BrokerOmniSearch";
 
 export type BrokerCtx = { userId: string; authUserId: string; profile: any };
 
@@ -22,7 +23,7 @@ const NAV = [
   { to: "/planipret/broker/stats",      Icon: BarChart3,       fr: "Statistiques",   en: "Statistics" },
   { to: "/planipret/broker/commissions", Icon: TrendingUp,     fr: "Commissions",    en: "Commissions" },
   { to: "/planipret/broker/maestro-clients", Icon: Users, fr: "Clients Maestro", en: "Maestro clients" },
-  { to: "/planipret/broker/search",     Icon: Search,          fr: "Recherche",      en: "Search" },
+  
   { to: "/planipret/broker/settings",   Icon: Settings,        fr: "Réglages",       en: "Settings" },
 ];
 
@@ -40,7 +41,6 @@ export default function PlanipretBrokerLayout() {
   const [authUserId, setAuthUserId] = useState<string>("");
   const [profile, setProfile] = useState<any>(null);
   const [denyReason, setDenyReason] = useState<string>("");
-  const [q, setQ] = useState("");
 
   const load = async () => {
     const access = await resolveBrokerAccess();
@@ -187,6 +187,9 @@ export default function PlanipretBrokerLayout() {
           <PlanipretLangSwitch />
           <button onClick={logout} style={{ color: "var(--pp-text-muted)" }}><LogOut className="w-4 h-4" /></button>
         </div>
+        <div className="px-3 pb-2">
+          <BrokerOmniSearch userId={userId} />
+        </div>
         <div className="flex gap-1 px-2 pb-2 overflow-x-auto">
           {NAV.map(({ to, fr, en }) => (
             <NavLink key={to} to={to}
@@ -203,19 +206,12 @@ export default function PlanipretBrokerLayout() {
       </div>
 
       {/* Main */}
-      <div className="flex flex-1 min-w-0 flex-col md:ml-[248px] pt-[92px] md:pt-0">
+      <div className="flex flex-1 min-w-0 flex-col md:ml-[248px] pt-[148px] md:pt-0">
         <header className="pp-app-header sticky top-0 hidden md:flex items-center justify-between gap-4 px-5 xl:px-7 z-30" style={{ height: 64 }}>
           <h1 className="pp-heading truncate" style={{ fontWeight: 700, fontSize: 18 }}>{title}</h1>
           <div className="flex items-center gap-3">
-            <form
-              onSubmit={(e) => { e.preventDefault(); const v = q.trim(); if (v) navigate(`/planipret/broker/search?q=${encodeURIComponent(v)}`); }}
-              className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full"
-              style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
-              <Search className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} />
-              <input value={q} onChange={(e) => setQ(e.target.value)}
-                placeholder={lang === "en" ? "Search number, contact, keyword" : "Numéro, contact, mot-clé"}
-                className="bg-transparent outline-none text-[12.5px] w-[240px]" style={{ color: "var(--pp-text-primary)" }} />
-            </form>
+            <BrokerOmniSearch userId={userId} className="hidden md:block w-[280px] lg:w-[340px] xl:w-[400px]" />
+
             <PlanipretLangSwitch />
             <span className="capitalize hidden xl:inline" style={{ fontSize: 10.5, color: "var(--pp-text-muted)" }}>{dateLabel}</span>
           </div>

@@ -10,6 +10,26 @@ import type { BrokerCtx } from "./PlanipretBrokerLayout";
 
 type Client = Record<string, any>;
 
+function Section({ title, rows }: { title: string; rows: [string, any][] }) {
+  const visible = rows.filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (visible.length === 0) return null;
+  return (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--pp-text-muted)" }}>{title}</div>
+      <div className="space-y-1.5">
+        {visible.map(([k, v], i) => (
+          <div key={`${k}-${i}`} className="flex justify-between gap-3 items-start">
+            <span style={{ color: "var(--pp-text-muted)" }}>{k}</span>
+            <span className="font-medium text-right break-all max-w-[65%]">
+              {typeof v === "object" ? JSON.stringify(v) : String(v)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PBMaestroClients() {
   const { } = useOutletContext<BrokerCtx>();
   const { lang } = useMplanipretLang();
@@ -184,22 +204,75 @@ export default function PBMaestroClients() {
               <h2 className="font-semibold text-[15px]">{detail.name || detail.display_name || (en ? "Client" : "Client")}</h2>
               <button onClick={() => setDetail(null)} className="p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
             </div>
-            <div className="p-4 space-y-3 text-[13px]">
+            <div className="p-4 space-y-4 text-[13px]">
               {detailLoading && <PPSkeleton style={{height:80}} />}
-              {[
+
+              <Section title={en ? "Identity" : "Identité"} rows={[
+                [en ? "First name" : "Prénom", detail.first_name],
+                [en ? "Last name" : "Nom", detail.last_name],
+                [en ? "Language" : "Langue", detail.language],
+                [en ? "Birth date" : "Date de naissance", detail.birth_date],
+                [en ? "Status" : "Statut", detail.status],
+                [en ? "Source" : "Source", detail.source],
+              ]} />
+
+              <Section title={en ? "Contact" : "Coordonnées"} rows={[
                 [en ? "Phone" : "Téléphone", detail.phone],
                 [en ? "Mobile" : "Cellulaire", detail.cell_phone],
                 [en ? "Work" : "Bureau", detail.work_phone],
+                [en ? "Home" : "Domicile", detail.home_phone],
                 [en ? "Email" : "Courriel", detail.email],
+                ...(Array.isArray(detail.emails) ? detail.emails.slice(1).map((e: string, i: number) => [`${en ? "Email" : "Courriel"} ${i + 2}`, e] as [string, any]) : []),
+              ]} />
+
+              {Array.isArray(detail.telephones) && detail.telephones.length > 1 && (
+                <Section title={en ? "All numbers" : "Tous les numéros"} rows={detail.telephones.map((t: any, i: number) => [
+                  String(t?.telephone_type ?? `#${i + 1}`),
+                  t?.telephone_number ?? "",
+                ] as [string, any])} />
+              )}
+
+              <Section title={en ? "Address" : "Adresse"} rows={[
+                [en ? "Address" : "Adresse", detail.address_line],
+                [en ? "City" : "Ville", detail.city],
+                [en ? "Province" : "Province", detail.province],
+                [en ? "Postal code" : "Code postal", detail.postal_code],
+                [en ? "Country" : "Pays", detail.country],
+              ]} />
+
+              <Section title={en ? "Professional" : "Professionnel"} rows={[
                 [en ? "Company" : "Entreprise", detail.company],
+                [en ? "Job title" : "Titre", detail.job_title],
+                [en ? "Broker ID" : "ID courtier", detail.broker_id],
                 ["Maestro ID", detail.maestro_client_id ?? detail.id],
-              ].map(([k, v]) => (
-                <div key={String(k)} className="flex justify-between gap-3">
-                  <span style={{ color: "var(--pp-text-muted)" }}>{k}</span>
-                  <span className="font-medium text-right break-all">{v ? String(v) : "—"}</span>
+                [en ? "Created" : "Créé le", detail.created_at],
+                [en ? "Updated" : "Mis à jour", detail.updated_at],
+              ]} />
+
+              {detail.notes && (
+                <Section title="Notes" rows={[["", detail.notes]]} />
+              )}
+
+              <details className="rounded-lg" style={{ border: "1px solid var(--pp-border, #e2e8f0)" }}>
+                <summary className="px-3 py-2 cursor-pointer font-semibold text-[12px]">
+                  {en ? "All Maestro fields" : "Tous les champs Maestro"}
+                </summary>
+                <div className="px-3 pb-3 space-y-1">
+                  {Object.entries(detail)
+                    .filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0))
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([k, v]) => (
+                      <div key={k} className="flex justify-between gap-3 items-start">
+                        <span className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{k}</span>
+                        <span className="font-medium text-right break-all text-[11px] max-w-[60%]">
+                          {typeof v === "object" ? JSON.stringify(v) : String(v)}
+                        </span>
+                      </div>
+                    ))}
                 </div>
-              ))}
+              </details>
             </div>
+
           </div>
         </div>
       )}

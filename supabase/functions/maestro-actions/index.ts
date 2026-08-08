@@ -32,6 +32,25 @@ function normalizeContact(c: any) {
   const cell = c.cell_phone ?? c.mobile ?? telOf("mobile", "cell") ?? null;
   const work = c.work_phone ?? c.office_phone ?? telOf("work", "office") ?? null;
   const home = c.home_phone ?? telOf("home") ?? null;
+  const addrs: any[] = Array.isArray(c.addresses) ? c.addresses : [];
+  const a0 = c.address && typeof c.address === "object" ? c.address : (addrs[0] ?? null);
+  const addressLine = (() => {
+    if (typeof c.address === "string" && c.address.trim()) return c.address.trim();
+    if (!a0) return null;
+    const parts = [
+      [a0.civic_number ?? a0.street_number, a0.street ?? a0.street_name ?? a0.address1].filter(Boolean).join(" "),
+      a0.apartment ?? a0.unit ?? a0.address2,
+      a0.city ?? a0.municipality,
+      a0.province ?? a0.state,
+      a0.postal_code ?? a0.zip,
+      a0.country,
+    ].filter((p) => p && String(p).trim());
+    return parts.length ? parts.join(", ") : null;
+  })();
+  const emails: string[] = Array.from(new Set([
+    c.email, c.email_address, c.personal_email, c.work_email,
+    ...(Array.isArray(c.emails) ? c.emails.map((e: any) => (typeof e === "string" ? e : e?.email ?? e?.email_address)) : []),
+  ].filter(Boolean).map((e: any) => String(e))));
   return {
     ...c,
     id,
@@ -39,16 +58,34 @@ function normalizeContact(c: any) {
     last_name: last,
     name: full,
     display_name: full,
-    email: c.email ?? c.email_address ?? null,
+    email: emails[0] ?? null,
+    emails,
     company: c.company ?? c.employer ?? c.organization ?? null,
+    job_title: c.job_title ?? c.occupation ?? c.title ?? null,
     phone: c.phone ?? c.phone_number ?? cell ?? work ?? home ??
       (tels[0]?.telephone_number ? String(tels[0].telephone_number) : null),
     cell_phone: cell,
     work_phone: work,
     home_phone: home,
+    telephones: tels,
+    addresses: addrs,
+    address_line: addressLine,
+    city: a0?.city ?? a0?.municipality ?? c.city ?? null,
+    province: a0?.province ?? a0?.state ?? c.province ?? null,
+    postal_code: a0?.postal_code ?? a0?.zip ?? c.postal_code ?? null,
+    country: a0?.country ?? c.country ?? null,
+    language: c.language ?? c.preferred_language ?? c.locale ?? null,
+    birth_date: c.birth_date ?? c.birthdate ?? c.date_of_birth ?? null,
+    status: c.status ?? c.client_status ?? c.state ?? null,
+    source: c.source ?? c.lead_source ?? null,
+    notes: c.notes ?? c.note ?? c.comments ?? null,
+    created_at: c.created_at ?? c.creation_date ?? c.created ?? null,
+    updated_at: c.updated_at ?? c.modification_date ?? c.modified ?? null,
+    broker_id: c.broker_id ?? c.user_id ?? null,
     maestro_client_id: c.client_id ?? id,
   };
 }
+
 
 /* ------------------------------------------------------------------ *
  * Lightweight in-memory cache for the Maestro mobile list endpoints.

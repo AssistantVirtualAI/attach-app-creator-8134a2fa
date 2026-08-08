@@ -10,6 +10,26 @@ import type { BrokerCtx } from "./PlanipretBrokerLayout";
 
 type Client = Record<string, any>;
 
+function Section({ title, rows }: { title: string; rows: [string, any][] }) {
+  const visible = rows.filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (visible.length === 0) return null;
+  return (
+    <div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--pp-text-muted)" }}>{title}</div>
+      <div className="space-y-1.5">
+        {visible.map(([k, v], i) => (
+          <div key={`${k}-${i}`} className="flex justify-between gap-3 items-start">
+            <span style={{ color: "var(--pp-text-muted)" }}>{k}</span>
+            <span className="font-medium text-right break-all max-w-[65%]">
+              {typeof v === "object" ? JSON.stringify(v) : String(v)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PBMaestroClients() {
   const { } = useOutletContext<BrokerCtx>();
   const { lang } = useMplanipretLang();

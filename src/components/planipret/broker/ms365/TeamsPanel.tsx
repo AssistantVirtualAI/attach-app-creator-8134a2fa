@@ -86,7 +86,13 @@ export default function TeamsPanel({ lang }: { lang: Lang }) {
 
   const q = query.trim().toLowerCase();
   const filteredChats = useMemo(() => !q ? chats : chats.filter((c) => JSON.stringify(c).toLowerCase().includes(q)), [chats, q]);
-  const filteredPeople = useMemo(() => !q ? people : people.filter((p) => `${p.displayName ?? ""} ${p.mail ?? ""}`.toLowerCase().includes(q)), [people, q]);
+  const pName = (p: any) => p.name ?? p.displayName ?? "";
+  const pMail = (p: any) => p.mail ?? p.email ?? p.userPrincipalName ?? "";
+  const filteredPeople = useMemo(
+    () => (!q ? people : people.filter((p) => `${pName(p)} ${pMail(p)} ${p.title ?? ""}`.toLowerCase().includes(q))),
+    [people, q],
+  );
+
 
   if (err === "ms365_not_connected") {
     return <div className="pp-card"><PPEmptyState icon={<Users className="w-5 h-5" />}

@@ -99,7 +99,22 @@ export default function PBMicrosoft() {
         </button>
       </div>
 
+      <div className="pp-card flex flex-wrap gap-1" style={{ padding: 8 }}>
+        {([["stats", lang === "en" ? "Statistics" : "Statistiques"],
+           ["mail", lang === "en" ? "Emails" : "Courriels"],
+           ["teams", "Teams"],
+           ["calendar", lang === "en" ? "Calendar" : "Calendrier"]] as const).map(([k, label]) => (
+          <button key={k} onClick={() => setTab(k as Tab)} className="px-3 py-1.5 rounded-lg text-[12.5px]"
+            style={tab === k
+              ? { background: "var(--pp-brand-accent-2)", color: "#fff", fontWeight: 700 }
+              : { color: "var(--pp-text-secondary)" }}>{label}</button>
+        ))}
+      </div>
+
+      {tab === "stats" && (
+        <>
       {statsLoading ? (
+
         <div className="pp-card p-4 space-y-2">{[0, 1, 2].map((i) => <PPSkeleton key={i} className="h-16 w-full" />)}</div>
       ) : statsErr ? (
         <div className="pp-card" style={{ padding: 16, color: "var(--pp-danger)", fontSize: 13 }}>Microsoft 365: {statsErr}</div>

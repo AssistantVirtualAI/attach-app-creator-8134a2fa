@@ -147,6 +147,34 @@ function newMessageSessionId() {
   return crypto.randomUUID().replace(/-/g, "");
 }
 
+const digitsOnly = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-10);
+
+/** Peer number of a locally logged message row. */
+function localPeer(row: any): string {
+  return String((row.direction === "outbound" ? row.to_number : row.from_number) ?? "");
+}
+
+/** Local history rows (planipret_phone_messages) for the current broker. */
+async function getLocalMessages(supabase: any, userId: string, limit = 500): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from("planipret_phone_messages")
+      .select("id,direction,to_number,from_number,body,type,ns_thread_id,sent_at,read_at")
+      .eq("user_id", userId)
+      .order("sent_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("[pp-ns-sms] local history error:", error.message);
+      return [];
+    }
+    return data ?? [];
+  } catch (e) {
+    console.warn("[pp-ns-sms] local history error:", e);
+    return [];
+  }
+}
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

@@ -3,11 +3,18 @@ import { MessageSquare, Timer } from "lucide-react";
 import { OvCard, OvEmpty, OV_COLORS, ovTooltip } from "./OvCard";
 import type { OvDaily } from "@/hooks/useBrokerOverview";
 
-export function OvMessagesChart({ data, lang }: { data: OvDaily[]; lang: "fr" | "en" }) {
+const PER: Record<string, { fr: string; en: string }> = {
+  day: { fr: "par jour", en: "per day" },
+  week: { fr: "par semaine", en: "per week" },
+  month: { fr: "par mois", en: "per month" },
+  quarter: { fr: "par trimestre", en: "per quarter" },
+};
+
+export function OvMessagesChart({ data, lang, granularity }: { data: OvDaily[]; lang: "fr" | "en"; granularity?: string }) {
   const empty = data.every((d) => !d.sent && !d.received);
   return (
     <OvCard
-      title={lang === "en" ? "Texts per day" : "Textos par jour"}
+      title={`${lang === "en" ? "Texts" : "Textos"} ${PER[granularity ?? "day"][lang]}`}
       icon={<MessageSquare className="w-4 h-4" />}
       to="/planipret/broker/messages"
       toLabel={lang === "en" ? "View all" : "Voir tout"}
@@ -29,7 +36,7 @@ export function OvMessagesChart({ data, lang }: { data: OvDaily[]; lang: "fr" | 
   );
 }
 
-export function OvDurationChart({ data, lang }: { data: OvDaily[]; lang: "fr" | "en" }) {
+export function OvDurationChart({ data, lang, granularity }: { data: OvDaily[]; lang: "fr" | "en"; granularity?: string }) {
   const empty = data.every((d) => !d.avg);
   return (
     <OvCard title={lang === "en" ? "Average call duration (min)" : "Durée moyenne d'appel (min)"} icon={<Timer className="w-4 h-4" />}>

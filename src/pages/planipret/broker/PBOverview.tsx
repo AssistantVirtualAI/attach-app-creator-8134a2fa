@@ -17,8 +17,10 @@ import OvCommissionsChart from "@/components/planipret/broker/overview/OvCommiss
 import OvM365Card from "@/components/planipret/broker/overview/OvM365Card";
 import OvConnectionsStrip from "@/components/planipret/broker/overview/OvConnectionsStrip";
 import { OvRecentCalls, OvRecentMessages, OvTopContacts } from "@/components/planipret/broker/overview/OvRecentTables";
+import GranularityToggle from "@/components/planipret/broker/GranularityToggle";
+import { bucketSeries, type Granularity } from "@/lib/planipret/timeBuckets";
 
-const RANGES = [7, 30, 90];
+const RANGES = [7, 30, 90, 180, 365];
 
 const pct = (cur: number, prev: number) => (prev > 0 ? ((cur - prev) / prev) * 100 : cur > 0 ? 100 : 0);
 
@@ -26,10 +28,17 @@ export default function PBOverview() {
   const { userId, authUserId, profile } = useOutletContext<BrokerCtx>();
   const { lang } = useMplanipretLang();
   const [days, setDays] = useState(30);
+  const [granularity, setGranularity] = useState<Granularity>("day");
   const [commissions, setCommissions] = useState<{ cy: number; py: number } | null>(null);
 
   const ov = useBrokerOverview(userId, days, lang as "fr" | "en");
   const { kpi, prev } = ov;
+  const series = bucketSeries(ov.daily, granularity, lang as "fr" | "en");
+  const recSeries = granularity === "day"
+    ? ov.recWeeks
+    : bucketSeries(ov.daily, granularity, lang as "fr" | "en").map((d) => ({
+        label: d.label, recorded: d.recorded, transcribed: d.transcribed, analyzed: d.analyzed,
+      }));
 
   const cards: KpiCard[] = [
     { Icon: Phone, label: lang === "en" ? "Calls" : "Appels", value: kpi.calls, delta: pct(kpi.calls, prev.calls) },
@@ -56,6 +65,8 @@ export default function PBOverview() {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <OvConnectionsStrip profile={profile} lang={lang as "fr" | "en"} />
+        <div className="flex flex-wrap items-center gap-2">
+        <GranularityToggle value={granularity} onChange={setGranularity} lang={lang as "fr" | "en"} />
         <div className="flex items-center gap-1">
           {RANGES.map((d) => (
             <button
@@ -72,6 +83,7 @@ export default function PBOverview() {
               {d} {lang === "en" ? "days" : "jours"}
             </button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -96,12 +108,12 @@ export default function PBOverview() {
           </>
         ) : (
           <>
-            <OvCallsChart data={ov.daily} lang={lang as "fr" | "en"} />
+            <OvCallsChart data={series} lang={lang as "fr" | "en"} granularity={granularity} />
             <OvCallsSplit split={ov.split} lang={lang as "fr" | "en"} />
-            <OvMessagesChart data={ov.daily} lang={lang as "fr" | "en"} />
-            <OvDurationChart data={ov.daily} lang={lang as "fr" | "en"} />
+            <OvMessagesChart data={series} lang={lang as "fr" | "en"} granularity={granularity} />
+            <OvDurationChart data={series} lang={lang as "fr" | "en"} granularity={granularity} />
             <OvHoursChart data={ov.hourly} lang={lang as "fr" | "en"} />
-            <OvRecordingsChart data={ov.recWeeks} lang={lang as "fr" | "en"} />
+            <OvRecordingsChart data={recSeries} lang={lang as "fr" | "en"} />
           </>
         )}
 
@@ -111,7 +123,7 @@ export default function PBOverview() {
           lang={lang as "fr" | "en"}
           onTotal={(cy, py) => setCommissions({ cy, py })}
         />
-        <OvM365Card days={days} lang={lang as "fr" | "en"} />
+        <OvM365Card days={days} lang={lang as "fr" | "en"} granularity={granularity} />
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">

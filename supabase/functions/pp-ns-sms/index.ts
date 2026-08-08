@@ -159,7 +159,7 @@ async function getLocalMessages(supabase: any, userId: string, limit = 500): Pro
   try {
     const { data, error } = await supabase
       .from("planipret_phone_messages")
-      .select("id,direction,to_number,from_number,body,type,ns_thread_id,sent_at,read_at")
+      .select("id,direction,to_number,from_number,body,thread_id,sent_at,read_at")
       .eq("user_id", userId)
       .order("sent_at", { ascending: false })
       .limit(limit);
@@ -227,8 +227,8 @@ Deno.serve(async (req) => {
         const key = digitsOnly(peer);
         if (!key || nsPeers.has(key) || byPeer.has(key)) continue;
         byPeer.set(key, {
-          id: row.ns_thread_id ?? `local:${peer}`,
-          messagesession_id: row.ns_thread_id ?? `local:${peer}`,
+          id: row.thread_id ?? `local:${peer}`,
+          messagesession_id: row.thread_id ?? `local:${peer}`,
           destination: peer,
           last_message: row.body,
           last_message_at: row.sent_at,
@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
           messages.map((m: any) => `${String(m.text ?? m.message ?? m.body ?? "").trim()}|${String(m.timestamp ?? m.created_at ?? "").slice(0, 16)}`),
         );
         const merged = localRows
-          .filter((row: any) => row.ns_thread_id === threadId || (hintKey && digitsOnly(localPeer(row)) === hintKey))
+          .filter((row: any) => row.thread_id === threadId || (hintKey && digitsOnly(localPeer(row)) === hintKey))
           .map((row: any) => ({
             id: row.id,
             direction: row.direction,
@@ -370,7 +370,7 @@ Deno.serve(async (req) => {
         const since = new Date(Date.now() - 90_000).toISOString();
         const { data: dup } = await supabase
           .from("planipret_phone_messages")
-          .select("id, ns_thread_id, sent_at")
+          .select("id, thread_id, sent_at")
           .eq("user_id", ctx.userId)
           .eq("direction", "outbound")
           .eq("to_number", destination)
@@ -386,7 +386,7 @@ Deno.serve(async (req) => {
             success: true,
             duplicate: true,
             message_id: dup.id,
-            thread_id: dup.ns_thread_id ?? thread_id ?? null,
+            thread_id: dup.thread_id ?? thread_id ?? null,
             to: destination,
             from: fromNumber,
             note: "SMS identique déjà envoyé il y a moins de 90 s — envoi ignoré.",
@@ -440,7 +440,7 @@ Deno.serve(async (req) => {
 
       const logMessage = async (threadId: string | null) => {
         try {
-          const { data: logged } = await supabase
+          const { data: logged, error: logError } = await supabase
             .from("planipret_phone_messages")
             .insert({
               user_id: ctx.userId,
@@ -448,18 +448,21 @@ Deno.serve(async (req) => {
               to_number: destination,
               from_number: fromNumber,
               body: message,
-              type,
-              ns_thread_id: threadId,
+              status: "sent",
+              metadata: { type },
+              thread_id: threadId,
               sent_at: new Date().toISOString(),
             })
             .select("id")
             .maybeSingle();
+          if (logError) console.error("[pp-ns-sms] log insert error:", logError.message);
           return logged?.id ?? null;
         } catch (logErr) {
           console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
           return null;
         }
       };
+
 
       if (!nsRejected) {
         const resolvedThreadId = thread_id

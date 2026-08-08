@@ -677,9 +677,22 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
        const result = d.result ?? {};
        const newThreadId = d.thread_id ?? result?.messagesession_id ?? result?.["messagesession-id"] ?? result?.session_id ?? result?.id;
       if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);
+      // ---- Vérification post-envoi (historique + bon DID) ----
+      const v = d.verification;
+      if (v) {
+        console.info("[pp-ns-sms] verification", v);
+        if (!v.saved) {
+          toast.warning("Envoyé, mais non enregistré dans l'historique.", { duration: 6000 });
+        } else if (!v.did_match) {
+          toast.warning(`Envoyé avec le numéro ${v.stored_from ?? "?"} au lieu de ${v.expected_from ?? "?"}.`, { duration: 8000 });
+        } else {
+          toast.success(`Envoyé depuis ${v.stored_from} · enregistré`, { duration: 2500 });
+        }
+      }
       // Refresh from server to reconcile optimistic message
       window.dispatchEvent(new CustomEvent("ava:sms-sent", { detail: { number, body } }));
       setTimeout(() => loadMessages(), 600);
+
 
     } catch (e: any) {
       console.error("[pp-ns-sms] send failed", e);

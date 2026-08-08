@@ -40,6 +40,7 @@ export async function ensureContacts(): Promise<PermStatus> {
     }
   } finally {
     await setPref("perm_contacts_v1", status);
+    if (status === "granted") void syncDeviceContactsToServer();
   }
   return status;
 }

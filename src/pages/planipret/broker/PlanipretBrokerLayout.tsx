@@ -22,7 +22,7 @@ const NAV = [
   { to: "/planipret/broker/stats",      Icon: BarChart3,       fr: "Statistiques",   en: "Statistics" },
   { to: "/planipret/broker/commissions", Icon: TrendingUp,     fr: "Commissions",    en: "Commissions" },
   { to: "/planipret/broker/maestro-clients", Icon: Users, fr: "Clients Maestro", en: "Maestro clients" },
-  { to: "/planipret/broker/search",     Icon: Search,          fr: "Recherche",      en: "Search" },
+  
   { to: "/planipret/broker/settings",   Icon: Settings,        fr: "Réglages",       en: "Settings" },
 ];
 

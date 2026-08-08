@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Calendar, Video, ExternalLink, Plus, X, Loader2, RefreshCw, Trash2, Pencil } from "lucide-react";
+import { Calendar, Video, ExternalLink, Plus, X, Loader2, RefreshCw, Trash2, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import { fmtDateTime } from "@/lib/planipret/brokerFormat";
 
@@ -18,7 +18,11 @@ const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Toronto"
 
 export default function CalendarPanel({ lang }: { lang: Lang }) {
   const en = lang === "en";
-  const [range, setRange] = useState(7);
+  const today = new Date();
+  const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [selected, setSelected] = useState<string>(
+    `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+  );
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [notConnected, setNotConnected] = useState(false);
@@ -27,30 +31,61 @@ export default function CalendarPanel({ lang }: { lang: Lang }) {
 
   const load = async () => {
     setLoading(true);
-    const start = new Date().toISOString();
-    const end = new Date(Date.now() + range * 86400000).toISOString();
+    // Load the whole visible grid (previous/next month overflow included).
+    const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const gridStart = new Date(first);
+    gridStart.setDate(1 - first.getDay());
+    const gridEnd = new Date(gridStart);
+    gridEnd.setDate(gridStart.getDate() + 42);
     const { data } = await supabase.functions.invoke("ms365-actions", {
-      body: { action: "list_calendar_events", payload: { start, end, top: 50 } },
+      body: { action: "list_calendar_events", payload: { start: gridStart.toISOString(), end: gridEnd.toISOString(), top: 250 } },
     });
     const res = (data as any) ?? {};
     setNotConnected(res.connected === false || res.error === "ms365_not_connected");
     setEvents(res.events ?? []);
     setLoading(false);
   };
-  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [range]);
+  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [cursor]);
 
-  const grouped = useMemo(() => {
+  const dayKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const byDay = useMemo(() => {
     const m = new Map<string, any[]>();
     for (const e of events) {
-      const key = String(e.start?.dateTime ?? "").slice(0, 10) || "—";
-      m.set(key, [...(m.get(key) ?? []), e]);
+      const raw = e.start?.dateTime ?? e.start?.date;
+      if (!raw) continue;
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) continue;
+      const k = dayKey(d);
+      m.set(k, [...(m.get(k) ?? []), e]);
     }
-    return Array.from(m.entries());
+    for (const list of m.values()) {
+      list.sort((a, b) => String(a.start?.dateTime ?? "").localeCompare(String(b.start?.dateTime ?? "")));
+    }
+    return m;
   }, [events]);
 
+  const cells = useMemo(() => {
+    const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const start = new Date(first);
+    start.setDate(1 - first.getDay());
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+  }, [cursor]);
+
+  const selectedList = byDay.get(selected) ?? [];
+  const monthLabel = cursor.toLocaleDateString(en ? "en-CA" : "fr-CA", { month: "long", year: "numeric" });
+  const weekDays = en ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+  const todayKey = dayKey(new Date());
+
   const openNew = () => {
-    const s = new Date(Date.now() + 3600000);
-    const e = new Date(Date.now() + 5400000);
+    const base = new Date(`${selected}T09:00:00`);
+    const s = Number.isNaN(base.getTime()) ? new Date(Date.now() + 3600000) : base;
+    const e = new Date(s.getTime() + 3600000);
     setForm({ subject: "", start: toLocalInput(s.toISOString()), end: toLocalInput(e.toISOString()), attendees: "", body: "", online: true });
   };
   const openEdit = (ev: any) => setForm({
@@ -104,61 +139,121 @@ export default function CalendarPanel({ lang }: { lang: Lang }) {
   return (
     <>
       <div className="pp-card flex flex-wrap items-center gap-2" style={{ padding: 12 }}>
-        <select value={range} onChange={(e) => setRange(Number(e.target.value))} className="pp-input" style={{ fontSize: 12 }}>
-          <option value={1}>{en ? "Today" : "Aujourd'hui"}</option>
-          <option value={7}>{en ? "Next 7 days" : "7 prochains jours"}</option>
-          <option value={30}>{en ? "Next 30 days" : "30 prochains jours"}</option>
-          <option value={90}>{en ? "Next 90 days" : "90 prochains jours"}</option>
-        </select>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+            className="p-1.5 rounded-lg" style={{ border: "1px solid var(--pp-bg-border)" }} aria-label="prev">
+            <ChevronLeft className="w-4 h-4" style={{ color: "var(--pp-text-secondary)" }} />
+          </button>
+          <div className="capitalize px-2" style={{ fontSize: 14, fontWeight: 700, minWidth: 150, textAlign: "center", color: "var(--pp-text-primary)" }}>
+            {monthLabel}
+          </div>
+          <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+            className="p-1.5 rounded-lg" style={{ border: "1px solid var(--pp-bg-border)" }} aria-label="next">
+            <ChevronRight className="w-4 h-4" style={{ color: "var(--pp-text-secondary)" }} />
+          </button>
+        </div>
+        <button onClick={() => { const n = new Date(); setCursor(new Date(n.getFullYear(), n.getMonth(), 1)); setSelected(dayKey(n)); }}
+          className="px-3 py-1.5 rounded-lg text-[12px]" style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
+          {en ? "Today" : "Aujourd'hui"}
+        </button>
         <button onClick={() => void load()} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]"
           style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
           <RefreshCw className="w-3.5 h-3.5" />{en ? "Refresh" : "Actualiser"}
         </button>
-        <button onClick={openNew} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-semibold text-white"
+        <button onClick={openNew} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-semibold text-white"
           style={{ background: "var(--pp-brand-accent-2)" }}>
           <Plus className="w-3.5 h-3.5" />{en ? "New meeting" : "Nouvelle réunion"}
         </button>
       </div>
 
-      {loading ? (
-        <div className="pp-card p-4 space-y-2">{[0, 1, 2].map((i) => <PPSkeleton key={i} className="h-12 w-full" />)}</div>
-      ) : events.length === 0 ? (
-        <div className="pp-card"><PPEmptyState icon={<Calendar className="w-5 h-5" />} title={en ? "No meetings" : "Aucune réunion"} /></div>
-      ) : (
-        <div className="space-y-3">
-          {grouped.map(([day, list]) => (
-            <div key={day} className="pp-card" style={{ padding: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--pp-text-secondary)", marginBottom: 8 }}>
-                {new Date(`${day}T12:00:00`).toLocaleDateString(en ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long" })}
-              </div>
-              <div className="space-y-2">
-                {list.map((ev) => (
-                  <div key={ev.id} className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate" style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>{ev.subject || "—"}</div>
-                      <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
-                        {fmtDateTime(ev.start?.dateTime, lang)} → {fmtDateTime(ev.end?.dateTime, lang)} · {(ev.attendees ?? []).length} {en ? "attendees" : "participants"}
-                      </div>
-                      {ev.location?.displayName && (
-                        <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{ev.location.displayName}</div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {ev.isOnlineMeeting && ev.onlineMeeting?.joinUrl && (
-                        <a href={ev.onlineMeeting.joinUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1" style={{ fontSize: 11.5, color: "var(--pp-brand-accent-2)" }}>
-                          <Video className="w-3.5 h-3.5" />{en ? "Join" : "Joindre"}<ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                      <button onClick={() => openEdit(ev)} title={en ? "Edit" : "Modifier"}><Pencil className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} /></button>
-                      <button onClick={() => void remove(ev.id)} title={en ? "Delete" : "Supprimer"}><Trash2 className="w-3.5 h-3.5" style={{ color: "#dc2626" }} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+      <div className="pp-card" style={{ padding: 12, marginTop: 12 }}>
+        {loading ? (
+          <PPSkeleton className="h-[420px] w-full" />
+        ) : (
+          <>
+            <div className="grid grid-cols-7 gap-1" style={{ marginBottom: 4 }}>
+              {weekDays.map((d) => (
+                <div key={d} style={{ fontSize: 11, fontWeight: 700, color: "var(--pp-text-muted)", textAlign: "center", padding: "4px 0" }}>{d}</div>
+              ))}
             </div>
-          ))}
+            <div className="grid grid-cols-7 gap-1">
+              {cells.map((d) => {
+                const k = dayKey(d);
+                const list = byDay.get(k) ?? [];
+                const inMonth = d.getMonth() === cursor.getMonth();
+                const isSel = k === selected;
+                const isToday = k === todayKey;
+                return (
+                  <button key={k} onClick={() => setSelected(k)}
+                    className="text-left rounded-lg"
+                    style={{
+                      minHeight: 88, padding: 6,
+                      background: isSel ? "var(--pp-bg-elevated)" : "transparent",
+                      border: `1px solid ${isSel ? "var(--pp-brand-accent-2)" : "var(--pp-bg-border)"}`,
+                      opacity: inMonth ? 1 : 0.45,
+                    }}>
+                    <div className="flex items-center justify-between">
+                      <span style={{
+                        fontSize: 11.5, fontWeight: isToday ? 800 : 600,
+                        color: isToday ? "var(--pp-brand-accent-2)" : "var(--pp-text-primary)",
+                      }}>{d.getDate()}</span>
+                      {list.length > 0 && (
+                        <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--pp-text-muted)" }}>{list.length}</span>
+                      )}
+                    </div>
+                    <div className="space-y-0.5" style={{ marginTop: 3 }}>
+                      {list.slice(0, 3).map((ev) => (
+                        <div key={ev.id} className="truncate rounded"
+                          style={{ fontSize: 10, padding: "1px 4px", background: "rgba(46,155,220,0.14)", color: "var(--pp-text-primary)" }}
+                          title={ev.subject || ""}>
+                          {String(ev.start?.dateTime ?? "").slice(11, 16)} {ev.subject || "—"}
+                        </div>
+                      ))}
+                      {list.length > 3 && (
+                        <div style={{ fontSize: 9.5, color: "var(--pp-text-muted)" }}>+{list.length - 3}</div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="pp-card" style={{ padding: 14, marginTop: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--pp-text-secondary)", marginBottom: 8 }}>
+          {new Date(`${selected}T12:00:00`).toLocaleDateString(en ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long" })}
         </div>
-      )}
+        {selectedList.length === 0 ? (
+          <PPEmptyState icon={<Calendar className="w-5 h-5" />} title={en ? "No meetings" : "Aucune réunion"} />
+        ) : (
+          <div className="space-y-2">
+            {selectedList.map((ev) => (
+              <div key={ev.id} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate" style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>{ev.subject || "—"}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+                    {fmtDateTime(ev.start?.dateTime, lang)} → {fmtDateTime(ev.end?.dateTime, lang)} · {(ev.attendees ?? []).length} {en ? "attendees" : "participants"}
+                  </div>
+                  {ev.location?.displayName && (
+                    <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{ev.location.displayName}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {ev.isOnlineMeeting && ev.onlineMeeting?.joinUrl && (
+                    <a href={ev.onlineMeeting.joinUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1" style={{ fontSize: 11.5, color: "var(--pp-brand-accent-2)" }}>
+                      <Video className="w-3.5 h-3.5" />{en ? "Join" : "Joindre"}<ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                  <button onClick={() => openEdit(ev)} title={en ? "Edit" : "Modifier"}><Pencil className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} /></button>
+                  <button onClick={() => void remove(ev.id)} title={en ? "Delete" : "Supprimer"}><Trash2 className="w-3.5 h-3.5" style={{ color: "#dc2626" }} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {form && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setForm(null)}>

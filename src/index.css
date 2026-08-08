@@ -407,17 +407,18 @@ All colors MUST be HSL.
   max-width: 100% !important;
   max-height: 100% !important;
   min-width: 0 !important;
-  overflow: hidden;
-  contain: size layout;
 }
 .recharts-wrapper {
   width: 100% !important;
 }
-.recharts-surface {
+/* recharts v3 renders the chart inside a 0-width helper div; restore it
+   so the surface (styled width:100%) can actually paint. */
+.recharts-responsive-container > div {
+  width: 100% !important;
+}
+.recharts-wrapper > .recharts-surface {
   max-width: 100%;
   max-height: 100%;
-  width: 100%;
-  height: 100%;
   display: block;
 }
 

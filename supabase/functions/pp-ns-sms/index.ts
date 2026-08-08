@@ -474,46 +474,13 @@ Deno.serve(async (req) => {
         return jsonResponse({ ok: true, via: "ns", result, message_id: messageId, from: fromNumber, to: destination, thread_id: resolvedThreadId });
       }
 
-      console.warn("[pp-ns-sms] NS send failed, fallback Maestro", res.status, nsError ?? lastText?.slice(0, 200));
+      console.error("[pp-ns-sms] NS send failed", res.status, nsError ?? lastText?.slice(0, 200));
 
-      // ---- Voie 2 (repli) : Maestro Telecom -------------------------------
-      if (ctx.maestroBrokerId) {
-        try {
-          const cfg = await getMaestroTelecomConfig(supabase);
-          if (isMaestroTelecomConfigured(cfg)) {
-            const r = await maestroTelecomFetch<any>(
-              cfg,
-              `/users/${encodeURIComponent(ctx.maestroBrokerId)}/messages`,
-              {
-                method: "POST",
-                body: {
-                  to_user_number: destination,
-                  message,
-                  // Demande à Maestro d'afficher le DID NetSapiens du courtier.
-                  from: fromNumber,
-                  from_number: fromNumber,
-                  from_did: fromNumber,
-                },
-              },
-            );
-            if (r.ok) {
-              const messageId = await logMessage(thread_id ?? sessionId);
-              return jsonResponse({
-                ok: true,
-                via: "maestro",
-                result: r.data,
-                message_id: messageId,
-                from: fromNumber,
-                to: destination,
-                thread_id: thread_id ?? sessionId,
-              });
-            }
-            console.warn("[pp-ns-sms] Maestro send failed", r.status, r.error);
-          }
-        } catch (e) {
-          console.warn("[pp-ns-sms] Maestro send error:", e);
-        }
-      }
+      // ---- PAS de repli Maestro -------------------------------------------
+      // `POST /users/{id}/messages` (Maestro) ignore `from`/`from_number` et
+      // envoie depuis un numéro du pool Maestro (le destinataire voyait le DID
+      // d'un autre courtier). On préfère échouer clairement plutôt que d'envoyer
+      // avec un mauvais afficheur.
 
       return jsonResponse(
         { ok: false, error: nsError ?? `Envoi SMS refusé (${res.status})`, status: res.status, body: lastText, from: fromNumber, to: destination, endpoint: path },

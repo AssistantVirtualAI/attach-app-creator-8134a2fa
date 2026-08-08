@@ -6,7 +6,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { nsFetch } from "../_shared/planipret-ns.ts";
-import { adminClient, getMaestroConfig, getBrokerAuth, maestroFetch } from "../_shared/maestro.ts";
+import { adminClient } from "../_shared/maestro.ts";
+import { getMaestroTelecomConfig, isMaestroTelecomConfigured, maestroTelecomFetch } from "../_shared/maestro-telecom.ts";
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -62,7 +63,8 @@ Deno.serve(async (req) => {
       .select("user_id, email, full_name, extension, ns_extension, maestro_broker_id, maestro_connected")
       .not("maestro_broker_id", "is", null);
 
-    const cfg = await getMaestroConfig(admin);
+    const cfg = await getMaestroTelecomConfig(admin);
+    const cfgOk = isMaestroTelecomConfigured(cfg);
     const rows: any[] = [];
 
     for (const p of profiles ?? []) {
@@ -73,17 +75,11 @@ Deno.serve(async (req) => {
       let maestroExt = "";
       let maestroStatus = "not_checked";
 
-      if (cfg.url && cfg.key) {
+      if (cfgOk) {
         try {
-          const auth = await getBrokerAuth(admin, p.user_id);
-          const r = await maestroFetch(cfg, {
-            method: "GET",
-            path: `/users/${encodeURIComponent(String(p.maestro_broker_id))}/sip`,
-            token: auth.token,
-            brokerId: String(p.maestro_broker_id),
-          });
+          const r = await maestroTelecomFetch(cfg, `/users/${encodeURIComponent(String(p.maestro_broker_id))}/sip`, { method: "GET" });
           maestroStatus = r.ok ? "ok" : `http_${r.status}`;
-          const pu = (r.data?.sip?.provider_user ?? r.data?.data?.sip?.provider_user ?? {}) as any;
+          const pu = ((r.data as any)?.sip?.provider_user ?? {}) as any;
           maestroDid = digits(pu.phone_number);
           maestroSmsDid = digits(pu.sms_number ?? pu.phone_number);
           maestroExt = String(pu.provider_external_user_id ?? "").trim();

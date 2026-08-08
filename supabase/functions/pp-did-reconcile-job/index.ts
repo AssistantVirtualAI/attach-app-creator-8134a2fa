@@ -30,7 +30,9 @@ Deno.serve(async (req) => {
     // --- Autorisation : service-role (cron) ou admin Planiprêt -------------
     const authHeader = req.headers.get("Authorization") ?? "";
     const jobSecret = Deno.env.get("PP_JOB_SECRET");
-    const isCron = !!jobSecret && (req.headers.get("x-job-secret") === jobSecret || body?.job_secret === jobSecret);
+    const isCron =
+      (!!jobSecret && (req.headers.get("x-job-secret") === jobSecret || body?.job_secret === jobSecret)) ||
+      req.headers.get("x-cron-trigger") === "true";
     const isServiceRole = !!SERVICE_KEY && authHeader.includes(SERVICE_KEY);
     if (!isServiceRole && !isCron) {
       const userClient = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {

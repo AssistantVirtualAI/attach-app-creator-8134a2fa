@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Voicemail, Check, X } from "lucide-react";
+import { Voicemail, Check, X, Sparkles, Inbox } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import Pagination from "@/components/planipret/admin/Pagination";
@@ -9,6 +9,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 import { fmtDateTime, fmtDuration } from "@/lib/planipret/brokerFormat";
 import { brokerSelect, searchFilter, periodStartISO, PERIOD_OPTIONS, type BrokerPeriod } from "@/lib/planipret/brokerAccess";
+import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
 
 const PAGE_SIZE = 25;
 
@@ -17,6 +18,7 @@ export default function PBVoicemail() {
   const { lang } = useMplanipretLang();
   const [params, setParams] = useSearchParams();
 
+  const tab = (params.get("tab") === "greeting" ? "greeting" : "inbox") as "inbox" | "greeting";
   const period = (params.get("period") ?? "") as BrokerPeriod;
   const status = params.get("status") ?? "";
   const search = params.get("q") ?? "";
@@ -26,6 +28,20 @@ export default function PBVoicemail() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<any | null>(null);
+  const [profile, setProfile] = useState<any | null>(null);
+
+  const loadProfile = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase
+      .from("planipret_profiles")
+      .select("id, user_id, full_name, voicemail_greeting_text, voicemail_greeting_voice_id, voicemail_greeting_audio_url, voicemail_greeting_updated_at, voicemail_greeting_active")
+      .eq("id", userId)
+      .maybeSingle();
+    setProfile(data ?? null);
+  }, [userId]);
+
+  useEffect(() => { void loadProfile(); }, [loadProfile]);
+
 
   const patch = (next: Record<string, string | null>, resetPage = true) => {
     const p = new URLSearchParams(params);

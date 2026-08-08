@@ -18,6 +18,7 @@ export async function getContactsPermissionStatus(): Promise<PermStatus> {
     status = "denied";
   } finally {
     await setPref("perm_contacts_v1", status);
+    if (status === "granted") void syncDeviceContactsToServer();
   }
   return status;
 }

@@ -164,23 +164,28 @@ function firstText(...values: unknown[]) {
   return "";
 }
 
+/** Unified search across device contacts, company directory, Maestro clients and M365. */
+async function unifiedSearch(ctx: Ctx, query: string, opts: { limit?: number; sources?: string[] } = {}) {
+  const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-contact-search`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, limit: opts.limit ?? 10, sources: opts.sources, _user_id: ctx.userId }),
+  });
+  const j = await r.json().catch(() => ({}));
+  return Array.isArray(j?.contacts) ? j.contacts : [];
+}
+
 async function resolveContact(ctx: Ctx, name: string, want: "phone" | "email"): Promise<{ value: string; name: string } | null> {
   if (!name) return null;
-  // 1) local contacts
-  const { data: local } = await ctx.admin.from("planipret_contacts")
-    .select("full_name, phone, email").ilike("full_name", `%${name}%`).limit(3);
-  for (const c of local ?? []) {
-    const v = want === "phone" ? c.phone : c.email;
-    if (v) return { value: v, name: c.full_name };
+  const hits = await unifiedSearch(ctx, name, { limit: 5 });
+  for (const c of hits) {
+    const v = want === "phone" ? (c.phone || c.extension) : c.email;
+    if (v) return { value: String(v), name: c.name || name };
   }
-  // 2) Maestro cache
-  const { data: mst } = await ctx.admin.from("planipret_maestro_clients")
-    .select("name, phone, email").ilike("name", `%${name}%`).limit(3);
-  for (const c of mst ?? []) {
-    const v = want === "phone" ? c.phone : c.email;
-    if (v) return { value: v, name: c.name };
-  }
-  // 3) MS365 people/contacts
+  // Last resort: live Outlook/People search.
   const r = await msAction(ctx, "search_contact", { query: name });
   for (const c of r?.results ?? []) {
     const v = want === "phone" ? c.phone : c.email;

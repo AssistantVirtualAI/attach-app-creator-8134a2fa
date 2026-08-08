@@ -109,13 +109,17 @@ export default function PBMicrosoft() {
 
           {(stats?.daily?.length ?? 0) > 0 && (
             <div className="pp-card" style={{ padding: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--pp-text-secondary)", marginBottom: 8 }}>
-                {lang === "en" ? "Daily activity" : "Activité quotidienne"}
+              <div className="flex flex-wrap items-center justify-between gap-2" style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--pp-text-secondary)" }}>
+                  {lang === "en" ? `${GRANULARITY_LABELS[granularity].en} activity` : `Activité — ${GRANULARITY_LABELS[granularity].fr.toLowerCase()}`}
+                </div>
+                <GranularityToggle value={granularity} onChange={setGranularity} lang={lang as "fr" | "en"} />
               </div>
-              <div style={{ height: 240 }}>
+              <div style={{ height: 260 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats!.daily}>
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                  <BarChart data={series}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--pp-bg-border)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" minTickGap={20} />
                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                     <Tooltip />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -127,6 +131,38 @@ export default function PBMicrosoft() {
               </div>
             </div>
           )}
+
+          {(stats?.daily?.length ?? 0) > 0 && (
+            <div className="grid gap-3 lg:grid-cols-3">
+              {(["week", "month", "quarter"] as const).map((g) => {
+                const rows = bucketSeries(
+                  (stats?.daily ?? []).map((d) => ({ date: d.date, label: d.date, ...d })),
+                  g, lang as "fr" | "en", [],
+                );
+                return (
+                  <div key={g} className="pp-card" style={{ padding: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--pp-text-secondary)", marginBottom: 8 }}>
+                      {lang === "en" ? `${GRANULARITY_LABELS[g].en} trend` : `Tendance — ${GRANULARITY_LABELS[g].fr.toLowerCase()}`}
+                    </div>
+                    <div style={{ height: 190 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={rows} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--pp-bg-border)" vertical={false} />
+                          <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" minTickGap={16} />
+                          <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                          <Tooltip />
+                          <Area type="monotone" dataKey="emails_received" stackId="1" name={lang === "en" ? "Received" : "Reçus"} stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
+                          <Area type="monotone" dataKey="emails_sent" stackId="1" name={lang === "en" ? "Sent" : "Envoyés"} stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
+                          <Area type="monotone" dataKey="meetings" stackId="1" name={lang === "en" ? "Meetings" : "Réunions"} stroke="#9B7FE8" fill="#9B7FE8" fillOpacity={0.3} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
 
           <div className="grid gap-3 lg:grid-cols-2">
             {(stats?.upcomingMeetings?.length ?? 0) > 0 && (

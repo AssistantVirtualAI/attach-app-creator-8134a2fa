@@ -349,7 +349,7 @@ export const EXPECTED_TOOL_NAMES = [
   "search_client","get_client_profile","get_client_history","update_client","create_task","create_appointment","get_pending_tasks","get_upcoming_appointments","create_client",
   "read_emails","get_unread_emails","get_recent_emails","summarize_email","send_email","search_contact","propose_email_reply","summarize_inbox",
   "update_calendar_event","delete_calendar_event","get_calendar_today","get_calendar_week","get_upcoming_meetings",
-  "search_ms365_contacts","find_contact",
+  "search_ms365_contacts","find_contact","search_directory","list_company_directory",
   "list_teams_chats","create_teams_chat","send_teams_message",
   "navigate_to","show_client_in_app","open_call_detail",
   "get_daily_briefing","get_my_stats","get_performance_report","generate_voicemail_greeting","explain_feature","get_integration_status",

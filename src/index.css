@@ -411,6 +411,11 @@ All colors MUST be HSL.
 .recharts-wrapper {
   width: 100% !important;
 }
+/* recharts v3 renders the chart inside a 0-width helper div; restore it
+   so the surface (styled width:100%) can actually paint. */
+.recharts-responsive-container > div {
+  width: 100% !important;
+}
 .recharts-wrapper > .recharts-surface {
   max-width: 100%;
   max-height: 100%;

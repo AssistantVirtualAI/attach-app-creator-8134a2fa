@@ -8,6 +8,12 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { fmtDateTime } from "@/lib/planipret/brokerFormat";
 import GranularityToggle from "@/components/planipret/broker/GranularityToggle";
 import { bucketSeries, GRANULARITY_LABELS, type Granularity } from "@/lib/planipret/timeBuckets";
+import MailPanel from "@/components/planipret/broker/ms365/MailPanel";
+import TeamsPanel from "@/components/planipret/broker/ms365/TeamsPanel";
+import CalendarPanel from "@/components/planipret/broker/ms365/CalendarPanel";
+
+type Tab = "stats" | "mail" | "teams" | "calendar";
+
 
 type Stats = {
   connected?: boolean;

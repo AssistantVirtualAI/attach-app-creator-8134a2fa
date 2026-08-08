@@ -29,7 +29,9 @@ const PAGE_SIZE = 25;
 
 export default function PBMicrosoft() {
   const { lang } = useMplanipretLang();
+  const [tab, setTab] = useState<Tab>("stats");
   const [days, setDays] = useState(30);
+
   const [granularity, setGranularity] = useState<Granularity>("day");
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);

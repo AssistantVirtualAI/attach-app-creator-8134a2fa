@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { BarChart, Bar, Area, AreaChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { Mail, Inbox, Send, Calendar, Video, ExternalLink, Sparkles, X, Loader2, RefreshCw } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { fmtDateTime } from "@/lib/planipret/brokerFormat";
+import GranularityToggle from "@/components/planipret/broker/GranularityToggle";
+import { bucketSeries, GRANULARITY_LABELS, type Granularity } from "@/lib/planipret/timeBuckets";
 
 type Stats = {
   connected?: boolean;
@@ -22,6 +24,7 @@ const PAGE_SIZE = 25;
 export default function PBMicrosoft() {
   const { lang } = useMplanipretLang();
   const [days, setDays] = useState(30);
+  const [granularity, setGranularity] = useState<Granularity>("day");
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsErr, setStatsErr] = useState<string | null>(null);
@@ -65,6 +68,10 @@ export default function PBMicrosoft() {
   };
 
   const t = stats?.totals;
+  const series = bucketSeries(
+    (stats?.daily ?? []).map((d) => ({ date: d.date, label: d.date, ...d })),
+    granularity, lang as "fr" | "en", [],
+  );
   const filtered = search.trim()
     ? emails.filter((e) => JSON.stringify(e).toLowerCase().includes(search.trim().toLowerCase()))
     : emails;
@@ -82,6 +89,8 @@ export default function PBMicrosoft() {
           <option value={7}>{lang === "en" ? "Last 7 days" : "7 derniers jours"}</option>
           <option value={30}>{lang === "en" ? "Last 30 days" : "30 derniers jours"}</option>
           <option value={90}>{lang === "en" ? "Last 90 days" : "90 derniers jours"}</option>
+          <option value={180}>{lang === "en" ? "Last 6 months" : "6 derniers mois"}</option>
+          <option value={365}>{lang === "en" ? "Last 12 months" : "12 derniers mois"}</option>
         </select>
         <button onClick={() => { void loadStats(); void loadEmails(); }}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]"

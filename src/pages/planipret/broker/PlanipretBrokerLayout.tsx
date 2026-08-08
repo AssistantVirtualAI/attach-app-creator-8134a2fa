@@ -207,15 +207,8 @@ export default function PlanipretBrokerLayout() {
         <header className="pp-app-header sticky top-0 hidden md:flex items-center justify-between gap-4 px-5 xl:px-7 z-30" style={{ height: 64 }}>
           <h1 className="pp-heading truncate" style={{ fontWeight: 700, fontSize: 18 }}>{title}</h1>
           <div className="flex items-center gap-3">
-            <form
-              onSubmit={(e) => { e.preventDefault(); const v = q.trim(); if (v) navigate(`/planipret/broker/search?q=${encodeURIComponent(v)}`); }}
-              className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full"
-              style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
-              <Search className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} />
-              <input value={q} onChange={(e) => setQ(e.target.value)}
-                placeholder={lang === "en" ? "Search number, contact, keyword" : "Numéro, contact, mot-clé"}
-                className="bg-transparent outline-none text-[12.5px] w-[240px]" style={{ color: "var(--pp-text-primary)" }} />
-            </form>
+            <BrokerOmniSearch userId={userId} className="hidden lg:block w-[320px] xl:w-[380px]" />
+
             <PlanipretLangSwitch />
             <span className="capitalize hidden xl:inline" style={{ fontSize: 10.5, color: "var(--pp-text-muted)" }}>{dateLabel}</span>
           </div>

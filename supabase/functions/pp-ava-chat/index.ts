@@ -136,7 +136,7 @@ async function searchDirectory(
         Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ query: q, limit: 5, _user_id: userId }),
+      body: JSON.stringify({ query: q, limit: 5, _caller: "ava_chat", _user_id: userId }),
     });
     const j = await r.json().catch(() => ({}));
     return Array.isArray(j?.contacts) ? j.contacts : [];

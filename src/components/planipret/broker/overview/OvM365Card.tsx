@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { OvCard, OvEmpty, OV_COLORS, ovTooltip } from "./OvCard";
 import { PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import { fmtDateTime } from "@/lib/planipret/brokerFormat";
+import { bucketSeries, type Granularity } from "@/lib/planipret/timeBuckets";
 
 type Stats = {
   connected?: boolean;
@@ -13,7 +14,7 @@ type Stats = {
   upcomingMeetings?: Array<{ subject: string; start: string; attendees: number; is_online: boolean; join_url: string | null }>;
 };
 
-export default function OvM365Card({ days, lang }: { days: number; lang: "fr" | "en" }) {
+export default function OvM365Card({ days, lang, granularity = "day" }: { days: number; lang: "fr" | "en"; granularity?: Granularity }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "off">("loading");
 
@@ -31,10 +32,16 @@ export default function OvM365Card({ days, lang }: { days: number; lang: "fr" | 
   }, [days]);
 
   const t = stats?.totals;
-  const daily = (stats?.daily ?? []).map((d) => ({
-    label: new Date(d.date).toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { day: "2-digit", month: "short" }),
-    received: d.emails_received, sent: d.emails_sent, meetings: d.meetings,
-  }));
+  const daily = bucketSeries(
+    (stats?.daily ?? []).map((d) => ({
+      date: d.date,
+      label: new Date(d.date).toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { day: "2-digit", month: "short" }),
+      received: d.emails_received, sent: d.emails_sent, meetings: d.meetings,
+    })),
+    granularity,
+    lang,
+    [],
+  );
 
   return (
     <>

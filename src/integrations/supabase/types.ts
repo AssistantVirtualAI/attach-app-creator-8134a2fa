@@ -8890,6 +8890,48 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_did_reconcile_reports: {
+        Row: {
+          alert_error: string | null
+          alert_sent: boolean
+          broker_count: number
+          created_at: string
+          domain: string
+          id: string
+          mismatch_count: number
+          orphan_ns_dids: Json
+          rows: Json
+          summary: Json
+          triggered_by: string
+        }
+        Insert: {
+          alert_error?: string | null
+          alert_sent?: boolean
+          broker_count?: number
+          created_at?: string
+          domain?: string
+          id?: string
+          mismatch_count?: number
+          orphan_ns_dids?: Json
+          rows?: Json
+          summary?: Json
+          triggered_by?: string
+        }
+        Update: {
+          alert_error?: string | null
+          alert_sent?: boolean
+          broker_count?: number
+          created_at?: string
+          domain?: string
+          id?: string
+          mismatch_count?: number
+          orphan_ns_dids?: Json
+          rows?: Json
+          summary?: Json
+          triggered_by?: string
+        }
+        Relationships: []
+      }
       planipret_did_routing_snapshots: {
         Row: {
           created_at: string

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { callPeer, msgPeer } from "@/lib/planipret/brokerFormat";
 
-export type OvDaily = { date: string; label: string; inbound: number; outbound: number; missed: number; sent: number; received: number; avg: number };
+export type OvDaily = { date: string; label: string; inbound: number; outbound: number; missed: number; sent: number; received: number; avg: number; recorded: number; transcribed: number; analyzed: number };
 export type OvHour = { hour: string; calls: number };
 export type OvRecWeek = { label: string; recorded: number; transcribed: number; analyzed: number };
 export type OvContact = { peer: string; calls: number; seconds: number };
@@ -81,13 +81,16 @@ export function useBrokerOverview(userId: string, days: number, lang: "fr" | "en
       buckets.set(key, {
         date: key,
         label: d.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { day: "2-digit", month: "short" }),
-        inbound: 0, outbound: 0, missed: 0, sent: 0, received: 0, avg: 0,
+        inbound: 0, outbound: 0, missed: 0, sent: 0, received: 0, avg: 0, recorded: 0, transcribed: 0, analyzed: 0,
       });
     }
     const durAcc = new Map<string, { t: number; n: number }>();
     for (const c of curCalls) {
       const b = buckets.get(dayKey(c.created_at)); if (!b) continue;
       if (isMissed(c)) b.missed++; else if (c.direction === "outbound") b.outbound++; else b.inbound++;
+      if (c.has_recording) b.recorded++;
+      if (c.has_transcript) b.transcribed++;
+      if (c.analyzed_at) b.analyzed++;
       const acc = durAcc.get(b.date) ?? { t: 0, n: 0 };
       acc.t += Number(c.duration_seconds ?? 0); acc.n++; durAcc.set(b.date, acc);
     }

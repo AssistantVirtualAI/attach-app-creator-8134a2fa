@@ -440,7 +440,7 @@ Deno.serve(async (req) => {
 
       const logMessage = async (threadId: string | null) => {
         try {
-          const { data: logged } = await supabase
+          const { data: logged, error: logError } = await supabase
             .from("planipret_phone_messages")
             .insert({
               user_id: ctx.userId,
@@ -448,18 +448,21 @@ Deno.serve(async (req) => {
               to_number: destination,
               from_number: fromNumber,
               body: message,
-              type,
+              status: "sent",
+              metadata: { type },
               thread_id: threadId,
               sent_at: new Date().toISOString(),
             })
             .select("id")
             .maybeSingle();
+          if (logError) console.error("[pp-ns-sms] log insert error:", logError.message);
           return logged?.id ?? null;
         } catch (logErr) {
           console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
           return null;
         }
       };
+
 
       if (!nsRejected) {
         const resolvedThreadId = thread_id

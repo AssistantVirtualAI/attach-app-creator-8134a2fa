@@ -213,6 +213,30 @@ Deno.serve(async (req) => {
         threads = Array.isArray(raw) ? raw : (raw?.messagesessions ?? raw?.data ?? []);
       }
 
+      // Historique local (planipret_phone_messages) : garantit que les SMS
+      // envoyés/reçus restent visibles même si NS-API n'expose pas la session.
+      const localRows = await getLocalMessages(supabase, ctx.userId);
+      const nsPeers = new Set(
+        threads
+          .map((t: any) => digitsOnly(t.destination ?? t["messagesession-destination"] ?? t.remote_party ?? t.phonenumber ?? t.contact ?? ""))
+          .filter(Boolean),
+      );
+      const byPeer = new Map<string, any>();
+      for (const row of localRows) {
+        const peer = localPeer(row);
+        const key = digitsOnly(peer);
+        if (!key || nsPeers.has(key) || byPeer.has(key)) continue;
+        byPeer.set(key, {
+          id: row.ns_thread_id ?? `local:${peer}`,
+          messagesession_id: row.ns_thread_id ?? `local:${peer}`,
+          destination: peer,
+          last_message: row.body,
+          last_message_at: row.sent_at,
+          unread: 0,
+          source: "local",
+        });
+      }
+      threads = [...threads, ...byPeer.values()];
 
       // Best-effort Maestro inbox enrichment.
       let maestroInbox: any[] = [];
@@ -233,24 +257,54 @@ Deno.serve(async (req) => {
       const threadId = pick("thread_id") as string | undefined;
       if (!threadId) return jsonResponse({ error: "thread_id requis" }, 400);
       const limit = (pick("limit") as string) ?? "100";
-      const res = await nsFetch(
-        `${userBase}/messagesessions/${encodeURIComponent(threadId)}/messages?limit=${limit}`,
-        { method: "GET" }
-      );
       let messages: any[] = [];
-      if (!res.ok) {
-        const txt = await res.text().catch(() => "");
-        console.warn(`[pp-ns-sms] messages ${res.status}:`, txt.slice(0, 300));
-      } else {
-        const raw = await res.json().catch(() => null);
-        messages = Array.isArray(raw) ? raw : (raw?.messages ?? raw?.data ?? []);
+      if (!threadId.startsWith("local:")) {
+        const res = await nsFetch(
+          `${userBase}/messagesessions/${encodeURIComponent(threadId)}/messages?limit=${limit}`,
+          { method: "GET" }
+        );
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          console.warn(`[pp-ns-sms] messages ${res.status}:`, txt.slice(0, 300));
+        } else {
+          const raw = await res.json().catch(() => null);
+          messages = Array.isArray(raw) ? raw : (raw?.messages ?? raw?.data ?? []);
+        }
       }
 
+      const phoneHint = (pick("phone_number") as string | undefined)
+        ?? (threadId.startsWith("local:") ? threadId.slice(6) : undefined);
 
+      // Fusion de l'historique local (dédupliqué par corps + minute).
+      try {
+        const localRows = await getLocalMessages(supabase, ctx.userId);
+        const hintKey = digitsOnly(phoneHint);
+        const seen = new Set(
+          messages.map((m: any) => `${String(m.text ?? m.message ?? m.body ?? "").trim()}|${String(m.timestamp ?? m.created_at ?? "").slice(0, 16)}`),
+        );
+        const merged = localRows
+          .filter((row: any) => row.ns_thread_id === threadId || (hintKey && digitsOnly(localPeer(row)) === hintKey))
+          .map((row: any) => ({
+            id: row.id,
+            direction: row.direction,
+            from: row.from_number,
+            to: row.to_number,
+            "from-number": row.from_number,
+            text: row.body,
+            body: row.body,
+            timestamp: row.sent_at,
+            source: "local",
+          }))
+          .filter((m: any) => !seen.has(`${String(m.text).trim()}|${String(m.timestamp).slice(0, 16)}`));
+        messages = [...messages, ...merged].sort(
+          (a: any, b: any) => +new Date(a.timestamp ?? a.created_at ?? 0) - +new Date(b.timestamp ?? b.created_at ?? 0),
+        );
+      } catch (e) {
+        console.warn("[pp-ns-sms] local merge failed:", e);
+      }
 
       // Best-effort Maestro conversation enrichment (needs a phone hint).
       let maestroMessages: any[] = [];
-      const phoneHint = pick("phone_number") as string | undefined;
       if (ctx.maestroBrokerId && phoneHint) {
         try {
           const cfg = await getMaestroTelecomConfig(supabase);
@@ -266,6 +320,7 @@ Deno.serve(async (req) => {
       }
       return jsonResponse({ ok: true, count: messages.length, messages, maestro_messages: maestroMessages });
     }
+
 
 
     if (action === "sms-numbers") {

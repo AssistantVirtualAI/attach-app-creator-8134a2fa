@@ -8,7 +8,7 @@
 // token-based matching (see _shared/contactMatch.ts).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { rankContacts, tokenize, type UnifiedContact } from "../_shared/contactMatch.ts";
+import { rankContacts, tokenize, normalizeText, digitsOnly, type UnifiedContact } from "../_shared/contactMatch.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -161,10 +161,35 @@ Deno.serve(async (req) => {
     }
     if (!userId) return j({ success: false, error: "unauthorized" }, 401);
 
+    const action = str(body?.action || "search");
+
+    // ---- Audit history: consult / purge -------------------------------
+    if (action === "audit_list") {
+      const { data, error } = await admin
+        .from("planipret_ava_directory_audit")
+        .select("id, caller, query, filters, sources_queried, results_count, top_result, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(Math.min(Number(body?.limit ?? 100) || 100, 500));
+      if (error) return j({ success: false, error: error.message, entries: [] }, 200);
+      return j({ success: true, entries: data ?? [] });
+    }
+    if (action === "audit_purge") {
+      const { error, count } = await admin
+        .from("planipret_ava_directory_audit")
+        .delete({ count: "exact" })
+        .eq("user_id", userId);
+      if (error) return j({ success: false, error: error.message }, 200);
+      return j({ success: true, purged: count ?? 0 });
+    }
+
     const query = str(body?.query ?? body?.name ?? body?.q);
     const limit = Math.min(Number(body?.limit ?? 10) || 10, 50);
     const sourcesReq: string[] | null = Array.isArray(body?.sources) && body.sources.length ? body.sources : null;
     const want = (s: string) => !sourcesReq || sourcesReq.includes(s);
+    const companyFilter = normalizeText(str(body?.company));
+    const phoneFilter = digitsOnly(body?.phone);
+    const caller = str(body?._caller || body?.caller) || "app";
 
     const cacheKey = `${userId}`;
     const hit = cache.get(cacheKey);
@@ -172,9 +197,9 @@ Deno.serve(async (req) => {
 
     if (!pool) {
       const [local, ns, maestro] = await Promise.allSettled([
-        want("device") || want("microsoft") ? fromLocalTable(admin, userId, "") : Promise.resolve([]),
-        want("directory") ? fromNsDirectory(userId) : Promise.resolve([]),
-        want("maestro") ? fromMaestro(userId, "") : Promise.resolve([]),
+        fromLocalTable(admin, userId, ""),
+        fromNsDirectory(userId),
+        fromMaestro(userId, ""),
       ]);
       pool = [
         ...(local.status === "fulfilled" ? local.value : []),
@@ -184,32 +209,62 @@ Deno.serve(async (req) => {
       cache.set(cacheKey, { at: Date.now(), v: pool });
     }
 
+    // ---- Filters ------------------------------------------------------
+    let scope = pool.filter((c) => want(c.source));
+    if (companyFilter) scope = scope.filter((c) => normalizeText(c.company).includes(companyFilter));
+    if (phoneFilter) {
+      scope = scope.filter((c) =>
+        (digitsOnly(c.phone) + digitsOnly(c.extension)).includes(phoneFilter));
+    }
+
+    const logAudit = async (count: number, top?: string) => {
+      try {
+        await admin.from("planipret_ava_directory_audit").insert({
+          user_id: userId,
+          caller,
+          query,
+          filters: {
+            sources: sourcesReq ?? "all",
+            company: str(body?.company) || null,
+            phone: str(body?.phone) || null,
+          },
+          sources_queried: Array.from(new Set(scope.map((c) => c.source))),
+          results_count: count,
+          top_result: top ?? null,
+        });
+      } catch (_) { /* auditing must never break search */ }
+    };
+
     if (!query) {
+      const list = scope.slice(0, limit);
+      await logAudit(list.length, list[0]?.name);
       return j({
         success: true,
         query: "",
-        count: Math.min(pool.length, limit),
-        total_indexed: pool.length,
-        contacts: pool.slice(0, limit),
+        count: list.length,
+        total_indexed: scope.length,
+        contacts: list,
       });
     }
 
-    let ranked = rankContacts(pool, query, limit);
+    let ranked = rankContacts(scope, query, limit);
 
     // Outlook / people search only when the local pool is thin — it is a live
     // Graph call and the pool already contains synced Microsoft contacts.
     if (ranked.length < 3 && want("microsoft")) {
       const ms = await fromMicrosoft(userId, query).catch(() => []);
-      if (ms.length) ranked = rankContacts([...pool, ...ms], query, limit);
+      if (ms.length) ranked = rankContacts([...scope, ...ms], query, limit);
     }
+
+    await logAudit(ranked.length, ranked[0]?.name);
 
     return j({
       success: true,
       query,
       count: ranked.length,
-      total_indexed: pool.length,
+      total_indexed: scope.length,
       contacts: ranked,
-      sources_indexed: Array.from(new Set(pool.map((c) => c.source))),
+      sources_indexed: Array.from(new Set(scope.map((c) => c.source))),
     });
   } catch (e) {
     console.error("[pp-contact-search] fatal", (e as any)?.message);

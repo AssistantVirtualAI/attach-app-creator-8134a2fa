@@ -8172,6 +8172,42 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_ava_directory_audit: {
+        Row: {
+          caller: string
+          created_at: string
+          filters: Json
+          id: string
+          query: string
+          results_count: number
+          sources_queried: string[]
+          top_result: string | null
+          user_id: string
+        }
+        Insert: {
+          caller?: string
+          created_at?: string
+          filters?: Json
+          id?: string
+          query?: string
+          results_count?: number
+          sources_queried?: string[]
+          top_result?: string | null
+          user_id: string
+        }
+        Update: {
+          caller?: string
+          created_at?: string
+          filters?: Json
+          id?: string
+          query?: string
+          results_count?: number
+          sources_queried?: string[]
+          top_result?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_ava_email_analyses: {
         Row: {
           broker_id: string

@@ -165,14 +165,22 @@ function firstText(...values: unknown[]) {
 }
 
 /** Unified search across device contacts, company directory, Maestro clients and M365. */
-async function unifiedSearch(ctx: Ctx, query: string, opts: { limit?: number; sources?: string[] } = {}) {
+async function unifiedSearch(ctx: Ctx, query: string, opts: { limit?: number; sources?: string[]; company?: string; phone?: string } = {}) {
   const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-contact-search`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ query, limit: opts.limit ?? 10, sources: opts.sources, _user_id: ctx.userId }),
+    body: JSON.stringify({
+      query,
+      limit: opts.limit ?? 10,
+      sources: opts.sources,
+      company: opts.company,
+      phone: opts.phone,
+      _caller: "ava_voice",
+      _user_id: ctx.userId,
+    }),
   });
   const j = await r.json().catch(() => ({}));
   return Array.isArray(j?.contacts) ? j.contacts : [];

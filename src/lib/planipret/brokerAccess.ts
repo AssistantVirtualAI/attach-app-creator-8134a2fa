@@ -39,10 +39,10 @@ export async function resolveBrokerAccess(): Promise<BrokerAccess> {
     const { data: isMember } = await supabase.rpc("is_planipret_member", { _user_id: user.id });
     if (!isMember) return { state: "denied", reason: "no-profile" };
 
-    return { state: "ready", userId: user.id, profile: { user_id: user.id, email: user.email, full_name: user.email, role: "broker" } };
+    return { state: "ready", userId: user.id, authUserId: user.id, profile: { user_id: user.id, email: user.email, full_name: user.email, role: "broker" } };
   }
 
-  return { state: "ready", userId: user.id, profile };
+  return { state: "ready", userId: (profile as any).id ?? user.id, authUserId: user.id, profile };
 }
 
 /**

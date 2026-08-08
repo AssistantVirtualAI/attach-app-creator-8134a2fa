@@ -164,6 +164,7 @@ export default function App() {
                     <Route path="more" element={<MMore />} />
                     <Route path="pipeline" element={<MPipeline />} />
                     <Route path="search" element={<MSearch />} />
+                    <Route path="directory" element={<MAvaDirectory />} />
                     <Route path="stats" element={<MStats />} />
                     <Route path="ava" element={<MAvaChat />} />
                     <Route path="change-password" element={<MChangePassword />} />

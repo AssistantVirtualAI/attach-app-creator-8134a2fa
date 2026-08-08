@@ -467,7 +467,7 @@ Deno.serve(async (req) => {
       const nsRejected = !res.ok || !!nsError || nsStatus === "failed" || nsStatus === "error"
         || result?.ok === false || result?.success === false;
 
-      const logMessage = async (threadId: string | null) => {
+      const logMessage = async (threadId: string | null, nsMsgId: string | null = null) => {
         try {
           const { data: logged, error: logError } = await supabase
             .from("planipret_phone_messages")
@@ -477,8 +477,8 @@ Deno.serve(async (req) => {
               to_number: destination,
               from_number: fromNumber,
               body: message,
-              status: "sent",
-              metadata: { type },
+              status: "sent", ns_message_id: nsMsgId,
+              metadata: { type }, ns_message_id: result?.id ?? result?.message_id ?? null,
               thread_id: threadId,
               sent_at: new Date().toISOString(),
             })
@@ -499,7 +499,7 @@ Deno.serve(async (req) => {
           ?? result?.["messagesession-id"]
           ?? result?.messagesession
           ?? sessionId;
-        const messageId = await logMessage(resolvedThreadId);
+        const messageId = await logMessage(resolvedThreadId, result?.id ?? result?.message_id ?? result?.["message-id"]);
         // Synchronisation Maestro : on NE renvoie PAS le SMS via Maestro
         // (mauvais afficheur) — on pousse seulement l'enregistrement pour que
         // la conversation apparaisse dans Maestro avec le vrai DID NS.

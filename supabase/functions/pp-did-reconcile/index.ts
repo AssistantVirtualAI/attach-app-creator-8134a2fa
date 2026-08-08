@@ -69,6 +69,8 @@ Deno.serve(async (req) => {
       const ext = String(p.extension ?? p.ns_extension ?? "").split("@")[0].trim();
       const nsDids = ext ? (nsByExt.get(ext) ?? []) : [];
       let maestroDid = "";
+      let maestroSmsDid = "";
+      let maestroExt = "";
       let maestroStatus = "not_checked";
 
       if (cfg.url && cfg.key) {
@@ -76,39 +78,44 @@ Deno.serve(async (req) => {
           const auth = await getBrokerAuth(admin, p.user_id);
           const r = await maestroFetch(cfg, {
             method: "GET",
-            path: `/api/v1/users/${encodeURIComponent(String(p.maestro_broker_id))}/sip`,
+            path: `/users/${encodeURIComponent(String(p.maestro_broker_id))}/sip`,
             token: auth.token,
             brokerId: String(p.maestro_broker_id),
           });
           maestroStatus = r.ok ? "ok" : `http_${r.status}`;
-          const d = r.data ?? {};
-          maestroDid = digits(
-            d.did ?? d.number ?? d.phone_number ?? d.caller_id ?? d.callerid
-              ?? d?.data?.did ?? d?.data?.number ?? d?.data?.phone_number ?? "",
-          );
+          const pu = (r.data?.sip?.provider_user ?? r.data?.data?.sip?.provider_user ?? {}) as any;
+          maestroDid = digits(pu.phone_number);
+          maestroSmsDid = digits(pu.sms_number ?? pu.phone_number);
+          maestroExt = String(pu.provider_external_user_id ?? "").trim();
         } catch (e) {
           maestroStatus = `error:${String((e as Error).message).slice(0, 60)}`;
         }
       }
 
-      const match = !!maestroDid && nsDids.includes(maestroDid);
+      const match = !!maestroSmsDid && nsDids.includes(maestroSmsDid);
+      const extMatch = !!ext && !!maestroExt && ext === maestroExt;
       const row = {
         email: p.email,
         name: p.full_name,
         extension: ext || null,
         maestro_broker_id: p.maestro_broker_id,
+        maestro_extension: maestroExt || null,
         ns_dids: nsDids,
         maestro_did: maestroDid || null,
+        maestro_sms_did: maestroSmsDid || null,
+        ns_did_of_maestro_ext: maestroExt ? (nsByExt.get(maestroExt) ?? []) : [],
         maestro_status: maestroStatus,
         status: !ext
           ? "no_extension"
           : nsDids.length === 0
             ? "no_ns_did"
-            : !maestroDid
+            : !maestroSmsDid
               ? "no_maestro_did"
-              : match
+              : match && extMatch
                 ? "match"
-                : "mismatch",
+                : !extMatch
+                  ? "extension_mismatch"
+                  : "did_mismatch",
       };
       if (!onlyMismatch || row.status !== "match") rows.push(row);
     }

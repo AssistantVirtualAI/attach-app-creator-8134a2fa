@@ -86,7 +86,13 @@ export default function TeamsPanel({ lang }: { lang: Lang }) {
 
   const q = query.trim().toLowerCase();
   const filteredChats = useMemo(() => !q ? chats : chats.filter((c) => JSON.stringify(c).toLowerCase().includes(q)), [chats, q]);
-  const filteredPeople = useMemo(() => !q ? people : people.filter((p) => `${p.displayName ?? ""} ${p.mail ?? ""}`.toLowerCase().includes(q)), [people, q]);
+  const pName = (p: any) => p.name ?? p.displayName ?? "";
+  const pMail = (p: any) => p.mail ?? p.email ?? p.userPrincipalName ?? "";
+  const filteredPeople = useMemo(
+    () => (!q ? people : people.filter((p) => `${pName(p)} ${pMail(p)} ${p.title ?? ""}`.toLowerCase().includes(q))),
+    [people, q],
+  );
+
 
   if (err === "ms365_not_connected") {
     return <div className="pp-card"><PPEmptyState icon={<Users className="w-5 h-5" />}
@@ -135,13 +141,27 @@ export default function TeamsPanel({ lang }: { lang: Lang }) {
           ) : tab === "people" ? (
             filteredPeople.length === 0
               ? <PPEmptyState icon={<Users className="w-5 h-5" />} title={en ? "No people" : "Aucune personne"} />
-              : filteredPeople.slice(0, 200).map((p) => (
-                <button key={p.id} onClick={() => void startDirect(p)} className="w-full text-left px-3 py-2.5"
-                  style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
-                  <div className="truncate" style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>{p.displayName}</div>
-                  <div className="truncate" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{p.mail ?? p.userPrincipalName}</div>
-                </button>
-              ))
+              : <>
+                <div className="px-3 py-1.5" style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>
+                  {filteredPeople.length} {en ? "people" : "personnes"}
+                </div>
+                {filteredPeople.map((p) => (
+                  <button key={p.id} onClick={() => void startDirect(p)} className="w-full text-left px-3 py-2.5 flex items-center gap-2"
+                    style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
+                    <span className="shrink-0 rounded-full" style={{ width: 8, height: 8, background: presenceColor(p.presence?.availability) }} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate" style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>{pName(p)}</span>
+                      <span className="block truncate" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+                        {pMail(p)}{p.title ? ` · ${p.title}` : ""}
+                      </span>
+                    </span>
+                    <span className="shrink-0" style={{ fontSize: 10.5, color: "var(--pp-text-muted)" }}>
+                      {presenceLabel(p.presence?.availability, en)}
+                    </span>
+                  </button>
+                ))}
+              </>
+
           ) : (
             teams.length === 0
               ? <PPEmptyState icon={<Hash className="w-5 h-5" />} title={en ? "No teams" : "Aucune équipe"} />
@@ -214,14 +234,15 @@ export default function TeamsPanel({ lang }: { lang: Lang }) {
             <input value={query} onChange={(e) => setQuery(e.target.value)} className="pp-input w-full" style={{ fontSize: 13, marginTop: 8 }}
               placeholder={en ? "Search people…" : "Rechercher des personnes…"} />
             <div className="overflow-y-auto" style={{ maxHeight: 280, marginTop: 8 }}>
-              {filteredPeople.slice(0, 150).map((p) => {
+              {filteredPeople.map((p) => {
                 const on = selected.has(p.id);
                 return (
                   <button key={p.id} onClick={() => setSelected((s) => { const n = new Set(s); on ? n.delete(p.id) : n.add(p.id); return n; })}
                     className="w-full text-left px-3 py-2 flex items-center justify-between" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
-                    <span style={{ fontSize: 13, color: "var(--pp-text-primary)" }}>{p.displayName}
-                      <span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}> · {p.mail ?? p.userPrincipalName}</span>
+                    <span style={{ fontSize: 13, color: "var(--pp-text-primary)" }}>{pName(p)}
+                      <span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}> · {pMail(p)}</span>
                     </span>
+
                     <span style={{ fontSize: 12, color: on ? "var(--pp-brand-accent-2)" : "var(--pp-text-muted)", fontWeight: on ? 700 : 400 }}>
                       {on ? "✓" : "+"}
                     </span>
@@ -253,6 +274,28 @@ export default function TeamsPanel({ lang }: { lang: Lang }) {
       toast.error(res.error || error?.message || (en ? "Could not open the chat" : "Impossible d'ouvrir la conversation"));
       return;
     }
-    openThread({ kind: "chat", id: res.chat_id, title: p.displayName });
+    openThread({ kind: "chat", id: res.chat_id, title: pName(p) || (en ? "Chat" : "Conversation") });
   }
 }
+
+const PRESENCE: Record<string, { color: string; fr: string; en: string }> = {
+  Available: { color: "#10b981", fr: "Disponible", en: "Available" },
+  AvailableIdle: { color: "#10b981", fr: "Disponible", en: "Available" },
+  Busy: { color: "#dc2626", fr: "Occupé", en: "Busy" },
+  BusyIdle: { color: "#dc2626", fr: "Occupé", en: "Busy" },
+  DoNotDisturb: { color: "#b91c1c", fr: "Ne pas déranger", en: "Do not disturb" },
+  Away: { color: "#f59e0b", fr: "Absent", en: "Away" },
+  BeRightBack: { color: "#f59e0b", fr: "De retour bientôt", en: "Be right back" },
+  Offline: { color: "#9ca3af", fr: "Hors ligne", en: "Offline" },
+  PresenceUnknown: { color: "#9ca3af", fr: "—", en: "—" },
+};
+
+function presenceColor(a?: string) {
+  return PRESENCE[a ?? ""]?.color ?? "#9ca3af";
+}
+function presenceLabel(a?: string, en?: boolean) {
+  const p = PRESENCE[a ?? ""];
+  if (!p) return a ?? "—";
+  return en ? p.en : p.fr;
+}
+

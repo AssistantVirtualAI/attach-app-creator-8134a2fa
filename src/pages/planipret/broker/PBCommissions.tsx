@@ -6,7 +6,7 @@ import CommissionDashboard from "@/components/planipret/commissions/CommissionDa
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 
 export default function PBCommissions() {
-  const { userId, profile } = useOutletContext<BrokerCtx>();
+  const { authUserId, profile } = useOutletContext<BrokerCtx>();
   const { lang } = useMplanipretLang();
   return (
     <PAPage>
@@ -18,7 +18,7 @@ export default function PBCommissions() {
       <CommissionDashboard
         lang={lang === "en" ? "en" : "fr"}
         scope="broker"
-        brokerUserId={userId}
+        brokerUserId={authUserId}
         brokerName={(profile as any)?.full_name}
       />
     </PAPage>

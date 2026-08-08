@@ -12,10 +12,12 @@ import { supabase } from "@/integrations/supabase/client";
 export type BrokerAccess =
   | { state: "anon" }
   | { state: "denied"; reason: "lemtel" | "no-profile" }
-  | { state: "ready"; userId: string; profile: any };
+  // `userId` is the id used by telephony rows (planipret_profiles.id),
+  // `authUserId` is the Supabase auth uid.
+  | { state: "ready"; userId: string; authUserId: string; profile: any };
 
 const PROFILE_FIELDS =
-  "user_id, full_name, email, extension, role, language, mobile_app_enabled, maestro_broker_id";
+  "id, user_id, full_name, email, extension, role, language, mobile_app_enabled, maestro_broker_id";
 
 export async function resolveBrokerAccess(): Promise<BrokerAccess> {
   const { data: { session } } = await supabase.auth.getSession();

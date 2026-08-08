@@ -415,6 +415,7 @@ All colors MUST be HSL.
    so the surface (styled width:100%) can actually paint. */
 .recharts-responsive-container > div {
   width: 100% !important;
+  height: 100% !important;
 }
 .recharts-wrapper > .recharts-surface {
   max-width: 100%;

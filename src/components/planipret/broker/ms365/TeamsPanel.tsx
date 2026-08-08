@@ -234,14 +234,15 @@ export default function TeamsPanel({ lang }: { lang: Lang }) {
             <input value={query} onChange={(e) => setQuery(e.target.value)} className="pp-input w-full" style={{ fontSize: 13, marginTop: 8 }}
               placeholder={en ? "Search people…" : "Rechercher des personnes…"} />
             <div className="overflow-y-auto" style={{ maxHeight: 280, marginTop: 8 }}>
-              {filteredPeople.slice(0, 150).map((p) => {
+              {filteredPeople.map((p) => {
                 const on = selected.has(p.id);
                 return (
                   <button key={p.id} onClick={() => setSelected((s) => { const n = new Set(s); on ? n.delete(p.id) : n.add(p.id); return n; })}
                     className="w-full text-left px-3 py-2 flex items-center justify-between" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
-                    <span style={{ fontSize: 13, color: "var(--pp-text-primary)" }}>{p.displayName}
-                      <span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}> · {p.mail ?? p.userPrincipalName}</span>
+                    <span style={{ fontSize: 13, color: "var(--pp-text-primary)" }}>{pName(p)}
+                      <span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}> · {pMail(p)}</span>
                     </span>
+
                     <span style={{ fontSize: 12, color: on ? "var(--pp-brand-accent-2)" : "var(--pp-text-muted)", fontWeight: on ? 700 : 400 }}>
                       {on ? "✓" : "+"}
                     </span>

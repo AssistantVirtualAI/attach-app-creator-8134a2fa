@@ -316,66 +316,11 @@ Deno.serve(async (req) => {
 
 
 
-      // ---- Voie 1 : Maestro Telecom (source de vérité de l'historique) ----
-      // Scott (Maestro) : `POST /users/{id}/messages` ENVOIE réellement le SMS.
-      // On l'utilise donc comme unique voie d'envoi quand le courtier est lié,
-      // en forçant son DID comme expéditeur. NS-API sert de repli.
-      if (ctx.maestroBrokerId) {
-        try {
-          const cfg = await getMaestroTelecomConfig(supabase);
-          if (isMaestroTelecomConfigured(cfg)) {
-            const r = await maestroTelecomFetch<any>(
-              cfg,
-              `/users/${encodeURIComponent(ctx.maestroBrokerId)}/messages`,
-              {
-                method: "POST",
-                body: {
-                  to_user_number: destination,
-                  message,
-                  // Force l'affichage du DID du courtier plutôt qu'un numéro Maestro générique.
-                  from: fromNumber,
-                  from_number: fromNumber,
-                  from_did: fromNumber,
-                },
-              },
-            );
-            if (r.ok) {
-              try {
-                await supabase.from("planipret_phone_messages").insert({
-                  user_id: ctx.userId,
-                  direction: "outbound",
-                  to_number: destination,
-                  from_number: fromNumber,
-                  body: message,
-                  type,
-                  ns_thread_id: thread_id ?? null,
-                  sent_at: new Date().toISOString(),
-                });
-              } catch (logErr) {
-                console.warn("[pp-ns-sms] maestro log insert failed (non-fatal):", logErr);
-              }
-              return jsonResponse({
-                ok: true,
-                via: "maestro",
-                result: r.data,
-                from: fromNumber,
-                to: destination,
-                thread_id: thread_id ?? null,
-              });
-            }
-            console.warn("[pp-ns-sms] Maestro send failed, fallback NS-API", r.status, r.error);
-          }
-        } catch (e) {
-          console.warn("[pp-ns-sms] Maestro send error, fallback NS-API:", e);
-        }
-      }
-
-      // ---- Voie 2 (repli) : NS-API v2 -------------------------------------
-      // NS-API v2 SMS: POST /users/{ext}/messagesessions/messages creates the
-
-      // session (if needed) and sends the message in one shot. This is the
-      // endpoint NetSapiens actually accepts — POSTing to /messagesessions
-      // directly returns HTTP 500 on most tenants.
+      // ---- Voie 1 : NS-API v2 (DID NetSapiens du courtier) ----------------
+      // On envoie TOUJOURS via NS-API en priorité : c'est la seule voie qui
+      // respecte `from-number` (le DID réel du courtier). Maestro
+      // `POST /users/{id}/messages` envoie depuis un numéro générique Maestro
+      // et sert donc uniquement de repli.
       const nsBody: Record<string, unknown> = {
         type: type === "chat" ? "chat" : "sms",
         destination,
@@ -405,64 +350,90 @@ Deno.serve(async (req) => {
       let result: any = null;
       try { result = lastText ? JSON.parse(lastText) : {}; } catch { result = { raw: lastText }; }
 
-      if (!res.ok) {
-        console.error("[pp-ns-sms] NS send failed", res.status, path, lastText);
-        return jsonResponse(
-          { ok: false, error: `Envoi SMS refusé (${res.status})`, status: res.status, body: lastText, from: fromNumber, to: destination, endpoint: path },
-          200,
-        );
-      }
-
-      // NS-API returns HTTP 200 even when the message failed downstream —
-      // inspect result body for explicit error/failure flags before claiming success.
       const nsError = result?.error ?? result?.errorMessage ?? result?.error_message ?? result?.message?.error;
       const nsStatus = String(result?.status ?? result?.state ?? "").toLowerCase();
-      if (nsError || nsStatus === "failed" || nsStatus === "error" || result?.ok === false || result?.success === false) {
-        console.error("[pp-ns-sms] NS send returned 200 with error body:", result);
-        return jsonResponse(
-          { ok: false, error: nsError ?? `NS-API a rejeté le SMS (status=${nsStatus || "unknown"})`, ns_result: result, from: fromNumber, to: destination },
-          200,
-        );
+      const nsRejected = !res.ok || !!nsError || nsStatus === "failed" || nsStatus === "error"
+        || result?.ok === false || result?.success === false;
+
+      const logMessage = async (threadId: string | null) => {
+        try {
+          const { data: logged } = await supabase
+            .from("planipret_phone_messages")
+            .insert({
+              user_id: ctx.userId,
+              direction: "outbound",
+              to_number: destination,
+              from_number: fromNumber,
+              body: message,
+              type,
+              ns_thread_id: threadId,
+              sent_at: new Date().toISOString(),
+            })
+            .select("id")
+            .maybeSingle();
+          return logged?.id ?? null;
+        } catch (logErr) {
+          console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
+          return null;
+        }
+      };
+
+      if (!nsRejected) {
+        const resolvedThreadId = thread_id
+          ?? result?.messagesession_id
+          ?? result?.["messagesession-id"]
+          ?? result?.messagesession
+          ?? sessionId;
+        const messageId = await logMessage(resolvedThreadId);
+        return jsonResponse({ ok: true, via: "ns", result, message_id: messageId, from: fromNumber, to: destination, thread_id: resolvedThreadId });
       }
 
-      const resolvedThreadId = thread_id
-        ?? result?.messagesession_id
-        ?? result?.["messagesession-id"]
-        ?? result?.messagesession
-        ?? sessionId;
+      console.warn("[pp-ns-sms] NS send failed, fallback Maestro", res.status, nsError ?? lastText?.slice(0, 200));
 
-      try {
-        const { data: logged } = await supabase
-          .from("planipret_phone_messages")
-          .insert({
-            user_id: ctx.userId,
-            direction: "outbound",
-            to_number: destination,
-            from_number: fromNumber,
-            body: message,
-            type,
-            ns_thread_id: resolvedThreadId,
-            sent_at: new Date().toISOString(),
-          })
-          .select("id")
-          .maybeSingle();
-        // Pas de mirror vers maestro-sync-message ici : ce chemin est le repli
-        // NS-API (Maestro indisponible), et `POST /users/{id}/messages`
-        // enverrait un second SMS réel.
-        void logged;
-
-      } catch (logErr) {
-        console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
+      // ---- Voie 2 (repli) : Maestro Telecom -------------------------------
+      if (ctx.maestroBrokerId) {
+        try {
+          const cfg = await getMaestroTelecomConfig(supabase);
+          if (isMaestroTelecomConfigured(cfg)) {
+            const r = await maestroTelecomFetch<any>(
+              cfg,
+              `/users/${encodeURIComponent(ctx.maestroBrokerId)}/messages`,
+              {
+                method: "POST",
+                body: {
+                  to_user_number: destination,
+                  message,
+                  // Demande à Maestro d'afficher le DID NetSapiens du courtier.
+                  from: fromNumber,
+                  from_number: fromNumber,
+                  from_did: fromNumber,
+                },
+              },
+            );
+            if (r.ok) {
+              const messageId = await logMessage(thread_id ?? sessionId);
+              return jsonResponse({
+                ok: true,
+                via: "maestro",
+                result: r.data,
+                message_id: messageId,
+                from: fromNumber,
+                to: destination,
+                thread_id: thread_id ?? sessionId,
+              });
+            }
+            console.warn("[pp-ns-sms] Maestro send failed", r.status, r.error);
+          }
+        } catch (e) {
+          console.warn("[pp-ns-sms] Maestro send error:", e);
+        }
       }
 
-      // NE PAS miroiter vers Maestro `POST /users/{id}/messages` : cet endpoint
-      // ENVOIE réellement un SMS depuis le numéro Maestro (+1 438 842 7217),
-      // ce qui produisait un double SMS chez le client (DID courtier + Maestro).
-      // NS-API reste la seule voie d'envoi ; l'historique est journalisé
-      // localement dans planipret_phone_messages.
+      return jsonResponse(
+        { ok: false, error: nsError ?? `Envoi SMS refusé (${res.status})`, status: res.status, body: lastText, from: fromNumber, to: destination, endpoint: path },
+        200,
+      );
 
-
-      return jsonResponse({ ok: true, result, from: fromNumber, to: destination, thread_id: resolvedThreadId });
     }
 
     return jsonResponse({ error: `Action inconnue: ${action}` }, 400);

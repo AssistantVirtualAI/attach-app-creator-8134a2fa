@@ -120,7 +120,7 @@ export default function PBMaestroClients() {
 
       <PATableWrap>
         {loading ? (
-          <div style={{ padding: 16 }}><PPSkeleton rows={6} /></div>
+          <div style={{ padding: 16 }}><div className="space-y-2">{Array.from({length:6}).map((_,i)=>(<PPSkeleton key={i} style={{height:32}} />))}</div></div>
         ) : rows.length === 0 ? (
           <PPEmptyState
             icon={<Users className="w-5 h-5" />}
@@ -185,7 +185,7 @@ export default function PBMaestroClients() {
               <button onClick={() => setDetail(null)} className="p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-4 space-y-3 text-[13px]">
-              {detailLoading && <PPSkeleton rows={4} />}
+              {detailLoading && <PPSkeleton style={{height:80}} />}
               {[
                 [en ? "Phone" : "Téléphone", detail.phone],
                 [en ? "Mobile" : "Cellulaire", detail.cell_phone],

@@ -227,80 +227,10 @@ export default function PBMicrosoft() {
         </>
       )}
 
-      {/* Emails */}
-      <div className="pp-card flex flex-wrap gap-2" style={{ padding: 12 }}>
-        <select value={folder} onChange={(e) => { setFolder(e.target.value); setPage(1); }} className="pp-input" style={{ fontSize: 12 }}>
-          <option value="inbox">{lang === "en" ? "Inbox" : "Réception"}</option>
-          <option value="unread">{lang === "en" ? "Unread" : "Non lus"}</option>
-          <option value="sent">{lang === "en" ? "Sent" : "Envoyés"}</option>
-          <option value="archive">{lang === "en" ? "Archive" : "Archives"}</option>
-          <option value="deleted">{lang === "en" ? "Deleted" : "Supprimés"}</option>
-        </select>
-        <input value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder={lang === "en" ? "Filter this page…" : "Filtrer cette page…"}
-          className="pp-input flex-1 min-w-[200px]" style={{ fontSize: 12 }} />
-      </div>
+      {tab === "mail" && <MailPanel lang={lang as "fr" | "en"} />}
+      {tab === "teams" && <TeamsPanel lang={lang as "fr" | "en"} />}
+      {tab === "calendar" && <CalendarPanel lang={lang as "fr" | "en"} />}
 
-      <div className="pp-card" style={{ padding: 0 }}>
-        {mailLoading ? (
-          <div className="p-4 space-y-2">{[0, 1, 2, 3].map((i) => <PPSkeleton key={i} className="h-10 w-full" />)}</div>
-        ) : filtered.length === 0 ? (
-          <PPEmptyState icon={<Mail className="w-5 h-5" />} title={lang === "en" ? "No emails" : "Aucun courriel"} />
-        ) : (
-          filtered.map((e) => (
-            <button key={e.id} onClick={() => void openEmail(e.id)} className="w-full text-left px-4 py-2.5"
-              style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="truncate" style={{ fontSize: 13, fontWeight: e.isRead ? 500 : 700, color: "var(--pp-text-primary)" }}>
-                  {e.from?.emailAddress?.name || e.from?.emailAddress?.address || e.toRecipients?.[0]?.emailAddress?.address || "—"}
-                </span>
-                <span style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>{fmtDateTime(e.receivedDateTime ?? e.sentDateTime, lang)}</span>
-              </div>
-              <div className="truncate" style={{ fontSize: 12.5, color: "var(--pp-text-secondary)" }}>{e.subject || "(no subject)"}</div>
-              <div className="truncate" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{e.bodyPreview}</div>
-            </button>
-          ))
-        )}
-        <div className="flex items-center justify-between px-4 py-3" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
-          <button disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="px-3 py-1.5 rounded-lg text-[12px] disabled:opacity-40" style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
-            {lang === "en" ? "Previous" : "Précédent"}
-          </button>
-          <span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{lang === "en" ? "Page" : "Page"} {page}</span>
-          <button disabled={!hasMore} onClick={() => setPage((p) => p + 1)}
-            className="px-3 py-1.5 rounded-lg text-[12px] disabled:opacity-40" style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
-            {lang === "en" ? "Next" : "Suivant"}
-          </button>
-        </div>
-      </div>
-
-      {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setDetail(null)}>
-          <div className="pp-card w-full max-w-2xl max-h-[85vh] overflow-y-auto" style={{ padding: 18 }} onClick={(ev) => ev.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="pp-heading" style={{ fontSize: 15.5, fontWeight: 700 }}>{detail.subject || (lang === "en" ? "Email" : "Courriel")}</h3>
-              <button onClick={() => setDetail(null)}><X className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} /></button>
-            </div>
-            {detailLoading ? (
-              <div className="flex items-center gap-2 mt-4" style={{ fontSize: 13, color: "var(--pp-text-muted)" }}>
-                <Loader2 className="w-4 h-4 animate-spin" />{lang === "en" ? "Loading…" : "Chargement…"}
-              </div>
-            ) : (
-              <>
-                <div className="mt-2" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
-                  {detail.from?.emailAddress?.address} → {(detail.toRecipients ?? []).map((r: any) => r.emailAddress?.address).join(", ")}
-                </div>
-                <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{fmtDateTime(detail.receivedDateTime ?? detail.sentDateTime, lang)}</div>
-                <div className="mt-4" style={{ fontSize: 13, color: "var(--pp-text-secondary)", whiteSpace: "pre-wrap" }}>
-                  {detail.body?.contentType === "html"
-                    ? <div dangerouslySetInnerHTML={{ __html: detail.body?.content ?? "" }} />
-                    : (detail.body?.content ?? detail.bodyPreview ?? "")}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </PAPage>
   );
 }

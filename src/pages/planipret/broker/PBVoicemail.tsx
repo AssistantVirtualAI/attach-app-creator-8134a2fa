@@ -84,7 +84,40 @@ export default function PBVoicemail() {
         subtitle={`${total} ${lang === "en" ? "messages" : "messages"} · ${rows.filter((r) => !r.is_read).length} ${lang === "en" ? "new on this page" : "nouveaux sur cette page"}`}
       />
 
+      <div className="flex gap-2">
+        {([
+          ["inbox", lang === "en" ? "Inbox" : "Boîte vocale", <Inbox key="i" className="w-3.5 h-3.5" />],
+          ["greeting", lang === "en" ? "Greeting (AI voice)" : "Annonce (voix IA)", <Sparkles key="s" className="w-3.5 h-3.5" />],
+        ] as const).map(([k, label, icon]) => (
+          <button
+            key={k}
+            onClick={() => patch({ tab: k === "inbox" ? null : "greeting" })}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              border: "1px solid var(--pp-bg-border)",
+              background: tab === k ? "var(--pp-bg-elevated)" : "transparent",
+              color: tab === k ? "var(--pp-text-primary)" : "var(--pp-text-secondary)",
+            }}
+          >
+            {icon}{label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "greeting" ? (
+        profile ? (
+          <div className="pp-card" style={{ padding: 16 }}>
+            <GreetingStudio profile={profile} onProfileChange={loadProfile} />
+          </div>
+        ) : (
+          <div className="pp-card p-4 space-y-2">{[0, 1, 2].map((i) => <PPSkeleton key={i} className="h-12 w-full" />)}</div>
+        )
+      ) : (
+      <>
       <div className="pp-card flex flex-wrap gap-2" style={{ padding: 12 }}>
+
         <select value={period} onChange={(e) => patch({ period: e.target.value })} className="pp-input" style={{ fontSize: 12 }}>
           {PERIOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{lang === "en" ? o.en : o.fr}</option>)}
         </select>

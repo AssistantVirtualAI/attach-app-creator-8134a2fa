@@ -4,6 +4,16 @@ import { Search, Phone, MessageSquare, Voicemail, Mic, Users, Mail, UserRound, T
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { useBrokerGlobalSearch, type SearchHit } from "@/hooks/planipret/useBrokerGlobalSearch";
 
+function toText(v: any): string {
+  if (v == null) return "";
+  if (typeof v === "string" || typeof v === "number") return String(v);
+  if (typeof v === "object") {
+    const e = v.emailAddress ?? v;
+    return String(e?.name ?? e?.address ?? e?.email ?? e?.displayName ?? "");
+  }
+  return String(v);
+}
+
 const ORDER: SearchHit["kind"][] = ["call", "message", "voicemail", "recording", "maestro", "person", "email", "commission"];
 
 const LABELS: Record<SearchHit["kind"], { fr: string; en: string; Icon: any; section: string }> = {
@@ -125,11 +135,11 @@ export default function BrokerOmniSearch({ userId, className }: { userId: string
                         className="w-full text-left px-3 py-2"
                         style={{ background: active ? "var(--pp-bg-elevated)" : "transparent", borderTop: "1px solid var(--pp-bg-border)" }}>
                         <div className="flex items-center justify-between gap-3">
-                          <span className="truncate" style={{ fontSize: 12.5, fontWeight: 600, color: "var(--pp-text-primary)" }}>{hit.primary}</span>
-                          {hit.meta && <span className="shrink-0" style={{ fontSize: 10.5, color: "var(--pp-text-muted)" }}>{hit.meta}</span>}
+                          <span className="truncate" style={{ fontSize: 12.5, fontWeight: 600, color: "var(--pp-text-primary)" }}>{toText(hit.primary)}</span>
+                          {hit.meta && <span className="shrink-0" style={{ fontSize: 10.5, color: "var(--pp-text-muted)" }}>{toText(hit.meta)}</span>}
                         </div>
                         {hit.secondary && (
-                          <div className="truncate" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{hit.secondary}</div>
+                          <div className="truncate" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{toText(hit.secondary)}</div>
                         )}
                       </button>
                     );

@@ -3,11 +3,21 @@ import { PhoneCall, PieChart as PieIcon } from "lucide-react";
 import { OvCard, OvEmpty, OV_COLORS, ovTooltip } from "./OvCard";
 import type { OvDaily } from "@/hooks/useBrokerOverview";
 
-export function OvCallsChart({ data, lang }: { data: OvDaily[]; lang: "fr" | "en" }) {
+const periodTitle = (g: string | undefined, lang: "fr" | "en", what: string) => {
+  const per: Record<string, { fr: string; en: string }> = {
+    day: { fr: "par jour", en: "per day" },
+    week: { fr: "par semaine", en: "per week" },
+    month: { fr: "par mois", en: "per month" },
+    quarter: { fr: "par trimestre", en: "per quarter" },
+  };
+  return `${what} ${per[g ?? "day"][lang]}`;
+};
+
+export function OvCallsChart({ data, lang, granularity }: { data: OvDaily[]; lang: "fr" | "en"; granularity?: string }) {
   const empty = data.every((d) => !d.inbound && !d.outbound && !d.missed);
   return (
     <OvCard
-      title={lang === "en" ? "Calls per day" : "Appels par jour"}
+      title={periodTitle(granularity, lang, lang === "en" ? "Calls" : "Appels")}
       icon={<PhoneCall className="w-4 h-4" />}
       to="/planipret/broker/calls"
       toLabel={lang === "en" ? "View all" : "Voir tout"}

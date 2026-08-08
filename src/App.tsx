@@ -94,7 +94,6 @@ const PBRecordings = lazyWithRetry(() => import("./pages/planipret/broker/PBReco
 const PBStats = lazyWithRetry(() => import("./pages/planipret/broker/PBStats"));
 const PBCommissions = lazyWithRetry(() => import("./pages/planipret/broker/PBCommissions"));
 const PBMicrosoft = lazyWithRetry(() => import("./pages/planipret/broker/PBMicrosoft"));
-const PBSearch = lazyWithRetry(() => import("./pages/planipret/broker/PBSearch"));
 const PBMaestroClients = lazyWithRetry(() => import("./pages/planipret/broker/PBMaestroClients"));
 
 const PBSettings = lazyWithRetry(() => import("./pages/planipret/broker/PBSettings"));
@@ -662,7 +661,7 @@ const App = () => (
                   <Route path="stats" element={<Suspense fallback={<AdminPageSkeleton />}><PBStats /></Suspense>} />
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PBCommissions /></Suspense>} />
                   <Route path="maestro-clients" element={<Suspense fallback={<AdminPageSkeleton />}><PBMaestroClients /></Suspense>} />
-                  <Route path="search" element={<Suspense fallback={<AdminPageSkeleton />}><PBSearch /></Suspense>} />
+                  <Route path="search" element={<Navigate to="/planipret/broker/overview" replace />} />
                   <Route path="settings" element={<Suspense fallback={<AdminPageSkeleton />}><PBSettings /></Suspense>} />
 
                 </Route>

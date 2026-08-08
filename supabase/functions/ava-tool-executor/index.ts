@@ -1033,34 +1033,42 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     return { success: true };
   },
 
-  // ===== M365 CONTACTS =====
+  // ===== RECHERCHE UNIFIÉE DE CONTACTS =====
   async find_contact(ctx, p) {
     const query = String(p?.query ?? p?.name ?? "").trim();
     if (!query) return { success: false, error: "query_required" };
-    const results: any[] = [];
-    // 1) local
-    const { data: local } = await ctx.admin.from("planipret_contacts")
-      .select("full_name, phone, email").ilike("full_name", `%${query}%`).limit(5);
-    for (const c of local ?? []) results.push({ name: c.full_name, email: c.email, phone: c.phone, source: "local" });
-    // 2) Maestro
-    const { data: mst } = await ctx.admin.from("planipret_maestro_clients")
-      .select("name, phone, email").ilike("name", `%${query}%`).limit(5);
-    for (const c of mst ?? []) results.push({ name: c.name, email: c.email, phone: c.phone, source: "maestro" });
-    // 3) MS365
-    const ms = await msAction(ctx, "search_contact", { query });
-    if (ms?.results) for (const r of ms.results) results.push(r);
-    if (ms?.error && !results.length) {
-      return { success: false, error: ms.error, needs_reconnect: /scope|permission|Insufficient/i.test(String(ms.error)), message: `Impossible de chercher dans Microsoft : ${ms.error}` };
+    const limit = Math.min(Number(p?.limit ?? 10) || 10, 25);
+    const contacts = await unifiedSearch(ctx, query, { limit });
+    if (!contacts.length) {
+      return { success: true, count: 0, contacts: [], message: `Aucun contact trouvé pour "${query}" dans vos contacts, l'annuaire de l'entreprise, Maestro ou Outlook.` };
     }
-    // Dédupliquer par email
-    const seen = new Set<string>();
-    const unique = results.filter((r) => {
-      const k = (r.email || r.phone || r.name || "").toLowerCase();
-      if (!k || seen.has(k)) return false;
-      seen.add(k); return true;
-    }).slice(0, 10);
-    return { success: true, count: unique.length, contacts: unique, message: unique.length ? `${unique.length} contact(s) trouvé(s) pour "${query}"` : `Aucun contact trouvé pour "${query}"` };
+    const label = (c: any) => [c.name, c.company, c.extension ? `poste ${c.extension}` : null, c.source].filter(Boolean).join(" — ");
+    return {
+      success: true,
+      count: contacts.length,
+      contacts,
+      ambiguous: contacts.length > 1,
+      message: contacts.length === 1
+        ? `1 contact trouvé : ${label(contacts[0])}`
+        : `${contacts.length} correspondances pour "${query}" : ${contacts.slice(0, 5).map(label).join(" ; ")}. Demande laquelle avant d'agir.`,
+    };
   },
+
+  async search_directory(ctx, p) {
+    const query = String(p?.query ?? p?.name ?? "").trim();
+    if (!query) return { success: false, error: "query_required" };
+    const sources = typeof p?.sources === "string"
+      ? p.sources.split(",").map((s: string) => s.trim()).filter(Boolean)
+      : Array.isArray(p?.sources) ? p.sources : undefined;
+    const contacts = await unifiedSearch(ctx, query, { limit: Math.min(Number(p?.limit ?? 10) || 10, 25), sources });
+    return { success: true, count: contacts.length, contacts, message: `${contacts.length} résultat(s) pour "${query}"` };
+  },
+
+  async list_company_directory(ctx, p) {
+    const contacts = await unifiedSearch(ctx, "", { limit: Math.min(Number(p?.limit ?? 50) || 50, 200), sources: ["directory"] });
+    return { success: true, count: contacts.length, contacts, message: `${contacts.length} entrée(s) dans l'annuaire de l'entreprise` };
+  },
+
 
   // ===== M365 TEAMS =====
   async list_teams_chats(ctx, _p) {

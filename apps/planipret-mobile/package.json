@@ -1,6 +1,7 @@
 {
   "name": "planipret-mobile",
-  "version": "1.0.0",
+  "version": "1.0.16",
+  "androidVersionCode": 16,
   "description": "Planiprêt — Standalone Capacitor Mobile App (iOS + Android)",
   "private": true,
   "type": "module",
@@ -11,6 +12,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "audit:native": "node scripts/audit-native.mjs",
+    "apply:version": "node scripts/apply-version.mjs",
     "verify:android": "node scripts/verify-android.mjs",
     "audit:parity": "node scripts/audit-parity.mjs",
     "cap:add:ios": "cap add ios && node scripts/apply-native-config.mjs && node scripts/verify-ios-scene.mjs",

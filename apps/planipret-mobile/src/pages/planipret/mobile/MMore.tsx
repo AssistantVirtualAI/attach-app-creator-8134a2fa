@@ -287,6 +287,9 @@ export default function MMore() {
       </Section>
 
       <Section title={t("more.sections.integrations")}>
+        <Row icon={<Search className="w-4 h-4" style={{ color: "#2E9BDC" }} />} label="Recherche AVA (répertoire unifié)"
+          sub="Cellulaire, entreprise, Maestro, Outlook — journal d'accès"
+          onClick={() => navigate("/mplanipret/directory")} chevron />
         <Row icon={<Info className="w-4 h-4" style={{ color: "#5EC2FF" }} />} label={t("screens.more.connectionsDiagnostic")}
           sub={t("screens.more.integrationsSub")}
           onClick={() => navigate("/mplanipret/connections")} chevron />

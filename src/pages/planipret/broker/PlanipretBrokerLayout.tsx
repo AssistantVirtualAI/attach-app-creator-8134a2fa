@@ -10,7 +10,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { resolveBrokerAccess } from "@/lib/planipret/brokerAccess";
 
-export type BrokerCtx = { userId: string; profile: any };
+export type BrokerCtx = { userId: string; authUserId: string; profile: any };
 
 const NAV = [
   { to: "/planipret/broker/overview",   Icon: LayoutDashboard, fr: "Vue d'ensemble", en: "Overview" },
@@ -36,6 +36,7 @@ export default function PlanipretBrokerLayout() {
   const { lang } = useMplanipretLang();
   const [state, setState] = useState<"checking" | "anon" | "denied" | "ready">("checking");
   const [userId, setUserId] = useState<string>("");
+  const [authUserId, setAuthUserId] = useState<string>("");
   const [profile, setProfile] = useState<any>(null);
   const [denyReason, setDenyReason] = useState<string>("");
   const [q, setQ] = useState("");
@@ -44,11 +45,13 @@ export default function PlanipretBrokerLayout() {
     const access = await resolveBrokerAccess();
     if (access.state === "ready") {
       setUserId(access.userId);
+      setAuthUserId(access.authUserId);
       setProfile(access.profile);
       setState("ready");
       return;
     }
     setUserId("");
+    setAuthUserId("");
     setProfile(null);
     if (access.state === "denied") {
       setDenyReason(access.reason);
@@ -64,7 +67,7 @@ export default function PlanipretBrokerLayout() {
   // session can never keep rendering another broker's data.
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") { setUserId(""); setProfile(null); setState("anon"); return; }
+      if (event === "SIGNED_OUT") { setUserId(""); setAuthUserId(""); setProfile(null); setState("anon"); return; }
       if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "TOKEN_REFRESHED") { void load(); }
     });
     return () => sub.subscription.unsubscribe();
@@ -218,7 +221,7 @@ export default function PlanipretBrokerLayout() {
         </header>
 
         <main className="pa-main flex-1 min-w-0 p-4 md:p-7 overflow-y-auto overflow-x-hidden">
-          <Outlet context={{ userId, profile } satisfies BrokerCtx} />
+          <Outlet context={{ userId, authUserId, profile } satisfies BrokerCtx} />
         </main>
       </div>
     </div>

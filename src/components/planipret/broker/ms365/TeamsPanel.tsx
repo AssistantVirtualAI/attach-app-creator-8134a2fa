@@ -141,13 +141,27 @@ export default function TeamsPanel({ lang }: { lang: Lang }) {
           ) : tab === "people" ? (
             filteredPeople.length === 0
               ? <PPEmptyState icon={<Users className="w-5 h-5" />} title={en ? "No people" : "Aucune personne"} />
-              : filteredPeople.slice(0, 200).map((p) => (
-                <button key={p.id} onClick={() => void startDirect(p)} className="w-full text-left px-3 py-2.5"
-                  style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
-                  <div className="truncate" style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>{p.displayName}</div>
-                  <div className="truncate" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{p.mail ?? p.userPrincipalName}</div>
-                </button>
-              ))
+              : <>
+                <div className="px-3 py-1.5" style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>
+                  {filteredPeople.length} {en ? "people" : "personnes"}
+                </div>
+                {filteredPeople.map((p) => (
+                  <button key={p.id} onClick={() => void startDirect(p)} className="w-full text-left px-3 py-2.5 flex items-center gap-2"
+                    style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
+                    <span className="shrink-0 rounded-full" style={{ width: 8, height: 8, background: presenceColor(p.presence?.availability) }} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate" style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>{pName(p)}</span>
+                      <span className="block truncate" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+                        {pMail(p)}{p.title ? ` · ${p.title}` : ""}
+                      </span>
+                    </span>
+                    <span className="shrink-0" style={{ fontSize: 10.5, color: "var(--pp-text-muted)" }}>
+                      {presenceLabel(p.presence?.availability, en)}
+                    </span>
+                  </button>
+                ))}
+              </>
+
           ) : (
             teams.length === 0
               ? <PPEmptyState icon={<Hash className="w-5 h-5" />} title={en ? "No teams" : "Aucune équipe"} />

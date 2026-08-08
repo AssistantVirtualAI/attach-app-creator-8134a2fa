@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Link2, Mail, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-type Dot = { label: string; value: string; ok: boolean | null; to: string; Icon: React.ComponentType<{ className?: string }> };
+type Dot = { label: string; value: string; ok: boolean | null; to: string; Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> };
 
 export default function OvConnectionsStrip({ profile, lang }: { profile: any; lang: "fr" | "en" }) {
   const [maestro, setMaestro] = useState<boolean | null>(null);

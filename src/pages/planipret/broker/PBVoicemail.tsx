@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Voicemail, Check, X } from "lucide-react";
+import { Voicemail, Check, X, Sparkles, Inbox } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import Pagination from "@/components/planipret/admin/Pagination";
@@ -9,6 +9,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 import { fmtDateTime, fmtDuration } from "@/lib/planipret/brokerFormat";
 import { brokerSelect, searchFilter, periodStartISO, PERIOD_OPTIONS, type BrokerPeriod } from "@/lib/planipret/brokerAccess";
+import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
 
 const PAGE_SIZE = 25;
 
@@ -17,6 +18,7 @@ export default function PBVoicemail() {
   const { lang } = useMplanipretLang();
   const [params, setParams] = useSearchParams();
 
+  const tab = (params.get("tab") === "greeting" ? "greeting" : "inbox") as "inbox" | "greeting";
   const period = (params.get("period") ?? "") as BrokerPeriod;
   const status = params.get("status") ?? "";
   const search = params.get("q") ?? "";
@@ -26,6 +28,20 @@ export default function PBVoicemail() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<any | null>(null);
+  const [profile, setProfile] = useState<any | null>(null);
+
+  const loadProfile = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase
+      .from("planipret_profiles")
+      .select("id, user_id, full_name, voicemail_greeting_text, voicemail_greeting_voice_id, voicemail_greeting_audio_url, voicemail_greeting_updated_at, voicemail_greeting_active")
+      .eq("id", userId)
+      .maybeSingle();
+    setProfile(data ?? null);
+  }, [userId]);
+
+  useEffect(() => { void loadProfile(); }, [loadProfile]);
+
 
   const patch = (next: Record<string, string | null>, resetPage = true) => {
     const p = new URLSearchParams(params);
@@ -68,7 +84,40 @@ export default function PBVoicemail() {
         subtitle={`${total} ${lang === "en" ? "messages" : "messages"} · ${rows.filter((r) => !r.is_read).length} ${lang === "en" ? "new on this page" : "nouveaux sur cette page"}`}
       />
 
+      <div className="flex gap-2">
+        {([
+          ["inbox", lang === "en" ? "Inbox" : "Boîte vocale", <Inbox key="i" className="w-3.5 h-3.5" />],
+          ["greeting", lang === "en" ? "Greeting (AI voice)" : "Annonce (voix IA)", <Sparkles key="s" className="w-3.5 h-3.5" />],
+        ] as const).map(([k, label, icon]) => (
+          <button
+            key={k}
+            onClick={() => patch({ tab: k === "inbox" ? null : "greeting" })}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              border: "1px solid var(--pp-bg-border)",
+              background: tab === k ? "var(--pp-bg-elevated)" : "transparent",
+              color: tab === k ? "var(--pp-text-primary)" : "var(--pp-text-secondary)",
+            }}
+          >
+            {icon}{label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "greeting" ? (
+        profile ? (
+          <div className="pp-card" style={{ padding: 16 }}>
+            <GreetingStudio profile={profile} onProfileChange={loadProfile} />
+          </div>
+        ) : (
+          <div className="pp-card p-4 space-y-2">{[0, 1, 2].map((i) => <PPSkeleton key={i} className="h-12 w-full" />)}</div>
+        )
+      ) : (
+      <>
       <div className="pp-card flex flex-wrap gap-2" style={{ padding: 12 }}>
+
         <select value={period} onChange={(e) => patch({ period: e.target.value })} className="pp-input" style={{ fontSize: 12 }}>
           {PERIOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{lang === "en" ? o.en : o.fr}</option>)}
         </select>
@@ -136,6 +185,10 @@ export default function PBVoicemail() {
           )}
         </div>
       )}
+      </>
+      )}
+
+
 
       {detail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setDetail(null)}>

@@ -274,6 +274,28 @@ export default function TeamsPanel({ lang }: { lang: Lang }) {
       toast.error(res.error || error?.message || (en ? "Could not open the chat" : "Impossible d'ouvrir la conversation"));
       return;
     }
-    openThread({ kind: "chat", id: res.chat_id, title: p.displayName });
+    openThread({ kind: "chat", id: res.chat_id, title: pName(p) || (en ? "Chat" : "Conversation") });
   }
 }
+
+const PRESENCE: Record<string, { color: string; fr: string; en: string }> = {
+  Available: { color: "#10b981", fr: "Disponible", en: "Available" },
+  AvailableIdle: { color: "#10b981", fr: "Disponible", en: "Available" },
+  Busy: { color: "#dc2626", fr: "Occupé", en: "Busy" },
+  BusyIdle: { color: "#dc2626", fr: "Occupé", en: "Busy" },
+  DoNotDisturb: { color: "#b91c1c", fr: "Ne pas déranger", en: "Do not disturb" },
+  Away: { color: "#f59e0b", fr: "Absent", en: "Away" },
+  BeRightBack: { color: "#f59e0b", fr: "De retour bientôt", en: "Be right back" },
+  Offline: { color: "#9ca3af", fr: "Hors ligne", en: "Offline" },
+  PresenceUnknown: { color: "#9ca3af", fr: "—", en: "—" },
+};
+
+function presenceColor(a?: string) {
+  return PRESENCE[a ?? ""]?.color ?? "#9ca3af";
+}
+function presenceLabel(a?: string, en?: boolean) {
+  const p = PRESENCE[a ?? ""];
+  if (!p) return a ?? "—";
+  return en ? p.en : p.fr;
+}
+

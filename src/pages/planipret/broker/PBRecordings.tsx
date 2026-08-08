@@ -106,6 +106,9 @@ export default function PBRecordings() {
                   <th className="px-4 py-2">Contact</th>
                   <th className="px-4 py-2">Date</th>
                   <th className="px-4 py-2">{lang === "en" ? "Duration" : "Durée"}</th>
+                  <th className="px-4 py-2">{lang === "en" ? "Transcript" : "Transcription"}</th>
+                  <th className="px-4 py-2">{lang === "en" ? "Summary & topics" : "Résumé & thèmes"}</th>
+                  <th className="px-4 py-2">Maestro</th>
                   <th className="px-4 py-2 text-right">{lang === "en" ? "Actions" : "Actions"}</th>
                 </tr>
               </thead>
@@ -118,12 +121,50 @@ export default function PBRecordings() {
                     </td>
                     <td className="px-4 py-2" style={{ color: "var(--pp-text-muted)" }}>{fmtDateTime(c.started_at ?? c.created_at, lang)}</td>
                     <td className="px-4 py-2" style={{ color: "var(--pp-text-muted)" }}>{fmtDuration(c.duration_seconds)}</td>
+                    <td className="px-4 py-2">
+                      {c.transcript || (Array.isArray(c.transcript_segments) && c.transcript_segments.length) ? (
+                        <span style={{ fontSize: 10, color: "var(--pp-success, #10b981)" }}>● {lang === "en" ? "Available" : "Disponible"}</span>
+                      ) : (
+                        <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2" style={{ maxWidth: 260 }}>
+                      {c.ai_summary_short || c.ai_summary ? (
+                        <div className="space-y-1">
+                          <div className="line-clamp-2" style={{ fontSize: 11, color: "var(--pp-text-secondary)", lineHeight: 1.35 }}>
+                            {c.ai_summary_short ?? c.ai_summary}
+                          </div>
+                          {Array.isArray(c.ai_topics) && c.ai_topics.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {c.ai_topics.slice(0, 3).map((tp: string, i: number) => (
+                                <span key={i} className="px-1.5 py-0.5 rounded-full text-[9px]" style={{ background: "rgba(155,127,232,0.14)", color: "#9B7FE8", border: "1px solid #9B7FE855" }}>{tp}</span>
+                              ))}
+                              {c.ai_topics.length > 3 && <span style={{ fontSize: 9, color: "var(--pp-text-faint)" }}>+{c.ai_topics.length - 3}</span>}
+                            </div>
+                          )}
+                          {Array.isArray(c.ai_action_items) && c.ai_action_items.length > 0 && (
+                            <div style={{ fontSize: 9, color: "#2E9BDC" }}>✓ {c.ai_action_items.length} action{c.ai_action_items.length > 1 ? "s" : ""}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {c.maestro_synced ? (
+                        <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, background: "rgba(16,185,129,0.14)", color: "#10b981", border: "1px solid #10b98155", fontWeight: 700 }}>
+                          ● {lang === "en" ? "Synced" : "Synchronisé"}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>{lang === "en" ? "Pending" : "En attente"}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => setDetail(c)}
                         className="px-2.5 py-1 rounded-lg text-[12px]" style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
                         {lang === "en" ? "Open" : "Ouvrir"}
                       </button>
-                      {c.recording_url && (
+                      {c.recording_url && String(c.recording_url).startsWith("http") && (
                         <a href={c.recording_url} download target="_blank" rel="noreferrer"
                           className="inline-flex items-center ml-2" style={{ color: "var(--pp-brand-accent-2)" }}>
                           <Download className="w-3.5 h-3.5" />
@@ -147,33 +188,13 @@ export default function PBRecordings() {
       </div>
 
       {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.45)" }} onClick={() => setDetail(null)}>
-          <div className="pp-card w-full max-w-lg max-h-[85vh] overflow-y-auto" style={{ padding: 18 }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="pp-heading" style={{ fontSize: 16, fontWeight: 700 }}>{callPeer(detail)}</h3>
-                <p style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
-                  {fmtDateTime(detail.started_at ?? detail.created_at, lang)} · {fmtDuration(detail.duration_seconds)} · {detail.direction}
-                </p>
-              </div>
-              <button onClick={() => setDetail(null)}><X className="w-4 h-4" style={{ color: "var(--pp-text-muted)" }} /></button>
-            </div>
-            {detail.recording_url && <audio controls autoPlay src={detail.recording_url} className="w-full mt-4" />}
-            {detail.ai_summary && (
-              <div className="mt-4">
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--pp-text-muted)", textTransform: "uppercase" }}>{lang === "en" ? "AI summary" : "Résumé IA"}</div>
-                <p style={{ fontSize: 13, color: "var(--pp-text-secondary)", marginTop: 4, whiteSpace: "pre-wrap" }}>{detail.ai_summary}</p>
-              </div>
-            )}
-            {detail.transcript && (
-              <div className="mt-4">
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--pp-text-muted)", textTransform: "uppercase" }}>{lang === "en" ? "Transcript" : "Transcription"}</div>
-                <p style={{ fontSize: 12.5, color: "var(--pp-text-secondary)", marginTop: 4, whiteSpace: "pre-wrap" }}>{detail.transcript}</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <RecordingDetailDrawer
+          call={detail}
+          onClose={() => setDetail(null)}
+          showBroker={false}
+        />
       )}
+
     </PAPage>
   );
 }

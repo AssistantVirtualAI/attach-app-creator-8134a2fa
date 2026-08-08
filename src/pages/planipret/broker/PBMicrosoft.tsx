@@ -226,6 +226,9 @@ export default function PBMicrosoft() {
           )}
         </>
       )}
+        </>
+      )}
+
 
       {tab === "mail" && <MailPanel lang={lang as "fr" | "en"} />}
       {tab === "teams" && <TeamsPanel lang={lang as "fr" | "en"} />}

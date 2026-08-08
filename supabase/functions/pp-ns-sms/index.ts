@@ -477,8 +477,9 @@ Deno.serve(async (req) => {
               to_number: destination,
               from_number: fromNumber,
               body: message,
-              status: "sent", ns_message_id: nsMsgId,
-              metadata: { type }, ns_message_id: result?.id ?? result?.message_id ?? null,
+              status: "sent",
+              ns_message_id: nsMsgId,
+              metadata: { type },
               thread_id: threadId,
               sent_at: new Date().toISOString(),
             })

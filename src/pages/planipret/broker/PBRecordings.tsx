@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
-import { Mic, Download, X, Sparkles } from "lucide-react";
+import { Mic, Download, Sparkles } from "lucide-react";
+import RecordingDetailDrawer from "@/components/planipret/recordings/RecordingDetailDrawer";
+
 import { PAPage, PAPageHeader, PATableWrap } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import Pagination from "@/components/planipret/admin/Pagination";

@@ -606,7 +606,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
     setError(null);
     try {
       const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", {
-        body: { action: "messages", thread_id: currentThreadId },
+         body: { action: "messages", thread_id: currentThreadId, phone_number: number },
       });
       if (err) throw err;
       const list: NsMessage[] = (data as any)?.messages ?? [];
@@ -674,8 +674,8 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
         const hint = d.from ? "" : " — aucun numéro SMS (DID) assigné à ce courtier.";
         throw new Error(`SMS refusé${status}${hint}\n${bodyDetail.slice(0, 260)}`);
       }
-      const result = d.result ?? {};
-      const newThreadId = result?.messagesession_id ?? result?.["messagesession-id"] ?? result?.session_id ?? result?.id;
+       const result = d.result ?? {};
+       const newThreadId = d.thread_id ?? result?.messagesession_id ?? result?.["messagesession-id"] ?? result?.session_id ?? result?.id;
       if (newThreadId && !currentThreadId) setCurrentThreadId(newThreadId);
       // Refresh from server to reconcile optimistic message
       window.dispatchEvent(new CustomEvent("ava:sms-sent", { detail: { number, body } }));

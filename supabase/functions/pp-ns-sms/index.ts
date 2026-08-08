@@ -216,16 +216,45 @@ Deno.serve(async (req) => {
       // Historique local (planipret_phone_messages) : garantit que les SMS
       // envoyés/reçus restent visibles même si NS-API n'expose pas la session.
       const localRows = await getLocalMessages(supabase, ctx.userId);
-      const nsPeers = new Set(
-        threads
-          .map((t: any) => digitsOnly(t.destination ?? t["messagesession-destination"] ?? t.remote_party ?? t.phonenumber ?? t.contact ?? ""))
-          .filter(Boolean),
-      );
+       const nsThreadByPeer = new Map<string, any>();
+       for (const thread of threads) {
+         const key = digitsOnly(
+           thread.destination
+             ?? thread["messagesession-destination"]
+             ?? thread.remote_party
+             ?? thread.phonenumber
+             ?? thread.contact
+             ?? "",
+         );
+         if (key && !nsThreadByPeer.has(key)) nsThreadByPeer.set(key, thread);
+       }
       const byPeer = new Map<string, any>();
       for (const row of localRows) {
         const peer = localPeer(row);
         const key = digitsOnly(peer);
-        if (!key || nsPeers.has(key) || byPeer.has(key)) continue;
+         if (!key) continue;
+
+         // NS can return a stale thread after an outgoing send. Keep its real
+         // session id, but promote the newer local message so the conversation
+         // immediately moves to the top and shows the text that was just sent.
+         const nsThread = nsThreadByPeer.get(key);
+         if (nsThread) {
+           const nsTime = new Date(
+             nsThread.last_message_at
+               ?? nsThread.updated_at
+               ?? nsThread.timestamp
+               ?? nsThread["messagesession-last-datetime"]
+               ?? 0,
+           ).getTime();
+           const localTime = new Date(row.sent_at ?? 0).getTime();
+           if (!Number.isFinite(nsTime) || localTime >= nsTime) {
+             nsThread.last_message = row.body;
+             nsThread.last_message_at = row.sent_at;
+           }
+           continue;
+         }
+
+         if (byPeer.has(key)) continue;
         byPeer.set(key, {
           id: row.thread_id ?? `local:${peer}`,
           messagesession_id: row.thread_id ?? `local:${peer}`,
@@ -272,7 +301,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      const phoneHint = (pick("phone_number") as string | undefined)
+       const phoneHint = (pick("phone_number") as string | undefined)
         ?? (threadId.startsWith("local:") ? threadId.slice(6) : undefined);
 
       // Fusion de l'historique local (dédupliqué par corps + minute).
@@ -438,7 +467,7 @@ Deno.serve(async (req) => {
       const nsRejected = !res.ok || !!nsError || nsStatus === "failed" || nsStatus === "error"
         || result?.ok === false || result?.success === false;
 
-      const logMessage = async (threadId: string | null) => {
+      const logMessage = async (threadId: string | null, nsMsgId: string | null = null) => {
         try {
           const { data: logged, error: logError } = await supabase
             .from("planipret_phone_messages")
@@ -449,6 +478,7 @@ Deno.serve(async (req) => {
               from_number: fromNumber,
               body: message,
               status: "sent",
+              ns_message_id: nsMsgId,
               metadata: { type },
               thread_id: threadId,
               sent_at: new Date().toISOString(),
@@ -470,7 +500,7 @@ Deno.serve(async (req) => {
           ?? result?.["messagesession-id"]
           ?? result?.messagesession
           ?? sessionId;
-        const messageId = await logMessage(resolvedThreadId);
+        const messageId = await logMessage(resolvedThreadId, result?.id ?? result?.message_id ?? result?.["message-id"]);
         // Synchronisation Maestro : on NE renvoie PAS le SMS via Maestro
         // (mauvais afficheur) — on pousse seulement l'enregistrement pour que
         // la conversation apparaisse dans Maestro avec le vrai DID NS.

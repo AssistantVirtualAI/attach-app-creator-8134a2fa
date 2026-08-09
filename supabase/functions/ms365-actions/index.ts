@@ -370,9 +370,17 @@ Deno.serve(async (req) => {
       case "list_calendar_events": {
         const start = payload.start ?? new Date().toISOString();
         const end = payload.end ?? new Date(Date.now() + 7 * 86400000).toISOString();
-        const r = await graph(admin, profile, `/me/calendarView?startDateTime=${encodeURIComponent(start)}&endDateTime=${encodeURIComponent(end)}&$orderby=start/dateTime&$top=${Math.min(Number(payload.top ?? 20), 50)}&$select=id,subject,bodyPreview,start,end,location,attendees,organizer,onlineMeeting,webLink,isOnlineMeeting`);
+        const r = await graph(admin, profile, `/me/calendarView?startDateTime=${encodeURIComponent(start)}&endDateTime=${encodeURIComponent(end)}&$orderby=start/dateTime&$top=${Math.min(Number(payload.top ?? 20), 250)}&$select=id,subject,bodyPreview,start,end,location,attendees,organizer,onlineMeeting,webLink,isOnlineMeeting`);
         const d = await r.json();
-        return j({ success: r.ok, events: d.value ?? [], error: d?.error?.message, details: d?.error, code: r.status }, r.ok ? 200 : 500);
+        // Graph renvoie des dateTime "naïfs" dans le fuseau demandé (Prefer).
+        // On y ajoute l'offset Toronto pour que les clients (mobile, portail)
+        // affichent la bonne heure quel que soit le fuseau de l'appareil.
+        const events = (d.value ?? []).map((ev: any) => ({
+          ...ev,
+          start: ev?.start ? { ...ev.start, dateTime: toOffsetIso(ev.start.dateTime, ev.start.timeZone) } : ev?.start,
+          end: ev?.end ? { ...ev.end, dateTime: toOffsetIso(ev.end.dateTime, ev.end.timeZone) } : ev?.end,
+        }));
+        return j({ success: r.ok, events, error: d?.error?.message, details: d?.error, code: r.status }, r.ok ? 200 : 500);
       }
       case "update_calendar_event": {
         const id = String(payload.event_id ?? "");

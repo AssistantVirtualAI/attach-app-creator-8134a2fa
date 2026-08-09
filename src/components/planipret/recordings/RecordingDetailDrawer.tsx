@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { RefreshCw, X, Download } from "lucide-react";
 import { getAiCorrectedTranscript, getAiTranscriptSegments, getDisplayTranscript } from "@/lib/planipretTranscript";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { downloadRecording } from "@/lib/planipret/downloadRecording";
+
 
 const ACCENT = "#2E9BDC";
 const AGENT = "#9B7FE8";

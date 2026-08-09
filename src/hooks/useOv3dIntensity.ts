@@ -101,16 +101,8 @@ export function useOv3dQuiet(deps: unknown[], holdMs = 260) {
   useEffect(() => {
     if (first.current) { first.current = false; return; }
     setQuiet(true);
-    const raf = requestAnimationFrame(() => {
-      // release after paint + hold, on an idle callback when available
-      const done = () => setQuiet(false);
-      const t = setTimeout(() => {
-        const ric = (window as any).requestIdleCallback as undefined | ((f: () => void) => number);
-        if (ric) ric(done); else done();
-      }, holdMs);
-      (raf as any).__t = t;
-    });
-    return () => cancelAnimationFrame(raf);
+    const t = setTimeout(() => setQuiet(false), holdMs);
+    return () => clearTimeout(t);
   }, [key, holdMs]);
 
   return quiet;

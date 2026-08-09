@@ -15,11 +15,63 @@ async function refreshToken(admin: any, profile: any) {
   return await refreshMicrosoftAccessToken(admin, profile, MS365_DELEGATED_SCOPES);
 }
 
+// Tous les courtiers Planiprêt sont au Québec : Graph doit renvoyer et
+// accepter les heures en America/Toronto, sinon l'agenda s'affiche en UTC.
+const APP_TZ = "America/Toronto";
+
+/** Force le fuseau sur un objet dateTime Graph ({ dateTime, timeZone }). */
+function withTz(v: any) {
+  if (!v) return v;
+  if (typeof v === "string") return { dateTime: v, timeZone: APP_TZ };
+  if (typeof v === "object" && v.dateTime) return { dateTime: v.dateTime, timeZone: v.timeZone || APP_TZ };
+  return v;
+}
+
+/** Décalage (minutes) d'un fuseau IANA à un instant donné. */
+function tzOffsetMinutes(tz: string, at: Date): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const p: Record<string, string> = {};
+  for (const part of dtf.formatToParts(at)) if (part.type !== "literal") p[part.type] = part.value;
+  const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  return (asUtc - at.getTime()) / 60000;
+}
+
+/**
+ * Convertit un dateTime "naïf" renvoyé par Graph (déjà exprimé dans `tz`)
+ * en ISO avec offset explicite, ex. 2026-08-09T14:00:00-04:00.
+ */
+function toOffsetIso(dateTime?: string, tz?: string): string | undefined {
+  if (!dateTime) return dateTime;
+  if (/(Z|[+-]\d{2}:\d{2})$/.test(dateTime)) return dateTime;
+  const zone = tz && tz !== "UTC" ? tz : APP_TZ;
+  const base = dateTime.replace(/\.\d+$/, "");
+  const guess = new Date(`${base}Z`);
+  if (Number.isNaN(guess.getTime())) return dateTime;
+  // Deux passes pour gérer les bascules d'heure avancée.
+  let offset = tzOffsetMinutes(zone, guess);
+  offset = tzOffsetMinutes(zone, new Date(guess.getTime() - offset * 60000));
+  const sign = offset >= 0 ? "+" : "-";
+  const abs = Math.abs(offset);
+  const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+  const mm = String(abs % 60).padStart(2, "0");
+  return `${base}${sign}${hh}:${mm}`;
+}
+
 async function graph(admin: any, profile: any, path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const token = profile.ms365_access_token;
+  const isCalendar = /\/(events|calendarView|calendar)/i.test(path);
   const r = await fetch(`${GRAPH}${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(isCalendar ? { Prefer: `outlook.timezone="${APP_TZ}"` } : {}),
+      ...(init.headers ?? {}),
+    },
   });
   if (r.status === 401 && retry) {
     const newToken = await refreshToken(admin, profile);
@@ -27,6 +79,7 @@ async function graph(admin: any, profile: any, path: string, init: RequestInit =
   }
   return r;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -344,24 +397,32 @@ Deno.serve(async (req) => {
       }
       case "create_calendar_event": {
         if (!payload.subject || !payload.start || !payload.end) return j({ success: false, error: "subject, start, end requis" }, 400);
-        const r = await graph(admin, profile, `/me/events`, { method: "POST", body: JSON.stringify({ subject: payload.subject, start: payload.start, end: payload.end, body: { contentType: "HTML", content: payload.body ?? "" }, attendees: (payload.attendees ?? []).map((e: string) => ({ emailAddress: { address: e }, type: "required" })), isOnlineMeeting: payload.isOnlineMeeting ?? true, onlineMeetingProvider: payload.onlineMeetingProvider ?? "teamsForBusiness" }) });
+        const r = await graph(admin, profile, `/me/events`, { method: "POST", body: JSON.stringify({ subject: payload.subject, start: withTz(payload.start), end: withTz(payload.end), body: { contentType: "HTML", content: payload.body ?? "" }, attendees: (payload.attendees ?? []).map((e: string) => ({ emailAddress: { address: e }, type: "required" })), isOnlineMeeting: payload.isOnlineMeeting ?? true, onlineMeetingProvider: payload.onlineMeetingProvider ?? "teamsForBusiness" }) });
         const d = await r.json();
         return j({ success: r.ok, event_id: d.id, event: d, error: d?.error?.message, code: r.status }, r.ok ? 200 : 500);
       }
       case "list_calendar_events": {
         const start = payload.start ?? new Date().toISOString();
         const end = payload.end ?? new Date(Date.now() + 7 * 86400000).toISOString();
-        const r = await graph(admin, profile, `/me/calendarView?startDateTime=${encodeURIComponent(start)}&endDateTime=${encodeURIComponent(end)}&$orderby=start/dateTime&$top=${Math.min(Number(payload.top ?? 20), 50)}&$select=id,subject,bodyPreview,start,end,location,attendees,organizer,onlineMeeting,webLink,isOnlineMeeting`);
+        const r = await graph(admin, profile, `/me/calendarView?startDateTime=${encodeURIComponent(start)}&endDateTime=${encodeURIComponent(end)}&$orderby=start/dateTime&$top=${Math.min(Number(payload.top ?? 20), 250)}&$select=id,subject,bodyPreview,start,end,location,attendees,organizer,onlineMeeting,webLink,isOnlineMeeting`);
         const d = await r.json();
-        return j({ success: r.ok, events: d.value ?? [], error: d?.error?.message, details: d?.error, code: r.status }, r.ok ? 200 : 500);
+        // Graph renvoie des dateTime "naïfs" dans le fuseau demandé (Prefer).
+        // On y ajoute l'offset Toronto pour que les clients (mobile, portail)
+        // affichent la bonne heure quel que soit le fuseau de l'appareil.
+        const events = (d.value ?? []).map((ev: any) => ({
+          ...ev,
+          start: ev?.start ? { ...ev.start, dateTime: toOffsetIso(ev.start.dateTime, ev.start.timeZone) } : ev?.start,
+          end: ev?.end ? { ...ev.end, dateTime: toOffsetIso(ev.end.dateTime, ev.end.timeZone) } : ev?.end,
+        }));
+        return j({ success: r.ok, events, error: d?.error?.message, details: d?.error, code: r.status }, r.ok ? 200 : 500);
       }
       case "update_calendar_event": {
         const id = String(payload.event_id ?? "");
         if (!id) return j({ success: false, error: "event_id requis" }, 400);
         const patch: Record<string, unknown> = {};
         if (payload.subject) patch.subject = payload.subject;
-        if (payload.start) patch.start = payload.start;
-        if (payload.end) patch.end = payload.end;
+        if (payload.start) patch.start = withTz(payload.start);
+        if (payload.end) patch.end = withTz(payload.end);
         if (payload.body) patch.body = { contentType: "HTML", content: payload.body };
         if (payload.location) patch.location = { displayName: String(payload.location) };
         if (Array.isArray(payload.attendees)) patch.attendees = payload.attendees.map((e: string) => ({ emailAddress: { address: e }, type: "required" }));

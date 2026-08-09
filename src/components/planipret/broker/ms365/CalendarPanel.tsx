@@ -3,18 +3,52 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Calendar, Video, ExternalLink, Plus, X, Loader2, RefreshCw, Trash2, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
-import { fmtDateTime } from "@/lib/planipret/brokerFormat";
 
 type Lang = "fr" | "en";
+
+// Les courtiers Planiprêt travaillent au Québec : l'agenda est toujours
+// affiché et enregistré en America/Toronto, peu importe le fuseau du poste.
+const tz = "America/Toronto";
+
+const tzParts = (d: Date) => {
+  const p: Record<string, string> = {};
+  for (const part of new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  }).formatToParts(d)) if (part.type !== "literal") p[part.type] = part.value;
+  return p;
+};
 
 const toLocalInput = (iso?: string) => {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  const p = tzParts(d);
+  return `${p.year}-${p.month}-${p.day}T${p.hour === "24" ? "00" : p.hour}:${p.minute}`;
 };
-const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Toronto";
+
+const tzDayKey = (d: Date) => {
+  const p = tzParts(d);
+  return `${p.year}-${p.month}-${p.day}`;
+};
+
+const tzTime = (iso?: string) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = tzParts(d);
+  return `${p.hour === "24" ? "00" : p.hour}:${p.minute}`;
+};
+
+const tzDateTime = (iso?: string, en = false) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(en ? "en-CA" : "fr-CA", {
+    timeZone: tz, day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+};
+
 
 export default function CalendarPanel({ lang }: { lang: Lang }) {
   const en = lang === "en";
@@ -57,7 +91,7 @@ export default function CalendarPanel({ lang }: { lang: Lang }) {
       if (!raw) continue;
       const d = new Date(raw);
       if (Number.isNaN(d.getTime())) continue;
-      const k = dayKey(d);
+      const k = tzDayKey(d);
       m.set(k, [...(m.get(k) ?? []), e]);
     }
     for (const list of m.values()) {
@@ -206,7 +240,7 @@ export default function CalendarPanel({ lang }: { lang: Lang }) {
                         <div key={ev.id} className="truncate rounded"
                           style={{ fontSize: 10, padding: "1px 4px", background: "rgba(46,155,220,0.14)", color: "var(--pp-text-primary)" }}
                           title={ev.subject || ""}>
-                          {String(ev.start?.dateTime ?? "").slice(11, 16)} {ev.subject || "—"}
+                          {tzTime(ev.start?.dateTime)} {ev.subject || "—"}
                         </div>
                       ))}
                       {list.length > 3 && (
@@ -234,7 +268,7 @@ export default function CalendarPanel({ lang }: { lang: Lang }) {
                 <div className="min-w-0">
                   <div className="truncate" style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>{ev.subject || "—"}</div>
                   <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
-                    {fmtDateTime(ev.start?.dateTime, lang)} → {fmtDateTime(ev.end?.dateTime, lang)} · {(ev.attendees ?? []).length} {en ? "attendees" : "participants"}
+                    {tzDateTime(ev.start?.dateTime, en)} → {tzDateTime(ev.end?.dateTime, en)} · {(ev.attendees ?? []).length} {en ? "attendees" : "participants"}
                   </div>
                   {ev.location?.displayName && (
                     <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{ev.location.displayName}</div>

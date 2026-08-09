@@ -21,6 +21,7 @@ import OvConnectionsStrip from "@/components/planipret/broker/overview/OvConnect
 import { OvRecentCalls, OvRecentMessages, OvTopContacts } from "@/components/planipret/broker/overview/OvRecentTables";
 import GranularityToggle from "@/components/planipret/broker/GranularityToggle";
 import { bucketSeries, type Granularity } from "@/lib/planipret/timeBuckets";
+import { Ov3DChartFilters } from "@/components/planipret/broker/overview/ov3dChart";
 import OvInsights from "@/components/planipret/broker/overview/OvInsights";
 import { buildOverviewMetrics, fetchOverviewInsights, type OverviewInsight } from "@/lib/planipret/overviewInsights";
 
@@ -112,6 +113,7 @@ export default function PBOverview() {
 
   return (
     <PAPage>
+      <Ov3DChartFilters />
       <PAPageHeader
         title={lang === "en" ? `Hello ${profile?.full_name ?? ""}` : `Bonjour ${profile?.full_name ?? ""}`}
         subtitle={lang === "en" ? "Your personal activity" : "Votre activité personnelle"}
@@ -192,7 +194,7 @@ export default function PBOverview() {
 
 
 
-      <div className="grid gap-3 xl:grid-cols-3">
+      <div className="ov3d-stage grid gap-3 xl:grid-cols-3">
         {ov.loading ? (
           <>
             <PPSkeleton style={{ height: 280 }} className="xl:col-span-2" />
@@ -218,7 +220,7 @@ export default function PBOverview() {
         <OvM365Card days={days} lang={lang as "fr" | "en"} granularity={granularity} />
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-3">
+      <div className="ov3d-stage grid gap-3 xl:grid-cols-3">
         {ov.loading ? (
           <>
             <PPSkeleton style={{ height: 240 }} className="xl:col-span-2" />

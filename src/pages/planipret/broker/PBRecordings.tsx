@@ -166,12 +166,23 @@ export default function PBRecordings() {
                         className="px-2.5 py-1 rounded-lg text-[12px]" style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
                         {lang === "en" ? "Open" : "Ouvrir"}
                       </button>
-                      {c.recording_url && String(c.recording_url).startsWith("http") && (
-                        <a href={c.recording_url} download target="_blank" rel="noreferrer"
-                          className="inline-flex items-center ml-2" style={{ color: "var(--pp-brand-accent-2)" }}>
-                          <Download className="w-3.5 h-3.5" />
-                        </a>
-                      )}
+                      <button
+                        type="button"
+                        disabled={dl === c.id}
+                        onClick={async () => {
+                          setDl(c.id);
+                          const r = await downloadRecording(c);
+                          setDl(null);
+                          if (!r.ok) toast.error(r.error ?? (lang === "en" ? "Download failed" : "Téléchargement échoué"));
+                        }}
+                        title={lang === "en" ? "Download" : "Télécharger"}
+                        className="inline-flex items-center ml-2 disabled:opacity-50"
+                        style={{ color: "var(--pp-brand-accent-2)" }}>
+                        {dl === c.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Download className="w-3.5 h-3.5" />}
+                      </button>
+
                     </td>
                   </tr>
                 ))}

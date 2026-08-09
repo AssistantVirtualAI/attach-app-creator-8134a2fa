@@ -6,6 +6,7 @@ import {
 import { Download, LayoutGrid, Table2, Search, RefreshCw, DollarSign, Briefcase, Wallet, Gauge, TrendingUp, Users, Filter, Trophy, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   type CommissionRow, type CommissionFilters, emptyFilters, fetchCommissionRows,
+  fetchMaestroCommissionRows,
   aggregate, applyFilters, brokerNames, lenderNames, globalTotals, kpiOf,
   fmtMoney, fmtNum, fmtPct, fmtBps, fmtCompact, toCsv, SECTION_LABELS, CHART_COLORS,
   isCommissionEditor, deleteCommissionRow, termLabel,
@@ -188,11 +189,16 @@ export default function CommissionDashboard({
   scope = "admin",
   brokerName,
   brokerUserId,
+  source = "internal",
+  onSourceResult,
 }: {
   lang?: Lang;
   scope?: "admin" | "broker";
   brokerName?: string;
   brokerUserId?: string;
+  /** "maestro" pulls the rows live from Maestro instead of the internal table. */
+  source?: "internal" | "maestro";
+  onSourceResult?: (r: { ok: boolean; code?: string; error?: string; dealCount?: number }) => void;
 }) {
   const [rows, setRows] = useState<CommissionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -212,12 +218,20 @@ export default function CommissionDashboard({
   const load = async () => {
     setLoading(true); setErr(null);
     try {
+      if (source === "maestro") {
+        const res = await fetchMaestroCommissionRows();
+        setRows(res.rows);
+        onSourceResult?.({ ok: res.ok, code: res.code, error: res.error, dealCount: res.dealCount });
+        if (!res.ok && res.error) setErr(res.error);
+        return;
+      }
       setRows(await fetchCommissionRows(scope === "broker" ? { brokerUserId, brokerName } : undefined));
+      onSourceResult?.({ ok: true });
     } catch (e: any) {
       setErr(e?.message ?? "Erreur");
     } finally { setLoading(false); }
   };
-  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [scope, brokerName, brokerUserId]);
+  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [scope, brokerName, brokerUserId, source]);
 
   const filtered = useMemo(() => applyFilters(rows, filters), [rows, filters]);
   const totals = useMemo(() => globalTotals(filtered), [filtered]);

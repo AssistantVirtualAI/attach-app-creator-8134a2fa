@@ -74,6 +74,31 @@ export async function fetchCommissionRows(scope?: { brokerUserId?: string | null
   }) as CommissionRow[];
 }
 
+/**
+ * Live commissions from Maestro for the signed-in broker.
+ * Falls back to an explicit code so the UI can invite the broker to connect.
+ */
+export async function fetchMaestroCommissionRows(fiscalYear?: number): Promise<{
+  ok: boolean; rows: CommissionRow[]; code?: string; error?: string; dealCount?: number; path?: string;
+}> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const { data, error } = await supabase.functions.invoke("pp-maestro-commissions", {
+    body: { fiscal_year: fiscalYear ?? new Date().getFullYear() },
+    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+  });
+  if (error) return { ok: false, rows: [], code: "invoke_failed", error: error.message };
+  const res = (data ?? {}) as any;
+  const rows = Array.isArray(res.rows) ? (res.rows as CommissionRow[]) : [];
+  return {
+    ok: Boolean(res.success),
+    rows,
+    code: res.code,
+    error: res.error,
+    dealCount: res.deal_count,
+    path: res.path,
+  };
+}
+
 /* ---------- formatting ---------- */
 const nfMoney = new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
 const nfNum = new Intl.NumberFormat("fr-CA", { maximumFractionDigits: 0 });

@@ -15,7 +15,15 @@ export function OvCard({
   title: string; icon?: ReactNode; to?: string; toLabel?: string; children: ReactNode; className?: string;
 }) {
   return (
-    <div className={`pp-card ${className}`} style={{ padding: 14 }}>
+    <div
+      className={`pp-card relative overflow-hidden ${className}`}
+      style={{
+        padding: 14,
+        background: "radial-gradient(600px 180px at 8% -30%, rgba(46,155,220,.10), transparent 70%), var(--pp-bg-card, var(--pp-bg-elevated))",
+        boxShadow: "0 20px 44px -34px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.04) inset",
+      }}
+    >
+
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2" style={{ color: "var(--pp-text-secondary)", fontSize: 12, fontWeight: 600 }}>
           {icon}<span>{title}</span>

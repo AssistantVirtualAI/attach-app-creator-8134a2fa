@@ -379,8 +379,8 @@ Deno.serve(async (req) => {
         if (!id) return j({ success: false, error: "event_id requis" }, 400);
         const patch: Record<string, unknown> = {};
         if (payload.subject) patch.subject = payload.subject;
-        if (payload.start) patch.start = payload.start;
-        if (payload.end) patch.end = payload.end;
+        if (payload.start) patch.start = withTz(payload.start);
+        if (payload.end) patch.end = withTz(payload.end);
         if (payload.body) patch.body = { contentType: "HTML", content: payload.body };
         if (payload.location) patch.location = { displayName: String(payload.location) };
         if (Array.isArray(payload.attendees)) patch.attendees = payload.attendees.map((e: string) => ({ emailAddress: { address: e }, type: "required" }));

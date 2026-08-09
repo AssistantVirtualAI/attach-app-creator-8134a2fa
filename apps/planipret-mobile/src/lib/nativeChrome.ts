@@ -13,8 +13,8 @@ import { Capacitor } from "@capacitor/core";
  * avec la couleur ci-dessous — visuellement identique à iOS.
  */
 const CHROME = {
-  dark: { bar: "#060D1A", nav: "#060D1A", style: "Dark" as const },
-  light: { bar: "#FFFFFF", nav: "#FFFFFF", style: "Light" as const },
+  dark: { bar: "#060D1A", style: "Dark" as const },
+  light: { bar: "#FFFFFF", style: "Light" as const },
 };
 
 export async function applyNativeChrome(theme: "light" | "dark") {
@@ -32,11 +32,4 @@ export async function applyNativeChrome(theme: "light" | "dark") {
     console.warn("[PP] status bar chrome failed", e);
   }
 
-  if (Capacitor.getPlatform() !== "android") return;
-  try {
-    const { NavigationBar } = await import("@hugotomazi/capacitor-navigation-bar");
-    await NavigationBar.setColor({ color: c.nav, darkButtons: theme === "light" });
-  } catch {
-    // Plugin optionnel : sans lui la couleur du thème natif s'applique.
-  }
 }

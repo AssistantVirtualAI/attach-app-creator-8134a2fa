@@ -969,8 +969,9 @@ function NewMeetingSheet({
           action: "create_calendar_event",
           payload: {
             subject: subject.trim(),
-            start: { dateTime: new Date(start).toISOString(), timeZone: tz },
-            end: { dateTime: new Date(end).toISOString(), timeZone: tz },
+            // datetime-local déjà saisi en heure de Toronto : ne pas convertir en UTC.
+            start: { dateTime: String(start).slice(0, 16), timeZone: tz },
+            end: { dateTime: String(end).slice(0, 16), timeZone: tz },
             body,
             attendees: attendees.split(",").map((s) => s.trim()).filter(Boolean),
             isOnlineMeeting: teams,

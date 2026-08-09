@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { TrendingUp } from "lucide-react";
-import { OvCard, OvEmpty, OV_COLORS, ovTooltip } from "./OvCard";
+import { OvCard, OvEmpty, OV_COLORS, ovTooltip, ovLegend } from "./OvCard";
 import { Chart3D, Ov3DGradients, fill3d } from "./ov3dChart";
 import { PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import { fetchCommissionRows, fmtMoney, type CommissionRow } from "@/lib/planipret/commissionStats";
@@ -69,7 +69,7 @@ export default function OvCommissionsChart({
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
                 <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} />
                 <Tooltip {...ovTooltip} formatter={(v: any) => fmtMoney(Number(v))} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend {...ovLegend} />
                 <Bar dataKey="cy" name={lang === "en" ? "This year" : "Cette année"} fill={fill3d(OV_COLORS.out)} radius={[4, 4, 2, 2]} />
                 <Bar dataKey="py" name={lang === "en" ? "Last year" : "An dernier"} fill={fill3d(OV_COLORS.accent)} radius={[4, 4, 2, 2]} />
               </BarChart>

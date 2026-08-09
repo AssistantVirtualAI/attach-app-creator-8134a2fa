@@ -1,6 +1,6 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Clock } from "lucide-react";
-import { OvCard, OvEmpty, OV_COLORS, ovTooltip } from "./OvCard";
+import { OvCard, OvEmpty, OV_COLORS, ovTooltip, ovLegend } from "./OvCard";
 import { Chart3D, Ov3DGradients, fill3d } from "./ov3dChart";
 import type { OvHour } from "@/hooks/useBrokerOverview";
 

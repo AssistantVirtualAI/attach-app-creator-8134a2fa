@@ -1,6 +1,6 @@
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { MessageSquare, Timer } from "lucide-react";
-import { OvCard, OvEmpty, OV_COLORS, ovTooltip } from "./OvCard";
+import { OvCard, OvEmpty, OV_COLORS, ovTooltip, ovLegend } from "./OvCard";
 import { Chart3D, Ov3DGradients, fill3d } from "./ov3dChart";
 import type { OvDaily } from "@/hooks/useBrokerOverview";
 
@@ -29,7 +29,7 @@ export function OvMessagesChart({ data, lang, granularity }: { data: OvDaily[]; 
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} interval="preserveStartEnd" minTickGap={24} />
             <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} allowDecimals={false} />
             <Tooltip {...ovTooltip} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Legend {...ovLegend} />
             <Bar dataKey="sent" name={lang === "en" ? "Sent" : "Envoyés"} fill={fill3d(OV_COLORS.out)} radius={[4, 4, 2, 2]} />
             <Bar dataKey="received" name={lang === "en" ? "Received" : "Reçus"} fill={fill3d(OV_COLORS.in)} radius={[4, 4, 2, 2]} />
           </BarChart>

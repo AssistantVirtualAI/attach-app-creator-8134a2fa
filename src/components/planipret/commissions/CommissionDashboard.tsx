@@ -10,8 +10,11 @@ import {
   aggregate, applyFilters, brokerNames, lenderNames, globalTotals, kpiOf,
   fmtMoney, fmtNum, fmtPct, fmtBps, fmtCompact, toCsv, SECTION_LABELS, CHART_COLORS,
   isCommissionEditor, deleteCommissionRow, termLabel,
+  fetchCommissionInsights, type CommissionInsight,
 } from "@/lib/planipret/commissionStats";
 import CommissionEntryDialog from "./CommissionEntryDialog";
+import CommissionInsights from "./CommissionInsights";
+
 
 
 type Lang = "fr" | "en";
@@ -276,6 +279,57 @@ export default function CommissionDashboard({
   const termChartData = useMemo(() => termData.map((r) => ({
     name: termLabel(String(r.dimension ?? ""), lang), CY: finite(r.cy_volume), PY: finite(r.py_volume),
   })), [termData, lang]);
+  const MONTHS_FR = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
+  const MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthChartData = useMemo(() => {
+    const rowsM = aggregate(filtered, "month");
+    if (!rowsM.length) return [];
+    const labels = lang === "en" ? MONTHS_EN : MONTHS_FR;
+    return Array.from({ length: 12 }, (_, i) => {
+      const key = String(i + 1).padStart(2, "0");
+      const hit = rowsM.find((r) => String(r.dimension ?? "").padStart(2, "0") === key);
+      return {
+        name: labels[i],
+        CY: finite(hit?.cy_volume), PY: finite(hit?.py_volume),
+        commission: finite(hit?.cy_commission), deals: finite(hit?.cy_deals),
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, lang]);
+
+  // ----- AI insights -----
+  const [aiSummary, setAiSummary] = useState("");
+  const [aiInsights, setAiInsights] = useState<CommissionInsight[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiGenerated, setAiGenerated] = useState(false);
+
+  const runInsights = async () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetchCommissionInsights({
+        rows: filtered,
+        lang,
+        scope,
+        source: source === "maestro" ? "maestro" : "internal",
+      });
+      if (!res.ok) {
+        setAiError(res.error || T(lang, "Analyse indisponible pour le moment.", "Analysis unavailable right now."));
+      } else {
+        setAiSummary(res.summary);
+        setAiInsights(res.insights);
+        setAiGenerated(true);
+      }
+    } catch (e: any) {
+      setAiError(e?.message ?? T(lang, "Erreur inattendue.", "Unexpected error."));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+
   const activeFilterCount = useMemo(() => {
     let n = 0;
     (["broker", "lender", "quarter", "productType", "term", "commissionType"] as const).forEach((k) => { if (filters[k] !== "all") n++; });
@@ -373,6 +427,37 @@ export default function CommissionDashboard({
         <Kpi Icon={Wallet} accent="#4AC9E3" label={T(lang, "Commission moy. / dossier", "Avg comm. / deal")} value={fmtMoney(totals.avgCommission)} />
         <Kpi Icon={Gauge} accent="#E86CB0" label="BPS" value={fmtBps(totals.bps)} sub={`PY ${fmtBps(totals.pyBps)}`} />
       </div>
+
+      {/* Yearly progress vs prior year */}
+      <div className="rounded-xl" style={{ padding: 14, border: "1px solid var(--pp-bg-border-2)", background: "linear-gradient(120deg, rgba(46,155,220,.10), transparent 60%), var(--pp-bg-card, var(--pp-bg-deep))" }}>
+        <div className="flex items-center justify-between gap-3 flex-wrap" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+          <span>{T(lang, "Progression vs année précédente", "Progress vs prior year")}</span>
+          <span className="tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>
+            {fmtMoney(totals.volume)} / {fmtMoney(totals.py_volume)}
+          </span>
+        </div>
+        <div className="mt-2 rounded-full overflow-hidden" style={{ height: 10, background: "var(--pp-bg-deep)", boxShadow: "inset 0 1px 3px rgba(0,0,0,.5)" }}>
+          <div style={{
+            width: `${Math.min(100, totals.py_volume ? (totals.volume / totals.py_volume) * 100 : (totals.volume ? 100 : 0))}%`,
+            height: "100%",
+            background: "linear-gradient(90deg,#2E9BDC,#00D4AA)",
+            boxShadow: "0 0 18px -2px #2E9BDC",
+          }} />
+        </div>
+      </div>
+
+      {/* AI insights */}
+      <CommissionInsights
+        lang={lang}
+        summary={aiSummary}
+        insights={aiInsights}
+        loading={aiLoading}
+        error={aiError}
+        generated={aiGenerated}
+        onGenerate={runInsights}
+      />
+
+
 
       {/* Filters */}
       <div className="pp-card sticky top-2 z-20" style={{ padding: 14, backdropFilter: "blur(10px)" }}>
@@ -474,6 +559,35 @@ export default function CommissionDashboard({
           <VisualTrend items={quarterChartData} />
           <ChartValues items={quarterChartData} compareKey="PY" />
         </Panel>
+
+        {monthChartData.length > 0 && (
+          <Panel className="xl:col-span-3" accent="#4AC9E3" title={T(lang, "Évolution mensuelle", "Monthly trend")}
+            subtitle={T(lang, "Volume mensuel, année courante vs précédente", "Monthly volume, current vs prior year")}>
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={monthChartData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="ccMonthCY" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4AC9E3" stopOpacity={0.55} />
+                    <stop offset="100%" stopColor="#4AC9E3" stopOpacity={0.03} />
+                  </linearGradient>
+                  <linearGradient id="ccMonthPY" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#9B7FE8" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#9B7FE8" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--pp-bg-border)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => fmtCompact(Number(v))} />
+                <Tooltip content={<TooltipDark />} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Area type="monotone" dataKey="PY" name={T(lang, "An dernier", "Last year")} stroke="#9B7FE8" strokeWidth={2} fill="url(#ccMonthPY)" />
+                <Area type="monotone" dataKey="CY" name={T(lang, "Cette année", "This year")} stroke="#4AC9E3" strokeWidth={2.5} fill="url(#ccMonthCY)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </Panel>
+        )}
+
+
 
         <Panel accent="#E8A33C" title={T(lang, "Mix produit", "Product mix")}
           subtitle={T(lang, "Répartition du volume par type de prêt", "Volume split by product type")}>

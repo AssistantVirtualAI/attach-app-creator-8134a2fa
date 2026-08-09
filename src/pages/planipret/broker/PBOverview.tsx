@@ -153,20 +153,17 @@ export default function PBOverview() {
       )}
 
       {!ov.loading && (
-        <div
-          className="rounded-xl"
-          style={{
-            padding: 14,
-            border: "1px solid var(--pp-bg-border)",
-            background: "linear-gradient(120deg, rgba(46,155,220,.10), transparent 60%), var(--pp-bg-card, var(--pp-bg-elevated))",
-          }}
-        >
+        <div className="ov3d-card" style={{ padding: 14 }}>
           <div className="flex items-center justify-between gap-3 flex-wrap" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
             <span>{lang === "en" ? "Calls vs previous period" : "Appels vs période précédente"}</span>
-            <span className="tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>
-              {kpi.calls} / {prev.calls}
+            <span className="flex items-center gap-2">
+              <span className="tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>
+                {kpi.calls} / {prev.calls}
+              </span>
+              <Delta3D delta={pct(kpi.calls, prev.calls)} />
             </span>
           </div>
+
           <div className="mt-2 rounded-full overflow-hidden" style={{ height: 10, background: "var(--pp-bg-deep, rgba(0,0,0,.35))", boxShadow: "inset 0 1px 3px rgba(0,0,0,.5)" }}>
             <div
               style={{

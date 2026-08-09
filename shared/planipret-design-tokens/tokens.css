@@ -1272,3 +1272,95 @@
 .planipret-admin-scope .pa-page .pp-card h2 {
   font-family: 'Urbanist', 'Inter', system-ui, sans-serif;
 }
+
+/* ============================================================
+   PLANIPRÊT BROKER PORTAL — THEME (light default / dark toggle)
+   Scope: `.planipret-broker-scope[data-pp-theme]`
+   Mirrors the mobile app palette exactly so the portal and the
+   mobile app share the same colors.
+   ============================================================ */
+.planipret-broker-scope[data-pp-theme="light"] {
+  --pp-bg-base: #F7F9FC;
+  --pp-bg-surface: #FFFFFF;
+  --pp-bg-elevated: #F0F4F9;
+  --pp-bg-deep: #FFFFFF;
+  --pp-bg-border: #E2E8F0;
+  --pp-bg-border-2: #DCE3EC;
+  --pp-brand-accent: #3B6FA0;
+  --pp-brand-accent-2: #1E3A5F;
+  --pp-success: #0D7A5F;
+  --pp-agent: #6C5CE7;
+  --pp-warning: #C9A84C;
+  --pp-danger: #B23A48;
+  --pp-text-primary: #0F1B3D;
+  --pp-text-secondary: #324867;
+  --pp-text-muted: #5A6B85;
+  --pp-text-faint: #94A3B8;
+  --pp-shadow-sm: 0 1px 2px rgba(15,27,61,0.04), 0 1px 1px rgba(15,27,61,0.03);
+  --pp-shadow-md: 0 8px 24px -12px rgba(15,27,61,0.12), 0 2px 6px -2px rgba(15,27,61,0.06);
+  --pp-shadow-lg: 0 24px 48px -16px rgba(15,27,61,0.18);
+  background: var(--pp-bg-base);
+  color: var(--pp-text-primary);
+}
+
+.planipret-broker-scope[data-pp-theme="dark"] {
+  --pp-bg-base: #060D1A;
+  --pp-bg-surface: #0E1729;
+  --pp-bg-elevated: #142036;
+  --pp-bg-deep: #08111F;
+  --pp-bg-border: rgba(255,255,255,0.07);
+  --pp-bg-border-2: rgba(255,255,255,0.10);
+  --pp-brand-accent: #5FB0E8;
+  --pp-brand-accent-2: #8EC9F2;
+  --pp-success: #2BD8A8;
+  --pp-agent: #9B7FE8;
+  --pp-warning: #F2C94C;
+  --pp-danger: #EF6171;
+  --pp-text-primary: #E8EDF5;
+  --pp-text-secondary: #B7C2D6;
+  --pp-text-muted: #8C99B0;
+  --pp-text-faint: #5A6B85;
+  --pp-shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --pp-shadow-md: 0 10px 28px -14px rgba(0,0,0,0.55);
+  --pp-shadow-lg: 0 24px 48px -16px rgba(0,0,0,0.65);
+  background: var(--pp-bg-base);
+  color: var(--pp-text-primary);
+}
+
+/* Component surfaces follow the tokens in dark mode */
+.planipret-broker-scope[data-pp-theme="dark"] .pp-card,
+.planipret-broker-scope[data-pp-theme="dark"] .pp-card-elevated,
+.planipret-broker-scope[data-pp-theme="dark"] .bg-card,
+.planipret-broker-scope[data-pp-theme="dark"] [class*="bg-card"] {
+  background: var(--pp-bg-surface) !important;
+  border-color: var(--pp-bg-border) !important;
+  color: var(--pp-text-primary);
+}
+.planipret-broker-scope[data-pp-theme="dark"] .pp-sidebar,
+.planipret-broker-scope[data-pp-theme="dark"] .pp-app-header {
+  background: var(--pp-bg-surface) !important;
+  border-color: var(--pp-bg-border) !important;
+}
+.planipret-broker-scope[data-pp-theme="dark"] .pp-sidebar > div:last-child {
+  background: var(--pp-bg-deep) !important;
+}
+.planipret-broker-scope[data-pp-theme="dark"] .pa-main { background: var(--pp-bg-base) !important; }
+.planipret-broker-scope[data-pp-theme="dark"] h1,
+.planipret-broker-scope[data-pp-theme="dark"] h2,
+.planipret-broker-scope[data-pp-theme="dark"] h3,
+.planipret-broker-scope[data-pp-theme="dark"] h4,
+.planipret-broker-scope[data-pp-theme="dark"] .pp-heading { color: var(--pp-text-primary); }
+.planipret-broker-scope[data-pp-theme="dark"] input,
+.planipret-broker-scope[data-pp-theme="dark"] select,
+.planipret-broker-scope[data-pp-theme="dark"] textarea {
+  background: var(--pp-bg-elevated) !important;
+  border-color: var(--pp-bg-border) !important;
+  color: var(--pp-text-primary) !important;
+}
+.planipret-broker-scope[data-pp-theme="dark"] .pp-nav-item { color: var(--pp-text-secondary); }
+.planipret-broker-scope[data-pp-theme="dark"] .pp-nav-item.is-active {
+  background: rgba(95,176,232,0.12);
+  color: var(--pp-brand-accent);
+}
+.planipret-broker-scope[data-pp-theme="dark"] table thead th { color: var(--pp-text-muted); }
+.planipret-broker-scope[data-pp-theme="dark"] table tbody tr { border-color: var(--pp-bg-border); }

@@ -2670,6 +2670,7 @@ function patchAndroidSplashTheme() {
     <color name="colorPrimaryDark">#0A1425</color>
     <color name="colorAccent">#2E9BDC</color>
     <color name="splashBackground">#0A1425</color>
+    <color name="navBarBackground">#060D1A</color>
 </resources>
 `
   );
@@ -2700,7 +2701,7 @@ function patchAndroidSplashTheme() {
         <item name="android:background">@color/splashBackground</item>
         <item name="android:windowBackground">@color/splashBackground</item>
         <item name="android:statusBarColor">@color/splashBackground</item>
-        <item name="android:navigationBarColor">@color/splashBackground</item>
+        <item name="android:navigationBarColor">@color/navBarBackground</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:windowTranslucentStatus">false</item>
         <item name="android:windowTranslucentNavigation">false</item>

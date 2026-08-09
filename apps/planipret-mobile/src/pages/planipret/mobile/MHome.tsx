@@ -27,6 +27,16 @@ import BriefListenButton from "@/components/planipret/mobile/BriefListenButton";
 type Period = "day" | "week" | "month" | "shift";
 const DEFAULT_PERIOD: Period = "month";
 
+// Courtiers au Québec : l'agenda Microsoft est toujours affiché en heure de Toronto.
+const PP_TZ = "America/Toronto";
+const ppDayKey = (d: Date) => {
+  const p: Record<string, string> = {};
+  for (const part of new Intl.DateTimeFormat("en-CA", {
+    timeZone: PP_TZ, year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(d)) if (part.type !== "literal") p[part.type] = part.value;
+  return `${p.year}-${p.month}-${p.day}`;
+};
+
 function periodRange(period: Period) {
   const now = new Date();
   const since = new Date(now);

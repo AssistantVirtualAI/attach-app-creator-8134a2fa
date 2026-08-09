@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { TrendingUp } from "lucide-react";
 import { OvCard, OvEmpty, OV_COLORS, ovTooltip } from "./OvCard";
+import { Chart3D, Ov3DGradients, fill3d } from "./ov3dChart";
 import { PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import { fetchCommissionRows, fmtMoney, type CommissionRow } from "@/lib/planipret/commissionStats";
 
@@ -60,17 +61,20 @@ export default function OvCommissionsChart({
                 {lang === "en" ? "prior year" : "année précédente"} {fmtMoney(pyTotal)}
               </span>
             </div>
+            <Chart3D>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={data} margin={{ top: 4, right: 8, left: -6, bottom: 0 }}>
+                <Ov3DGradients colors={[OV_COLORS.out, OV_COLORS.accent]} />
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--pp-bg-border)" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
                 <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} />
                 <Tooltip {...ovTooltip} formatter={(v: any) => fmtMoney(Number(v))} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="cy" name={lang === "en" ? "This year" : "Cette année"} fill={OV_COLORS.out} radius={[3, 3, 0, 0]} />
-                <Bar dataKey="py" name={lang === "en" ? "Last year" : "An dernier"} fill={OV_COLORS.accent} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="cy" name={lang === "en" ? "This year" : "Cette année"} fill={fill3d(OV_COLORS.out)} radius={[4, 4, 2, 2]} />
+                <Bar dataKey="py" name={lang === "en" ? "Last year" : "An dernier"} fill={fill3d(OV_COLORS.accent)} radius={[4, 4, 2, 2]} />
               </BarChart>
             </ResponsiveContainer>
+            </Chart3D>
           </>
         )}
     </OvCard>

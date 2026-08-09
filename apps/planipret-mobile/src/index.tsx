@@ -107,20 +107,35 @@ if (typeof window !== 'undefined') {
 }
 
 // Global anti-zoom guards for iOS/Android WebView (no pinch, no double-tap zoom).
+// IMPORTANT: on Android the viewport meta already blocks zoom, and calling
+// preventDefault() on rapid touchend sequences kills momentum scrolling
+// (Messages page freezing). So the double-tap guard is iOS-only, and only
+// fires when the two taps land on the same spot.
 if (typeof document !== 'undefined') {
+  const isAndroid = Capacitor.getPlatform() === 'android';
   document.addEventListener('gesturestart', (e) => e.preventDefault());
   document.addEventListener('gesturechange', (e) => e.preventDefault());
   document.addEventListener('gestureend', (e) => e.preventDefault());
-  let lastTouchEnd = 0;
-  document.addEventListener(
-    'touchend',
-    (e) => {
-      const now = Date.now();
-      if (now - lastTouchEnd <= 300) e.preventDefault();
-      lastTouchEnd = now;
-    },
-    { passive: false },
-  );
+  if (!isAndroid) {
+    let lastTouchEnd = 0;
+    let lastX = 0;
+    let lastY = 0;
+    document.addEventListener(
+      'touchend',
+      (e) => {
+        const t = e.changedTouches?.[0];
+        const x = t?.clientX ?? 0;
+        const y = t?.clientY ?? 0;
+        const now = Date.now();
+        const sameSpot = Math.abs(x - lastX) < 30 && Math.abs(y - lastY) < 30;
+        if (now - lastTouchEnd <= 300 && sameSpot && e.cancelable) e.preventDefault();
+        lastTouchEnd = now;
+        lastX = x;
+        lastY = y;
+      },
+      { passive: false },
+    );
+  }
   document.addEventListener('dblclick', (e) => {
     const t = e.target as HTMLElement | null;
     if (!t) return;
@@ -129,6 +144,25 @@ if (typeof document !== 'undefined') {
     e.preventDefault();
   });
 }
+
+/**
+ * Android only: make the WebView own the whole screen like iOS.
+ * Without this the native launch image (robot) stays visible in a band above
+ * the app. We disable status-bar overlay, paint it Planiprêt navy, and hide
+ * the splash as soon as we boot.
+ */
+async function configureAndroidChrome() {
+  if (Capacitor.getPlatform() !== 'android') return;
+  try {
+    const { StatusBar, Style } = await import('@capacitor/status-bar');
+    await StatusBar.setOverlaysWebView({ overlay: false });
+    await StatusBar.setBackgroundColor({ color: '#0A1425' });
+    await StatusBar.setStyle({ style: Style.Dark });
+  } catch (e) {
+    console.warn('[PP] StatusBar config failed', e);
+  }
+}
+
 
 let splashHidden = false;
 /**

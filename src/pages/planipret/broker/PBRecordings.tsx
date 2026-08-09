@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { useOutletContext, useSearchParams } from "react-router-dom";
-import { Mic, Download, Sparkles } from "lucide-react";
+import { Mic, Download, Sparkles, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { downloadRecording } from "@/lib/planipret/downloadRecording";
 import RecordingDetailDrawer from "@/components/planipret/recordings/RecordingDetailDrawer";
+
 
 import { PAPage, PAPageHeader, PATableWrap } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
@@ -28,6 +31,8 @@ export default function PBRecordings() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<any | null>(null);
+  const [dl, setDl] = useState<string | null>(null);
+
 
   const patch = (next: Record<string, string | null>, resetPage = true) => {
     const p = new URLSearchParams(params);
@@ -166,12 +171,23 @@ export default function PBRecordings() {
                         className="px-2.5 py-1 rounded-lg text-[12px]" style={{ border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
                         {lang === "en" ? "Open" : "Ouvrir"}
                       </button>
-                      {c.recording_url && String(c.recording_url).startsWith("http") && (
-                        <a href={c.recording_url} download target="_blank" rel="noreferrer"
-                          className="inline-flex items-center ml-2" style={{ color: "var(--pp-brand-accent-2)" }}>
-                          <Download className="w-3.5 h-3.5" />
-                        </a>
-                      )}
+                      <button
+                        type="button"
+                        disabled={dl === c.id}
+                        onClick={async () => {
+                          setDl(c.id);
+                          const r = await downloadRecording(c);
+                          setDl(null);
+                          if (!r.ok) toast.error(r.error ?? (lang === "en" ? "Download failed" : "Téléchargement échoué"));
+                        }}
+                        title={lang === "en" ? "Download" : "Télécharger"}
+                        className="inline-flex items-center ml-2 disabled:opacity-50"
+                        style={{ color: "var(--pp-brand-accent-2)" }}>
+                        {dl === c.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Download className="w-3.5 h-3.5" />}
+                      </button>
+
                     </td>
                   </tr>
                 ))}

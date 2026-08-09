@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { RefreshCw, X, Download } from "lucide-react";
 import { getAiCorrectedTranscript, getAiTranscriptSegments, getDisplayTranscript } from "@/lib/planipretTranscript";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { downloadRecording } from "@/lib/planipret/downloadRecording";
+
 
 const ACCENT = "#2E9BDC";
 const AGENT = "#9B7FE8";
@@ -546,6 +548,12 @@ export default function RecordingDetailDrawer({ call, onClose, onUpdated, showBr
                     <div>
                       <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.audioLabel}</p>
                       <audio key={detail.recording_url} src={detail.recording_url} controls className="w-full" />
+                      <button type="button" onClick={async () => {
+                        const r = await downloadRecording(detail);
+                        if (!r.ok) toast.error(r.error ?? "Téléchargement échoué");
+                      }} className="inline-flex items-center gap-1 text-xs mt-2" style={{ color: ACCENT }}>
+                        <Download className="w-3 h-3" /> {t.download}
+                      </button>
                     </div>
                   );
                 }
@@ -565,12 +573,16 @@ export default function RecordingDetailDrawer({ call, onClose, onUpdated, showBr
                           }
                         }}
                       />
-                      <a href={detail.recording_url} download className="inline-flex items-center gap-1 text-xs mt-2" style={{ color: ACCENT }}>
+                      <button type="button" onClick={async () => {
+                        const r = await downloadRecording(detail);
+                        if (!r.ok) toast.error(r.error ?? "Téléchargement échoué");
+                      }} className="inline-flex items-center gap-1 text-xs mt-2" style={{ color: ACCENT }}>
                         <Download className="w-3 h-3" /> {t.download}
-                      </a>
+                      </button>
                     </div>
                   );
                 }
+
                 // Fallback state (no audio yet, no error yet): still loading or awaiting first resolve
 
                 return (

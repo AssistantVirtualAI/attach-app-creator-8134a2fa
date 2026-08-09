@@ -31,7 +31,7 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
     };
   }, [rows]);
 
-  const quiet = useOv3dQuiet([rows.length, rows[0]?.id ?? rows[0]?.key ?? null]);
+  const quiet = useOv3dQuiet([rows.length, (rows[0] as any)?.id ?? null]);
 
   return (
     <OvCard
@@ -100,7 +100,7 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
 });
 
 export const OvRecentMessages = memo(function OvRecentMessages({ rows, lang }: { rows: any[]; lang: "fr" | "en" }) {
-  const quiet = useOv3dQuiet([rows.length, rows[0]?.id ?? rows[0]?.key ?? null]);
+  const quiet = useOv3dQuiet([rows.length, (rows[0] as any)?.id ?? null]);
 
   return (
     <OvCard
@@ -142,7 +142,7 @@ export const OvTopContacts = memo(function OvTopContacts({ rows, lang }: { rows:
     total: rows.reduce((a, b) => a + (b.calls || 0), 0),
   }), [rows]);
 
-  const quiet = useOv3dQuiet([rows.length, rows[0]?.id ?? rows[0]?.key ?? null]);
+  const quiet = useOv3dQuiet([rows.length, rows[0]?.peer ?? null]);
 
   return (
     <OvCard title={lang === "en" ? "Top contacts" : "Meilleurs contacts"} icon={<Users className="w-4 h-4" />}>

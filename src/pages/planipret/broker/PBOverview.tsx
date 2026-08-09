@@ -21,6 +21,8 @@ import OvConnectionsStrip from "@/components/planipret/broker/overview/OvConnect
 import { OvRecentCalls, OvRecentMessages, OvTopContacts } from "@/components/planipret/broker/overview/OvRecentTables";
 import GranularityToggle from "@/components/planipret/broker/GranularityToggle";
 import { bucketSeries, type Granularity } from "@/lib/planipret/timeBuckets";
+import Ov3DIntensityControl from "@/components/planipret/broker/overview/Ov3DIntensityControl";
+import { useOv3dIntensity, useOv3dProfiler } from "@/hooks/useOv3dIntensity";
 import { Ov3DChartFilters } from "@/components/planipret/broker/overview/ov3dChart";
 import OvInsights from "@/components/planipret/broker/overview/OvInsights";
 import { buildOverviewMetrics, fetchOverviewInsights, type OverviewInsight } from "@/lib/planipret/overviewInsights";
@@ -38,6 +40,8 @@ export default function PBOverview() {
   const [commissions, setCommissions] = useState<{ cy: number; py: number } | null>(null);
 
   const ov = useBrokerOverview(userId, days, lang as "fr" | "en");
+  const { level: ov3dLevel, setLevel: setOv3dLevel, autoReduced, degrade } = useOv3dIntensity();
+  const profile3d = useOv3dProfiler(degrade, ov3dLevel !== "flat");
   const { kpi, prev } = ov;
   const series = bucketSeries(ov.daily, granularity, lang as "fr" | "en");
   const recSeries = granularity === "day"
@@ -122,12 +126,13 @@ export default function PBOverview() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <OvConnectionsStrip profile={profile} lang={lang as "fr" | "en"} />
         <div className="flex flex-wrap items-center gap-2">
-        <GranularityToggle value={granularity} onChange={setGranularity} lang={lang as "fr" | "en"} />
+        <GranularityToggle value={granularity} onChange={(v) => { profile3d(); setGranularity(v); }} lang={lang as "fr" | "en"} />
+        <Ov3DIntensityControl level={ov3dLevel} onChange={setOv3dLevel} lang={lang as "fr" | "en"} autoReduced={autoReduced} />
         <div className="flex items-center gap-1">
           {RANGES.map((d) => (
             <button
               key={d}
-              onClick={() => setDays(d)}
+              onClick={() => { profile3d(); setDays(d); }}
               className="px-3 py-1.5 rounded-lg"
               style={{
                 fontSize: 12,

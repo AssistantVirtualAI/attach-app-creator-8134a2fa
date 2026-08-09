@@ -9,6 +9,8 @@ import { fmtDuration } from "@/lib/planipret/brokerFormat";
 import { fmtMoney } from "@/lib/planipret/commissionStats";
 import { useBrokerOverview } from "@/hooks/useBrokerOverview";
 import OvKpiRow, { type KpiCard } from "@/components/planipret/broker/overview/OvKpiRow";
+import { Delta3D } from "@/components/planipret/broker/overview/ov3d";
+
 import { OvCallsChart, OvCallsSplit } from "@/components/planipret/broker/overview/OvCallsChart";
 import { OvMessagesChart, OvDurationChart } from "@/components/planipret/broker/overview/OvMessagesChart";
 import OvHoursChart from "@/components/planipret/broker/overview/OvHoursChart";

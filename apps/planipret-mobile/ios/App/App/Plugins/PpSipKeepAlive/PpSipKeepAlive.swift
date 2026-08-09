@@ -578,9 +578,6 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       applyAudioRoute()
     }
     private func connect() {
-      // Un seul propriétaire par AOR : si PJSIP tient la registration TLS,
-      // toute socket WSS ici crée un binding concurrent que NetSapiens résout
-      // en fermant l'autre (appels entrants → messagerie).
       if nativeEngineOwnsAor {
         NSLog("[PpSipKeepAlive] connect skipped — PJSIP owns the AOR")
         registerOnOpen = false

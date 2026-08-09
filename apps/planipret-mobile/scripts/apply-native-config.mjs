@@ -2711,6 +2711,26 @@ function patchAndroidSplashTheme() {
 `
   );
 
+  // 3b. Android 12+ (API 31) : l'API SplashScreen affiche AUTOMATIQUEMENT
+  // l'icône du launcher (le fameux « robot ») au-dessus du fond, même si le
+  // thème classique n'a aucune image. Il faut neutraliser l'icône animée ici,
+  // sinon elle reste visible en haut de l'écran au démarrage.
+  writeIfChanged(
+    path.join(resRoot, "values-v31", "styles.xml"),
+    `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splashBackground</item>
+        <item name="windowSplashScreenAnimatedIcon">@null</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/splashBackground</item>
+        <item name="android:windowSplashScreenBehavior" tools:targetApi="33">icon_preferred</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+    </style>
+</resources>
+`.replace("<resources>", '<resources xmlns:tools="http://schemas.android.com/tools">')
+  );
+
+
   // 4. Supprimer toute image de lancement générée (le fameux robot)
   let removed = 0;
   for (const dir of fs.readdirSync(resRoot)) {

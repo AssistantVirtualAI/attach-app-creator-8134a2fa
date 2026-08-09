@@ -91,14 +91,15 @@ export default function PlanipretBrokerLayout() {
 
   if (state === "anon") {
     return (
-      <div className="planipret-scope">
-        <MobileAuthScreen
+      <div className="planipret-scope planipret-admin-scope">
+        <BrokerAuthScreen
           msRedirect={location.pathname.startsWith("/planipret/broker") ? location.pathname : "/planipret/broker/overview"}
           onLoggedIn={async () => { await load(); }}
         />
       </div>
     );
   }
+
 
   if (state === "denied") {
     return (

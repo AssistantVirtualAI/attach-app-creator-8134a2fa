@@ -731,7 +731,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
     for (const e of events) {
       const dt = e.start?.dateTime ? new Date(e.start.dateTime) : null;
       if (!dt) continue;
-      const key = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
+      const key = ppDayKey(dt);
       (map[key] ||= []).push(e);
     }
     for (const k of Object.keys(map)) {
@@ -740,7 +740,7 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
     return map;
   }, [events]);
 
-  const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const dayKey = (d: Date) => ppDayKey(d);
   const selectedEvents = eventsByDay[dayKey(selected)] ?? [];
 
   // Build 6-week grid starting from Sunday
@@ -878,11 +878,11 @@ function MsCalendarSection({ profile, events, loading, error, lang }: {
                       <div className="w-14 flex-shrink-0 text-center px-1.5 py-1 rounded-md"
                         style={{ background: "rgba(46,155,220,0.12)", color: "var(--pp-brand-accent)", fontFamily: "Urbanist,sans-serif" }}>
                         <div className="text-[11px] font-bold tabular-nums leading-none">
-                          {start ? start.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) : "—"}
+                          {start ? start.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", timeZone: PP_TZ }) : "—"}
                         </div>
                         {end && (
                           <div className="text-[9px] mt-0.5 opacity-70 tabular-nums leading-none">
-                            {end.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}
+                            {end.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", timeZone: PP_TZ })}
                           </div>
                         )}
                       </div>

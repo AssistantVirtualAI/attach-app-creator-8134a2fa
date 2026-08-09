@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, TrendingUp, Settings, LogOut, Mail, ShieldAlert, Users,
 } from "lucide-react";
-import MobileAuthScreen from "@/components/planipret/mobile/MobileAuthScreen";
+import BrokerAuthScreen from "@/components/planipret/broker/BrokerAuthScreen";
 import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
@@ -91,14 +91,15 @@ export default function PlanipretBrokerLayout() {
 
   if (state === "anon") {
     return (
-      <div className="planipret-scope">
-        <MobileAuthScreen
+      <div className="planipret-scope planipret-admin-scope">
+        <BrokerAuthScreen
           msRedirect={location.pathname.startsWith("/planipret/broker") ? location.pathname : "/planipret/broker/overview"}
           onLoggedIn={async () => { await load(); }}
         />
       </div>
     );
   }
+
 
   if (state === "denied") {
     return (

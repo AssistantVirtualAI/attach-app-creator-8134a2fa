@@ -392,6 +392,37 @@ export default function CommissionDashboard({
         <Kpi Icon={Gauge} accent="#E86CB0" label="BPS" value={fmtBps(totals.bps)} sub={`PY ${fmtBps(totals.pyBps)}`} />
       </div>
 
+      {/* Yearly progress vs prior year */}
+      <div className="rounded-xl" style={{ padding: 14, border: "1px solid var(--pp-bg-border-2)", background: "linear-gradient(120deg, rgba(46,155,220,.10), transparent 60%), var(--pp-bg-card, var(--pp-bg-deep))" }}>
+        <div className="flex items-center justify-between gap-3 flex-wrap" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+          <span>{T(lang, "Progression vs année précédente", "Progress vs prior year")}</span>
+          <span className="tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>
+            {fmtMoney(totals.volume)} / {fmtMoney(totals.py_volume)}
+          </span>
+        </div>
+        <div className="mt-2 rounded-full overflow-hidden" style={{ height: 10, background: "var(--pp-bg-deep)", boxShadow: "inset 0 1px 3px rgba(0,0,0,.5)" }}>
+          <div style={{
+            width: `${Math.min(100, totals.py_volume ? (totals.volume / totals.py_volume) * 100 : (totals.volume ? 100 : 0))}%`,
+            height: "100%",
+            background: "linear-gradient(90deg,#2E9BDC,#00D4AA)",
+            boxShadow: "0 0 18px -2px #2E9BDC",
+          }} />
+        </div>
+      </div>
+
+      {/* AI insights */}
+      <CommissionInsights
+        lang={lang}
+        summary={aiSummary}
+        insights={aiInsights}
+        loading={aiLoading}
+        error={aiError}
+        generated={aiGenerated}
+        onGenerate={runInsights}
+      />
+
+
+
       {/* Filters */}
       <div className="pp-card sticky top-2 z-20" style={{ padding: 14, backdropFilter: "blur(10px)" }}>
         <div className="flex items-center gap-2 mb-3">

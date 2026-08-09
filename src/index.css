@@ -1009,20 +1009,26 @@ All colors MUST be HSL.
     inset 4px 0 0 var(--ov3d-accent);
 }
 
-/* Charts: extruded look */
-.ov3d-chart { position: relative; }
+/* Charts: soft extruded look (elegant, not crude) */
+.ov3d-chart { position: relative; padding-top: 4px; }
 .ov3d-chart .recharts-surface { overflow: visible; }
 .ov3d-chart .recharts-bar-rectangle path,
 .ov3d-chart .recharts-rectangle path { filter: url(#ov3dExtrude); }
-.ov3d-chart .recharts-area-area { filter: drop-shadow(0 10px 12px rgba(0,0,0,.45)); }
+.ov3d-chart .recharts-area-area { filter: none; }
 .ov3d-chart .recharts-line-curve,
-.ov3d-chart .recharts-area-curve { filter: drop-shadow(0 6px 6px rgba(0,0,0,.55)); }
-.ov3d-chart .recharts-pie-sector path { filter: drop-shadow(0 12px 12px rgba(0,0,0,.5)); }
+.ov3d-chart .recharts-area-curve { filter: drop-shadow(0 5px 8px rgba(0,0,0,.38)); stroke-linecap: round; }
+.ov3d-chart .recharts-pie-sector path { filter: url(#ov3dSoft); }
+/* Softer grid + axes so the relief reads instead of the lines */
+.ov3d-chart .recharts-cartesian-grid line { stroke: color-mix(in srgb, var(--pp-bg-border) 60%, transparent); }
+.ov3d-chart .recharts-cartesian-axis-line,
+.ov3d-chart .recharts-cartesian-axis-tick-line { stroke: transparent; }
+.ov3d-chart .recharts-text { letter-spacing: .2px; }
+/* Ambient floor glow under the plot */
 .ov3d-chart::before {
   content: "";
-  position: absolute; left: 6%; right: 6%; bottom: 16px; height: 14px;
+  position: absolute; left: 4%; right: 4%; bottom: 22px; height: 22px;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(0,0,0,.45), transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(0,0,0,calc(.32 * var(--ov3d-d, 1))), transparent 72%);
   pointer-events: none;
 }
 
@@ -1030,7 +1036,9 @@ All colors MUST be HSL.
   .ov3d-deck { transform: none; }
   .ov3d-chart .recharts-bar-rectangle path,
   .ov3d-chart .recharts-rectangle path { filter: none; }
+  .ov3d-chart .recharts-pie-sector path { filter: none; }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .ov3d-deck { transform: none; }
 }

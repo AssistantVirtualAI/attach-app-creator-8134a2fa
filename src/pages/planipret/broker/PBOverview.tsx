@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Phone, PhoneMissed, MessageSquare, Timer, Voicemail, Mic, PercentCircle, TrendingUp } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
@@ -19,6 +19,9 @@ import OvConnectionsStrip from "@/components/planipret/broker/overview/OvConnect
 import { OvRecentCalls, OvRecentMessages, OvTopContacts } from "@/components/planipret/broker/overview/OvRecentTables";
 import GranularityToggle from "@/components/planipret/broker/GranularityToggle";
 import { bucketSeries, type Granularity } from "@/lib/planipret/timeBuckets";
+import OvInsights from "@/components/planipret/broker/overview/OvInsights";
+import { buildOverviewMetrics, fetchOverviewInsights, type OverviewInsight } from "@/lib/planipret/overviewInsights";
+
 
 const RANGES = [7, 30, 90, 180, 365];
 

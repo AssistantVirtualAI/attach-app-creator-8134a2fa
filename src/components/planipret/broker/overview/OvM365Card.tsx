@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Calendar, Mail, Video } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { OvCard, OvEmpty, OV_COLORS, ovTooltip } from "./OvCard";
+import { OvCard, OvEmpty, OV_COLORS, ovTooltip, ovLegend } from "./OvCard";
 import { PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import { fmtDateTime } from "@/lib/planipret/brokerFormat";
 import { bucketSeries, type Granularity } from "@/lib/planipret/timeBuckets";
@@ -76,7 +76,7 @@ export default function OvM365Card({ days, lang, granularity = "day" }: { days: 
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} interval="preserveStartEnd" minTickGap={24} />
                     <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} allowDecimals={false} />
                     <Tooltip {...ovTooltip} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Legend {...ovLegend} />
                     <Bar dataKey="received" name={lang === "en" ? "Received" : "Reçus"} fill={OV_COLORS.in} radius={[3, 3, 0, 0]} />
                     <Bar dataKey="sent" name={lang === "en" ? "Sent" : "Envoyés"} fill={OV_COLORS.out} radius={[3, 3, 0, 0]} />
                     <Bar dataKey="meetings" name={lang === "en" ? "Meetings" : "Réunions"} fill={OV_COLORS.warm} radius={[3, 3, 0, 0]} />

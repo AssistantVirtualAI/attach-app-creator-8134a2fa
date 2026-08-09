@@ -43,11 +43,26 @@ export function OvEmpty({ label }: { label: string }) {
 }
 
 export const ovTooltip = {
+  // Legibility over the 3D relief: opaque surface, no inherited filters,
+  // strong label/value contrast and a soft cursor highlight.
+  wrapperStyle: { outline: "none", zIndex: 40 },
+  cursor: { fill: "rgba(255,255,255,0.06)", stroke: "rgba(255,255,255,0.12)" },
   contentStyle: {
     background: "var(--pp-bg-elevated, #14161c)",
     border: "1px solid var(--pp-bg-border)",
     borderRadius: 10,
     fontSize: 12,
+    padding: "8px 10px",
     color: "var(--pp-text-primary)",
+    boxShadow: "0 18px 40px -18px rgba(0,0,0,.95)",
+    filter: "none",
   },
+  labelStyle: { color: "var(--pp-text-primary)", fontWeight: 700, marginBottom: 4 },
+  itemStyle: { color: "var(--pp-text-secondary)", padding: "1px 0" },
+} as const;
+
+/** Legend style that stays readable above gradients / shadows. */
+export const ovLegend = {
+  wrapperStyle: { fontSize: 11, filter: "none", color: "var(--pp-text-secondary)" },
+  iconSize: 9,
 } as const;

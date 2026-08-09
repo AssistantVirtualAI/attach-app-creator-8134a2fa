@@ -4,6 +4,7 @@ import { MessageSquare, Phone, Sparkles, Users } from "lucide-react";
 import { OvCard, OvEmpty } from "./OvCard";
 import { Badge3D, MicroBar3D, OV3D, Row3D, Table3D, Threshold3D } from "./ov3d";
 import { callPeer, fmtDateTime, fmtDuration } from "@/lib/planipret/brokerFormat";
+import { useOv3dQuiet } from "@/hooks/useOv3dIntensity";
 import type { OvContact } from "@/hooks/useBrokerOverview";
 
 function StatusBadge({ call, lang }: { call: any; lang: "fr" | "en" }) {
@@ -30,6 +31,8 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
     };
   }, [rows]);
 
+  const quiet = useOv3dQuiet([rows.length, (rows[0] as any)?.id ?? null]);
+
   return (
     <OvCard
       title={lang === "en" ? "Recent calls" : "Derniers appels"}
@@ -40,7 +43,7 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
     >
       {!rows.length ? <OvEmpty label={lang === "en" ? "No calls" : "Aucun appel"} /> : (
         <div className="overflow-x-auto">
-          <Table3D>
+          <Table3D quiet={quiet}>
             <thead>
               <tr>
                 <th>{lang === "en" ? "When" : "Quand"}</th>
@@ -97,6 +100,8 @@ export const OvRecentCalls = memo(function OvRecentCalls({ rows, lang }: { rows:
 });
 
 export const OvRecentMessages = memo(function OvRecentMessages({ rows, lang }: { rows: any[]; lang: "fr" | "en" }) {
+  const quiet = useOv3dQuiet([rows.length, (rows[0] as any)?.id ?? null]);
+
   return (
     <OvCard
       title={lang === "en" ? "Recent texts" : "Derniers textos"}
@@ -137,10 +142,12 @@ export const OvTopContacts = memo(function OvTopContacts({ rows, lang }: { rows:
     total: rows.reduce((a, b) => a + (b.calls || 0), 0),
   }), [rows]);
 
+  const quiet = useOv3dQuiet([rows.length, rows[0]?.peer ?? null]);
+
   return (
     <OvCard title={lang === "en" ? "Top contacts" : "Meilleurs contacts"} icon={<Users className="w-4 h-4" />}>
       {!rows.length ? <OvEmpty label={lang === "en" ? "No data" : "Aucune donnée"} /> : (
-        <Table3D>
+        <Table3D quiet={quiet}>
           <tbody>
             {rows.map((r) => {
               const share = total ? Math.round(((r.calls || 0) / total) * 100) : 0;

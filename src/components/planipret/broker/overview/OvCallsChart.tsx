@@ -1,6 +1,6 @@
 import { Area, AreaChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PhoneCall, PieChart as PieIcon } from "lucide-react";
-import { OvCard, OvEmpty, OV_COLORS, ovTooltip } from "./OvCard";
+import { OvCard, OvEmpty, OV_COLORS, ovTooltip, ovLegend } from "./OvCard";
 import { Chart3D, Ov3DGradients, areaFill3d, fill3d } from "./ov3dChart";
 import type { OvDaily } from "@/hooks/useBrokerOverview";
 
@@ -33,7 +33,7 @@ export function OvCallsChart({ data, lang, granularity }: { data: OvDaily[]; lan
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} interval="preserveStartEnd" minTickGap={24} />
             <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} allowDecimals={false} />
             <Tooltip {...ovTooltip} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Legend {...ovLegend} />
             <Area type="monotone" dataKey="inbound" stackId="1" name={lang === "en" ? "Inbound" : "Entrants"} stroke={OV_COLORS.in} fill={areaFill3d(OV_COLORS.in)} fillOpacity={1} strokeWidth={2} />
             <Area type="monotone" dataKey="outbound" stackId="1" name={lang === "en" ? "Outbound" : "Sortants"} stroke={OV_COLORS.out} fill={areaFill3d(OV_COLORS.out)} fillOpacity={1} strokeWidth={2} />
             <Area type="monotone" dataKey="missed" stackId="1" name={lang === "en" ? "Missed" : "Manqués"} stroke={OV_COLORS.missed} fill={areaFill3d(OV_COLORS.missed)} fillOpacity={1} strokeWidth={2} />
@@ -63,7 +63,7 @@ export function OvCallsSplit({ split, lang }: { split: { key: string; value: num
               {data.map((d) => <Cell key={d.key} fill={fill3d(colors[d.key])} stroke="transparent" />)}
             </Pie>
             <Tooltip {...ovTooltip} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Legend {...ovLegend} />
           </PieChart>
         </ResponsiveContainer>
         </Chart3D>

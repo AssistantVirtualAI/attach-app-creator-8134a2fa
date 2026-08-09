@@ -152,15 +152,14 @@ if (typeof document !== 'undefined') {
  * the splash as soon as we boot.
  */
 async function configureAndroidChrome() {
-  if (Capacitor.getPlatform() !== 'android') return;
+  if (!Capacitor.isNativePlatform()) return;
+  let theme: 'light' | 'dark' = 'light';
   try {
-    const { StatusBar, Style } = await import('@capacitor/status-bar');
-    await StatusBar.setOverlaysWebView({ overlay: false });
-    await StatusBar.setBackgroundColor({ color: '#0A1425' });
-    await StatusBar.setStyle({ style: Style.Dark });
-  } catch (e) {
-    console.warn('[PP] StatusBar config failed', e);
-  }
+    const v = localStorage.getItem('mplanipret-theme');
+    if (v === 'light' || v === 'dark') theme = v;
+  } catch {}
+  const { applyNativeChrome } = await import('@/lib/nativeChrome');
+  await applyNativeChrome(theme);
 }
 
 

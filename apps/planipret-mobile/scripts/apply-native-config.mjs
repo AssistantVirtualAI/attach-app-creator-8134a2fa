@@ -2845,6 +2845,7 @@ patchIosInfoPlist();
 patchIosEntitlements();
 patchAndroidManifest();
 patchAndroidNativeFiles();
+patchAndroidSplashTheme();
 patchIosNativeFiles();
 
 // Version / build number alignés iOS + Android depuis package.json.

@@ -40,21 +40,66 @@ export default function PBOverview() {
         label: d.label, recorded: d.recorded, transcribed: d.transcribed, analyzed: d.analyzed,
       }));
 
+  const sp = (key: "inbound" | "outbound" | "missed" | "sent" | "received" | "avg") =>
+    (ov.daily ?? []).map((d: any) => Number(d?.[key] ?? 0));
+  const callsSpark = (ov.daily ?? []).map((d: any) => Number(d?.inbound ?? 0) + Number(d?.outbound ?? 0));
+
   const cards: KpiCard[] = [
-    { Icon: Phone, label: lang === "en" ? "Calls" : "Appels", value: kpi.calls, delta: pct(kpi.calls, prev.calls) },
-    { Icon: PhoneMissed, label: lang === "en" ? "Missed" : "Manqués", value: kpi.missed, delta: pct(kpi.missed, prev.missed), invert: true },
-    { Icon: PercentCircle, label: lang === "en" ? "Answer rate" : "Taux de réponse", value: `${Math.round(kpi.answerRate)}%`, delta: pct(kpi.answerRate, prev.answerRate) },
-    { Icon: Timer, label: lang === "en" ? "Avg. duration" : "Durée moyenne", value: fmtDuration(kpi.avgDuration), delta: pct(kpi.avgDuration, prev.avgDuration) },
-    { Icon: MessageSquare, label: lang === "en" ? "Texts sent" : "Textos envoyés", value: kpi.smsSent, delta: pct(kpi.smsSent, prev.smsSent) },
-    { Icon: MessageSquare, label: lang === "en" ? "Texts received" : "Textos reçus", value: kpi.smsReceived, delta: pct(kpi.smsReceived, prev.smsReceived) },
-    { Icon: Mic, label: lang === "en" ? "Recordings" : "Enregistrements", value: kpi.recordings, delta: pct(kpi.recordings, prev.recordings) },
+    { Icon: Phone, accent: "#2E9BDC", spark: callsSpark, label: lang === "en" ? "Calls" : "Appels", value: kpi.calls, delta: pct(kpi.calls, prev.calls) },
+    { Icon: PhoneMissed, accent: "#E84C4C", spark: sp("missed"), label: lang === "en" ? "Missed" : "Manqués", value: kpi.missed, delta: pct(kpi.missed, prev.missed), invert: true },
+    { Icon: PercentCircle, accent: "#00D4AA", label: lang === "en" ? "Answer rate" : "Taux de réponse", value: `${Math.round(kpi.answerRate)}%`, delta: pct(kpi.answerRate, prev.answerRate) },
+    { Icon: Timer, accent: "#9B7FE8", spark: sp("avg"), label: lang === "en" ? "Avg. duration" : "Durée moyenne", value: fmtDuration(kpi.avgDuration), delta: pct(kpi.avgDuration, prev.avgDuration) },
+    { Icon: MessageSquare, accent: "#4AC9E3", spark: sp("sent"), label: lang === "en" ? "Texts sent" : "Textos envoyés", value: kpi.smsSent, delta: pct(kpi.smsSent, prev.smsSent) },
+    { Icon: MessageSquare, accent: "#E8A33C", spark: sp("received"), label: lang === "en" ? "Texts received" : "Textos reçus", value: kpi.smsReceived, delta: pct(kpi.smsReceived, prev.smsReceived) },
+    { Icon: Mic, accent: "#E86CB0", label: lang === "en" ? "Recordings" : "Enregistrements", value: kpi.recordings, delta: pct(kpi.recordings, prev.recordings) },
     {
       Icon: TrendingUp,
+      accent: "#00D4AA",
       label: lang === "en" ? "Commissions (YTD)" : "Commissions (cumul)",
       value: commissions ? fmtMoney(commissions.cy) : "…",
       delta: commissions ? pct(commissions.cy, commissions.py) : null,
     },
   ];
+
+  // ----- AI insights -----
+  const [aiSummary, setAiSummary] = useState("");
+  const [aiInsights, setAiInsights] = useState<OverviewInsight[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiGenerated, setAiGenerated] = useState(false);
+
+  useEffect(() => {
+    setAiSummary(""); setAiInsights([]); setAiError(null); setAiGenerated(false);
+  }, [days, userId]);
+
+  const runInsights = async () => {
+    if (aiLoading) return;
+    setAiLoading(true); setAiError(null);
+    try {
+      const metrics = buildOverviewMetrics({
+        days,
+        kpi: kpi as any,
+        prev: prev as any,
+        daily: (ov.daily ?? []) as any,
+        hourly: (ov.hourly ?? []) as any,
+        topContacts: (ov.topContacts ?? []) as any,
+        commissions,
+      });
+      const res = await fetchOverviewInsights({ lang: lang as "fr" | "en", days, metrics });
+      if (!res.ok) {
+        setAiError(res.error || (lang === "en" ? "Analysis unavailable right now." : "Analyse indisponible pour le moment."));
+      } else {
+        setAiSummary(res.summary);
+        setAiInsights(res.insights);
+        setAiGenerated(true);
+      }
+    } catch (e: any) {
+      setAiError(e?.message ?? (lang === "en" ? "Unexpected error." : "Erreur inattendue."));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
 
   return (
     <PAPage>

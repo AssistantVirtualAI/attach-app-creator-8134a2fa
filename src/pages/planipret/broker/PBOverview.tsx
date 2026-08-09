@@ -148,6 +148,47 @@ export default function PBOverview() {
         />
       )}
 
+      {!ov.loading && (
+        <div
+          className="rounded-xl"
+          style={{
+            padding: 14,
+            border: "1px solid var(--pp-bg-border)",
+            background: "linear-gradient(120deg, rgba(46,155,220,.10), transparent 60%), var(--pp-bg-card, var(--pp-bg-elevated))",
+          }}
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+            <span>{lang === "en" ? "Calls vs previous period" : "Appels vs période précédente"}</span>
+            <span className="tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>
+              {kpi.calls} / {prev.calls}
+            </span>
+          </div>
+          <div className="mt-2 rounded-full overflow-hidden" style={{ height: 10, background: "var(--pp-bg-deep, rgba(0,0,0,.35))", boxShadow: "inset 0 1px 3px rgba(0,0,0,.5)" }}>
+            <div
+              style={{
+                width: `${Math.min(100, prev.calls ? (kpi.calls / prev.calls) * 100 : kpi.calls ? 100 : 0)}%`,
+                height: "100%",
+                background: "linear-gradient(90deg,#2E9BDC,#00D4AA)",
+                boxShadow: "0 0 18px -2px #2E9BDC",
+                transition: "width .5s ease",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      <OvInsights
+        lang={lang as "fr" | "en"}
+        summary={aiSummary}
+        insights={aiInsights}
+        loading={aiLoading}
+        error={aiError}
+        generated={aiGenerated}
+        onGenerate={runInsights}
+      />
+
+
+
       <div className="grid gap-3 xl:grid-cols-3">
         {ov.loading ? (
           <>

@@ -91,7 +91,7 @@ const PBCalls = lazyWithRetry(() => import("./pages/planipret/broker/PBCalls"));
 const PBMessages = lazyWithRetry(() => import("./pages/planipret/broker/PBMessages"));
 const PBVoicemail = lazyWithRetry(() => import("./pages/planipret/broker/PBVoicemail"));
 const PBRecordings = lazyWithRetry(() => import("./pages/planipret/broker/PBRecordings"));
-const PBStats = lazyWithRetry(() => import("./pages/planipret/broker/PBStats"));
+
 const PBCommissions = lazyWithRetry(() => import("./pages/planipret/broker/PBCommissions"));
 const PBMicrosoft = lazyWithRetry(() => import("./pages/planipret/broker/PBMicrosoft"));
 const PBMaestroClients = lazyWithRetry(() => import("./pages/planipret/broker/PBMaestroClients"));
@@ -658,7 +658,7 @@ const App = () => (
                   <Route path="voicemail" element={<Suspense fallback={<AdminPageSkeleton />}><PBVoicemail /></Suspense>} />
                   <Route path="recordings" element={<Suspense fallback={<AdminPageSkeleton />}><PBRecordings /></Suspense>} />
                   <Route path="microsoft" element={<Suspense fallback={<AdminPageSkeleton />}><PBMicrosoft /></Suspense>} />
-                  <Route path="stats" element={<Suspense fallback={<AdminPageSkeleton />}><PBStats /></Suspense>} />
+                  
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PBCommissions /></Suspense>} />
                   <Route path="maestro-clients" element={<Suspense fallback={<AdminPageSkeleton />}><PBMaestroClients /></Suspense>} />
                   <Route path="search" element={<Navigate to="/planipret/broker/overview" replace />} />

@@ -28,10 +28,10 @@ const config: CapacitorConfig = {
       enabled: false,
     },
     SplashScreen: {
-      // The web layer calls SplashScreen.hide() on first paint (src/index.tsx).
-      // Auto-hide is disabled so WebKit stops logging the splash timeout warning.
-      launchAutoHide: false,
+      // Never hold a native launch screen over the Android WebView.
+      launchAutoHide: true,
       launchShowDuration: 0,
+      launchFadeOutDuration: 0,
       backgroundColor: '#0A1425',   // Bleu nuit Planiprêt
       showSpinner: false,
     },

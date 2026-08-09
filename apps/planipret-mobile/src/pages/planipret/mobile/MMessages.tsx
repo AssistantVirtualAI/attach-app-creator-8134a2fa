@@ -795,7 +795,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
                     </div>
                     {!sameAsNext && (
                       <p className={`pp-bubble-time ${out ? "text-right" : "text-left"}`}>
-                        {fmtTime(msgTime(m), lang, t)}
+                        {fmtClock(msgTime(m), lang)}
                         {pending ? ` · ${t("common.sending")}` : ""}
                       </p>
                     )}

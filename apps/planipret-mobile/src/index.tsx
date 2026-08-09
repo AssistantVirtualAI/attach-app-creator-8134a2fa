@@ -186,6 +186,8 @@ async function bootstrap() {
   // bundle the device is actually running.
   console.log('[PP] BUILD MARKER pp-build-2026-08-04-boot-retry');
   console.log('[PP] bootstrap:start', { native: Capacitor.isNativePlatform(), proto: window.location.protocol });
+  void configureAndroidChrome();
+  if (Capacitor.getPlatform() === 'android') window.setTimeout(() => { void hideSplash('android-boot'); }, 600);
   // Safety net: never leave the user staring at the launch image, even if the
   // first React commit never happens (render error, slow chunk, no network).
   window.setTimeout(() => { void hideSplash('safety-timeout'); }, 4000);

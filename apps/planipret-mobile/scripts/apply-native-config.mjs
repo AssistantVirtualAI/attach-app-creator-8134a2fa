@@ -2649,6 +2649,85 @@ function patchAndroidManifest() {
   console.log("[native-config] Android deep links + SIP keep-alive service applied.");
 }
 
+/**
+ * Android: écran de lancement en couleur unie (pas d'image robot) + thème
+ * plein écran pour que la WebView occupe tout l'écran comme sur iOS.
+ * Sans ça, l'image de lancement générée reste visible dans une bande en haut.
+ */
+function patchAndroidSplashTheme() {
+  const resRoot = path.join(appDir, "android", "app", "src", "main", "res");
+  if (!fs.existsSync(resRoot)) {
+    console.log("[native-config] Android res/ absent — run npx cap add android first.");
+    return;
+  }
+
+  // 1. Couleurs
+  writeIfChanged(
+    path.join(resRoot, "values", "colors.xml"),
+    `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#0A1425</color>
+    <color name="colorPrimaryDark">#0A1425</color>
+    <color name="colorAccent">#2E9BDC</color>
+    <color name="splashBackground">#0A1425</color>
+</resources>
+`
+  );
+
+  // 2. Splash = couleur unie, aucune image
+  writeIfChanged(
+    path.join(resRoot, "drawable", "splash.xml"),
+    `<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splashBackground" />
+</layer-list>
+`
+  );
+
+  // 3. Thèmes plein écran, sans ActionBar, fond navy
+  writeIfChanged(
+    path.join(resRoot, "values", "styles.xml"),
+    `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:background">@color/splashBackground</item>
+        <item name="android:windowBackground">@color/splashBackground</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:background">@color/splashBackground</item>
+        <item name="android:windowBackground">@color/splashBackground</item>
+        <item name="android:statusBarColor">@color/splashBackground</item>
+        <item name="android:navigationBarColor">@color/splashBackground</item>
+    </style>
+
+    <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
+        <item name="android:background">@drawable/splash</item>
+        <item name="android:windowBackground">@drawable/splash</item>
+    </style>
+</resources>
+`
+  );
+
+  // 4. Supprimer toute image de lancement générée (le fameux robot)
+  let removed = 0;
+  for (const dir of fs.readdirSync(resRoot)) {
+    if (!dir.startsWith("drawable") && !dir.startsWith("mipmap")) continue;
+    const full = path.join(resRoot, dir);
+    if (!fs.statSync(full).isDirectory()) continue;
+    for (const file of fs.readdirSync(full)) {
+      if (/^(splash|ic_splash|launch_splash|splash_screen)\.(png|jpg|jpeg|webp)$/i.test(file)) {
+        fs.rmSync(path.join(full, file));
+        removed += 1;
+      }
+    }
+  }
+  if (removed) console.log(`[native-config] Android: ${removed} image(s) de splash supprimée(s).`);
+  console.log("[native-config] Android splash/theme plein écran appliqué.");
+}
+
 function patchAndroidNativeFiles() {
   const javaRoot = path.join(appDir, "android", "app", "src", "main", "java");
   if (!fs.existsSync(javaRoot)) {

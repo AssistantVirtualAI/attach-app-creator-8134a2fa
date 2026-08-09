@@ -958,7 +958,7 @@ function NewMeetingSheet({
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Toronto";
+  const tz = "America/Toronto";
 
   const submit = async () => {
     if (!subject.trim()) { toast.error(t("screens.home.titleRequired")); return; }

@@ -276,6 +276,24 @@ export default function CommissionDashboard({
   const termChartData = useMemo(() => termData.map((r) => ({
     name: termLabel(String(r.dimension ?? ""), lang), CY: finite(r.cy_volume), PY: finite(r.py_volume),
   })), [termData, lang]);
+  const MONTHS_FR = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
+  const MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthChartData = useMemo(() => {
+    const rowsM = aggregate(filtered, "month");
+    if (!rowsM.length) return [];
+    const labels = lang === "en" ? MONTHS_EN : MONTHS_FR;
+    return Array.from({ length: 12 }, (_, i) => {
+      const key = String(i + 1).padStart(2, "0");
+      const hit = rowsM.find((r) => String(r.dimension ?? "").padStart(2, "0") === key);
+      return {
+        name: labels[i],
+        CY: finite(hit?.cy_volume), PY: finite(hit?.py_volume),
+        commission: finite(hit?.cy_commission), deals: finite(hit?.cy_deals),
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, lang]);
+
   const activeFilterCount = useMemo(() => {
     let n = 0;
     (["broker", "lender", "quarter", "productType", "term", "commissionType"] as const).forEach((k) => { if (filters[k] !== "all") n++; });

@@ -98,9 +98,12 @@ function aggregate(deals: ReturnType<typeof normalizeDeal>[], brokerName: string
     else { pyVol += d.amount; pyCnt += 1; pyCom += d.commission; }
     add("lender", d.lender, null, d, y);
     add("quarter", quarterOf(d.date), null, d, y);
+    add("month", String(d.date.getUTCMonth() + 1).padStart(2, "0"), null, d, y);
     add("product_mix", d.product, null, d, y);
     add("term_mix", d.term || "Other", null, d, y);
     add("matrix", d.product, d.term || "Other", d, y);
+    if (d.status) add("pipeline", d.status, null, d, y);
+
   }
 
   const yoy = (c: number, p: number) => (p ? ((c - p) / p) * 100 : null);

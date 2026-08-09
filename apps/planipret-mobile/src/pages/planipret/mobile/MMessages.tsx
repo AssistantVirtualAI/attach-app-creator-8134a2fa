@@ -946,14 +946,14 @@ function TeamChat({ profile }: { profile: any }) {
             const name = senderNames[m.sender_id] ?? t("messages.broker");
             return (
               <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                <div className="max-w-[78%]">
+                <div className="max-w-[80%] min-w-0">
                   {!mine && (
                     <div className="text-[10px] mb-0.5 px-1" style={{ color: "var(--pp-brand-accent)" }}>{name}</div>
                   )}
-                  <div className={mine ? "pp-bubble-out" : "pp-bubble-in"} style={{ padding: "8px 12px", fontSize: 14 }}>
-                    <p className="whitespace-pre-wrap break-words">{m.message}</p>
+                  <div className={mine ? "pp-bubble-out" : "pp-bubble-in"}>
+                    <p className="whitespace-pre-wrap">{m.message}</p>
                   </div>
-                  <p className={`text-[10px] mt-1 ${mine ? "text-right" : "text-left"}`} style={{ color: "var(--pp-text-faint)" }}>
+                  <p className={`pp-bubble-time ${mine ? "text-right" : "text-left"}`}>
                     {fmtTime(m.created_at, lang, t)}
                   </p>
                 </div>

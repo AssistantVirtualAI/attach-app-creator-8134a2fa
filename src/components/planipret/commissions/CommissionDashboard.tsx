@@ -560,6 +560,35 @@ export default function CommissionDashboard({
           <ChartValues items={quarterChartData} compareKey="PY" />
         </Panel>
 
+        {monthChartData.length > 0 && (
+          <Panel className="xl:col-span-3" accent="#4AC9E3" title={T(lang, "Évolution mensuelle", "Monthly trend")}
+            subtitle={T(lang, "Volume mensuel, année courante vs précédente", "Monthly volume, current vs prior year")}>
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={monthChartData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="ccMonthCY" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4AC9E3" stopOpacity={0.55} />
+                    <stop offset="100%" stopColor="#4AC9E3" stopOpacity={0.03} />
+                  </linearGradient>
+                  <linearGradient id="ccMonthPY" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#9B7FE8" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#9B7FE8" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--pp-bg-border)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => fmtCompact(Number(v))} />
+                <Tooltip content={<TooltipDark />} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Area type="monotone" dataKey="PY" name={T(lang, "An dernier", "Last year")} stroke="#9B7FE8" strokeWidth={2} fill="url(#ccMonthPY)" />
+                <Area type="monotone" dataKey="CY" name={T(lang, "Cette année", "This year")} stroke="#4AC9E3" strokeWidth={2.5} fill="url(#ccMonthCY)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </Panel>
+        )}
+
+
+
         <Panel accent="#E8A33C" title={T(lang, "Mix produit", "Product mix")}
           subtitle={T(lang, "Répartition du volume par type de prêt", "Volume split by product type")}>
           <VisualBars items={productChartData} valueKey="Volume" horizontal />

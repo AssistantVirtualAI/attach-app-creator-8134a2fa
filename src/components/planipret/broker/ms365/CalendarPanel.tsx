@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Calendar, Video, ExternalLink, Plus, X, Loader2, RefreshCw, Trash2, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
-import { fmtDateTime } from "@/lib/planipret/brokerFormat";
 
 type Lang = "fr" | "en";
 
@@ -92,7 +91,7 @@ export default function CalendarPanel({ lang }: { lang: Lang }) {
       if (!raw) continue;
       const d = new Date(raw);
       if (Number.isNaN(d.getTime())) continue;
-      const k = dayKey(d);
+      const k = tzDayKey(d);
       m.set(k, [...(m.get(k) ?? []), e]);
     }
     for (const list of m.values()) {
@@ -241,7 +240,7 @@ export default function CalendarPanel({ lang }: { lang: Lang }) {
                         <div key={ev.id} className="truncate rounded"
                           style={{ fontSize: 10, padding: "1px 4px", background: "rgba(46,155,220,0.14)", color: "var(--pp-text-primary)" }}
                           title={ev.subject || ""}>
-                          {String(ev.start?.dateTime ?? "").slice(11, 16)} {ev.subject || "—"}
+                          {tzTime(ev.start?.dateTime)} {ev.subject || "—"}
                         </div>
                       ))}
                       {list.length > 3 && (
@@ -269,7 +268,7 @@ export default function CalendarPanel({ lang }: { lang: Lang }) {
                 <div className="min-w-0">
                   <div className="truncate" style={{ fontSize: 13, fontWeight: 600, color: "var(--pp-text-primary)" }}>{ev.subject || "—"}</div>
                   <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
-                    {fmtDateTime(ev.start?.dateTime, lang)} → {fmtDateTime(ev.end?.dateTime, lang)} · {(ev.attendees ?? []).length} {en ? "attendees" : "participants"}
+                    {tzDateTime(ev.start?.dateTime, en)} → {tzDateTime(ev.end?.dateTime, en)} · {(ev.attendees ?? []).length} {en ? "attendees" : "participants"}
                   </div>
                   {ev.location?.displayName && (
                     <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{ev.location.displayName}</div>

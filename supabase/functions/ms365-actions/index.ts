@@ -27,6 +27,40 @@ function withTz(v: any) {
   return v;
 }
 
+/** Décalage (minutes) d'un fuseau IANA à un instant donné. */
+function tzOffsetMinutes(tz: string, at: Date): number {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const p: Record<string, string> = {};
+  for (const part of dtf.formatToParts(at)) if (part.type !== "literal") p[part.type] = part.value;
+  const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  return (asUtc - at.getTime()) / 60000;
+}
+
+/**
+ * Convertit un dateTime "naïf" renvoyé par Graph (déjà exprimé dans `tz`)
+ * en ISO avec offset explicite, ex. 2026-08-09T14:00:00-04:00.
+ */
+function toOffsetIso(dateTime?: string, tz?: string): string | undefined {
+  if (!dateTime) return dateTime;
+  if (/(Z|[+-]\d{2}:\d{2})$/.test(dateTime)) return dateTime;
+  const zone = tz && tz !== "UTC" ? tz : APP_TZ;
+  const base = dateTime.replace(/\.\d+$/, "");
+  const guess = new Date(`${base}Z`);
+  if (Number.isNaN(guess.getTime())) return dateTime;
+  // Deux passes pour gérer les bascules d'heure avancée.
+  let offset = tzOffsetMinutes(zone, guess);
+  offset = tzOffsetMinutes(zone, new Date(guess.getTime() - offset * 60000));
+  const sign = offset >= 0 ? "+" : "-";
+  const abs = Math.abs(offset);
+  const hh = String(Math.floor(abs / 60)).padStart(2, "0");
+  const mm = String(abs % 60).padStart(2, "0");
+  return `${base}${sign}${hh}:${mm}`;
+}
+
 async function graph(admin: any, profile: any, path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const token = profile.ms365_access_token;
   const isCalendar = /\/(events|calendarView|calendar)/i.test(path);

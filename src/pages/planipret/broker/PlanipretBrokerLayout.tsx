@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, TrendingUp, Settings, LogOut, Mail, ShieldAlert, Users,
+  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, TrendingUp, Settings, LogOut, Mail, ShieldAlert, Users, Sun, Moon,
 } from "lucide-react";
 import BrokerAuthScreen from "@/components/planipret/broker/BrokerAuthScreen";
 import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { resolveBrokerAccess } from "@/lib/planipret/brokerAccess";
 import BrokerOmniSearch from "@/components/planipret/broker/BrokerOmniSearch";
@@ -35,6 +36,7 @@ export default function PlanipretBrokerLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { lang } = useMplanipretLang();
+  const { theme, toggle: toggleTheme } = useMplanipretTheme();
   const [state, setState] = useState<"checking" | "anon" | "denied" | "ready">("checking");
   const [userId, setUserId] = useState<string>("");
   const [authUserId, setAuthUserId] = useState<string>("");
@@ -82,7 +84,7 @@ export default function PlanipretBrokerLayout() {
 
   if (state === "checking") {
     return (
-      <div className="planipret-scope planipret-admin-scope min-h-screen flex items-center justify-center"
+      <div className="planipret-scope planipret-admin-scope planipret-broker-scope min-h-screen flex items-center justify-center" data-pp-theme={theme}
         style={{ color: "var(--pp-text-muted)", fontFamily: "'Epilogue', sans-serif" }}>
         {lang === "en" ? "Loading…" : "Chargement…"}
       </div>
@@ -91,7 +93,7 @@ export default function PlanipretBrokerLayout() {
 
   if (state === "anon") {
     return (
-      <div className="planipret-scope planipret-admin-scope">
+      <div className="planipret-scope planipret-admin-scope planipret-broker-scope" data-pp-theme={theme}>
         <BrokerAuthScreen
           msRedirect={location.pathname.startsWith("/planipret/broker") ? location.pathname : "/planipret/broker/overview"}
           onLoggedIn={async () => { await load(); }}
@@ -103,7 +105,7 @@ export default function PlanipretBrokerLayout() {
 
   if (state === "denied") {
     return (
-      <div className="planipret-scope planipret-admin-scope min-h-screen flex items-center justify-center p-6">
+      <div className="planipret-scope planipret-admin-scope planipret-broker-scope min-h-screen flex items-center justify-center p-6" data-pp-theme={theme}>
         <div className="pp-card max-w-md text-center" style={{ padding: 24 }}>
           <ShieldAlert className="w-8 h-8 mx-auto mb-3" style={{ color: "#ef4444" }} />
           <h1 className="pp-heading" style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
@@ -128,7 +130,7 @@ export default function PlanipretBrokerLayout() {
   const dateLabel = new Date().toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   return (
-    <div className="planipret-scope planipret-admin-scope min-h-screen flex"
+    <div className="planipret-scope planipret-admin-scope planipret-broker-scope min-h-screen flex" data-pp-theme={theme}
       style={{ background: "var(--pp-bg-base)", fontFamily: "'Epilogue', sans-serif" }}>
       {/* Sidebar (desktop) */}
       <aside className="pp-sidebar hidden md:flex flex-col fixed left-0 top-0 h-screen w-[248px] z-40">
@@ -184,6 +186,9 @@ export default function PlanipretBrokerLayout() {
         <div className="flex items-center gap-2 px-3 py-2">
           <img src={planipretLogo.url} alt="" style={{ width: 26, height: 26, borderRadius: 7 }} />
           <span className="pp-heading flex-1 truncate" style={{ fontWeight: 700, fontSize: 15 }}>{title}</span>
+          <button onClick={toggleTheme} aria-label="Theme" style={{ color: "var(--pp-text-muted)" }}>
+            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
           <PlanipretLangSwitch />
           <button onClick={logout} style={{ color: "var(--pp-text-muted)" }}><LogOut className="w-4 h-4" /></button>
         </div>
@@ -212,6 +217,12 @@ export default function PlanipretBrokerLayout() {
           <div className="flex items-center gap-3">
             <BrokerOmniSearch userId={userId} className="hidden md:block w-[280px] lg:w-[340px] xl:w-[400px]" />
 
+            <button onClick={toggleTheme} title={theme === "dark" ? "Mode clair" : "Mode sombre"}
+              aria-label="Theme"
+              className="flex items-center justify-center rounded-lg"
+              style={{ width: 30, height: 30, color: "var(--pp-text-muted)", border: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-elevated)" }}>
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
             <PlanipretLangSwitch />
             <span className="capitalize hidden xl:inline" style={{ fontSize: 10.5, color: "var(--pp-text-muted)" }}>{dateLabel}</span>
           </div>

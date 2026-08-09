@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Phone, PhoneMissed, MessageSquare, Timer, Voicemail, Mic, PercentCircle, TrendingUp } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
@@ -19,6 +19,9 @@ import OvConnectionsStrip from "@/components/planipret/broker/overview/OvConnect
 import { OvRecentCalls, OvRecentMessages, OvTopContacts } from "@/components/planipret/broker/overview/OvRecentTables";
 import GranularityToggle from "@/components/planipret/broker/GranularityToggle";
 import { bucketSeries, type Granularity } from "@/lib/planipret/timeBuckets";
+import OvInsights from "@/components/planipret/broker/overview/OvInsights";
+import { buildOverviewMetrics, fetchOverviewInsights, type OverviewInsight } from "@/lib/planipret/overviewInsights";
+
 
 const RANGES = [7, 30, 90, 180, 365];
 
@@ -40,21 +43,66 @@ export default function PBOverview() {
         label: d.label, recorded: d.recorded, transcribed: d.transcribed, analyzed: d.analyzed,
       }));
 
+  const sp = (key: "inbound" | "outbound" | "missed" | "sent" | "received" | "avg") =>
+    (ov.daily ?? []).map((d: any) => Number(d?.[key] ?? 0));
+  const callsSpark = (ov.daily ?? []).map((d: any) => Number(d?.inbound ?? 0) + Number(d?.outbound ?? 0));
+
   const cards: KpiCard[] = [
-    { Icon: Phone, label: lang === "en" ? "Calls" : "Appels", value: kpi.calls, delta: pct(kpi.calls, prev.calls) },
-    { Icon: PhoneMissed, label: lang === "en" ? "Missed" : "Manqués", value: kpi.missed, delta: pct(kpi.missed, prev.missed), invert: true },
-    { Icon: PercentCircle, label: lang === "en" ? "Answer rate" : "Taux de réponse", value: `${Math.round(kpi.answerRate)}%`, delta: pct(kpi.answerRate, prev.answerRate) },
-    { Icon: Timer, label: lang === "en" ? "Avg. duration" : "Durée moyenne", value: fmtDuration(kpi.avgDuration), delta: pct(kpi.avgDuration, prev.avgDuration) },
-    { Icon: MessageSquare, label: lang === "en" ? "Texts sent" : "Textos envoyés", value: kpi.smsSent, delta: pct(kpi.smsSent, prev.smsSent) },
-    { Icon: MessageSquare, label: lang === "en" ? "Texts received" : "Textos reçus", value: kpi.smsReceived, delta: pct(kpi.smsReceived, prev.smsReceived) },
-    { Icon: Mic, label: lang === "en" ? "Recordings" : "Enregistrements", value: kpi.recordings, delta: pct(kpi.recordings, prev.recordings) },
+    { Icon: Phone, accent: "#2E9BDC", spark: callsSpark, label: lang === "en" ? "Calls" : "Appels", value: kpi.calls, delta: pct(kpi.calls, prev.calls) },
+    { Icon: PhoneMissed, accent: "#E84C4C", spark: sp("missed"), label: lang === "en" ? "Missed" : "Manqués", value: kpi.missed, delta: pct(kpi.missed, prev.missed), invert: true },
+    { Icon: PercentCircle, accent: "#00D4AA", label: lang === "en" ? "Answer rate" : "Taux de réponse", value: `${Math.round(kpi.answerRate)}%`, delta: pct(kpi.answerRate, prev.answerRate) },
+    { Icon: Timer, accent: "#9B7FE8", spark: sp("avg"), label: lang === "en" ? "Avg. duration" : "Durée moyenne", value: fmtDuration(kpi.avgDuration), delta: pct(kpi.avgDuration, prev.avgDuration) },
+    { Icon: MessageSquare, accent: "#4AC9E3", spark: sp("sent"), label: lang === "en" ? "Texts sent" : "Textos envoyés", value: kpi.smsSent, delta: pct(kpi.smsSent, prev.smsSent) },
+    { Icon: MessageSquare, accent: "#E8A33C", spark: sp("received"), label: lang === "en" ? "Texts received" : "Textos reçus", value: kpi.smsReceived, delta: pct(kpi.smsReceived, prev.smsReceived) },
+    { Icon: Mic, accent: "#E86CB0", label: lang === "en" ? "Recordings" : "Enregistrements", value: kpi.recordings, delta: pct(kpi.recordings, prev.recordings) },
     {
       Icon: TrendingUp,
+      accent: "#00D4AA",
       label: lang === "en" ? "Commissions (YTD)" : "Commissions (cumul)",
       value: commissions ? fmtMoney(commissions.cy) : "…",
       delta: commissions ? pct(commissions.cy, commissions.py) : null,
     },
   ];
+
+  // ----- AI insights -----
+  const [aiSummary, setAiSummary] = useState("");
+  const [aiInsights, setAiInsights] = useState<OverviewInsight[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiGenerated, setAiGenerated] = useState(false);
+
+  useEffect(() => {
+    setAiSummary(""); setAiInsights([]); setAiError(null); setAiGenerated(false);
+  }, [days, userId]);
+
+  const runInsights = async () => {
+    if (aiLoading) return;
+    setAiLoading(true); setAiError(null);
+    try {
+      const metrics = buildOverviewMetrics({
+        days,
+        kpi: kpi as any,
+        prev: prev as any,
+        daily: (ov.daily ?? []) as any,
+        hourly: (ov.hourly ?? []) as any,
+        topContacts: (ov.topContacts ?? []) as any,
+        commissions,
+      });
+      const res = await fetchOverviewInsights({ lang: lang as "fr" | "en", days, metrics });
+      if (!res.ok) {
+        setAiError(res.error || (lang === "en" ? "Analysis unavailable right now." : "Analyse indisponible pour le moment."));
+      } else {
+        setAiSummary(res.summary);
+        setAiInsights(res.insights);
+        setAiGenerated(true);
+      }
+    } catch (e: any) {
+      setAiError(e?.message ?? (lang === "en" ? "Unexpected error." : "Erreur inattendue."));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
 
   return (
     <PAPage>
@@ -99,6 +147,47 @@ export default function PBOverview() {
           ]}
         />
       )}
+
+      {!ov.loading && (
+        <div
+          className="rounded-xl"
+          style={{
+            padding: 14,
+            border: "1px solid var(--pp-bg-border)",
+            background: "linear-gradient(120deg, rgba(46,155,220,.10), transparent 60%), var(--pp-bg-card, var(--pp-bg-elevated))",
+          }}
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+            <span>{lang === "en" ? "Calls vs previous period" : "Appels vs période précédente"}</span>
+            <span className="tabular-nums" style={{ color: "var(--pp-text-primary)", fontWeight: 700 }}>
+              {kpi.calls} / {prev.calls}
+            </span>
+          </div>
+          <div className="mt-2 rounded-full overflow-hidden" style={{ height: 10, background: "var(--pp-bg-deep, rgba(0,0,0,.35))", boxShadow: "inset 0 1px 3px rgba(0,0,0,.5)" }}>
+            <div
+              style={{
+                width: `${Math.min(100, prev.calls ? (kpi.calls / prev.calls) * 100 : kpi.calls ? 100 : 0)}%`,
+                height: "100%",
+                background: "linear-gradient(90deg,#2E9BDC,#00D4AA)",
+                boxShadow: "0 0 18px -2px #2E9BDC",
+                transition: "width .5s ease",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      <OvInsights
+        lang={lang as "fr" | "en"}
+        summary={aiSummary}
+        insights={aiInsights}
+        loading={aiLoading}
+        error={aiError}
+        generated={aiGenerated}
+        onGenerate={runInsights}
+      />
+
+
 
       <div className="grid gap-3 xl:grid-cols-3">
         {ov.loading ? (

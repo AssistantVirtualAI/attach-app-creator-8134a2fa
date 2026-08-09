@@ -328,6 +328,7 @@
   background-color: var(--pp-bg-deep);
   color: var(--pp-text-primary);
   border-color: var(--pp-bg-border-2);
+  font-size: 16px !important;
 }
 .planipret-scope input::placeholder,
 .planipret-scope textarea::placeholder {
@@ -599,39 +600,10 @@
   --pp-shadow-md: 0 8px 24px -12px rgba(15,27,61,0.12), 0 2px 6px -2px rgba(15,27,61,0.06);
   --pp-shadow-lg: 0 24px 48px -16px rgba(15,27,61,0.18);
 
-  /* shadcn/Tailwind semantic tokens forced to the light finance palette so
-     Card/Button/Badge match the admin portal even when the app runs in dark. */
-  --background: 210 33% 98%;
-  --foreground: 224 60% 15%;
-  --card: 0 0% 100%;
-  --card-foreground: 224 60% 15%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 224 60% 15%;
-  --primary: 209 46% 43%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 214 32% 95%;
-  --secondary-foreground: 224 60% 15%;
-  --muted: 214 32% 95%;
-  --muted-foreground: 216 19% 44%;
-  --accent: 214 32% 93%;
-  --accent-foreground: 224 60% 15%;
-  --destructive: 351 51% 46%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-  --ring: 209 46% 43%;
-
   background: var(--pp-bg-base);
   color: var(--pp-text-primary);
   font-family: 'Epilogue', 'Inter', system-ui, sans-serif;
 }
-/* Headings inside shadcn cards must not inherit the pp heading color rule
-   when the card is a light surface — keep them readable. */
-.planipret-admin-scope .bg-card,
-.planipret-admin-scope [class*="bg-card"] {
-  color: hsl(var(--card-foreground));
-}
-
 .planipret-admin-scope h1,
 .planipret-admin-scope h2,
 .planipret-admin-scope h3,
@@ -957,10 +929,12 @@
   box-shadow: 0 0 0 3px rgba(13,122,95,0.18);
 }
 .planipret-mobile-scope input,
-.planipret-mobile-scope textarea {
+.planipret-mobile-scope textarea,
+.planipret-mobile-scope select {
   background: #fff;
   border-color: var(--pp-bg-border);
   color: var(--pp-text-primary);
+  font-size: 16px !important;
 }
 .planipret-mobile-scope input:focus,
 .planipret-mobile-scope textarea:focus {
@@ -973,10 +947,10 @@
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--pp-bg-border);
-  /* Leave a real empty tappable-safe gap above the header on /mplanipret. */
-  margin-top: calc(env(safe-area-inset-top, 0px) + 56px) !important;
-  padding-top: 18px !important;
-  padding-bottom: 12px !important;
+  /* Respect iOS safe area — sit just below the status bar. */
+  margin-top: env(safe-area-inset-top, 0px) !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
 }
 .planipret-mobile-scope .pp-mobile-tabbar {
   background: rgba(255,255,255,0.95);
@@ -1145,6 +1119,15 @@
   background: rgba(3,7,18,0.75) !important;
   border-top: 1px solid var(--pp-glass-border) !important;
 }
+/* Android WebView often ignores backdrop-filter → translucent bars let the page
+   text bleed through. Fall back to opaque bars when blur is unsupported. */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .planipret-mobile-scope[data-pp-theme="dark"] .pp-mobile-tabbar,
+  .planipret-mobile-scope[data-pp-theme="dark"] .pp-mobile-footer,
+  .planipret-mobile-scope[data-pp-theme="dark"] .pp-mobile-header {
+    background: #030712 !important;
+  }
+}
 /* Inputs become glass pills */
 .planipret-mobile-scope[data-pp-theme="dark"] input,
 .planipret-mobile-scope[data-pp-theme="dark"] textarea {
@@ -1206,189 +1189,13 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* ==========================================================================
-   Admin portal — page shell normalization (visual only)
-   Ensures every admin page shares the same width, rhythm and never
-   overflows horizontally past the layout.
-   ========================================================================== */
-.planipret-admin-scope .pa-main {
-  min-width: 0;
-  overflow-x: hidden;
-}
-.planipret-admin-scope .pa-page {
-  width: 100%;
-  max-width: 1400px;
-  margin-inline: auto;
-  min-width: 0;
-}
-.planipret-admin-scope .pa-page > * { min-width: 0; max-width: 100%; }
-.planipret-admin-scope .pa-page table { width: 100%; max-width: 100%; }
-.planipret-admin-scope .pa-page pre,
-.planipret-admin-scope .pa-page code { max-width: 100%; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
-.planipret-admin-scope .pa-page img { max-width: 100%; height: auto; }
-
-/* Horizontal scroll container for wide tables */
-.planipret-admin-scope .pa-scroll {
-  max-width: 100%;
-  overflow-x: auto;
+/* Android: keep momentum scrolling alive inside flex columns.
+   Without min-height:0 a flex-1 scroll area can't shrink and the page freezes. */
+.overflow-y-auto,
+.overflow-auto {
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
 }
-.planipret-admin-scope .pa-scroll::-webkit-scrollbar { height: 8px; }
-.planipret-admin-scope .pa-scroll::-webkit-scrollbar-track { background: transparent; }
-.planipret-admin-scope .pa-scroll::-webkit-scrollbar-thumb {
-  background: var(--pp-bg-border-2);
-  border-radius: 999px;
-}
-.planipret-admin-scope .pa-scroll::-webkit-scrollbar-thumb:hover { background: var(--pp-text-faint); }
-
-/* Unified page header */
-.planipret-admin-scope .pa-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--pp-bg-border);
-}
-.planipret-admin-scope .pa-header-title {
-  font-family: 'Urbanist', 'Inter', sans-serif;
-  font-weight: 700;
-  font-size: 21px;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  color: var(--pp-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.planipret-admin-scope .pa-header-sub {
-  font-size: 12px;
-  color: var(--pp-text-faint);
-  margin-top: 4px;
-  max-width: 70ch;
-}
-.planipret-admin-scope .pa-header-icon {
-  width: 34px; height: 34px;
-  border-radius: 10px;
-  display: inline-flex; align-items: center; justify-content: center;
-  flex: none;
-  background: rgba(59,111,160,0.10);
-  color: var(--pp-brand-accent-2);
-  border: 1px solid rgba(59,111,160,0.22);
-}
-.planipret-admin-scope .pa-header-actions {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-}
-
-/* Consistent card padding rhythm across pages */
-.planipret-admin-scope .pa-page .pp-card { max-width: 100%; }
-
-/* Uniform page titles across all admin pages (overrides legacy inline sizes) */
-.planipret-admin-scope .pa-page > * h1,
-.planipret-admin-scope .pa-page > h1,
-.planipret-admin-scope .pa-page .pa-title {
-  font-family: 'Urbanist', 'Inter', system-ui, sans-serif !important;
-  font-size: 21px !important;
-  font-weight: 700 !important;
-  line-height: 1.2 !important;
-  letter-spacing: -0.02em !important;
-  color: var(--pp-text-primary) !important;
-}
-/* Section headings inside cards stay secondary to the page title */
-.planipret-admin-scope .pa-page .pp-card h2 {
-  font-family: 'Urbanist', 'Inter', system-ui, sans-serif;
-}
-
-/* ============================================================
-   PLANIPRÊT BROKER PORTAL — THEME (light default / dark toggle)
-   Scope: `.planipret-broker-scope[data-pp-theme]`
-   Mirrors the mobile app palette exactly so the portal and the
-   mobile app share the same colors.
-   ============================================================ */
-.planipret-broker-scope[data-pp-theme="light"] {
-  --pp-bg-base: #F7F9FC;
-  --pp-bg-surface: #FFFFFF;
-  --pp-bg-elevated: #F0F4F9;
-  --pp-bg-deep: #FFFFFF;
-  --pp-bg-border: #E2E8F0;
-  --pp-bg-border-2: #DCE3EC;
-  --pp-brand-accent: #3B6FA0;
-  --pp-brand-accent-2: #1E3A5F;
-  --pp-success: #0D7A5F;
-  --pp-agent: #6C5CE7;
-  --pp-warning: #C9A84C;
-  --pp-danger: #B23A48;
-  --pp-text-primary: #0F1B3D;
-  --pp-text-secondary: #324867;
-  --pp-text-muted: #5A6B85;
-  --pp-text-faint: #94A3B8;
-  --pp-shadow-sm: 0 1px 2px rgba(15,27,61,0.04), 0 1px 1px rgba(15,27,61,0.03);
-  --pp-shadow-md: 0 8px 24px -12px rgba(15,27,61,0.12), 0 2px 6px -2px rgba(15,27,61,0.06);
-  --pp-shadow-lg: 0 24px 48px -16px rgba(15,27,61,0.18);
-  background: var(--pp-bg-base);
-  color: var(--pp-text-primary);
-}
-
-.planipret-broker-scope[data-pp-theme="dark"] {
-  --pp-bg-base: #060D1A;
-  --pp-bg-surface: #0E1729;
-  --pp-bg-elevated: #142036;
-  --pp-bg-deep: #08111F;
-  --pp-bg-border: rgba(255,255,255,0.07);
-  --pp-bg-border-2: rgba(255,255,255,0.10);
-  --pp-brand-accent: #5FB0E8;
-  --pp-brand-accent-2: #8EC9F2;
-  --pp-success: #2BD8A8;
-  --pp-agent: #9B7FE8;
-  --pp-warning: #F2C94C;
-  --pp-danger: #EF6171;
-  --pp-text-primary: #E8EDF5;
-  --pp-text-secondary: #B7C2D6;
-  --pp-text-muted: #8C99B0;
-  --pp-text-faint: #5A6B85;
-  --pp-shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
-  --pp-shadow-md: 0 10px 28px -14px rgba(0,0,0,0.55);
-  --pp-shadow-lg: 0 24px 48px -16px rgba(0,0,0,0.65);
-  background: var(--pp-bg-base);
-  color: var(--pp-text-primary);
-}
-
-/* Component surfaces follow the tokens in dark mode */
-.planipret-broker-scope[data-pp-theme="dark"] .pp-card,
-.planipret-broker-scope[data-pp-theme="dark"] .pp-card-elevated,
-.planipret-broker-scope[data-pp-theme="dark"] .bg-card,
-.planipret-broker-scope[data-pp-theme="dark"] [class*="bg-card"] {
-  background: var(--pp-bg-surface) !important;
-  border-color: var(--pp-bg-border) !important;
-  color: var(--pp-text-primary);
-}
-.planipret-broker-scope[data-pp-theme="dark"] .pp-sidebar,
-.planipret-broker-scope[data-pp-theme="dark"] .pp-app-header {
-  background: var(--pp-bg-surface) !important;
-  border-color: var(--pp-bg-border) !important;
-}
-.planipret-broker-scope[data-pp-theme="dark"] .pp-sidebar > div:last-child {
-  background: var(--pp-bg-deep) !important;
-}
-.planipret-broker-scope[data-pp-theme="dark"] .pa-main { background: var(--pp-bg-base) !important; }
-.planipret-broker-scope[data-pp-theme="dark"] h1,
-.planipret-broker-scope[data-pp-theme="dark"] h2,
-.planipret-broker-scope[data-pp-theme="dark"] h3,
-.planipret-broker-scope[data-pp-theme="dark"] h4,
-.planipret-broker-scope[data-pp-theme="dark"] .pp-heading { color: var(--pp-text-primary); }
-.planipret-broker-scope[data-pp-theme="dark"] input,
-.planipret-broker-scope[data-pp-theme="dark"] select,
-.planipret-broker-scope[data-pp-theme="dark"] textarea {
-  background: var(--pp-bg-elevated) !important;
-  border-color: var(--pp-bg-border) !important;
-  color: var(--pp-text-primary) !important;
-}
-.planipret-broker-scope[data-pp-theme="dark"] .pp-nav-item { color: var(--pp-text-secondary); }
-.planipret-broker-scope[data-pp-theme="dark"] .pp-nav-item.is-active {
-  background: rgba(95,176,232,0.12);
-  color: var(--pp-brand-accent);
-}
-.planipret-broker-scope[data-pp-theme="dark"] table thead th { color: var(--pp-text-muted); }
-.planipret-broker-scope[data-pp-theme="dark"] table tbody tr { border-color: var(--pp-bg-border); }
+.flex-1.overflow-y-auto,
+.flex-1.overflow-auto { min-height: 0; }

@@ -1188,3 +1188,14 @@
 /* Hide scrollbar (used by horizontal tab bars) */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Android: keep momentum scrolling alive inside flex columns.
+   Without min-height:0 a flex-1 scroll area can't shrink and the page freezes. */
+.overflow-y-auto,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+.flex-1.overflow-y-auto,
+.flex-1.overflow-auto { min-height: 0; }

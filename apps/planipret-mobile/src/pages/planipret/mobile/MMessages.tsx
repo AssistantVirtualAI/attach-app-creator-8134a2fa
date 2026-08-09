@@ -734,7 +734,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-2" style={{ background: "var(--pp-bg-base)" }}>
+      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1" style={{ background: "var(--pp-bg-base)", overflowX: "hidden" }}>
         {loading && messages.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin" style={{ color: "var(--pp-brand-accent)" }} />
@@ -747,20 +747,34 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
           messages.map((m, i) => {
             const out = msgIsOut(m, myExt);
             const body = msgBody(m);
+            const prev = i > 0 ? messages[i - 1] : null;
+            const next = i < messages.length - 1 ? messages[i + 1] : null;
+            const sameAsPrev = !!prev && msgIsOut(prev, myExt) === out && sameMinuteGroup(msgTime(prev), msgTime(m));
+            const sameAsNext = !!next && msgIsOut(next, myExt) === out && sameMinuteGroup(msgTime(m), msgTime(next));
+            const showDay = !prev || dayStamp(msgTime(prev)) !== dayStamp(msgTime(m));
+            const pending = String(m.id ?? "").startsWith("tmp-");
+            const shape = sameAsPrev && sameAsNext ? "pp-bubble-mid" : sameAsPrev ? "" : sameAsNext ? "pp-bubble-first" : "";
             return (
-              <div key={msgId(m, i)} className={`flex ${out ? "justify-end" : "justify-start"}`}>
-                <div className="max-w-[78%]">
-                  <div className={out ? "pp-bubble-out" : "pp-bubble-in"} style={{ padding: "8px 12px", fontSize: 14 }}>
-                    {body && <p className="whitespace-pre-wrap break-words">{body}</p>}
+              <div key={msgId(m, i)}>
+                {showDay && <div className="pp-day-sep">{dayLabel(msgTime(m), lang)}</div>}
+                <div className={`flex ${out ? "justify-end" : "justify-start"}`} style={{ marginTop: sameAsPrev ? 2 : 8 }}>
+                  <div className="max-w-[80%] min-w-0">
+                    <div className={`${out ? "pp-bubble-out" : "pp-bubble-in"} ${shape}`} style={pending ? { opacity: 0.65 } : undefined}>
+                      {body && <p className="whitespace-pre-wrap">{body}</p>}
+                    </div>
+                    {!sameAsNext && (
+                      <p className={`pp-bubble-time ${out ? "text-right" : "text-left"}`}>
+                        {fmtTime(msgTime(m), lang, t)}
+                        {pending ? ` · ${t("common.sending")}` : ""}
+                      </p>
+                    )}
                   </div>
-                  <p className={`text-[10px] mt-1 ${out ? "text-right" : "text-left"}`} style={{ color: "var(--pp-text-faint)" }}>
-                    {fmtTime(msgTime(m), lang, t)}{String(m.id ?? "").startsWith("tmp-") ? ` · ${t("common.sending")}` : ""}
-                  </p>
                 </div>
               </div>
             );
           })
         )}
+
         <div ref={bottomRef} />
       </div>
 

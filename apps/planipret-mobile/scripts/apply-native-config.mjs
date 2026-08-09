@@ -2725,12 +2725,12 @@ function patchAndroidSplashTheme() {
     path.join(resRoot, "values-v31", "styles.xml"),
     `<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/splashBackground</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_icon_transparent</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/splashBackground</item>
-        <item name="windowSplashScreenAnimationDuration">0</item>
-        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+    <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
+        <item name="android:windowBackground">@color/splashBackground</item>
+        <item name="android:windowSplashScreenBackground">@color/splashBackground</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_transparent</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/splashBackground</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
     </style>
 </resources>
 `

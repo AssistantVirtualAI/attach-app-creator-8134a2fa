@@ -15,9 +15,5 @@ class AppBridgeViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(Self.authPlugin)
     }
 
-    // iPad must support all orientations (App Review runs on iPad Air);
-    // iPhone stays portrait-locked.
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        UIDevice.current.userInterfaceIdiom == .pad ? .all : .portrait
-    }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
 }

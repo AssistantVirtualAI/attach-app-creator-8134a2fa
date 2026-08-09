@@ -15,11 +15,29 @@ async function refreshToken(admin: any, profile: any) {
   return await refreshMicrosoftAccessToken(admin, profile, MS365_DELEGATED_SCOPES);
 }
 
+// Tous les courtiers Planiprêt sont au Québec : Graph doit renvoyer et
+// accepter les heures en America/Toronto, sinon l'agenda s'affiche en UTC.
+const APP_TZ = "America/Toronto";
+
+/** Force le fuseau sur un objet dateTime Graph ({ dateTime, timeZone }). */
+function withTz(v: any) {
+  if (!v) return v;
+  if (typeof v === "string") return { dateTime: v, timeZone: APP_TZ };
+  if (typeof v === "object" && v.dateTime) return { dateTime: v.dateTime, timeZone: v.timeZone || APP_TZ };
+  return v;
+}
+
 async function graph(admin: any, profile: any, path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const token = profile.ms365_access_token;
+  const isCalendar = /\/(events|calendarView|calendar)/i.test(path);
   const r = await fetch(`${GRAPH}${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(isCalendar ? { Prefer: `outlook.timezone="${APP_TZ}"` } : {}),
+      ...(init.headers ?? {}),
+    },
   });
   if (r.status === 401 && retry) {
     const newToken = await refreshToken(admin, profile);
@@ -27,6 +45,7 @@ async function graph(admin: any, profile: any, path: string, init: RequestInit =
   }
   return r;
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

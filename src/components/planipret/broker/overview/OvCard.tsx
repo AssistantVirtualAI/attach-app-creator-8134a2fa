@@ -10,29 +10,24 @@ export const OV_COLORS = {
 };
 
 export function OvCard({
-  title, icon, to, toLabel, children, className = "",
+  title, icon, to, toLabel, children, className = "", right,
 }: {
-  title: string; icon?: ReactNode; to?: string; toLabel?: string; children: ReactNode; className?: string;
+  title: string; icon?: ReactNode; to?: string; toLabel?: string; children: ReactNode; className?: string; right?: ReactNode;
 }) {
   return (
-    <div
-      className={`pp-card relative overflow-hidden ${className}`}
-      style={{
-        padding: 14,
-        background: "radial-gradient(600px 180px at 8% -30%, rgba(46,155,220,.10), transparent 70%), var(--pp-bg-card, var(--pp-bg-elevated))",
-        boxShadow: "0 20px 44px -34px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.04) inset",
-      }}
-    >
-
-      <div className="flex items-center justify-between mb-2">
+    <div className={`ov3d-card relative overflow-hidden ${className}`} style={{ padding: 14 }}>
+      <div className="flex items-center justify-between mb-2 gap-2">
         <div className="flex items-center gap-2" style={{ color: "var(--pp-text-secondary)", fontSize: 12, fontWeight: 600 }}>
           {icon}<span>{title}</span>
         </div>
-        {to && (
-          <Link to={to} style={{ fontSize: 11, color: "var(--pp-accent, #2E9BDC)" }}>
-            {toLabel}
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {right}
+          {to && (
+            <Link to={to} style={{ fontSize: 11, color: "var(--pp-accent, #2E9BDC)" }}>
+              {toLabel}
+            </Link>
+          )}
+        </div>
       </div>
       {children}
     </div>

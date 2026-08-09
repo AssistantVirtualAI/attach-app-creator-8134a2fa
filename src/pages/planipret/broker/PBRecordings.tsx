@@ -31,6 +31,8 @@ export default function PBRecordings() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<any | null>(null);
+  const [dl, setDl] = useState<string | null>(null);
+
 
   const patch = (next: Record<string, string | null>, resetPage = true) => {
     const p = new URLSearchParams(params);

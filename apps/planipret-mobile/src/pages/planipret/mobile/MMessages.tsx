@@ -61,6 +61,37 @@ const fmtTime = (iso: string, lang: "fr" | "en" = "fr", t?: (key: string) => str
   return d.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { day: "2-digit", month: "2-digit" });
 };
 
+/** Heure seule (hh:mm) — utilisée dans le fil, où la date est déjà séparée. */
+const fmtClock = (iso: string, lang: "fr" | "en" = "fr") => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" });
+};
+
+/** Clé de jour, pour insérer un séparateur de date dans le fil. */
+const dayStamp = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toDateString();
+};
+
+/** Libellé du séparateur : Aujourd'hui / Hier / date longue. */
+const dayLabel = (iso: string, lang: "fr" | "en" = "fr") => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const yest = new Date(); yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === now.toDateString()) return lang === "en" ? "Today" : "Aujourd'hui";
+  if (d.toDateString() === yest.toDateString()) return lang === "en" ? "Yesterday" : "Hier";
+  return d.toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "short", day: "numeric", month: "long" });
+};
+
+/** Deux messages sont regroupés s'ils sont espacés de moins de 3 minutes. */
+const sameMinuteGroup = (a: string, b: string) => {
+  const x = new Date(a).getTime(); const y = new Date(b).getTime();
+  if (Number.isNaN(x) || Number.isNaN(y)) return false;
+  return Math.abs(y - x) < 3 * 60 * 1000;
+};
+
 export default function MMessages() {
   const { t, lang } = useMplanipretLang();
   const { profile, openDialer, registerRefresh } = useOutletContext<PlanipretMobileContext>();

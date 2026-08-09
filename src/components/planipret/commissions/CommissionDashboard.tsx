@@ -297,6 +297,39 @@ export default function CommissionDashboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, lang]);
 
+  // ----- AI insights -----
+  const [aiSummary, setAiSummary] = useState("");
+  const [aiInsights, setAiInsights] = useState<CommissionInsight[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiGenerated, setAiGenerated] = useState(false);
+
+  const runInsights = async () => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetchCommissionInsights({
+        rows: filtered,
+        lang,
+        scope,
+        source: source === "maestro" ? "maestro" : "internal",
+      });
+      if (!res.ok) {
+        setAiError(res.error || T(lang, "Analyse indisponible pour le moment.", "Analysis unavailable right now."));
+      } else {
+        setAiSummary(res.summary);
+        setAiInsights(res.insights);
+        setAiGenerated(true);
+      }
+    } catch (e: any) {
+      setAiError(e?.message ?? T(lang, "Erreur inattendue.", "Unexpected error."));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+
   const activeFilterCount = useMemo(() => {
     let n = 0;
     (["broker", "lender", "quarter", "productType", "term", "commissionType"] as const).forEach((k) => { if (filters[k] !== "all") n++; });

@@ -16,9 +16,11 @@ const listeners = new Set<(t: MpTheme) => void>();
 
 function applyToDom(t: MpTheme) {
   if (typeof document === "undefined") return;
-  document.querySelectorAll<HTMLElement>(".planipret-mobile-scope").forEach((el) => {
-    el.setAttribute("data-pp-theme", t);
-  });
+  document
+    .querySelectorAll<HTMLElement>(".planipret-mobile-scope, .planipret-broker-scope")
+    .forEach((el) => {
+      el.setAttribute("data-pp-theme", t);
+    });
 }
 
 export function useMplanipretTheme() {

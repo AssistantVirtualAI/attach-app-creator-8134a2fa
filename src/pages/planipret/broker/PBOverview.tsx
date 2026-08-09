@@ -47,22 +47,26 @@ export default function PBOverview() {
     (ov.daily ?? []).map((d: any) => Number(d?.[key] ?? 0));
   const callsSpark = (ov.daily ?? []).map((d: any) => Number(d?.inbound ?? 0) + Number(d?.outbound ?? 0));
 
+  const vs = (n: number | string) => (lang === "en" ? `prev. ${n}` : `préc. ${n}`);
+
   const cards: KpiCard[] = [
-    { Icon: Phone, accent: "#2E9BDC", spark: callsSpark, label: lang === "en" ? "Calls" : "Appels", value: kpi.calls, delta: pct(kpi.calls, prev.calls) },
-    { Icon: PhoneMissed, accent: "#E84C4C", spark: sp("missed"), label: lang === "en" ? "Missed" : "Manqués", value: kpi.missed, delta: pct(kpi.missed, prev.missed), invert: true },
-    { Icon: PercentCircle, accent: "#00D4AA", label: lang === "en" ? "Answer rate" : "Taux de réponse", value: `${Math.round(kpi.answerRate)}%`, delta: pct(kpi.answerRate, prev.answerRate) },
-    { Icon: Timer, accent: "#9B7FE8", spark: sp("avg"), label: lang === "en" ? "Avg. duration" : "Durée moyenne", value: fmtDuration(kpi.avgDuration), delta: pct(kpi.avgDuration, prev.avgDuration) },
-    { Icon: MessageSquare, accent: "#4AC9E3", spark: sp("sent"), label: lang === "en" ? "Texts sent" : "Textos envoyés", value: kpi.smsSent, delta: pct(kpi.smsSent, prev.smsSent) },
-    { Icon: MessageSquare, accent: "#E8A33C", spark: sp("received"), label: lang === "en" ? "Texts received" : "Textos reçus", value: kpi.smsReceived, delta: pct(kpi.smsReceived, prev.smsReceived) },
-    { Icon: Mic, accent: "#E86CB0", label: lang === "en" ? "Recordings" : "Enregistrements", value: kpi.recordings, delta: pct(kpi.recordings, prev.recordings) },
+    { Icon: Phone, accent: "#2E9BDC", spark: callsSpark, label: lang === "en" ? "Calls" : "Appels", value: kpi.calls, delta: pct(kpi.calls, prev.calls), hint: vs(prev.calls) },
+    { Icon: PhoneMissed, accent: "#E84C4C", spark: sp("missed"), label: lang === "en" ? "Missed" : "Manqués", value: kpi.missed, delta: pct(kpi.missed, prev.missed), invert: true, hint: vs(prev.missed), threshold: { value: kpi.calls ? (kpi.missed / kpi.calls) * 100 : 0, warn: 10, bad: 20, invert: true, label: lang === "en" ? "Missed share thresholds 10% / 20%" : "Seuils d'appels manqués 10 % / 20 %" } },
+    { Icon: PercentCircle, accent: "#00D4AA", label: lang === "en" ? "Answer rate" : "Taux de réponse", value: `${Math.round(kpi.answerRate)}%`, delta: pct(kpi.answerRate, prev.answerRate), hint: vs(`${Math.round(prev.answerRate)}%`), threshold: { value: kpi.answerRate, warn: 85, bad: 70, label: lang === "en" ? "Targets 85% / 70%" : "Cibles 85 % / 70 %" } },
+    { Icon: Timer, accent: "#9B7FE8", spark: sp("avg"), label: lang === "en" ? "Avg. duration" : "Durée moyenne", value: fmtDuration(kpi.avgDuration), delta: pct(kpi.avgDuration, prev.avgDuration), hint: vs(fmtDuration(prev.avgDuration)), threshold: { value: kpi.avgDuration, warn: 60, bad: 20, invert: true, label: lang === "en" ? "Thresholds 60s / 20s" : "Seuils 60 s / 20 s" } },
+    { Icon: MessageSquare, accent: "#4AC9E3", spark: sp("sent"), label: lang === "en" ? "Texts sent" : "Textos envoyés", value: kpi.smsSent, delta: pct(kpi.smsSent, prev.smsSent), hint: vs(prev.smsSent) },
+    { Icon: MessageSquare, accent: "#E8A33C", spark: sp("received"), label: lang === "en" ? "Texts received" : "Textos reçus", value: kpi.smsReceived, delta: pct(kpi.smsReceived, prev.smsReceived), hint: vs(prev.smsReceived) },
+    { Icon: Mic, accent: "#E86CB0", label: lang === "en" ? "Recordings" : "Enregistrements", value: kpi.recordings, delta: pct(kpi.recordings, prev.recordings), hint: vs(prev.recordings) },
     {
       Icon: TrendingUp,
       accent: "#00D4AA",
       label: lang === "en" ? "Commissions (YTD)" : "Commissions (cumul)",
       value: commissions ? fmtMoney(commissions.cy) : "…",
       delta: commissions ? pct(commissions.cy, commissions.py) : null,
+      hint: commissions ? vs(fmtMoney(commissions.py)) : undefined,
     },
   ];
+
 
   // ----- AI insights -----
   const [aiSummary, setAiSummary] = useState("");

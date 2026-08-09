@@ -948,3 +948,89 @@ All colors MUST be HSL.
   .ov3d-row, .ov3d-tile { transition: none; }
   .ov3d-row:hover, .ov3d-tile:hover { transform: none; }
 }
+
+/* ============================================================
+   Planiprêt — Overview: real depth (perspective, bevels, gloss)
+   ============================================================ */
+.ov3d-stage { perspective: 1400px; perspective-origin: 50% -10%; }
+.ov3d-deck { transform-style: preserve-3d; transform: rotateX(4deg); }
+
+.ov3d-card {
+  border-top-color: rgba(255,255,255,.16);
+  box-shadow:
+    0 30px 60px -32px rgba(0,0,0,.95),
+    0 10px 22px -18px rgba(0,0,0,.8),
+    0 1px 0 rgba(255,255,255,.10) inset,
+    0 -1px 0 rgba(0,0,0,.35) inset;
+}
+.ov3d-card::after {
+  content: "";
+  position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(160deg, rgba(255,255,255,.10), rgba(255,255,255,0) 38%);
+}
+
+.ov3d-table th {
+  background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.02));
+  box-shadow: 0 1px 0 rgba(255,255,255,.10) inset, 0 6px 10px -10px rgba(0,0,0,.9);
+  border-radius: 8px;
+}
+.ov3d-row {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.02) 42%, rgba(0,0,0,.16)),
+    var(--pp-bg-card, var(--pp-bg-elevated));
+  box-shadow:
+    0 14px 22px -18px rgba(0,0,0,1),
+    0 2px 0 rgba(0,0,0,.45),
+    0 1px 0 rgba(255,255,255,.12) inset,
+    0 -1px 0 rgba(0,0,0,.45) inset;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ov3d-row:hover, .ov3d-tile:hover {
+    transform: translateY(-3px) scale(1.006);
+    box-shadow:
+      0 22px 32px -18px rgba(0,0,0,1),
+      0 3px 0 rgba(0,0,0,.5),
+      0 1px 0 rgba(255,255,255,.18) inset,
+      0 0 0 1px color-mix(in srgb, var(--ov3d-accent) 35%, transparent);
+  }
+}
+.ov3d-row td:first-child {
+  box-shadow: inset 4px 0 0 var(--ov3d-accent), inset 6px 0 10px -6px color-mix(in srgb, var(--ov3d-accent) 60%, transparent);
+}
+.ov3d-tile {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,.02) 45%, rgba(0,0,0,.16)),
+    var(--pp-bg-card, var(--pp-bg-elevated));
+  box-shadow:
+    0 16px 24px -18px rgba(0,0,0,1),
+    0 2px 0 rgba(0,0,0,.45),
+    0 1px 0 rgba(255,255,255,.12) inset,
+    inset 4px 0 0 var(--ov3d-accent);
+}
+
+/* Charts: extruded look */
+.ov3d-chart { position: relative; }
+.ov3d-chart .recharts-surface { overflow: visible; }
+.ov3d-chart .recharts-bar-rectangle path,
+.ov3d-chart .recharts-rectangle path { filter: url(#ov3dExtrude); }
+.ov3d-chart .recharts-area-area { filter: drop-shadow(0 10px 12px rgba(0,0,0,.45)); }
+.ov3d-chart .recharts-line-curve,
+.ov3d-chart .recharts-area-curve { filter: drop-shadow(0 6px 6px rgba(0,0,0,.55)); }
+.ov3d-chart .recharts-pie-sector path { filter: drop-shadow(0 12px 12px rgba(0,0,0,.5)); }
+.ov3d-chart::before {
+  content: "";
+  position: absolute; left: 6%; right: 6%; bottom: 16px; height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,.45), transparent 70%);
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .ov3d-deck { transform: none; }
+  .ov3d-chart .recharts-bar-rectangle path,
+  .ov3d-chart .recharts-rectangle path { filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ov3d-deck { transform: none; }
+}

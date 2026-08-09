@@ -10,8 +10,11 @@ import {
   aggregate, applyFilters, brokerNames, lenderNames, globalTotals, kpiOf,
   fmtMoney, fmtNum, fmtPct, fmtBps, fmtCompact, toCsv, SECTION_LABELS, CHART_COLORS,
   isCommissionEditor, deleteCommissionRow, termLabel,
+  fetchCommissionInsights, type CommissionInsight,
 } from "@/lib/planipret/commissionStats";
 import CommissionEntryDialog from "./CommissionEntryDialog";
+import CommissionInsights from "./CommissionInsights";
+
 
 
 type Lang = "fr" | "en";

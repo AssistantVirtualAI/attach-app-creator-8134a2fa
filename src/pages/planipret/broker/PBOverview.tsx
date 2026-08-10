@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Phone, PhoneMissed, MessageSquare, Timer, Voicemail, Mic, PercentCircle, TrendingUp } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
@@ -26,6 +26,7 @@ import { useOv3dIntensity, useOv3dProfiler } from "@/hooks/useOv3dIntensity";
 import { Ov3DChartFilters } from "@/components/planipret/broker/overview/ov3dChart";
 import OvInsights from "@/components/planipret/broker/overview/OvInsights";
 import { buildOverviewMetrics, fetchOverviewInsights, type OverviewInsight } from "@/lib/planipret/overviewInsights";
+import { loadOvInsights, saveOvInsights, isOvInsightsFresh, formatAge } from "@/lib/planipret/overviewInsightsCache";
 
 
 const RANGES = [7, 30, 90, 180, 365];

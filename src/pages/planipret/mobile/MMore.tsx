@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
+import { hasAiConsent, revokeAiConsent } from "@/components/planipret/mobile/AiConsentGate";
+import { Bot } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -30,6 +33,7 @@ const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
 
 export default function MMore() {
+  const [aiOk, setAiOk] = useState<boolean>(() => hasAiConsent());
   const { profile, reloadProfile } = useOutletContext<PlanipretMobileContext>();
   const { t, lang, setLang } = useMplanipretLang();
   const navigate = useNavigate();
@@ -404,6 +408,12 @@ export default function MMore() {
         <Row icon={<HelpCircle className="w-4 h-4" />} label={t("more.helpCenter")} onClick={() => setHelpOpen(true)} chevron />
         <Row icon={<MessageCircle className="w-4 h-4" />} label={t("more.contactSupport")}
           onClick={() => { window.location.href = "mailto:support@avastatistic.ca?subject=Support%20Planipr%C3%AAt%20AI%20Portal"; }} chevron />
+        <Row icon={<Bot className="w-4 h-4" />} label={aiOk ? "Consentement IA (AVA) : accordé" : "Consentement IA (AVA) : non accordé"}
+          sub="AVA envoie vos messages et transcriptions à OpenAI, Google (Gemini) et ElevenLabs. Touchez pour accorder ou retirer votre consentement."
+          onClick={async () => {
+            if (aiOk) { revokeAiConsent(); setAiOk(false); toast.success("Consentement IA retiré"); }
+            else { const ok = await ensureAiConsent(); setAiOk(ok); }
+          }} chevron />
         <Row icon={<Shield className="w-4 h-4" />} label={t("more.privacy")} onClick={() => navigate("/mplanipret/privacy")} chevron />
         <Row icon={<SettingsIcon className="w-4 h-4" />} label={t("more.diagnostic")} sub={t("more.diagnosticSub")}
           onClick={async () => {

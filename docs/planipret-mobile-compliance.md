@@ -36,6 +36,14 @@ This document tracks how the `/planipret/mobile` app meets Apple App Store and G
 - No microphone stream is ever sent outside the SRTP session opened for the active call. No raw audio is uploaded to Supabase/Lovable Cloud.
 - Local storage keys used by the mobile app (no PII): `pp_nc_enabled`, `pp_nc_mode`, `pp_auto_handover`, `pp_network_prefs`. Cleared on logout.
 
+
+## 3bis. Third-party AI (App Store 5.1.1(i) / 5.1.2(i))
+
+- No user data reaches an AI provider before explicit consent. Every AI call site awaits `ensureAiConsent()` (`src/components/planipret/mobile/AiConsentHost.tsx`), which shows `AiConsentGate` listing **what** is sent (messages to AVA, call transcripts/metadata, SMS/email text being improved, related contact name & number), **who** receives it (OpenAI, Google Gemini, Anthropic Claude for text; ElevenLabs for voice) and **what is never sent** (credentials, tokens, raw audio).
+- Gated surfaces: AVA chat (`MAvaChat`, `AvaChatSheet`), AVA voice agent, proactive AVA (`avaProactive`), call coaching (`useCallAnalysis`), AI text improve (SMS/email), TTS brief playback (`BriefListenButton`).
+- Consent is revocable at any time: *Plus → Consentement IA (AVA)*. Declining keeps the app fully usable.
+- The privacy policy (`/mplanipret/privacy`, section 3bis) documents the same disclosure plus the equivalent-protection statement.
+
 ## 4. Security posture
 
 - Auth: Supabase JWT in `httpOnly` cookies (session-based). No credentials stored on the device.

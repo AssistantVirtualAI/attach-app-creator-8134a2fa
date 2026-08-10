@@ -159,10 +159,75 @@ export default function PBOverview() {
   return (
     <PAPage>
       <Ov3DChartFilters />
-      <PAPageHeader
-        title={lang === "en" ? `Hello ${profile?.full_name ?? ""}` : `Bonjour ${profile?.full_name ?? ""}`}
-        subtitle={lang === "en" ? "Your personal activity" : "Votre activité personnelle"}
-      />
+
+      {/* Hero */}
+      <div
+        className="relative overflow-hidden rounded-2xl"
+        style={{
+          padding: "22px 20px",
+          border: "1px solid var(--pp-bg-border)",
+          background:
+            "radial-gradient(1100px 340px at 8% -20%, rgba(46,155,220,.28), transparent 62%), radial-gradient(900px 320px at 96% 130%, rgba(155,127,232,.24), transparent 60%), radial-gradient(700px 260px at 60% -40%, rgba(0,212,170,.14), transparent 60%), var(--pp-bg-card, var(--pp-bg-elevated))",
+          boxShadow: "0 30px 70px -46px rgba(0,0,0,.95), 0 1px 0 rgba(255,255,255,.06) inset",
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            background: "linear-gradient(115deg, transparent 40%, rgba(255,255,255,.05) 50%, transparent 60%)",
+          }}
+        />
+        <div className="relative flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2" style={{ fontSize: 11, color: "var(--pp-text-muted)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 700 }}>
+              <span className="inline-flex items-center gap-1.5">
+                <span style={{ width: 7, height: 7, borderRadius: 99, background: "#00D4AA", boxShadow: "0 0 10px #00D4AA" }} />
+                {lang === "en" ? "Live overview" : "Vue en direct"}
+              </span>
+              <span style={{ opacity: .5 }}>•</span>
+              <span>{lang === "en" ? `Last ${days} days` : `${days} derniers jours`}</span>
+            </div>
+            <h1
+              className="mt-1.5"
+              style={{
+                fontSize: 30, lineHeight: 1.1, fontWeight: 800, letterSpacing: "-.03em",
+                background: "linear-gradient(100deg, var(--pp-text-primary) 20%, #2E9BDC 60%, #9B7FE8 95%)",
+                WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+              }}
+            >
+              {lang === "en" ? `Hello ${profile?.full_name ?? ""}` : `Bonjour ${profile?.full_name ?? ""}`}
+            </h1>
+            <p className="mt-1" style={{ fontSize: 12.5, color: "var(--pp-text-secondary)" }}>
+              {lang === "en" ? "Your personal activity, analyzed in real time." : "Votre activité personnelle, analysée en temps réel."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { l: lang === "en" ? "Calls" : "Appels", v: kpi.calls, c: "#2E9BDC" },
+              { l: lang === "en" ? "Answer" : "Réponse", v: `${Math.round(kpi.answerRate)}%`, c: "#00D4AA" },
+              { l: lang === "en" ? "Texts" : "Textos", v: kpi.smsSent + kpi.smsReceived, c: "#9B7FE8" },
+            ].map((s) => (
+              <div
+                key={s.l}
+                className="rounded-xl px-3 py-2"
+                style={{
+                  minWidth: 92,
+                  border: `1px solid ${s.c}33`,
+                  background: `linear-gradient(180deg, ${s.c}1a, transparent)`,
+                  boxShadow: `0 16px 34px -28px ${s.c}`,
+                }}
+              >
+                <div className="tabular-nums" style={{ fontSize: 20, fontWeight: 800, color: "var(--pp-text-primary)", letterSpacing: "-.02em" }}>
+                  {ov.loading ? "…" : s.v}
+                </div>
+                <div style={{ fontSize: 10.5, color: "var(--pp-text-muted)" }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <OvConnectionsStrip profile={profile} lang={lang as "fr" | "en"} />

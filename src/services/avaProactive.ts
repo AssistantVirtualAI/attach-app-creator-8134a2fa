@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { hasAiConsent } from "@/components/planipret/mobile/AiConsentGate";
 
 export type AvaSuggestion = {
   id: string;
@@ -23,6 +24,7 @@ type AvaArgs = {
 };
 
 export async function callAva(args: AvaArgs): Promise<AvaResponse> {
+  if (!hasAiConsent()) return { reply: "", suggestions: [] };
   const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
     body: {
       mode: args.mode ?? "chat",

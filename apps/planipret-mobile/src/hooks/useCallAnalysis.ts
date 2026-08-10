@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface CallAnalysisRow {
@@ -115,6 +116,7 @@ export function useCallAnalysis(callId: string | null) {
     setAnalyzing(true);
     setError(null);
     try {
+      if (!(await ensureAiConsent())) { setAnalyzing(false); return; }
       const { data, error: err } = await supabase.functions.invoke("pp-coach-call", {
         body: { call_id: callId, force },
       });

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 import { hasAiConsent, revokeAiConsent } from "@/components/planipret/mobile/AiConsentGate";
-import { Bot } from "lucide-react";
 import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";

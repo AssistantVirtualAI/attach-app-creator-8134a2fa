@@ -300,8 +300,10 @@ export default function PBOverview() {
         loading={aiLoading}
         error={aiError}
         generated={aiGenerated}
-        onGenerate={runInsights}
+        updatedLabel={aiUpdatedAt ? formatAge(aiUpdatedAt, lang as "fr" | "en") : null}
+        onGenerate={() => runInsights(true)}
       />
+
 
 
 

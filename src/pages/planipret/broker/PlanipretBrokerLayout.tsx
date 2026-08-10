@@ -43,6 +43,22 @@ export default function PlanipretBrokerLayout() {
   const [profile, setProfile] = useState<any>(null);
   const [denyReason, setDenyReason] = useState<string>("");
 
+  // The broker portal uses document scrolling. Clear any scroll lock left by
+  // another route/modal so wheel and touch scrolling work on every page.
+  useEffect(() => {
+    const htmlOverflow = document.documentElement.style.overflow;
+    const bodyOverflow = document.body.style.overflow;
+    const bodyTouchAction = document.body.style.touchAction;
+    document.documentElement.style.overflow = "auto";
+    document.body.style.overflow = "auto";
+    document.body.style.touchAction = "pan-y";
+    return () => {
+      document.documentElement.style.overflow = htmlOverflow;
+      document.body.style.overflow = bodyOverflow;
+      document.body.style.touchAction = bodyTouchAction;
+    };
+  }, []);
+
   const load = async () => {
     const access = await resolveBrokerAccess();
     if (access.state === "ready") {
@@ -130,7 +146,7 @@ export default function PlanipretBrokerLayout() {
   const dateLabel = new Date().toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   return (
-    <div className="planipret-scope planipret-admin-scope planipret-broker-scope h-screen overflow-hidden flex" data-pp-theme={theme}
+    <div className="planipret-scope planipret-admin-scope planipret-broker-scope min-h-screen flex" data-pp-theme={theme}
       style={{ background: "var(--pp-bg-base)", fontFamily: "'Epilogue', sans-serif" }}>
       {/* Sidebar (desktop) */}
       <aside className="pp-sidebar hidden md:flex flex-col fixed left-0 top-0 h-screen w-[248px] z-40">
@@ -211,7 +227,7 @@ export default function PlanipretBrokerLayout() {
       </div>
 
       {/* Main */}
-      <div className="flex flex-1 min-w-0 min-h-0 flex-col md:ml-[248px] pt-[148px] md:pt-0">
+      <div className="flex flex-1 min-w-0 min-h-screen flex-col md:ml-[248px] pt-[148px] md:pt-0">
         <header className="pp-app-header sticky top-0 hidden md:flex items-center justify-between gap-4 px-5 xl:px-7 z-30" style={{ height: 64 }}>
           <h1 className="pp-heading truncate" style={{ fontWeight: 700, fontSize: 18 }}>{title}</h1>
           <div className="flex items-center gap-3">
@@ -228,7 +244,7 @@ export default function PlanipretBrokerLayout() {
           </div>
         </header>
 
-        <main className="pa-main flex-1 min-h-0 min-w-0 p-4 md:p-7 overflow-y-auto overflow-x-hidden" style={{ WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}>
+        <main className="pa-main flex-1 min-w-0 p-4 md:p-7 overflow-x-hidden">
           <Outlet context={{ userId, authUserId, profile } satisfies BrokerCtx} />
         </main>
       </div>

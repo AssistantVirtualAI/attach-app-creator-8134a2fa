@@ -24,7 +24,7 @@ type AvaArgs = {
 };
 
 export async function callAva(args: AvaArgs): Promise<AvaResponse> {
-  if (!hasAiConsent()) return null as any;
+  if (!hasAiConsent()) return { reply: "", suggestions: [] };
   const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
     body: {
       mode: args.mode ?? "chat",

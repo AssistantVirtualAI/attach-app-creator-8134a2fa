@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Phone, PhoneMissed, MessageSquare, Timer, Voicemail, Mic, PercentCircle, TrendingUp } from "lucide-react";
-import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
+import { PAPage } from "@/components/planipret/admin/PAPageShell";
 import { PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
@@ -26,6 +26,7 @@ import { useOv3dIntensity, useOv3dProfiler } from "@/hooks/useOv3dIntensity";
 import { Ov3DChartFilters } from "@/components/planipret/broker/overview/ov3dChart";
 import OvInsights from "@/components/planipret/broker/overview/OvInsights";
 import { buildOverviewMetrics, fetchOverviewInsights, type OverviewInsight } from "@/lib/planipret/overviewInsights";
+import { loadOvInsights, saveOvInsights, isOvInsightsFresh, formatAge } from "@/lib/planipret/overviewInsightsCache";
 
 
 const RANGES = [7, 30, 90, 180, 365];
@@ -75,19 +76,27 @@ export default function PBOverview() {
   ];
 
 
-  // ----- AI insights -----
+  // ----- AI insights (auto-loaded, refreshed every 24h) -----
   const [aiSummary, setAiSummary] = useState("");
   const [aiInsights, setAiInsights] = useState<OverviewInsight[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiGenerated, setAiGenerated] = useState(false);
+  const [aiUpdatedAt, setAiUpdatedAt] = useState<number | null>(null);
+  const aiRunning = useRef(false);
 
-  useEffect(() => {
-    setAiSummary(""); setAiInsights([]); setAiError(null); setAiGenerated(false);
-  }, [days, userId]);
-
-  const runInsights = async () => {
-    if (aiLoading) return;
+  const runInsights = useCallback(async (force = false) => {
+    if (aiRunning.current) return;
+    const cached = loadOvInsights(userId, days, lang);
+    if (!force && isOvInsightsFresh(cached) && cached) {
+      setAiSummary(cached.summary);
+      setAiInsights(cached.insights);
+      setAiUpdatedAt(cached.generatedAt);
+      setAiGenerated(true);
+      setAiError(null);
+      return;
+    }
+    aiRunning.current = true;
     setAiLoading(true); setAiError(null);
     try {
       const metrics = buildOverviewMetrics({
@@ -101,27 +110,124 @@ export default function PBOverview() {
       });
       const res = await fetchOverviewInsights({ lang: lang as "fr" | "en", days, metrics });
       if (!res.ok) {
-        setAiError(res.error || (lang === "en" ? "Analysis unavailable right now." : "Analyse indisponible pour le moment."));
+        // Fall back to a stale cache rather than showing nothing.
+        if (cached) {
+          setAiSummary(cached.summary); setAiInsights(cached.insights);
+          setAiUpdatedAt(cached.generatedAt); setAiGenerated(true);
+        } else {
+          setAiError(res.error || (lang === "en" ? "Analysis unavailable right now." : "Analyse indisponible pour le moment."));
+        }
       } else {
         setAiSummary(res.summary);
         setAiInsights(res.insights);
         setAiGenerated(true);
+        setAiUpdatedAt(Date.now());
+        saveOvInsights(userId, days, lang, res.summary, res.insights);
       }
     } catch (e: any) {
       setAiError(e?.message ?? (lang === "en" ? "Unexpected error." : "Erreur inattendue."));
     } finally {
+      aiRunning.current = false;
       setAiLoading(false);
     }
-  };
+  }, [aiLoading, days, userId, lang, kpi, prev, ov.daily, ov.hourly, ov.topContacts, commissions]);
+
+  // Hydrate from cache instantly on period/lang/user change.
+  useEffect(() => {
+    const cached = loadOvInsights(userId, days, lang);
+    if (cached) {
+      setAiSummary(cached.summary); setAiInsights(cached.insights);
+      setAiUpdatedAt(cached.generatedAt); setAiGenerated(true); setAiError(null);
+    } else {
+      setAiSummary(""); setAiInsights([]); setAiUpdatedAt(null); setAiGenerated(false); setAiError(null);
+    }
+  }, [days, userId, lang]);
+
+  // Auto-generate once data is ready when there is no fresh (<24h) analysis.
+  useEffect(() => {
+    if (ov.loading) return;
+    if (!(kpi?.calls || kpi?.smsSent || kpi?.smsReceived)) return;
+    const cached = loadOvInsights(userId, days, lang);
+    if (isOvInsightsFresh(cached)) return;
+    const t = setTimeout(() => { void runInsights(true); }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ov.loading, days, userId, lang]);
+
 
 
   return (
     <PAPage>
       <Ov3DChartFilters />
-      <PAPageHeader
-        title={lang === "en" ? `Hello ${profile?.full_name ?? ""}` : `Bonjour ${profile?.full_name ?? ""}`}
-        subtitle={lang === "en" ? "Your personal activity" : "Votre activité personnelle"}
-      />
+
+      {/* Hero */}
+      <div
+        className="relative overflow-hidden rounded-2xl"
+        style={{
+          padding: "22px 20px",
+          border: "1px solid var(--pp-bg-border)",
+          background:
+            "radial-gradient(1100px 340px at 8% -20%, rgba(46,155,220,.28), transparent 62%), radial-gradient(900px 320px at 96% 130%, rgba(155,127,232,.24), transparent 60%), radial-gradient(700px 260px at 60% -40%, rgba(0,212,170,.14), transparent 60%), var(--pp-bg-card, var(--pp-bg-elevated))",
+          boxShadow: "0 30px 70px -46px rgba(0,0,0,.95), 0 1px 0 rgba(255,255,255,.06) inset",
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            position: "absolute", inset: 0, pointerEvents: "none",
+            background: "linear-gradient(115deg, transparent 40%, rgba(255,255,255,.05) 50%, transparent 60%)",
+          }}
+        />
+        <div className="relative flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2" style={{ fontSize: 11, color: "var(--pp-text-muted)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 700 }}>
+              <span className="inline-flex items-center gap-1.5">
+                <span style={{ width: 7, height: 7, borderRadius: 99, background: "#00D4AA", boxShadow: "0 0 10px #00D4AA" }} />
+                {lang === "en" ? "Live overview" : "Vue en direct"}
+              </span>
+              <span style={{ opacity: .5 }}>•</span>
+              <span>{lang === "en" ? `Last ${days} days` : `${days} derniers jours`}</span>
+            </div>
+            <h1
+              className="mt-1.5"
+              style={{
+                fontSize: 30, lineHeight: 1.1, fontWeight: 800, letterSpacing: "-.03em",
+                background: "linear-gradient(100deg, var(--pp-text-primary) 20%, #2E9BDC 60%, #9B7FE8 95%)",
+                WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+              }}
+            >
+              {lang === "en" ? `Hello ${profile?.full_name ?? ""}` : `Bonjour ${profile?.full_name ?? ""}`}
+            </h1>
+            <p className="mt-1" style={{ fontSize: 12.5, color: "var(--pp-text-secondary)" }}>
+              {lang === "en" ? "Your personal activity, analyzed in real time." : "Votre activité personnelle, analysée en temps réel."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { l: lang === "en" ? "Calls" : "Appels", v: kpi.calls, c: "#2E9BDC" },
+              { l: lang === "en" ? "Answer" : "Réponse", v: `${Math.round(kpi.answerRate)}%`, c: "#00D4AA" },
+              { l: lang === "en" ? "Texts" : "Textos", v: kpi.smsSent + kpi.smsReceived, c: "#9B7FE8" },
+            ].map((s) => (
+              <div
+                key={s.l}
+                className="rounded-xl px-3 py-2"
+                style={{
+                  minWidth: 92,
+                  border: `1px solid ${s.c}33`,
+                  background: `linear-gradient(180deg, ${s.c}1a, transparent)`,
+                  boxShadow: `0 16px 34px -28px ${s.c}`,
+                }}
+              >
+                <div className="tabular-nums" style={{ fontSize: 20, fontWeight: 800, color: "var(--pp-text-primary)", letterSpacing: "-.02em" }}>
+                  {ov.loading ? "…" : s.v}
+                </div>
+                <div style={{ fontSize: 10.5, color: "var(--pp-text-muted)" }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <OvConnectionsStrip profile={profile} lang={lang as "fr" | "en"} />
@@ -194,8 +300,10 @@ export default function PBOverview() {
         loading={aiLoading}
         error={aiError}
         generated={aiGenerated}
-        onGenerate={runInsights}
+        updatedLabel={aiUpdatedAt ? formatAge(aiUpdatedAt, lang as "fr" | "en") : null}
+        onGenerate={() => runInsights(true)}
       />
+
 
 
 

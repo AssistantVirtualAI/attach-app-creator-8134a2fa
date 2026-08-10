@@ -43,6 +43,22 @@ export default function PlanipretBrokerLayout() {
   const [profile, setProfile] = useState<any>(null);
   const [denyReason, setDenyReason] = useState<string>("");
 
+  // The broker portal uses document scrolling. Clear any scroll lock left by
+  // another route/modal so wheel and touch scrolling work on every page.
+  useEffect(() => {
+    const htmlOverflow = document.documentElement.style.overflow;
+    const bodyOverflow = document.body.style.overflow;
+    const bodyTouchAction = document.body.style.touchAction;
+    document.documentElement.style.overflow = "auto";
+    document.body.style.overflow = "auto";
+    document.body.style.touchAction = "pan-y";
+    return () => {
+      document.documentElement.style.overflow = htmlOverflow;
+      document.body.style.overflow = bodyOverflow;
+      document.body.style.touchAction = bodyTouchAction;
+    };
+  }, []);
+
   const load = async () => {
     const access = await resolveBrokerAccess();
     if (access.state === "ready") {

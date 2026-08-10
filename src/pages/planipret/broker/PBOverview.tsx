@@ -75,19 +75,27 @@ export default function PBOverview() {
   ];
 
 
-  // ----- AI insights -----
+  // ----- AI insights (auto-loaded, refreshed every 24h) -----
   const [aiSummary, setAiSummary] = useState("");
   const [aiInsights, setAiInsights] = useState<OverviewInsight[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiGenerated, setAiGenerated] = useState(false);
+  const [aiUpdatedAt, setAiUpdatedAt] = useState<number | null>(null);
+  const aiRunning = useRef(false);
 
-  useEffect(() => {
-    setAiSummary(""); setAiInsights([]); setAiError(null); setAiGenerated(false);
-  }, [days, userId]);
-
-  const runInsights = async () => {
-    if (aiLoading) return;
+  const runInsights = useCallback(async (force = false) => {
+    if (aiRunning.current) return;
+    const cached = loadOvInsights(userId, days, lang);
+    if (!force && isOvInsightsFresh(cached) && cached) {
+      setAiSummary(cached.summary);
+      setAiInsights(cached.insights);
+      setAiUpdatedAt(cached.generatedAt);
+      setAiGenerated(true);
+      setAiError(null);
+      return;
+    }
+    aiRunning.current = true;
     setAiLoading(true); setAiError(null);
     try {
       const metrics = buildOverviewMetrics({
@@ -101,18 +109,50 @@ export default function PBOverview() {
       });
       const res = await fetchOverviewInsights({ lang: lang as "fr" | "en", days, metrics });
       if (!res.ok) {
-        setAiError(res.error || (lang === "en" ? "Analysis unavailable right now." : "Analyse indisponible pour le moment."));
+        // Fall back to a stale cache rather than showing nothing.
+        if (cached) {
+          setAiSummary(cached.summary); setAiInsights(cached.insights);
+          setAiUpdatedAt(cached.generatedAt); setAiGenerated(true);
+        } else {
+          setAiError(res.error || (lang === "en" ? "Analysis unavailable right now." : "Analyse indisponible pour le moment."));
+        }
       } else {
         setAiSummary(res.summary);
         setAiInsights(res.insights);
         setAiGenerated(true);
+        setAiUpdatedAt(Date.now());
+        saveOvInsights(userId, days, lang, res.summary, res.insights);
       }
     } catch (e: any) {
       setAiError(e?.message ?? (lang === "en" ? "Unexpected error." : "Erreur inattendue."));
     } finally {
+      aiRunning.current = false;
       setAiLoading(false);
     }
-  };
+  }, [aiLoading, days, userId, lang, kpi, prev, ov.daily, ov.hourly, ov.topContacts, commissions]);
+
+  // Hydrate from cache instantly on period/lang/user change.
+  useEffect(() => {
+    const cached = loadOvInsights(userId, days, lang);
+    if (cached) {
+      setAiSummary(cached.summary); setAiInsights(cached.insights);
+      setAiUpdatedAt(cached.generatedAt); setAiGenerated(true); setAiError(null);
+    } else {
+      setAiSummary(""); setAiInsights([]); setAiUpdatedAt(null); setAiGenerated(false); setAiError(null);
+    }
+  }, [days, userId, lang]);
+
+  // Auto-generate once data is ready when there is no fresh (<24h) analysis.
+  useEffect(() => {
+    if (ov.loading) return;
+    if (!(kpi?.calls || kpi?.smsSent || kpi?.smsReceived)) return;
+    const cached = loadOvInsights(userId, days, lang);
+    if (isOvInsightsFresh(cached)) return;
+    const t = setTimeout(() => { void runInsights(true); }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ov.loading, days, userId, lang]);
+
 
 
   return (

@@ -67,6 +67,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/maestro-sync",    key: "maestroSync",     Icon: Zap },
       { to: "/planipret/admin/telecom-mapping", key: "telecomMapping",  Icon: Plug },
       { to: "/planipret/admin/did-reconcile",   key: "didReconcile",    Icon: PlugZap },
+      { to: "/planipret/admin/phone-numbers",   key: "phoneNumbers",    Icon: Phone },
       { to: "/planipret/admin/compliance",      key: "compliance",      Icon: ShieldCheck },
       { to: "/planipret/admin/audit-checklist", key: "auditChecklist",  Icon: CheckSquare, badge: "audit" },
     ],

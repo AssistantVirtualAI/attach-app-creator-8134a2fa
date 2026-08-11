@@ -84,6 +84,7 @@ const PAMaestroSync = lazyWithRetry(() => import("./pages/planipret/admin/PAMaes
 const PASyncedCalls = lazyWithRetry(() => import("./pages/planipret/admin/PASyncedCalls"));
 const PATelecomMapping = lazyWithRetry(() => import("./pages/planipret/admin/PATelecomMapping"));
 const PADidReconcile = lazyWithRetry(() => import("./pages/planipret/admin/PADidReconcile"));
+const PAPhoneNumbers = lazyWithRetry(() => import("./pages/planipret/admin/PAPhoneNumbers"));
 const PAMaestroStatus = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroStatus"));
 const PlanipretBrokerLayout = lazyWithRetry(() => import("./pages/planipret/broker/PlanipretBrokerLayout"));
 const PBOverview = lazyWithRetry(() => import("./pages/planipret/broker/PBOverview"));
@@ -635,6 +636,7 @@ const App = () => (
                   <Route path="synced-calls" element={<Suspense fallback={<AdminPageSkeleton />}><PASyncedCalls /></Suspense>} />
                   <Route path="telecom-mapping" element={<Suspense fallback={<AdminPageSkeleton />}><PATelecomMapping /></Suspense>} />
                   <Route path="did-reconcile" element={<Suspense fallback={<AdminPageSkeleton />}><PADidReconcile /></Suspense>} />
+                  <Route path="phone-numbers" element={<Suspense fallback={<AdminPageSkeleton />}><PAPhoneNumbers /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
                   <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />

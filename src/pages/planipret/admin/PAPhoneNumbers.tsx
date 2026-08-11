@@ -1,0 +1,173 @@
+import { useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, RefreshCw, PhoneOff, PhoneForwarded } from "lucide-react";
+import { toast } from "sonner";
+
+type Did = {
+  e164: string;
+  pretty: string;
+  extension: string | null;
+  status: "assigned" | "available" | "reserved";
+  display_name: string | null;
+};
+type Broker = { extension: string; full_name: string | null; email: string | null };
+
+export default function PAPhoneNumbers() {
+  const qc = useQueryClient();
+  const [q, setQ] = useState("");
+  const [tab, setTab] = useState<"all" | "available" | "assigned">("available");
+  const [pick, setPick] = useState<Record<string, string>>({});
+
+  const { data, isFetching, refetch } = useQuery({
+    queryKey: ["pa-phone-numbers"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("pp-admin-did-assignments", {
+        body: { action: "list_with_brokers", domain: "planipret.ca" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Erreur");
+      return data as { numbers: Did[]; brokers: Broker[] };
+    },
+  });
+
+  const numbers = data?.numbers ?? [];
+  const brokers = data?.brokers ?? [];
+
+  const mutate = useMutation({
+    mutationFn: async (payload: { action: "assign" | "release"; e164: string; extension?: string }) => {
+      const { data, error } = await supabase.functions.invoke("pp-admin-did-assignments", {
+        body: { ...payload, domain: "planipret.ca" },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Erreur");
+      return data;
+    },
+    onSuccess: (_d, v) => {
+      toast.success(v.action === "assign" ? "Numéro assigné" : "Numéro libéré");
+      qc.invalidateQueries({ queryKey: ["pa-phone-numbers"] });
+    },
+    onError: (e: any) => toast.error(e.message || "Erreur"),
+  });
+
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return numbers.filter((n) => {
+      if (tab !== "all" && n.status !== tab) return false;
+      if (!term) return true;
+      return [n.pretty, n.e164, n.extension, n.display_name]
+        .some((v) => (v || "").toLowerCase().includes(term));
+    });
+  }, [numbers, q, tab]);
+
+  const counts = useMemo(() => ({
+    total: numbers.length,
+    available: numbers.filter((n) => n.status === "available").length,
+    assigned: numbers.filter((n) => n.status === "assigned").length,
+  }), [numbers]);
+
+  return (
+    <div className="space-y-4 p-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold">Numéros de téléphone</h1>
+          <p className="text-sm text-muted-foreground">
+            Inventaire des DID Planiprêt. Les numéros sans courtier réel sont marqués disponibles et peuvent être assignés ici.
+          </p>
+        </div>
+        <Button variant="outline" className="gap-2" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          Rafraîchir
+        </Button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(["available", "assigned", "all"] as const).map((k) => (
+          <Button key={k} size="sm" variant={tab === k ? "default" : "outline"} onClick={() => setTab(k)}>
+            {k === "available" ? `Disponibles (${counts.available})`
+              : k === "assigned" ? `Assignés (${counts.assigned})`
+              : `Tous (${counts.total})`}
+          </Button>
+        ))}
+      </div>
+
+      <Input
+        placeholder="Rechercher un numéro, un poste ou un courtier…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        className="max-w-md"
+      />
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">{filtered.length} numéro(s)</CardTitle>
+          <CardDescription>
+            L'assignation est enregistrée dans le portail. Le routage carrier reste géré dans le portail NetSapiens.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b">
+                <th className="py-2 pr-3">Numéro</th>
+                <th className="py-2 pr-3">Poste</th>
+                <th className="py-2 pr-3">Courtier</th>
+                <th className="py-2 pr-3">Statut</th>
+                <th className="py-2 pr-3 w-[320px]">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((n) => (
+                <tr key={n.e164} className="border-b last:border-0">
+                  <td className="py-2 pr-3 font-mono">{n.pretty}</td>
+                  <td className="py-2 pr-3">{n.extension || "—"}</td>
+                  <td className="py-2 pr-3 text-muted-foreground">{n.display_name || "—"}</td>
+                  <td className="py-2 pr-3">
+                    <Badge variant={n.status === "assigned" ? "default" : "secondary"}>
+                      {n.status === "assigned" ? "Assigné" : "Disponible"}
+                    </Badge>
+                  </td>
+                  <td className="py-2 pr-3">
+                    {n.status === "assigned" ? (
+                      <Button size="sm" variant="outline" className="gap-2"
+                        disabled={mutate.isPending}
+                        onClick={() => mutate.mutate({ action: "release", e164: n.e164 })}>
+                        <PhoneOff className="w-3.5 h-3.5" /> Libérer
+                      </Button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Select value={pick[n.e164] ?? ""} onValueChange={(v) => setPick((p) => ({ ...p, [n.e164]: v }))}>
+                          <SelectTrigger className="h-8 w-[200px]"><SelectValue placeholder="Choisir un courtier" /></SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            {brokers.map((b) => (
+                              <SelectItem key={b.extension} value={b.extension}>
+                                {b.extension} — {b.full_name || b.email || "Sans nom"}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button size="sm" className="gap-2"
+                          disabled={!pick[n.e164] || mutate.isPending}
+                          onClick={() => mutate.mutate({ action: "assign", e164: n.e164, extension: pick[n.e164] })}>
+                          <PhoneForwarded className="w-3.5 h-3.5" /> Assigner
+                        </Button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">Aucun numéro.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

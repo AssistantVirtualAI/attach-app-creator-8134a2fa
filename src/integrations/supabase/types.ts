@@ -8861,31 +8861,37 @@ export type Database = {
         Row: {
           callerid_name: string | null
           created_at: string
+          display_name: string | null
           domain: string
-          extension: string
+          extension: string | null
           phone_number_digits: string
           phone_number_e164: string
           source: string
+          status: string
           updated_at: string
         }
         Insert: {
           callerid_name?: string | null
           created_at?: string
+          display_name?: string | null
           domain?: string
-          extension: string
+          extension?: string | null
           phone_number_digits: string
           phone_number_e164: string
           source?: string
+          status?: string
           updated_at?: string
         }
         Update: {
           callerid_name?: string | null
           created_at?: string
+          display_name?: string | null
           domain?: string
-          extension?: string
+          extension?: string | null
           phone_number_digits?: string
           phone_number_e164?: string
           source?: string
+          status?: string
           updated_at?: string
         }
         Relationships: []

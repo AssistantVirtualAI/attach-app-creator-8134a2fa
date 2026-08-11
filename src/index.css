@@ -1130,3 +1130,18 @@ All colors MUST be HSL.
 @media (prefers-reduced-motion: reduce) {
   :root { --ov3d-d: .5; }
 }
+
+/* Planiprêt portals (admin + broker): always use natural document scrolling.
+   Any `overflow-x: hidden` on the main column would turn it into a scroll
+   container and break wheel/touch scrolling on 3D pages (commissions, overview). */
+.planipret-admin-scope .pa-main,
+.planipret-broker-scope .pa-main {
+  overflow-y: visible !important;
+  overflow-x: clip;
+  min-height: 0;
+}
+.planipret-admin-scope,
+.planipret-broker-scope {
+  overflow: visible !important;
+  touch-action: pan-y;
+}

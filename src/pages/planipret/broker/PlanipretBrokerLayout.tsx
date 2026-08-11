@@ -244,7 +244,7 @@ export default function PlanipretBrokerLayout() {
           </div>
         </header>
 
-        <main className="pa-main flex-1 min-w-0 p-4 md:p-7 overflow-x-hidden">
+        <main className="pa-main flex-1 min-w-0 p-4 md:p-7" style={{ overflowX: "clip", overflowY: "visible" }}>
           <Outlet context={{ userId, authUserId, profile } satisfies BrokerCtx} />
         </main>
       </div>

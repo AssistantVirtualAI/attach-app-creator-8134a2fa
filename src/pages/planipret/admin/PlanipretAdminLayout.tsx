@@ -519,7 +519,7 @@ export default function PlanipretAdminLayout() {
             </div>
           </div>
         </header>
-        <main className="pa-main flex-1 min-w-0 p-5 md:p-7 overflow-y-auto overflow-x-hidden">
+        <main className="pa-main flex-1 min-w-0 p-5 md:p-7" style={{ overflowX: "clip", overflowY: "visible" }}>
           <Outlet context={{ profile, softphone }} />
         </main>
       </div>

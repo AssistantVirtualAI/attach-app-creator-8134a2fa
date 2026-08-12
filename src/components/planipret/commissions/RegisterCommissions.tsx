@@ -481,9 +481,14 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               lang={lang}
               brokers={data.brokers ?? []}
               periodLabel={`${data.window?.start} → ${data.window?.end}`}
-              onSelect={(b) => setAgent(b)}
+              onSelect={(b) => { setDrillData(null); setDrillAgent(b); }}
             />
           )}
+
+          {tab === "gaps" && isAdminView && (
+            <CommissionDiscrepancies lang={lang} discrepancies={data.discrepancies} />
+          )}
+
 
           {tab === "trend" && (
             <>

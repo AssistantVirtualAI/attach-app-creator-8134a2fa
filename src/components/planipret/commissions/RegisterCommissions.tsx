@@ -724,8 +724,9 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                               cursor={{ fill: "rgba(120,140,200,0.08)" }}
                               formatter={(v: any, _n: any, p: any) => [`${fmtMoney(Number(v))} · ${(p?.payload?.share ?? 0).toFixed(1)} %`, p?.payload?.name]}
                             />
-                            <Bar dataKey="value" radius={[0, 6, 6, 0]} filter="url(#ov3dExtrude)">
-                              {rows.map((r: any, i: number) => <Cell key={i} fill={fill3d(r.fill)} />)}
+                            <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={26}>
+                              {rows.map((r: any, i: number) => <Cell key={i} fill={r.fill} fillOpacity={0.95} stroke={r.fill} strokeWidth={1} />)}
+
                               <LabelList
                                 dataKey="share"
                                 position="right"

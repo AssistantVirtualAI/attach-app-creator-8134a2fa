@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { agentKey, buildResolver, splitName, type AliasRow, type BrokerDir } from "../_shared/broker-identity.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -29,6 +30,34 @@ const isoDate = (v: unknown): string | null => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 };
 
+const REG = "planipret_commission_register";
+const ALIAS = "planipret_commission_broker_aliases";
+
+async function loadResolver(admin: any) {
+  const { data: profiles } = await admin
+    .from("planipret_profiles")
+    .select("user_id,full_name,email,first_name,last_name,maestro_broker_id");
+  const { data: aliases } = await admin
+    .from(ALIAS)
+    .select("agent_key,broker_user_id,maestro_broker_id,first_name,last_name");
+  return {
+    profiles: (profiles ?? []) as BrokerDir[],
+    resolve: buildResolver((profiles ?? []) as BrokerDir[], (aliases ?? []) as AliasRow[]),
+  };
+}
+
+async function fetchAllRows(admin: any, cols: string) {
+  const out: any[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin.from(REG).select(cols).range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -45,24 +74,137 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "import");
 
-    if (action === "summary") {
-      const { data } = await admin
-        .from("planipret_commission_register")
-        .select("fiscal_year,broker_user_id,agent_name")
-        .limit(200000);
-      const rows = (data ?? []) as any[];
+    if (action === "summary" || action === "validate") {
+      const rows = await fetchAllRows(
+        admin,
+        "fiscal_year,broker_user_id,agent_name,agent_key,first_name,last_name,maestro_broker_id,match_method,loan_amt,amount,commission_type,date_trans,number",
+      );
       const byYear: Record<string, number> = {};
-      const unmatched = new Set<string>();
+      const brokers = new Map<string, any>();
+      const unmatchedMap = new Map<string, any>();
+      let totalVolume = 0;
+      let totalCommission = 0;
+      let noDate = 0;
+      const dealSet = new Set<string>();
+      const volSet = new Set<string>();
+
       for (const r of rows) {
         byYear[r.fiscal_year] = (byYear[r.fiscal_year] ?? 0) + 1;
-        if (!r.broker_user_id && r.agent_name) unmatched.add(r.agent_name);
+        if (!r.date_trans) noDate++;
+        totalCommission += Number(r.amount ?? 0);
+        if (r.commission_type === "base" && Number(r.loan_amt) > 0) {
+          const vk = `${r.number}|${r.institution ?? ""}|${r.mortgage_type ?? ""}|${Number(r.loan_amt).toFixed(2)}`;
+          if (!volSet.has(vk)) { volSet.add(vk); totalVolume += Number(r.loan_amt ?? 0); }
+        }
+        if (r.commission_type === "base" && r.number) dealSet.add(String(r.number));
+
+        const key = r.agent_key ?? agentKey(r.agent_name) ?? "(inconnu)";
+        if (r.broker_user_id) {
+          const b = brokers.get(key) ?? {
+            agent_key: key,
+            raw_name: r.agent_name,
+            broker_user_id: r.broker_user_id,
+            first_name: r.first_name,
+            last_name: r.last_name,
+            maestro_broker_id: r.maestro_broker_id,
+            match_method: r.match_method,
+            rows: 0, volume: 0, commission: 0, deals: new Set<string>(),
+          };
+          b.rows++;
+          b.commission += Number(r.amount ?? 0);
+          if (r.commission_type === "base" && Number(r.loan_amt) > 0) b.volume += Number(r.loan_amt ?? 0);
+          if (r.commission_type === "base" && r.number) b.deals.add(String(r.number));
+          brokers.set(key, b);
+        } else if (r.agent_name) {
+          const u = unmatchedMap.get(key) ?? { agent_key: key, raw_name: r.agent_name, rows: 0, commission: 0, volume: 0 };
+          u.rows++;
+          u.commission += Number(r.amount ?? 0);
+          if (r.commission_type === "base") u.volume += Number(r.loan_amt ?? 0);
+          unmatchedMap.set(key, u);
+        }
       }
+
+      const brokerList = [...brokers.values()]
+        .map((b) => ({ ...b, deals: b.deals.size }))
+        .sort((a, b) => b.volume - a.volume);
+      const unmatched = [...unmatchedMap.values()].sort((a, b) => b.rows - a.rows);
+
       const { data: imports } = await admin
         .from("planipret_commission_imports")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(20);
-      return json({ ok: true, total: rows.length, byYear, unmatched: [...unmatched].sort(), imports: imports ?? [] });
+
+      const dispatchedRows = rows.filter((r: any) => r.broker_user_id).length;
+      return json({
+        ok: true,
+        total: rows.length,
+        byYear,
+        unmatched: unmatched.map((u) => u.raw_name),
+        unmatchedDetail: unmatched,
+        brokers: brokerList,
+        imports: imports ?? [],
+        report: {
+          rows: rows.length,
+          dispatchedRows,
+          orphanRows: rows.length - dispatchedRows,
+          noDate,
+          totalVolume,
+          totalCommission,
+          totalDeals: dealSet.size,
+          brokerVolumeSum: brokerList.reduce((s: number, b: any) => s + b.volume, 0),
+          brokerCommissionSum: brokerList.reduce((s: number, b: any) => s + b.commission, 0),
+          brokerDealsSum: brokerList.reduce((s: number, b: any) => s + b.deals, 0),
+          withMaestroId: rows.filter((r: any) => r.maestro_broker_id).length,
+          withNames: rows.filter((r: any) => r.first_name || r.last_name).length,
+        },
+      });
+    }
+
+    if (action === "alias.upsert") {
+      const rawName = String(body?.rawName ?? "").trim();
+      const key = agentKey(rawName);
+      if (!key) return json({ error: "invalid_name" }, 400);
+      const sp = splitName(rawName);
+      const { error } = await admin.from(ALIAS).upsert({
+        agent_key: key,
+        raw_name: rawName,
+        broker_user_id: body?.brokerUserId ?? null,
+        maestro_broker_id: body?.maestroBrokerId ? String(body.maestroBrokerId).trim() : null,
+        first_name: body?.firstName ?? sp.first,
+        last_name: body?.lastName ?? sp.last,
+        created_by: user.id,
+      }, { onConflict: "agent_key" });
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true, agent_key: key });
+    }
+
+    if (action === "alias.list") {
+      const { data } = await admin.from(ALIAS).select("*").order("raw_name");
+      return json({ ok: true, aliases: data ?? [] });
+    }
+
+    if (action === "redispatch") {
+      const { resolve } = await loadResolver(admin);
+      const rows = await fetchAllRows(admin, "id,agent_name,maestro_broker_id");
+      let updated = 0;
+      const CH = 200;
+      for (let i = 0; i < rows.length; i += CH) {
+        const slice = rows.slice(i, i + CH);
+        await Promise.all(slice.map(async (r: any) => {
+          const res = resolve(r.agent_name, r.maestro_broker_id);
+          const { error } = await admin.from(REG).update({
+            broker_user_id: res.broker_user_id,
+            first_name: res.first_name,
+            last_name: res.last_name,
+            maestro_broker_id: res.maestro_broker_id,
+            match_method: res.match_method,
+            agent_key: agentKey(r.agent_name),
+          }).eq("id", r.id);
+          if (!error) updated++;
+        }));
+      }
+      return json({ ok: true, updated });
     }
 
     if (action === "purge") {
@@ -79,17 +221,13 @@ Deno.serve(async (req) => {
     const fileName = String(body?.fileName ?? "registre.xlsx");
     const replaceYears: boolean = body?.replaceYears !== false;
 
-    // Broker directory for name -> user_id resolution
-    const { data: profiles } = await admin.from("planipret_profiles").select("user_id,full_name,email");
-    const byName = new Map<string, string>();
-    for (const p of (profiles ?? []) as any[]) {
-      if (p.full_name) byName.set(String(p.full_name).trim().toLowerCase(), p.user_id);
-      if (p.email) byName.set(String(p.email).trim().toLowerCase(), p.user_id);
-    }
+    // Broker directory: alias -> maestro id -> normalised name -> email
+    const { resolve } = await loadResolver(admin);
 
     const prepared = rawRows.map((r, i) => {
       const date = isoDate(r.date_trans);
       const agent = str(r.agent_name);
+      const ident = resolve(agent, str(r.maestro_broker_id ?? r.maestro_id));
       return {
         number: str(r.number),
         loan_amt: num(r.loan_amt),
@@ -113,7 +251,12 @@ Deno.serve(async (req) => {
         source_row: Number(r.source_row ?? i + 2),
         fiscal_year: date ? Number(date.slice(0, 4)) : null,
         ym_key: date ? date.slice(0, 7) : null,
-        broker_user_id: agent ? byName.get(agent.toLowerCase()) ?? null : null,
+        broker_user_id: ident.broker_user_id,
+        first_name: ident.first_name,
+        last_name: ident.last_name,
+        maestro_broker_id: ident.maestro_broker_id,
+        match_method: ident.match_method,
+        agent_key: agentKey(agent),
       };
     }).filter((r) => r.date_trans);
 

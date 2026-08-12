@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertTriangle, Database } from "lucide-react";
+import { Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertTriangle, Database, Wand2 } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { supabase } from "@/integrations/supabase/client";

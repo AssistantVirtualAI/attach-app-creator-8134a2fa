@@ -20,6 +20,7 @@ import {
   type Granularity,
   yoy,
 } from "../_shared/commission-engine.ts";
+import { agentKey } from "../_shared/broker-identity.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -105,7 +106,7 @@ Deno.serve(async (req) => {
     const { data: allRowsRaw, error } = await admin
       .from("planipret_commission_register")
       .select(
-        "number,loan_amt,institution,amount,mortgage_type,term,agent_name,date_trans,commission_type,source_row,broker_user_id,first_name,last_name,maestro_broker_id,agent_key",
+        "number,loan_amt,institution,amount,mortgage_type,term,agent_name,target_name,date_trans,commission_type,source_row,broker_user_id,first_name,last_name,maestro_broker_id,agent_key,cabinet,fiscal_year,sheet_name",
       )
       .in("fiscal_year", years)
       .order("source_row", { ascending: true })
@@ -121,16 +122,23 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const myName: string | null = (prof as any)?.full_name ?? null;
     const myMaestroId: string | null = (prof as any)?.maestro_broker_id ?? null;
+    const myKeys = new Set(
+      [
+        agentKey(myName),
+        agentKey([(prof as any)?.first_name, (prof as any)?.last_name].filter(Boolean).join(" ")),
+      ].filter(Boolean) as string[],
+    );
 
-    const scopedAll =
-      scope === "all" && isAdmin
-        ? allRows
-        : allRows.filter(
-            (r) =>
-              r.broker_user_id === user.id ||
-              (!r.broker_user_id && myMaestroId && (r as any).maestro_broker_id === myMaestroId) ||
-              (!r.broker_user_id && myName && (r.agent_name ?? "").trim().toLowerCase() === myName.trim().toLowerCase()),
-          );
+    const isMineRow = (r: any) => {
+      if (r.broker_user_id) return r.broker_user_id === user.id;
+      if (myMaestroId && (r.maestro_broker_id === myMaestroId || r.cabinet === myMaestroId)) return true;
+      if (r.agent_key && myKeys.has(r.agent_key)) return true;
+      const k1 = agentKey(r.agent_name);
+      const k2 = agentKey(r.target_name);
+      return Boolean((k1 && myKeys.has(k1)) || (k2 && myKeys.has(k2)));
+    };
+
+    const scopedAll = scope === "all" && isAdmin ? allRows : allRows.filter(isMineRow);
 
     // Optional agent filter (admin global view)
     const mine = agent
@@ -585,8 +593,71 @@ Deno.serve(async (req) => {
     }
 
 
+    // ---- Data integrity for the scoped rows (per fiscal year + duplicates + orphans) ----
+    const volSourceRows = new Set(volumeTranches(mine, cyYtd).map((r) => r.source_row));
+    const dealSourceRows = new Set(dealContracts(mine, cyYtd).map((r) => r.source_row));
+
+    const byYearMap = new Map<number, any>();
+    for (const r of mine) {
+      const fy = (r as any).fiscal_year ?? (r.date_trans ? Number(r.date_trans.slice(0, 4)) : null);
+      if (!fy) continue;
+      const cur = byYearMap.get(fy) ?? { year: fy, rows: 0, volume: 0, commission: 0, sheets: new Set<string>(), outOfYear: 0 };
+      cur.rows += 1;
+      cur.commission += Number(r.amount ?? 0);
+      if ((r.commission_type ?? "").trim().toLowerCase() === "base") cur.volume += Number(r.loan_amt ?? 0);
+      const sheet = (r as any).sheet_name;
+      if (sheet) cur.sheets.add(String(sheet));
+      if (r.date_trans && Number(r.date_trans.slice(0, 4)) !== fy) cur.outOfYear += 1;
+      byYearMap.set(fy, cur);
+    }
+    const integrityYears = Array.from(byYearMap.values())
+      .map((y: any) => ({ ...y, sheets: Array.from(y.sheets) }))
+      .sort((a: any, b: any) => b.year - a.year);
+
+    const dupMap = new Map<string, number>();
+    for (const r of mine) {
+      const k = `${r.number ?? ""}|${r.date_trans ?? ""}|${Number(r.amount ?? 0).toFixed(2)}|${(r.commission_type ?? "")}|${Number(r.loan_amt ?? 0).toFixed(2)}`;
+      dupMap.set(k, (dupMap.get(k) ?? 0) + 1);
+    }
+    const duplicateRows = Array.from(dupMap.values()).reduce((s2, c) => s2 + (c > 1 ? c - 1 : 0), 0);
+
+    const orphanRows = allRows.filter((r) => !r.broker_user_id).length;
+    const missingDate = mine.filter((r) => !r.date_trans).length;
+    const missingAmount = mine.filter((r) => r.amount === null || r.amount === undefined).length;
+
+    const integrity = {
+      totalRows: mine.length,
+      years: integrityYears,
+      duplicateRows,
+      orphanRows,
+      missingDate,
+      missingAmount,
+      outOfYear: integrityYears.reduce((s2: number, y: any) => s2 + y.outOfYear, 0),
+      clean: duplicateRows === 0 && missingDate === 0 && missingAmount === 0,
+    };
+
+    // ---- Deal lines for the selected window (broker "Dossiers" table) ----
+    const deals = mine
+      .filter(inWin)
+      .sort((a, b) => (b.date_trans ?? "").localeCompare(a.date_trans ?? "") || a.source_row - b.source_row)
+      .slice(0, 3000)
+      .map((r) => ({
+        sourceRow: r.source_row,
+        date: r.date_trans,
+        number: r.number,
+        institution: r.institution,
+        mortgageType: r.mortgage_type,
+        term: r.term,
+        commissionType: r.commission_type,
+        loanAmt: Number(r.loan_amt ?? 0),
+        amount: Number(r.amount ?? 0),
+        countedInVolume: volSourceRows.has(r.source_row),
+        countedInDeals: dealSourceRows.has(r.source_row),
+        broker: r.agent_name,
+      }));
 
     return json({
+
       ok: true,
       year,
       month,
@@ -621,6 +692,9 @@ Deno.serve(async (req) => {
       reconciliation,
       discrepancies,
       detail,
+      integrity,
+      deals,
+
 
     });
   } catch (e) {

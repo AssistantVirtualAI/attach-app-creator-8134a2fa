@@ -16,9 +16,11 @@ import BrokerDrilldown from "./BrokerDrilldown";
 import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
 import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
+import RegisterHealthBadge from "./RegisterHealthBadge";
+import RegisterDealsTable from "./RegisterDealsTable";
 
 type Lang = "fr" | "en";
-type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "gaps" | "data";
+type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "gaps" | "data" | "deals";
 
 
 const PALETTE = ["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"];
@@ -324,12 +326,13 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const tabs: { key: Tab; label: string }[] = [
     { key: "overview", label: isFr ? "Vue d'ensemble" : "Overview" },
     ...(isAdminView ? [{ key: "brokers" as Tab, label: isFr ? "Courtiers" : "Brokers" }] : []),
-    { key: "trend", label: isFr ? "Tendance mensuelle" : "Monthly trend" },
+    { key: "trend", label: isFr ? "Tendance" : "Trend" },
     { key: "lenders", label: isFr ? "Prêteurs" : "Lenders" },
-    { key: "mix", label: isFr ? "Mix produits & termes" : "Product & term mix" },
-    { key: "quarters", label: isFr ? "Trimestres" : "Quarters" },
-    { key: "periods", label: isFr ? "Stats par période" : "Stats by period" },
+    { key: "mix", label: isFr ? "Mix produits" : "Product mix" },
+    ...(isAdminView ? [{ key: "quarters" as Tab, label: isFr ? "Trimestres" : "Quarters" }] : []),
+    ...(isAdminView ? [{ key: "periods" as Tab, label: isFr ? "Stats par période" : "Stats by period" }] : []),
     { key: "club", label: "Club Excellence" },
+    { key: "deals", label: isFr ? "Dossiers" : "Deals" },
     ...(isAdminView ? [{ key: "gaps" as Tab, label: isFr ? "Écarts" : "Gaps" }] : []),
     ...(isAdminView ? [{ key: "data" as Tab, label: isFr ? "Couverture des données" : "Data coverage" }] : []),
   ];
@@ -398,8 +401,10 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
         )}
       </div>
 
+      <RegisterHealthBadge integrity={data?.integrity} lang={lang} />
 
       <div className="flex flex-wrap gap-1.5 mb-2">
+
         {tabs.map((t) => {
           const isClub = t.key === "club";
           const active = tab === t.key;
@@ -434,10 +439,22 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
       )}
 
       {data && data.rowCount === 0 && (
-        <div className="pp-card" style={{ padding: 20, fontSize: 13, color: "var(--pp-text-muted)" }}>
-          {isFr
-            ? "Aucune donnée de registre pour cette période. L'administrateur doit importer le registre de dépôts."
-            : "No register data for this period. An administrator must import the deposit register."}
+        <div
+          className="pp-card"
+          style={{
+            padding: 28, borderRadius: 16, textAlign: "center",
+            background: "linear-gradient(155deg, var(--pp-bg-elevated) 0%, var(--pp-bg-card) 100%)",
+            border: "1px solid var(--pp-bg-border)",
+          }}
+        >
+          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--pp-text-primary)" }}>
+            {isFr ? "Aucune commission pour cette période" : "No commission for this period"}
+          </div>
+          <p style={{ fontSize: 12.5, color: "var(--pp-text-muted)", marginTop: 6, maxWidth: 460, marginInline: "auto", lineHeight: 1.6 }}>
+            {isFr
+              ? "Aucune ligne du registre de dépôts n'est rattachée à votre profil sur cette période. Essayez une autre année, ou connectez votre compte Maestro pour suivre vos commissions en temps réel."
+              : "No deposit-register line is linked to your profile for this period. Try another year, or connect your Maestro account to track commissions in real time."}
+          </p>
         </div>
       )}
 
@@ -790,8 +807,12 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             />
           )}
 
+          {tab === "deals" && (
+            <RegisterDealsTable deals={(data.deals ?? []) as any} lang={lang} />
+          )}
 
-          {Array.isArray(data.reconciliation?.checks) && (
+          {isAdminView && Array.isArray(data.reconciliation?.checks) && (
+
             <Section title={isFr ? "Contrôles de réconciliation (MATCH / MISMATCH)" : "Reconciliation checks (MATCH / MISMATCH)"}>
               <Table
                 head={[isFr ? "Contrôle" : "Check", isFr ? "Attendu" : "Expected", isFr ? "Obtenu" : "Actual", "Écart", "Statut"]}
@@ -815,7 +836,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             </Section>
           )}
 
-          {Array.isArray(data.calcNotes) && (
+          {isAdminView && Array.isArray(data.calcNotes) && (
             <Section title={isFr ? "Notes de calcul" : "Calculation notes"}>
               <ul style={{ fontSize: 12, color: "var(--pp-text-secondary)", lineHeight: 1.6, paddingLeft: 16, listStyle: "disc" }}>
                 {data.calcNotes.map((n: string, i: number) => <li key={i}>{n}</li>)}

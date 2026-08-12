@@ -397,18 +397,23 @@ Deno.serve(async (req) => {
     if (action === "redispatch") {
 
       const { resolve } = await loadResolver(admin);
-      const rows = await fetchAllRows(admin, "id,agent_name,maestro_broker_id");
+      const rows = await fetchAllRows(admin, "id,agent_name,target_name,maestro_broker_id,cabinet");
       let updated = 0;
       const CH = 200;
       for (let i = 0; i < rows.length; i += CH) {
         const slice = rows.slice(i, i + CH);
         await Promise.all(slice.map(async (r: any) => {
-          const res = resolve(r.agent_name, r.maestro_broker_id);
+          const hint = r.maestro_broker_id ?? r.cabinet ?? null;
+          let res = resolve(r.agent_name, hint);
+          if (!res.broker_user_id && r.target_name && r.target_name !== r.agent_name) {
+            const alt = resolve(r.target_name, hint);
+            if (alt.broker_user_id) res = { ...alt, match_method: `${alt.match_method ?? "name"}_target` };
+          }
           const { error } = await admin.from(REG).update({
             broker_user_id: res.broker_user_id,
             first_name: res.first_name,
             last_name: res.last_name,
-            maestro_broker_id: res.maestro_broker_id,
+            maestro_broker_id: res.maestro_broker_id ?? r.cabinet ?? null,
             match_method: res.match_method,
             agent_key: agentKey(r.agent_name),
           }).eq("id", r.id);
@@ -440,7 +445,15 @@ Deno.serve(async (req) => {
     const prepared = rawRows.map((r, i) => {
       const date = isoDate(r.date_trans);
       const agent = str(r.agent_name);
-      const ident = resolve(agent, str(r.maestro_broker_id ?? r.maestro_id));
+      const targetName = str(r.target_name);
+      const cabinetId = str(r.cabinet);
+      const maestroHint = str(r.maestro_broker_id ?? r.maestro_id) ?? cabinetId;
+      let ident = resolve(agent, maestroHint);
+      if (!ident.broker_user_id && targetName && targetName !== agent) {
+        const alt = resolve(targetName, maestroHint);
+        if (alt.broker_user_id) ident = { ...alt, match_method: `${alt.match_method ?? "name"}_target` };
+      }
+      if (!ident.maestro_broker_id && cabinetId) ident = { ...ident, maestro_broker_id: cabinetId };
       const ctype = normaliseCommissionType(r.commission_type, typeOverrides);
       const sheet = str(r.sheet ?? r.sheet_name);
       const sourceRow = Number(r.source_row ?? i + 2);

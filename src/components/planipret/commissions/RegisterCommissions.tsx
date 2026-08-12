@@ -184,6 +184,39 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     return () => { cancelled = true; };
   }, [year, month, granularity, periodIndex, agent, isAdminView]);
 
+  // Drill-down fetch (admin only)
+  useEffect(() => {
+    if (!isAdminView || !drillAgent) return;
+    let cancelled = false;
+    (async () => {
+      setDrillLoading(true); setDrillError(null);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const { data: res, error: err } = await supabase.functions.invoke("pp-commission-stats", {
+          body: {
+            year,
+            month: granularity === "ytd" || granularity === "month" ? periodIndex : month,
+            granularity,
+            periodIndex,
+            scope: "all",
+            agent: null,
+            detailAgent: drillAgent,
+          },
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        });
+        if (err) throw err;
+        if ((res as any)?.error) throw new Error((res as any).error);
+        if (!cancelled) setDrillData((res as any)?.detail ?? null);
+      } catch (e: any) {
+        if (!cancelled) setDrillError(e?.message ?? "error");
+      } finally {
+        if (!cancelled) setDrillLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAdminView, drillAgent, year, month, granularity, periodIndex]);
+
+
   const onGranularity = (g: Granularity) => {
     setGranularity(g);
     setPeriodIndex(g === "week" ? 1 : g === "quarter" ? Math.ceil(((new Date()).getMonth() + 1) / 3) : g === "month" ? (new Date()).getMonth() + 1 : 12);

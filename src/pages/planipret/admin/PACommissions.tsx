@@ -3,6 +3,7 @@ import { TrendingUp, Lock } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import CommissionDashboard from "@/components/planipret/commissions/CommissionDashboard";
+import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import { supabase } from "@/integrations/supabase/client";
 
 /** Only these emails can open the commissions page. */
@@ -11,6 +12,7 @@ const COMMISSIONS_ALLOWED_EMAILS = ["mhassoun@assistantvirtualai.com"];
 export default function PACommissions() {
   const { lang } = useMplanipretLang();
   const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [source, setSource] = useState<"register" | "maestro" | "internal">("register");
 
   useEffect(() => {
     let cancelled = false;

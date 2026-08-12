@@ -103,9 +103,10 @@ function ClubKpi({ label, value, sub, delta, accent, info }: { label: string; va
   );
 }
 
-function Podium({ club, isFr }: { club: any[]; isFr: boolean }) {
+function Podium({ club, isFr, clubVolume }: { club: any[]; isFr: boolean; clubVolume?: number }) {
   const top = club.slice(0, 3);
   if (!top.length) return null;
+  const leader = top[0]?.volume || 0;
   const order = [top[1], top[0], top[2]].filter(Boolean);
   const heights: Record<number, number> = { 1: 132, 2: 104, 3: 86 };
   const colors: Record<number, string> = { 1: GOLD, 2: SILVER, 3: BRONZE };
@@ -137,6 +138,16 @@ function Podium({ club, isFr }: { club: any[]; isFr: boolean }) {
               <div className="mt-1"><Delta value={c.volumeYoy} /></div>
             </div>
             <div
+              tabIndex={0}
+              role="img"
+              aria-label={`#${c.rank} ${c.broker}`}
+              title={(() => {
+                const share = clubVolume ? (c.volume / clubVolume) * 100 : 0;
+                const gap = leader - (c.volume || 0);
+                return isFr
+                  ? `#${c.rank} ${c.broker}\nVolume déboursé : ${fmtMoney(c.volume)} (${share.toFixed(1)} % du club)\n${fmtNum(c.deals)} dossiers · dossier moyen ${fmtMoney(c.avgDeal)}\nCommission : ${fmtMoney(c.commission)} (${fmtBps(c.bps)})\n${c.rank === 1 ? "Meneur de la saison" : `Écart avec le meneur : ${fmtMoney(gap)}`}\nLa hauteur de la marche est fixe et reflète uniquement le rang.`
+                  : `#${c.rank} ${c.broker}\nFunded volume: ${fmtMoney(c.volume)} (${share.toFixed(1)}% of club)\n${fmtNum(c.deals)} deals · avg deal ${fmtMoney(c.avgDeal)}\nCommission: ${fmtMoney(c.commission)} (${fmtBps(c.bps)})\n${c.rank === 1 ? "Season leader" : `Gap to leader: ${fmtMoney(gap)}`}\nStep height is fixed and only reflects rank.`;
+              })()}
               style={{
                 height: heights[c.rank] ?? 80, borderRadius: "12px 12px 6px 6px",
                 background: `linear-gradient(180deg, ${col}cc, ${col}55 45%, ${col}22)`,
@@ -255,11 +266,11 @@ export default function ClubExcellencePanel({
           {data?.season?.current?.start} → {data?.season?.current?.end} · {fmtNum(totals.brokers)} {isFr ? "courtiers" : "brokers"} · {fmtNum(totals.deals)} {isFr ? "dossiers" : "deals"}
         </div>
         <div className="grid gap-3 mt-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
-          <ClubKpi label={isFr ? "Volume du club" : "Club volume"} value={fmtMoney(totals.volume)} delta={totals.volumeYoy} accent={GOLD} />
-          <ClubKpi label="Commission" value={fmtMoney(totals.commission)} accent="#8B5CF6" />
-          <ClubKpi label={isFr ? "Dossiers" : "Deals"} value={fmtNum(totals.deals)} accent="#70AD47" />
-          <ClubKpi label={isFr ? "Dossier moyen" : "Avg deal"} value={fmtMoney(totals.avgDeal)} accent="#4472C4" />
-          <ClubKpi label="BPS" value={fmtBps(totals.bps)} accent="#14B8A6" />
+          <ClubKpi label={isFr ? "Volume du club" : "Club volume"} value={fmtMoney(totals.volume)} delta={totals.volumeYoy} accent={GOLD} info={isFr ? "Somme des volumes hypothécaires déboursés par tous les courtiers du registre pour la saison en cours. L'écart compare avec la même saison l'an dernier." : "Sum of funded mortgage volume for every broker in the register for the current season. The delta compares with the same season last year."} />
+          <ClubKpi label="Commission" value={fmtMoney(totals.commission)} accent="#8B5CF6" info={isFr ? "Total des commissions générées par les dossiers déboursés de la saison, toutes sources du registre confondues." : "Total commissions from funded deals for the season, across all register sources."} />
+          <ClubKpi label={isFr ? "Dossiers" : "Deals"} value={fmtNum(totals.deals)} accent="#70AD47" info={isFr ? "Nombre de dossiers déboursés durant la saison. Un dossier est compté à sa date de déboursement." : "Number of funded deals during the season. A deal is counted at its funding date."} />
+          <ClubKpi label={isFr ? "Dossier moyen" : "Avg deal"} value={fmtMoney(totals.avgDeal)} accent="#4472C4" info={isFr ? "Volume total ÷ nombre de dossiers. Indique la taille moyenne des prêts déboursés." : "Total volume ÷ number of deals. Shows the average size of funded loans."} />
+          <ClubKpi label="BPS" value={fmtBps(totals.bps)} accent="#14B8A6" info={isFr ? "Points de base : commission ÷ volume × 10 000. Mesure le rendement moyen obtenu par dollar prêté (ex. 90 BPS = 0,90 %)." : "Basis points: commission ÷ volume × 10,000. Measures average yield per dollar lent (e.g. 90 BPS = 0.90%)."} />
           {me && (
             <ClubKpi
               label={isFr ? "Mon rang" : "My rank"}
@@ -267,18 +278,31 @@ export default function ClubExcellencePanel({
               sub={totals.volume ? `${((me.volume / totals.volume) * 100).toFixed(1)} % ${isFr ? "du club" : "of club"}` : undefined}
               delta={me.volumeYoy}
               accent={ED_ACCENT}
+              info={isFr ? "Votre position au classement du club selon le volume déboursé, et votre part du volume total. L'écart indique votre progression de volume vs l'an dernier." : "Your club ranking by funded volume, plus your share of total volume. The delta shows your volume growth vs last year."}
             />
           )}
         </div>
       </div>
 
-      <Panel title={isFr ? "Podium de la saison" : "Season podium"} subtitle={isFr ? "Top 3 par volume déboursé" : "Top 3 by funded volume"}>
-        <Podium club={club} isFr={isFr} />
+      <Panel
+        title={isFr ? "Podium de la saison" : "Season podium"}
+        subtitle={isFr ? "Top 3 par volume déboursé" : "Top 3 by funded volume"}
+        info={isFr
+          ? "Classement des 3 premiers courtiers selon le volume hypothécaire déboursé de la saison (1er août → 31 juillet). La hauteur des marches illustre le rang, pas l'écart réel : survolez une marche pour voir le volume, la part du club et l'écart en dollars avec le meneur."
+          : "Top 3 brokers by funded mortgage volume for the season (Aug 1 → Jul 31). Step height illustrates rank, not the actual gap: hover a step to see volume, club share and the dollar gap to the leader."}
+        note={isFr
+          ? "Écart YoY : variation du volume par rapport à la même saison l'an dernier. Vert = progression, rouge = recul, « — » = pas d'historique comparable."
+          : "YoY delta: volume change vs the same season last year. Green = growth, red = decline, “—” = no comparable history."}
+      >
+        <Podium club={club} isFr={isFr} clubVolume={totals.volume} />
       </Panel>
 
       <Panel
         title={isFr ? "Classement complet des courtiers" : "Full broker standings"}
         subtitle={isFr ? "Tous les courtiers du registre pour la saison en cours" : "All brokers in the register for the current season"}
+        info={isFr
+          ? "Part = volume du courtier ÷ volume total du club. La barre est proportionnelle au volume du meneur (barre pleine = 1er rang). BPS = commission ÷ volume × 10 000. YoY = variation vs la même saison l'an dernier."
+          : "Share = broker volume ÷ total club volume. The bar is proportional to the leader's volume (full bar = rank 1). BPS = commission ÷ volume × 10,000. YoY = change vs the same season last year."}
         right={<span style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>{fmtNum(club.length)} {isFr ? "courtiers" : "brokers"}</span>}
       >
         <div className="overflow-x-auto">

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  PieChart, Pie, Cell, BarChart,
+  ResponsiveContainer, ComposedChart, Bar, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  PieChart, Pie, Cell, BarChart, RadialBarChart, RadialBar,
 } from "recharts";
 import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy, FileDown, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,13 +9,15 @@ import CommissionInsights from "./CommissionInsights";
 import RegisterFilters, { type Granularity } from "./RegisterFilters";
 import BrokerLeaderboard from "./BrokerLeaderboard";
 import CommissionDiscrepancies from "./CommissionDiscrepancies";
+import CommissionCoverage from "./CommissionCoverage";
 import BrokerDrilldown from "./BrokerDrilldown";
 import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
 import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 
 type Lang = "fr" | "en";
-type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "gaps";
+type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "gaps" | "data";
+
 
 const PALETTE = ["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"];
 
@@ -245,7 +247,21 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     }));
   }, [data, MONTHS]);
 
+  const cumulative = useMemo(() => {
+    let cy = 0, py = 0;
+    return trendData.map((m: any) => {
+      cy += m.cyVolume || 0; py += m.pyVolume || 0;
+      return {
+        ...m,
+        cyCum: cy,
+        pyCum: py,
+        commPerDeal: m.deals ? (m.cyCommission || 0) / m.deals : 0,
+      };
+    });
+  }, [trendData]);
+
   const kpi = data?.kpi;
+
 
   // ---- AI insights (Claude), cached 24h per user/year/month ----
   const [ai, setAi] = useState<{ summary: string; insights: any[] } | null>(null);
@@ -312,8 +328,11 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     { key: "quarters", label: isFr ? "Trimestres" : "Quarters" },
     { key: "periods", label: isFr ? "Stats par période" : "Stats by period" },
     { key: "club", label: "Club Excellence" },
+    { key: "club", label: "Club Excellence" },
     ...(isAdminView ? [{ key: "gaps" as Tab, label: isFr ? "Écarts" : "Gaps" }] : []),
+    ...(isAdminView ? [{ key: "data" as Tab, label: isFr ? "Couverture des données" : "Data coverage" }] : []),
   ];
+
 
 
   return (
@@ -474,6 +493,95 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                   </ResponsiveContainer>
                 </div>
               </Section>
+
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))" }}>
+                <Section title={isFr ? "Volume cumulé — courbe de progression" : "Cumulative volume — pace curve"}>
+                  <div style={{ height: 240 }}>
+                    <ResponsiveContainer>
+                      <AreaChart data={cumulative}>
+                        <defs>
+                          <linearGradient id="gCumCy" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#5B8FF9" stopOpacity={0.75} />
+                            <stop offset="100%" stopColor="#5B8FF9" stopOpacity={0.05} />
+                          </linearGradient>
+                          <linearGradient id="gCumPy" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#A5A5A5" stopOpacity={0.5} />
+                            <stop offset="100%" stopColor="#A5A5A5" stopOpacity={0.03} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,.18)" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000000)}M`} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
+                        <Legend wrapperStyle={{ fontSize: 11.5 }} />
+                        <Area name={String(year - 1)} dataKey="pyCum" stroke="#A5A5A5" fill="url(#gCumPy)" strokeWidth={2} />
+                        <Area name={String(year)} dataKey="cyCum" stroke="#5B8FF9" fill="url(#gCumCy)" strokeWidth={2.4} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Section>
+
+                <Section title={isFr ? "Dossiers vs commission par dossier" : "Deals vs commission per deal"}>
+                  <div style={{ height: 240 }}>
+                    <ResponsiveContainer>
+                      <ComposedChart data={cumulative}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,.18)" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
+                        <YAxis yAxisId="l" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
+                        <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [n === (isFr ? "Dossiers" : "Deals") ? fmtNum(Number(v)) : fmtMoney(Number(v)), n]} />
+                        <Legend wrapperStyle={{ fontSize: 11.5 }} />
+                        <Bar yAxisId="l" name={isFr ? "Dossiers" : "Deals"} dataKey="deals" fill="#70AD47" radius={[5, 5, 0, 0]} />
+                        <Line yAxisId="r" name={isFr ? "Comm./dossier" : "Comm./deal"} dataKey="commPerDeal" stroke="#FFC000" strokeWidth={2.4} dot={{ r: 2 }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Section>
+
+                <Section title={isFr ? "Concentration des prêteurs (top 6)" : "Lender concentration (top 6)"}>
+                  <div style={{ height: 240 }}>
+                    <ResponsiveContainer>
+                      <RadialBarChart data={(data.lenders ?? []).slice(0, 6).map((l: any, i: number) => ({
+                        name: l.key, value: l.cyVolume, fill: PALETTE[i % PALETTE.length],
+                      }))} innerRadius="25%" outerRadius="95%" startAngle={90} endAngle={-270}>
+                        <RadialBar background dataKey="value" cornerRadius={6} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v: any, _n: any, p: any) => [fmtMoney(Number(v)), p?.payload?.name]} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} iconSize={8} layout="vertical" align="right" verticalAlign="middle" />
+                      </RadialBarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Section>
+
+                <Section title={isFr ? "BPS par mois (rentabilité)" : "BPS per month (yield)"}>
+                  <div style={{ height: 240 }}>
+                    <ResponsiveContainer>
+                      <AreaChart data={cumulative}>
+                        <defs>
+                          <linearGradient id="gBps" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.7} />
+                            <stop offset="100%" stopColor="#8B5CF6" stopOpacity={0.04} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,.18)" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
+                        <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => fmtBps(Number(v))} />
+                        <Area name="BPS" dataKey="bps" stroke="#8B5CF6" fill="url(#gBps)" strokeWidth={2.2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Section>
+              </div>
+
+              <Section title={isFr ? "Notes de lecture" : "Reading notes"}>
+                <ul style={{ fontSize: 12, color: "var(--pp-text-secondary)", lineHeight: 1.65, paddingLeft: 16, listStyle: "disc" }}>
+                  <li>{isFr ? "La courbe cumulée compare le rythme de l'année courante à celui de l'année précédente sur la même fenêtre." : "The cumulative curve compares the current year pace to the prior year over the same window."}</li>
+                  <li>{isFr ? "BPS = commission / volume × 10 000 ; une baisse de BPS avec un volume en hausse signale un mix moins rémunérateur." : "BPS = commission / volume × 10,000; falling BPS with rising volume signals a less profitable mix."}</li>
+                  <li>{isFr ? "La concentration des prêteurs mesure le risque : plus de 50 % du volume chez un seul prêteur est un signal d'attention." : "Lender concentration measures risk: over 50% of volume with a single lender is a warning signal."}</li>
+                  <li>{isFr ? "Tous les chiffres proviennent du registre de dépôts importé (onglets 2022→2026), sans retraitement manuel." : "All figures come from the imported deposit register (2022→2026 sheets), with no manual adjustment."}</li>
+                </ul>
+              </Section>
+
             </>
           )}
 
@@ -489,6 +597,9 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           {tab === "gaps" && isAdminView && (
             <CommissionDiscrepancies lang={lang} discrepancies={data.discrepancies} />
           )}
+
+          {tab === "data" && isAdminView && <CommissionCoverage lang={lang} />}
+
 
 
           {tab === "trend" && (

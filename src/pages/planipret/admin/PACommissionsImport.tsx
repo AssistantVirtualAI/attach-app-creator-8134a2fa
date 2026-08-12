@@ -388,7 +388,10 @@ export default function PACommissionsImport() {
         )}
       </div>
 
+      <CommissionMappingPanel isFr={isFr} call={call} analysis={analysis} />
+
       <CommissionValidationPanel isFr={isFr} call={call} />
+
 
     </PAPage>
   );

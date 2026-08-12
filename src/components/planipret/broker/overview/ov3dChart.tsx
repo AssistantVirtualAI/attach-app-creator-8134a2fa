@@ -1,4 +1,5 @@
 import { memo, type ReactNode } from "react";
+import { useInViewOnce, useSupports3D } from "./use3dCapability";
 
 /** Global SVG filters used by .ov3d-chart shapes to look softly extruded.
  *  Tuned for elegance: a tight contact shadow + a wide soft ambient shadow,
@@ -19,10 +20,40 @@ export const Ov3DChartFilters = memo(function Ov3DChartFilters() {
   );
 });
 
-/** Wrapper adding the 3D stage (shadow, extrusion filters) around a chart. */
-export function Chart3D({ children }: { children: ReactNode }) {
-  return <div className="ov3d-chart">{children}</div>;
+/**
+ * Wrapper adding the 3D stage (shadow, extrusion filters) around a chart.
+ * - Lazy: the chart subtree only mounts when it approaches the viewport.
+ * - Adaptive: devices that can't handle the 3D relief (low memory/CPU,
+ *   reduced motion, forced flat intensity) get an accessible 2D rendering.
+ */
+export function Chart3D({
+  children,
+  minHeight = 240,
+  lazy = true,
+}: { children: ReactNode; minHeight?: number; lazy?: boolean }) {
+  const [ref, visible] = useInViewOnce<HTMLDivElement>();
+  const supports3D = useSupports3D();
+  const show = !lazy || visible;
+
+  return (
+    <div
+      ref={ref}
+      className={`ov3d-chart${supports3D ? "" : " ov3d-2d"}`}
+      data-render-mode={supports3D ? "3d" : "2d"}
+      style={show ? undefined : { minHeight }}
+    >
+      {show ? children : (
+        <div
+          className="ov3d-chart-skeleton"
+          role="img"
+          aria-label="Graphique en cours de chargement"
+          style={{ height: minHeight }}
+        />
+      )}
+    </div>
+  );
 }
+
 
 const gid = (color: string) => `ov3dg-${color.replace(/[^a-zA-Z0-9]/g, "")}`;
 

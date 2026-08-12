@@ -311,7 +311,9 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     { key: "mix", label: isFr ? "Mix produits & termes" : "Product & term mix" },
     { key: "quarters", label: isFr ? "Trimestres" : "Quarters" },
     { key: "club", label: "Club Excellence" },
+    ...(isAdminView ? [{ key: "gaps" as Tab, label: isFr ? "Écarts" : "Gaps" }] : []),
   ];
+
 
   return (
     <div>

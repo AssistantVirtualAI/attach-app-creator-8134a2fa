@@ -11,6 +11,7 @@ import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { resolveBrokerAccess } from "@/lib/planipret/brokerAccess";
 import BrokerOmniSearch from "@/components/planipret/broker/BrokerOmniSearch";
+import HighReadabilityToggle from "@/components/planipret/broker/HighReadabilityToggle";
 
 export type BrokerCtx = { userId: string; authUserId: string; profile: any };
 
@@ -232,6 +233,8 @@ export default function PlanipretBrokerLayout() {
           <h1 className="pp-heading truncate" style={{ fontWeight: 700, fontSize: 18 }}>{title}</h1>
           <div className="flex items-center gap-3">
             <BrokerOmniSearch userId={userId} className="hidden md:block w-[280px] lg:w-[340px] xl:w-[400px]" />
+
+            <HighReadabilityToggle />
 
             <button onClick={toggleTheme} title={theme === "dark" ? "Mode clair" : "Mode sombre"}
               aria-label="Theme"

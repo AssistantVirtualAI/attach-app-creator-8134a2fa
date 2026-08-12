@@ -247,7 +247,21 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     }));
   }, [data, MONTHS]);
 
+  const cumulative = useMemo(() => {
+    let cy = 0, py = 0;
+    return trendData.map((m: any) => {
+      cy += m.cyVolume || 0; py += m.pyVolume || 0;
+      return {
+        ...m,
+        cyCum: cy,
+        pyCum: py,
+        commPerDeal: m.deals ? (m.cyCommission || 0) / m.deals : 0,
+      };
+    });
+  }, [trendData]);
+
   const kpi = data?.kpi;
+
 
   // ---- AI insights (Claude), cached 24h per user/year/month ----
   const [ai, setAi] = useState<{ summary: string; insights: any[] } | null>(null);

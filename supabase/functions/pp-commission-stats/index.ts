@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
     const { data: allRowsRaw, error } = await admin
       .from("planipret_commission_register")
       .select(
-        "number,loan_amt,institution,amount,mortgage_type,term,agent_name,date_trans,commission_type,source_row,broker_user_id,first_name,last_name,maestro_broker_id,agent_key",
+        "number,loan_amt,institution,amount,mortgage_type,term,agent_name,target_name,date_trans,commission_type,source_row,broker_user_id,first_name,last_name,maestro_broker_id,agent_key,cabinet,fiscal_year,sheet_name",
       )
       .in("fiscal_year", years)
       .order("source_row", { ascending: true })
@@ -121,16 +121,23 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const myName: string | null = (prof as any)?.full_name ?? null;
     const myMaestroId: string | null = (prof as any)?.maestro_broker_id ?? null;
+    const myKeys = new Set(
+      [
+        agentKey(myName),
+        agentKey([(prof as any)?.first_name, (prof as any)?.last_name].filter(Boolean).join(" ")),
+      ].filter(Boolean) as string[],
+    );
 
-    const scopedAll =
-      scope === "all" && isAdmin
-        ? allRows
-        : allRows.filter(
-            (r) =>
-              r.broker_user_id === user.id ||
-              (!r.broker_user_id && myMaestroId && (r as any).maestro_broker_id === myMaestroId) ||
-              (!r.broker_user_id && myName && (r.agent_name ?? "").trim().toLowerCase() === myName.trim().toLowerCase()),
-          );
+    const isMineRow = (r: any) => {
+      if (r.broker_user_id) return r.broker_user_id === user.id;
+      if (myMaestroId && (r.maestro_broker_id === myMaestroId || r.cabinet === myMaestroId)) return true;
+      if (r.agent_key && myKeys.has(r.agent_key)) return true;
+      const k1 = agentKey(r.agent_name);
+      const k2 = agentKey(r.target_name);
+      return Boolean((k1 && myKeys.has(k1)) || (k2 && myKeys.has(k2)));
+    };
+
+    const scopedAll = scope === "all" && isAdmin ? allRows : allRows.filter(isMineRow);
 
     // Optional agent filter (admin global view)
     const mine = agent

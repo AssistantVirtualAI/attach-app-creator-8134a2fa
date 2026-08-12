@@ -14,6 +14,7 @@ import BrokerTopSellers from "./BrokerTopSellers";
 import BrokerYearMatrix from "./BrokerYearMatrix";
 import BrokerDrilldown from "./BrokerDrilldown";
 import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
+import { exportNodePng, exportDashboardPdf } from "@/lib/planipret/exportVisuals";
 import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 import InfoTip from "@/components/planipret/broker/overview/InfoTip";

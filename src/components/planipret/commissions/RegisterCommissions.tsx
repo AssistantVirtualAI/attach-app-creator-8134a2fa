@@ -5,6 +5,8 @@ import {
 } from "recharts";
 import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import CommissionInsights from "./CommissionInsights";
+import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 
 type Lang = "fr" | "en";
 type Tab = "overview" | "trend" | "lenders" | "mix" | "quarters" | "club";
@@ -160,6 +162,60 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
 
   const kpi = data?.kpi;
 
+  // ---- AI insights (Claude), cached 24h per user/year/month ----
+  const [ai, setAi] = useState<{ summary: string; insights: any[] } | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const generateInsights = async (force = false) => {
+    if (!data || data.rowCount === 0) return;
+    const cacheKey = `pp-register-insights:${data.brokerName ?? "me"}:${year}:${month}:${lang}`;
+    if (!force) {
+      try {
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Date.now() - parsed.ts < 24 * 3600 * 1000) { setAi(parsed.value); return; }
+        }
+      } catch { /* ignore */ }
+    }
+    if (!(await ensureAiConsent())) return;
+    setAiLoading(true); setAiError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const payload = {
+        lang, scope: "broker", source: "register",
+        metrics: {
+          year, throughMonth: month,
+          ytd: data.kpi.ytd, ytdPriorYear: data.kpi.ytdPy,
+          monthly: data.monthly, quarters: data.quarters,
+          lenders: data.lenders.slice(0, 12), products: data.products, terms: data.terms,
+          commissionTypes: data.commissionTypes,
+          clubRank: data.club.find((c: any) => c.isMe)?.rank ?? null,
+          clubSize: data.club.length,
+        },
+      };
+      const { data: res, error: err } = await supabase.functions.invoke("pp-commissions-insights", {
+        body: payload,
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+      });
+      if (err) throw err;
+      const value = { summary: (res as any)?.summary ?? "", insights: (res as any)?.insights ?? [] };
+      setAi(value);
+      try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), value })); } catch { /* ignore */ }
+    } catch (e: any) {
+      setAiError(e?.message ?? "AI error");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setAi(null);
+    if (data && data.rowCount > 0) void generateInsights(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.rowCount, year, month]);
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "overview", label: isFr ? "Vue d'ensemble" : "Overview" },
     { key: "trend", label: isFr ? "Tendance mensuelle" : "Monthly trend" },
@@ -269,6 +325,18 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
                   </ResponsiveContainer>
                 </div>
               </Section>
+
+              <div className="mt-3">
+                <CommissionInsights
+                  lang={lang}
+                  summary={ai?.summary ?? ""}
+                  insights={(ai?.insights ?? []) as any}
+                  loading={aiLoading}
+                  error={aiError}
+                  generated={!!ai}
+                  onGenerate={() => void generateInsights(true)}
+                />
+              </div>
 
               <Section title={isFr ? "Commission par type" : "Commission by type"}>
                 <div style={{ height: 240 }}>

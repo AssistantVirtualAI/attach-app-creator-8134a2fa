@@ -717,7 +717,18 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           )}
         </>
       )}
+
+      {isAdminView && drillAgent && (
+        <BrokerDrilldown
+          lang={lang}
+          detail={drillData}
+          loading={drillLoading}
+          error={drillError}
+          onClose={() => { setDrillAgent(null); setDrillData(null); setDrillError(null); }}
+        />
+      )}
     </div>
+
   );
 }
 

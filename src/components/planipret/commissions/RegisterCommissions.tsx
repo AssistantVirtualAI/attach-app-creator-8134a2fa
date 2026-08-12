@@ -560,6 +560,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               style={{ fontSize: 12, fontWeight: 700, opacity: data ? 1 : .5, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
               <FileDown className="w-3.5 h-3.5" />{isFr ? "Rapport détaillé" : "Detailed report"}
             </button>}
+            <MaestroSyncButton lang={lang} scope={isAdminView ? "admin" : "broker"} onDone={() => setYear((y) => y)} />
             <button onClick={resetFilters} className="pp-toolbar-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
               style={{ fontSize: 12, fontWeight: 700, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
               <RotateCcw className="w-3.5 h-3.5" />{isFr ? "Réinitialiser" : "Reset"}

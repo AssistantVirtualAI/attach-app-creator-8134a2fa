@@ -1,4 +1,4 @@
-import { Users } from "lucide-react";
+import { Users, Landmark } from "lucide-react";
 
 export type Granularity = "week" | "month" | "quarter" | "year" | "ytd";
 
@@ -29,6 +29,7 @@ export default function RegisterFilters({
   periodIndex, onPeriodIndex,
   agents, agent, onAgent,
   showAgent,
+  lenders = [], lender = "", onLender,
 }: {
   lang: "fr" | "en";
   years: number[];
@@ -42,6 +43,9 @@ export default function RegisterFilters({
   agent: string;
   onAgent: (a: string) => void;
   showAgent: boolean;
+  lenders?: string[];
+  lender?: string;
+  onLender?: (l: string) => void;
 }) {
   const isFr = lang === "fr";
   const MONTHS = isFr ? MONTHS_FR : MONTHS_EN;
@@ -97,6 +101,21 @@ export default function RegisterFilters({
         <select value={periodIndex} onChange={(e) => onPeriodIndex(Number(e.target.value))} style={selStyle}>
           {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+      )}
+
+      {onLender && (
+        <div className="inline-flex items-center gap-1.5">
+          <Landmark className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} />
+          <select
+            value={lender}
+            onChange={(e) => onLender(e.target.value)}
+            aria-label={isFr ? "Prêteur" : "Lender"}
+            style={{ ...selStyle, maxWidth: 220 }}
+          >
+            <option value="">{isFr ? "Tous les prêteurs" : "All lenders"}</option>
+            {lenders.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </div>
       )}
 
       {showAgent && (

@@ -4,6 +4,7 @@ import {
   AreaChart, Area, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, BarChart,
 } from "recharts";
 import { Star, Crown, Medal, TrendingUp, TrendingDown, Info } from "lucide-react";
+import { InfoTip, StatNote } from "@/components/planipret/broker/overview/InfoTip";
 import { Chart3D, Ov3DChartFilters, Ov3DGradients, fill3d, areaFill3d } from "@/components/planipret/broker/overview/ov3dChart";
 
 type Lang = "fr" | "en";
@@ -39,14 +40,16 @@ function Delta({ value }: { value: number | string }) {
   }
   const up = value >= 0;
   return (
-    <span className="inline-flex items-center gap-0.5" style={{ fontSize: 11.5, fontWeight: 800, color: up ? "#22c55e" : "#ef4444" }}>
+    <span
+      title={`Écart vs la même période l'an dernier (YoY) : ${up ? "+" : ""}${(value * 100).toFixed(1)} %. Vert = progression, rouge = recul.`}
+      className="inline-flex items-center gap-0.5" style={{ fontSize: 11.5, fontWeight: 800, color: up ? "#22c55e" : "#ef4444" }}>
       {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
       {(value * 100).toFixed(1)} %
     </span>
   );
 }
 
-function Panel({ title, subtitle, children, right }: { title: string; subtitle?: string; children: React.ReactNode; right?: React.ReactNode }) {
+function Panel({ title, subtitle, children, right, info, note }: { title: string; subtitle?: string; children: React.ReactNode; right?: React.ReactNode; info?: string; note?: React.ReactNode }) {
   return (
     <div
       className="ov3d-card"
@@ -59,17 +62,21 @@ function Panel({ title, subtitle, children, right }: { title: string; subtitle?:
     >
       <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
         <div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--pp-text-primary)" }}>{title}</div>
+          <div className="flex items-center gap-1.5" style={{ fontSize: 13, fontWeight: 800, color: "var(--pp-text-primary)" }}>
+            <span>{title}</span>
+            {info && <InfoTip title={title} text={info} />}
+          </div>
           {subtitle && <div style={{ fontSize: 11, color: "var(--pp-text-muted)", marginTop: 2 }}>{subtitle}</div>}
         </div>
         {right}
       </div>
       {children}
+      {note && <StatNote>{note}</StatNote>}
     </div>
   );
 }
 
-function ClubKpi({ label, value, sub, delta, accent }: { label: string; value: string; sub?: string; delta?: number | string; accent: string }) {
+function ClubKpi({ label, value, sub, delta, accent, info }: { label: string; value: string; sub?: string; delta?: number | string; accent: string; info?: string }) {
   return (
     <div
       className="ov3d-card"
@@ -83,7 +90,10 @@ function ClubKpi({ label, value, sub, delta, accent }: { label: string; value: s
     >
       <div style={{ position: "absolute", inset: 0, background: `radial-gradient(130% 80% at 0% 0%, ${accent}26, transparent 62%)`, pointerEvents: "none" }} />
       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: accent, opacity: .9 }} />
-      <div style={{ fontSize: 10.5, letterSpacing: .5, textTransform: "uppercase", color: "var(--pp-text-muted)", fontWeight: 800 }}>{label}</div>
+      <div className="flex items-center gap-1" style={{ fontSize: 10.5, letterSpacing: .5, textTransform: "uppercase", color: "var(--pp-text-muted)", fontWeight: 800 }}>
+        <span>{label}</span>
+        {info && <InfoTip title={label} text={info} size={11} />}
+      </div>
       <div style={{ fontSize: 23, fontWeight: 900, marginTop: 4, color: "var(--pp-text-primary)", textShadow: "0 2px 10px rgba(0,0,0,.45)" }}>{value}</div>
       <div className="flex items-center gap-2 mt-1">
         {delta !== undefined && <Delta value={delta} />}

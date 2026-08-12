@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
     const { data: allRowsRaw, error } = await admin
       .from("planipret_commission_register")
       .select(
-        "number,loan_amt,institution,amount,mortgage_type,term,agent_name,date_trans,commission_type,source_row,broker_user_id",
+        "number,loan_amt,institution,amount,mortgage_type,term,agent_name,date_trans,commission_type,source_row,broker_user_id,first_name,last_name,maestro_broker_id,agent_key",
       )
       .in("fiscal_year", years)
       .order("source_row", { ascending: true })
@@ -114,13 +114,13 @@ Deno.serve(async (req) => {
 
     const allRows = (allRowsRaw ?? []) as RegisterRow[];
 
-    let myName: string | null = null;
     const { data: prof } = await admin
       .from("planipret_profiles")
-      .select("full_name")
+      .select("full_name,first_name,last_name,maestro_broker_id")
       .eq("user_id", user.id)
       .maybeSingle();
-    myName = (prof as any)?.full_name ?? null;
+    const myName: string | null = (prof as any)?.full_name ?? null;
+    const myMaestroId: string | null = (prof as any)?.maestro_broker_id ?? null;
 
     const scopedAll =
       scope === "all" && isAdmin
@@ -128,6 +128,7 @@ Deno.serve(async (req) => {
         : allRows.filter(
             (r) =>
               r.broker_user_id === user.id ||
+              (!r.broker_user_id && myMaestroId && (r as any).maestro_broker_id === myMaestroId) ||
               (!r.broker_user_id && myName && (r.agent_name ?? "").trim().toLowerCase() === myName.trim().toLowerCase()),
           );
 
@@ -181,8 +182,13 @@ Deno.serve(async (req) => {
       .map((name) => {
         const c = metrics(scopedAll, cyYtd, { broker: name });
         const p = metrics(scopedAll, pyYtd, { broker: name });
+        const idRow = scopedAll.find((x) => x.agent_name === name) as any;
         return {
           broker: name,
+          firstName: idRow?.first_name ?? null,
+          lastName: idRow?.last_name ?? null,
+          maestroBrokerId: idRow?.maestro_broker_id ?? null,
+          brokerUserId: idRow?.broker_user_id ?? null,
           isMe: !!myName && name.trim().toLowerCase() === myName.trim().toLowerCase(),
           volume: c.volume, deals: c.deals, commission: c.commission,
           avgDeal: c.avgDeal, bps: c.bps, commissionPerDeal: c.commissionPerDeal,
@@ -269,8 +275,13 @@ Deno.serve(async (req) => {
       .map((name) => {
         const c = metrics(allRows, seasonCur, { broker: name });
         const p = metrics(allRows, seasonPrev, { broker: name });
+        const idRow = scopedAll.find((x) => x.agent_name === name) as any;
         return {
           broker: name,
+          firstName: idRow?.first_name ?? null,
+          lastName: idRow?.last_name ?? null,
+          maestroBrokerId: idRow?.maestro_broker_id ?? null,
+          brokerUserId: idRow?.broker_user_id ?? null,
           isMe: !!myName && name.trim().toLowerCase() === myName.trim().toLowerCase(),
           volume: c.volume,
           deals: c.deals,

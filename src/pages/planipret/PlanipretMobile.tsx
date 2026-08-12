@@ -970,6 +970,20 @@ export default function PlanipretMobile() {
               <p style={{ fontSize: 11, opacity: 0.7, color: "var(--pp-text-secondary)", marginBottom: 12, wordBreak: "break-word" }}>{profileErrorDetail}</p>
             )}
             <button onClick={() => { setProfileErrorDetail(""); setAccessError(null); setLoading(true); void loadProfile(); }} className="pp-btn-primary inline-block">{t("common.retry")}</button>
+            <button
+              onClick={async () => {
+                try { await supabase.auth.signOut(); } catch { /* ignore */ }
+                setProfile(null);
+                setProfileErrorDetail("");
+                setAccessError("unauthenticated");
+                setLoading(false);
+              }}
+              className="w-full mt-3 text-[12px] font-semibold"
+              style={{ color: "var(--pp-brand-accent)", minHeight: 44 }}
+            >
+              {t("common.logout")}
+            </button>
+
           </div>
         </div>
       </Frame>

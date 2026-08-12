@@ -30,15 +30,38 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
   const [formError, setFormError] = useState<string | null>(null);
   const [showLegal, setShowLegal] = useState<null | "tos" | "privacy">(null);
 
+  const friendlyError = (raw?: string | null): string => {
+    const msg = String(raw || "");
+    if (/invalid login credentials/i.test(msg)) {
+      return lang === "fr" ? "Courriel ou mot de passe incorrect." : "Incorrect email or password.";
+    }
+    if (/email not confirmed/i.test(msg)) {
+      return lang === "fr" ? "Ce compte n'est pas encore confirmé." : "This account is not confirmed yet.";
+    }
+    if (/rate|too many/i.test(msg)) {
+      return lang === "fr" ? "Trop de tentatives. Réessayez dans quelques minutes." : "Too many attempts. Please try again in a few minutes.";
+    }
+    if (/network|fetch|timeout|load failed/i.test(msg)) {
+      return lang === "fr" ? "Connexion réseau instable. Réessayez." : "Unstable network connection. Please try again.";
+    }
+    return msg || t("auth.failed");
+  };
+
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
     setFormError(null);
     if (!email || !password) { setFormError(t("auth.missing")); toast.error(t("auth.missing")); return; }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      const attempt = () => supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      let { error } = await attempt();
+      // Retry once on transient network failures (common on review devices).
+      if (error && /network|fetch|timeout|load failed/i.test(error.message || "")) {
+        await new Promise((r) => setTimeout(r, 800));
+        ({ error } = await attempt());
+      }
       if (error) {
-        const msg = error.message || t("auth.failed");
+        const msg = friendlyError(error.message);
         setFormError(msg);
         toast.error(msg);
         return;
@@ -48,7 +71,7 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
       void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin());
       await onLoggedIn();
     } catch (err: any) {
-      const msg = err?.message || "Network error";
+      const msg = friendlyError(err?.message);
       setFormError(msg);
       toast.error(msg);
     } finally {
@@ -62,21 +85,30 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) toast.error(error.message);
+    if (error) toast.error(friendlyError(error.message));
     else toast.success(lang === "fr" ? "Courriel envoyé" : "Email sent");
   };
 
   const signInWithMicrosoft = async () => {
     setLoading(true);
+    setFormError(null);
     try {
       await startMicrosoftSignIn(msRedirect, {
         loginHint: email.trim() || undefined,
         prompt: "login",
       });
     }
-    catch (error: any) { toast.error(error?.message || t("auth.msUnavailable")); }
+    catch (error: any) {
+      clearMs365Pending();
+      const msg = lang === "fr"
+        ? "Connexion Microsoft indisponible. Utilisez votre courriel et mot de passe ci-dessus."
+        : "Microsoft sign-in is unavailable. Please use your email and password above.";
+      setFormError(msg);
+      toast.error(msg);
+    }
     finally { setLoading(false); }
   };
+
 
 
   return (
@@ -123,25 +155,7 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
 
         {/* Form */}
         <Ms365PendingBanner onRetry={signInWithMicrosoft} />
-        {/* Microsoft SSO (primary) */}
-        <div className="px-6 mb-3">
-          <button type="button" onClick={signInWithMicrosoft} disabled={loading}
-            className="w-full rounded-xl py-3 font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
-            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)", fontSize: 14 }}>
-            <svg width="16" height="16" viewBox="0 0 23 23" aria-hidden>
-              <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
-              <rect x="12" y="1" width="10" height="10" fill="#7FBA00"/>
-              <rect x="1" y="12" width="10" height="10" fill="#00A4EF"/>
-              <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
-            </svg>
-            {t("auth.signInMs")}
-          </button>
-          <div className="flex items-center gap-2 my-3" style={{ color: "var(--pp-text-faint)", fontSize: 11 }}>
-            <div className="flex-1 h-px" style={{ background: "var(--pp-bg-border)" }} />
-            <span className="uppercase tracking-wider">{t("auth.or")}</span>
-            <div className="flex-1 h-px" style={{ background: "var(--pp-bg-border)" }} />
-          </div>
-        </div>
+
 
         {/* Email/password fallback */}
         <form onSubmit={submit} className="px-6 space-y-3">
@@ -176,6 +190,27 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
             {t("auth.forgot")}
           </button>
         </form>
+
+        {/* Microsoft SSO (secondary) */}
+        <div className="px-6 mt-4">
+          <div className="flex items-center gap-2 mb-3" style={{ color: "var(--pp-text-faint)", fontSize: 11 }}>
+            <div className="flex-1 h-px" style={{ background: "var(--pp-bg-border)" }} />
+            <span className="uppercase tracking-wider">{t("auth.or")}</span>
+            <div className="flex-1 h-px" style={{ background: "var(--pp-bg-border)" }} />
+          </div>
+          <button type="button" onClick={signInWithMicrosoft} disabled={loading}
+            className="w-full rounded-xl py-3 font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)", fontSize: 14, minHeight: 44 }}>
+            <svg width="16" height="16" viewBox="0 0 23 23" aria-hidden>
+              <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
+              <rect x="12" y="1" width="10" height="10" fill="#7FBA00"/>
+              <rect x="1" y="12" width="10" height="10" fill="#00A4EF"/>
+              <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
+            </svg>
+            {t("auth.signInMs")}
+          </button>
+        </div>
+
 
         <p style={{ fontSize: 11.5, color: "var(--pp-text-muted)", textAlign: "center", marginTop: 14, padding: "0 24px" }}>
           {t("auth.separate")}

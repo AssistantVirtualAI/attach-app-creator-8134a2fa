@@ -219,8 +219,21 @@ Deno.serve(async (req) => {
     }
 
     const deals = raw.map(normalizeDeal);
+    const strict = isStrictMappingEnabled();
+    // In strict mode, unmapped lines are NEVER folded into the totals.
+    const counted = strict ? deals.filter((d) => d.provenance.rule_matched) : deals;
     const brokerName = String(prof.full_name ?? prof.email ?? "Courtier");
-    const rows = aggregate(deals, brokerName, prof.user_id ?? prof.id ?? null, fiscalYear);
+    const rows = aggregate(counted, brokerName, prof.user_id ?? prof.id ?? null, fiscalYear);
+
+    const provenance = deals.map((d) => ({
+      ...d.provenance,
+      date: d.date && !Number.isNaN(d.date.getTime()) ? d.date.toISOString() : null,
+      lender: d.lender,
+      product: d.product,
+      amount: d.amount,
+      commission: d.commission,
+      counted: strict ? d.provenance.rule_matched : true,
+    }));
 
     return j({
       success: true,
@@ -229,8 +242,12 @@ Deno.serve(async (req) => {
       maestro_user_id: telecomUserId,
       path: usedPath,
       deal_count: deals.length,
+      counted_count: counted.length,
       fiscal_year: fiscalYear,
+      provenance,
+      audit: auditSummary(deals.map((d) => d.provenance)),
     });
+
   } catch (e: any) {
     console.error("pp-maestro-commissions error", e);
     return j({ success: false, rows: [], error: e?.message ?? "server_error" }, 500);

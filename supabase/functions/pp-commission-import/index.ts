@@ -179,6 +179,14 @@ Deno.serve(async (req) => {
       return json({ ok: true, agent_key: key });
     }
 
+    if (action === "brokers.list") {
+      const { data } = await admin
+        .from("planipret_profiles")
+        .select("user_id,full_name,email,first_name,last_name,maestro_broker_id")
+        .order("full_name");
+      return json({ ok: true, brokers: data ?? [] });
+    }
+
     if (action === "alias.list") {
       const { data } = await admin.from(ALIAS).select("*").order("raw_name");
       return json({ ok: true, aliases: data ?? [] });

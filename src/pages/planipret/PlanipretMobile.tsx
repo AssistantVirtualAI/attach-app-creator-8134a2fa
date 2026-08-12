@@ -981,7 +981,7 @@ export default function PlanipretMobile() {
               className="w-full mt-3 text-[12px] font-semibold"
               style={{ color: "var(--pp-brand-accent)", minHeight: 44 }}
             >
-              {t("more.signOut")}
+              {t("common.logout")}
             </button>
 
           </div>

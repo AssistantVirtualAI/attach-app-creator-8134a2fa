@@ -302,18 +302,51 @@ export default function PACommissionsImport() {
             </div>
           )}
 
-          <button
-            onClick={doImport}
-            disabled={busy}
-            className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg"
-            style={{ background: "var(--pp-success, #16a34a)", color: "#fff", fontSize: 13, fontWeight: 700, opacity: busy ? 0.6 : 1 }}
-          >
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-            {isFr ? `Importer ${totalRows} lignes` : `Import ${totalRows} rows`}
-          </button>
-          <div className="mt-1" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
-            {isFr ? "Les années présentes dans le fichier sont remplacées (import idempotent)." : "Years present in the file are replaced (idempotent import)."}
+          <div className="mt-4 flex items-center gap-2 flex-wrap">
+            <button
+              onClick={doAnalyze}
+              disabled={analyzing}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg"
+              style={{ background: "var(--pp-brand-accent-2)", color: "#fff", fontSize: 13, fontWeight: 700, opacity: analyzing ? 0.6 : 1 }}
+            >
+              {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+              {isFr ? "Analyser avec Claude" : "Analyze with Claude"}
+            </button>
+
+            <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", fontSize: 12.5 }}>
+              <input type="radio" checked={mode === "replace"} onChange={() => setMode("replace")} />
+              {isFr ? "Remplacer les années" : "Replace years"}
+            </label>
+            <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", fontSize: 12.5 }}>
+              <input type="radio" checked={mode === "merge"} onChange={() => setMode("merge")} />
+              {isFr ? "Ré-import incrémental (clé unique)" : "Incremental re-import (unique key)"}
+            </label>
+
+            <button
+              onClick={doImport}
+              disabled={busy}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg"
+              style={{ background: "var(--pp-success, #16a34a)", color: "#fff", fontSize: 13, fontWeight: 700, opacity: busy ? 0.6 : 1 }}
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+              {isFr ? `Importer ${totalRows} lignes` : `Import ${totalRows} rows`}
+            </button>
           </div>
+          <div className="mt-1" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+            {mode === "replace"
+              ? (isFr ? "Les années présentes dans le fichier sont remplacées (import idempotent)." : "Years present in the file are replaced (idempotent import).")
+              : (isFr ? "Seules les lignes correspondantes sont mises à jour, sans purger le registre." : "Only matching rows are updated, without purging the register.")}
+          </div>
+          {analysis && (
+            <div className="mt-2" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+              {isFr ? "Colonnes à confirmer" : "Columns to confirm"} : {analysis.unknownHeaders?.length ? analysis.unknownHeaders.join(" · ") : "—"}
+              {" | "}
+              {isFr ? "Types inconnus" : "Unknown types"} : {analysis.unknownCommissionTypes?.length ? analysis.unknownCommissionTypes.join(" · ") : "—"}
+            </div>
+          )}
+
         </div>
       )}
 

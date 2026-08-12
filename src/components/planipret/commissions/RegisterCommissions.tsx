@@ -311,6 +311,14 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
   const kpi = data?.kpi;
 
+  // Small series feeding the KPI sparklines (same window as the cards).
+  const spark = useMemo(() => ({
+    volume: trendData.map((m: any) => m.cyVolume || 0),
+    deals: trendData.map((m: any) => m.deals || 0),
+    commission: trendData.map((m: any) => m.cyCommission || 0),
+    bps: trendData.map((m: any) => m.bps || 0),
+  }), [trendData]);
+
   /* ---- Advanced filtering (lender) applied client-side on the deal lines ---- */
   const allDeals: DealLine[] = useMemo(() => (data?.deals ?? []) as DealLine[], [data]);
   const lenderOptions: string[] = useMemo(() => {
@@ -564,20 +572,33 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           {tab === "overview" && (
             <>
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
-                <Kpi label={isFr ? "Volume" : "Volume"} value={fmtMoney(kpi.ytd.volume)} delta={pctDelta(kpi.ytd.volume, kpi.ytdPy.volume)} accent="#4472C4"
+                <Kpi label={isFr ? "Volume" : "Volume"} value={fmtMoney(kpi.ytd.volume)} delta={pctDelta(kpi.ytd.volume, kpi.ytdPy.volume)} accent={CHART_COLORS[0]} spark={spark.volume}
+                  info={isFr ? "Somme des montants de prêt des dossiers comptés dans le volume. L'écart compare la même fenêtre de l'année précédente. Cliquez pour voir les dossiers."
+                    : "Sum of loan amounts counted in volume. The delta compares the same window last year. Click to see the deals."}
                   onClick={() => openDrill(isFr ? "Volume — dossiers sous-jacents" : "Volume — underlying deals", filteredDeals.filter((d) => d.countedInVolume), periodSubtitle)} />
-                <Kpi label={isFr ? "Dossiers" : "Deals"} value={fmtNum(kpi.ytd.deals)} delta={pctDelta(kpi.ytd.deals, kpi.ytdPy.deals)} accent="#70AD47"
+                <Kpi label={isFr ? "Dossiers" : "Deals"} value={fmtNum(kpi.ytd.deals)} delta={pctDelta(kpi.ytd.deals, kpi.ytdPy.deals)} accent={CHART_COLORS[1]} spark={spark.deals}
+                  info={isFr ? "Nombre de dossiers comptés sur la période (les lignes d'ajustement et de boni sont exclues du compte)."
+                    : "Number of counted deals for the period (adjustment and bonus lines are excluded)."}
                   onClick={() => openDrill(isFr ? "Dossiers" : "Deals", filteredDeals.filter((d) => d.countedInDeals), periodSubtitle)} />
-                <Kpi label="Commission" value={fmtMoney(kpi.ytd.commission)} delta={pctDelta(kpi.ytd.commission, kpi.ytdPy.commission)} accent="#ED7D31"
+                <Kpi label="Commission" value={fmtMoney(kpi.ytd.commission)} delta={pctDelta(kpi.ytd.commission, kpi.ytdPy.commission)} accent={CHART_COLORS[2]} spark={spark.commission}
+                  info={isFr ? "Total des commissions inscrites au registre pour la période, toutes catégories confondues."
+                    : "Total commissions recorded in the register for the period, all categories included."}
                   onClick={() => openDrill("Commission", filteredDeals.filter((d) => (d.amount || 0) !== 0), periodSubtitle)} />
-                <Kpi label={isFr ? "Dossier moyen" : "Avg deal"} value={fmtMoney(kpi.ytd.avgDeal)} accent="#FFC000"
+                <Kpi label={isFr ? "Dossier moyen" : "Avg deal"} value={fmtMoney(kpi.ytd.avgDeal)} accent={CHART_COLORS[3]}
+                  info={isFr ? "Volume divisé par le nombre de dossiers comptés : la taille moyenne d'un prêt sur la période."
+                    : "Volume divided by counted deals: the average loan size for the period."}
                   onClick={() => openDrill(isFr ? "Dossier moyen" : "Avg deal", filteredDeals.filter((d) => d.countedInDeals), periodSubtitle)} />
-                <Kpi label="BPS" value={fmtBps(kpi.ytd.bps)} accent="#8B5CF6"
+                <Kpi label="BPS" value={fmtBps(kpi.ytd.bps)} accent={CHART_COLORS[4]} spark={spark.bps}
+                  info={isFr ? "Rendement : commission ÷ volume × 10 000. Un BPS qui baisse pendant que le volume monte signale un mix moins rémunérateur."
+                    : "Yield: commission ÷ volume × 10,000. Falling BPS while volume rises signals a less profitable mix."}
                   onClick={() => openDrill("BPS", filteredDeals, periodSubtitle)} />
-                <Kpi label={isFr ? "Prêteurs actifs" : "Active lenders"} value={fmtNum(kpi.activeLenders)} accent="#14B8A6"
+                <Kpi label={isFr ? "Prêteurs actifs" : "Active lenders"} value={fmtNum(kpi.activeLenders)} accent={CHART_COLORS[5]}
+                  info={isFr ? "Nombre de prêteurs distincts ayant au moins un dossier sur la période. Plus il est élevé, moins la dépendance à un prêteur est forte."
+                    : "Distinct lenders with at least one deal in the period. Higher means less dependency on a single lender."}
                   onClick={() => openDrill(isFr ? "Prêteurs actifs" : "Active lenders", filteredDeals, periodSubtitle)} />
                 {isAdminView && (
-                  <Kpi label={isFr ? "Courtiers actifs" : "Active brokers"} value={fmtNum(kpi.activeBrokers)} accent="#EC4899" />
+                  <Kpi label={isFr ? "Courtiers actifs" : "Active brokers"} value={fmtNum(kpi.activeBrokers)} accent={CHART_COLORS[6]}
+                    info={isFr ? "Courtiers ayant au moins un dossier au registre sur la période sélectionnée." : "Brokers with at least one register deal in the selected period."} />
                 )}
               </div>
 

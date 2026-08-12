@@ -18,6 +18,7 @@ export default function PBCommissions() {
   const { lang } = useMplanipretLang();
   const isFr = lang !== "en";
   const [source, setSource] = useState<Source>("register");
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const [maestroConnected, setMaestroConnected] = useState<boolean | null>(null);
   const [info, setInfo] = useState<{ ok: boolean; code?: string; error?: string; dealCount?: number } | null>(null);

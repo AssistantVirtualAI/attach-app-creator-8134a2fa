@@ -10,6 +10,9 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 import { fmtDateTime, msgPeer } from "@/lib/planipret/brokerFormat";
 import { brokerSelect, searchFilter, periodStartISO, PERIOD_OPTIONS, type BrokerPeriod } from "@/lib/planipret/brokerAccess";
+import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
+import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
+import ppBanner from "@/assets/planipret/banner-messages.jpg";
 
 type Thread = { key: string; peer: string; last: any; messages: any[]; unread: number };
 
@@ -113,6 +116,14 @@ export default function PBMessages() {
 
   return (
     <PAPage>
+      <PPPageBanner
+        image={ppBanner}
+        accent="#6366F1"
+        title={lang === "en" ? "Messages" : "Textos"}
+        subtitle={lang === "en" ? "SMS conversations and exchanged volume" : "Conversations SMS et volume échangé"}
+      />
+      <PPActivityCharts kind="messages" lang={lang === "en" ? "en" : "fr"} userId={userId} />
+
       <PAPageHeader
         icon={<MessageSquare className="w-4 h-4" />}
         title={lang === "en" ? "My texts" : "Mes textos"}

@@ -10,6 +10,9 @@ import type { BrokerCtx } from "./PlanipretBrokerLayout";
 import { fmtDateTime, fmtDuration } from "@/lib/planipret/brokerFormat";
 import { brokerSelect, searchFilter, periodStartISO, PERIOD_OPTIONS, type BrokerPeriod } from "@/lib/planipret/brokerAccess";
 import GreetingStudio from "@/components/planipret/mobile/voicemail/GreetingStudio";
+import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
+import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
+import ppBanner from "@/assets/planipret/banner-voicemail.jpg";
 
 const PAGE_SIZE = 25;
 
@@ -78,6 +81,14 @@ export default function PBVoicemail() {
 
   return (
     <PAPage>
+      <PPPageBanner
+        image={ppBanner}
+        accent="#F59E0B"
+        title={lang === "en" ? "Voicemail" : "Boîte vocale"}
+        subtitle={lang === "en" ? "Voice messages and greeting" : "Messages vocaux et annonce d'accueil"}
+      />
+      <PPActivityCharts kind="voicemail" lang={lang === "en" ? "en" : "fr"} userId={userId} />
+
       <PAPageHeader
         icon={<Voicemail className="w-4 h-4" />}
         title={lang === "en" ? "My voicemail" : "Ma messagerie vocale"}

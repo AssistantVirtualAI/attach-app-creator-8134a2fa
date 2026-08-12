@@ -8,6 +8,9 @@ import Pagination from "@/components/planipret/admin/Pagination";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 import { fmtDateTime, fmtDuration, callPeer } from "@/lib/planipret/brokerFormat";
+import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
+import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
+import ppBanner from "@/assets/planipret/banner-calls.jpg";
 
 const PAGE_SIZE = 25;
 
@@ -61,6 +64,14 @@ export default function PBCalls() {
 
   return (
     <PAPage>
+      <PPPageBanner
+        image={ppBanner}
+        accent="#3B82F6"
+        title={lang === "en" ? "Calls" : "Appels"}
+        subtitle={lang === "en" ? "Your call history and trends" : "Historique et tendances de vos appels"}
+      />
+      <PPActivityCharts kind="calls" lang={lang === "en" ? "en" : "fr"} userId={userId} />
+
       <PAPageHeader
         icon={<Phone className="w-4 h-4" />}
         title={lang === "en" ? "My calls" : "Mes appels"}

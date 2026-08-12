@@ -12,6 +12,9 @@ import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import AvaCallRecordingsPanel from "@/components/planipret/admin/ava/AvaCallRecordingsPanel";
 import RecordingDetailDrawer from "@/components/planipret/recordings/RecordingDetailDrawer";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
+import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
+import ppBanner from "@/assets/planipret/banner-recordings.jpg";
 
 const ACCENT = "#2E9BDC";
 const AGENT = "#9B7FE8";
@@ -339,6 +342,14 @@ export default function PARecordings() {
 
   return (
     <div className="pa-page space-y-5">
+      <PPPageBanner
+        image={ppBanner}
+        accent="#10B981"
+        title={lang === "en" ? "Recordings · global view" : "Enregistrements · vue globale"}
+        subtitle={lang === "en" ? "Captured recordings and 30-day trends" : "Enregistrements captés et tendances sur 30 jours"}
+      />
+      <PPActivityCharts kind="recordings" lang={lang === "en" ? "en" : "fr"} />
+
       <div className="flex gap-1 border-b" style={{ borderColor: "var(--pp-bg-border-2)" }}>
         {([
           ["pbx", t.tabPbx],

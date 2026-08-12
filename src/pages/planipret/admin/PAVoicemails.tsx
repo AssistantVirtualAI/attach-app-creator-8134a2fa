@@ -7,6 +7,9 @@ import Pagination from "@/components/planipret/admin/Pagination";
 import DebugPanel, { type DebugEntry } from "@/components/planipret/admin/DebugPanel";
 import { TableEmptyState, TableErrorState } from "@/components/planipret/admin/TableStates";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
+import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
+import ppBanner from "@/assets/planipret/banner-voicemail.jpg";
 
 const ACCENT = "#2E9BDC";
 
@@ -145,6 +148,14 @@ export default function PAVoicemails() {
 
   return (
     <div className="pa-page space-y-5">
+      <PPPageBanner
+        image={ppBanner}
+        accent="#F59E0B"
+        title={lang === "en" ? "Voicemail · global view" : "Boîtes vocales · vue globale"}
+        subtitle={lang === "en" ? "Received messages and read rate over 30 days" : "Messages reçus et taux d'écoute sur 30 jours"}
+      />
+      <PPActivityCharts kind="voicemail" lang={lang === "en" ? "en" : "fr"} />
+
       <DebugPanel entries={debug} />
       <div className="pp-card p-4 flex items-center gap-2 flex-wrap">
         <input value={search} onChange={(e) => setFilterValue("search", e.target.value)} placeholder={t.searchPlaceholder} className="px-3 py-2 rounded-lg text-sm w-64" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)" }} />

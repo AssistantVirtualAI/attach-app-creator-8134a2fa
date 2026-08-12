@@ -13,6 +13,9 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 import { fmtDateTime, fmtDuration, callPeer } from "@/lib/planipret/brokerFormat";
 import { brokerSelect, searchFilter, periodStartISO, PERIOD_OPTIONS, type BrokerPeriod } from "@/lib/planipret/brokerAccess";
+import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
+import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
+import ppBanner from "@/assets/planipret/banner-recordings.jpg";
 
 const PAGE_SIZE = 25;
 
@@ -69,6 +72,14 @@ export default function PBRecordings() {
 
   return (
     <PAPage>
+      <PPPageBanner
+        image={ppBanner}
+        accent="#10B981"
+        title={lang === "en" ? "Recordings" : "Enregistrements"}
+        subtitle={lang === "en" ? "Recordings, transcripts and AI summaries" : "Enregistrements, transcriptions et résumés IA"}
+      />
+      <PPActivityCharts kind="recordings" lang={lang === "en" ? "en" : "fr"} userId={userId} />
+
       <PAPageHeader
         icon={<Mic className="w-4 h-4" />}
         title={lang === "en" ? "My recordings" : "Mes enregistrements"}

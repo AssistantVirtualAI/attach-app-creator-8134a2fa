@@ -836,7 +836,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             </Section>
           )}
 
-          {Array.isArray(data.calcNotes) && (
+          {isAdminView && Array.isArray(data.calcNotes) && (
             <Section title={isFr ? "Notes de calcul" : "Calculation notes"}>
               <ul style={{ fontSize: 12, color: "var(--pp-text-secondary)", lineHeight: 1.6, paddingLeft: 16, listStyle: "disc" }}>
                 {data.calcNotes.map((n: string, i: number) => <li key={i}>{n}</li>)}

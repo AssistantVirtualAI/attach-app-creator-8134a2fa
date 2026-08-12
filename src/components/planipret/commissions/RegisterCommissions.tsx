@@ -124,15 +124,35 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const isAdminView = scope === "admin";
   const MONTHS = isFr ? MONTHS_FR : MONTHS_EN;
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
+  const saved = isAdminView ? readAdminCommissionFilters() : null;
+  const [year, setYear] = useState(saved?.year ?? now.getFullYear());
   const [month, setMonth] = useState(12);
-  const [granularity, setGranularity] = useState<Granularity>("ytd");
-  const [periodIndex, setPeriodIndex] = useState(12);
-  const [agent, setAgent] = useState("");
-  const [tab, setTab] = useState<Tab>("overview");
+  const [granularity, setGranularity] = useState<Granularity>((saved?.granularity as Granularity) ?? "ytd");
+  const [periodIndex, setPeriodIndex] = useState(saved?.periodIndex ?? 12);
+  const [agent, setAgent] = useState(saved?.agent ?? "");
+  const [tab, setTab] = useState<Tab>((saved?.tab as Tab) ?? "overview");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Persist the admin filters in the browser so the same view reopens later.
+  const { clear: clearSavedFilters } = useAdminCommissionFilters(isAdminView, { year, granularity, periodIndex, agent, tab });
+  const resetFilters = () => {
+    const d = defaultAdminCommissionFilters();
+    clearSavedFilters();
+    setYear(d.year);
+    setGranularity(d.granularity as Granularity);
+    setPeriodIndex(d.periodIndex);
+    setAgent("");
+    setTab("overview");
+  };
+
+  // Broker drill-down
+  const [drillAgent, setDrillAgent] = useState<string | null>(null);
+  const [drillData, setDrillData] = useState<any>(null);
+  const [drillLoading, setDrillLoading] = useState(false);
+  const [drillError, setDrillError] = useState<string | null>(null);
+
 
   useEffect(() => {
     let cancelled = false;

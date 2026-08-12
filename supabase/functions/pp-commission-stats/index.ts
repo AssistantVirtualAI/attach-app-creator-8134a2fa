@@ -212,6 +212,37 @@ Deno.serve(async (req) => {
 
     const availableAgents = uniq(scopedAll.map((r) => r.agent_name)).sort((a, b) => a.localeCompare(b));
 
+    // Per-broker × per-year matrix (multi-year evolution, independent of the selected window)
+    const yearsWithData = uniq(scopedAll.map((r) => Number(r.fiscal_year)))
+      .filter((y) => Number.isFinite(y))
+      .sort((a, b) => a - b);
+    const yearlyBrokerKeys = uniq(scopedAll.map((r) => r.agent_name)).sort((a, b) => a.localeCompare(b));
+    const brokerYearly = yearlyBrokerKeys.map((name) => {
+      const idRow = scopedAll.find((x) => x.agent_name === name) as any;
+      const cells = yearsWithData.map((y) => {
+        const m = metrics(scopedAll, yearWindow(y), { broker: name });
+        return { year: y, volume: m.volume, deals: m.deals, commission: m.commission, bps: m.bps, avgDeal: m.avgDeal };
+      });
+      return {
+        broker: name,
+        firstName: idRow?.first_name ?? null,
+        lastName: idRow?.last_name ?? null,
+        brokerUserId: idRow?.broker_user_id ?? null,
+        maestroBrokerId: idRow?.maestro_broker_id ?? null,
+        cells,
+        totalVolume: cells.reduce((a, c) => a + c.volume, 0),
+        totalDeals: cells.reduce((a, c) => a + c.deals, 0),
+        totalCommission: cells.reduce((a, c) => a + c.commission, 0),
+      };
+    }).sort((a, b) => b.totalVolume - a.totalVolume);
+
+    // Brokers whose register rows are not attached to a portal account yet
+    const unlinkedBrokers = uniq(scopedAll.filter((r: any) => !r.broker_user_id).map((r) => r.agent_name))
+      .map((name) => {
+        const rows = scopedAll.filter((r) => r.agent_name === name);
+        return { broker: name, rows: rows.length, commission: rows.reduce((a, r) => a + (Number(r.amount) || 0), 0) };
+      });
+
     const monthly = Array.from({ length: 12 }, (_, i) => {
       const m = i + 1;
       const wc = monthWindow(year, m);
@@ -674,6 +705,9 @@ Deno.serve(async (req) => {
       availableYears,
       availableAgents,
       brokers,
+      brokerYearly,
+      brokerYears: yearsWithData,
+      unlinkedBrokers,
       series,
       kpi,
       monthly,

@@ -394,26 +394,49 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.rowCount, year, granularity, periodIndex, agent]);
 
-  const tabs: { key: Tab; label: string }[] = [
+  const tabs: { key: TabKey; label: string; count?: number | null; tone?: "gold" | "warn" }[] = [
     { key: "overview", label: isFr ? "Vue d'ensemble" : "Overview" },
-    ...(isAdminView ? [{ key: "brokers" as Tab, label: isFr ? "Courtiers" : "Brokers" }] : []),
+    ...(isAdminView ? [{ key: "brokers" as TabKey, label: isFr ? "Courtiers" : "Brokers" }] : []),
     { key: "trend", label: isFr ? "Tendance" : "Trend" },
     { key: "lenders", label: isFr ? "Prêteurs" : "Lenders" },
     { key: "mix", label: isFr ? "Mix produits" : "Product mix" },
-    ...(isAdminView ? [{ key: "quarters" as Tab, label: isFr ? "Trimestres" : "Quarters" }] : []),
-    ...(isAdminView ? [{ key: "periods" as Tab, label: isFr ? "Stats par période" : "Stats by period" }] : []),
-    { key: "club", label: "Club Excellence" },
-    { key: "deals", label: isFr ? "Dossiers" : "Deals" },
-    ...(isAdminView ? [{ key: "gaps" as Tab, label: isFr ? "Écarts" : "Gaps" }] : []),
-    ...(isAdminView ? [{ key: "data" as Tab, label: isFr ? "Couverture des données" : "Data coverage" }] : []),
+    ...(isAdminView ? [{ key: "quarters" as TabKey, label: isFr ? "Trimestres" : "Quarters" }] : []),
+    ...(isAdminView ? [{ key: "periods" as TabKey, label: isFr ? "Stats par période" : "Stats by period" }] : []),
+    { key: "club", label: "Club Excellence", tone: "gold" },
+    { key: "deals", label: isFr ? "Dossiers" : "Deals", count: filteredDeals.length },
+    ...(isAdminView ? [{ key: "gaps" as TabKey, label: isFr ? "Écarts" : "Gaps", count: data?.discrepancies?.total ?? null, tone: "warn" as const }] : []),
+    ...(isAdminView ? [{ key: "data" as TabKey, label: isFr ? "Couverture des données" : "Data coverage" }] : []),
   ];
 
 
 
+  const heroTitle = isAdminView
+    ? (isFr ? "Commissions — vue entreprise" : "Commissions — firm view")
+    : (isFr ? "Mes commissions" : "My commissions");
+  const heroSubtitle = isAdminView
+    ? (isFr ? "Registre de dépôts 2022 → 2026 · volume, dossiers, prêteurs et commissions"
+            : "Deposit register 2022 → 2026 · volume, deals, lenders and commissions")
+    : (data?.brokerName ?? (isFr ? "Votre performance issue du registre de dépôts" : "Your performance from the deposit register"));
+
   return (
     <div>
+      {data && data.rowCount > 0 && kpi && (
+        <CommissionsHero
+          lang={lang}
+          title={heroTitle}
+          subtitle={heroSubtitle}
+          periodLabel={data.window ? `${data.window.start} → ${data.window.end}${isAdminView && !agent ? (isFr ? " · tous les courtiers" : " · all brokers") : agent ? ` · ${agent}` : ""}` : String(year)}
+          volume={kpi.ytd.volume}
+          deals={kpi.ytd.deals}
+          commission={kpi.ytd.commission}
+          volumeDelta={typeof pctDelta(kpi.ytd.volume, kpi.ytdPy.volume) === "number" ? (pctDelta(kpi.ytd.volume, kpi.ytdPy.volume) as number) : null}
+          dealsDelta={typeof pctDelta(kpi.ytd.deals, kpi.ytdPy.deals) === "number" ? (pctDelta(kpi.ytd.deals, kpi.ytdPy.deals) as number) : null}
+          commissionDelta={typeof pctDelta(kpi.ytd.commission, kpi.ytdPy.commission) === "number" ? (pctDelta(kpi.ytd.commission, kpi.ytdPy.commission) as number) : null}
+        />
+      )}
+
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+      <div className="pp-filters-sticky flex flex-wrap items-center gap-2">
         <RegisterFilters
           lang={lang}
           years={years}
@@ -506,40 +529,11 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
       <RegisterHealthBadge integrity={data?.integrity} lang={lang} />
 
-      <div className="flex flex-wrap gap-1.5 mb-2">
-
-        {tabs.map((t) => {
-          const isClub = t.key === "club";
-          const active = tab === t.key;
-          return (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className="px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"
-              style={{
-                fontSize: 12.5, fontWeight: isClub ? 800 : 700,
-                background: isClub
-                  ? (active
-                    ? "linear-gradient(135deg, #FFC000, #E8A33C)"
-                    : "linear-gradient(135deg, rgba(255,192,0,.16), rgba(255,192,0,.05))")
-                  : active ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
-                color: isClub ? (active ? "#1b1400" : "#FFC000") : active ? "#fff" : "var(--pp-text-secondary)",
-                border: isClub ? "1px solid rgba(255,192,0,.45)" : "1px solid var(--pp-bg-border)",
-                boxShadow: isClub ? "0 12px 22px -16px rgba(255,192,0,.8), inset 0 1px 0 rgba(255,255,255,.25)" : undefined,
-              }}>
-              {isClub && <Star className="w-3.5 h-3.5" style={{ fill: active ? "#1b1400" : "#FFC000" }} />}
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
+      <CommissionsTabs tabs={tabs} value={tab as TabKey} onChange={(k) => setTab(k as Tab)} />
 
       {error && <div className="pp-card" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger,#ef4444)" }}>{error}</div>}
 
-      {!error && !data && loading && (
-        <div className="pp-card" style={{ padding: 24, textAlign: "center", color: "var(--pp-text-muted)", fontSize: 13 }}>
-          <Loader2 className="w-5 h-5 animate-spin inline" />
-        </div>
-      )}
+      {!error && !data && loading && <CommissionsSkeleton />}
 
       {data && data.rowCount === 0 && (
         <div

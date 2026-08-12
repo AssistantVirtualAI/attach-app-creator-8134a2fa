@@ -619,6 +619,9 @@ Deno.serve(async (req) => {
       calcNotes,
       season: { current: seasonCur, previous: seasonPrev },
       reconciliation,
+      discrepancies,
+      detail,
+
     });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);

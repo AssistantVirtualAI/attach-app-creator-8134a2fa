@@ -45,18 +45,24 @@ const pick = (o: any, keys: string[]): any => {
   return null;
 };
 
+const COMMISSION_FALLBACK_FIELDS = ["commission", "commission_amount", "total_commission", "broker_commission", "revenue", "Case amount"];
+
 function normalizeDeal(d: any) {
   const dateRaw = pick(d, ["funding_date", "funded_at", "closing_date", "close_date", "completion_date", "date", "created_at"]);
   const date = dateRaw ? new Date(String(dateRaw)) : null;
   const amount = num(pick(d, ["mortgage_amount", "loan_amount", "amount", "volume", "financing_amount", "principal"]));
-  const commission = num(pick(d, ["commission", "commission_amount", "total_commission", "broker_commission", "revenue"]));
+  // Provenance: the commission is the RAW value of the exact Maestro field selected
+  // by the (record type + stage) mapping. No recalculation is ever applied.
+  const provenance = resolveRevenue(d, COMMISSION_FALLBACK_FIELDS);
+  const commission = num(provenance.revenue_raw);
   const lender = String(pick(d, ["lender", "lender_name", "institution", "bank", "financial_institution"]) ?? "—").trim() || "—";
   const product = String(pick(d, ["product_type", "product", "rate_type", "mortgage_type", "type"]) ?? "—").trim() || "—";
   const termRaw = pick(d, ["term", "term_years", "term_length", "duration"]);
   const term = termRaw == null ? "" : String(termRaw).trim();
   const status = String(pick(d, ["status", "state", "stage"]) ?? "").toLowerCase();
-  return { date, amount, commission, lender, product, term, status, raw: d };
+  return { date, amount, commission, lender, product, term, status, provenance, raw: d };
 }
+
 
 function fiscalYearOf(d: Date) { return d.getUTCFullYear(); }
 function quarterOf(d: Date) { return `Q${Math.floor(d.getUTCMonth() / 3) + 1}`; }

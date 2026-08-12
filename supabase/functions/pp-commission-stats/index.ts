@@ -692,6 +692,9 @@ Deno.serve(async (req) => {
       reconciliation,
       discrepancies,
       detail,
+      integrity,
+      deals,
+
 
     });
   } catch (e) {

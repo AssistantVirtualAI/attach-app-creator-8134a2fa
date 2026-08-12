@@ -303,14 +303,12 @@ export default function PACommissionsImport() {
                 </span>
               ))}
             </div>
-            {summary.unmatched?.length > 0 && (
-              <div className="mt-2" style={{ color: "var(--pp-text-muted)" }}>
-                {isFr ? "Non rattachés" : "Unlinked"} : {summary.unmatched.join(" · ")}
-              </div>
-            )}
           </div>
         )}
       </div>
+
+      <CommissionValidationPanel isFr={isFr} call={call} />
+
     </PAPage>
   );
 }

@@ -53,7 +53,10 @@ Deno.serve(async (req) => {
     const userText = [
       `Langue de réponse: ${lang}`,
       `Portée: ${body?.scope === "admin" ? "agence (tous les courtiers)" : "courtier individuel"}`,
-      `Source des données: ${body?.source ?? "internal"}`,
+      `Source des données: ${body?.source ?? "maestro"} (synchronisation Maestro)`,
+      body?.focusLabel
+        ? `Onglet affiché à l'utilisateur: ${body.focusLabel} (clé: ${body?.focus ?? ""}). Concentre l'analyse sur ce qui est visible dans cet onglet et explique comment lire ces chiffres.`
+        : "",
       "Métriques (JSON):",
       JSON.stringify(metrics).slice(0, 18000),
     ].join("\n");

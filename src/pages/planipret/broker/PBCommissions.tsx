@@ -1,27 +1,15 @@
 import { useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
-import { TrendingUp, Cloud, Database, Loader2, ShieldCheck, Archive, ChevronDown } from "lucide-react";
+import { TrendingUp, Cloud, CheckCircle2 } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import CommissionDashboard from "@/components/planipret/commissions/CommissionDashboard";
-import CommissionProvenance from "@/components/planipret/commissions/CommissionProvenance";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
 import { supabase } from "@/integrations/supabase/client";
-import type { BrokerCtx } from "./PlanipretBrokerLayout";
-
-type Source = "maestro" | "internal" | "provenance" | "register";
-
 
 export default function PBCommissions() {
-  const { authUserId, profile } = useOutletContext<BrokerCtx>();
   const { lang } = useMplanipretLang();
   const isFr = lang !== "en";
-  const [source, setSource] = useState<Source>("register");
-  const [moreOpen, setMoreOpen] = useState(false);
-
   const [maestroConnected, setMaestroConnected] = useState<boolean | null>(null);
-  const [info, setInfo] = useState<{ ok: boolean; code?: string; error?: string; dealCount?: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,25 +32,6 @@ export default function PBCommissions() {
     return () => { cancelled = true; window.removeEventListener("maestro:connected", onConnected); };
   }, []);
 
-  const notConnected = maestroConnected === false || info?.code === "maestro_not_connected";
-
-  const tab = (value: Source, Icon: typeof Cloud, label: string) => (
-    <button
-      key={value}
-      onClick={() => setSource(value)}
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
-      style={{
-        fontSize: 12.5,
-        fontWeight: 600,
-        background: source === value ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
-        color: source === value ? "#fff" : "var(--pp-text-secondary)",
-        border: "1px solid var(--pp-bg-border)",
-      }}
-    >
-      <Icon className="w-3.5 h-3.5" />{label}
-    </button>
-  );
-
   return (
     <PAPage>
       <PAPageHeader
@@ -73,86 +42,26 @@ export default function PBCommissions() {
           : "Your personal performance and commission breakdown"}
       />
 
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        {tab("register", Archive, isFr ? "Registre" : "Register")}
-        {tab("maestro", Cloud, "Maestro")}
-        <div className="relative">
-          <button
-            onClick={() => setMoreOpen((v) => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
-            style={{
-              fontSize: 12.5, fontWeight: 600,
-              background: source === "internal" || source === "provenance" ? "var(--pp-brand-accent-2)" : "transparent",
-              color: source === "internal" || source === "provenance" ? "#fff" : "var(--pp-text-muted)",
-              border: "1px solid var(--pp-bg-border)",
-            }}
-          >
-            {isFr ? "Plus" : "More"}
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
-          {moreOpen && (
-            <div
-              className="absolute z-20 mt-1 rounded-lg overflow-hidden"
-              style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", minWidth: 180 }}
-            >
-              {([["internal", isFr ? "Données internes" : "Internal data", Database], ["provenance", isFr ? "Provenance" : "Provenance", ShieldCheck]] as const).map(([v, label, Icon]) => (
-                <button
-                  key={v}
-                  onClick={() => { setSource(v as Source); setMoreOpen(false); }}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-left"
-                  style={{ fontSize: 12.5, color: source === v ? "var(--pp-text-primary)" : "var(--pp-text-secondary)", fontWeight: source === v ? 700 : 500 }}
-                >
-                  <Icon className="w-3.5 h-3.5" />{label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {source === "maestro" && maestroConnected === null && (
-          <span className="flex items-center gap-1.5" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            {isFr ? "Vérification de Maestro…" : "Checking Maestro…"}
-          </span>
-        )}
-        {source === "maestro" && info?.ok && (
-          <span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
-            {isFr ? `${info.dealCount ?? 0} dossiers synchronisés depuis Maestro` : `${info.dealCount ?? 0} deals synced from Maestro`}
-          </span>
-        )}
-      </div>
-
-      {source === "register" ? (
-        <RegisterCommissions lang={isFr ? "fr" : "en"} />
-      ) : (source === "maestro" || source === "provenance") && notConnected ? (
-        <div className="max-w-xl">
-          <p className="mb-3" style={{ fontSize: 13, color: "var(--pp-text-muted)" }}>
+      {maestroConnected === false && (
+        <div className="max-w-xl mb-3">
+          <p className="mb-2 flex items-center gap-1.5" style={{ fontSize: 12.5, color: "var(--pp-text-muted)" }}>
+            <Cloud className="w-3.5 h-3.5" />
             {isFr
-              ? "Connectez votre compte Maestro pour afficher vos commissions en temps réel."
-              : "Connect your Maestro account to display your commissions in real time."}
+              ? "Connectez votre compte Maestro pour garder vos commissions à jour automatiquement."
+              : "Connect your Maestro account to keep your commissions updated automatically."}
           </p>
           <MaestroConnectCard />
         </div>
-      ) : source === "provenance" ? (
-        <CommissionProvenance lang={isFr ? "fr" : "en"} />
-      ) : (
-        <>
-          {source === "maestro" && info && !info.ok && info.error && (
-            <div className="pp-card mb-3" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger)" }}>
-              {info.error}
-            </div>
-          )}
-          <CommissionDashboard
-            lang={isFr ? "fr" : "en"}
-            scope="broker"
-            source={source === "internal" ? "internal" : "maestro"}
-            brokerUserId={authUserId}
-            brokerName={(profile as any)?.full_name}
-            onSourceResult={setInfo}
-          />
-        </>
       )}
 
+      {maestroConnected === true && (
+        <p className="mb-2 inline-flex items-center gap-1.5" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+          <CheckCircle2 className="w-3.5 h-3.5" style={{ color: "#16a34a" }} />
+          {isFr ? "Données synchronisées via Maestro" : "Data synced via Maestro"}
+        </p>
+      )}
 
+      <RegisterCommissions lang={isFr ? "fr" : "en"} />
     </PAPage>
   );
 }

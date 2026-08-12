@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, ComposedChart, Bar, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart, RadialBarChart, RadialBar,
 } from "recharts";
-import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy, FileDown, RotateCcw, Star } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Trophy, FileDown, RotateCcw, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CommissionInsights from "./CommissionInsights";
 import ClubExcellencePanel from "./ClubExcellencePanel";
@@ -12,13 +12,10 @@ import RegisterFilters, { type Granularity } from "./RegisterFilters";
 import BrokerLeaderboard from "./BrokerLeaderboard";
 import BrokerTopSellers from "./BrokerTopSellers";
 import BrokerYearMatrix from "./BrokerYearMatrix";
-import CommissionDiscrepancies from "./CommissionDiscrepancies";
-import CommissionCoverage from "./CommissionCoverage";
 import BrokerDrilldown from "./BrokerDrilldown";
 import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
 import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
-import RegisterHealthBadge from "./RegisterHealthBadge";
 import InfoTip from "@/components/planipret/broker/overview/InfoTip";
 import RegisterDealsTable, { type DealLine } from "./RegisterDealsTable";
 import RegisterDrilldown, { dealsCsv } from "./RegisterDrilldown";
@@ -32,7 +29,7 @@ import {
 } from "./ui/chartTheme";
 
 type Lang = "fr" | "en";
-type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "gaps" | "data" | "deals";
+type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "deals";
 
 
 const PALETTE = CHART_COLORS;
@@ -346,14 +343,27 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const periodSubtitle = `${data?.periodLabel ?? year}${lender ? ` · ${lender}` : ""}${agent ? ` · ${agent}` : ""}`;
 
 
-  // ---- AI insights (Claude), cached 24h per user/year/month ----
+  /* ---- Data signature: changes as soon as Maestro brings new numbers ---- */
+  const dataSignature = useMemo(() => {
+    if (!data) return "none";
+    const k = data.kpi?.ytd ?? {};
+    return [
+      data.rowCount ?? 0,
+      Math.round(Number(k.volume) || 0),
+      Math.round(Number(k.commission) || 0),
+      Math.round(Number(k.deals) || 0),
+      data.syncedAt ?? "",
+    ].join("|");
+  }, [data]);
+
+  // ---- AI insights (Claude), auto-refreshed on every new Maestro payload ----
   const [ai, setAi] = useState<{ summary: string; insights: any[] } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
   const generateInsights = async (force = false) => {
     if (!data || data.rowCount === 0) return;
-    const cacheKey = `pp-register-insights:${isAdminView ? "admin" : (data.brokerName ?? "me")}:${agent || "all"}:${year}:${granularity}:${periodIndex}:${lang}`;
+    const cacheKey = `pp-register-insights:${isAdminView ? "admin" : (data.brokerName ?? "me")}:${agent || "all"}:${year}:${granularity}:${periodIndex}:${lang}:${tab}:${dataSignature}`;
     if (!force) {
       try {
         const raw = localStorage.getItem(cacheKey);
@@ -368,7 +378,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const payload = {
-        lang, scope: isAdminView && !agent ? "admin" : "broker", source: "register",
+        lang, scope: isAdminView && !agent ? "admin" : "broker", source: "maestro",
+        focus: tab, focusLabel: tabLabel,
         metrics: {
           year, period: data.periodLabel, granularity, window: data.window,
           agent: agent || (isAdminView ? "all brokers" : data.brokerName),
@@ -396,11 +407,13 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     }
   };
 
+  // Auto-run: regenerates whenever the visible slice or the underlying
+  // Maestro data changes (signature), never waiting for a manual click.
   useEffect(() => {
     setAi(null);
     if (data && data.rowCount > 0) void generateInsights(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.rowCount, year, granularity, periodIndex, agent]);
+  }, [dataSignature, year, granularity, periodIndex, agent, tab]);
 
   const tabs: { key: TabKey; label: string; count?: number | null; tone?: "gold" | "warn" }[] = [
     { key: "overview", label: isFr ? "Vue d'ensemble" : "Overview" },
@@ -412,9 +425,11 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     ...(isAdminView ? [{ key: "periods" as TabKey, label: isFr ? "Stats par période" : "Stats by period" }] : []),
     { key: "club", label: "Club Excellence", tone: "gold" },
     { key: "deals", label: isFr ? "Dossiers" : "Deals", count: filteredDeals.length },
-    ...(isAdminView ? [{ key: "gaps" as TabKey, label: isFr ? "Écarts" : "Gaps", count: data?.discrepancies?.total ?? null, tone: "warn" as const }] : []),
-    ...(isAdminView ? [{ key: "data" as TabKey, label: isFr ? "Couverture des données" : "Data coverage" }] : []),
   ];
+
+  const tabLabel = tabs.find((t) => t.key === (tab as TabKey))?.label ?? String(tab);
+
+
 
 
 
@@ -422,9 +437,9 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     ? (isFr ? "Commissions — vue entreprise" : "Commissions — firm view")
     : (isFr ? "Mes commissions" : "My commissions");
   const heroSubtitle = isAdminView
-    ? (isFr ? "Registre de dépôts 2022 → 2026 · volume, dossiers, prêteurs et commissions"
-            : "Deposit register 2022 → 2026 · volume, deals, lenders and commissions")
-    : (data?.brokerName ?? (isFr ? "Votre performance issue du registre de dépôts" : "Your performance from the deposit register"));
+    ? (isFr ? "Données Maestro · volume, dossiers, prêteurs et commissions"
+            : "Maestro data · volume, deals, lenders and commissions")
+    : (data?.brokerName ?? (isFr ? "Votre performance, synchronisée depuis Maestro" : "Your performance, synced from Maestro"));
 
   return (
     <div>
@@ -463,17 +478,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           onLender={setLender}
         />
         {loading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--pp-text-muted)" }} />}
-        {data?.reconciliation && (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg" style={{
-            fontSize: 11.5, fontWeight: 700,
-            background: data.reconciliation.allOk ?? (data.reconciliation.volumeOk && data.reconciliation.dealsOk) ? "rgba(22,163,74,.12)" : "rgba(245,158,11,.14)",
-            color: data.reconciliation.allOk ?? (data.reconciliation.volumeOk && data.reconciliation.dealsOk) ? "#16a34a" : "#f59e0b",
-          }}>
-            {(data.reconciliation.allOk ?? (data.reconciliation.volumeOk && data.reconciliation.dealsOk))
-              ? <><ShieldCheck className="w-3.5 h-3.5" />{isFr ? "Totaux réconciliés" : "Totals reconciled"}</>
-              : <><AlertTriangle className="w-3.5 h-3.5" />{isFr ? "Écart de réconciliation" : "Reconciliation gap"}</>}
-          </span>
-        )}
         {data?.window && (
           <span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
             {data.window.start} → {data.window.end}
@@ -490,12 +494,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               style={{ fontSize: 12, fontWeight: 700, opacity: filteredDeals.length ? 1 : .5, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
               <FileDown className="w-3.5 h-3.5" />{isFr ? "Export CSV" : "Export CSV"}
             </button>
-            {isAdminView && data?.discrepancies?.total > 0 && (
-              <button onClick={() => setTab("gaps")} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-                style={{ fontSize: 11.5, fontWeight: 800, background: "rgba(245,158,11,.14)", color: "#f59e0b", border: "1px solid rgba(245,158,11,.25)" }}>
-                <AlertTriangle className="w-3.5 h-3.5" />{fmtNum(data.discrepancies.total)} {isFr ? "écarts" : "gaps"}
-              </button>
-            )}
             {isAdminView && <button
               onClick={() => data && downloadCommissionsPdf({ lang, data, agent, aiSummary: ai?.summary, year })}
               disabled={!data}
@@ -535,8 +533,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
         </div>
       )}
 
-      <RegisterHealthBadge integrity={data?.integrity} lang={lang} />
-
       <CommissionsTabs tabs={tabs} value={tab as TabKey} onChange={(k) => setTab(k as Tab)} />
 
       {error && <div className="pp-card" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger,#ef4444)" }}>{error}</div>}
@@ -557,8 +553,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           </div>
           <p style={{ fontSize: 12.5, color: "var(--pp-text-muted)", marginTop: 6, maxWidth: 460, marginInline: "auto", lineHeight: 1.6 }}>
             {isFr
-              ? "Aucune ligne du registre de dépôts n'est rattachée à votre profil sur cette période. Essayez une autre année, ou connectez votre compte Maestro pour suivre vos commissions en temps réel."
-              : "No deposit-register line is linked to your profile for this period. Try another year, or connect your Maestro account to track commissions in real time."}
+              ? "Aucun dossier n'est rattaché à votre profil sur cette période. Essayez une autre année, ou connectez votre compte Maestro pour suivre vos commissions en temps réel."
+              : "No deal is linked to your profile for this period. Try another year, or connect your Maestro account to track commissions in real time."}
           </p>
         </div>
       )}
@@ -569,6 +565,19 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
             <Ov3DGradients colors={["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"]} />
           </svg>
+
+          <div className="mb-3">
+            <CommissionInsights
+              lang={lang}
+              context={tabLabel}
+              summary={ai?.summary ?? ""}
+              insights={(ai?.insights ?? []) as any}
+              loading={aiLoading}
+              error={aiError}
+              generated={!!ai}
+              onGenerate={() => void generateInsights(true)}
+            />
+          </div>
           {tab === "overview" && (
             <>
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))" }}>
@@ -626,18 +635,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                   </ResponsiveContainer>
                 </div>
               </Section>
-
-              <div className="mt-3">
-                <CommissionInsights
-                  lang={lang}
-                  summary={ai?.summary ?? ""}
-                  insights={(ai?.insights ?? []) as any}
-                  loading={aiLoading}
-                  error={aiError}
-                  generated={!!ai}
-                  onGenerate={() => void generateInsights(true)}
-                />
-              </div>
 
               <Section title={isFr ? "Commission par type" : "Commission by type"} chart={240} accent={CHART_COLORS[2]} info={isFr ? "Répartition du montant de commission entre les catégories du registre (commission de base, bonis, ajustements)." : "Split of commission amount across the register categories (base commission, bonuses, adjustments)."}>
                 <div style={{ height: 240 }}>
@@ -815,14 +812,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               />
             </>
           )}
-
-
-          {tab === "gaps" && isAdminView && (
-            <CommissionDiscrepancies lang={lang} discrepancies={data.discrepancies} />
-          )}
-
-          {tab === "data" && isAdminView && <CommissionCoverage lang={lang} />}
-
 
 
           {tab === "trend" && (
@@ -1046,38 +1035,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             <RegisterDealsTable deals={filteredDeals as any} lang={lang} />
           )}
 
-          {isAdminView && Array.isArray(data.reconciliation?.checks) && (
-
-            <Section title={isFr ? "Contrôles de réconciliation (MATCH / MISMATCH)" : "Reconciliation checks (MATCH / MISMATCH)"}>
-              <Table
-                head={[isFr ? "Contrôle" : "Check", isFr ? "Attendu" : "Expected", isFr ? "Obtenu" : "Actual", "Écart", "Statut"]}
-                rows={data.reconciliation.checks.map((c: any) => [
-                  c.label,
-                  c.key.includes("Deals") ? fmtNum(c.expected) : fmtMoney(c.expected),
-                  c.key.includes("Deals") ? fmtNum(c.actual) : fmtMoney(c.actual),
-                  c.key.includes("Deals") ? fmtNum(c.delta) : fmtMoney(c.delta),
-                  <span key="s" className="inline-flex items-center gap-1" style={{ fontWeight: 800, fontSize: 11.5, color: c.ok ? "#16a34a" : "#ef4444" }}>
-                    {c.ok ? <ShieldCheck className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}{c.status}
-                  </span>,
-                ])}
-              />
-              {data.reconciliation.quarterCheck && (
-                <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)", marginTop: 8 }}>
-                  {data.reconciliation.quarterCheck.applicable
-                    ? `${isFr ? "Trimestres complets inclus" : "Completed quarters included"} : ${data.reconciliation.quarterCheck.quarters.map((q: number) => `Q${q}`).join(", ")} · ${fmtMoney(data.reconciliation.quarterCheck.volume)} · ${fmtNum(data.reconciliation.quarterCheck.deals)} ${isFr ? "doss." : "deals"} · ${fmtMoney(data.reconciliation.quarterCheck.commission)}`
-                    : data.reconciliation.quarterCheck.note}
-                </div>
-              )}
-            </Section>
-          )}
-
-          {isAdminView && Array.isArray(data.calcNotes) && (
-            <Section title={isFr ? "Notes de calcul" : "Calculation notes"}>
-              <ul style={{ fontSize: 12, color: "var(--pp-text-secondary)", lineHeight: 1.6, paddingLeft: 16, listStyle: "disc" }}>
-                {data.calcNotes.map((n: string, i: number) => <li key={i}>{n}</li>)}
-              </ul>
-            </Section>
-          )}
         </div>
       )}
 

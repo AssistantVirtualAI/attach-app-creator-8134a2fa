@@ -25,6 +25,7 @@ import ChartFrame, { PanelFrame } from "./ui/ChartFrame";
 import CommissionsHero from "./ui/CommissionsHero";
 import CommissionsTabs, { type TabKey } from "./ui/CommissionsTabs";
 import CommissionsSkeleton from "./ui/CommissionsSkeleton";
+import MaestroSyncButton from "./ui/MaestroSyncButton";
 import {
   CHART_COLORS, CommissionsGradients, axisProps, gridProps, legendProps, tipProps,
 } from "./ui/chartTheme";

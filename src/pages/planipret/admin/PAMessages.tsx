@@ -10,6 +10,9 @@ import { getPlanipretBrokerDirectory } from "@/lib/planipret/adminDirectory";
 import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
+import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
+import ppBanner from "@/assets/planipret/banner-messages.jpg";
 
 const ACCENT = "#2E9BDC";
 const SUCCESS = "#00D4AA";
@@ -186,6 +189,14 @@ export default function PAMessages() {
 
   return (
     <div className="pa-page space-y-5">
+      <PPPageBanner
+        image={ppBanner}
+        accent="#6366F1"
+        title={lang === "en" ? "Messages · global view" : "Textos · vue globale"}
+        subtitle={lang === "en" ? "SMS volume and breakdown over 30 days" : "Volume SMS et répartition sur 30 jours"}
+      />
+      <PPActivityCharts kind="messages" lang={lang === "en" ? "en" : "fr"} />
+
       <DebugPanel entries={debug} />
 
       <NsSyncBar features={["messages", "cdrs"]} onReload={() => load(page, pageSize)} />

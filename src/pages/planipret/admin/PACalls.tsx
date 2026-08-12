@@ -11,6 +11,9 @@ import { applyPlanipretCallFilters } from "@/lib/planipret/adminCounts";
 import { usePlanipretNsAutoSync } from "@/hooks/usePlanipretNsAutoSync";
 import NsSyncBar from "@/components/planipret/admin/NsSyncBar";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import PPPageBanner from "@/components/planipret/analytics/PPPageBanner";
+import PPActivityCharts from "@/components/planipret/analytics/PPActivityCharts";
+import ppBanner from "@/assets/planipret/banner-calls.jpg";
 
 const ACCENT = "#2E9BDC";
 const SUCCESS = "#00D4AA";
@@ -145,6 +148,14 @@ export default function PACalls() {
 
   return (
     <div className="pa-page space-y-5">
+      <PPPageBanner
+        image={ppBanner}
+        accent="#3B82F6"
+        title={lang === "en" ? "Calls · global view" : "Appels · vue globale"}
+        subtitle={lang === "en" ? "Volume, peak hours and breakdown over 30 days" : "Volume, heures de pointe et répartition sur 30 jours"}
+      />
+      <PPActivityCharts kind="calls" lang={lang === "en" ? "en" : "fr"} />
+
       <DebugPanel entries={debug} />
 
       <NsSyncBar features={["cdrs", "recordings"]} onReload={() => load(page, pageSize)} />

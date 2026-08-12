@@ -314,8 +314,11 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     { key: "quarters", label: isFr ? "Trimestres" : "Quarters" },
     { key: "periods", label: isFr ? "Stats par période" : "Stats by period" },
     { key: "club", label: "Club Excellence" },
+    { key: "club", label: "Club Excellence" },
     ...(isAdminView ? [{ key: "gaps" as Tab, label: isFr ? "Écarts" : "Gaps" }] : []),
+    ...(isAdminView ? [{ key: "data" as Tab, label: isFr ? "Couverture des données" : "Data coverage" }] : []),
   ];
+
 
 
   return (

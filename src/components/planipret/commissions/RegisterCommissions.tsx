@@ -50,10 +50,15 @@ function Delta({ value }: { value: number | string }) {
   );
 }
 
-function Kpi({ label, value, delta, accent }: { label: string; value: string; delta?: number | string; accent: string }) {
+function Kpi({ label, value, delta, accent, onClick }: { label: string; value: string; delta?: number | string; accent: string; onClick?: () => void }) {
   return (
     <div
-      className="ov3d-card"
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+      title={onClick ? "Voir les dossiers sous-jacents" : undefined}
+      className={`ov3d-card${onClick ? " pp-drillable" : ""}`}
       style={{
         position: "relative", padding: 14, borderRadius: 14, overflow: "hidden",
         background: "linear-gradient(155deg, var(--pp-bg-elevated) 0%, var(--pp-bg-card) 100%)",
@@ -275,7 +280,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const lenderOptions: string[] = useMemo(() => {
     const set = new Set<string>();
     for (const d of allDeals) if (d.institution) set.add(d.institution);
-    for (const l of (data?.lenders ?? [])) if (l?.name) set.add(l.name);
+    for (const l of (data?.lenders ?? [])) if (l?.key) set.add(l.key);
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [allDeals, data]);
 
@@ -386,6 +391,9 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           agent={agent}
           onAgent={setAgent}
           showAgent={isAdminView}
+          lenders={lenderOptions}
+          lender={lender}
+          onLender={setLender}
         />
         {loading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--pp-text-muted)" }} />}
         {data?.reconciliation && (
@@ -405,15 +413,23 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             {isAdminView && !agent ? (isFr ? " · tous les courtiers" : " · all brokers") : agent ? ` · ${agent}` : ""}
           </span>
         )}
-        {isAdminView && (
+        {(
           <div className="ml-auto flex items-center gap-1.5">
-            {data?.discrepancies?.total > 0 && (
+            <button
+              onClick={() => dealsCsv(filteredDeals, `commissions-${year}${lender ? `-${lender}` : ""}.csv`)}
+              disabled={filteredDeals.length === 0}
+              title={isFr ? "Exporter le résultat filtré" : "Export the filtered result"}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{ fontSize: 12, fontWeight: 700, opacity: filteredDeals.length ? 1 : .5, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
+              <FileDown className="w-3.5 h-3.5" />{isFr ? "Export CSV" : "Export CSV"}
+            </button>
+            {isAdminView && data?.discrepancies?.total > 0 && (
               <button onClick={() => setTab("gaps")} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
                 style={{ fontSize: 11.5, fontWeight: 800, background: "rgba(245,158,11,.14)", color: "#f59e0b", border: "1px solid rgba(245,158,11,.25)" }}>
                 <AlertTriangle className="w-3.5 h-3.5" />{fmtNum(data.discrepancies.total)} {isFr ? "écarts" : "gaps"}
               </button>
             )}
-            <button
+            {isAdminView && <button
               onClick={() => data && downloadCommissionsPdf({ lang, data, agent, aiSummary: ai?.summary, year })}
               disabled={!data}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
@@ -422,7 +438,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                 background: "var(--pp-brand-accent-2)", color: "#fff", border: "1px solid var(--pp-bg-border)",
               }}>
               <FileDown className="w-3.5 h-3.5" />{isFr ? "Rapport PDF" : "PDF report"}
-            </button>
+            </button>}
             <button onClick={resetFilters} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
               style={{ fontSize: 12, fontWeight: 700, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
               <RotateCcw className="w-3.5 h-3.5" />{isFr ? "Réinitialiser" : "Reset"}
@@ -430,6 +446,27 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           </div>
         )}
       </div>
+
+      {lender && (
+        <div className="flex flex-wrap items-center gap-2 mb-2 rounded-xl" style={{ padding: "8px 10px", border: "1px solid var(--pp-brand-accent-2, #2E9BDC)", background: "color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 10%, transparent)" }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: "var(--pp-text-primary)" }}>
+            {isFr ? "Résultat filtré" : "Filtered result"} · {lender}
+          </span>
+          <span style={{ fontSize: 12, color: "var(--pp-text-secondary)" }}>
+            {fmtNum(filteredTotals.count)} {isFr ? "dossiers" : "deals"} · {fmtMoney(filteredTotals.volume)} · {fmtMoney(filteredTotals.commission)} · {fmtBps(filteredTotals.bps)}
+          </span>
+          <button
+            onClick={() => openDrill(lender, filteredDeals, periodSubtitle)}
+            className="px-2 py-1 rounded-lg"
+            style={{ fontSize: 11.5, fontWeight: 700, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
+            {isFr ? "Voir les dossiers" : "View deals"}
+          </button>
+          <button onClick={() => setLender("")} className="ml-auto px-2 py-1 rounded-lg"
+            style={{ fontSize: 11.5, fontWeight: 700, background: "transparent", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-muted)" }}>
+            {isFr ? "Effacer" : "Clear"}
+          </button>
+        </div>
+      )}
 
       <RegisterHealthBadge integrity={data?.integrity} lang={lang} />
 
@@ -497,12 +534,18 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           {tab === "overview" && (
             <>
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
-                <Kpi label={isFr ? "Volume" : "Volume"} value={fmtMoney(kpi.ytd.volume)} delta={pctDelta(kpi.ytd.volume, kpi.ytdPy.volume)} accent="#4472C4" />
-                <Kpi label={isFr ? "Dossiers" : "Deals"} value={fmtNum(kpi.ytd.deals)} delta={pctDelta(kpi.ytd.deals, kpi.ytdPy.deals)} accent="#70AD47" />
-                <Kpi label="Commission" value={fmtMoney(kpi.ytd.commission)} delta={pctDelta(kpi.ytd.commission, kpi.ytdPy.commission)} accent="#ED7D31" />
-                <Kpi label={isFr ? "Dossier moyen" : "Avg deal"} value={fmtMoney(kpi.ytd.avgDeal)} accent="#FFC000" />
-                <Kpi label="BPS" value={fmtBps(kpi.ytd.bps)} accent="#8B5CF6" />
-                <Kpi label={isFr ? "Prêteurs actifs" : "Active lenders"} value={fmtNum(kpi.activeLenders)} accent="#14B8A6" />
+                <Kpi label={isFr ? "Volume" : "Volume"} value={fmtMoney(kpi.ytd.volume)} delta={pctDelta(kpi.ytd.volume, kpi.ytdPy.volume)} accent="#4472C4"
+                  onClick={() => openDrill(isFr ? "Volume — dossiers sous-jacents" : "Volume — underlying deals", filteredDeals.filter((d) => d.countedInVolume), periodSubtitle)} />
+                <Kpi label={isFr ? "Dossiers" : "Deals"} value={fmtNum(kpi.ytd.deals)} delta={pctDelta(kpi.ytd.deals, kpi.ytdPy.deals)} accent="#70AD47"
+                  onClick={() => openDrill(isFr ? "Dossiers" : "Deals", filteredDeals.filter((d) => d.countedInDeals), periodSubtitle)} />
+                <Kpi label="Commission" value={fmtMoney(kpi.ytd.commission)} delta={pctDelta(kpi.ytd.commission, kpi.ytdPy.commission)} accent="#ED7D31"
+                  onClick={() => openDrill("Commission", filteredDeals.filter((d) => (d.amount || 0) !== 0), periodSubtitle)} />
+                <Kpi label={isFr ? "Dossier moyen" : "Avg deal"} value={fmtMoney(kpi.ytd.avgDeal)} accent="#FFC000"
+                  onClick={() => openDrill(isFr ? "Dossier moyen" : "Avg deal", filteredDeals.filter((d) => d.countedInDeals), periodSubtitle)} />
+                <Kpi label="BPS" value={fmtBps(kpi.ytd.bps)} accent="#8B5CF6"
+                  onClick={() => openDrill("BPS", filteredDeals, periodSubtitle)} />
+                <Kpi label={isFr ? "Prêteurs actifs" : "Active lenders"} value={fmtNum(kpi.activeLenders)} accent="#14B8A6"
+                  onClick={() => openDrill(isFr ? "Prêteurs actifs" : "Active lenders", filteredDeals, periodSubtitle)} />
                 {isAdminView && (
                   <Kpi label={isFr ? "Courtiers actifs" : "Active brokers"} value={fmtNum(kpi.activeBrokers)} accent="#EC4899" />
                 )}
@@ -751,7 +794,14 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                   head={["#", isFr ? "Prêteur" : "Lender", "Volume", isFr ? "Doss." : "Deals", "Commission", "BPS",
                     "% vol.", isFr ? "Vol. PY" : "PY vol.", "YoY vol.", "YoY comm."]}
                   rows={data.lenders.map((l: any) => [
-                    l.rank, l.key, fmtMoney(l.cyVolume), fmtNum(l.cyDeals), fmtMoney(l.cyCommission), fmtBps(l.cyBps),
+                    l.rank,
+                    <button
+                      key={`l-${l.key}`}
+                      onClick={() => openDrill(l.key, allDeals.filter((d) => d.institution === l.key), periodSubtitle)}
+                      style={{ fontWeight: 700, color: "var(--pp-text-primary)", textDecoration: "underline dotted", textUnderlineOffset: 3 }}
+                    >
+                      {l.key}
+                    </button>, fmtMoney(l.cyVolume), fmtNum(l.cyDeals), fmtMoney(l.cyCommission), fmtBps(l.cyBps),
                     fmtPct(l.sharePct), fmtMoney(l.pyVolume), <Delta key="a" value={l.volumeYoy} />, <Delta key="b" value={l.commissionYoy} />,
                   ])}
                 />
@@ -869,7 +919,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           )}
 
           {tab === "deals" && (
-            <RegisterDealsTable deals={(data.deals ?? []) as any} lang={lang} />
+            <RegisterDealsTable deals={filteredDeals as any} lang={lang} />
           )}
 
           {isAdminView && Array.isArray(data.reconciliation?.checks) && (
@@ -906,6 +956,16 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           )}
         </div>
       )}
+
+      <RegisterDrilldown
+        open={!!drill}
+        onClose={() => setDrill(null)}
+        lang={lang}
+        title={drill?.title ?? ""}
+        subtitle={drill?.subtitle}
+        deals={drill?.deals ?? []}
+        contextLabel={data?.periodLabel}
+      />
 
       {isAdminView && drillAgent && (
         <BrokerDrilldown

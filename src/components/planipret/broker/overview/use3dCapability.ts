@@ -26,7 +26,10 @@ export function useSupports3D() {
     compute();
     const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     mq?.addEventListener?.("change", compute);
-    return () => mq?.removeEventListener?.("change", compute);
+    // React to the user changing the 3D intensity control at runtime.
+    const mo = new MutationObserver(compute);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    return () => { mq?.removeEventListener?.("change", compute); mo.disconnect(); };
   }, []);
 
   return ok;

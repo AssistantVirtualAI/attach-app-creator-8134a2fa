@@ -12,13 +12,10 @@ import RegisterFilters, { type Granularity } from "./RegisterFilters";
 import BrokerLeaderboard from "./BrokerLeaderboard";
 import BrokerTopSellers from "./BrokerTopSellers";
 import BrokerYearMatrix from "./BrokerYearMatrix";
-import CommissionDiscrepancies from "./CommissionDiscrepancies";
-import CommissionCoverage from "./CommissionCoverage";
 import BrokerDrilldown from "./BrokerDrilldown";
 import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
 import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
-import RegisterHealthBadge from "./RegisterHealthBadge";
 import InfoTip from "@/components/planipret/broker/overview/InfoTip";
 import RegisterDealsTable, { type DealLine } from "./RegisterDealsTable";
 import RegisterDrilldown, { dealsCsv } from "./RegisterDrilldown";
@@ -32,7 +29,7 @@ import {
 } from "./ui/chartTheme";
 
 type Lang = "fr" | "en";
-type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "gaps" | "data" | "deals";
+type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "deals";
 
 
 const PALETTE = CHART_COLORS;
@@ -412,8 +409,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     ...(isAdminView ? [{ key: "periods" as TabKey, label: isFr ? "Stats par période" : "Stats by period" }] : []),
     { key: "club", label: "Club Excellence", tone: "gold" },
     { key: "deals", label: isFr ? "Dossiers" : "Deals", count: filteredDeals.length },
-    ...(isAdminView ? [{ key: "gaps" as TabKey, label: isFr ? "Écarts" : "Gaps", count: data?.discrepancies?.total ?? null, tone: "warn" as const }] : []),
-    ...(isAdminView ? [{ key: "data" as TabKey, label: isFr ? "Couverture des données" : "Data coverage" }] : []),
   ];
 
 
@@ -422,9 +417,9 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     ? (isFr ? "Commissions — vue entreprise" : "Commissions — firm view")
     : (isFr ? "Mes commissions" : "My commissions");
   const heroSubtitle = isAdminView
-    ? (isFr ? "Registre de dépôts 2022 → 2026 · volume, dossiers, prêteurs et commissions"
-            : "Deposit register 2022 → 2026 · volume, deals, lenders and commissions")
-    : (data?.brokerName ?? (isFr ? "Votre performance issue du registre de dépôts" : "Your performance from the deposit register"));
+    ? (isFr ? "Données Maestro · volume, dossiers, prêteurs et commissions"
+            : "Maestro data · volume, deals, lenders and commissions")
+    : (data?.brokerName ?? (isFr ? "Votre performance, synchronisée depuis Maestro" : "Your performance, synced from Maestro"));
 
   return (
     <div>
@@ -463,17 +458,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           onLender={setLender}
         />
         {loading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--pp-text-muted)" }} />}
-        {data?.reconciliation && (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg" style={{
-            fontSize: 11.5, fontWeight: 700,
-            background: data.reconciliation.allOk ?? (data.reconciliation.volumeOk && data.reconciliation.dealsOk) ? "rgba(22,163,74,.12)" : "rgba(245,158,11,.14)",
-            color: data.reconciliation.allOk ?? (data.reconciliation.volumeOk && data.reconciliation.dealsOk) ? "#16a34a" : "#f59e0b",
-          }}>
-            {(data.reconciliation.allOk ?? (data.reconciliation.volumeOk && data.reconciliation.dealsOk))
-              ? <><ShieldCheck className="w-3.5 h-3.5" />{isFr ? "Totaux réconciliés" : "Totals reconciled"}</>
-              : <><AlertTriangle className="w-3.5 h-3.5" />{isFr ? "Écart de réconciliation" : "Reconciliation gap"}</>}
-          </span>
-        )}
         {data?.window && (
           <span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
             {data.window.start} → {data.window.end}
@@ -490,12 +474,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               style={{ fontSize: 12, fontWeight: 700, opacity: filteredDeals.length ? 1 : .5, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
               <FileDown className="w-3.5 h-3.5" />{isFr ? "Export CSV" : "Export CSV"}
             </button>
-            {isAdminView && data?.discrepancies?.total > 0 && (
-              <button onClick={() => setTab("gaps")} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-                style={{ fontSize: 11.5, fontWeight: 800, background: "rgba(245,158,11,.14)", color: "#f59e0b", border: "1px solid rgba(245,158,11,.25)" }}>
-                <AlertTriangle className="w-3.5 h-3.5" />{fmtNum(data.discrepancies.total)} {isFr ? "écarts" : "gaps"}
-              </button>
-            )}
             {isAdminView && <button
               onClick={() => data && downloadCommissionsPdf({ lang, data, agent, aiSummary: ai?.summary, year })}
               disabled={!data}
@@ -535,8 +513,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
         </div>
       )}
 
-      <RegisterHealthBadge integrity={data?.integrity} lang={lang} />
-
       <CommissionsTabs tabs={tabs} value={tab as TabKey} onChange={(k) => setTab(k as Tab)} />
 
       {error && <div className="pp-card" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger,#ef4444)" }}>{error}</div>}
@@ -557,8 +533,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           </div>
           <p style={{ fontSize: 12.5, color: "var(--pp-text-muted)", marginTop: 6, maxWidth: 460, marginInline: "auto", lineHeight: 1.6 }}>
             {isFr
-              ? "Aucune ligne du registre de dépôts n'est rattachée à votre profil sur cette période. Essayez une autre année, ou connectez votre compte Maestro pour suivre vos commissions en temps réel."
-              : "No deposit-register line is linked to your profile for this period. Try another year, or connect your Maestro account to track commissions in real time."}
+              ? "Aucun dossier n'est rattaché à votre profil sur cette période. Essayez une autre année, ou connectez votre compte Maestro pour suivre vos commissions en temps réel."
+              : "No deal is linked to your profile for this period. Try another year, or connect your Maestro account to track commissions in real time."}
           </p>
         </div>
       )}
@@ -815,14 +791,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               />
             </>
           )}
-
-
-          {tab === "gaps" && isAdminView && (
-            <CommissionDiscrepancies lang={lang} discrepancies={data.discrepancies} />
-          )}
-
-          {tab === "data" && isAdminView && <CommissionCoverage lang={lang} />}
-
 
 
           {tab === "trend" && (

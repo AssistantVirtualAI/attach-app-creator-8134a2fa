@@ -32,6 +32,22 @@ const isoDate = (v: unknown): string | null => {
 
 const REG = "planipret_commission_register";
 const ALIAS = "planipret_commission_broker_aliases";
+const MAP = "planipret_commission_mappings";
+
+async function loadMappings(admin: any) {
+  const { data } = await admin.from(MAP).select("kind,source_key,target_value,target_user_id,maestro_broker_id");
+  const rows = (data ?? []) as any[];
+  const columns: Record<string, string> = {};
+  const commissionTypes: Record<string, string> = {};
+  const brokers: Record<string, any> = {};
+  for (const r of rows) {
+    if (r.kind === "column") columns[r.source_key] = r.target_value;
+    else if (r.kind === "commission_type") commissionTypes[r.source_key] = r.target_value;
+    else if (r.kind === "broker") brokers[r.source_key] = r;
+  }
+  return { columns, commissionTypes, brokers };
+}
+
 
 async function loadResolver(admin: any) {
   const { data: profiles } = await admin

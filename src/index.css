@@ -1229,8 +1229,9 @@ All colors MUST be HSL.
 .pp-tabs-scroll { scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
 .pp-tabs-scroll::-webkit-scrollbar { height: 5px; }
 .pp-tabs-scroll::-webkit-scrollbar-thumb { background: var(--pp-bg-border); border-radius: 999px; }
-.pp-tab-pill:hover { background: var(--pp-bg-card) !important; color: var(--pp-text-primary) !important; }
-.pp-tab-pill[aria-selected="true"]:hover { color: #fff !important; }
+.pp-tab-pill[aria-selected="false"]:hover { background: var(--pp-bg-card) !important; color: var(--pp-text-primary) !important; }
+.pp-tab-pill[aria-selected="true"]:hover { filter: brightness(1.06); }
+
 
 .pp-filters-sticky {
   position: sticky; top: 0; z-index: 20;

@@ -398,17 +398,30 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
 
       <div className="flex flex-wrap gap-1.5 mb-2">
-        {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className="px-3 py-1.5 rounded-lg"
-            style={{
-              fontSize: 12.5, fontWeight: 700,
-              background: tab === t.key ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
-              color: tab === t.key ? "#fff" : "var(--pp-text-secondary)",
-              border: "1px solid var(--pp-bg-border)",
-            }}>{t.label}</button>
-        ))}
+        {tabs.map((t) => {
+          const isClub = t.key === "club";
+          const active = tab === t.key;
+          return (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className="px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"
+              style={{
+                fontSize: 12.5, fontWeight: isClub ? 800 : 700,
+                background: isClub
+                  ? (active
+                    ? "linear-gradient(135deg, #FFC000, #E8A33C)"
+                    : "linear-gradient(135deg, rgba(255,192,0,.16), rgba(255,192,0,.05))")
+                  : active ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
+                color: isClub ? (active ? "#1b1400" : "#FFC000") : active ? "#fff" : "var(--pp-text-secondary)",
+                border: isClub ? "1px solid rgba(255,192,0,.45)" : "1px solid var(--pp-bg-border)",
+                boxShadow: isClub ? "0 12px 22px -16px rgba(255,192,0,.8), inset 0 1px 0 rgba(255,255,255,.25)" : undefined,
+              }}>
+              {isClub && <Star className="w-3.5 h-3.5" style={{ fill: active ? "#1b1400" : "#FFC000" }} />}
+              {t.label}
+            </button>
+          );
+        })}
       </div>
+
 
       {error && <div className="pp-card" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger,#ef4444)" }}>{error}</div>}
 

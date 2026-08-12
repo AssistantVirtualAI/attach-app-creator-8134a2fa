@@ -7,7 +7,11 @@ import type { OvHour } from "@/hooks/useBrokerOverview";
 export default function OvHoursChart({ data, lang }: { data: OvHour[]; lang: "fr" | "en" }) {
   const empty = data.every((d) => !d.calls);
   return (
-    <OvCard title={lang === "en" ? "Busiest hours" : "Heures de pointe"} icon={<Clock className="w-4 h-4" />}>
+    <OvCard
+      title={lang === "en" ? "Busiest hours" : "Heures de pointe"}
+      icon={<Clock className="w-4 h-4" />}
+      info={lang === "en" ? "Calls aggregated by hour of day (business hours 6am to 11pm, America/Toronto). Use it to align availability with peaks." : "Appels cumulés par heure de la journée (heures d'affaires 6 h à 23 h, heure de Toronto). Sert à aligner votre disponibilité sur les pointes."}
+    >
       {empty ? <OvEmpty label={lang === "en" ? "No data" : "Aucune donnée"} /> : (
         <Chart3D>
         <ResponsiveContainer width="100%" height={220}>

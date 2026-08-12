@@ -16,6 +16,7 @@ export function OvMessagesChart({ data, lang, granularity }: { data: OvDaily[]; 
   return (
     <OvCard
       title={`${lang === "en" ? "Texts" : "Textos"} ${PER[granularity ?? "day"][lang]}`}
+      info={lang === "en" ? "Texts sent vs received per bucket. A large gap in favour of received messages may indicate delayed replies." : "Textos envoyés vs reçus par intervalle. Un écart important en faveur des reçus peut indiquer des réponses tardives."}
       icon={<MessageSquare className="w-4 h-4" />}
       to="/planipret/broker/messages"
       toLabel={lang === "en" ? "View all" : "Voir tout"}
@@ -43,7 +44,11 @@ export function OvMessagesChart({ data, lang, granularity }: { data: OvDaily[]; 
 export function OvDurationChart({ data, lang, granularity }: { data: OvDaily[]; lang: "fr" | "en"; granularity?: string }) {
   const empty = data.every((d) => !d.avg);
   return (
-    <OvCard title={lang === "en" ? "Average call duration (min)" : "Durée moyenne d'appel (min)"} icon={<Timer className="w-4 h-4" />}>
+    <OvCard
+      title={lang === "en" ? "Average call duration (min)" : "Durée moyenne d'appel (min)"}
+      icon={<Timer className="w-4 h-4" />}
+      info={lang === "en" ? "Average talk time of answered calls per bucket, in minutes (ringing excluded)." : "Durée moyenne de conversation des appels répondus par intervalle, en minutes (sonnerie exclue)."}
+    >
       {empty ? <OvEmpty label={lang === "en" ? "No data" : "Aucune donnée"} /> : (
         <Chart3D>
         <ResponsiveContainer width="100%" height={220}>

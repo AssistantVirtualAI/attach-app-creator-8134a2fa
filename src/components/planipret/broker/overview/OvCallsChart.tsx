@@ -19,6 +19,7 @@ export function OvCallsChart({ data, lang, granularity }: { data: OvDaily[]; lan
   return (
     <OvCard
       title={periodTitle(granularity, lang, lang === "en" ? "Calls" : "Appels")}
+      info={lang === "en" ? "Inbound, outbound and missed calls per bucket. Buckets follow the selected granularity (day/week/month), America/Toronto time." : "Appels entrants, sortants et manqués par intervalle. Les intervalles suivent la granularité choisie (jour/semaine/mois), heure de Toronto."}
       icon={<PhoneCall className="w-4 h-4" />}
       to="/planipret/broker/calls"
       toLabel={lang === "en" ? "View all" : "Voir tout"}
@@ -53,7 +54,11 @@ export function OvCallsSplit({ split, lang }: { split: { key: string; value: num
   const data = split.map((s) => ({ name: labels[s.key], value: s.value, key: s.key }));
   const total = data.reduce((a, b) => a + b.value, 0);
   return (
-    <OvCard title={lang === "en" ? "Call mix" : "Répartition des appels"} icon={<PieIcon className="w-4 h-4" />}>
+    <OvCard
+      title={lang === "en" ? "Call mix" : "Répartition des appels"}
+      icon={<PieIcon className="w-4 h-4" />}
+      info={lang === "en" ? "Share of inbound, outbound and missed calls over the period. Percentages are relative to total calls." : "Part des appels entrants, sortants et manqués sur la période. Les pourcentages sont calculés sur le total des appels."}
+    >
       {!total ? <OvEmpty label={lang === "en" ? "No data" : "Aucune donnée"} /> : (
         <Chart3D>
         <ResponsiveContainer width="100%" height={240}>

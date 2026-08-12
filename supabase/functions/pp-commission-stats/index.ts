@@ -213,9 +213,9 @@ Deno.serve(async (req) => {
     const availableAgents = uniq(scopedAll.map((r) => r.agent_name)).sort((a, b) => a.localeCompare(b));
 
     // Per-broker × per-year matrix (multi-year evolution, independent of the selected window)
-    const yearsWithData = uniq(scopedAll.map((r) => Number(r.fiscal_year)))
-      .filter((y) => Number.isFinite(y))
-      .sort((a, b) => a - b);
+    const yearsWithData = Array.from(
+      new Set(scopedAll.map((r) => Number((r as any).fiscal_year)).filter((y) => Number.isFinite(y))),
+    ).sort((a, b) => a - b);
     const yearlyBrokerKeys = uniq(scopedAll.map((r) => r.agent_name)).sort((a, b) => a.localeCompare(b));
     const brokerYearly = yearlyBrokerKeys.map((name) => {
       const idRow = scopedAll.find((x) => x.agent_name === name) as any;

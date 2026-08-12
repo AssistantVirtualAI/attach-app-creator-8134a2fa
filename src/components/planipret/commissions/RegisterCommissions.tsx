@@ -401,8 +401,10 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
         )}
       </div>
 
+      <RegisterHealthBadge integrity={data?.integrity} lang={lang} />
 
       <div className="flex flex-wrap gap-1.5 mb-2">
+
         {tabs.map((t) => {
           const isClub = t.key === "club";
           const active = tab === t.key;

@@ -598,6 +598,9 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             <CommissionDiscrepancies lang={lang} discrepancies={data.discrepancies} />
           )}
 
+          {tab === "data" && isAdminView && <CommissionCoverage lang={lang} />}
+
+
 
           {tab === "trend" && (
             <>

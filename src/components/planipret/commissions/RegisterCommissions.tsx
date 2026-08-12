@@ -351,7 +351,32 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             {isAdminView && !agent ? (isFr ? " · tous les courtiers" : " · all brokers") : agent ? ` · ${agent}` : ""}
           </span>
         )}
+        {isAdminView && (
+          <div className="ml-auto flex items-center gap-1.5">
+            {data?.discrepancies?.total > 0 && (
+              <button onClick={() => setTab("gaps")} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+                style={{ fontSize: 11.5, fontWeight: 800, background: "rgba(245,158,11,.14)", color: "#f59e0b", border: "1px solid rgba(245,158,11,.25)" }}>
+                <AlertTriangle className="w-3.5 h-3.5" />{fmtNum(data.discrepancies.total)} {isFr ? "écarts" : "gaps"}
+              </button>
+            )}
+            <button
+              onClick={() => data && downloadCommissionsPdf({ lang, data, agent, aiSummary: ai?.summary, year })}
+              disabled={!data}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{
+                fontSize: 12, fontWeight: 700, opacity: data ? 1 : .5,
+                background: "var(--pp-brand-accent-2)", color: "#fff", border: "1px solid var(--pp-bg-border)",
+              }}>
+              <FileDown className="w-3.5 h-3.5" />{isFr ? "Rapport PDF" : "PDF report"}
+            </button>
+            <button onClick={resetFilters} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{ fontSize: 12, fontWeight: 700, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
+              <RotateCcw className="w-3.5 h-3.5" />{isFr ? "Réinitialiser" : "Reset"}
+            </button>
+          </div>
+        )}
       </div>
+
 
       <div className="flex flex-wrap gap-1.5 mb-2">
         {tabs.map((t) => (

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  PieChart, Pie, Cell, BarChart, RadialBarChart, RadialBar,
+  PieChart, Pie, Cell, BarChart, RadialBarChart, RadialBar, LabelList,
 } from "recharts";
 import { Loader2, TrendingUp, TrendingDown, Trophy, FileDown, RotateCcw, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";

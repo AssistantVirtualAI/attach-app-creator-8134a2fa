@@ -3,17 +3,22 @@ import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart,
 } from "recharts";
-import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy, FileDown, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CommissionInsights from "./CommissionInsights";
 import RegisterFilters, { type Granularity } from "./RegisterFilters";
 import BrokerLeaderboard from "./BrokerLeaderboard";
+import CommissionDiscrepancies from "./CommissionDiscrepancies";
+import BrokerDrilldown from "./BrokerDrilldown";
+import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
+import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 
 type Lang = "fr" | "en";
-type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "club";
+type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "club" | "gaps";
 
 const PALETTE = ["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"];
+
 
 const fmtMoney = (v: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(v || 0);

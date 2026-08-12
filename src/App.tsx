@@ -86,6 +86,8 @@ const PATelecomMapping = lazyWithRetry(() => import("./pages/planipret/admin/PAT
 const PADidReconcile = lazyWithRetry(() => import("./pages/planipret/admin/PADidReconcile"));
 const PAPhoneNumbers = lazyWithRetry(() => import("./pages/planipret/admin/PAPhoneNumbers"));
 const PAMaestroStatus = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroStatus"));
+const PACommissionsImport = lazyWithRetry(() => import("./pages/planipret/admin/PACommissionsImport"));
+
 const PlanipretBrokerLayout = lazyWithRetry(() => import("./pages/planipret/broker/PlanipretBrokerLayout"));
 const PBOverview = lazyWithRetry(() => import("./pages/planipret/broker/PBOverview"));
 const PBCalls = lazyWithRetry(() => import("./pages/planipret/broker/PBCalls"));

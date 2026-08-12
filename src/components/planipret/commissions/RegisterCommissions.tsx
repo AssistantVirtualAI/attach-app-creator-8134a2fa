@@ -427,6 +427,10 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     { key: "deals", label: isFr ? "Dossiers" : "Deals", count: filteredDeals.length },
   ];
 
+  const tabLabel = tabs.find((t) => t.key === (tab as TabKey))?.label ?? String(tab);
+
+
+
 
 
   const heroTitle = isAdminView

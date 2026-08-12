@@ -602,7 +602,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                 )}
               </div>
 
-              <Section title={isFr ? "Volume mensuel — année courante vs précédente" : "Monthly volume — CY vs PY"} chart={280}>
+              <Section title={isFr ? "Volume mensuel — année courante vs précédente" : "Monthly volume — CY vs PY"} chart={280} accent={CHART_COLORS[0]} info={isFr ? "Chaque barre compare le volume du mois à celui du même mois de l'année précédente. Une barre bleue plus haute que la grise signifie une croissance sur ce mois." : "Each bar compares the month volume to the same month last year. A blue bar above the grey one means growth for that month."}>
                 <div style={{ height: 280 }}>
                   <ResponsiveContainer>
                     <ComposedChart data={trendData}>
@@ -639,7 +639,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                 />
               </div>
 
-              <Section title={isFr ? "Commission par type" : "Commission by type"} chart={240}>
+              <Section title={isFr ? "Commission par type" : "Commission by type"} chart={240} accent={CHART_COLORS[2]} info={isFr ? "Répartition du montant de commission entre les catégories du registre (commission de base, bonis, ajustements)." : "Split of commission amount across the register categories (base commission, bonuses, adjustments)."}>
                 <div style={{ height: 240 }}>
                   <ResponsiveContainer>
                     <PieChart>
@@ -654,7 +654,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               </Section>
 
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))" }}>
-                <Section title={isFr ? "Volume cumulé — courbe de progression" : "Cumulative volume — pace curve"} chart={240}>
+                <Section title={isFr ? "Volume cumulé — courbe de progression" : "Cumulative volume — pace curve"} chart={240} accent={CHART_COLORS[0]} info={isFr ? "Cumul du volume mois après mois. Si la courbe de l'année courante passe au-dessus de celle de l'an dernier, le rythme est en avance." : "Month-over-month cumulative volume. When the current-year curve sits above last year, the pace is ahead."}>
                   <div style={{ height: 240 }}>
                     <ResponsiveContainer>
                       <AreaChart data={cumulative}>
@@ -680,7 +680,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                   </div>
                 </Section>
 
-                <Section title={isFr ? "Dossiers vs commission par dossier" : "Deals vs commission per deal"} chart={240}>
+                <Section title={isFr ? "Dossiers vs commission par dossier" : "Deals vs commission per deal"} chart={240} accent={CHART_COLORS[1]} info={isFr ? "Les barres montrent le nombre de dossiers, la ligne la commission moyenne par dossier. Beaucoup de dossiers avec une ligne qui descend = des dossiers plus petits." : "Bars show deal count, the line shows average commission per deal. Many deals with a falling line means smaller deals."}>
                   <div style={{ height: 240 }}>
                     <ResponsiveContainer>
                       <ComposedChart data={cumulative}>
@@ -697,7 +697,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                   </div>
                 </Section>
 
-                <Section title={isFr ? "Concentration des prêteurs (top 6)" : "Lender concentration (top 6)"} chart={240}>
+                <Section title={isFr ? "Concentration des prêteurs (top 6)" : "Lender concentration (top 6)"} chart={240} accent={CHART_COLORS[5]} info={isFr ? "Poids relatif des 6 premiers prêteurs. Plus de 50 % du volume chez un seul prêteur est un signal de dépendance." : "Relative weight of the top 6 lenders. Over 50% of volume with one lender signals dependency."}>
                   <div style={{ height: 240 }}>
                     <ResponsiveContainer>
                       <RadialBarChart data={(data.lenders ?? []).slice(0, 6).map((l: any, i: number) => ({
@@ -711,7 +711,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                   </div>
                 </Section>
 
-                <Section title={isFr ? "BPS par mois (rentabilité)" : "BPS per month (yield)"} chart={240}>
+                <Section title={isFr ? "BPS par mois (rentabilité)" : "BPS per month (yield)"} chart={240} accent={CHART_COLORS[4]} info={isFr ? "Rendement mensuel : commission ÷ volume × 10 000. Les creux indiquent des mois moins rémunérateurs à volume égal." : "Monthly yield: commission ÷ volume × 10,000. Dips mark less profitable months at equal volume."}>
                   <div style={{ height: 240 }}>
                     <ResponsiveContainer>
                       <AreaChart data={cumulative}>
@@ -827,7 +827,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
           {tab === "trend" && (
             <>
-              <Section title={isFr ? "Commission mensuelle — CY vs PY" : "Monthly commission — CY vs PY"} chart={260}>
+              <Section title={isFr ? "Commission mensuelle — CY vs PY" : "Monthly commission — CY vs PY"} chart={260} accent={CHART_COLORS[2]} info={isFr ? "Commission encaissée par mois, comparée au même mois de l'année précédente." : "Commission booked per month, compared to the same month last year."}>
                 <div style={{ height: 260 }}>
                   <ResponsiveContainer>
                     <ComposedChart data={trendData}>
@@ -858,7 +858,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
           {tab === "lenders" && (
             <>
-              <Section title={isFr ? "Top 10 prêteurs — volume CY vs PY" : "Top 10 lenders — volume CY vs PY"} chart={320}>
+              <Section title={isFr ? "Top 10 prêteurs — volume CY vs PY" : "Top 10 lenders — volume CY vs PY"} chart={320} accent={CHART_COLORS[0]} info={isFr ? "Les 10 prêteurs les plus utilisés, classés par volume de l'année courante, avec le rappel de l'année précédente." : "The 10 most used lenders ranked by current-year volume, with last year for reference."}>
                 <div style={{ height: 320 }}>
                   <ResponsiveContainer>
                     <BarChart data={data.lenders.slice(0, 10)} layout="vertical" margin={{ left: 30 }}>
@@ -896,7 +896,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           {tab === "mix" && (
             <>
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))" }}>
-                <Section title={isFr ? "Mix par type de prêt" : "Product mix"} chart={240}>
+                <Section title={isFr ? "Mix par type de prêt" : "Product mix"} chart={240} accent={CHART_COLORS[3]} info={isFr ? "Part de volume par type de produit hypothécaire sur la période." : "Share of volume per mortgage product type for the period."}>
                   <div style={{ height: 240 }}>
                     <ResponsiveContainer>
                       <PieChart>
@@ -909,7 +909,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                     </ResponsiveContainer>
                   </div>
                 </Section>
-                <Section title={isFr ? "Mix par terme" : "Term mix"} chart={240}>
+                <Section title={isFr ? "Mix par terme" : "Term mix"} chart={240} accent={CHART_COLORS[1]} info={isFr ? "Volume par durée de terme, utile pour anticiper les renouvellements." : "Volume by term length, useful to anticipate renewals."}>
                   <div style={{ height: 240 }}>
                     <ResponsiveContainer>
                       <BarChart data={data.terms}>
@@ -936,7 +936,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           )}
 
           {tab === "quarters" && (
-            <Section title={isFr ? "Résumé trimestriel" : "Quarter summary"} chart={260}>
+            <Section title={isFr ? "Résumé trimestriel" : "Quarter summary"} chart={260} accent={CHART_COLORS[0]} info={isFr ? "Volume par trimestre comparé à l'année précédente, avec le détail chiffré en dessous." : "Quarterly volume against last year, with the numeric detail below."}>
               <div style={{ height: 260 }}>
                 <ResponsiveContainer>
                   <ComposedChart data={data.quarters.map((q: any) => ({ name: `Q${q.quarter}`, ...q }))}>

@@ -776,69 +776,14 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
 
           {tab === "club" && (
-            <>
-              <Section
-                title={isFr ? "Club Excellence — classement de la saison" : "Club Excellence — season standings"}
-                right={<span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{data.season.current.start} → {data.season.current.end}</span>}
-              >
-                <Table
-                  head={["#", isFr ? "Courtier" : "Broker", "Volume", isFr ? "Doss." : "Deals", "Commission", isFr ? "Doss. moy." : "Avg deal", "BPS", "YoY vol."]}
-                  rows={data.club.map((c: any) => [
-                    c.isMe ? <span key="r" className="inline-flex items-center gap-1" style={{ fontWeight: 800 }}><Trophy className="w-3 h-3" style={{ color: "#FFC000" }} />{c.rank}</span> : c.rank,
-                    <span key="n" style={{ fontWeight: c.isMe ? 800 : 500, color: c.isMe ? "var(--pp-brand-accent-2)" : undefined }}>{c.broker}</span>,
-                    fmtMoney(c.volume), fmtNum(c.deals), fmtMoney(c.commission), fmtMoney(c.avgDeal), fmtBps(c.bps),
-                    <Delta key="d" value={c.volumeYoy} />,
-                  ])}
-                />
-              </Section>
-              <Section title={isFr ? "Ma saison mois par mois (août → juillet)" : "My season month by month (Aug → Jul)"}>
-                <div style={{ height: 250 }}>
-                  <ResponsiveContainer>
-                    <ComposedChart data={data.clubMonthly.map((m: any) => ({ name: `${MONTHS[m.month - 1]} ${String(m.year).slice(2)}`, ...m }))}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,.18)" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} />
-                      <YAxis tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                      <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
-                      <Bar name="Volume" dataKey="volume" fill="#8B5CF6" radius={[5, 5, 0, 0]} />
-                      <Line name="Commission" dataKey="commission" stroke="#FFC000" strokeWidth={2} dot={false} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </Section>
-
-              {Array.isArray(data.seasons) && (
-                <Section title={isFr ? "Saisons Club Excellence (4 dernières)" : "Club Excellence seasons (last 4)"}>
-                  <Table
-                    head={[isFr ? "Saison" : "Season", "Volume", isFr ? "Doss." : "Deals", "Commission", isFr ? "Doss. moy." : "Avg deal", "BPS", "YoY vol.", "YoY doss.", "YoY comm."]}
-                    rows={data.seasons.map((s2: any) => [
-                      <span key="l" style={{ fontWeight: 700 }}>{s2.label}</span>,
-                      fmtMoney(s2.volume), fmtNum(s2.deals), fmtMoney(s2.commission), fmtMoney(s2.avgDeal), fmtBps(s2.bps),
-                      <Delta key="a" value={s2.volumeYoy} />, <Delta key="b" value={s2.dealYoy} />, <Delta key="c" value={s2.commissionYoy} />,
-                    ])}
-                  />
-                  <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))" }}>
-                    {data.seasons.map((s2: any) => (
-                      <div key={s2.label} className="pp-card" style={{ padding: 10 }}>
-                        <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>{s2.label}</div>
-                        <div style={{ height: 160 }}>
-                          <ResponsiveContainer>
-                            <ComposedChart data={s2.monthly.map((m: any) => ({ name: MONTHS[m.month - 1], ...m }))}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,.18)" vertical={false} />
-                              <XAxis dataKey="name" tick={{ fontSize: 9, fill: "var(--pp-text-muted)" }} />
-                              <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
-                              <Bar name="Volume" dataKey="volume" fill="#4472C4" radius={[4, 4, 0, 0]} />
-                              <Line name="Commission" dataKey="commission" stroke="#FFC000" strokeWidth={2} dot={false} />
-                            </ComposedChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Section>
-              )}
-            </>
+            <ClubExcellencePanel
+              lang={lang}
+              data={data}
+              isAdminView={isAdminView}
+              onBroker={(b) => { setDrillData(null); setDrillAgent(b); }}
+            />
           )}
+
 
           {Array.isArray(data.reconciliation?.checks) && (
             <Section title={isFr ? "Contrôles de réconciliation (MATCH / MISMATCH)" : "Reconciliation checks (MATCH / MISMATCH)"}>

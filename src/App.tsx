@@ -641,6 +641,8 @@ const App = () => (
                   <Route path="phone-numbers" element={<Suspense fallback={<AdminPageSkeleton />}><PAPhoneNumbers /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
+                  <Route path="commissions-import" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionsImport /></Suspense>} />
+
                   <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />
                 </Route>
 

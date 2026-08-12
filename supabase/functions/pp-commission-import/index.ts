@@ -403,15 +403,20 @@ Deno.serve(async (req) => {
     const rawRows: any[] = Array.isArray(body?.rows) ? body.rows : [];
     if (!rawRows.length) return json({ error: "no_rows" }, 400);
     const fileName = String(body?.fileName ?? "registre.xlsx");
-    const replaceYears: boolean = body?.replaceYears !== false;
+    const mode = body?.mode === "merge" ? "merge" : "replace";
+    const replaceYears: boolean = mode === "replace" && body?.replaceYears !== false;
 
-    // Broker directory: alias -> maestro id -> normalised name -> email
+    const saved = await loadMappings(admin);
+    const typeOverrides = { ...saved.commissionTypes, ...(body?.commissionTypes ?? {}) };
     const { resolve } = await loadResolver(admin);
 
     const prepared = rawRows.map((r, i) => {
       const date = isoDate(r.date_trans);
       const agent = str(r.agent_name);
       const ident = resolve(agent, str(r.maestro_broker_id ?? r.maestro_id));
+      const ctype = normaliseCommissionType(r.commission_type, typeOverrides);
+      const sheet = str(r.sheet ?? r.sheet_name);
+      const sourceRow = Number(r.source_row ?? i + 2);
       return {
         number: str(r.number),
         loan_amt: num(r.loan_amt),
@@ -428,11 +433,22 @@ Deno.serve(async (req) => {
         agent_name: agent,
         target_name: str(r.target_name),
         date_trans: date,
-        commission_type: str(r.commission_type)?.toLowerCase() ?? null,
+        commission_type: ctype.value,
         split_type: str(r.split_type),
         agent_company: str(r.agent_company),
         cabinet: str(r.cabinet),
-        source_row: Number(r.source_row ?? i + 2),
+        source_row: sourceRow,
+        sheet_name: sheet,
+        raw: r.raw ?? r,
+        row_key: rowKey({
+          sheet,
+          sourceRow,
+          number: str(r.number),
+          date,
+          commissionType: ctype.value,
+          amount: num(r.amount),
+        }),
+        map_status: ident.broker_user_id && ctype.known ? "ok" : "unmapped",
         fiscal_year: date ? Number(date.slice(0, 4)) : null,
         ym_key: date ? date.slice(0, 7) : null,
         broker_user_id: ident.broker_user_id,
@@ -454,7 +470,7 @@ Deno.serve(async (req) => {
     if (impErr) return json({ error: impErr.message }, 500);
 
     if (replaceYears && years.length) {
-      const { error: delErr } = await admin.from("planipret_commission_register").delete().in("fiscal_year", years);
+      const { error: delErr } = await admin.from(REG).delete().in("fiscal_year", years);
       if (delErr) return json({ error: delErr.message }, 500);
     }
 
@@ -462,7 +478,9 @@ Deno.serve(async (req) => {
     let inserted = 0;
     for (let i = 0; i < prepared.length; i += CHUNK) {
       const slice = prepared.slice(i, i + CHUNK).map((r) => ({ ...r, import_batch_id: imp.id }));
-      const { error } = await admin.from("planipret_commission_register").insert(slice);
+      const { error } = mode === "merge"
+        ? await admin.from(REG).upsert(slice, { onConflict: "row_key" })
+        : await admin.from(REG).insert(slice);
       if (error) {
         await admin.from("planipret_commission_imports").update({ status: "failed", notes: { error: error.message } }).eq("id", imp.id);
         return json({ error: error.message, inserted }, 500);
@@ -471,12 +489,15 @@ Deno.serve(async (req) => {
     }
 
     const unmatched = Array.from(new Set(prepared.filter((r) => !r.broker_user_id && r.agent_name).map((r) => r.agent_name!)));
+    const unmappedTypes = Array.from(new Set(prepared.filter((r) => r.map_status === "unmapped").map((r) => r.commission_type ?? "")))
+      .filter(Boolean);
     await admin
       .from("planipret_commission_imports")
-      .update({ status: "completed", row_count: inserted, notes: { unmatched } })
+      .update({ status: "completed", row_count: inserted, notes: { unmatched, unmappedTypes, mode } })
       .eq("id", imp.id);
 
-    return json({ ok: true, inserted, years, unmatched, importId: imp.id });
+    return json({ ok: true, inserted, years, unmatched, unmappedTypes, mode, importId: imp.id });
+
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

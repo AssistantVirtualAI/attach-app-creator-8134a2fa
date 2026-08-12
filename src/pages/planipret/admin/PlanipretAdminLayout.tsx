@@ -4,7 +4,7 @@ import { PrefetchNavLink } from "@/components/PrefetchLink";
 import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard, Users, Phone, MessageSquare, Mic, Plug,
-  BarChart3, LogOut, ShieldCheck, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket,
+  BarChart3, LogOut, Sun, Moon, ShieldCheck, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket,
 } from "lucide-react";
 import SessionTimeoutModal from "@/components/planipret/SessionTimeoutModal";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
@@ -15,6 +15,8 @@ import { WorkspaceHeaderExtras } from "@/components/portals/WorkspaceHeaderExtra
 import { getPlanipretBrokerDirectoryCount } from "@/lib/planipret/adminDirectory";
 import { getPlanipretCallCount } from "@/lib/planipret/adminCounts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
+import HighReadabilityToggle from "@/components/planipret/broker/HighReadabilityToggle";
 import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
@@ -130,6 +132,7 @@ const initials = (n?: string) =>
 
 export default function PlanipretAdminLayout() {
   const { lang, setLang, t: tt } = useMplanipretLang();
+  const { theme, toggle: toggleTheme } = useMplanipretTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [profile, setProfile] = useState<any>(null);
@@ -275,7 +278,7 @@ export default function PlanipretAdminLayout() {
 
   if (loading) {
     return (
-      <div className="planipret-scope planipret-admin-scope min-h-screen flex items-center justify-center"
+      <div data-pp-theme={theme} className="planipret-scope planipret-admin-scope min-h-screen flex items-center justify-center"
         style={{ color: "var(--pp-text-muted)", fontFamily: "'Epilogue', sans-serif" }}>
         Chargement…
       </div>
@@ -324,7 +327,7 @@ export default function PlanipretAdminLayout() {
   };
 
   return (
-    <div className="planipret-scope planipret-admin-scope min-h-screen flex"
+    <div data-pp-theme={theme} className="planipret-scope planipret-admin-scope min-h-screen flex"
       style={{ background: "var(--pp-bg-base)", fontFamily: "'Epilogue', sans-serif" }}>
       {/* Mobile redirect notice (dismissible) */}
       {!mobileNoticeDismissed && (
@@ -464,6 +467,15 @@ export default function PlanipretAdminLayout() {
               <Search className="w-3.5 h-3.5" />
               <span className="flex-1 text-left">Rechercher courtiers, appels, intégrations…</span>
               <kbd className="pp-kbd">⌘K</kbd>
+            </button>
+
+            <HighReadabilityToggle compact />
+
+            <button onClick={toggleTheme} aria-label="Theme"
+              title={theme === "dark" ? "Mode clair" : "Mode sombre"}
+              className="flex items-center justify-center rounded-lg shrink-0"
+              style={{ width: 32, height: 32, color: "var(--pp-text-muted)", border: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-elevated)" }}>
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
 
             <div className="hidden md:flex items-center gap-1.5 shrink-0"

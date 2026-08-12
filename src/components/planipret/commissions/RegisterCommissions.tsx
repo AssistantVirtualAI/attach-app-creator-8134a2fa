@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart, RadialBarChart, RadialBar, LabelList,
 } from "recharts";
-import { Loader2, TrendingUp, TrendingDown, Trophy, FileDown, RotateCcw, Star } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Trophy, FileDown, RotateCcw, Star, ImageDown, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CommissionInsights from "./CommissionInsights";
 import ClubExcellencePanel from "./ClubExcellencePanel";
@@ -14,6 +14,7 @@ import BrokerTopSellers from "./BrokerTopSellers";
 import BrokerYearMatrix from "./BrokerYearMatrix";
 import BrokerDrilldown from "./BrokerDrilldown";
 import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
+import { exportNodePng, exportDashboardPdf } from "@/lib/planipret/exportVisuals";
 import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 import InfoTip from "@/components/planipret/broker/overview/InfoTip";
@@ -181,6 +182,13 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Export (PNG / PDF) + mobile filter drawer
+  const exportRootRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState<null | "png" | "pdf">(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+
 
   // Persist the admin filters in the browser so the same view reopens later.
   const { clear: clearSavedFilters } = useAdminCommissionFilters(true, { year, granularity, periodIndex, agent, lender, tab }, scopeKey);
@@ -441,14 +449,33 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             : "Maestro data · volume, deals, lenders and commissions")
     : (data?.brokerName ?? (isFr ? "Votre performance, synchronisée depuis Maestro" : "Your performance, synced from Maestro"));
 
+  const periodBadge = data?.window
+    ? `${data.window.start} → ${data.window.end}${isAdminView && !agent ? (isFr ? " · tous les courtiers" : " · all brokers") : agent ? ` · ${agent}` : ""}`
+    : String(year);
+
+  const runPng = async () => {
+    setExporting("png");
+    try { await exportNodePng(exportRootRef.current, `commissions-${tabLabel}-${year}`); }
+    finally { setExporting(null); }
+  };
+  const runVisualPdf = async () => {
+    setExporting("pdf");
+    try {
+      await exportDashboardPdf(exportRootRef.current, {
+        lang, title: heroTitle, subtitle: heroSubtitle, periodLabel: periodBadge,
+      });
+    } finally { setExporting(null); }
+  };
+
   return (
-    <div>
+    <div ref={exportRootRef} className="pp-commissions-root">
       {data && data.rowCount > 0 && kpi && (
+        <div data-pp-export-block>
         <CommissionsHero
           lang={lang}
           title={heroTitle}
           subtitle={heroSubtitle}
-          periodLabel={data.window ? `${data.window.start} → ${data.window.end}${isAdminView && !agent ? (isFr ? " · tous les courtiers" : " · all brokers") : agent ? ` · ${agent}` : ""}` : String(year)}
+          periodLabel={periodBadge}
           volume={kpi.ytd.volume}
           deals={kpi.ytd.deals}
           commission={kpi.ytd.commission}
@@ -456,61 +483,91 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           dealsDelta={typeof pctDelta(kpi.ytd.deals, kpi.ytdPy.deals) === "number" ? (pctDelta(kpi.ytd.deals, kpi.ytdPy.deals) as number) : null}
           commissionDelta={typeof pctDelta(kpi.ytd.commission, kpi.ytdPy.commission) === "number" ? (pctDelta(kpi.ytd.commission, kpi.ytdPy.commission) as number) : null}
         />
+        </div>
       )}
 
-      {/* Filters */}
-      <div className="pp-filters-sticky flex flex-wrap items-center gap-2">
-        <RegisterFilters
-          lang={lang}
-          years={years}
-          year={year}
-          onYear={setYear}
-          granularity={granularity}
-          onGranularity={onGranularity}
-          periodIndex={periodIndex}
-          onPeriodIndex={setPeriodIndex}
-          agents={data?.availableAgents ?? []}
-          agent={agent}
-          onAgent={setAgent}
-          showAgent={isAdminView}
-          lenders={lenderOptions}
-          lender={lender}
-          onLender={setLender}
-        />
-        {loading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--pp-text-muted)" }} />}
-        {data?.window && (
-          <span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
-            {data.window.start} → {data.window.end}
-            {isAdminView && !agent ? (isFr ? " · tous les courtiers" : " · all brokers") : agent ? ` · ${agent}` : ""}
-          </span>
-        )}
-        {(
-          <div className="ml-auto flex items-center gap-1.5">
+      {/* Filters — collapsible on mobile */}
+      <div className="pp-filters-sticky">
+        <div className="flex items-center gap-2 md:hidden mb-2">
+          <button
+            onClick={() => setFiltersOpen((v) => !v)}
+            aria-expanded={filtersOpen}
+            className="inline-flex items-center gap-1.5 px-3 rounded-lg"
+            style={{ minHeight: 44, fontSize: 13, fontWeight: 700, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" }}>
+            <SlidersHorizontal className="w-4 h-4" />
+            {isFr ? "Filtres" : "Filters"}
+            <ChevronDown className="w-4 h-4" style={{ transform: filtersOpen ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
+          </button>
+          {loading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--pp-text-muted)" }} />}
+          <span className="truncate" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{periodBadge}</span>
+        </div>
+
+        <div className={`${filtersOpen ? "flex" : "hidden"} md:flex flex-wrap items-center gap-2`}>
+          <RegisterFilters
+            lang={lang}
+            years={years}
+            year={year}
+            onYear={setYear}
+            granularity={granularity}
+            onGranularity={onGranularity}
+            periodIndex={periodIndex}
+            onPeriodIndex={setPeriodIndex}
+            agents={data?.availableAgents ?? []}
+            agent={agent}
+            onAgent={setAgent}
+            showAgent={isAdminView}
+            lenders={lenderOptions}
+            lender={lender}
+            onLender={setLender}
+          />
+          {loading && <Loader2 className="w-4 h-4 animate-spin hidden md:block" style={{ color: "var(--pp-text-muted)" }} />}
+          {data?.window && (
+            <span className="hidden md:inline" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{periodBadge}</span>
+          )}
+          <div className="pp-hide-export md:ml-auto flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => dealsCsv(filteredDeals, `commissions-${year}${lender ? `-${lender}` : ""}.csv`)}
               disabled={filteredDeals.length === 0}
               title={isFr ? "Exporter le résultat filtré" : "Export the filtered result"}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              className="pp-toolbar-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
               style={{ fontSize: 12, fontWeight: 700, opacity: filteredDeals.length ? 1 : .5, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
-              <FileDown className="w-3.5 h-3.5" />{isFr ? "Export CSV" : "Export CSV"}
+              <FileDown className="w-3.5 h-3.5" />CSV
+            </button>
+            <button
+              onClick={runPng}
+              disabled={exporting !== null}
+              title={isFr ? "Exporter la vue en PNG" : "Export the view as PNG"}
+              className="pp-toolbar-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{ fontSize: 12, fontWeight: 700, opacity: exporting ? .6 : 1, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
+              {exporting === "png" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />}PNG
+            </button>
+            <button
+              onClick={runVisualPdf}
+              disabled={exporting !== null || !data}
+              title={isFr ? "PDF récapitulatif (graphiques + KPI)" : "PDF recap (charts + KPIs)"}
+              className="pp-toolbar-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{
+                fontSize: 12, fontWeight: 700, opacity: exporting || !data ? .6 : 1,
+                background: "var(--pp-brand-accent-2)", color: "#fff", border: "1px solid var(--pp-bg-border)",
+              }}>
+              {exporting === "pdf" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+              {isFr ? "PDF récap" : "PDF recap"}
             </button>
             {isAdminView && <button
               onClick={() => data && downloadCommissionsPdf({ lang, data, agent, aiSummary: ai?.summary, year })}
               disabled={!data}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-              style={{
-                fontSize: 12, fontWeight: 700, opacity: data ? 1 : .5,
-                background: "var(--pp-brand-accent-2)", color: "#fff", border: "1px solid var(--pp-bg-border)",
-              }}>
-              <FileDown className="w-3.5 h-3.5" />{isFr ? "Rapport PDF" : "PDF report"}
+              className="pp-toolbar-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{ fontSize: 12, fontWeight: 700, opacity: data ? 1 : .5, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
+              <FileDown className="w-3.5 h-3.5" />{isFr ? "Rapport détaillé" : "Detailed report"}
             </button>}
-            <button onClick={resetFilters} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+            <button onClick={resetFilters} className="pp-toolbar-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
               style={{ fontSize: 12, fontWeight: 700, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
               <RotateCcw className="w-3.5 h-3.5" />{isFr ? "Réinitialiser" : "Reset"}
             </button>
           </div>
-        )}
+        </div>
       </div>
+
 
       {lender && (
         <div className="flex flex-wrap items-center gap-2 mb-2 rounded-xl" style={{ padding: "8px 10px", border: "1px solid var(--pp-brand-accent-2, #2E9BDC)", background: "color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 10%, transparent)" }}>

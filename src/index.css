@@ -1251,3 +1251,83 @@ All colors MUST be HSL.
 [data-pp-hr="1"] .pp-hero-aurora { opacity: .2 !important; filter: none !important; }
 [data-pp-hr="1"] .pp-chart-frame { box-shadow: none !important; }
 [data-pp-hr="1"] .pp-tab-pill { transform: none !important; }
+
+/* ============================================================
+   Planiprêt portails — thème sombre (admin + broker)
+   Activé par data-pp-theme="dark" sur la racine du scope.
+   Contrastes vérifiés AA sur texte principal et secondaire.
+   ============================================================ */
+.planipret-admin-scope[data-pp-theme="dark"] {
+  --pp-bg-base: #060D1A;
+  --pp-bg-surface: #0A1628;
+  --pp-bg-elevated: #0D1F35;
+  --pp-bg-card: #0B1A2D;
+  --pp-bg-deep: #040B16;
+  --pp-bg-border: #16304C;
+  --pp-bg-border-2: #1D3D5E;
+  --pp-brand-accent: #4FA8E8;
+  --pp-brand-accent-2: #2E9BDC;
+  --pp-success: #22D3A5;
+  --pp-warning: #F0B429;
+  --pp-danger: #FF6B6B;
+  --pp-text-primary: #EAF1FA;
+  --pp-text-secondary: #B4C6DC;
+  --pp-text-muted: #8AA3BE;
+  --pp-text-faint: #66809C;
+  --pp-shadow-sm: 0 1px 2px rgba(0,0,0,.5);
+  --pp-shadow-md: 0 10px 26px -14px rgba(0,0,0,.75);
+  --pp-shadow-lg: 0 26px 56px -22px rgba(0,0,0,.85);
+  background: var(--pp-bg-base);
+  color: var(--pp-text-primary);
+}
+.planipret-admin-scope[data-pp-theme="dark"] .pp-card,
+.planipret-admin-scope[data-pp-theme="dark"] .pp-card-elevated,
+.planipret-admin-scope[data-pp-theme="dark"] .pp-app-header,
+.planipret-admin-scope[data-pp-theme="dark"] .pp-sidebar {
+  background: var(--pp-bg-surface) !important;
+  border-color: var(--pp-bg-border) !important;
+  color: var(--pp-text-primary);
+}
+.planipret-admin-scope[data-pp-theme="dark"] input,
+.planipret-admin-scope[data-pp-theme="dark"] select,
+.planipret-admin-scope[data-pp-theme="dark"] textarea {
+  background: var(--pp-bg-deep) !important;
+  color: var(--pp-text-primary) !important;
+  border-color: var(--pp-bg-border) !important;
+}
+.planipret-admin-scope[data-pp-theme="dark"] table thead th { color: var(--pp-text-secondary); }
+.planipret-admin-scope[data-pp-theme="light"] { --pp-bg-card: #FFFFFF; }
+
+/* ============================================================
+   Commissions — harmonisation typo / espacements / mobile
+   ============================================================ */
+.pp-commissions-root { font-feature-settings: "tnum" 1, "kern" 1; }
+.pp-commissions-root .pp-filters-sticky { margin-bottom: 12px; }
+.pp-toolbar-btn { min-height: 34px; }
+.pp-frame-action:focus-visible,
+.pp-toolbar-btn:focus-visible,
+.pp-tab-pill:focus-visible {
+  outline: 2px solid var(--pp-brand-accent, #2E9BDC);
+  outline-offset: 2px;
+}
+@media (max-width: 767px) {
+  .pp-commissions-root .pp-toolbar-btn,
+  .pp-commissions-root .pp-frame-action { min-height: 44px; min-width: 44px; }
+  .pp-commissions-root .pp-chart-frame,
+  .pp-commissions-root .ov3d-card { padding: 12px !important; border-radius: 14px !important; }
+  .pp-commissions-root table { font-size: 12px; }
+  .pp-commissions-root .pp-table-scroll,
+  .pp-commissions-root .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+}
+
+/* Haute lisibilité — conformité WCAG AA renforcée */
+[data-pp-hr="1"] .pp-commissions-root { --pp-text-muted: var(--pp-text-secondary); }
+[data-pp-hr="1"] .pp-commissions-root .pp-toolbar-btn,
+[data-pp-hr="1"] .pp-commissions-root .pp-frame-action {
+  min-height: 44px; min-width: 44px;
+  border-color: var(--pp-text-muted) !important;
+  color: var(--pp-text-primary) !important;
+}
+[data-pp-hr="1"] .pp-commissions-root .pp-hero-aurora { opacity: .12 !important; }
+[data-pp-hr="1"] .pp-commissions-root * { text-shadow: none !important; }
+[data-pp-hr="1"] .pp-commissions-root .pp-tab-pill[aria-selected="true"] { outline: 2px solid var(--pp-text-primary); outline-offset: 1px; }

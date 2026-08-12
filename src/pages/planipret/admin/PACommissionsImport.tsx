@@ -5,6 +5,7 @@ import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import CommissionValidationPanel from "@/components/planipret/commissions/CommissionValidationPanel";
 
 const FIELDS = [
   "number", "loan_amt", "primary_client_name", "secondary_client_name", "institution",
@@ -303,14 +304,12 @@ export default function PACommissionsImport() {
                 </span>
               ))}
             </div>
-            {summary.unmatched?.length > 0 && (
-              <div className="mt-2" style={{ color: "var(--pp-text-muted)" }}>
-                {isFr ? "Non rattachés" : "Unlinked"} : {summary.unmatched.join(" · ")}
-              </div>
-            )}
           </div>
         )}
       </div>
+
+      <CommissionValidationPanel isFr={isFr} call={call} />
+
     </PAPage>
   );
 }

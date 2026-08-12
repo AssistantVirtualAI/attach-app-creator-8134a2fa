@@ -102,7 +102,15 @@ export default function BrokerLeaderboard({
                           <Trophy className="w-3 h-3" style={{ color: b.rank === 1 ? "#FFC000" : b.rank === 2 ? "#C0C0C0" : "#CD7F32" }} />{b.rank}
                         </span>
                       : b.rank,
-                    <span key="n" style={{ fontWeight: 600 }}>{b.broker}</span>,
+                    <span key="n" className="flex flex-col" style={{ lineHeight: 1.25 }}>
+                      <span style={{ fontWeight: 600 }}>
+                        {b.firstName || b.lastName ? `${b.firstName ?? ""} ${b.lastName ?? ""}`.trim() : b.broker}
+                      </span>
+                      <span style={{ fontSize: 10.5, color: b.maestroBrokerId ? "var(--pp-text-muted)" : "#f59e0b" }}>
+                        {b.maestroBrokerId ? `Maestro ${b.maestroBrokerId}` : (isFr ? "Maestro ID manquant" : "Missing Maestro ID")}
+                      </span>
+                    </span>,
+
                     fmtMoney(b.volume), fmtNum(b.deals), fmtMoney(b.commission),
                     fmtMoney(b.avgDeal), fmtBps(b.bps), fmtPct(b.sharePct), fmtMoney(b.pyVolume),
                     <Delta key="a" value={b.volumeYoy} />, <Delta key="c" value={b.commissionYoy} />,

@@ -8675,6 +8675,45 @@ export type Database = {
           },
         ]
       }
+      planipret_commission_broker_aliases: {
+        Row: {
+          agent_key: string
+          broker_user_id: string | null
+          created_at: string
+          created_by: string | null
+          first_name: string | null
+          id: string
+          last_name: string | null
+          maestro_broker_id: string | null
+          raw_name: string
+          updated_at: string
+        }
+        Insert: {
+          agent_key: string
+          broker_user_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          maestro_broker_id?: string | null
+          raw_name: string
+          updated_at?: string
+        }
+        Update: {
+          agent_key?: string
+          broker_user_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          maestro_broker_id?: string | null
+          raw_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       planipret_commission_imports: {
         Row: {
           created_at: string
@@ -8714,6 +8753,7 @@ export type Database = {
       planipret_commission_register: {
         Row: {
           agent_company: string | null
+          agent_key: string | null
           agent_name: string | null
           amount: number
           broker_user_id: string | null
@@ -8723,12 +8763,16 @@ export type Database = {
           created_at: string
           date_trans: string | null
           financial_inst_id: string | null
+          first_name: string | null
           fiscal_year: number | null
           id: string
           import_batch_id: string | null
           institution: string | null
           is_adjustment: string | null
+          last_name: string | null
           loan_amt: number
+          maestro_broker_id: string | null
+          match_method: string | null
           mortgage_type: string | null
           number: string | null
           points: number | null
@@ -8743,6 +8787,7 @@ export type Database = {
         }
         Insert: {
           agent_company?: string | null
+          agent_key?: string | null
           agent_name?: string | null
           amount?: number
           broker_user_id?: string | null
@@ -8752,12 +8797,16 @@ export type Database = {
           created_at?: string
           date_trans?: string | null
           financial_inst_id?: string | null
+          first_name?: string | null
           fiscal_year?: number | null
           id?: string
           import_batch_id?: string | null
           institution?: string | null
           is_adjustment?: string | null
+          last_name?: string | null
           loan_amt?: number
+          maestro_broker_id?: string | null
+          match_method?: string | null
           mortgage_type?: string | null
           number?: string | null
           points?: number | null
@@ -8772,6 +8821,7 @@ export type Database = {
         }
         Update: {
           agent_company?: string | null
+          agent_key?: string | null
           agent_name?: string | null
           amount?: number
           broker_user_id?: string | null
@@ -8781,12 +8831,16 @@ export type Database = {
           created_at?: string
           date_trans?: string | null
           financial_inst_id?: string | null
+          first_name?: string | null
           fiscal_year?: number | null
           id?: string
           import_batch_id?: string | null
           institution?: string | null
           is_adjustment?: string | null
+          last_name?: string | null
           loan_amt?: number
+          maestro_broker_id?: string | null
+          match_method?: string | null
           mortgage_type?: string | null
           number?: string | null
           points?: number | null
@@ -10234,11 +10288,13 @@ export type Database = {
           email: string | null
           extension: string | null
           first_login_at: string | null
+          first_name: string | null
           full_name: string | null
           id: string
           language: string
           last_eod_summary_at: string | null
           last_morning_brief_at: string | null
+          last_name: string | null
           login_email: string | null
           maestro_broker_id: string | null
           maestro_broker_token: string | null
@@ -10339,11 +10395,13 @@ export type Database = {
           email?: string | null
           extension?: string | null
           first_login_at?: string | null
+          first_name?: string | null
           full_name?: string | null
           id?: string
           language?: string
           last_eod_summary_at?: string | null
           last_morning_brief_at?: string | null
+          last_name?: string | null
           login_email?: string | null
           maestro_broker_id?: string | null
           maestro_broker_token?: string | null
@@ -10444,11 +10502,13 @@ export type Database = {
           email?: string | null
           extension?: string | null
           first_login_at?: string | null
+          first_name?: string | null
           full_name?: string | null
           id?: string
           language?: string
           last_eod_summary_at?: string | null
           last_morning_brief_at?: string | null
+          last_name?: string | null
           login_email?: string | null
           maestro_broker_id?: string | null
           maestro_broker_token?: string | null

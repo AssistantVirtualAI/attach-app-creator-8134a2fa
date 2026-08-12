@@ -183,6 +183,13 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Export (PNG / PDF) + mobile filter drawer
+  const exportRootRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState<null | "png" | "pdf">(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+
+
   // Persist the admin filters in the browser so the same view reopens later.
   const { clear: clearSavedFilters } = useAdminCommissionFilters(true, { year, granularity, periodIndex, agent, lender, tab }, scopeKey);
   const resetFilters = () => {

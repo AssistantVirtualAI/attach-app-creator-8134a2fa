@@ -310,6 +310,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     { key: "lenders", label: isFr ? "Prêteurs" : "Lenders" },
     { key: "mix", label: isFr ? "Mix produits & termes" : "Product & term mix" },
     { key: "quarters", label: isFr ? "Trimestres" : "Quarters" },
+    { key: "periods", label: isFr ? "Stats par période" : "Stats by period" },
     { key: "club", label: "Club Excellence" },
     ...(isAdminView ? [{ key: "gaps" as Tab, label: isFr ? "Écarts" : "Gaps" }] : []),
   ];

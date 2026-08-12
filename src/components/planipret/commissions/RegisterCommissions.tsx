@@ -873,7 +873,47 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                   </ResponsiveContainer>
                 </div>
               </Section>
-              <Section title={isFr ? "Classement des prêteurs" : "Lender ranking"}>
+              <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))" }}>
+                <ChartFrame
+                  title={isFr ? "Part de marché des prêteurs" : "Lender market share"}
+                  accent={CHART_COLORS[3]}
+                  height={250}
+                  info={isFr
+                    ? "Part de chaque prêteur dans le volume total de la période. Le centre indique le poids cumulé des 3 premiers prêteurs — au-delà de 60 %, la dépendance devient un risque."
+                    : "Each lender's share of total period volume. The centre shows the combined weight of the top 3 lenders — above 60% dependency becomes a risk."}
+                >
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie data={(data.lenders ?? []).slice(0, 8)} dataKey="cyVolume" nameKey="key" innerRadius={58} outerRadius={92} paddingAngle={2} stroke="none">
+                        {(data.lenders ?? []).slice(0, 8).map((_: any, i: number) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip {...tipProps} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
+                      <Legend {...legendProps} layout="vertical" align="right" verticalAlign="middle" />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </ChartFrame>
+
+                <ChartFrame
+                  title={isFr ? "Rendement par prêteur (BPS)" : "Yield per lender (BPS)"}
+                  accent={CHART_COLORS[4]}
+                  height={250}
+                  info={isFr
+                    ? "Commission ÷ volume × 10 000 pour chaque prêteur. Un prêteur à fort volume mais faible BPS pèse peu sur la rémunération."
+                    : "Commission ÷ volume × 10,000 per lender. A high-volume lender with low BPS contributes little to earnings."}
+                >
+                  <ResponsiveContainer>
+                    <BarChart data={(data.lenders ?? []).slice(0, 8)} margin={{ left: 4, right: 8 }}>
+                      <CartesianGrid {...gridProps} />
+                      <XAxis dataKey="key" {...axisProps} interval={0} angle={-18} textAnchor="end" height={54} />
+                      <YAxis {...axisProps} />
+                      <Tooltip {...tipProps} formatter={(v: any) => fmtBps(Number(v))} />
+                      <Bar dataKey="cyBps" name="BPS" fill={fill3d("#8B5CF6")} radius={[6, 6, 0, 0]} filter="url(#ov3dExtrude)" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartFrame>
+              </div>
+
+              <Section title={isFr ? "Classement des prêteurs" : "Lender ranking"} accent={CHART_COLORS[0]} info={isFr ? "Classement complet des prêteurs sur la période. Cliquez sur un nom pour ouvrir les dossiers correspondants." : "Full lender ranking for the period. Click a name to open the matching deals."}>
                 <Table
                   head={["#", isFr ? "Prêteur" : "Lender", "Volume", isFr ? "Doss." : "Deals", "Commission", "BPS",
                     "% vol.", isFr ? "Vol. PY" : "PY vol.", "YoY vol.", "YoY comm."]}

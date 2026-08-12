@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { TrendingUp, Cloud, Database, Loader2 } from "lucide-react";
+import { TrendingUp, Cloud, Database, Loader2, ShieldCheck } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import CommissionDashboard from "@/components/planipret/commissions/CommissionDashboard";
+import CommissionProvenance from "@/components/planipret/commissions/CommissionProvenance";
 import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
 import { supabase } from "@/integrations/supabase/client";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 
-type Source = "maestro" | "internal";
+type Source = "maestro" | "internal" | "provenance";
+
 
 export default function PBCommissions() {
   const { authUserId, profile } = useOutletContext<BrokerCtx>();

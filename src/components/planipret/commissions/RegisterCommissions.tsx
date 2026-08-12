@@ -694,19 +694,53 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                   </div>
                 </Section>
 
-                <Section title={isFr ? "Concentration des prêteurs (top 6)" : "Lender concentration (top 6)"} chart={240} accent={CHART_COLORS[5]} info={isFr ? "Poids relatif des 6 premiers prêteurs. Plus de 50 % du volume chez un seul prêteur est un signal de dépendance." : "Relative weight of the top 6 lenders. Over 50% of volume with one lender signals dependency."}>
-                  <div style={{ height: 240 }}>
-                    <ResponsiveContainer>
-                      <RadialBarChart data={(data.lenders ?? []).slice(0, 6).map((l: any, i: number) => ({
-                        name: l.key, value: l.cyVolume, fill: PALETTE[i % PALETTE.length],
-                      }))} innerRadius="25%" outerRadius="95%" startAngle={90} endAngle={-270}>
-                        <RadialBar background dataKey="value" cornerRadius={6} />
-                        <Tooltip {...tipProps} formatter={(v: any, _n: any, p: any) => [fmtMoney(Number(v)), p?.payload?.name]} />
-                        <Legend {...legendProps} iconSize={8} layout="vertical" align="right" verticalAlign="middle" />
-                      </RadialBarChart>
-                    </ResponsiveContainer>
-                  </div>
+                <Section title={isFr ? "Concentration des prêteurs (top 6)" : "Lender concentration (top 6)"} chart={300} accent={CHART_COLORS[5]} info={isFr ? "Poids relatif des 6 premiers prêteurs. Plus de 50 % du volume chez un seul prêteur est un signal de dépendance." : "Relative weight of the top 6 lenders. Over 50% of volume with one lender signals dependency."}>
+                  {(() => {
+                    const top = (data.lenders ?? []).slice(0, 6);
+                    const total = (data.lenders ?? []).reduce((s: number, l: any) => s + Number(l.cyVolume || 0), 0) || 1;
+                    const rows = top.map((l: any, i: number) => ({
+                      name: String(l.key ?? "—"),
+                      short: String(l.key ?? "—").length > 18 ? `${String(l.key).slice(0, 17)}…` : String(l.key ?? "—"),
+                      value: Number(l.cyVolume || 0),
+                      share: (Number(l.cyVolume || 0) / total) * 100,
+                      fill: PALETTE[i % PALETTE.length],
+                    }));
+                    if (!rows.length) return <div style={{ height: 240, display: "grid", placeItems: "center", fontSize: 12, color: "var(--pp-text-secondary)" }}>{isFr ? "Aucune donnée prêteur" : "No lender data"}</div>;
+                    return (
+                      <div style={{ height: 300 }}>
+                        <ResponsiveContainer>
+                          <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 64, bottom: 4, left: 4 }} barCategoryGap="22%">
+                            <CartesianGrid {...gridProps} vertical horizontal={false} />
+                            <XAxis type="number" {...axisProps} tickFormatter={(v) => `${Math.round(Number(v) / 1000000)}M`} />
+                            <YAxis
+                              type="category"
+                              dataKey="short"
+                              width={130}
+                              {...axisProps}
+                              tick={{ ...(axisProps as any).tick, fontSize: 12 }}
+                            />
+                            <Tooltip
+                              {...tipProps}
+                              cursor={{ fill: "rgba(120,140,200,0.08)" }}
+                              formatter={(v: any, _n: any, p: any) => [`${fmtMoney(Number(v))} · ${(p?.payload?.share ?? 0).toFixed(1)} %`, p?.payload?.name]}
+                            />
+                            <Bar dataKey="value" radius={[0, 6, 6, 0]} filter="url(#ov3dExtrude)">
+                              {rows.map((r: any, i: number) => <Cell key={i} fill={fill3d(r.fill)} />)}
+                              <LabelList
+                                dataKey="share"
+                                position="right"
+                                offset={8}
+                                formatter={(v: any) => `${Number(v).toFixed(1)} %`}
+                                style={{ fontSize: 11, fontWeight: 700, fill: "var(--pp-text-primary)" }}
+                              />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    );
+                  })()}
                 </Section>
+
 
                 <Section title={isFr ? "BPS par mois (rentabilité)" : "BPS per month (yield)"} chart={240} accent={CHART_COLORS[4]} info={isFr ? "Rendement mensuel : commission ÷ volume × 10 000. Les creux indiquent des mois moins rémunérateurs à volume égal." : "Monthly yield: commission ÷ volume × 10,000. Dips mark less profitable months at equal volume."}>
                   <div style={{ height: 240 }}>

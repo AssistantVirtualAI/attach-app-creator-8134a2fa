@@ -1,0 +1,113 @@
+import { Users } from "lucide-react";
+
+export type Granularity = "week" | "month" | "quarter" | "year" | "ytd";
+
+const MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+const MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+const selStyle: React.CSSProperties = {
+  background: "var(--pp-bg-elevated)",
+  border: "1px solid var(--pp-bg-border)",
+  color: "var(--pp-text-primary)",
+  fontSize: 12.5,
+  fontWeight: 600,
+  borderRadius: 10,
+  padding: "6px 10px",
+};
+
+export function isoWeeksInYear(y: number): number {
+  const dec28 = new Date(Date.UTC(y, 11, 28));
+  const dow = dec28.getUTCDay() || 7;
+  const thu = new Date(dec28.getTime() + (4 - dow) * 86400000);
+  const jan1 = new Date(Date.UTC(thu.getUTCFullYear(), 0, 1));
+  return Math.ceil(((thu.getTime() - jan1.getTime()) / 86400000 + 1) / 7);
+}
+
+export default function RegisterFilters({
+  lang, years, year, onYear,
+  granularity, onGranularity,
+  periodIndex, onPeriodIndex,
+  agents, agent, onAgent,
+  showAgent,
+}: {
+  lang: "fr" | "en";
+  years: number[];
+  year: number;
+  onYear: (y: number) => void;
+  granularity: Granularity;
+  onGranularity: (g: Granularity) => void;
+  periodIndex: number;
+  onPeriodIndex: (i: number) => void;
+  agents: string[];
+  agent: string;
+  onAgent: (a: string) => void;
+  showAgent: boolean;
+}) {
+  const isFr = lang === "fr";
+  const MONTHS = isFr ? MONTHS_FR : MONTHS_EN;
+
+  const grans: { key: Granularity; label: string }[] = [
+    { key: "week", label: isFr ? "Semaine" : "Week" },
+    { key: "month", label: isFr ? "Mois" : "Month" },
+    { key: "quarter", label: isFr ? "Trimestre" : "Quarter" },
+    { key: "ytd", label: isFr ? "Cumul annuel" : "Year to date" },
+    { key: "year", label: isFr ? "Année" : "Year" },
+  ];
+
+  const periodOptions = (): { value: number; label: string }[] => {
+    if (granularity === "week") {
+      return Array.from({ length: isoWeeksInYear(year) }, (_, i) => ({
+        value: i + 1,
+        label: isFr ? `Semaine ${i + 1}` : `Week ${i + 1}`,
+      }));
+    }
+    if (granularity === "month") return MONTHS.map((m, i) => ({ value: i + 1, label: m }));
+    if (granularity === "quarter") return [1, 2, 3, 4].map((q) => ({ value: q, label: `Q${q}` }));
+    if (granularity === "ytd") {
+      return MONTHS.map((m, i) => ({ value: i + 1, label: isFr ? `Jusqu'à ${m}` : `Through ${m}` }));
+    }
+    return [];
+  };
+
+  const options = periodOptions();
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <select value={year} onChange={(e) => onYear(Number(e.target.value))} style={{ ...selStyle, fontWeight: 800 }}>
+        {years.map((y) => <option key={y} value={y}>{y}</option>)}
+      </select>
+
+      <div className="inline-flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--pp-bg-border)" }}>
+        {grans.map((g) => (
+          <button
+            key={g.key}
+            onClick={() => onGranularity(g.key)}
+            style={{
+              fontSize: 12, fontWeight: 700, padding: "6px 10px",
+              background: granularity === g.key ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
+              color: granularity === g.key ? "#fff" : "var(--pp-text-secondary)",
+            }}
+          >
+            {g.label}
+          </button>
+        ))}
+      </div>
+
+      {options.length > 0 && (
+        <select value={periodIndex} onChange={(e) => onPeriodIndex(Number(e.target.value))} style={selStyle}>
+          {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      )}
+
+      {showAgent && (
+        <div className="inline-flex items-center gap-1.5">
+          <Users className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} />
+          <select value={agent} onChange={(e) => onAgent(e.target.value)} style={{ ...selStyle, maxWidth: 240 }}>
+            <option value="">{isFr ? "Tous les courtiers" : "All brokers"}</option>
+            {agents.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+      )}
+    </div>
+  );
+}

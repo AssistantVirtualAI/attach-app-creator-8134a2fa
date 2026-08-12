@@ -1,18 +1,11 @@
 import { useState } from "react";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { writeMaestroSyncStatus, relativeTime } from "@/lib/planipret/commissionsCache";
 
 const KEY = (scope: string) => `pp-maestro-commissions-sync:${scope}`;
 
-function relative(iso: string | null, isFr: boolean) {
-  if (!iso) return null;
-  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (min < 1) return isFr ? "à l'instant" : "just now";
-  if (min < 60) return isFr ? `il y a ${min} min` : `${min} min ago`;
-  const h = Math.round(min / 60);
-  if (h < 24) return isFr ? `il y a ${h} h` : `${h} h ago`;
-  return new Date(iso).toLocaleDateString(isFr ? "fr-CA" : "en-CA");
-}
+const relative = relativeTime;
 
 /** Triggers the Maestro commission sync ("all" for admin, "self" for a broker). */
 export default function MaestroSyncButton({

@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { TrendingUp, Cloud, Database, Loader2, ShieldCheck } from "lucide-react";
+import { TrendingUp, Cloud, Database, Loader2, ShieldCheck, Archive } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import CommissionDashboard from "@/components/planipret/commissions/CommissionDashboard";
 import CommissionProvenance from "@/components/planipret/commissions/CommissionProvenance";
+import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
 import { supabase } from "@/integrations/supabase/client";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 
-type Source = "maestro" | "internal" | "provenance";
+type Source = "maestro" | "internal" | "provenance" | "register";
 
 
 export default function PBCommissions() {
   const { authUserId, profile } = useOutletContext<BrokerCtx>();
   const { lang } = useMplanipretLang();
   const isFr = lang !== "en";
-  const [source, setSource] = useState<Source>("maestro");
+  const [source, setSource] = useState<Source>("register");
+
   const [maestroConnected, setMaestroConnected] = useState<boolean | null>(null);
   const [info, setInfo] = useState<{ ok: boolean; code?: string; error?: string; dealCount?: number } | null>(null);
 
@@ -71,6 +73,7 @@ export default function PBCommissions() {
       />
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
+        {tab("register", Archive, isFr ? "Registre 2022+" : "Register 2022+")}
         {tab("maestro", Cloud, "Maestro")}
         {tab("internal", Database, isFr ? "Données internes" : "Internal data")}
         {tab("provenance", ShieldCheck, isFr ? "Provenance" : "Provenance")}
@@ -87,7 +90,9 @@ export default function PBCommissions() {
         )}
       </div>
 
-      {(source === "maestro" || source === "provenance") && notConnected ? (
+      {source === "register" ? (
+        <RegisterCommissions lang={isFr ? "fr" : "en"} />
+      ) : (source === "maestro" || source === "provenance") && notConnected ? (
         <div className="max-w-xl">
           <p className="mb-3" style={{ fontSize: 13, color: "var(--pp-text-muted)" }}>
             {isFr
@@ -108,13 +113,14 @@ export default function PBCommissions() {
           <CommissionDashboard
             lang={isFr ? "fr" : "en"}
             scope="broker"
-            source={source}
+            source={source === "internal" ? "internal" : "maestro"}
             brokerUserId={authUserId}
             brokerName={(profile as any)?.full_name}
             onSourceResult={setInfo}
           />
         </>
       )}
+
 
     </PAPage>
   );

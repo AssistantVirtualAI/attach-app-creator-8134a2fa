@@ -57,7 +57,35 @@ export default function PACommissions() {
           ? "Global view across all brokers — volume, deals, lenders and commissions"
           : "Vue globale sur tous les courtiers — volume, dossiers, prêteurs et commissions"}
       />
-      <CommissionDashboard lang={lang === "en" ? "en" : "fr"} scope="admin" />
+
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {([
+          ["register", lang === "en" ? "Register 2022+" : "Registre 2022+"],
+          ["maestro", "Maestro"],
+          ["internal", lang === "en" ? "Internal data" : "Données internes"],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setSource(key)}
+            className="px-3 py-1.5 rounded-lg"
+            style={{
+              fontSize: 12.5, fontWeight: 700,
+              background: source === key ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
+              color: source === key ? "#fff" : "var(--pp-text-secondary)",
+              border: "1px solid var(--pp-bg-border)",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {source === "register" ? (
+        <RegisterCommissions lang={lang === "en" ? "en" : "fr"} scope="admin" />
+      ) : (
+        <CommissionDashboard lang={lang === "en" ? "en" : "fr"} scope="admin" source={source} />
+      )}
     </PAPage>
   );
 }
+

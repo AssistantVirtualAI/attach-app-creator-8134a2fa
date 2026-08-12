@@ -444,6 +444,9 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
       {data && data.rowCount > 0 && (
         <div className="ov3d-stage">
           <Ov3DChartFilters />
+          <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
+            <Ov3DGradients colors={["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"]} />
+          </svg>
           {tab === "overview" && (
             <>
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>

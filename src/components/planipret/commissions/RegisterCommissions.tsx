@@ -3,9 +3,11 @@ import {
   ResponsiveContainer, ComposedChart, Bar, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart, RadialBarChart, RadialBar,
 } from "recharts";
-import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy, FileDown, RotateCcw } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy, FileDown, RotateCcw, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CommissionInsights from "./CommissionInsights";
+import ClubExcellencePanel from "./ClubExcellencePanel";
+import { Ov3DChartFilters, Ov3DGradients, fill3d } from "@/components/planipret/broker/overview/ov3dChart";
 import RegisterFilters, { type Granularity } from "./RegisterFilters";
 import BrokerLeaderboard from "./BrokerLeaderboard";
 import CommissionDiscrepancies from "./CommissionDiscrepancies";
@@ -328,7 +330,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     { key: "quarters", label: isFr ? "Trimestres" : "Quarters" },
     { key: "periods", label: isFr ? "Stats par période" : "Stats by period" },
     { key: "club", label: "Club Excellence" },
-    { key: "club", label: "Club Excellence" },
     ...(isAdminView ? [{ key: "gaps" as Tab, label: isFr ? "Écarts" : "Gaps" }] : []),
     ...(isAdminView ? [{ key: "data" as Tab, label: isFr ? "Couverture des données" : "Data coverage" }] : []),
   ];
@@ -399,17 +400,30 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
 
       <div className="flex flex-wrap gap-1.5 mb-2">
-        {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className="px-3 py-1.5 rounded-lg"
-            style={{
-              fontSize: 12.5, fontWeight: 700,
-              background: tab === t.key ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
-              color: tab === t.key ? "#fff" : "var(--pp-text-secondary)",
-              border: "1px solid var(--pp-bg-border)",
-            }}>{t.label}</button>
-        ))}
+        {tabs.map((t) => {
+          const isClub = t.key === "club";
+          const active = tab === t.key;
+          return (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className="px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5"
+              style={{
+                fontSize: 12.5, fontWeight: isClub ? 800 : 700,
+                background: isClub
+                  ? (active
+                    ? "linear-gradient(135deg, #FFC000, #E8A33C)"
+                    : "linear-gradient(135deg, rgba(255,192,0,.16), rgba(255,192,0,.05))")
+                  : active ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
+                color: isClub ? (active ? "#1b1400" : "#FFC000") : active ? "#fff" : "var(--pp-text-secondary)",
+                border: isClub ? "1px solid rgba(255,192,0,.45)" : "1px solid var(--pp-bg-border)",
+                boxShadow: isClub ? "0 12px 22px -16px rgba(255,192,0,.8), inset 0 1px 0 rgba(255,255,255,.25)" : undefined,
+              }}>
+              {isClub && <Star className="w-3.5 h-3.5" style={{ fill: active ? "#1b1400" : "#FFC000" }} />}
+              {t.label}
+            </button>
+          );
+        })}
       </div>
+
 
       {error && <div className="pp-card" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger,#ef4444)" }}>{error}</div>}
 
@@ -428,7 +442,11 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
       )}
 
       {data && data.rowCount > 0 && (
-        <>
+        <div className="ov3d-stage">
+          <Ov3DChartFilters />
+          <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
+            <Ov3DGradients colors={["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"]} />
+          </svg>
           {tab === "overview" && (
             <>
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
@@ -531,7 +549,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                         <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [n === (isFr ? "Dossiers" : "Deals") ? fmtNum(Number(v)) : fmtMoney(Number(v)), n]} />
                         <Legend wrapperStyle={{ fontSize: 11.5 }} />
-                        <Bar yAxisId="l" name={isFr ? "Dossiers" : "Deals"} dataKey="deals" fill="#70AD47" radius={[5, 5, 0, 0]} />
+                        <Bar yAxisId="l" name={isFr ? "Dossiers" : "Deals"} dataKey="deals" fill={fill3d("#70AD47")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
                         <Line yAxisId="r" name={isFr ? "Comm./dossier" : "Comm./deal"} dataKey="commPerDeal" stroke="#FFC000" strokeWidth={2.4} dot={{ r: 2 }} />
                       </ComposedChart>
                     </ResponsiveContainer>
@@ -613,8 +631,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                       <YAxis tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
                       <Legend wrapperStyle={{ fontSize: 11.5 }} />
-                      <Bar name={String(year)} dataKey="cyCommission" fill="#ED7D31" radius={[5, 5, 0, 0]} />
-                      <Bar name={String(year - 1)} dataKey="pyCommission" fill="#A5A5A5" radius={[5, 5, 0, 0]} />
+                      <Bar name={String(year)} dataKey="cyCommission" fill={fill3d("#ED7D31")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
+                      <Bar name={String(year - 1)} dataKey="pyCommission" fill={fill3d("#A5A5A5")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -644,8 +662,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                       <YAxis type="category" dataKey="key" width={130} tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
                       <Legend wrapperStyle={{ fontSize: 11.5 }} />
-                      <Bar name={String(year)} dataKey="cyVolume" fill="#4472C4" radius={[0, 5, 5, 0]} />
-                      <Bar name={String(year - 1)} dataKey="pyVolume" fill="#A5A5A5" radius={[0, 5, 5, 0]} />
+                      <Bar name={String(year)} dataKey="cyVolume" fill={fill3d("#4472C4")} radius={[0, 5, 5, 0]}  filter="url(#ov3dExtrude)" />
+                      <Bar name={String(year - 1)} dataKey="pyVolume" fill={fill3d("#A5A5A5")} radius={[0, 5, 5, 0]}  filter="url(#ov3dExtrude)" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -687,7 +705,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                         <XAxis dataKey="key" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
                         <YAxis tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => fmtMoney(Number(v))} />
-                        <Bar dataKey="cyVolume" name="Volume" fill="#70AD47" radius={[5, 5, 0, 0]} />
+                        <Bar dataKey="cyVolume" name="Volume" fill={fill3d("#70AD47")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -715,8 +733,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                     <YAxis tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                     <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
                     <Legend wrapperStyle={{ fontSize: 11.5 }} />
-                    <Bar name={String(year)} dataKey="volume" fill="#4472C4" radius={[5, 5, 0, 0]} />
-                    <Bar name={String(year - 1)} dataKey="pyVolume" fill="#A5A5A5" radius={[5, 5, 0, 0]} />
+                    <Bar name={String(year)} dataKey="volume" fill={fill3d("#4472C4")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
+                    <Bar name={String(year - 1)} dataKey="pyVolume" fill={fill3d("#A5A5A5")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -764,69 +782,14 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
 
           {tab === "club" && (
-            <>
-              <Section
-                title={isFr ? "Club Excellence — classement de la saison" : "Club Excellence — season standings"}
-                right={<span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{data.season.current.start} → {data.season.current.end}</span>}
-              >
-                <Table
-                  head={["#", isFr ? "Courtier" : "Broker", "Volume", isFr ? "Doss." : "Deals", "Commission", isFr ? "Doss. moy." : "Avg deal", "BPS", "YoY vol."]}
-                  rows={data.club.map((c: any) => [
-                    c.isMe ? <span key="r" className="inline-flex items-center gap-1" style={{ fontWeight: 800 }}><Trophy className="w-3 h-3" style={{ color: "#FFC000" }} />{c.rank}</span> : c.rank,
-                    <span key="n" style={{ fontWeight: c.isMe ? 800 : 500, color: c.isMe ? "var(--pp-brand-accent-2)" : undefined }}>{c.broker}</span>,
-                    fmtMoney(c.volume), fmtNum(c.deals), fmtMoney(c.commission), fmtMoney(c.avgDeal), fmtBps(c.bps),
-                    <Delta key="d" value={c.volumeYoy} />,
-                  ])}
-                />
-              </Section>
-              <Section title={isFr ? "Ma saison mois par mois (août → juillet)" : "My season month by month (Aug → Jul)"}>
-                <div style={{ height: 250 }}>
-                  <ResponsiveContainer>
-                    <ComposedChart data={data.clubMonthly.map((m: any) => ({ name: `${MONTHS[m.month - 1]} ${String(m.year).slice(2)}`, ...m }))}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,.18)" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} />
-                      <YAxis tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                      <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
-                      <Bar name="Volume" dataKey="volume" fill="#8B5CF6" radius={[5, 5, 0, 0]} />
-                      <Line name="Commission" dataKey="commission" stroke="#FFC000" strokeWidth={2} dot={false} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </Section>
-
-              {Array.isArray(data.seasons) && (
-                <Section title={isFr ? "Saisons Club Excellence (4 dernières)" : "Club Excellence seasons (last 4)"}>
-                  <Table
-                    head={[isFr ? "Saison" : "Season", "Volume", isFr ? "Doss." : "Deals", "Commission", isFr ? "Doss. moy." : "Avg deal", "BPS", "YoY vol.", "YoY doss.", "YoY comm."]}
-                    rows={data.seasons.map((s2: any) => [
-                      <span key="l" style={{ fontWeight: 700 }}>{s2.label}</span>,
-                      fmtMoney(s2.volume), fmtNum(s2.deals), fmtMoney(s2.commission), fmtMoney(s2.avgDeal), fmtBps(s2.bps),
-                      <Delta key="a" value={s2.volumeYoy} />, <Delta key="b" value={s2.dealYoy} />, <Delta key="c" value={s2.commissionYoy} />,
-                    ])}
-                  />
-                  <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))" }}>
-                    {data.seasons.map((s2: any) => (
-                      <div key={s2.label} className="pp-card" style={{ padding: 10 }}>
-                        <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>{s2.label}</div>
-                        <div style={{ height: 160 }}>
-                          <ResponsiveContainer>
-                            <ComposedChart data={s2.monthly.map((m: any) => ({ name: MONTHS[m.month - 1], ...m }))}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,.18)" vertical={false} />
-                              <XAxis dataKey="name" tick={{ fontSize: 9, fill: "var(--pp-text-muted)" }} />
-                              <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
-                              <Bar name="Volume" dataKey="volume" fill="#4472C4" radius={[4, 4, 0, 0]} />
-                              <Line name="Commission" dataKey="commission" stroke="#FFC000" strokeWidth={2} dot={false} />
-                            </ComposedChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Section>
-              )}
-            </>
+            <ClubExcellencePanel
+              lang={lang}
+              data={data}
+              isAdminView={isAdminView}
+              onBroker={(b) => { setDrillData(null); setDrillAgent(b); }}
+            />
           )}
+
 
           {Array.isArray(data.reconciliation?.checks) && (
             <Section title={isFr ? "Contrôles de réconciliation (MATCH / MISMATCH)" : "Reconciliation checks (MATCH / MISMATCH)"}>
@@ -859,7 +822,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               </ul>
             </Section>
           )}
-        </>
+        </div>
       )}
 
       {isAdminView && drillAgent && (

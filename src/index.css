@@ -1217,3 +1217,37 @@ All colors MUST be HSL.
 .pp-drillable { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
 .pp-drillable:hover { transform: translateY(-2px); }
 [data-pp-hr="1"] .pp-drillable:hover { transform: none; outline: 2px solid var(--pp-brand-accent-2, #2E9BDC); }
+
+/* ---- Commissions pages: shared presentation helpers ---- */
+.pp-skel {
+  background: linear-gradient(90deg, rgba(127,127,127,.10) 25%, rgba(127,127,127,.20) 37%, rgba(127,127,127,.10) 63%);
+  background-size: 400% 100%;
+  animation: pp-skel-shimmer 1.4s ease infinite;
+}
+@keyframes pp-skel-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+.pp-tabs-scroll { scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.pp-tabs-scroll::-webkit-scrollbar { height: 5px; }
+.pp-tabs-scroll::-webkit-scrollbar-thumb { background: var(--pp-bg-border); border-radius: 999px; }
+.pp-tab-pill[aria-selected="false"]:hover { background: var(--pp-bg-card) !important; color: var(--pp-text-primary) !important; }
+.pp-tab-pill[aria-selected="true"]:hover { filter: brightness(1.06); }
+
+
+.pp-filters-sticky {
+  position: sticky; top: 0; z-index: 20;
+  padding: 8px 10px; border-radius: 14px; margin-bottom: 10px;
+  background: color-mix(in srgb, var(--pp-bg-elevated) 88%, transparent);
+  border: 1px solid var(--pp-bg-border);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 16px 34px -30px rgba(0,0,0,.9);
+}
+
+.pp-table-modern tbody tr { transition: background .14s ease; }
+.pp-table-modern tbody tr:hover { background: color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 10%, transparent) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-skel { animation: none; }
+}
+[data-pp-hr="1"] .pp-hero-aurora { opacity: .2 !important; filter: none !important; }
+[data-pp-hr="1"] .pp-chart-frame { box-shadow: none !important; }
+[data-pp-hr="1"] .pp-tab-pill { transform: none !important; }

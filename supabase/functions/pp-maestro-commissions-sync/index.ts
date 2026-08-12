@@ -110,9 +110,13 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader) return j({ success: false, error: "unauthorized", code: "unauthorized" }, 401);
-    const { data: u } = await admin.auth.getUser(authHeader.replace(/^Bearer\s+/i, ""));
-    const callerId = u?.user?.id ?? null;
-    if (!callerId) return j({ success: false, error: "unauthorized", code: "unauthorized" }, 401);
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    // Scheduled runs authenticate with the service role key (admin privileges).
+    const isService = token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const { data: u } = isService ? { data: null as any } : await admin.auth.getUser(token);
+    const callerId = isService ? null : (u?.user?.id ?? null);
+    if (!isService && !callerId) return j({ success: false, error: "unauthorized", code: "unauthorized" }, 401);
+    if (isService && mode === "self") return j({ success: false, error: "mode self requires a user", code: "bad_mode" }, 400);
 
     const SELECT = "id, user_id, full_name, first_name, last_name, email, maestro_broker_id";
 
@@ -128,8 +132,10 @@ Deno.serve(async (req) => {
       if (!prof) return j({ success: false, error: "profil introuvable", code: "no_profile" });
       targets = [prof as BrokerProfile];
     } else {
-      const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: callerId });
-      if (!isAdmin) return j({ success: false, error: "forbidden", code: "forbidden" }, 403);
+      if (!isService) {
+        const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: callerId });
+        if (!isAdmin) return j({ success: false, error: "forbidden", code: "forbidden" }, 403);
+      }
 
       let q = admin.from("planipret_profiles").select(SELECT);
       if (mode === "brokers") {

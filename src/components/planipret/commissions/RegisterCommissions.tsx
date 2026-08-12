@@ -621,13 +621,44 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           )}
 
           {tab === "brokers" && (
-            <BrokerLeaderboard
-              lang={lang}
-              brokers={data.brokers ?? []}
-              periodLabel={`${data.window?.start} → ${data.window?.end}`}
-              onSelect={(b) => { setDrillData(null); setDrillAgent(b); }}
-            />
+            <>
+              <div
+                className="mb-3 rounded-xl px-3 py-2.5"
+                style={{
+                  background: "var(--pp-bg-elevated)",
+                  border: "1px solid var(--pp-bg-border)",
+                  fontSize: 12.5,
+                  color: "var(--pp-text-secondary)",
+                }}
+              >
+                <div style={{ fontWeight: 800, color: "var(--pp-text-primary)", marginBottom: 4 }}>
+                  {isFr ? "Couverture du registre importé" : "Imported register coverage"}
+                </div>
+                <div>
+                  {isFr
+                    ? `${(data.availableAgents ?? []).length} courtier(s) présent(s) dans le registre · ${fmtNum(data.totalRows ?? 0)} ligne(s) sur la période.`
+                    : `${(data.availableAgents ?? []).length} broker(s) found in the register · ${fmtNum(data.totalRows ?? 0)} row(s) in period.`}
+                </div>
+                {(data.availableAgents ?? []).length > 0 && (
+                  <div style={{ marginTop: 4, opacity: 0.9 }}>
+                    {(data.availableAgents ?? []).join(" · ")}
+                  </div>
+                )}
+                <div style={{ marginTop: 6, fontSize: 11.5, opacity: 0.85 }}>
+                  {isFr
+                    ? "Le nombre de courtiers reflète uniquement le fichier importé. Pour voir toute l'entreprise, importez un registre global (toutes les lignes) plutôt qu'un tableau de bord individuel."
+                    : "Broker count reflects the imported file only. To see the whole firm, import a company-wide register instead of an individual dashboard export."}
+                </div>
+              </div>
+              <BrokerLeaderboard
+                lang={lang}
+                brokers={data.brokers ?? []}
+                periodLabel={`${data.window?.start} → ${data.window?.end}`}
+                onSelect={(b) => { setDrillData(null); setDrillAgent(b); }}
+              />
+            </>
           )}
+
 
           {tab === "gaps" && isAdminView && (
             <CommissionDiscrepancies lang={lang} discrepancies={data.discrepancies} />

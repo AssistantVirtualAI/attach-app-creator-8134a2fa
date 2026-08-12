@@ -277,10 +277,10 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
         {data?.reconciliation && (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg" style={{
             fontSize: 11.5, fontWeight: 700,
-            background: data.reconciliation.volumeOk && data.reconciliation.dealsOk ? "rgba(22,163,74,.12)" : "rgba(245,158,11,.14)",
-            color: data.reconciliation.volumeOk && data.reconciliation.dealsOk ? "#16a34a" : "#f59e0b",
+            background: data.reconciliation.allOk ?? (data.reconciliation.volumeOk && data.reconciliation.dealsOk) ? "rgba(22,163,74,.12)" : "rgba(245,158,11,.14)",
+            color: data.reconciliation.allOk ?? (data.reconciliation.volumeOk && data.reconciliation.dealsOk) ? "#16a34a" : "#f59e0b",
           }}>
-            {data.reconciliation.volumeOk && data.reconciliation.dealsOk
+            {(data.reconciliation.allOk ?? (data.reconciliation.volumeOk && data.reconciliation.dealsOk))
               ? <><ShieldCheck className="w-3.5 h-3.5" />{isFr ? "Totaux réconciliés" : "Totals reconciled"}</>
               : <><AlertTriangle className="w-3.5 h-3.5" />{isFr ? "Écart de réconciliation" : "Reconciliation gap"}</>}
           </span>
@@ -559,7 +559,71 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                   </ResponsiveContainer>
                 </div>
               </Section>
+
+              {Array.isArray(data.seasons) && (
+                <Section title={isFr ? "Saisons Club Excellence (4 dernières)" : "Club Excellence seasons (last 4)"}>
+                  <Table
+                    head={[isFr ? "Saison" : "Season", "Volume", isFr ? "Doss." : "Deals", "Commission", isFr ? "Doss. moy." : "Avg deal", "BPS", "YoY vol.", "YoY doss.", "YoY comm."]}
+                    rows={data.seasons.map((s2: any) => [
+                      <span key="l" style={{ fontWeight: 700 }}>{s2.label}</span>,
+                      fmtMoney(s2.volume), fmtNum(s2.deals), fmtMoney(s2.commission), fmtMoney(s2.avgDeal), fmtBps(s2.bps),
+                      <Delta key="a" value={s2.volumeYoy} />, <Delta key="b" value={s2.dealYoy} />, <Delta key="c" value={s2.commissionYoy} />,
+                    ])}
+                  />
+                  <div className="grid gap-3 mt-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))" }}>
+                    {data.seasons.map((s2: any) => (
+                      <div key={s2.label} className="pp-card" style={{ padding: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>{s2.label}</div>
+                        <div style={{ height: 160 }}>
+                          <ResponsiveContainer>
+                            <ComposedChart data={s2.monthly.map((m: any) => ({ name: MONTHS[m.month - 1], ...m }))}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(127,127,127,.18)" vertical={false} />
+                              <XAxis dataKey="name" tick={{ fontSize: 9, fill: "var(--pp-text-muted)" }} />
+                              <YAxis tick={{ fontSize: 10, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+                              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
+                              <Bar name="Volume" dataKey="volume" fill="#4472C4" radius={[4, 4, 0, 0]} />
+                              <Line name="Commission" dataKey="commission" stroke="#FFC000" strokeWidth={2} dot={false} />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              )}
             </>
+          )}
+
+          {Array.isArray(data.reconciliation?.checks) && (
+            <Section title={isFr ? "Contrôles de réconciliation (MATCH / MISMATCH)" : "Reconciliation checks (MATCH / MISMATCH)"}>
+              <Table
+                head={[isFr ? "Contrôle" : "Check", isFr ? "Attendu" : "Expected", isFr ? "Obtenu" : "Actual", "Écart", "Statut"]}
+                rows={data.reconciliation.checks.map((c: any) => [
+                  c.label,
+                  c.key.includes("Deals") ? fmtNum(c.expected) : fmtMoney(c.expected),
+                  c.key.includes("Deals") ? fmtNum(c.actual) : fmtMoney(c.actual),
+                  c.key.includes("Deals") ? fmtNum(c.delta) : fmtMoney(c.delta),
+                  <span key="s" className="inline-flex items-center gap-1" style={{ fontWeight: 800, fontSize: 11.5, color: c.ok ? "#16a34a" : "#ef4444" }}>
+                    {c.ok ? <ShieldCheck className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}{c.status}
+                  </span>,
+                ])}
+              />
+              {data.reconciliation.quarterCheck && (
+                <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)", marginTop: 8 }}>
+                  {data.reconciliation.quarterCheck.applicable
+                    ? `${isFr ? "Trimestres complets inclus" : "Completed quarters included"} : ${data.reconciliation.quarterCheck.quarters.map((q: number) => `Q${q}`).join(", ")} · ${fmtMoney(data.reconciliation.quarterCheck.volume)} · ${fmtNum(data.reconciliation.quarterCheck.deals)} ${isFr ? "doss." : "deals"} · ${fmtMoney(data.reconciliation.quarterCheck.commission)}`
+                    : data.reconciliation.quarterCheck.note}
+                </div>
+              )}
+            </Section>
+          )}
+
+          {Array.isArray(data.calcNotes) && (
+            <Section title={isFr ? "Notes de calcul" : "Calculation notes"}>
+              <ul style={{ fontSize: 12, color: "var(--pp-text-secondary)", lineHeight: 1.6, paddingLeft: 16, listStyle: "disc" }}>
+                {data.calcNotes.map((n: string, i: number) => <li key={i}>{n}</li>)}
+              </ul>
+            </Section>
           )}
         </>
       )}

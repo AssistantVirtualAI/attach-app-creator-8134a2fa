@@ -132,6 +132,55 @@ export default function CommissionValidationPanel({ isFr, call }: Props) {
             ))}
           </div>
 
+          {r.anomalyCounts && Object.keys(r.anomalyCounts).length > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, fontWeight: 700 }}>
+                <AlertTriangle className="w-3.5 h-3.5" style={{ color: "var(--pp-warning,#f59e0b)" }} />
+                {isFr ? "Anomalies détectées" : "Detected anomalies"}
+                <span style={{ color: "var(--pp-text-muted)", fontWeight: 600 }}>({r.anomalyTotal})</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {Object.entries(r.anomalyCounts as Record<string, number>)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([k, v]) => (
+                    <span key={k} className="px-2.5 py-1 rounded-lg" style={{
+                      fontSize: 11.5, fontWeight: 700,
+                      background: "rgba(245,158,11,.14)", color: "#f59e0b",
+                      border: "1px solid rgba(245,158,11,.25)",
+                    }}>{k.replace(/_/g, " ")} · {v}</span>
+                  ))}
+              </div>
+              {Array.isArray(data.anomalies) && data.anomalies.length > 0 && (
+                <div className="mt-2 overflow-x-auto" style={{ maxHeight: 220, overflowY: "auto" }}>
+                  <table style={{ width: "100%", fontSize: 11.5, borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ color: "var(--pp-text-muted)", textAlign: "left" }}>
+                        {[isFr ? "Ligne source" : "Source row", isFr ? "Année" : "Year", isFr ? "Contrat" : "Contract",
+                          isFr ? "Agent" : "Agent", isFr ? "Anomalie" : "Anomaly", isFr ? "Détail" : "Detail"].map((h) => (
+                          <th key={h} style={{ padding: "5px 8px", whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.anomalies.slice(0, 200).map((a: any, i: number) => (
+                        <tr key={i} style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
+                          <td style={{ padding: "5px 8px" }}>{a.sourceRow ?? "—"}</td>
+                          <td style={{ padding: "5px 8px" }}>{a.year ?? "—"}</td>
+                          <td style={{ padding: "5px 8px" }}>{a.number ?? "—"}</td>
+                          <td style={{ padding: "5px 8px" }}>{a.agent ?? "—"}</td>
+                          <td style={{ padding: "5px 8px", fontWeight: 600 }}>{String(a.kind).replace(/_/g, " ")}</td>
+                          <td style={{ padding: "5px 8px", color: "var(--pp-text-muted)" }}>{a.detail || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+
+
           <div className="mt-4">
             <div className="flex items-center gap-1.5" style={{ fontSize: 12.5, fontWeight: 700 }}>
               <Users className="w-3.5 h-3.5" />{isFr ? "Courtiers rattachés" : "Linked brokers"}

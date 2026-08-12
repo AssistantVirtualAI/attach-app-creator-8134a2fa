@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
     const isAdmin = Boolean(isAdminData);
 
     // Pull the years we need: PY, CY, and the season overlap year.
-    const years = [year - 1, year, year + 1];
+    const years = [year - 4, year - 3, year - 2, year - 1, year, year + 1];
     const { data: allRowsRaw, error } = await admin
       .from("planipret_commission_register")
       .select(
@@ -304,6 +304,41 @@ Deno.serve(async (req) => {
       return { month: m, year: y, volume: mm.volume, deals: mm.deals, commission: mm.commission };
     });
 
+    // Four Aug->Jul season blocks (v3 spec): current + three prior seasons.
+    const seasonBaseYear = year - (month >= 8 ? 0 : 1);
+    const seasons = [0, 1, 2, 3].map((back) => {
+      const sy = seasonBaseYear - back;
+      const w = seasonWindow(sy);
+      const wp = seasonWindow(sy - 1);
+      const c = metrics(mine, w);
+      const p = metrics(mine, wp);
+      return {
+        seasonYear: sy,
+        label: `${sy}-${sy + 1}`,
+        window: w,
+        priorWindow: wp,
+        volume: c.volume,
+        deals: c.deals,
+        commission: c.commission,
+        avgDeal: c.avgDeal,
+        bps: c.bps,
+        commissionPerDeal: c.commissionPerDeal,
+        pyVolume: p.volume,
+        pyDeals: p.deals,
+        pyCommission: p.commission,
+        volumeYoy: yoy(c.volume, p.volume),
+        dealYoy: yoy(c.deals, p.deals),
+        commissionYoy: yoy(c.commission, p.commission),
+        monthly: Array.from({ length: 12 }, (_, i) => {
+          const m2 = ((7 + i) % 12) + 1;
+          const y2 = m2 >= 8 ? sy : sy + 1;
+          const mw = monthWindow(y2, m2);
+          const mm = metrics(mine, mw);
+          return { month: m2, year: y2, volume: mm.volume, deals: mm.deals, commission: mm.commission };
+        }),
+      };
+    });
+
     // Yearly history for the year filter
     const availableYearsRes = await admin
       .from("planipret_commission_register")
@@ -314,19 +349,85 @@ Deno.serve(async (req) => {
       new Set(((availableYearsRes.data ?? []) as any[]).map((r) => r.fiscal_year as number)),
     ).sort((a, b) => b - a);
 
-    // Reconciliation checks
-    const lenderVolume = lenders.reduce((s, l) => s + l.cyVolume, 0);
-    const lenderDeals = lenders.reduce((s, l) => s + l.cyDeals, 0);
-    const productVolume = products.reduce((s, l) => s + l.cyVolume, 0);
-    const termVolume = terms.reduce((s, l) => s + l.cyVolume, 0);
-    const matrixVolume = matrix.reduce((s, r) => s + r.total, 0);
+    // Reconciliation checks (v3 §17)
+    const lenderVolume = lenders.reduce((s2, l) => s2 + l.cyVolume, 0);
+    const lenderDeals = lenders.reduce((s2, l) => s2 + l.cyDeals, 0);
+    const lenderCommission = lenders.reduce((s2, l) => s2 + l.cyCommission, 0);
+    const productVolume = products.reduce((s2, l) => s2 + l.cyVolume, 0);
+    const termVolume = terms.reduce((s2, l) => s2 + l.cyVolume, 0);
+    const matrixVolume = matrix.reduce((s2, r) => s2 + r.total, 0);
+
+    // Broker Monthly vs Lender Monthly independent MATCH/MISMATCH (v3 §11)
+    const brokerScope = agent ? mine : scopedAll;
+    const brokerBreak = uniq(brokerScope.map((r) => r.agent_name)).map((name) => ({
+      broker: name,
+      volume: periodVolume(brokerScope, cyYtd, { broker: name }),
+      deals: periodDeals(brokerScope, cyYtd, { broker: name }),
+      commission: periodCommission(brokerScope, cyYtd, { broker: name }),
+    }));
+    const brokerVolume = brokerBreak.reduce((s2, b) => s2 + b.volume, 0);
+    const brokerDeals = brokerBreak.reduce((s2, b) => s2 + b.deals, 0);
+    const brokerCommission = brokerBreak.reduce((s2, b) => s2 + b.commission, 0);
+
     const near = (a: number, b: number) => Math.abs(a - b) < 0.5;
+    const kpiVolume = kpi.ytd.volume;
+    const kpiDeals = kpi.ytd.deals;
+    const kpiCommission = kpi.ytd.commission;
+
+    // Quarters reconcile to the cumulative window only when fully inside it (v3 §17)
+    const completedQuarters = [1, 2, 3, 4]
+      .map((q) => ({ q, w: quarterWindow(year, q) }))
+      .filter((x) => x.w.start >= cyYtd.start && x.w.end <= cyYtd.end);
+    const quarterUnionWindow: Window | null = completedQuarters.length
+      ? { start: completedQuarters[0].w.start, end: completedQuarters[completedQuarters.length - 1].w.end }
+      : null;
+    const quarterCheck = quarterUnionWindow
+      ? {
+          applicable: true,
+          quarters: completedQuarters.map((x) => x.q),
+          window: quarterUnionWindow,
+          volume: periodVolume(mine, quarterUnionWindow),
+          deals: periodDeals(mine, quarterUnionWindow),
+          commission: periodCommission(mine, quarterUnionWindow),
+          note:
+            "Le contrôle trimestriel ne porte que sur les trimestres complets inclus dans la fenêtre sélectionnée ; l'unicité est recalculée sur la fenêtre trimestrielle, jamais par addition des mois.",
+        }
+      : { applicable: false, quarters: [] as number[], note: "Aucun trimestre complet dans la fenêtre sélectionnée." };
+
+    const checks = [
+      { key: "lenderVolume", label: "Volume — Prêteurs vs KPI", expected: kpiVolume, actual: lenderVolume, ok: near(lenderVolume, kpiVolume) },
+      { key: "productVolume", label: "Volume — Mix produits vs KPI", expected: kpiVolume, actual: productVolume, ok: near(productVolume, kpiVolume) },
+      { key: "termVolume", label: "Volume — Mix termes vs KPI", expected: kpiVolume, actual: termVolume, ok: near(termVolume, kpiVolume) },
+      { key: "matrixVolume", label: "Volume — Matrice type × terme vs KPI", expected: kpiVolume, actual: matrixVolume, ok: near(matrixVolume, kpiVolume) },
+      { key: "brokerVolume", label: "Volume — Courtiers vs Prêteurs", expected: lenderVolume, actual: brokerVolume, ok: near(brokerVolume, lenderVolume) },
+      { key: "lenderDeals", label: "Dossiers — Prêteurs vs KPI", expected: kpiDeals, actual: lenderDeals, ok: lenderDeals === kpiDeals },
+      { key: "brokerDeals", label: "Dossiers — Courtiers vs Prêteurs", expected: lenderDeals, actual: brokerDeals, ok: brokerDeals === lenderDeals },
+      { key: "lenderCommission", label: "Commissions — Prêteurs vs KPI", expected: kpiCommission, actual: lenderCommission, ok: near(lenderCommission, kpiCommission) },
+      { key: "brokerCommission", label: "Commissions — Courtiers vs KPI", expected: kpiCommission, actual: brokerCommission, ok: near(brokerCommission, kpiCommission) },
+    ].map((c) => ({ ...c, status: c.ok ? "MATCH" : "MISMATCH", delta: c.actual - c.expected }));
+
     const reconciliation = {
-      volumeOk:
-        near(lenderVolume, kpi.ytd.volume) && near(productVolume, kpi.ytd.volume) && near(termVolume, kpi.ytd.volume) && near(matrixVolume, kpi.ytd.volume),
-      dealsOk: lenderDeals === kpi.ytd.deals,
-      details: { kpiVolume: kpi.ytd.volume, lenderVolume, productVolume, termVolume, matrixVolume, kpiDeals: kpi.ytd.deals, lenderDeals },
+      volumeOk: checks.filter((c) => c.key.toLowerCase().includes("volume")).every((c) => c.ok),
+      dealsOk: checks.filter((c) => c.key.toLowerCase().includes("deals")).every((c) => c.ok),
+      commissionOk: checks.filter((c) => c.key.toLowerCase().includes("commission")).every((c) => c.ok),
+      allOk: checks.every((c) => c.ok),
+      checks,
+      quarterCheck,
+      details: {
+        kpiVolume, lenderVolume, productVolume, termVolume, matrixVolume, brokerVolume,
+        kpiDeals, lenderDeals, brokerDeals,
+        kpiCommission, lenderCommission, brokerCommission,
+      },
     };
+
+    const calcNotes = [
+      "Volume : lignes « base » avec loan_amt > 0 dans la fenêtre exacte ; clé unique = numéro + institution + type de prêt + montant du prêt (la tranche de prêt fait partie de la clé).",
+      "Dossiers : lignes « base » dans la fenêtre, un contrat compté une seule fois, attribué au prêteur / type / terme / courtier de sa première ligne base de la période.",
+      "Commissions : somme de tous les montants de la fenêtre, tous types confondus (base, bonus, bonus2, perform, ajustements), sans dédoublonnage.",
+      "Tranches de prêt : des montants distincts sous le même contrat / prêteur / type sont conservés ; les lignes base strictement identiques ne sont comptées qu'une fois.",
+      "Réinitialisation : l'unicité est recalculée intégralement dans chaque fenêtre (mois, trimestre, cumul annuel, saison, filtre) — jamais par addition de résultats mensuels.",
+      "BPS = Commissions / Volume × 10 000 · Dossier moyen = Volume / Dossiers · Commission par dossier = Commissions / Dossiers.",
+    ];
 
     return json({
       ok: true,
@@ -357,6 +458,8 @@ Deno.serve(async (req) => {
       commissionTypes,
       club,
       clubMonthly,
+      seasons,
+      calcNotes,
       season: { current: seasonCur, previous: seasonPrev },
       reconciliation,
     });

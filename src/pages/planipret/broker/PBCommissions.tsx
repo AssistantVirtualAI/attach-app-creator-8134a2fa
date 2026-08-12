@@ -73,10 +73,40 @@ export default function PBCommissions() {
       />
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        {tab("register", Archive, isFr ? "Registre 2022+" : "Register 2022+")}
+        {tab("register", Archive, isFr ? "Registre" : "Register")}
         {tab("maestro", Cloud, "Maestro")}
-        {tab("internal", Database, isFr ? "Données internes" : "Internal data")}
-        {tab("provenance", ShieldCheck, isFr ? "Provenance" : "Provenance")}
+        <div className="relative">
+          <button
+            onClick={() => setMoreOpen((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
+            style={{
+              fontSize: 12.5, fontWeight: 600,
+              background: source === "internal" || source === "provenance" ? "var(--pp-brand-accent-2)" : "transparent",
+              color: source === "internal" || source === "provenance" ? "#fff" : "var(--pp-text-muted)",
+              border: "1px solid var(--pp-bg-border)",
+            }}
+          >
+            {isFr ? "Plus" : "More"}
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+          {moreOpen && (
+            <div
+              className="absolute z-20 mt-1 rounded-lg overflow-hidden"
+              style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", minWidth: 180 }}
+            >
+              {([["internal", isFr ? "Données internes" : "Internal data", Database], ["provenance", isFr ? "Provenance" : "Provenance", ShieldCheck]] as const).map(([v, label, Icon]) => (
+                <button
+                  key={v}
+                  onClick={() => { setSource(v as Source); setMoreOpen(false); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-left"
+                  style={{ fontSize: 12.5, color: source === v ? "var(--pp-text-primary)" : "var(--pp-text-secondary)", fontWeight: source === v ? 700 : 500 }}
+                >
+                  <Icon className="w-3.5 h-3.5" />{label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {source === "maestro" && maestroConnected === null && (
           <span className="flex items-center gap-1.5" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
             <Loader2 className="w-3.5 h-3.5 animate-spin" />

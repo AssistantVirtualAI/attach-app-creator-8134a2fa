@@ -571,7 +571,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           </svg>
           {tab === "overview" && (
             <>
-              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))" }}>
                 <Kpi label={isFr ? "Volume" : "Volume"} value={fmtMoney(kpi.ytd.volume)} delta={pctDelta(kpi.ytd.volume, kpi.ytdPy.volume)} accent={CHART_COLORS[0]} spark={spark.volume}
                   info={isFr ? "Somme des montants de prêt des dossiers comptés dans le volume. L'écart compare la même fenêtre de l'année précédente. Cliquez pour voir les dossiers."
                     : "Sum of loan amounts counted in volume. The delta compares the same window last year. Click to see the deals."}
@@ -1003,7 +1003,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
           {tab === "periods" && (
             <>
-              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))" }}>
                 <Kpi label={isFr ? "Volume — période" : "Volume — period"} value={fmtMoney(kpi.ytd.volume)} delta={pctDelta(kpi.ytd.volume, kpi.ytdPy.volume)} accent="#4472C4" />
                 <Kpi label={isFr ? "Dossiers — période" : "Deals — period"} value={fmtNum(kpi.ytd.deals)} delta={pctDelta(kpi.ytd.deals, kpi.ytdPy.deals)} accent="#70AD47" />
                 <Kpi label={isFr ? "Commission — période" : "Commission — period"} value={fmtMoney(kpi.ytd.commission)} delta={pctDelta(kpi.ytd.commission, kpi.ytdPy.commission)} accent="#ED7D31" />

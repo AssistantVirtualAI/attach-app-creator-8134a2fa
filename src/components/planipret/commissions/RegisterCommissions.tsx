@@ -545,6 +545,19 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
             <Ov3DGradients colors={["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"]} />
           </svg>
+
+          <div className="mb-3">
+            <CommissionInsights
+              lang={lang}
+              context={tabLabel}
+              summary={ai?.summary ?? ""}
+              insights={(ai?.insights ?? []) as any}
+              loading={aiLoading}
+              error={aiError}
+              generated={!!ai}
+              onGenerate={() => void generateInsights(true)}
+            />
+          </div>
           {tab === "overview" && (
             <>
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))" }}>
@@ -602,18 +615,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                   </ResponsiveContainer>
                 </div>
               </Section>
-
-              <div className="mt-3">
-                <CommissionInsights
-                  lang={lang}
-                  summary={ai?.summary ?? ""}
-                  insights={(ai?.insights ?? []) as any}
-                  loading={aiLoading}
-                  error={aiError}
-                  generated={!!ai}
-                  onGenerate={() => void generateInsights(true)}
-                />
-              </div>
 
               <Section title={isFr ? "Commission par type" : "Commission by type"} chart={240} accent={CHART_COLORS[2]} info={isFr ? "Répartition du montant de commission entre les catégories du registre (commission de base, bonis, ajustements)." : "Split of commission amount across the register categories (base commission, bonuses, adjustments)."}>
                 <div style={{ height: 240 }}>
@@ -1014,38 +1015,6 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             <RegisterDealsTable deals={filteredDeals as any} lang={lang} />
           )}
 
-          {isAdminView && Array.isArray(data.reconciliation?.checks) && (
-
-            <Section title={isFr ? "Contrôles de réconciliation (MATCH / MISMATCH)" : "Reconciliation checks (MATCH / MISMATCH)"}>
-              <Table
-                head={[isFr ? "Contrôle" : "Check", isFr ? "Attendu" : "Expected", isFr ? "Obtenu" : "Actual", "Écart", "Statut"]}
-                rows={data.reconciliation.checks.map((c: any) => [
-                  c.label,
-                  c.key.includes("Deals") ? fmtNum(c.expected) : fmtMoney(c.expected),
-                  c.key.includes("Deals") ? fmtNum(c.actual) : fmtMoney(c.actual),
-                  c.key.includes("Deals") ? fmtNum(c.delta) : fmtMoney(c.delta),
-                  <span key="s" className="inline-flex items-center gap-1" style={{ fontWeight: 800, fontSize: 11.5, color: c.ok ? "#16a34a" : "#ef4444" }}>
-                    {c.ok ? <ShieldCheck className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}{c.status}
-                  </span>,
-                ])}
-              />
-              {data.reconciliation.quarterCheck && (
-                <div style={{ fontSize: 11.5, color: "var(--pp-text-muted)", marginTop: 8 }}>
-                  {data.reconciliation.quarterCheck.applicable
-                    ? `${isFr ? "Trimestres complets inclus" : "Completed quarters included"} : ${data.reconciliation.quarterCheck.quarters.map((q: number) => `Q${q}`).join(", ")} · ${fmtMoney(data.reconciliation.quarterCheck.volume)} · ${fmtNum(data.reconciliation.quarterCheck.deals)} ${isFr ? "doss." : "deals"} · ${fmtMoney(data.reconciliation.quarterCheck.commission)}`
-                    : data.reconciliation.quarterCheck.note}
-                </div>
-              )}
-            </Section>
-          )}
-
-          {isAdminView && Array.isArray(data.calcNotes) && (
-            <Section title={isFr ? "Notes de calcul" : "Calculation notes"}>
-              <ul style={{ fontSize: 12, color: "var(--pp-text-secondary)", lineHeight: 1.6, paddingLeft: 16, listStyle: "disc" }}>
-                {data.calcNotes.map((n: string, i: number) => <li key={i}>{n}</li>)}
-              </ul>
-            </Section>
-          )}
         </div>
       )}
 

@@ -204,6 +204,9 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     setTab("overview");
   };
 
+  // Bumped after a Maestro sync to refetch the stats.
+  const [refreshKey, setRefreshKey] = useState(0);
+
   // Broker drill-down
   const [drillAgent, setDrillAgent] = useState<string | null>(null);
   const [drillData, setDrillData] = useState<any>(null);

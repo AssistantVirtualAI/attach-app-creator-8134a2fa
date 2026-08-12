@@ -18,18 +18,21 @@ export function useSupports3D() {
       const lowCpu = typeof navigator.hardwareConcurrency === "number" && navigator.hardwareConcurrency <= 3;
       const forcedFlat =
         getComputedStyle(document.documentElement).getPropertyValue("--ov3d-d").trim() === "0";
+      // High readability mode always renders the accessible flat charts.
+      const highReadability = document.documentElement.getAttribute("data-pp-hr") === "1";
       // SVG filters (used for the extrusion) are the expensive part.
       const noFilters = typeof CSS !== "undefined" && CSS.supports && !CSS.supports("filter", "url(#x)");
-      setOk(!(reduced || lowMem || lowCpu || forcedFlat || noFilters));
+      setOk(!(reduced || lowMem || lowCpu || forcedFlat || highReadability || noFilters));
     };
 
     compute();
     const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     mq?.addEventListener?.("change", compute);
-    // React to the user changing the 3D intensity control at runtime.
+    // React to the user changing the 3D intensity control / readability mode.
     const mo = new MutationObserver(compute);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["style", "data-pp-hr"] });
     return () => { mq?.removeEventListener?.("change", compute); mo.disconnect(); };
+
   }, []);
 
   return ok;

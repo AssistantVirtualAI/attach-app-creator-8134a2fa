@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     if (action === "summary" || action === "validate") {
       const rows = await fetchAllRows(
         admin,
-        "fiscal_year,broker_user_id,agent_name,agent_key,first_name,last_name,maestro_broker_id,match_method,loan_amt,amount,commission_type,date_trans,number",
+        "source_row,fiscal_year,broker_user_id,agent_name,agent_key,first_name,last_name,maestro_broker_id,match_method,loan_amt,amount,commission_type,date_trans,number,institution,mortgage_type",
       );
       const byYear: Record<string, number> = {};
       const brokers = new Map<string, any>();
@@ -85,12 +85,30 @@ Deno.serve(async (req) => {
       let totalVolume = 0;
       let totalCommission = 0;
       let noDate = 0;
+      const KNOWN_TYPES = new Set(["base", "bonus", "bonus2", "perform", "adjustment", "ajustement"]);
+      const anomalies: any[] = [];
+      const pushAnomaly = (r: any, kind: string, detail: string) => {
+        if (anomalies.length < 500) {
+          anomalies.push({ kind, detail, sourceRow: r.source_row ?? null, number: r.number ?? null, agent: r.agent_name ?? null, year: r.fiscal_year ?? null });
+        }
+      };
+      const anomalyCounts: Record<string, number> = {};
+      const bump = (k: string) => { anomalyCounts[k] = (anomalyCounts[k] ?? 0) + 1; };
       const dealSet = new Set<string>();
       const volSet = new Set<string>();
 
       for (const r of rows) {
         byYear[r.fiscal_year] = (byYear[r.fiscal_year] ?? 0) + 1;
-        if (!r.date_trans) noDate++;
+        if (!r.date_trans) { noDate++; bump("date_manquante"); pushAnomaly(r, "date_manquante", "date_trans absente"); }
+        else if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.date_trans))) { bump("date_invalide"); pushAnomaly(r, "date_invalide", String(r.date_trans)); }
+        if (r.amount !== null && r.amount !== undefined && !Number.isFinite(Number(r.amount))) { bump("montant_non_numerique"); pushAnomaly(r, "montant_non_numerique", String(r.amount)); }
+        if (r.loan_amt !== null && r.loan_amt !== undefined && !Number.isFinite(Number(r.loan_amt))) { bump("loan_amt_non_numerique"); pushAnomaly(r, "loan_amt_non_numerique", String(r.loan_amt)); }
+        const ct = String(r.commission_type ?? "").trim().toLowerCase();
+        if (!ct) { bump("type_commission_manquant"); pushAnomaly(r, "type_commission_manquant", ""); }
+        else if (!KNOWN_TYPES.has(ct)) { bump("type_commission_inconnu"); pushAnomaly(r, "type_commission_inconnu", ct); }
+        if (ct === "base" && Number(r.loan_amt ?? 0) <= 0) { bump("base_sans_montant_pret"); pushAnomaly(r, "base_sans_montant_pret", String(r.loan_amt ?? "")); }
+        if (!r.number) { bump("contrat_manquant"); pushAnomaly(r, "contrat_manquant", ""); }
+        if (!r.agent_name) { bump("agent_manquant"); pushAnomaly(r, "agent_manquant", ""); }
         totalCommission += Number(r.amount ?? 0);
         if (r.commission_type === "base" && Number(r.loan_amt) > 0) {
           const vk = `${r.number}|${r.institution ?? ""}|${r.mortgage_type ?? ""}|${Number(r.loan_amt).toFixed(2)}`;
@@ -157,7 +175,10 @@ Deno.serve(async (req) => {
           brokerDealsSum: brokerList.reduce((s: number, b: any) => s + b.deals, 0),
           withMaestroId: rows.filter((r: any) => r.maestro_broker_id).length,
           withNames: rows.filter((r: any) => r.first_name || r.last_name).length,
+          anomalyCounts,
+          anomalyTotal: Object.values(anomalyCounts).reduce((a: number, b: number) => a + b, 0),
         },
+        anomalies,
       });
     }
 

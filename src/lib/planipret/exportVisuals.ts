@@ -22,6 +22,7 @@ async function capture(node: HTMLElement, scale = 2): Promise<HTMLCanvasElement>
     scale: Math.min(scale, window.devicePixelRatio > 1 ? 2 : 1.6),
     useCORS: true,
     logging: false,
+    ignoreElements: (el: Element) => (el as HTMLElement).classList?.contains("pp-hide-export"),
     windowWidth: node.scrollWidth,
   });
 }

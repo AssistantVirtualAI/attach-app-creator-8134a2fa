@@ -17,7 +17,8 @@ import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
 import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 import RegisterHealthBadge from "./RegisterHealthBadge";
-import RegisterDealsTable from "./RegisterDealsTable";
+import RegisterDealsTable, { type DealLine } from "./RegisterDealsTable";
+import RegisterDrilldown, { dealsCsv } from "./RegisterDrilldown";
 
 type Lang = "fr" | "en";
 type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "gaps" | "data" | "deals";
@@ -130,19 +131,21 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const isAdminView = scope === "admin";
   const MONTHS = isFr ? MONTHS_FR : MONTHS_EN;
   const now = new Date();
-  const saved = isAdminView ? readAdminCommissionFilters() : null;
+  const scopeKey = isAdminView ? "admin" : "broker";
+  const saved = readAdminCommissionFilters(scopeKey);
   const [year, setYear] = useState(saved?.year ?? now.getFullYear());
   const [month, setMonth] = useState(12);
   const [granularity, setGranularity] = useState<Granularity>((saved?.granularity as Granularity) ?? "ytd");
   const [periodIndex, setPeriodIndex] = useState(saved?.periodIndex ?? 12);
-  const [agent, setAgent] = useState(saved?.agent ?? "");
+  const [agent, setAgent] = useState(isAdminView ? (saved?.agent ?? "") : "");
+  const [lender, setLender] = useState(saved?.lender ?? "");
   const [tab, setTab] = useState<Tab>((saved?.tab as Tab) ?? "overview");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Persist the admin filters in the browser so the same view reopens later.
-  const { clear: clearSavedFilters } = useAdminCommissionFilters(isAdminView, { year, granularity, periodIndex, agent, tab });
+  const { clear: clearSavedFilters } = useAdminCommissionFilters(true, { year, granularity, periodIndex, agent, lender, tab }, scopeKey);
   const resetFilters = () => {
     const d = defaultAdminCommissionFilters();
     clearSavedFilters();
@@ -150,6 +153,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     setGranularity(d.granularity as Granularity);
     setPeriodIndex(d.periodIndex);
     setAgent("");
+    setLender("");
     setTab("overview");
   };
 
@@ -265,6 +269,32 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   }, [trendData]);
 
   const kpi = data?.kpi;
+
+  /* ---- Advanced filtering (lender) applied client-side on the deal lines ---- */
+  const allDeals: DealLine[] = useMemo(() => (data?.deals ?? []) as DealLine[], [data]);
+  const lenderOptions: string[] = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of allDeals) if (d.institution) set.add(d.institution);
+    for (const l of (data?.lenders ?? [])) if (l?.name) set.add(l.name);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [allDeals, data]);
+
+  const filteredDeals: DealLine[] = useMemo(
+    () => (lender ? allDeals.filter((d) => d.institution === lender) : allDeals),
+    [allDeals, lender],
+  );
+
+  const filteredTotals = useMemo(() => {
+    const volume = filteredDeals.filter((d) => d.countedInVolume).reduce((s2, d) => s2 + (d.loanAmt || 0), 0);
+    const commission = filteredDeals.reduce((s2, d) => s2 + (d.amount || 0), 0);
+    const count = filteredDeals.filter((d) => d.countedInDeals).length;
+    return { volume, commission, count, bps: volume ? (commission / volume) * 10000 : 0 };
+  }, [filteredDeals]);
+
+  /* ---- Drill-down modal ---- */
+  const [drill, setDrill] = useState<{ title: string; subtitle?: string; deals: DealLine[] } | null>(null);
+  const openDrill = (title: string, deals: DealLine[], subtitle?: string) => setDrill({ title, deals, subtitle });
+  const periodSubtitle = `${data?.periodLabel ?? year}${lender ? ` · ${lender}` : ""}${agent ? ` · ${agent}` : ""}`;
 
 
   // ---- AI insights (Claude), cached 24h per user/year/month ----

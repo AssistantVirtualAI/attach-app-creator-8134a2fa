@@ -429,6 +429,163 @@ Deno.serve(async (req) => {
       "BPS = Commissions / Volume × 10 000 · Dossier moyen = Volume / Dossiers · Commission par dossier = Commissions / Dossiers.",
     ];
 
+    // ---- Discrepancies: raw source value vs value used in the displayed KPI (admin audit) ----
+    const inWin = (r: RegisterRow) => !!r.date_trans && r.date_trans >= cyYtd.start && r.date_trans <= cyYtd.end;
+    const winRows = mine.filter(inWin).sort((a, b) => a.source_row - b.source_row);
+    const countedVolumeRows = new Set(volumeTranches(mine, cyYtd).map((r) => r.source_row));
+    const countedDealRows = new Set(dealContracts(mine, cyYtd).map((r) => r.source_row));
+    const dLabel = (k: string) =>
+      k === "deduplicated"
+        ? "DÉDOUBLONNÉ"
+        : k === "excluded_type"
+          ? "HORS VOLUME"
+          : k === "missing_amount"
+            ? "NON MAPPÉ"
+            : k === "invalid_loan"
+              ? "NON MAPPÉ"
+              : "OK";
+
+    const discRows: any[] = [];
+    const discCounts: Record<string, number> = {};
+    const bumpD = (k: string) => { discCounts[k] = (discCounts[k] ?? 0) + 1; };
+    let discTotalGap = 0;
+    for (const r of winRows) {
+      const isBaseRow = (r.commission_type ?? "").trim().toLowerCase() === "base";
+      const loanRaw = Number(r.loan_amt ?? 0);
+      const amountRaw = r.amount;
+      const push = (kind: string, field: string, rawValue: unknown, displayed: number) => {
+        bumpD(kind);
+        discTotalGap += Math.abs(Number(rawValue ?? 0) - displayed);
+        if (discRows.length < 800) {
+          discRows.push({
+            source: "registre",
+            sourceRow: r.source_row,
+            date: r.date_trans,
+            number: r.number,
+            broker: r.agent_name,
+            firstName: (r as any).first_name ?? null,
+            lastName: (r as any).last_name ?? null,
+            maestroBrokerId: (r as any).maestro_broker_id ?? null,
+            institution: r.institution,
+            mortgageType: r.mortgage_type,
+            commissionType: r.commission_type,
+            field,
+            rawValue: rawValue ?? null,
+            displayedValue: displayed,
+            delta: Number(rawValue ?? 0) - displayed,
+            kind,
+            status: dLabel(kind),
+          });
+        }
+      };
+
+      if (isBaseRow && loanRaw > 0 && !countedVolumeRows.has(r.source_row)) {
+        push("deduplicated", "loan_amt", loanRaw, 0);
+      } else if (!isBaseRow && loanRaw > 0) {
+        push("excluded_type", "loan_amt", loanRaw, 0);
+      } else if (isBaseRow && (r.loan_amt === null || r.loan_amt === undefined || !Number.isFinite(loanRaw) || loanRaw <= 0)) {
+        push("invalid_loan", "loan_amt", r.loan_amt ?? null, 0);
+      }
+
+      if (amountRaw !== null && amountRaw !== undefined && !Number.isFinite(Number(amountRaw))) {
+        push("missing_amount", "amount", amountRaw, 0);
+      }
+    }
+
+    const discrepancies = {
+      window: cyYtd,
+      scanned: winRows.length,
+      countedVolumeRows: countedVolumeRows.size,
+      countedDealRows: countedDealRows.size,
+      total: Object.values(discCounts).reduce((s2, v) => s2 + v, 0),
+      counts: discCounts,
+      totalGap: discTotalGap,
+      rows: discRows,
+      legend: [
+        "DÉDOUBLONNÉ : ligne base dont la tranche (numéro + institution + type + montant) est déjà comptée dans la fenêtre — le montant brut n'alimente pas le volume affiché.",
+        "HORS VOLUME : la ligne porte un montant de prêt mais son type de commission n'est pas « base » — exclue du volume par la règle, commission conservée.",
+        "NON MAPPÉ : montant du prêt absent, nul ou non numérique sur une ligne base, ou montant de commission non numérique — aucune valeur retenue.",
+      ],
+    };
+
+    // ---- Drill-down: one broker, selected window, commissions by type + deal lines ----
+    const detailAgent: string | null =
+      typeof body?.detailAgent === "string" && body.detailAgent.trim() ? body.detailAgent.trim() : null;
+    let detail: any = null;
+    if (detailAgent) {
+      const dRows = scopedAll
+        .filter((r) => (r.agent_name ?? "").trim().toLowerCase() === detailAgent.toLowerCase())
+        .filter(inWin)
+        .sort((a, b) => (a.date_trans ?? "").localeCompare(b.date_trans ?? "") || a.source_row - b.source_row);
+      const dVolRows = new Set(
+        volumeTranches(scopedAll.filter((r) => (r.agent_name ?? "").trim().toLowerCase() === detailAgent.toLowerCase()), cyYtd)
+          .map((r) => r.source_row),
+      );
+      const dDealRows = new Set(
+        dealContracts(scopedAll.filter((r) => (r.agent_name ?? "").trim().toLowerCase() === detailAgent.toLowerCase()), cyYtd)
+          .map((r) => r.source_row),
+      );
+      const idRow = dRows[0] as any;
+      const typeKeysD = uniq(dRows.map((r) => r.commission_type));
+      const byType = typeKeysD
+        .map((t) => {
+          const sub = dRows.filter((r) => (r.commission_type ?? "") === t);
+          return {
+            type: t,
+            rows: sub.length,
+            commission: sub.reduce((s2, r) => s2 + Number(r.amount ?? 0), 0),
+            volume: sub.filter((r) => dVolRows.has(r.source_row)).reduce((s2, r) => s2 + Number(r.loan_amt ?? 0), 0),
+            deals: sub.filter((r) => dDealRows.has(r.source_row)).length,
+          };
+        })
+        .sort((a, b) => b.commission - a.commission);
+
+      const byPeriod = Array.from(
+        dRows.reduce((map, r) => {
+          const k = (r.date_trans ?? "").slice(0, 7);
+          const cur = map.get(k) ?? { period: k, commission: 0, volume: 0, deals: 0, rows: 0 };
+          cur.rows += 1;
+          cur.commission += Number(r.amount ?? 0);
+          if (dVolRows.has(r.source_row)) cur.volume += Number(r.loan_amt ?? 0);
+          if (dDealRows.has(r.source_row)) cur.deals += 1;
+          map.set(k, cur);
+          return map;
+        }, new Map<string, any>()).values(),
+      ).sort((a: any, b: any) => a.period.localeCompare(b.period));
+
+      detail = {
+        agent: detailAgent,
+        firstName: idRow?.first_name ?? null,
+        lastName: idRow?.last_name ?? null,
+        maestroBrokerId: idRow?.maestro_broker_id ?? null,
+        window: cyYtd,
+        periodLabel: resolved.label,
+        kpi: metrics(scopedAll, cyYtd, { broker: detailAgent }),
+        kpiPy: metrics(scopedAll, pyYtd, { broker: detailAgent }),
+        byType,
+        byPeriod,
+        lines: dRows.slice(0, 2000).map((r) => ({
+          sourceRow: r.source_row,
+          date: r.date_trans,
+          number: r.number,
+          institution: r.institution,
+          mortgageType: r.mortgage_type,
+          term: r.term,
+          commissionType: r.commission_type,
+          loanAmt: r.loan_amt,
+          amount: r.amount,
+          countedInVolume: dVolRows.has(r.source_row),
+          countedInDeals: dDealRows.has(r.source_row),
+          provenanceField: "amount",
+          volumeField: "loan_amt",
+          provenanceSource: "registre",
+        })),
+        truncated: dRows.length > 2000,
+      };
+    }
+
+
+
     return json({
       ok: true,
       year,
@@ -462,6 +619,9 @@ Deno.serve(async (req) => {
       calcNotes,
       season: { current: seasonCur, previous: seasonPrev },
       reconciliation,
+      discrepancies,
+      detail,
+
     });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);

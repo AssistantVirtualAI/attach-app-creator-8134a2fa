@@ -3,17 +3,22 @@ import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart,
 } from "recharts";
-import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy, FileDown, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CommissionInsights from "./CommissionInsights";
 import RegisterFilters, { type Granularity } from "./RegisterFilters";
 import BrokerLeaderboard from "./BrokerLeaderboard";
+import CommissionDiscrepancies from "./CommissionDiscrepancies";
+import BrokerDrilldown from "./BrokerDrilldown";
+import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
+import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 
 type Lang = "fr" | "en";
-type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "club";
+type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "club" | "gaps";
 
 const PALETTE = ["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"];
+
 
 const fmtMoney = (v: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(v || 0);
@@ -119,15 +124,35 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const isAdminView = scope === "admin";
   const MONTHS = isFr ? MONTHS_FR : MONTHS_EN;
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
+  const saved = isAdminView ? readAdminCommissionFilters() : null;
+  const [year, setYear] = useState(saved?.year ?? now.getFullYear());
   const [month, setMonth] = useState(12);
-  const [granularity, setGranularity] = useState<Granularity>("ytd");
-  const [periodIndex, setPeriodIndex] = useState(12);
-  const [agent, setAgent] = useState("");
-  const [tab, setTab] = useState<Tab>("overview");
+  const [granularity, setGranularity] = useState<Granularity>((saved?.granularity as Granularity) ?? "ytd");
+  const [periodIndex, setPeriodIndex] = useState(saved?.periodIndex ?? 12);
+  const [agent, setAgent] = useState(saved?.agent ?? "");
+  const [tab, setTab] = useState<Tab>((saved?.tab as Tab) ?? "overview");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Persist the admin filters in the browser so the same view reopens later.
+  const { clear: clearSavedFilters } = useAdminCommissionFilters(isAdminView, { year, granularity, periodIndex, agent, tab });
+  const resetFilters = () => {
+    const d = defaultAdminCommissionFilters();
+    clearSavedFilters();
+    setYear(d.year);
+    setGranularity(d.granularity as Granularity);
+    setPeriodIndex(d.periodIndex);
+    setAgent("");
+    setTab("overview");
+  };
+
+  // Broker drill-down
+  const [drillAgent, setDrillAgent] = useState<string | null>(null);
+  const [drillData, setDrillData] = useState<any>(null);
+  const [drillLoading, setDrillLoading] = useState(false);
+  const [drillError, setDrillError] = useState<string | null>(null);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -158,6 +183,39 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     void run();
     return () => { cancelled = true; };
   }, [year, month, granularity, periodIndex, agent, isAdminView]);
+
+  // Drill-down fetch (admin only)
+  useEffect(() => {
+    if (!isAdminView || !drillAgent) return;
+    let cancelled = false;
+    (async () => {
+      setDrillLoading(true); setDrillError(null);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const { data: res, error: err } = await supabase.functions.invoke("pp-commission-stats", {
+          body: {
+            year,
+            month: granularity === "ytd" || granularity === "month" ? periodIndex : month,
+            granularity,
+            periodIndex,
+            scope: "all",
+            agent: null,
+            detailAgent: drillAgent,
+          },
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        });
+        if (err) throw err;
+        if ((res as any)?.error) throw new Error((res as any).error);
+        if (!cancelled) setDrillData((res as any)?.detail ?? null);
+      } catch (e: any) {
+        if (!cancelled) setDrillError(e?.message ?? "error");
+      } finally {
+        if (!cancelled) setDrillLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAdminView, drillAgent, year, month, granularity, periodIndex]);
+
 
   const onGranularity = (g: Granularity) => {
     setGranularity(g);
@@ -253,7 +311,9 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     { key: "mix", label: isFr ? "Mix produits & termes" : "Product & term mix" },
     { key: "quarters", label: isFr ? "Trimestres" : "Quarters" },
     { key: "club", label: "Club Excellence" },
+    ...(isAdminView ? [{ key: "gaps" as Tab, label: isFr ? "Écarts" : "Gaps" }] : []),
   ];
+
 
   return (
     <div>
@@ -291,7 +351,32 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             {isAdminView && !agent ? (isFr ? " · tous les courtiers" : " · all brokers") : agent ? ` · ${agent}` : ""}
           </span>
         )}
+        {isAdminView && (
+          <div className="ml-auto flex items-center gap-1.5">
+            {data?.discrepancies?.total > 0 && (
+              <button onClick={() => setTab("gaps")} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+                style={{ fontSize: 11.5, fontWeight: 800, background: "rgba(245,158,11,.14)", color: "#f59e0b", border: "1px solid rgba(245,158,11,.25)" }}>
+                <AlertTriangle className="w-3.5 h-3.5" />{fmtNum(data.discrepancies.total)} {isFr ? "écarts" : "gaps"}
+              </button>
+            )}
+            <button
+              onClick={() => data && downloadCommissionsPdf({ lang, data, agent, aiSummary: ai?.summary, year })}
+              disabled={!data}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{
+                fontSize: 12, fontWeight: 700, opacity: data ? 1 : .5,
+                background: "var(--pp-brand-accent-2)", color: "#fff", border: "1px solid var(--pp-bg-border)",
+              }}>
+              <FileDown className="w-3.5 h-3.5" />{isFr ? "Rapport PDF" : "PDF report"}
+            </button>
+            <button onClick={resetFilters} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+              style={{ fontSize: 12, fontWeight: 700, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
+              <RotateCcw className="w-3.5 h-3.5" />{isFr ? "Réinitialiser" : "Reset"}
+            </button>
+          </div>
+        )}
       </div>
+
 
       <div className="flex flex-wrap gap-1.5 mb-2">
         {tabs.map((t) => (
@@ -396,9 +481,14 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               lang={lang}
               brokers={data.brokers ?? []}
               periodLabel={`${data.window?.start} → ${data.window?.end}`}
-              onSelect={(b) => setAgent(b)}
+              onSelect={(b) => { setDrillData(null); setDrillAgent(b); }}
             />
           )}
+
+          {tab === "gaps" && isAdminView && (
+            <CommissionDiscrepancies lang={lang} discrepancies={data.discrepancies} />
+          )}
+
 
           {tab === "trend" && (
             <>
@@ -627,7 +717,18 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           )}
         </>
       )}
+
+      {isAdminView && drillAgent && (
+        <BrokerDrilldown
+          lang={lang}
+          detail={drillData}
+          loading={drillLoading}
+          error={drillError}
+          onClose={() => { setDrillAgent(null); setDrillData(null); setDrillError(null); }}
+        />
+      )}
     </div>
+
   );
 }
 

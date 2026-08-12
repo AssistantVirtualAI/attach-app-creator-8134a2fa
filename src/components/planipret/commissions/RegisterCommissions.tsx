@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, ComposedChart, Bar, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart, RadialBarChart, RadialBar,
 } from "recharts";
-import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy, FileDown, RotateCcw, Star } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Trophy, FileDown, RotateCcw, Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CommissionInsights from "./CommissionInsights";
 import ClubExcellencePanel from "./ClubExcellencePanel";
@@ -343,14 +343,27 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const periodSubtitle = `${data?.periodLabel ?? year}${lender ? ` · ${lender}` : ""}${agent ? ` · ${agent}` : ""}`;
 
 
-  // ---- AI insights (Claude), cached 24h per user/year/month ----
+  /* ---- Data signature: changes as soon as Maestro brings new numbers ---- */
+  const dataSignature = useMemo(() => {
+    if (!data) return "none";
+    const k = data.kpi?.ytd ?? {};
+    return [
+      data.rowCount ?? 0,
+      Math.round(Number(k.volume) || 0),
+      Math.round(Number(k.commission) || 0),
+      Math.round(Number(k.deals) || 0),
+      data.syncedAt ?? "",
+    ].join("|");
+  }, [data]);
+
+  // ---- AI insights (Claude), auto-refreshed on every new Maestro payload ----
   const [ai, setAi] = useState<{ summary: string; insights: any[] } | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
   const generateInsights = async (force = false) => {
     if (!data || data.rowCount === 0) return;
-    const cacheKey = `pp-register-insights:${isAdminView ? "admin" : (data.brokerName ?? "me")}:${agent || "all"}:${year}:${granularity}:${periodIndex}:${lang}`;
+    const cacheKey = `pp-register-insights:${isAdminView ? "admin" : (data.brokerName ?? "me")}:${agent || "all"}:${year}:${granularity}:${periodIndex}:${lang}:${tab}:${dataSignature}`;
     if (!force) {
       try {
         const raw = localStorage.getItem(cacheKey);
@@ -365,7 +378,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const payload = {
-        lang, scope: isAdminView && !agent ? "admin" : "broker", source: "register",
+        lang, scope: isAdminView && !agent ? "admin" : "broker", source: "maestro",
+        focus: tab, focusLabel: tabLabel,
         metrics: {
           year, period: data.periodLabel, granularity, window: data.window,
           agent: agent || (isAdminView ? "all brokers" : data.brokerName),
@@ -393,11 +407,13 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     }
   };
 
+  // Auto-run: regenerates whenever the visible slice or the underlying
+  // Maestro data changes (signature), never waiting for a manual click.
   useEffect(() => {
     setAi(null);
     if (data && data.rowCount > 0) void generateInsights(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.rowCount, year, granularity, periodIndex, agent]);
+  }, [dataSignature, year, granularity, periodIndex, agent, tab]);
 
   const tabs: { key: TabKey; label: string; count?: number | null; tone?: "gold" | "warn" }[] = [
     { key: "overview", label: isFr ? "Vue d'ensemble" : "Overview" },

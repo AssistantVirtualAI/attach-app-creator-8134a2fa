@@ -807,8 +807,12 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             />
           )}
 
+          {tab === "deals" && (
+            <RegisterDealsTable deals={(data.deals ?? []) as any} lang={lang} />
+          )}
 
-          {Array.isArray(data.reconciliation?.checks) && (
+          {isAdminView && Array.isArray(data.reconciliation?.checks) && (
+
             <Section title={isFr ? "Contrôles de réconciliation (MATCH / MISMATCH)" : "Reconciliation checks (MATCH / MISMATCH)"}>
               <Table
                 head={[isFr ? "Contrôle" : "Check", isFr ? "Attendu" : "Expected", isFr ? "Obtenu" : "Actual", "Écart", "Statut"]}

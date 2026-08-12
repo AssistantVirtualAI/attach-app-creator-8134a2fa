@@ -8675,6 +8675,140 @@ export type Database = {
           },
         ]
       }
+      planipret_commission_imports: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          file_name: string
+          id: string
+          notes: Json
+          row_count: number
+          status: string
+          updated_at: string
+          years: number[]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          file_name: string
+          id?: string
+          notes?: Json
+          row_count?: number
+          status?: string
+          updated_at?: string
+          years?: number[]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          file_name?: string
+          id?: string
+          notes?: Json
+          row_count?: number
+          status?: string
+          updated_at?: string
+          years?: number[]
+        }
+        Relationships: []
+      }
+      planipret_commission_register: {
+        Row: {
+          agent_company: string | null
+          agent_name: string | null
+          amount: number
+          broker_user_id: string | null
+          buy_down: number | null
+          cabinet: string | null
+          commission_type: string | null
+          created_at: string
+          date_trans: string | null
+          financial_inst_id: string | null
+          fiscal_year: number | null
+          id: string
+          import_batch_id: string | null
+          institution: string | null
+          is_adjustment: string | null
+          loan_amt: number
+          mortgage_type: string | null
+          number: string | null
+          points: number | null
+          primary_client_name: string | null
+          secondary_client_name: string | null
+          source_row: number
+          split_type: string | null
+          target_name: string | null
+          term: string | null
+          updated_at: string
+          ym_key: string | null
+        }
+        Insert: {
+          agent_company?: string | null
+          agent_name?: string | null
+          amount?: number
+          broker_user_id?: string | null
+          buy_down?: number | null
+          cabinet?: string | null
+          commission_type?: string | null
+          created_at?: string
+          date_trans?: string | null
+          financial_inst_id?: string | null
+          fiscal_year?: number | null
+          id?: string
+          import_batch_id?: string | null
+          institution?: string | null
+          is_adjustment?: string | null
+          loan_amt?: number
+          mortgage_type?: string | null
+          number?: string | null
+          points?: number | null
+          primary_client_name?: string | null
+          secondary_client_name?: string | null
+          source_row?: number
+          split_type?: string | null
+          target_name?: string | null
+          term?: string | null
+          updated_at?: string
+          ym_key?: string | null
+        }
+        Update: {
+          agent_company?: string | null
+          agent_name?: string | null
+          amount?: number
+          broker_user_id?: string | null
+          buy_down?: number | null
+          cabinet?: string | null
+          commission_type?: string | null
+          created_at?: string
+          date_trans?: string | null
+          financial_inst_id?: string | null
+          fiscal_year?: number | null
+          id?: string
+          import_batch_id?: string | null
+          institution?: string | null
+          is_adjustment?: string | null
+          loan_amt?: number
+          mortgage_type?: string | null
+          number?: string | null
+          points?: number | null
+          primary_client_name?: string | null
+          secondary_client_name?: string | null
+          source_row?: number
+          split_type?: string | null
+          target_name?: string | null
+          term?: string | null
+          updated_at?: string
+          ym_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planipret_commission_register_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "planipret_commission_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planipret_commission_stats: {
         Row: {
           broker_name: string

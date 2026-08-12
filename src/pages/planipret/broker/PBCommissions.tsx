@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import { TrendingUp, Cloud, Database, Loader2, ShieldCheck } from "lucide-react";
+import { TrendingUp, Cloud, Database, Loader2, ShieldCheck, Archive } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import CommissionDashboard from "@/components/planipret/commissions/CommissionDashboard";
 import CommissionProvenance from "@/components/planipret/commissions/CommissionProvenance";
+import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
 import { supabase } from "@/integrations/supabase/client";
 import type { BrokerCtx } from "./PlanipretBrokerLayout";
 
-type Source = "maestro" | "internal" | "provenance";
+type Source = "maestro" | "internal" | "provenance" | "register";
 
 
 export default function PBCommissions() {
   const { authUserId, profile } = useOutletContext<BrokerCtx>();
   const { lang } = useMplanipretLang();
   const isFr = lang !== "en";
-  const [source, setSource] = useState<Source>("maestro");
+  const [source, setSource] = useState<Source>("register");
+
   const [maestroConnected, setMaestroConnected] = useState<boolean | null>(null);
   const [info, setInfo] = useState<{ ok: boolean; code?: string; error?: string; dealCount?: number } | null>(null);
 

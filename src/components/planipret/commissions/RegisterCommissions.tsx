@@ -16,9 +16,11 @@ import BrokerDrilldown from "./BrokerDrilldown";
 import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
 import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
+import RegisterHealthBadge from "./RegisterHealthBadge";
+import RegisterDealsTable from "./RegisterDealsTable";
 
 type Lang = "fr" | "en";
-type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "gaps" | "data";
+type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "gaps" | "data" | "deals";
 
 
 const PALETTE = ["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"];

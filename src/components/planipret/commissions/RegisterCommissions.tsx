@@ -439,10 +439,22 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
       )}
 
       {data && data.rowCount === 0 && (
-        <div className="pp-card" style={{ padding: 20, fontSize: 13, color: "var(--pp-text-muted)" }}>
-          {isFr
-            ? "Aucune donnée de registre pour cette période. L'administrateur doit importer le registre de dépôts."
-            : "No register data for this period. An administrator must import the deposit register."}
+        <div
+          className="pp-card"
+          style={{
+            padding: 28, borderRadius: 16, textAlign: "center",
+            background: "linear-gradient(155deg, var(--pp-bg-elevated) 0%, var(--pp-bg-card) 100%)",
+            border: "1px solid var(--pp-bg-border)",
+          }}
+        >
+          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--pp-text-primary)" }}>
+            {isFr ? "Aucune commission pour cette période" : "No commission for this period"}
+          </div>
+          <p style={{ fontSize: 12.5, color: "var(--pp-text-muted)", marginTop: 6, maxWidth: 460, marginInline: "auto", lineHeight: 1.6 }}>
+            {isFr
+              ? "Aucune ligne du registre de dépôts n'est rattachée à votre profil sur cette période. Essayez une autre année, ou connectez votre compte Maestro pour suivre vos commissions en temps réel."
+              : "No deposit-register line is linked to your profile for this period. Try another year, or connect your Maestro account to track commissions in real time."}
+          </p>
         </div>
       )}
 

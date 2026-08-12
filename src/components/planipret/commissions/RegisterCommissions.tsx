@@ -612,9 +612,23 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
       <CommissionsTabs tabs={tabs} value={tab as TabKey} onChange={(k) => setTab(k as Tab)} />
 
-      {error && <div className="pp-card" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger,#ef4444)" }}>{error}</div>}
+      <div className="pp-hide-export">
+        <MaestroStatusBadge
+          lang={lang}
+          scope={scopeKey}
+          loading={loading}
+          stale={stale}
+          dataError={error}
+          rowCount={data?.rowCount ?? null}
+          dataSyncedAt={data?.syncedAt ?? cachedAt}
+        />
+      </div>
 
-      {!error && !data && loading && <CommissionsSkeleton />}
+      {error && !data && (
+        <div className="pp-card" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger,#ef4444)" }}>{error}</div>
+      )}
+
+      {!data && loading && <CommissionsSkeleton />}
 
       {data && data.rowCount === 0 && (
         <div

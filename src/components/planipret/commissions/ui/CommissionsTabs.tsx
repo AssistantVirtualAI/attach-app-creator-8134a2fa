@@ -50,8 +50,9 @@ export default function CommissionsTabs({
               background: gold
                 ? (active ? "linear-gradient(135deg, #FFC94A, #E09A22)" : "linear-gradient(135deg, rgba(255,192,0,.16), rgba(255,192,0,.05))")
                 : active
-                  ? "linear-gradient(135deg, var(--pp-brand-accent-2, #2E9BDC), color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 70%, #6D5BF9))"
+                  ? "linear-gradient(135deg, #2E9BDC, #6D5BF9)"
                   : "transparent",
+
               color: gold ? (active ? "#1b1400" : "#E0A32B") : active ? "#fff" : "var(--pp-text-secondary)",
               border: gold ? "1px solid rgba(255,192,0,.45)" : "1px solid transparent",
               boxShadow: active ? "0 14px 24px -18px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.22)" : undefined,

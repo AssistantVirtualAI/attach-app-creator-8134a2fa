@@ -216,8 +216,12 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
   useEffect(() => {
     let cancelled = false;
+    const cacheKey = statsCacheKey(scopeKey, [year, month, granularity, periodIndex, agent || "all"]);
     const run = async () => {
       setLoading(true); setError(null);
+      // Instant paint from the last known payload (never a blank page).
+      const cached = readStatsCache(cacheKey) ?? (data ? null : readAnyStatsCache(scopeKey));
+      if (cached && !cancelled) { setData(cached.value); setStale(true); setCachedAt(new Date(cached.ts).toISOString()); }
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const { data: res, error: err } = await supabase.functions.invoke("pp-commission-stats", {
@@ -233,15 +237,22 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
         });
         if (err) throw err;
         if ((res as any)?.error) throw new Error((res as any).error);
-        if (!cancelled) setData(res);
+        if (!cancelled) {
+          setData(res); setStale(false); setCachedAt(null); setError(null);
+          writeStatsCache(cacheKey, res);
+        }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "error");
+        if (cancelled) return;
+        const fallback = readStatsCache(cacheKey) ?? readAnyStatsCache(scopeKey);
+        if (fallback) { setData(fallback.value); setStale(true); setCachedAt(new Date(fallback.ts).toISOString()); }
+        setError(e?.message ?? "error");
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     void run();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month, granularity, periodIndex, agent, isAdminView, refreshKey]);
 
   // Drill-down fetch (admin only)

@@ -47,19 +47,66 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
     return msg || t("auth.failed");
   };
 
+  /**
+   * iOS WKWebView occasionally fails `fetch` with the opaque message
+   * "Load failed" (seen during Apple review). XHR uses a different network
+   * path and succeeds, so we use it as a last-resort transport and then hand
+   * the tokens back to the Supabase client via setSession().
+   */
+  const passwordSignInViaXhr = (mail: string, pass: string) =>
+    new Promise<{ error: string | null }>((resolve) => {
+      try {
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/token?grant_type=password`;
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", url, true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.setRequestHeader("apikey", import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string);
+        xhr.timeout = 20000;
+        xhr.onload = async () => {
+          try {
+            const body = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status >= 200 && xhr.status < 300 && body?.access_token) {
+              const { error } = await supabase.auth.setSession({
+                access_token: body.access_token,
+                refresh_token: body.refresh_token,
+              });
+              resolve({ error: error?.message ?? null });
+              return;
+            }
+            resolve({ error: body?.msg || body?.error_description || `HTTP ${xhr.status}` });
+          } catch (e: any) {
+            resolve({ error: e?.message || "parse_error" });
+          }
+        };
+        xhr.onerror = () => resolve({ error: "network" });
+        xhr.ontimeout = () => resolve({ error: "timeout" });
+        xhr.send(JSON.stringify({ email: mail, password: pass }));
+      } catch (e: any) {
+        resolve({ error: e?.message || "network" });
+      }
+    });
+
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
     setFormError(null);
     if (!email || !password) { setFormError(t("auth.missing")); toast.error(t("auth.missing")); return; }
     setLoading(true);
+    const mail = email.trim().toLowerCase();
     try {
-      const attempt = () => supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      const attempt = () => supabase.auth.signInWithPassword({ email: mail, password });
+      const isTransport = (m?: string | null) => /network|fetch|timeout|load failed|failed to fetch/i.test(String(m || ""));
       let { error } = await attempt();
       // Retry once on transient network failures (common on review devices).
-      if (error && /network|fetch|timeout|load failed/i.test(error.message || "")) {
+      if (error && isTransport(error.message)) {
         await new Promise((r) => setTimeout(r, 800));
         ({ error } = await attempt());
       }
+      // Still a transport failure → fall back to XHR.
+      if (error && isTransport(error.message)) {
+        const fallback = await passwordSignInViaXhr(mail, password);
+        error = fallback.error ? ({ message: fallback.error } as any) : null;
+      }
+
       if (error) {
         const msg = friendlyError(error.message);
         setFormError(msg);

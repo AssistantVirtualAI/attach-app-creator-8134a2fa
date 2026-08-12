@@ -47,6 +47,7 @@ export default function OvCommissionsChart({
   return (
     <OvCard
       title={lang === "en" ? "Commissions by quarter" : "Commissions par trimestre"}
+      info={lang === "en" ? "Commissions grouped by calendar quarter, current year vs previous year. The delta is the year-over-year variation for the same quarter." : "Commissions regroupées par trimestre civil, année en cours vs année précédente. L'écart correspond à la variation d'une année à l'autre pour le même trimestre."}
       icon={<TrendingUp className="w-4 h-4" />}
       to="/planipret/broker/commissions"
       toLabel={lang === "en" ? "View all" : "Voir tout"}

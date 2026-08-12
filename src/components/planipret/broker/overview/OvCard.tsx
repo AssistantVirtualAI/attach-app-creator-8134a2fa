@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { InfoTip, StatNote } from "./InfoTip";
 
 export const OV_COLORS = {
   in: "#2E9BDC",
@@ -10,15 +11,20 @@ export const OV_COLORS = {
 };
 
 export function OvCard({
-  title, icon, to, toLabel, children, className = "", right,
+  title, icon, to, toLabel, children, className = "", right, info, note,
 }: {
   title: string; icon?: ReactNode; to?: string; toLabel?: string; children: ReactNode; className?: string; right?: ReactNode;
+  /** Explains how the figures in this card are computed. */
+  info?: string;
+  /** Short contextual caption displayed under the card content. */
+  note?: ReactNode;
 }) {
   return (
     <div className={`ov3d-card relative overflow-hidden ${className}`} style={{ padding: 14 }}>
       <div className="flex items-center justify-between mb-2 gap-2">
         <div className="flex items-center gap-2" style={{ color: "var(--pp-text-secondary)", fontSize: 12, fontWeight: 600 }}>
           {icon}<span>{title}</span>
+          {info && <InfoTip title={title} text={info} />}
         </div>
         <div className="flex items-center gap-2">
           {right}
@@ -30,9 +36,11 @@ export function OvCard({
         </div>
       </div>
       {children}
+      {note && <StatNote>{note}</StatNote>}
     </div>
   );
 }
+
 
 export function OvEmpty({ label }: { label: string }) {
   return (

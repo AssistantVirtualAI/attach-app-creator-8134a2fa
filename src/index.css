@@ -1145,3 +1145,29 @@ All colors MUST be HSL.
   overflow: visible !important;
   touch-action: pan-y;
 }
+
+/* ============================================================
+   Planiprêt — accessible 2D fallback + lazy chart placeholder
+   Applied when the device can't render the 3D relief smoothly.
+   ============================================================ */
+.ov3d-chart.ov3d-2d { --ov3d-d: 0; }
+.ov3d-chart.ov3d-2d .recharts-bar-rectangle path,
+.ov3d-chart.ov3d-2d .recharts-rectangle path,
+.ov3d-chart.ov3d-2d .recharts-pie-sector path,
+.ov3d-chart.ov3d-2d .recharts-line-curve,
+.ov3d-chart.ov3d-2d .recharts-area-curve { filter: none !important; }
+.ov3d-chart.ov3d-2d::before { display: none; }
+.ov3d-chart.ov3d-2d .recharts-cartesian-axis-line,
+.ov3d-chart.ov3d-2d .recharts-cartesian-axis-tick-line { stroke: color-mix(in srgb, var(--pp-bg-border) 90%, transparent); }
+.ov3d-chart.ov3d-2d .recharts-cartesian-grid line { stroke: color-mix(in srgb, var(--pp-bg-border) 85%, transparent); }
+
+.ov3d-chart-skeleton {
+  width: 100%;
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.03) 25%, rgba(255,255,255,.07) 37%, rgba(255,255,255,.03) 63%);
+  background-size: 400% 100%;
+  animation: ov3dShimmer 1.4s ease-in-out infinite;
+}
+@keyframes ov3dShimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .ov3d-chart-skeleton { animation: none; } }

@@ -56,15 +56,39 @@ export default function PBOverview() {
   const callsSpark = (ov.daily ?? []).map((d: any) => Number(d?.inbound ?? 0) + Number(d?.outbound ?? 0));
 
   const vs = (n: number | string) => (lang === "en" ? `prev. ${n}` : `préc. ${n}`);
+  const en = lang === "en";
+  // Contextual explanations: how each KPI is computed and how to read the delta.
+  const INFO = {
+    calls: en
+      ? "Total inbound + outbound calls over the selected period. The delta compares with the immediately preceding period of the same length."
+      : "Total des appels entrants + sortants sur la période choisie. L'écart compare avec la période précédente de même durée.",
+    missed: en
+      ? "Calls that rang without being answered. Lower is better: a green delta means fewer missed calls than the previous period. The dot turns amber above 10% of calls, red above 20%."
+      : "Appels sonnés sans réponse. Moins il y en a, mieux c'est : un écart vert signifie moins d'appels manqués que la période précédente. Le point passe à l'ambre au-delà de 10 % des appels, au rouge au-delà de 20 %.",
+    answer: en
+      ? "Answered calls ÷ total calls × 100. Target 85%; below 70% the indicator turns red."
+      : "Appels répondus ÷ total des appels × 100. Cible 85 % ; sous 70 % l'indicateur devient rouge.",
+    duration: en
+      ? "Average talk time of answered calls (ringing excluded). Very short averages (< 20s) often signal transfers or hang-ups."
+      : "Durée moyenne de conversation des appels répondus (sonnerie exclue). Une moyenne très courte (< 20 s) signale souvent des transferts ou raccrochages.",
+    sent: en ? "SMS sent from your line over the period." : "SMS envoyés depuis votre ligne sur la période.",
+    received: en ? "SMS received on your line over the period." : "SMS reçus sur votre ligne sur la période.",
+    recordings: en
+      ? "Calls recorded over the period. Only calls where recording was active are counted."
+      : "Appels enregistrés sur la période. Seuls les appels dont l'enregistrement était actif sont comptés.",
+    commissions: en
+      ? "Cumulative commissions for the current year, compared with the same period last year (YoY)."
+      : "Commissions cumulées de l'année en cours, comparées à la même période l'an dernier (YoY).",
+  };
 
   const cards: KpiCard[] = [
-    { Icon: Phone, accent: "#2E9BDC", spark: callsSpark, label: lang === "en" ? "Calls" : "Appels", value: kpi.calls, delta: pct(kpi.calls, prev.calls), hint: vs(prev.calls) },
-    { Icon: PhoneMissed, accent: "#E84C4C", spark: sp("missed"), label: lang === "en" ? "Missed" : "Manqués", value: kpi.missed, delta: pct(kpi.missed, prev.missed), invert: true, hint: vs(prev.missed), threshold: { value: kpi.calls ? (kpi.missed / kpi.calls) * 100 : 0, warn: 10, bad: 20, invert: true, label: lang === "en" ? "Missed share thresholds 10% / 20%" : "Seuils d'appels manqués 10 % / 20 %" } },
-    { Icon: PercentCircle, accent: "#00D4AA", label: lang === "en" ? "Answer rate" : "Taux de réponse", value: `${Math.round(kpi.answerRate)}%`, delta: pct(kpi.answerRate, prev.answerRate), hint: vs(`${Math.round(prev.answerRate)}%`), threshold: { value: kpi.answerRate, warn: 85, bad: 70, label: lang === "en" ? "Targets 85% / 70%" : "Cibles 85 % / 70 %" } },
-    { Icon: Timer, accent: "#9B7FE8", spark: sp("avg"), label: lang === "en" ? "Avg. duration" : "Durée moyenne", value: fmtDuration(kpi.avgDuration), delta: pct(kpi.avgDuration, prev.avgDuration), hint: vs(fmtDuration(prev.avgDuration)), threshold: { value: kpi.avgDuration, warn: 60, bad: 20, invert: true, label: lang === "en" ? "Thresholds 60s / 20s" : "Seuils 60 s / 20 s" } },
-    { Icon: MessageSquare, accent: "#4AC9E3", spark: sp("sent"), label: lang === "en" ? "Texts sent" : "Textos envoyés", value: kpi.smsSent, delta: pct(kpi.smsSent, prev.smsSent), hint: vs(prev.smsSent) },
-    { Icon: MessageSquare, accent: "#E8A33C", spark: sp("received"), label: lang === "en" ? "Texts received" : "Textos reçus", value: kpi.smsReceived, delta: pct(kpi.smsReceived, prev.smsReceived), hint: vs(prev.smsReceived) },
-    { Icon: Mic, accent: "#E86CB0", label: lang === "en" ? "Recordings" : "Enregistrements", value: kpi.recordings, delta: pct(kpi.recordings, prev.recordings), hint: vs(prev.recordings) },
+    { Icon: Phone, accent: "#2E9BDC", spark: callsSpark, label: lang === "en" ? "Calls" : "Appels", value: kpi.calls, delta: pct(kpi.calls, prev.calls), hint: vs(prev.calls), info: INFO.calls },
+    { Icon: PhoneMissed, accent: "#E84C4C", spark: sp("missed"), label: lang === "en" ? "Missed" : "Manqués", value: kpi.missed, delta: pct(kpi.missed, prev.missed), invert: true, hint: vs(prev.missed), threshold: { value: kpi.calls ? (kpi.missed / kpi.calls) * 100 : 0, warn: 10, bad: 20, invert: true, label: lang === "en" ? "Missed share thresholds 10% / 20%" : "Seuils d'appels manqués 10 % / 20 %" }, info: INFO.missed },
+    { Icon: PercentCircle, accent: "#00D4AA", label: lang === "en" ? "Answer rate" : "Taux de réponse", value: `${Math.round(kpi.answerRate)}%`, delta: pct(kpi.answerRate, prev.answerRate), hint: vs(`${Math.round(prev.answerRate)}%`), threshold: { value: kpi.answerRate, warn: 85, bad: 70, label: lang === "en" ? "Targets 85% / 70%" : "Cibles 85 % / 70 %" }, info: INFO.answer },
+    { Icon: Timer, accent: "#9B7FE8", spark: sp("avg"), label: lang === "en" ? "Avg. duration" : "Durée moyenne", value: fmtDuration(kpi.avgDuration), delta: pct(kpi.avgDuration, prev.avgDuration), hint: vs(fmtDuration(prev.avgDuration)), threshold: { value: kpi.avgDuration, warn: 60, bad: 20, invert: true, label: lang === "en" ? "Thresholds 60s / 20s" : "Seuils 60 s / 20 s" }, info: INFO.duration },
+    { Icon: MessageSquare, accent: "#4AC9E3", spark: sp("sent"), label: lang === "en" ? "Texts sent" : "Textos envoyés", value: kpi.smsSent, delta: pct(kpi.smsSent, prev.smsSent), hint: vs(prev.smsSent), info: INFO.sent },
+    { Icon: MessageSquare, accent: "#E8A33C", spark: sp("received"), label: lang === "en" ? "Texts received" : "Textos reçus", value: kpi.smsReceived, delta: pct(kpi.smsReceived, prev.smsReceived), hint: vs(prev.smsReceived), info: INFO.received },
+    { Icon: Mic, accent: "#E86CB0", label: lang === "en" ? "Recordings" : "Enregistrements", value: kpi.recordings, delta: pct(kpi.recordings, prev.recordings), hint: vs(prev.recordings), info: INFO.recordings },
     {
       Icon: TrendingUp,
       accent: "#00D4AA",
@@ -72,6 +96,7 @@ export default function PBOverview() {
       value: commissions ? fmtMoney(commissions.cy) : "…",
       delta: commissions ? pct(commissions.cy, commissions.py) : null,
       hint: commissions ? vs(fmtMoney(commissions.py)) : undefined,
+      info: INFO.commissions,
     },
   ];
 

@@ -9,6 +9,7 @@ export default function OvRecordingsChart({ data, lang }: { data: OvRecWeek[]; l
   return (
     <OvCard
       title={lang === "en" ? "Recordings & AI analysis" : "Enregistrements & analyses IA"}
+      info={lang === "en" ? "Recorded, transcribed and AI-analysed calls per week. The gap between recorded and transcribed shows the processing backlog." : "Appels enregistrés, transcrits et analysés par l'IA, par semaine. L'écart entre enregistrés et transcrits indique le retard de traitement."}
       icon={<Mic className="w-4 h-4" />}
       to="/planipret/broker/recordings"
       toLabel={lang === "en" ? "View all" : "Voir tout"}

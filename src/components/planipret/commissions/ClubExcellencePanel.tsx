@@ -4,6 +4,7 @@ import {
   AreaChart, Area, PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, BarChart,
 } from "recharts";
 import { Star, Crown, Medal, TrendingUp, TrendingDown, Info } from "lucide-react";
+import { InfoTip, StatNote } from "@/components/planipret/broker/overview/InfoTip";
 import { Chart3D, Ov3DChartFilters, Ov3DGradients, fill3d, areaFill3d } from "@/components/planipret/broker/overview/ov3dChart";
 
 type Lang = "fr" | "en";
@@ -39,14 +40,16 @@ function Delta({ value }: { value: number | string }) {
   }
   const up = value >= 0;
   return (
-    <span className="inline-flex items-center gap-0.5" style={{ fontSize: 11.5, fontWeight: 800, color: up ? "#22c55e" : "#ef4444" }}>
+    <span
+      title={`Écart vs la même période l'an dernier (YoY) : ${up ? "+" : ""}${(value * 100).toFixed(1)} %. Vert = progression, rouge = recul.`}
+      className="inline-flex items-center gap-0.5" style={{ fontSize: 11.5, fontWeight: 800, color: up ? "#22c55e" : "#ef4444" }}>
       {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
       {(value * 100).toFixed(1)} %
     </span>
   );
 }
 
-function Panel({ title, subtitle, children, right }: { title: string; subtitle?: string; children: React.ReactNode; right?: React.ReactNode }) {
+function Panel({ title, subtitle, children, right, info, note }: { title: string; subtitle?: string; children: React.ReactNode; right?: React.ReactNode; info?: string; note?: React.ReactNode }) {
   return (
     <div
       className="ov3d-card"
@@ -59,17 +62,21 @@ function Panel({ title, subtitle, children, right }: { title: string; subtitle?:
     >
       <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
         <div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--pp-text-primary)" }}>{title}</div>
+          <div className="flex items-center gap-1.5" style={{ fontSize: 13, fontWeight: 800, color: "var(--pp-text-primary)" }}>
+            <span>{title}</span>
+            {info && <InfoTip title={title} text={info} />}
+          </div>
           {subtitle && <div style={{ fontSize: 11, color: "var(--pp-text-muted)", marginTop: 2 }}>{subtitle}</div>}
         </div>
         {right}
       </div>
       {children}
+      {note && <StatNote>{note}</StatNote>}
     </div>
   );
 }
 
-function ClubKpi({ label, value, sub, delta, accent }: { label: string; value: string; sub?: string; delta?: number | string; accent: string }) {
+function ClubKpi({ label, value, sub, delta, accent, info }: { label: string; value: string; sub?: string; delta?: number | string; accent: string; info?: string }) {
   return (
     <div
       className="ov3d-card"
@@ -83,7 +90,10 @@ function ClubKpi({ label, value, sub, delta, accent }: { label: string; value: s
     >
       <div style={{ position: "absolute", inset: 0, background: `radial-gradient(130% 80% at 0% 0%, ${accent}26, transparent 62%)`, pointerEvents: "none" }} />
       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: accent, opacity: .9 }} />
-      <div style={{ fontSize: 10.5, letterSpacing: .5, textTransform: "uppercase", color: "var(--pp-text-muted)", fontWeight: 800 }}>{label}</div>
+      <div className="flex items-center gap-1" style={{ fontSize: 10.5, letterSpacing: .5, textTransform: "uppercase", color: "var(--pp-text-muted)", fontWeight: 800 }}>
+        <span>{label}</span>
+        {info && <InfoTip title={label} text={info} size={11} />}
+      </div>
       <div style={{ fontSize: 23, fontWeight: 900, marginTop: 4, color: "var(--pp-text-primary)", textShadow: "0 2px 10px rgba(0,0,0,.45)" }}>{value}</div>
       <div className="flex items-center gap-2 mt-1">
         {delta !== undefined && <Delta value={delta} />}
@@ -93,9 +103,10 @@ function ClubKpi({ label, value, sub, delta, accent }: { label: string; value: s
   );
 }
 
-function Podium({ club, isFr }: { club: any[]; isFr: boolean }) {
+function Podium({ club, isFr, clubVolume }: { club: any[]; isFr: boolean; clubVolume?: number }) {
   const top = club.slice(0, 3);
   if (!top.length) return null;
+  const leader = top[0]?.volume || 0;
   const order = [top[1], top[0], top[2]].filter(Boolean);
   const heights: Record<number, number> = { 1: 132, 2: 104, 3: 86 };
   const colors: Record<number, string> = { 1: GOLD, 2: SILVER, 3: BRONZE };
@@ -127,6 +138,16 @@ function Podium({ club, isFr }: { club: any[]; isFr: boolean }) {
               <div className="mt-1"><Delta value={c.volumeYoy} /></div>
             </div>
             <div
+              tabIndex={0}
+              role="img"
+              aria-label={`#${c.rank} ${c.broker}`}
+              title={(() => {
+                const share = clubVolume ? (c.volume / clubVolume) * 100 : 0;
+                const gap = leader - (c.volume || 0);
+                return isFr
+                  ? `#${c.rank} ${c.broker}\nVolume déboursé : ${fmtMoney(c.volume)} (${share.toFixed(1)} % du club)\n${fmtNum(c.deals)} dossiers · dossier moyen ${fmtMoney(c.avgDeal)}\nCommission : ${fmtMoney(c.commission)} (${fmtBps(c.bps)})\n${c.rank === 1 ? "Meneur de la saison" : `Écart avec le meneur : ${fmtMoney(gap)}`}\nLa hauteur de la marche est fixe et reflète uniquement le rang.`
+                  : `#${c.rank} ${c.broker}\nFunded volume: ${fmtMoney(c.volume)} (${share.toFixed(1)}% of club)\n${fmtNum(c.deals)} deals · avg deal ${fmtMoney(c.avgDeal)}\nCommission: ${fmtMoney(c.commission)} (${fmtBps(c.bps)})\n${c.rank === 1 ? "Season leader" : `Gap to leader: ${fmtMoney(gap)}`}\nStep height is fixed and only reflects rank.`;
+              })()}
               style={{
                 height: heights[c.rank] ?? 80, borderRadius: "12px 12px 6px 6px",
                 background: `linear-gradient(180deg, ${col}cc, ${col}55 45%, ${col}22)`,
@@ -245,11 +266,11 @@ export default function ClubExcellencePanel({
           {data?.season?.current?.start} → {data?.season?.current?.end} · {fmtNum(totals.brokers)} {isFr ? "courtiers" : "brokers"} · {fmtNum(totals.deals)} {isFr ? "dossiers" : "deals"}
         </div>
         <div className="grid gap-3 mt-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
-          <ClubKpi label={isFr ? "Volume du club" : "Club volume"} value={fmtMoney(totals.volume)} delta={totals.volumeYoy} accent={GOLD} />
-          <ClubKpi label="Commission" value={fmtMoney(totals.commission)} accent="#8B5CF6" />
-          <ClubKpi label={isFr ? "Dossiers" : "Deals"} value={fmtNum(totals.deals)} accent="#70AD47" />
-          <ClubKpi label={isFr ? "Dossier moyen" : "Avg deal"} value={fmtMoney(totals.avgDeal)} accent="#4472C4" />
-          <ClubKpi label="BPS" value={fmtBps(totals.bps)} accent="#14B8A6" />
+          <ClubKpi label={isFr ? "Volume du club" : "Club volume"} value={fmtMoney(totals.volume)} delta={totals.volumeYoy} accent={GOLD} info={isFr ? "Somme des volumes hypothécaires déboursés par tous les courtiers du registre pour la saison en cours. L'écart compare avec la même saison l'an dernier." : "Sum of funded mortgage volume for every broker in the register for the current season. The delta compares with the same season last year."} />
+          <ClubKpi label="Commission" value={fmtMoney(totals.commission)} accent="#8B5CF6" info={isFr ? "Total des commissions générées par les dossiers déboursés de la saison, toutes sources du registre confondues." : "Total commissions from funded deals for the season, across all register sources."} />
+          <ClubKpi label={isFr ? "Dossiers" : "Deals"} value={fmtNum(totals.deals)} accent="#70AD47" info={isFr ? "Nombre de dossiers déboursés durant la saison. Un dossier est compté à sa date de déboursement." : "Number of funded deals during the season. A deal is counted at its funding date."} />
+          <ClubKpi label={isFr ? "Dossier moyen" : "Avg deal"} value={fmtMoney(totals.avgDeal)} accent="#4472C4" info={isFr ? "Volume total ÷ nombre de dossiers. Indique la taille moyenne des prêts déboursés." : "Total volume ÷ number of deals. Shows the average size of funded loans."} />
+          <ClubKpi label="BPS" value={fmtBps(totals.bps)} accent="#14B8A6" info={isFr ? "Points de base : commission ÷ volume × 10 000. Mesure le rendement moyen obtenu par dollar prêté (ex. 90 BPS = 0,90 %)." : "Basis points: commission ÷ volume × 10,000. Measures average yield per dollar lent (e.g. 90 BPS = 0.90%)."} />
           {me && (
             <ClubKpi
               label={isFr ? "Mon rang" : "My rank"}
@@ -257,26 +278,49 @@ export default function ClubExcellencePanel({
               sub={totals.volume ? `${((me.volume / totals.volume) * 100).toFixed(1)} % ${isFr ? "du club" : "of club"}` : undefined}
               delta={me.volumeYoy}
               accent={ED_ACCENT}
+              info={isFr ? "Votre position au classement du club selon le volume déboursé, et votre part du volume total. L'écart indique votre progression de volume vs l'an dernier." : "Your club ranking by funded volume, plus your share of total volume. The delta shows your volume growth vs last year."}
             />
           )}
         </div>
       </div>
 
-      <Panel title={isFr ? "Podium de la saison" : "Season podium"} subtitle={isFr ? "Top 3 par volume déboursé" : "Top 3 by funded volume"}>
-        <Podium club={club} isFr={isFr} />
+      <Panel
+        title={isFr ? "Podium de la saison" : "Season podium"}
+        subtitle={isFr ? "Top 3 par volume déboursé" : "Top 3 by funded volume"}
+        info={isFr
+          ? "Classement des 3 premiers courtiers selon le volume hypothécaire déboursé de la saison (1er août → 31 juillet). La hauteur des marches illustre le rang, pas l'écart réel : survolez une marche pour voir le volume, la part du club et l'écart en dollars avec le meneur."
+          : "Top 3 brokers by funded mortgage volume for the season (Aug 1 → Jul 31). Step height illustrates rank, not the actual gap: hover a step to see volume, club share and the dollar gap to the leader."}
+        note={isFr
+          ? "Écart YoY : variation du volume par rapport à la même saison l'an dernier. Vert = progression, rouge = recul, « — » = pas d'historique comparable."
+          : "YoY delta: volume change vs the same season last year. Green = growth, red = decline, “—” = no comparable history."}
+      >
+        <Podium club={club} isFr={isFr} clubVolume={totals.volume} />
       </Panel>
 
       <Panel
         title={isFr ? "Classement complet des courtiers" : "Full broker standings"}
         subtitle={isFr ? "Tous les courtiers du registre pour la saison en cours" : "All brokers in the register for the current season"}
+        info={isFr
+          ? "Part = volume du courtier ÷ volume total du club. La barre est proportionnelle au volume du meneur (barre pleine = 1er rang). BPS = commission ÷ volume × 10 000. YoY = variation vs la même saison l'an dernier."
+          : "Share = broker volume ÷ total club volume. The bar is proportional to the leader's volume (full bar = rank 1). BPS = commission ÷ volume × 10,000. YoY = change vs the same season last year."}
         right={<span style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>{fmtNum(club.length)} {isFr ? "courtiers" : "brokers"}</span>}
       >
         <div className="overflow-x-auto">
           <table className="ov3d-table">
             <thead>
               <tr>
-                {["#", isFr ? "Courtier" : "Broker", "Volume", isFr ? "Part" : "Share", isFr ? "Doss." : "Deals", "Commission", isFr ? "Doss. moy." : "Avg deal", "BPS", "YoY"].map((h, i) => (
-                  <th key={h} style={{ textAlign: i <= 1 ? "left" : "right" }}>{h}</th>
+                {[
+                  { h: "#", t: isFr ? "Rang par volume déboursé de la saison" : "Rank by funded volume for the season" },
+                  { h: isFr ? "Courtier" : "Broker", t: isFr ? "Courtier au registre; « moi » identifie votre ligne" : "Broker in the register; “me” marks your row" },
+                  { h: "Volume", t: isFr ? "Volume hypothécaire déboursé sur la saison" : "Funded mortgage volume for the season" },
+                  { h: isFr ? "Part" : "Share", t: isFr ? "Volume du courtier ÷ volume total du club × 100. La barre est relative au meneur." : "Broker volume ÷ total club volume × 100. The bar is relative to the leader." },
+                  { h: isFr ? "Doss." : "Deals", t: isFr ? "Nombre de dossiers déboursés" : "Number of funded deals" },
+                  { h: "Commission", t: isFr ? "Commissions générées par ces dossiers" : "Commissions generated by those deals" },
+                  { h: isFr ? "Doss. moy." : "Avg deal", t: isFr ? "Volume ÷ nombre de dossiers" : "Volume ÷ number of deals" },
+                  { h: "BPS", t: isFr ? "Commission ÷ volume × 10 000 (rendement moyen)" : "Commission ÷ volume × 10,000 (average yield)" },
+                  { h: "YoY", t: isFr ? "Variation du volume vs la même saison l'an dernier" : "Volume change vs the same season last year" },
+                ].map(({ h, t }, i) => (
+                  <th key={h} title={t} style={{ textAlign: i <= 1 ? "left" : "right", cursor: "help" }}>{h}</th>
                 ))}
               </tr>
             </thead>

@@ -1,5 +1,6 @@
 import { memo } from "react";
 import { Badge3D, Delta3D, Threshold3D } from "./ov3d";
+import { InfoTip } from "./InfoTip";
 
 export type KpiCard = {
   label: string;
@@ -12,6 +13,8 @@ export type KpiCard = {
   threshold?: { value: number; warn: number; bad: number; invert?: boolean; label?: string };
   /** Optional small caption under the value (e.g. "vs 120 période préc.") */
   hint?: string;
+  /** Contextual explanation: how the figure is computed / how to read it. */
+  info?: string;
   Icon: React.ComponentType<{ className?: string }>;
 };
 
@@ -43,7 +46,7 @@ const Spark = memo(function Spark({ values, accent }: { values: number[]; accent
 function OvKpiRow({ cards }: { cards: KpiCard[] }) {
   return (
     <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-      {cards.map(({ label, value, delta, invert, Icon, accent, spark, threshold, hint }, idx) => {
+      {cards.map(({ label, value, delta, invert, Icon, accent, spark, threshold, hint, info }, idx) => {
         const color = accent ?? ACCENTS[idx % ACCENTS.length];
         return (
           <div key={label} className="ov3d-card ov3d-tile relative overflow-hidden" style={{ ["--ov3d-accent" as any]: color, padding: 14, borderRadius: 12 }}>
@@ -56,6 +59,7 @@ function OvKpiRow({ cards }: { cards: KpiCard[] }) {
                 <Icon className="w-3.5 h-3.5" />
               </span>
               <span style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>{label}</span>
+              {info && <InfoTip title={label} text={info} />}
               {threshold && (
                 <span className="ml-auto">
                   <Threshold3D {...threshold} />
@@ -66,7 +70,17 @@ function OvKpiRow({ cards }: { cards: KpiCard[] }) {
               <span className="tabular-nums" style={{ fontSize: 22, fontWeight: 800, color: "var(--pp-text-primary)", letterSpacing: "-.02em" }}>
                 {value}
               </span>
-              <Delta3D delta={delta} invert={invert} />
+              <span
+                title={
+                  delta == null || !Number.isFinite(delta)
+                    ? undefined
+                    : `Écart vs période précédente : ${delta > 0 ? "+" : ""}${Math.round(delta)} %. ${
+                        invert ? "Une baisse est favorable." : "Une hausse est favorable."
+                      }`
+                }
+              >
+                <Delta3D delta={delta} invert={invert} />
+              </span>
             </div>
             {hint && (
               <div className="relative" style={{ marginTop: 4 }}>

@@ -1171,3 +1171,49 @@ All colors MUST be HSL.
 }
 @keyframes ov3dShimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 @media (prefers-reduced-motion: reduce) { .ov3d-chart-skeleton { animation: none; } }
+
+/* ============================================================
+   Planiprêt — "Haute lisibilité" accessibility mode
+   Enabled via <html data-pp-hr="1"> (see usePpHighReadability).
+   Flattens the 3D relief, raises contrast, enlarges chart type.
+   ============================================================ */
+[data-pp-hr="1"] { --ov3d-d: 0; }
+[data-pp-hr="1"] .ov3d-chart::before,
+[data-pp-hr="1"] .ov3d-card::before { display: none !important; }
+[data-pp-hr="1"] .ov3d-chart .recharts-bar-rectangle path,
+[data-pp-hr="1"] .ov3d-chart .recharts-rectangle path,
+[data-pp-hr="1"] .ov3d-chart .recharts-pie-sector path,
+[data-pp-hr="1"] .ov3d-chart .recharts-line-curve,
+[data-pp-hr="1"] .ov3d-chart .recharts-area-curve,
+[data-pp-hr="1"] .recharts-surface path { filter: none !important; }
+[data-pp-hr="1"] .recharts-bar-rectangle path,
+[data-pp-hr="1"] .recharts-pie-sector path { fill-opacity: 1 !important; stroke: rgba(0,0,0,.35); stroke-width: 1; }
+[data-pp-hr="1"] .recharts-line-curve,
+[data-pp-hr="1"] .recharts-area-curve { stroke-width: 3 !important; }
+[data-pp-hr="1"] .recharts-cartesian-grid line { stroke: color-mix(in srgb, var(--pp-text-muted) 55%, transparent) !important; stroke-dasharray: none !important; }
+[data-pp-hr="1"] .recharts-cartesian-axis-tick text,
+[data-pp-hr="1"] .recharts-legend-item-text,
+[data-pp-hr="1"] .recharts-label { font-size: 13px !important; font-weight: 700 !important; fill: var(--pp-text-primary) !important; color: var(--pp-text-primary) !important; }
+[data-pp-hr="1"] .recharts-tooltip-wrapper * { font-size: 13.5px !important; }
+[data-pp-hr="1"] .ov3d-card,
+[data-pp-hr="1"] .pp-card { box-shadow: none !important; border-color: color-mix(in srgb, var(--pp-text-muted) 55%, transparent) !important; }
+[data-pp-hr="1"] .ov3d-row { box-shadow: none !important; }
+[data-pp-hr="1"] .ov3d-row td,
+[data-pp-hr="1"] .ov3d-table td { color: var(--pp-text-primary) !important; font-size: 13px !important; }
+[data-pp-hr="1"] .ov3d-table th { color: var(--pp-text-primary) !important; font-size: 12px !important; }
+[data-pp-hr="1"] * { text-shadow: none !important; }
+[data-pp-hr="1"] :focus-visible { outline: 3px solid var(--pp-brand-accent-2, #2E9BDC) !important; outline-offset: 2px; }
+[data-pp-hr="1"] .ov3d-chart-skeleton { animation: none !important; }
+
+/* Responsive chart readability: on narrow screens shrink padding and keep
+   axis labels legible instead of overlapping. */
+@media (max-width: 640px) {
+  .ov3d-chart .recharts-cartesian-axis-tick text { font-size: 10px; }
+  .ov3d-chart .recharts-legend-wrapper { font-size: 10.5px; }
+  .ov3d-chart { overflow-x: auto; }
+}
+
+/* Clickable stat affordance (drill-down) */
+.pp-drillable { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+.pp-drillable:hover { transform: translateY(-2px); }
+[data-pp-hr="1"] .pp-drillable:hover { transform: none; outline: 2px solid var(--pp-brand-accent-2, #2E9BDC); }

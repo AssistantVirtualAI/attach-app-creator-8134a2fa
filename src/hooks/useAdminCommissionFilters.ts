@@ -5,10 +5,11 @@ export type AdminCommissionFilters = {
   granularity: "week" | "month" | "quarter" | "year" | "ytd";
   periodIndex: number;
   agent: string;
+  lender: string;
   tab: string;
 };
 
-const KEY = "pp-admin-commission-filters:v1";
+const key = (scope: string) => `pp-commission-filters:${scope}:v2`;
 
 export function defaultAdminCommissionFilters(): AdminCommissionFilters {
   return {
@@ -16,13 +17,14 @@ export function defaultAdminCommissionFilters(): AdminCommissionFilters {
     granularity: "ytd",
     periodIndex: 12,
     agent: "",
+    lender: "",
     tab: "overview",
   };
 }
 
-export function readAdminCommissionFilters(): AdminCommissionFilters | null {
+export function readAdminCommissionFilters(scope = "admin"): AdminCommissionFilters | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key(scope));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
@@ -32,6 +34,7 @@ export function readAdminCommissionFilters(): AdminCommissionFilters | null {
       granularity: ["week", "month", "quarter", "year", "ytd"].includes(parsed.granularity) ? parsed.granularity : d.granularity,
       periodIndex: Number(parsed.periodIndex) || d.periodIndex,
       agent: typeof parsed.agent === "string" ? parsed.agent : "",
+      lender: typeof parsed.lender === "string" ? parsed.lender : "",
       tab: typeof parsed.tab === "string" ? parsed.tab : d.tab,
     };
   } catch {
@@ -40,8 +43,8 @@ export function readAdminCommissionFilters(): AdminCommissionFilters | null {
 }
 
 /** Persists the admin commission filters in the browser (admin portal only). */
-export function useAdminCommissionFilters(enabled: boolean, value: AdminCommissionFilters) {
-  const [restored] = useState<AdminCommissionFilters | null>(() => (enabled ? readAdminCommissionFilters() : null));
+export function useAdminCommissionFilters(enabled: boolean, value: AdminCommissionFilters, scope = "admin") {
+  const [restored] = useState<AdminCommissionFilters | null>(() => (enabled ? readAdminCommissionFilters(scope) : null));
   const first = useRef(true);
 
   useEffect(() => {
@@ -51,19 +54,19 @@ export function useAdminCommissionFilters(enabled: boolean, value: AdminCommissi
       return;
     }
     try {
-      localStorage.setItem(KEY, JSON.stringify(value));
+      localStorage.setItem(key(scope), JSON.stringify(value));
     } catch {
       /* ignore */
     }
-  }, [enabled, value.year, value.granularity, value.periodIndex, value.agent, value.tab]);
+  }, [enabled, scope, value.year, value.granularity, value.periodIndex, value.agent, value.lender, value.tab]);
 
   const clear = useCallback(() => {
     try {
-      localStorage.removeItem(KEY);
+      localStorage.removeItem(key(scope));
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [scope]);
 
   return { restored, clear };
 }

@@ -60,6 +60,9 @@ export default function PACommissionsImport() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [mapping, setMapping] = useState<Record<Field, string>>({} as any);
   const [busy, setBusy] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [mode, setMode] = useState<"replace" | "merge">("replace");
   const [result, setResult] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
 
@@ -68,6 +71,7 @@ export default function PACommissionsImport() {
 
   const onFile = async (file: File) => {
     setResult(null);
+    setAnalysis(null);
     setFileName(file.name);
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { cellDates: false });
@@ -97,12 +101,15 @@ export default function PACommissionsImport() {
         if (col) idx[f] = s.headers.indexOf(col);
       }
       for (const row of s.rows) {
-        const rec: any = { source_row: order++ };
+        const rec: any = { source_row: order++, sheet: s.name };
         for (const f of FIELDS) {
           const i = idx[f];
           rec[f] = i !== undefined && i >= 0 ? row[i] : undefined;
         }
         if (rec.date_trans === undefined || rec.date_trans === null || rec.date_trans === "") continue;
+        const raw: Record<string, any> = {};
+        s.headers.forEach((h, i) => { if (h) raw[h] = row[i]; });
+        rec.raw = raw;
         out.push(rec);
       }
     }
@@ -123,6 +130,41 @@ export default function PACommissionsImport() {
     return data as any;
   };
 
+  const doAnalyze = async () => {
+    if (!activeSheets.length) return;
+    setAnalyzing(true);
+    try {
+      const payloadSheets = activeSheets.slice(0, 8).map((s) => {
+        const ctCol = mapping.commission_type ? s.headers.indexOf(mapping.commission_type) : -1;
+        return {
+          name: s.name,
+          headers: s.headers,
+          samples: s.rows.slice(0, 3),
+          commissionTypeSamples: ctCol >= 0
+            ? Array.from(new Set(s.rows.map((r) => String(r[ctCol] ?? "").trim()).filter(Boolean))).slice(0, 60)
+            : [],
+        };
+      });
+      const res = await call({ action: "analyze", sheets: payloadSheets });
+      setAnalysis(res);
+      // Apply column suggestions to the visible mapping (header -> field becomes field -> header)
+      const next = { ...mapping };
+      for (const [header, field] of Object.entries(res.columns ?? {})) {
+        if (field && field !== "__ignore__" && (FIELDS as readonly string[]).includes(String(field)) && allHeaders.includes(header)) {
+          if (!next[field as Field]) next[field as Field] = header;
+        }
+      }
+      setMapping(next);
+      toast.success(isFr
+        ? `Analyse terminée${res.aiUsed ? " (Claude)" : ""} — ${res.unknownHeaders?.length ?? 0} colonne(s) à confirmer`
+        : `Analysis done${res.aiUsed ? " (Claude)" : ""} — ${res.unknownHeaders?.length ?? 0} column(s) to confirm`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Analyse impossible");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const doImport = async () => {
     if (!mapping.date_trans) { toast.error(isFr ? "Colonne date requise" : "Date column required"); return; }
     setBusy(true);
@@ -131,19 +173,23 @@ export default function PACommissionsImport() {
       const CHUNK = 4000;
       let inserted = 0;
       let unmatched: string[] = [];
+      let unmappedTypes: string[] = [];
       let years: number[] = [];
       for (let i = 0; i < rows.length; i += CHUNK) {
         const res = await call({
           action: "import",
           fileName,
+          mode,
           rows: rows.slice(i, i + CHUNK),
-          replaceYears: i === 0,
+          replaceYears: mode === "replace" && i === 0,
+          commissionTypes: analysis?.commissionTypes ?? undefined,
         });
         inserted += res.inserted ?? 0;
         unmatched = Array.from(new Set([...unmatched, ...(res.unmatched ?? [])]));
+        unmappedTypes = Array.from(new Set([...unmappedTypes, ...(res.unmappedTypes ?? [])]));
         years = Array.from(new Set([...years, ...(res.years ?? [])]));
       }
-      setResult({ inserted, unmatched, years });
+      setResult({ inserted, unmatched, unmappedTypes, years });
       toast.success(isFr ? `${inserted} lignes importées` : `${inserted} rows imported`);
       void loadSummary();
     } catch (e: any) {
@@ -152,6 +198,7 @@ export default function PACommissionsImport() {
       setBusy(false);
     }
   };
+
 
   const loadSummary = async () => {
     try { setSummary(await call({ action: "summary" })); } catch { /* ignore */ }

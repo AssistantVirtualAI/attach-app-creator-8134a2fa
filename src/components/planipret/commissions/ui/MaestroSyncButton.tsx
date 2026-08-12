@@ -1,18 +1,11 @@
 import { useState } from "react";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { writeMaestroSyncStatus, relativeTime } from "@/lib/planipret/commissionsCache";
 
 const KEY = (scope: string) => `pp-maestro-commissions-sync:${scope}`;
 
-function relative(iso: string | null, isFr: boolean) {
-  if (!iso) return null;
-  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (min < 1) return isFr ? "à l'instant" : "just now";
-  if (min < 60) return isFr ? `il y a ${min} min` : `${min} min ago`;
-  const h = Math.round(min / 60);
-  if (h < 24) return isFr ? `il y a ${h} h` : `${h} h ago`;
-  return new Date(iso).toLocaleDateString(isFr ? "fr-CA" : "en-CA");
-}
+const relative = relativeTime;
 
 /** Triggers the Maestro commission sync ("all" for admin, "self" for a broker). */
 export default function MaestroSyncButton({
@@ -42,22 +35,31 @@ export default function MaestroSyncButton({
       if (error) throw error;
       const res = data as any;
       if (!res?.success) {
-        setMsg(
-          res?.code === "no_endpoint"
-            ? (isFr ? "Endpoint Maestro pas encore disponible — données inchangées." : "Maestro endpoint not available yet — data unchanged.")
-            : (res?.error ?? (isFr ? "Synchronisation impossible." : "Sync failed.")),
-        );
+        const message = res?.code === "no_endpoint"
+          ? (isFr ? "Endpoint Maestro pas encore disponible — données inchangées." : "Maestro endpoint not available yet — data unchanged.")
+          : (res?.error ?? (isFr ? "Synchronisation impossible." : "Sync failed."));
+        setMsg(message);
+        writeMaestroSyncStatus(scope, {
+          at: new Date().toISOString(), ok: false, written: 0,
+          brokers: res?.brokers, unlinked: res?.unlinked, code: res?.code ?? null, error: message,
+        });
         return;
       }
       const at = res.synced_at ?? new Date().toISOString();
       setSyncedAt(at);
       try { localStorage.setItem(KEY(scope), at); } catch { /* ignore */ }
+      writeMaestroSyncStatus(scope, {
+        at, ok: true, written: res.written ?? 0, candidates: res.candidates,
+        brokers: res.brokers, unlinked: res.unlinked ?? [], code: null, error: null,
+      });
       setMsg(isFr
         ? `${res.written ?? 0} ligne(s) · ${res.brokers ?? 1} courtier(s)`
         : `${res.written ?? 0} row(s) · ${res.brokers ?? 1} broker(s)`);
       onDone?.();
     } catch (e: any) {
-      setMsg(e?.message ?? (isFr ? "Erreur" : "Error"));
+      const message = e?.message ?? (isFr ? "Erreur" : "Error");
+      setMsg(message);
+      writeMaestroSyncStatus(scope, { at: new Date().toISOString(), ok: false, written: 0, error: message });
     } finally {
       setBusy(false);
     }

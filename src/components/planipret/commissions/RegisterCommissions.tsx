@@ -26,6 +26,8 @@ import CommissionsHero from "./ui/CommissionsHero";
 import CommissionsTabs, { type TabKey } from "./ui/CommissionsTabs";
 import CommissionsSkeleton from "./ui/CommissionsSkeleton";
 import MaestroSyncButton from "./ui/MaestroSyncButton";
+import MaestroStatusBadge from "./ui/MaestroStatusBadge";
+import { statsCacheKey, readStatsCache, readAnyStatsCache, writeStatsCache } from "@/lib/planipret/commissionsCache";
 import {
   CHART_COLORS, CommissionsGradients, axisProps, gridProps, legendProps, tipProps,
 } from "./ui/chartTheme";
@@ -183,6 +185,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
 
   // Export (PNG / PDF) + mobile filter drawer
   const exportRootRef = useRef<HTMLDivElement>(null);
@@ -216,8 +220,12 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
   useEffect(() => {
     let cancelled = false;
+    const cacheKey = statsCacheKey(scopeKey, [year, month, granularity, periodIndex, agent || "all"]);
     const run = async () => {
       setLoading(true); setError(null);
+      // Instant paint from the last known payload (never a blank page).
+      const cached = readStatsCache(cacheKey) ?? (data ? null : readAnyStatsCache(scopeKey));
+      if (cached && !cancelled) { setData(cached.value); setStale(true); setCachedAt(new Date(cached.ts).toISOString()); }
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const { data: res, error: err } = await supabase.functions.invoke("pp-commission-stats", {
@@ -233,15 +241,22 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
         });
         if (err) throw err;
         if ((res as any)?.error) throw new Error((res as any).error);
-        if (!cancelled) setData(res);
+        if (!cancelled) {
+          setData(res); setStale(false); setCachedAt(null); setError(null);
+          writeStatsCache(cacheKey, res);
+        }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "error");
+        if (cancelled) return;
+        const fallback = readStatsCache(cacheKey) ?? readAnyStatsCache(scopeKey);
+        if (fallback) { setData(fallback.value); setStale(true); setCachedAt(new Date(fallback.ts).toISOString()); }
+        setError(e?.message ?? "error");
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     void run();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month, granularity, periodIndex, agent, isAdminView, refreshKey]);
 
   // Drill-down fetch (admin only)
@@ -402,6 +417,18 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           commissionTypes: data.commissionTypes,
           clubRank: data.club.find((c: any) => c.isMe)?.rank ?? null,
           clubSize: data.club.length,
+          // Provenance / data quality so Claude reads the endpoint data as-is.
+          dataSource: { source: "maestro", syncedAt: data.syncedAt ?? cachedAt ?? null, stale, rowCount: data.rowCount },
+          lenderFilter: lender || null,
+          filteredTotals: lender ? filteredTotals : undefined,
+          unmappedRows: allDeals.filter((d: any) => d?.mapStatus === "unmapped").length,
+          // Raw deal lines (already scoped to this broker or to the firm view).
+          deals: filteredDeals.slice(0, 300).map((d: any) => ({
+            n: d.number, date: d.date ?? d.dateTrans, agent: d.agentName,
+            lender: d.institution, product: d.mortgageType, term: d.term,
+            loan: d.loanAmt, commission: d.amount, type: d.commissionType,
+          })),
+          dealsTotal: filteredDeals.length,
         },
       };
       const { data: res, error: err } = await supabase.functions.invoke("pp-commissions-insights", {
@@ -597,9 +624,23 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
       <CommissionsTabs tabs={tabs} value={tab as TabKey} onChange={(k) => setTab(k as Tab)} />
 
-      {error && <div className="pp-card" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger,#ef4444)" }}>{error}</div>}
+      <div className="pp-hide-export">
+        <MaestroStatusBadge
+          lang={lang}
+          scope={scopeKey}
+          loading={loading}
+          stale={stale}
+          dataError={error}
+          rowCount={data?.rowCount ?? null}
+          dataSyncedAt={data?.syncedAt ?? cachedAt}
+        />
+      </div>
 
-      {!error && !data && loading && <CommissionsSkeleton />}
+      {error && !data && (
+        <div className="pp-card" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger,#ef4444)" }}>{error}</div>
+      )}
+
+      {!data && loading && <CommissionsSkeleton />}
 
       {data && data.rowCount === 0 && (
         <div

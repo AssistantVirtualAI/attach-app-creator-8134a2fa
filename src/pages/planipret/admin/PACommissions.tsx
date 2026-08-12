@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { TrendingUp, Lock } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import CommissionDashboard from "@/components/planipret/commissions/CommissionDashboard";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -12,7 +11,6 @@ const COMMISSIONS_ALLOWED_EMAILS = ["mhassoun@assistantvirtualai.com"];
 export default function PACommissions() {
   const { lang } = useMplanipretLang();
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [source, setSource] = useState<"register" | "maestro" | "internal">("register");
 
   useEffect(() => {
     let cancelled = false;
@@ -60,34 +58,7 @@ export default function PACommissions() {
           : "Vue globale sur tous les courtiers — volume, dossiers, prêteurs et commissions"}
       />
 
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {([
-          ["register", lang === "en" ? "Register 2022+" : "Registre 2022+"],
-          ["maestro", "Maestro"],
-          ["internal", lang === "en" ? "Internal data" : "Données internes"],
-        ] as const).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setSource(key)}
-            className="px-3 py-1.5 rounded-lg"
-            style={{
-              fontSize: 12.5, fontWeight: 700,
-              background: source === key ? "var(--pp-brand-accent-2)" : "var(--pp-bg-elevated)",
-              color: source === key ? "#fff" : "var(--pp-text-secondary)",
-              border: "1px solid var(--pp-bg-border)",
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {source === "register" ? (
-        <RegisterCommissions lang={lang === "en" ? "en" : "fr"} scope="admin" />
-      ) : (
-        <CommissionDashboard lang={lang === "en" ? "en" : "fr"} scope="admin" source={source} />
-      )}
+      <RegisterCommissions lang={lang === "en" ? "en" : "fr"} scope="admin" />
     </PAPage>
   );
 }
-

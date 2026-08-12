@@ -132,6 +132,7 @@ const initials = (n?: string) =>
 
 export default function PlanipretAdminLayout() {
   const { lang, setLang, t: tt } = useMplanipretLang();
+  const { theme, toggle: toggleTheme } = useMplanipretTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [profile, setProfile] = useState<any>(null);
@@ -466,6 +467,15 @@ export default function PlanipretAdminLayout() {
               <Search className="w-3.5 h-3.5" />
               <span className="flex-1 text-left">Rechercher courtiers, appels, intégrations…</span>
               <kbd className="pp-kbd">⌘K</kbd>
+            </button>
+
+            <HighReadabilityToggle compact />
+
+            <button onClick={toggleTheme} aria-label="Theme"
+              title={theme === "dark" ? "Mode clair" : "Mode sombre"}
+              className="flex items-center justify-center rounded-lg shrink-0"
+              style={{ width: 32, height: 32, color: "var(--pp-text-muted)", border: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-elevated)" }}>
+              {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
 
             <div className="hidden md:flex items-center gap-1.5 shrink-0"

@@ -30,15 +30,38 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
   const [formError, setFormError] = useState<string | null>(null);
   const [showLegal, setShowLegal] = useState<null | "tos" | "privacy">(null);
 
+  const friendlyError = (raw?: string | null): string => {
+    const msg = String(raw || "");
+    if (/invalid login credentials/i.test(msg)) {
+      return lang === "fr" ? "Courriel ou mot de passe incorrect." : "Incorrect email or password.";
+    }
+    if (/email not confirmed/i.test(msg)) {
+      return lang === "fr" ? "Ce compte n'est pas encore confirmé." : "This account is not confirmed yet.";
+    }
+    if (/rate|too many/i.test(msg)) {
+      return lang === "fr" ? "Trop de tentatives. Réessayez dans quelques minutes." : "Too many attempts. Please try again in a few minutes.";
+    }
+    if (/network|fetch|timeout|load failed/i.test(msg)) {
+      return lang === "fr" ? "Connexion réseau instable. Réessayez." : "Unstable network connection. Please try again.";
+    }
+    return msg || t("auth.failed");
+  };
+
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
     setFormError(null);
     if (!email || !password) { setFormError(t("auth.missing")); toast.error(t("auth.missing")); return; }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      const attempt = () => supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      let { error } = await attempt();
+      // Retry once on transient network failures (common on review devices).
+      if (error && /network|fetch|timeout|load failed/i.test(error.message || "")) {
+        await new Promise((r) => setTimeout(r, 800));
+        ({ error } = await attempt());
+      }
       if (error) {
-        const msg = error.message || t("auth.failed");
+        const msg = friendlyError(error.message);
         setFormError(msg);
         toast.error(msg);
         return;
@@ -48,7 +71,7 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
       void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin());
       await onLoggedIn();
     } catch (err: any) {
-      const msg = err?.message || "Network error";
+      const msg = friendlyError(err?.message);
       setFormError(msg);
       toast.error(msg);
     } finally {
@@ -62,21 +85,30 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) toast.error(error.message);
+    if (error) toast.error(friendlyError(error.message));
     else toast.success(lang === "fr" ? "Courriel envoyé" : "Email sent");
   };
 
   const signInWithMicrosoft = async () => {
     setLoading(true);
+    setFormError(null);
     try {
       await startMicrosoftSignIn(msRedirect, {
         loginHint: email.trim() || undefined,
         prompt: "login",
       });
     }
-    catch (error: any) { toast.error(error?.message || t("auth.msUnavailable")); }
+    catch (error: any) {
+      clearMs365Pending();
+      const msg = lang === "fr"
+        ? "Connexion Microsoft indisponible. Utilisez votre courriel et mot de passe ci-dessus."
+        : "Microsoft sign-in is unavailable. Please use your email and password above.";
+      setFormError(msg);
+      toast.error(msg);
+    }
     finally { setLoading(false); }
   };
+
 
 
   return (

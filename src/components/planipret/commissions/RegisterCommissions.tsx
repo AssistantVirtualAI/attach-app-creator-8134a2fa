@@ -7,6 +7,7 @@ import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy, 
 import { supabase } from "@/integrations/supabase/client";
 import CommissionInsights from "./CommissionInsights";
 import ClubExcellencePanel from "./ClubExcellencePanel";
+import { Ov3DChartFilters, Ov3DGradients, fill3d } from "@/components/planipret/broker/overview/ov3dChart";
 import RegisterFilters, { type Granularity } from "./RegisterFilters";
 import BrokerLeaderboard from "./BrokerLeaderboard";
 import CommissionDiscrepancies from "./CommissionDiscrepancies";
@@ -441,7 +442,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
       )}
 
       {data && data.rowCount > 0 && (
-        <>
+        <div className="ov3d-stage">
+          <Ov3DChartFilters />
           {tab === "overview" && (
             <>
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
@@ -544,7 +546,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                         <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [n === (isFr ? "Dossiers" : "Deals") ? fmtNum(Number(v)) : fmtMoney(Number(v)), n]} />
                         <Legend wrapperStyle={{ fontSize: 11.5 }} />
-                        <Bar yAxisId="l" name={isFr ? "Dossiers" : "Deals"} dataKey="deals" fill="#70AD47" radius={[5, 5, 0, 0]} />
+                        <Bar yAxisId="l" name={isFr ? "Dossiers" : "Deals"} dataKey="deals" fill={fill3d("#70AD47")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
                         <Line yAxisId="r" name={isFr ? "Comm./dossier" : "Comm./deal"} dataKey="commPerDeal" stroke="#FFC000" strokeWidth={2.4} dot={{ r: 2 }} />
                       </ComposedChart>
                     </ResponsiveContainer>
@@ -626,8 +628,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                       <YAxis tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
                       <Legend wrapperStyle={{ fontSize: 11.5 }} />
-                      <Bar name={String(year)} dataKey="cyCommission" fill="#ED7D31" radius={[5, 5, 0, 0]} />
-                      <Bar name={String(year - 1)} dataKey="pyCommission" fill="#A5A5A5" radius={[5, 5, 0, 0]} />
+                      <Bar name={String(year)} dataKey="cyCommission" fill={fill3d("#ED7D31")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
+                      <Bar name={String(year - 1)} dataKey="pyCommission" fill={fill3d("#A5A5A5")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
@@ -657,8 +659,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                       <YAxis type="category" dataKey="key" width={130} tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
                       <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
                       <Legend wrapperStyle={{ fontSize: 11.5 }} />
-                      <Bar name={String(year)} dataKey="cyVolume" fill="#4472C4" radius={[0, 5, 5, 0]} />
-                      <Bar name={String(year - 1)} dataKey="pyVolume" fill="#A5A5A5" radius={[0, 5, 5, 0]} />
+                      <Bar name={String(year)} dataKey="cyVolume" fill={fill3d("#4472C4")} radius={[0, 5, 5, 0]}  filter="url(#ov3dExtrude)" />
+                      <Bar name={String(year - 1)} dataKey="pyVolume" fill={fill3d("#A5A5A5")} radius={[0, 5, 5, 0]}  filter="url(#ov3dExtrude)" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -700,7 +702,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                         <XAxis dataKey="key" tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} />
                         <YAxis tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                         <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => fmtMoney(Number(v))} />
-                        <Bar dataKey="cyVolume" name="Volume" fill="#70AD47" radius={[5, 5, 0, 0]} />
+                        <Bar dataKey="cyVolume" name="Volume" fill={fill3d("#70AD47")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -728,8 +730,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                     <YAxis tick={{ fontSize: 11, fill: "var(--pp-text-muted)" }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
                     <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any) => [fmtMoney(Number(v)), n]} />
                     <Legend wrapperStyle={{ fontSize: 11.5 }} />
-                    <Bar name={String(year)} dataKey="volume" fill="#4472C4" radius={[5, 5, 0, 0]} />
-                    <Bar name={String(year - 1)} dataKey="pyVolume" fill="#A5A5A5" radius={[5, 5, 0, 0]} />
+                    <Bar name={String(year)} dataKey="volume" fill={fill3d("#4472C4")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
+                    <Bar name={String(year - 1)} dataKey="pyVolume" fill={fill3d("#A5A5A5")} radius={[5, 5, 0, 0]}  filter="url(#ov3dExtrude)" />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -817,7 +819,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               </ul>
             </Section>
           )}
-        </>
+        </div>
       )}
 
       {isAdminView && drillAgent && (

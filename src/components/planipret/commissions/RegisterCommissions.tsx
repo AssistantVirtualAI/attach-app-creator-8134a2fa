@@ -417,6 +417,18 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           commissionTypes: data.commissionTypes,
           clubRank: data.club.find((c: any) => c.isMe)?.rank ?? null,
           clubSize: data.club.length,
+          // Provenance / data quality so Claude reads the endpoint data as-is.
+          dataSource: { source: "maestro", syncedAt: data.syncedAt ?? cachedAt ?? null, stale, rowCount: data.rowCount },
+          lenderFilter: lender || null,
+          filteredTotals: lender ? filteredTotals : undefined,
+          unmappedRows: allDeals.filter((d: any) => d?.mapStatus === "unmapped").length,
+          // Raw deal lines (already scoped to this broker or to the firm view).
+          deals: filteredDeals.slice(0, 300).map((d: any) => ({
+            n: d.number, date: d.date ?? d.dateTrans, agent: d.agentName,
+            lender: d.institution, product: d.mortgageType, term: d.term,
+            loan: d.loanAmt, commission: d.amount, type: d.commissionType,
+          })),
+          dealsTotal: filteredDeals.length,
         },
       };
       const { data: res, error: err } = await supabase.functions.invoke("pp-commissions-insights", {

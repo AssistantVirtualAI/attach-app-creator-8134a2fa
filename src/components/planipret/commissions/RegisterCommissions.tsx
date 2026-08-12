@@ -185,6 +185,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
 
   // Export (PNG / PDF) + mobile filter drawer
   const exportRootRef = useRef<HTMLDivElement>(null);

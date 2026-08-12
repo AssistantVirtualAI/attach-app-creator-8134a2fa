@@ -19,6 +19,7 @@ import { downloadCommissionsPdf } from "@/lib/planipret/commissionsPdf";
 import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminCommissionFilters } from "@/hooks/useAdminCommissionFilters";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 import RegisterHealthBadge from "./RegisterHealthBadge";
+import InfoTip from "@/components/planipret/broker/overview/InfoTip";
 import RegisterDealsTable, { type DealLine } from "./RegisterDealsTable";
 import RegisterDrilldown, { dealsCsv } from "./RegisterDrilldown";
 import { Chart3D } from "@/components/planipret/broker/overview/ov3dChart";
@@ -60,7 +61,30 @@ function Delta({ value }: { value: number | string }) {
   );
 }
 
-function Kpi({ label, value, delta, accent, onClick }: { label: string; value: string; delta?: number | string; accent: string; onClick?: () => void }) {
+function Sparkline({ points, color }: { points: number[]; color: string }) {
+  const pts = points.filter((n) => Number.isFinite(n));
+  if (pts.length < 2) return null;
+  const max = Math.max(...pts), min = Math.min(...pts);
+  const span = max - min || 1;
+  const w = 96, h = 26;
+  const d = pts.map((v, i) => `${(i / (pts.length - 1)) * w},${h - ((v - min) / span) * (h - 4) - 2}`).join(" L");
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden style={{ overflow: "visible" }}>
+      <defs>
+        <linearGradient id={`spk-${color.replace(/[^a-z0-9]/gi, "")}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={.45} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={`M${d} L${w},${h} L0,${h} Z`} fill={`url(#spk-${color.replace(/[^a-z0-9]/gi, "")})`} />
+      <path d={`M${d}`} fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Kpi({ label, value, delta, accent, onClick, info, spark }: {
+  label: string; value: string; delta?: number | string; accent: string; onClick?: () => void; info?: string; spark?: number[];
+}) {
   return (
     <div
       role={onClick ? "button" : undefined}
@@ -70,17 +94,22 @@ function Kpi({ label, value, delta, accent, onClick }: { label: string; value: s
       title={onClick ? "Voir les dossiers sous-jacents" : undefined}
       className={`ov3d-card${onClick ? " pp-drillable" : ""}`}
       style={{
-        position: "relative", padding: 14, borderRadius: 14, overflow: "hidden",
+        position: "relative", padding: 14, borderRadius: 16, overflow: "hidden",
         background: "linear-gradient(155deg, var(--pp-bg-elevated) 0%, var(--pp-bg-card) 100%)",
         border: "1px solid var(--pp-bg-border)",
-        boxShadow: "0 10px 26px -18px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06)",
+        boxShadow: "0 18px 38px -26px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.07)",
       }}
     >
-      <div style={{ position: "absolute", inset: 0, background: `radial-gradient(120% 70% at 0% 0%, ${accent}22, transparent 60%)`, pointerEvents: "none" }} />
-      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: accent, opacity: .85 }} />
-      <div style={{ fontSize: 11, letterSpacing: .4, textTransform: "uppercase", color: "var(--pp-text-muted)", fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: "var(--pp-text-primary)" }}>{value}</div>
-      {delta !== undefined && <div className="mt-1"><Delta value={delta} /></div>}
+      <div aria-hidden style={{ position: "absolute", inset: 0, background: `radial-gradient(130% 75% at 0% 0%, ${accent}26, transparent 62%)`, pointerEvents: "none" }} />
+      <div aria-hidden style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: accent, boxShadow: `0 0 16px ${accent}99` }} />
+      <div className="inline-flex items-center gap-1" style={{ fontSize: 10.5, letterSpacing: .5, textTransform: "uppercase", color: "var(--pp-text-muted)", fontWeight: 800 }}>
+        {label}{info && <InfoTip text={info} />}
+      </div>
+      <div style={{ fontSize: 23, fontWeight: 900, letterSpacing: -0.4, marginTop: 4, color: "var(--pp-text-primary)" }}>{value}</div>
+      <div className="flex items-end justify-between gap-2 mt-1">
+        <div>{delta !== undefined && <Delta value={delta} />}</div>
+        {spark && spark.length > 1 && <div style={{ opacity: .95 }}><Sparkline points={spark} color={accent} /></div>}
+      </div>
     </div>
   );
 }

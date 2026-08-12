@@ -10,6 +10,8 @@ import ClubExcellencePanel from "./ClubExcellencePanel";
 import { Ov3DChartFilters, Ov3DGradients, fill3d } from "@/components/planipret/broker/overview/ov3dChart";
 import RegisterFilters, { type Granularity } from "./RegisterFilters";
 import BrokerLeaderboard from "./BrokerLeaderboard";
+import BrokerTopSellers from "./BrokerTopSellers";
+import BrokerYearMatrix from "./BrokerYearMatrix";
 import CommissionDiscrepancies from "./CommissionDiscrepancies";
 import CommissionCoverage from "./CommissionCoverage";
 import BrokerDrilldown from "./BrokerDrilldown";
@@ -143,6 +145,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const [granularity, setGranularity] = useState<Granularity>((saved?.granularity as Granularity) ?? "ytd");
   const [periodIndex, setPeriodIndex] = useState(saved?.periodIndex ?? 12);
   const [agent, setAgent] = useState(isAdminView ? (saved?.agent ?? "") : "");
+  const [brokersYear, setBrokersYear] = useState<number | "all">("all");
   const [lender, setLender] = useState(saved?.lender ?? "");
   const [tab, setTab] = useState<Tab>((saved?.tab as Tab) ?? "overview");
   const [data, setData] = useState<any>(null);
@@ -723,6 +726,39 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                     : "Broker count reflects the imported file only. To see the whole firm, import a company-wide register instead of an individual dashboard export."}
                 </div>
               </div>
+              {(data.unlinkedBrokers ?? []).length > 0 && (
+                <div className="mb-3 rounded-xl px-3 py-2.5"
+                  style={{ background: "rgba(245,158,11,.10)", border: "1px solid rgba(245,158,11,.45)", fontSize: 12.5, color: "var(--pp-text-secondary)" }}>
+                  <div style={{ fontWeight: 800, color: "var(--pp-text-primary)", marginBottom: 3 }}>
+                    {isFr ? "Courtiers non rattachés à un compte" : "Brokers not linked to an account"}
+                  </div>
+                  <div>
+                    {(data.unlinkedBrokers ?? []).map((u: any) => `${u.broker} (${fmtNum(u.rows)} ${isFr ? "lignes" : "rows"})`).join(" · ")}
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 11.5, opacity: .9 }}>
+                    {isFr
+                      ? "Leurs lignes restent visibles ici, mais ne sont pas encore dispatchées vers un portail courtier. Utilisez l'onglet Correspondances pour les rattacher."
+                      : "Their rows stay visible here but are not dispatched to a broker portal yet. Use the mapping tab to link them."}
+                  </div>
+                </div>
+              )}
+
+              <BrokerTopSellers
+                lang={lang}
+                brokerYearly={(data.brokerYearly ?? []) as any}
+                years={(data.brokerYears ?? []) as number[]}
+                year={brokersYear}
+                onYear={setBrokersYear}
+                onSelect={(b) => { setDrillData(null); setDrillAgent(b); }}
+              />
+
+              <BrokerYearMatrix
+                lang={lang}
+                brokerYearly={(data.brokerYearly ?? []) as any}
+                years={(data.brokerYears ?? []) as number[]}
+                onSelect={(b) => { setDrillData(null); setDrillAgent(b); }}
+              />
+
               <BrokerLeaderboard
                 lang={lang}
                 brokers={data.brokers ?? []}

@@ -14,6 +14,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { InfoTip, StatNote } from "@/components/planipret/broker/overview/InfoTip";
+import { useInViewOnce, useSupports3D } from "@/components/planipret/broker/overview/use3dCapability";
 import { supabase } from "@/integrations/supabase/client";
 
 type Table = "planipret_phone_calls" | "planipret_phone_messages" | "planipret_voicemails";
@@ -36,7 +38,10 @@ const TABLE: Record<PPActivityKind, Table> = {
 
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, children, info, note }: { title: string; children: React.ReactNode; info?: string; note?: React.ReactNode }) {
+  // Lazy: heavy Recharts subtrees only mount when the card nears the viewport.
+  const [ref, visible] = useInViewOnce<HTMLDivElement>();
+  const supports3D = useSupports3D();
   return (
     <div
       className="rounded-2xl p-3"
@@ -46,10 +51,19 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
         boxShadow: "0 16px 32px -26px rgba(0,0,0,.8)",
       }}
     >
-      <div style={{ fontSize: 12, fontWeight: 800, color: "var(--pp-text-secondary)", marginBottom: 6 }}>
-        {title}
+      <div className="flex items-center gap-1.5" style={{ fontSize: 12, fontWeight: 800, color: "var(--pp-text-secondary)", marginBottom: 6 }}>
+        <span>{title}</span>
+        {info && <InfoTip title={title} text={info} />}
       </div>
-      <div style={{ height: 180 }}>{children}</div>
+      <div
+        ref={ref}
+        className={supports3D ? undefined : "ov3d-2d"}
+        data-render-mode={supports3D ? "3d" : "2d"}
+        style={{ height: 180 }}
+      >
+        {visible ? children : <div className="ov3d-chart-skeleton" style={{ height: 180 }} role="img" aria-label={title} />}
+      </div>
+      {note && <StatNote>{note}</StatNote>}
     </div>
   );
 }
@@ -163,7 +177,13 @@ export default function PPActivityCharts({
 
   return (
     <div className="grid gap-3 mb-4 md:grid-cols-3">
-      <Card title={isFr ? `Activité — ${days} derniers jours` : `Activity — last ${days} days`}>
+      <Card
+        title={isFr ? `Activité — ${days} derniers jours` : `Activity — last ${days} days`}
+        info={isFr
+          ? "Nombre d'éléments par jour sur les 30 derniers jours (fuseau America/Toronto). Une pente montante indique une hausse d'activité; les creux correspondent souvent aux fins de semaine."
+          : "Count per day over the last 30 days (America/Toronto). A rising slope means more activity; dips usually match weekends."}
+        note={isFr ? "Chaque point = 1 journée civile." : "Each point = one calendar day."}
+      >
         <ResponsiveContainer>
           <AreaChart data={daily} margin={{ top: 6, right: 6, left: -22, bottom: 0 }}>
             <defs>
@@ -181,7 +201,12 @@ export default function PPActivityCharts({
         </ResponsiveContainer>
       </Card>
 
-      <Card title={isFr ? "Répartition par heure" : "By hour of day"}>
+      <Card
+        title={isFr ? "Répartition par heure" : "By hour of day"}
+        info={isFr
+          ? "Volume cumulé par heure de la journée (6 h à 22 h) sur la période. Les barres les plus hautes identifient vos heures de pointe — utiles pour planifier la disponibilité."
+          : "Volume aggregated by hour of day (6am–10pm) over the period. The tallest bars are your peak hours — useful for planning availability."}
+      >
         <ResponsiveContainer>
           <BarChart data={hourly} margin={{ top: 6, right: 6, left: -22, bottom: 0 }}>
             <defs>
@@ -199,7 +224,12 @@ export default function PPActivityCharts({
         </ResponsiveContainer>
       </Card>
 
-      <Card title={isFr ? "Répartition" : "Breakdown"}>
+      <Card
+        title={isFr ? "Répartition" : "Breakdown"}
+        info={isFr
+          ? "Part de chaque catégorie sur le total de la période. Pour les appels : entrants répondus, sortants et manqués; les manqués sont exclus des entrants pour éviter le double comptage."
+          : "Share of each category over the period total. For calls: answered inbound, outbound and missed; missed are excluded from inbound to avoid double counting."}
+      >
         <ResponsiveContainer>
           <PieChart>
             <Pie data={split} dataKey="value" nameKey="name" innerRadius={42} outerRadius={64} paddingAngle={3}>

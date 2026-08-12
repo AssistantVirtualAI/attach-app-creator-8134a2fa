@@ -73,6 +73,7 @@ export default function PBCommissions() {
       />
 
       <div className="flex flex-wrap items-center gap-2 mb-3">
+        {tab("register", Archive, isFr ? "Registre 2022+" : "Register 2022+")}
         {tab("maestro", Cloud, "Maestro")}
         {tab("internal", Database, isFr ? "Données internes" : "Internal data")}
         {tab("provenance", ShieldCheck, isFr ? "Provenance" : "Provenance")}
@@ -89,7 +90,9 @@ export default function PBCommissions() {
         )}
       </div>
 
-      {(source === "maestro" || source === "provenance") && notConnected ? (
+      {source === "register" ? (
+        <RegisterCommissions lang={isFr ? "fr" : "en"} />
+      ) : (source === "maestro" || source === "provenance") && notConnected ? (
         <div className="max-w-xl">
           <p className="mb-3" style={{ fontSize: 13, color: "var(--pp-text-muted)" }}>
             {isFr
@@ -110,13 +113,14 @@ export default function PBCommissions() {
           <CommissionDashboard
             lang={isFr ? "fr" : "en"}
             scope="broker"
-            source={source}
+            source={source === "internal" ? "internal" : "maestro"}
             brokerUserId={authUserId}
             brokerName={(profile as any)?.full_name}
             onSourceResult={setInfo}
           />
         </>
       )}
+
 
     </PAPage>
   );

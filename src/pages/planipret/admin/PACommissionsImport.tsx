@@ -6,6 +6,8 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import CommissionValidationPanel from "@/components/planipret/commissions/CommissionValidationPanel";
+import CommissionMappingPanel from "@/components/planipret/commissions/CommissionMappingPanel";
+
 
 const FIELDS = [
   "number", "loan_amt", "primary_client_name", "secondary_client_name", "institution",

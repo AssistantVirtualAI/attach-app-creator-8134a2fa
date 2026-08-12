@@ -326,12 +326,13 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const tabs: { key: Tab; label: string }[] = [
     { key: "overview", label: isFr ? "Vue d'ensemble" : "Overview" },
     ...(isAdminView ? [{ key: "brokers" as Tab, label: isFr ? "Courtiers" : "Brokers" }] : []),
-    { key: "trend", label: isFr ? "Tendance mensuelle" : "Monthly trend" },
+    { key: "trend", label: isFr ? "Tendance" : "Trend" },
     { key: "lenders", label: isFr ? "Prêteurs" : "Lenders" },
-    { key: "mix", label: isFr ? "Mix produits & termes" : "Product & term mix" },
-    { key: "quarters", label: isFr ? "Trimestres" : "Quarters" },
-    { key: "periods", label: isFr ? "Stats par période" : "Stats by period" },
+    { key: "mix", label: isFr ? "Mix produits" : "Product mix" },
+    ...(isAdminView ? [{ key: "quarters" as Tab, label: isFr ? "Trimestres" : "Quarters" }] : []),
+    ...(isAdminView ? [{ key: "periods" as Tab, label: isFr ? "Stats par période" : "Stats by period" }] : []),
     { key: "club", label: "Club Excellence" },
+    { key: "deals", label: isFr ? "Dossiers" : "Deals" },
     ...(isAdminView ? [{ key: "gaps" as Tab, label: isFr ? "Écarts" : "Gaps" }] : []),
     ...(isAdminView ? [{ key: "data" as Tab, label: isFr ? "Couverture des données" : "Data coverage" }] : []),
   ];

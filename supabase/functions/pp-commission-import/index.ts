@@ -440,7 +440,15 @@ Deno.serve(async (req) => {
     const prepared = rawRows.map((r, i) => {
       const date = isoDate(r.date_trans);
       const agent = str(r.agent_name);
-      const ident = resolve(agent, str(r.maestro_broker_id ?? r.maestro_id));
+      const targetName = str(r.target_name);
+      const cabinetId = str(r.cabinet);
+      const maestroHint = str(r.maestro_broker_id ?? r.maestro_id) ?? cabinetId;
+      let ident = resolve(agent, maestroHint);
+      if (!ident.broker_user_id && targetName && targetName !== agent) {
+        const alt = resolve(targetName, maestroHint);
+        if (alt.broker_user_id) ident = { ...alt, match_method: `${alt.match_method ?? "name"}_target` };
+      }
+      if (!ident.maestro_broker_id && cabinetId) ident = { ...ident, maestro_broker_id: cabinetId };
       const ctype = normaliseCommissionType(r.commission_type, typeOverrides);
       const sheet = str(r.sheet ?? r.sheet_name);
       const sourceRow = Number(r.source_row ?? i + 2);

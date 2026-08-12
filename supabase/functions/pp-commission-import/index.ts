@@ -1,6 +1,17 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { agentKey, buildResolver, splitName, type AliasRow, type BrokerDir } from "../_shared/broker-identity.ts";
+import { claudeText } from "../_shared/anthropic.ts";
+import {
+  CANONICAL_FIELDS,
+  FIELD_LABELS,
+  KNOWN_COMMISSION_TYPES,
+  buildColumnMap,
+  normaliseCommissionType,
+  norm,
+  rowKey,
+} from "../_shared/commission-mapping.ts";
+
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -32,6 +43,22 @@ const isoDate = (v: unknown): string | null => {
 
 const REG = "planipret_commission_register";
 const ALIAS = "planipret_commission_broker_aliases";
+const MAP = "planipret_commission_mappings";
+
+async function loadMappings(admin: any) {
+  const { data } = await admin.from(MAP).select("kind,source_key,target_value,target_user_id,maestro_broker_id");
+  const rows = (data ?? []) as any[];
+  const columns: Record<string, string> = {};
+  const commissionTypes: Record<string, string> = {};
+  const brokers: Record<string, any> = {};
+  for (const r of rows) {
+    if (r.kind === "column") columns[r.source_key] = r.target_value;
+    else if (r.kind === "commission_type") commissionTypes[r.source_key] = r.target_value;
+    else if (r.kind === "broker") brokers[r.source_key] = r;
+  }
+  return { columns, commissionTypes, brokers };
+}
+
 
 async function loadResolver(admin: any) {
   const { data: profiles } = await admin
@@ -213,7 +240,162 @@ Deno.serve(async (req) => {
       return json({ ok: true, aliases: data ?? [] });
     }
 
+    // ---------- Mapping (columns A:S, commission types, broker labels) ----------
+    if (action === "mapping.get") {
+      const { data } = await admin.from(MAP).select("*").order("kind").order("source_key");
+      const rows = (data ?? []) as any[];
+      return json({
+        ok: true,
+        mappings: rows,
+        columns: Object.fromEntries(rows.filter((r) => r.kind === "column").map((r) => [r.source_key, r.target_value])),
+        commissionTypes: Object.fromEntries(rows.filter((r) => r.kind === "commission_type").map((r) => [r.source_key, r.target_value])),
+        brokers: rows.filter((r) => r.kind === "broker"),
+        fields: CANONICAL_FIELDS,
+        fieldLabels: FIELD_LABELS,
+        knownTypes: KNOWN_COMMISSION_TYPES,
+      });
+    }
+
+    if (action === "mapping.upsert") {
+      const items: any[] = Array.isArray(body?.items) ? body.items : [body?.item].filter(Boolean);
+      if (!items.length) return json({ error: "no_items" }, 400);
+      const payload = items.map((it) => ({
+        kind: String(it.kind),
+        scope: String(it.scope ?? "default"),
+        source_key: norm(it.sourceKey ?? it.source_key),
+        source_label: str(it.sourceLabel ?? it.source_label ?? it.sourceKey ?? it.source_key),
+        target_value: str(it.targetValue ?? it.target_value),
+        target_user_id: it.targetUserId ?? it.target_user_id ?? null,
+        maestro_broker_id: str(it.maestroBrokerId ?? it.maestro_broker_id),
+        created_by: user.id,
+      })).filter((p) => p.source_key && ["column", "commission_type", "broker"].includes(p.kind));
+      if (!payload.length) return json({ error: "invalid_items" }, 400);
+      const { error } = await admin.from(MAP).upsert(payload, { onConflict: "kind,scope,source_key" });
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true, saved: payload.length });
+    }
+
+    if (action === "mapping.delete") {
+      const id = String(body?.id ?? "");
+      if (!id) return json({ error: "missing_id" }, 400);
+      const { error } = await admin.from(MAP).delete().eq("id", id);
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true });
+    }
+
+    // ---------- Analyze: propose a mapping for the uploaded workbook ----------
+    if (action === "analyze") {
+      const sheets: any[] = Array.isArray(body?.sheets) ? body.sheets : [];
+      if (!sheets.length) return json({ error: "no_sheets" }, 400);
+      const saved = await loadMappings(admin);
+
+      const headerSet: string[] = Array.from(new Set(sheets.flatMap((s: any) => (s.headers ?? []).map((h: any) => String(h ?? "").trim()))));
+      const { map, unknown } = buildColumnMap(headerSet, saved.columns);
+
+      const typeLabels: string[] = Array.from(new Set(
+        sheets.flatMap((s: any) => (s.commissionTypeSamples ?? []).map((t: any) => String(t ?? "").trim())),
+      )).filter(Boolean).slice(0, 120);
+      const typeMap: Record<string, { value: string | null; known: boolean }> = {};
+      const unknownTypes: string[] = [];
+      for (const t of typeLabels) {
+        const r = normaliseCommissionType(t, saved.commissionTypes);
+        typeMap[t] = r;
+        if (!r.known) unknownTypes.push(t);
+      }
+
+      let ai: any = null;
+      if (unknown.length || unknownTypes.length) {
+        try {
+          const samples = sheets.slice(0, 6).map((s: any) => ({
+            sheet: s.name,
+            headers: (s.headers ?? []).slice(0, 40),
+            rows: (s.samples ?? []).slice(0, 3),
+          }));
+          const text = await claudeText(
+            [
+              "Tu es un expert en registres de commissions hypothécaires (Planiprêt).",
+              "On te donne les entêtes et quelques lignes d'un classeur Excel.",
+              `Champs cibles possibles: ${CANONICAL_FIELDS.join(", ")} ou "__ignore__".`,
+              `Types de commission normalisés possibles: ${KNOWN_COMMISSION_TYPES.join(", ")} ou "other".`,
+              'Réponds UNIQUEMENT en JSON: {"columns":{"<entete brute>":"<champ>"},"commissionTypes":{"<libelle brut>":"<type>"},"notes":["..."]}',
+            ].join("\n"),
+            JSON.stringify({ unknownHeaders: unknown, unknownCommissionTypes: unknownTypes, samples }).slice(0, 16000),
+            { model: "claude-sonnet-4-5-20250929", max_tokens: 1200, temperature: 0, label: "commission-mapping" },
+          );
+          const m = text?.match(/\{[\s\S]*\}/);
+          if (m) ai = JSON.parse(m[0]);
+        } catch (e) {
+          console.error("analyze ai error", e);
+        }
+      }
+
+      const suggestions: Record<string, string> = {};
+      for (const [h, f] of Object.entries(map)) if (f) suggestions[h] = f;
+      if (ai?.columns) {
+        for (const [h, f] of Object.entries(ai.columns as Record<string, string>)) {
+          if (!suggestions[h] && ([...CANONICAL_FIELDS, "__ignore__"] as string[]).includes(String(f))) suggestions[h] = String(f);
+        }
+      }
+      const typeSuggestions: Record<string, string> = {};
+      for (const [t, r] of Object.entries(typeMap)) if (r.value) typeSuggestions[t] = r.value;
+      if (ai?.commissionTypes) {
+        for (const [t, v] of Object.entries(ai.commissionTypes as Record<string, string>)) {
+          if (([...KNOWN_COMMISSION_TYPES, "other"] as string[]).includes(String(v))) typeSuggestions[t] = String(v);
+        }
+      }
+
+      return json({
+        ok: true,
+        headers: headerSet,
+        columns: suggestions,
+        unknownHeaders: unknown.filter((h) => !suggestions[h]),
+        commissionTypes: typeSuggestions,
+        unknownCommissionTypes: unknownTypes.filter((t) => !typeSuggestions[t] || typeSuggestions[t] === "other"),
+        notes: ai?.notes ?? [],
+        aiUsed: !!ai,
+        savedColumns: saved.columns,
+        savedCommissionTypes: saved.commissionTypes,
+        fields: CANONICAL_FIELDS,
+        fieldLabels: FIELD_LABELS,
+        knownTypes: KNOWN_COMMISSION_TYPES,
+      });
+    }
+
+    // ---------- Remap: re-apply saved mappings to rows already imported ----------
+    if (action === "remap") {
+      const saved = await loadMappings(admin);
+      const { resolve } = await loadResolver(admin);
+      const rows = await fetchAllRows(admin, "id,agent_name,maestro_broker_id,commission_type,raw");
+      let updated = 0;
+      let unmappedCount = 0;
+      const CH = 200;
+      for (let i = 0; i < rows.length; i += CH) {
+        const slice = rows.slice(i, i + CH);
+        await Promise.all(slice.map(async (r: any) => {
+          const rawType = r.raw?.commission_type ?? r.commission_type;
+          const t = normaliseCommissionType(rawType, saved.commissionTypes);
+          const rawAgent = r.raw?.agent_name ?? r.agent_name;
+          const res = resolve(rawAgent, r.maestro_broker_id ?? r.raw?.maestro_broker_id ?? null);
+          const mapStatus = res.broker_user_id && t.known ? "ok" : "unmapped";
+          if (mapStatus === "unmapped") unmappedCount++;
+          const { error } = await admin.from(REG).update({
+            commission_type: t.value,
+            broker_user_id: res.broker_user_id,
+            first_name: res.first_name,
+            last_name: res.last_name,
+            maestro_broker_id: res.maestro_broker_id,
+            match_method: res.match_method,
+            agent_key: agentKey(rawAgent),
+            map_status: mapStatus,
+          }).eq("id", r.id);
+          if (!error) updated++;
+        }));
+      }
+      return json({ ok: true, updated, unmapped: unmappedCount, total: rows.length });
+    }
+
     if (action === "redispatch") {
+
       const { resolve } = await loadResolver(admin);
       const rows = await fetchAllRows(admin, "id,agent_name,maestro_broker_id");
       let updated = 0;
@@ -248,15 +430,20 @@ Deno.serve(async (req) => {
     const rawRows: any[] = Array.isArray(body?.rows) ? body.rows : [];
     if (!rawRows.length) return json({ error: "no_rows" }, 400);
     const fileName = String(body?.fileName ?? "registre.xlsx");
-    const replaceYears: boolean = body?.replaceYears !== false;
+    const mode = body?.mode === "merge" ? "merge" : "replace";
+    const replaceYears: boolean = mode === "replace" && body?.replaceYears !== false;
 
-    // Broker directory: alias -> maestro id -> normalised name -> email
+    const saved = await loadMappings(admin);
+    const typeOverrides = { ...saved.commissionTypes, ...(body?.commissionTypes ?? {}) };
     const { resolve } = await loadResolver(admin);
 
     const prepared = rawRows.map((r, i) => {
       const date = isoDate(r.date_trans);
       const agent = str(r.agent_name);
       const ident = resolve(agent, str(r.maestro_broker_id ?? r.maestro_id));
+      const ctype = normaliseCommissionType(r.commission_type, typeOverrides);
+      const sheet = str(r.sheet ?? r.sheet_name);
+      const sourceRow = Number(r.source_row ?? i + 2);
       return {
         number: str(r.number),
         loan_amt: num(r.loan_amt),
@@ -273,11 +460,22 @@ Deno.serve(async (req) => {
         agent_name: agent,
         target_name: str(r.target_name),
         date_trans: date,
-        commission_type: str(r.commission_type)?.toLowerCase() ?? null,
+        commission_type: ctype.value,
         split_type: str(r.split_type),
         agent_company: str(r.agent_company),
         cabinet: str(r.cabinet),
-        source_row: Number(r.source_row ?? i + 2),
+        source_row: sourceRow,
+        sheet_name: sheet,
+        raw: r.raw ?? r,
+        row_key: rowKey({
+          sheet,
+          sourceRow,
+          number: str(r.number),
+          date,
+          commissionType: ctype.value,
+          amount: num(r.amount),
+        }),
+        map_status: ident.broker_user_id && ctype.known ? "ok" : "unmapped",
         fiscal_year: date ? Number(date.slice(0, 4)) : null,
         ym_key: date ? date.slice(0, 7) : null,
         broker_user_id: ident.broker_user_id,
@@ -299,7 +497,7 @@ Deno.serve(async (req) => {
     if (impErr) return json({ error: impErr.message }, 500);
 
     if (replaceYears && years.length) {
-      const { error: delErr } = await admin.from("planipret_commission_register").delete().in("fiscal_year", years);
+      const { error: delErr } = await admin.from(REG).delete().in("fiscal_year", years);
       if (delErr) return json({ error: delErr.message }, 500);
     }
 
@@ -307,7 +505,9 @@ Deno.serve(async (req) => {
     let inserted = 0;
     for (let i = 0; i < prepared.length; i += CHUNK) {
       const slice = prepared.slice(i, i + CHUNK).map((r) => ({ ...r, import_batch_id: imp.id }));
-      const { error } = await admin.from("planipret_commission_register").insert(slice);
+      const { error } = mode === "merge"
+        ? await admin.from(REG).upsert(slice, { onConflict: "row_key" })
+        : await admin.from(REG).insert(slice);
       if (error) {
         await admin.from("planipret_commission_imports").update({ status: "failed", notes: { error: error.message } }).eq("id", imp.id);
         return json({ error: error.message, inserted }, 500);
@@ -316,12 +516,15 @@ Deno.serve(async (req) => {
     }
 
     const unmatched = Array.from(new Set(prepared.filter((r) => !r.broker_user_id && r.agent_name).map((r) => r.agent_name!)));
+    const unmappedTypes = Array.from(new Set(prepared.filter((r) => r.map_status === "unmapped").map((r) => r.commission_type ?? "")))
+      .filter(Boolean);
     await admin
       .from("planipret_commission_imports")
-      .update({ status: "completed", row_count: inserted, notes: { unmatched } })
+      .update({ status: "completed", row_count: inserted, notes: { unmatched, unmappedTypes, mode } })
       .eq("id", imp.id);
 
-    return json({ ok: true, inserted, years, unmatched, importId: imp.id });
+    return json({ ok: true, inserted, years, unmatched, unmappedTypes, mode, importId: imp.id });
+
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

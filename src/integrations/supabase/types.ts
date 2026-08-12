@@ -8722,7 +8722,9 @@ export type Database = {
           id: string
           notes: Json
           row_count: number
+          sheet_names: string[]
           status: string
+          storage_path: string | null
           updated_at: string
           years: number[]
         }
@@ -8733,7 +8735,9 @@ export type Database = {
           id?: string
           notes?: Json
           row_count?: number
+          sheet_names?: string[]
           status?: string
+          storage_path?: string | null
           updated_at?: string
           years?: number[]
         }
@@ -8744,9 +8748,56 @@ export type Database = {
           id?: string
           notes?: Json
           row_count?: number
+          sheet_names?: string[]
           status?: string
+          storage_path?: string | null
           updated_at?: string
           years?: number[]
+        }
+        Relationships: []
+      }
+      planipret_commission_mappings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          maestro_broker_id: string | null
+          notes: Json
+          scope: string
+          source_key: string
+          source_label: string | null
+          target_user_id: string | null
+          target_value: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          maestro_broker_id?: string | null
+          notes?: Json
+          scope?: string
+          source_key: string
+          source_label?: string | null
+          target_user_id?: string | null
+          target_value?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          maestro_broker_id?: string | null
+          notes?: Json
+          scope?: string
+          source_key?: string
+          source_label?: string | null
+          target_user_id?: string | null
+          target_value?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -8772,12 +8823,16 @@ export type Database = {
           last_name: string | null
           loan_amt: number
           maestro_broker_id: string | null
+          map_status: string
           match_method: string | null
           mortgage_type: string | null
           number: string | null
           points: number | null
           primary_client_name: string | null
+          raw: Json
+          row_key: string | null
           secondary_client_name: string | null
+          sheet_name: string | null
           source_row: number
           split_type: string | null
           target_name: string | null
@@ -8806,12 +8861,16 @@ export type Database = {
           last_name?: string | null
           loan_amt?: number
           maestro_broker_id?: string | null
+          map_status?: string
           match_method?: string | null
           mortgage_type?: string | null
           number?: string | null
           points?: number | null
           primary_client_name?: string | null
+          raw?: Json
+          row_key?: string | null
           secondary_client_name?: string | null
+          sheet_name?: string | null
           source_row?: number
           split_type?: string | null
           target_name?: string | null
@@ -8840,12 +8899,16 @@ export type Database = {
           last_name?: string | null
           loan_amt?: number
           maestro_broker_id?: string | null
+          map_status?: string
           match_method?: string | null
           mortgage_type?: string | null
           number?: string | null
           points?: number | null
           primary_client_name?: string | null
+          raw?: Json
+          row_key?: string | null
           secondary_client_name?: string | null
+          sheet_name?: string | null
           source_row?: number
           split_type?: string | null
           target_name?: string | null

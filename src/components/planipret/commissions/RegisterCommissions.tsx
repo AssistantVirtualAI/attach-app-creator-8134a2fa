@@ -6,10 +6,12 @@ import {
 import { Loader2, TrendingUp, TrendingDown, ShieldCheck, AlertTriangle, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import CommissionInsights from "./CommissionInsights";
+import RegisterFilters, { type Granularity } from "./RegisterFilters";
+import BrokerLeaderboard from "./BrokerLeaderboard";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 
 type Lang = "fr" | "en";
-type Tab = "overview" | "trend" | "lenders" | "mix" | "quarters" | "club";
+type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "club";
 
 const PALETTE = ["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"];
 
@@ -112,12 +114,16 @@ function Table({ head, rows }: { head: string[]; rows: (string | number | JSX.El
   );
 }
 
-export default function RegisterCommissions({ lang }: { lang: Lang }) {
+export default function RegisterCommissions({ lang, scope = "broker" }: { lang: Lang; scope?: "broker" | "admin" }) {
   const isFr = lang === "fr";
+  const isAdminView = scope === "admin";
   const MONTHS = isFr ? MONTHS_FR : MONTHS_EN;
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(12);
+  const [granularity, setGranularity] = useState<Granularity>("ytd");
+  const [periodIndex, setPeriodIndex] = useState(12);
+  const [agent, setAgent] = useState("");
   const [tab, setTab] = useState<Tab>("overview");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -130,7 +136,14 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const { data: res, error: err } = await supabase.functions.invoke("pp-commission-stats", {
-          body: { year, month },
+          body: {
+            year,
+            month: granularity === "ytd" || granularity === "month" ? periodIndex : month,
+            granularity,
+            periodIndex,
+            scope: isAdminView ? "all" : "self",
+            agent: isAdminView && agent ? agent : null,
+          },
           headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
         });
         if (err) throw err;
@@ -144,7 +157,12 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
     };
     void run();
     return () => { cancelled = true; };
-  }, [year, month]);
+  }, [year, month, granularity, periodIndex, agent, isAdminView]);
+
+  const onGranularity = (g: Granularity) => {
+    setGranularity(g);
+    setPeriodIndex(g === "week" ? 1 : g === "quarter" ? Math.ceil(((new Date()).getMonth() + 1) / 3) : g === "month" ? (new Date()).getMonth() + 1 : 12);
+  };
 
   const years: number[] = useMemo(() => {
     const list: number[] = data?.availableYears?.length ? data.availableYears : [];
@@ -152,13 +170,22 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
     return Array.from(new Set(list)).sort((a, b) => b - a);
   }, [data, year]);
 
-  const trendData = useMemo(() =>
-    (data?.monthly ?? []).map((m: any) => ({
+  const trendData = useMemo(() => {
+    if (data?.series) {
+      return data.series.map((m: any) => ({
+        name: m.label,
+        cyVolume: m.cyVolume, pyVolume: m.pyVolume,
+        cyCommission: m.cyCommission, pyCommission: m.pyCommission,
+        bps: m.bps, deals: m.cyDeals,
+      }));
+    }
+    return (data?.monthly ?? []).map((m: any) => ({
       name: MONTHS[m.month - 1],
       cyVolume: m.cyVolume, pyVolume: m.pyVolume,
       cyCommission: m.cyCommission, pyCommission: m.pyCommission,
       bps: m.bps, deals: m.cyDeals,
-    })), [data, MONTHS]);
+    }));
+  }, [data, MONTHS]);
 
   const kpi = data?.kpi;
 
@@ -169,7 +196,7 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
 
   const generateInsights = async (force = false) => {
     if (!data || data.rowCount === 0) return;
-    const cacheKey = `pp-register-insights:${data.brokerName ?? "me"}:${year}:${month}:${lang}`;
+    const cacheKey = `pp-register-insights:${isAdminView ? "admin" : (data.brokerName ?? "me")}:${agent || "all"}:${year}:${granularity}:${periodIndex}:${lang}`;
     if (!force) {
       try {
         const raw = localStorage.getItem(cacheKey);
@@ -184,9 +211,11 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const payload = {
-        lang, scope: "broker", source: "register",
+        lang, scope: isAdminView && !agent ? "admin" : "broker", source: "register",
         metrics: {
-          year, throughMonth: month,
+          year, period: data.periodLabel, granularity, window: data.window,
+          agent: agent || (isAdminView ? "all brokers" : data.brokerName),
+          brokers: isAdminView ? (data.brokers ?? []).slice(0, 20) : undefined,
           ytd: data.kpi.ytd, ytdPriorYear: data.kpi.ytdPy,
           monthly: data.monthly, quarters: data.quarters,
           lenders: data.lenders.slice(0, 12), products: data.products, terms: data.terms,
@@ -214,10 +243,11 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
     setAi(null);
     if (data && data.rowCount > 0) void generateInsights(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.rowCount, year, month]);
+  }, [data?.rowCount, year, granularity, periodIndex, agent]);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "overview", label: isFr ? "Vue d'ensemble" : "Overview" },
+    ...(isAdminView ? [{ key: "brokers" as Tab, label: isFr ? "Courtiers" : "Brokers" }] : []),
     { key: "trend", label: isFr ? "Tendance mensuelle" : "Monthly trend" },
     { key: "lenders", label: isFr ? "Prêteurs" : "Lenders" },
     { key: "mix", label: isFr ? "Mix produits & termes" : "Product & term mix" },
@@ -229,22 +259,20 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
     <div>
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <select
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          className="px-3 py-1.5 rounded-lg"
-          style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)", fontSize: 12.5, fontWeight: 700 }}
-        >
-          {years.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select
-          value={month}
-          onChange={(e) => setMonth(Number(e.target.value))}
-          className="px-3 py-1.5 rounded-lg"
-          style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)", fontSize: 12.5 }}
-        >
-          {MONTHS.map((m, i) => <option key={m} value={i + 1}>{isFr ? `Jusqu'à ${m}` : `Through ${m}`}</option>)}
-        </select>
+        <RegisterFilters
+          lang={lang}
+          years={years}
+          year={year}
+          onYear={setYear}
+          granularity={granularity}
+          onGranularity={onGranularity}
+          periodIndex={periodIndex}
+          onPeriodIndex={setPeriodIndex}
+          agents={data?.availableAgents ?? []}
+          agent={agent}
+          onAgent={setAgent}
+          showAgent={isAdminView}
+        />
         {loading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--pp-text-muted)" }} />}
         {data?.reconciliation && (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg" style={{
@@ -255,6 +283,12 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
             {data.reconciliation.volumeOk && data.reconciliation.dealsOk
               ? <><ShieldCheck className="w-3.5 h-3.5" />{isFr ? "Totaux réconciliés" : "Totals reconciled"}</>
               : <><AlertTriangle className="w-3.5 h-3.5" />{isFr ? "Écart de réconciliation" : "Reconciliation gap"}</>}
+          </span>
+        )}
+        {data?.window && (
+          <span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
+            {data.window.start} → {data.window.end}
+            {isAdminView && !agent ? (isFr ? " · tous les courtiers" : " · all brokers") : agent ? ` · ${agent}` : ""}
           </span>
         )}
       </div>
@@ -293,12 +327,15 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
           {tab === "overview" && (
             <>
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
-                <Kpi label={isFr ? "Volume YTD" : "YTD Volume"} value={fmtMoney(kpi.ytd.volume)} delta={pctDelta(kpi.ytd.volume, kpi.ytdPy.volume)} accent="#4472C4" />
+                <Kpi label={isFr ? "Volume" : "Volume"} value={fmtMoney(kpi.ytd.volume)} delta={pctDelta(kpi.ytd.volume, kpi.ytdPy.volume)} accent="#4472C4" />
                 <Kpi label={isFr ? "Dossiers" : "Deals"} value={fmtNum(kpi.ytd.deals)} delta={pctDelta(kpi.ytd.deals, kpi.ytdPy.deals)} accent="#70AD47" />
                 <Kpi label="Commission" value={fmtMoney(kpi.ytd.commission)} delta={pctDelta(kpi.ytd.commission, kpi.ytdPy.commission)} accent="#ED7D31" />
                 <Kpi label={isFr ? "Dossier moyen" : "Avg deal"} value={fmtMoney(kpi.ytd.avgDeal)} accent="#FFC000" />
                 <Kpi label="BPS" value={fmtBps(kpi.ytd.bps)} accent="#8B5CF6" />
                 <Kpi label={isFr ? "Prêteurs actifs" : "Active lenders"} value={fmtNum(kpi.activeLenders)} accent="#14B8A6" />
+                {isAdminView && (
+                  <Kpi label={isFr ? "Courtiers actifs" : "Active brokers"} value={fmtNum(kpi.activeBrokers)} accent="#EC4899" />
+                )}
               </div>
 
               <Section title={isFr ? "Volume mensuel — année courante vs précédente" : "Monthly volume — CY vs PY"}>
@@ -352,6 +389,15 @@ export default function RegisterCommissions({ lang }: { lang: Lang }) {
                 </div>
               </Section>
             </>
+          )}
+
+          {tab === "brokers" && (
+            <BrokerLeaderboard
+              lang={lang}
+              brokers={data.brokers ?? []}
+              periodLabel={`${data.window?.start} → ${data.window?.end}`}
+              onSelect={(b) => setAgent(b)}
+            />
           )}
 
           {tab === "trend" && (

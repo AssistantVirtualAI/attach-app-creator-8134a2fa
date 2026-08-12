@@ -133,3 +133,63 @@ export const quarterWindow = (y: number, q: number): Window => ({
 });
 /** Club Excellence season: Aug 1 (y) -> Jul 31 (y+1) */
 export const seasonWindow = (y: number): Window => ({ start: dstr(y, 8, 1), end: dstr(y + 1, 7, 31) });
+
+export const yearWindow = (y: number): Window => ({ start: dstr(y, 1, 1), end: dstr(y, 12, 31) });
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Monday of ISO week `w` of year `y`. */
+function isoWeekMonday(y: number, w: number): Date {
+  const jan4 = new Date(Date.UTC(y, 0, 4));
+  const dow = jan4.getUTCDay() || 7; // 1..7 (Mon..Sun)
+  const week1Mon = new Date(jan4.getTime() - (dow - 1) * 86400000);
+  return new Date(week1Mon.getTime() + (w - 1) * 7 * 86400000);
+}
+
+/** ISO week window (Mon → Sun). */
+export function weekWindow(y: number, w: number): Window {
+  const mon = isoWeekMonday(y, w);
+  const sun = new Date(mon.getTime() + 6 * 86400000);
+  return { start: iso(mon), end: iso(sun) };
+}
+
+/** Number of ISO weeks in a year (52 or 53). */
+export function isoWeeksInYear(y: number): number {
+  const dec28 = new Date(Date.UTC(y, 11, 28));
+  const dow = dec28.getUTCDay() || 7;
+  const thu = new Date(dec28.getTime() + (4 - dow) * 86400000);
+  const jan1 = new Date(Date.UTC(thu.getUTCFullYear(), 0, 1));
+  return Math.ceil(((thu.getTime() - jan1.getTime()) / 86400000 + 1) / 7);
+}
+
+export type Granularity = "week" | "month" | "quarter" | "year" | "ytd";
+
+/** Resolve the analysis window for a granularity + index, plus its prior-year twin. */
+export function resolveWindow(
+  granularity: Granularity,
+  year: number,
+  index: number,
+): { window: Window; priorWindow: Window; label: string } {
+  switch (granularity) {
+    case "week": {
+      const w = Math.min(isoWeeksInYear(year), Math.max(1, index));
+      const pyW = Math.min(isoWeeksInYear(year - 1), w);
+      return { window: weekWindow(year, w), priorWindow: weekWindow(year - 1, pyW), label: `S${w}` };
+    }
+    case "month": {
+      const m = Math.min(12, Math.max(1, index));
+      return { window: monthWindow(year, m), priorWindow: monthWindow(year - 1, m), label: `M${m}` };
+    }
+    case "quarter": {
+      const q = Math.min(4, Math.max(1, index));
+      return { window: quarterWindow(year, q), priorWindow: quarterWindow(year - 1, q), label: `Q${q}` };
+    }
+    case "year":
+      return { window: yearWindow(year), priorWindow: yearWindow(year - 1), label: String(year) };
+    default: {
+      const m = Math.min(12, Math.max(1, index || 12));
+      return { window: ytdWindow(year, m), priorWindow: ytdWindow(year - 1, m), label: `YTD ${m}` };
+    }
+  }
+}
+

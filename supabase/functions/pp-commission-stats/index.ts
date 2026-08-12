@@ -13,6 +13,11 @@ import {
   ytdWindow,
   quarterWindow,
   seasonWindow,
+  yearWindow,
+  weekWindow,
+  isoWeeksInYear,
+  resolveWindow,
+  type Granularity,
   yoy,
 } from "../_shared/commission-engine.ts";
 
@@ -86,6 +91,11 @@ Deno.serve(async (req) => {
     const year = Number(body?.year) || new Date().getFullYear();
     const month = Math.min(12, Math.max(1, Number(body?.month) || 12));
     const scope: "self" | "all" = body?.scope === "all" ? "all" : "self";
+    const granularity = (["week", "month", "quarter", "year", "ytd"].includes(body?.granularity)
+      ? body.granularity
+      : "ytd") as Granularity;
+    const periodIndex = Number(body?.periodIndex) || (granularity === "ytd" ? month : granularity === "quarter" ? Math.ceil(month / 3) : granularity === "month" ? month : 1);
+    const agent: string | null = typeof body?.agent === "string" && body.agent.trim() ? body.agent.trim() : null;
 
     const { data: isAdminData } = await admin.rpc("is_planipret_admin", { _user_id: user.id });
     const isAdmin = Boolean(isAdminData);
@@ -112,7 +122,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     myName = (prof as any)?.full_name ?? null;
 
-    const mine =
+    const scopedAll =
       scope === "all" && isAdmin
         ? allRows
         : allRows.filter(
@@ -121,8 +131,14 @@ Deno.serve(async (req) => {
               (!r.broker_user_id && myName && (r.agent_name ?? "").trim().toLowerCase() === myName.trim().toLowerCase()),
           );
 
-    const cyYtd = ytdWindow(year, month);
-    const pyYtd = ytdWindow(year - 1, month);
+    // Optional agent filter (admin global view)
+    const mine = agent
+      ? scopedAll.filter((r) => (r.agent_name ?? "").trim().toLowerCase() === agent.toLowerCase())
+      : scopedAll;
+
+    const resolved = resolveWindow(granularity, year, periodIndex);
+    const cyYtd = resolved.window;
+    const pyYtd = resolved.priorWindow;
     const cyMonth = monthWindow(year, month);
     const pyMonth = monthWindow(year - 1, month);
 
@@ -132,8 +148,55 @@ Deno.serve(async (req) => {
       month: metrics(mine, cyMonth),
       monthPy: metrics(mine, pyMonth),
       activeLenders: uniq(volumeTranches(mine, cyYtd).map((r) => r.institution)).length,
-      activeBrokers: uniq(volumeTranches(allRows, cyYtd).map((r) => r.agent_name)).length,
+      activeBrokers: uniq(volumeTranches(scopedAll, cyYtd).map((r) => r.agent_name)).length,
     };
+
+    // Trend series adapted to the granularity (weeks when granularity=week, otherwise months)
+    const series =
+      granularity === "week"
+        ? Array.from({ length: isoWeeksInYear(year) }, (_, i) => {
+            const w = i + 1;
+            const wc = weekWindow(year, w);
+            const wp = weekWindow(year - 1, Math.min(isoWeeksInYear(year - 1), w));
+            const c = metrics(mine, wc);
+            const p = metrics(mine, wp);
+            return {
+              index: w,
+              label: `S${w}`,
+              cyVolume: c.volume, cyDeals: c.deals, cyCommission: c.commission,
+              pyVolume: p.volume, pyDeals: p.deals, pyCommission: p.commission,
+              avgDeal: c.avgDeal, bps: c.bps,
+              volumeYoy: yoy(c.volume, p.volume), commissionYoy: yoy(c.commission, p.commission),
+            };
+          })
+        : null;
+
+    // Per-broker leaderboard on the selected window (admin global view)
+    const brokerKeys = uniq([
+      ...volumeTranches(scopedAll, cyYtd).map((r) => r.agent_name),
+      ...volumeTranches(scopedAll, pyYtd).map((r) => r.agent_name),
+    ]);
+    const brokerTotalVolume = periodVolume(scopedAll, cyYtd);
+    const brokers = brokerKeys
+      .map((name) => {
+        const c = metrics(scopedAll, cyYtd, { broker: name });
+        const p = metrics(scopedAll, pyYtd, { broker: name });
+        return {
+          broker: name,
+          isMe: !!myName && name.trim().toLowerCase() === myName.trim().toLowerCase(),
+          volume: c.volume, deals: c.deals, commission: c.commission,
+          avgDeal: c.avgDeal, bps: c.bps, commissionPerDeal: c.commissionPerDeal,
+          pyVolume: p.volume, pyDeals: p.deals, pyCommission: p.commission,
+          sharePct: brokerTotalVolume ? c.volume / brokerTotalVolume : 0,
+          volumeYoy: yoy(c.volume, p.volume),
+          dealYoy: yoy(c.deals, p.deals),
+          commissionYoy: yoy(c.commission, p.commission),
+        };
+      })
+      .sort((a, b) => b.volume - a.volume)
+      .map((x, i) => ({ rank: i + 1, ...x }));
+
+    const availableAgents = uniq(scopedAll.map((r) => r.agent_name)).sort((a, b) => a.localeCompare(b));
 
     const monthly = Array.from({ length: 12 }, (_, i) => {
       const m = i + 1;
@@ -259,10 +322,19 @@ Deno.serve(async (req) => {
       year,
       month,
       scope,
+      granularity,
+      periodIndex,
+      agent,
+      window: cyYtd,
+      priorWindow: pyYtd,
+      periodLabel: resolved.label,
       isAdmin,
       brokerName: myName,
       rowCount: mine.length,
       availableYears,
+      availableAgents,
+      brokers,
+      series,
       kpi,
       monthly,
       quarters,

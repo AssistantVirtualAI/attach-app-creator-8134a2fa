@@ -73,6 +73,7 @@ export default function PBCommissions() {
       <div className="flex flex-wrap items-center gap-2 mb-3">
         {tab("maestro", Cloud, "Maestro")}
         {tab("internal", Database, isFr ? "Données internes" : "Internal data")}
+        {tab("provenance", ShieldCheck, isFr ? "Provenance" : "Provenance")}
         {source === "maestro" && maestroConnected === null && (
           <span className="flex items-center gap-1.5" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -86,7 +87,7 @@ export default function PBCommissions() {
         )}
       </div>
 
-      {source === "maestro" && notConnected ? (
+      {(source === "maestro" || source === "provenance") && notConnected ? (
         <div className="max-w-xl">
           <p className="mb-3" style={{ fontSize: 13, color: "var(--pp-text-muted)" }}>
             {isFr
@@ -95,6 +96,8 @@ export default function PBCommissions() {
           </p>
           <MaestroConnectCard />
         </div>
+      ) : source === "provenance" ? (
+        <CommissionProvenance lang={isFr ? "fr" : "en"} />
       ) : (
         <>
           {source === "maestro" && info && !info.ok && info.error && (
@@ -112,6 +115,7 @@ export default function PBCommissions() {
           />
         </>
       )}
+
     </PAPage>
   );
 }

@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getMaestroTelecomConfig, isMaestroTelecomConfigured, maestroTelecomFetch } from "../_shared/maestro-telecom.ts";
 import { getMaestroOAuthEnv, getUserMaestroAccessToken, fetchMaestroUserProfile } from "../_shared/maestro-oauth.ts";
+import { resolveRevenue, auditSummary, isStrictMappingEnabled } from "../_shared/maestro-commission-map.ts";
 
 /**
  * Broker commissions sourced from Maestro.
@@ -45,18 +46,24 @@ const pick = (o: any, keys: string[]): any => {
   return null;
 };
 
+const COMMISSION_FALLBACK_FIELDS = ["commission", "commission_amount", "total_commission", "broker_commission", "revenue", "Case amount"];
+
 function normalizeDeal(d: any) {
   const dateRaw = pick(d, ["funding_date", "funded_at", "closing_date", "close_date", "completion_date", "date", "created_at"]);
   const date = dateRaw ? new Date(String(dateRaw)) : null;
   const amount = num(pick(d, ["mortgage_amount", "loan_amount", "amount", "volume", "financing_amount", "principal"]));
-  const commission = num(pick(d, ["commission", "commission_amount", "total_commission", "broker_commission", "revenue"]));
+  // Provenance: the commission is the RAW value of the exact Maestro field selected
+  // by the (record type + stage) mapping. No recalculation is ever applied.
+  const provenance = resolveRevenue(d, COMMISSION_FALLBACK_FIELDS);
+  const commission = num(provenance.revenue_raw);
   const lender = String(pick(d, ["lender", "lender_name", "institution", "bank", "financial_institution"]) ?? "—").trim() || "—";
   const product = String(pick(d, ["product_type", "product", "rate_type", "mortgage_type", "type"]) ?? "—").trim() || "—";
   const termRaw = pick(d, ["term", "term_years", "term_length", "duration"]);
   const term = termRaw == null ? "" : String(termRaw).trim();
   const status = String(pick(d, ["status", "state", "stage"]) ?? "").toLowerCase();
-  return { date, amount, commission, lender, product, term, status, raw: d };
+  return { date, amount, commission, lender, product, term, status, provenance, raw: d };
 }
+
 
 function fiscalYearOf(d: Date) { return d.getUTCFullYear(); }
 function quarterOf(d: Date) { return `Q${Math.floor(d.getUTCMonth() / 3) + 1}`; }
@@ -212,8 +219,21 @@ Deno.serve(async (req) => {
     }
 
     const deals = raw.map(normalizeDeal);
+    const strict = isStrictMappingEnabled();
+    // In strict mode, unmapped lines are NEVER folded into the totals.
+    const counted = strict ? deals.filter((d) => d.provenance.rule_matched) : deals;
     const brokerName = String(prof.full_name ?? prof.email ?? "Courtier");
-    const rows = aggregate(deals, brokerName, prof.user_id ?? prof.id ?? null, fiscalYear);
+    const rows = aggregate(counted, brokerName, prof.user_id ?? prof.id ?? null, fiscalYear);
+
+    const provenance = deals.map((d) => ({
+      ...d.provenance,
+      date: d.date && !Number.isNaN(d.date.getTime()) ? d.date.toISOString() : null,
+      lender: d.lender,
+      product: d.product,
+      amount: d.amount,
+      commission: d.commission,
+      counted: strict ? d.provenance.rule_matched : true,
+    }));
 
     return j({
       success: true,
@@ -222,8 +242,12 @@ Deno.serve(async (req) => {
       maestro_user_id: telecomUserId,
       path: usedPath,
       deal_count: deals.length,
+      counted_count: counted.length,
       fiscal_year: fiscalYear,
+      provenance,
+      audit: auditSummary(deals.map((d) => d.provenance)),
     });
+
   } catch (e: any) {
     console.error("pp-maestro-commissions error", e);
     return j({ success: false, rows: [], error: e?.message ?? "server_error" }, 500);

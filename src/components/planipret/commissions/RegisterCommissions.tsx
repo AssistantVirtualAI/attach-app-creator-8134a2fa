@@ -15,7 +15,7 @@ import { useAdminCommissionFilters, readAdminCommissionFilters, defaultAdminComm
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 
 type Lang = "fr" | "en";
-type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "club" | "gaps";
+type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "gaps";
 
 const PALETTE = ["#4472C4", "#70AD47", "#ED7D31", "#A5A5A5", "#FFC000", "#8B5CF6", "#EC4899", "#14B8A6"];
 
@@ -310,6 +310,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     { key: "lenders", label: isFr ? "Prêteurs" : "Lenders" },
     { key: "mix", label: isFr ? "Mix produits & termes" : "Product & term mix" },
     { key: "quarters", label: isFr ? "Trimestres" : "Quarters" },
+    { key: "periods", label: isFr ? "Stats par période" : "Stats by period" },
     { key: "club", label: "Club Excellence" },
     ...(isAdminView ? [{ key: "gaps" as Tab, label: isFr ? "Écarts" : "Gaps" }] : []),
   ];
@@ -618,6 +619,38 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               </div>
             </Section>
           )}
+
+          {tab === "periods" && (
+            <>
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}>
+                <Kpi label={isFr ? "Volume — période" : "Volume — period"} value={fmtMoney(kpi.ytd.volume)} delta={pctDelta(kpi.ytd.volume, kpi.ytdPy.volume)} accent="#4472C4" />
+                <Kpi label={isFr ? "Dossiers — période" : "Deals — period"} value={fmtNum(kpi.ytd.deals)} delta={pctDelta(kpi.ytd.deals, kpi.ytdPy.deals)} accent="#70AD47" />
+                <Kpi label={isFr ? "Commission — période" : "Commission — period"} value={fmtMoney(kpi.ytd.commission)} delta={pctDelta(kpi.ytd.commission, kpi.ytdPy.commission)} accent="#ED7D31" />
+                <Kpi label={isFr ? "Commission / dossier" : "Commission / deal"} value={fmtMoney(kpi.ytd.deals ? kpi.ytd.commission / kpi.ytd.deals : 0)} accent="#8B5CF6" />
+              </div>
+
+              <Section title={isFr ? "Volume, dossiers et commission par mois" : "Volume, deals and commission by month"}>
+                <Table
+                  head={[isFr ? "Mois" : "Month", "", "Volume", isFr ? "Doss." : "Deals", "Commission", isFr ? "Comm./doss." : "Comm./deal", "BPS"]}
+                  rows={(data.monthly ?? []).map((m: any) => [
+                    MONTHS[m.month - 1], "", fmtMoney(m.cyVolume), fmtNum(m.cyDeals), fmtMoney(m.cyCommission),
+                    fmtMoney(m.cyDeals ? m.cyCommission / m.cyDeals : 0), fmtBps(m.bps),
+                  ])}
+                />
+              </Section>
+
+              <Section title={isFr ? "Par trimestre" : "By quarter"}>
+                <Table
+                  head={[isFr ? "Trimestre" : "Quarter", "", "Volume", isFr ? "Doss." : "Deals", "Commission", isFr ? "Comm./doss." : "Comm./deal", "BPS"]}
+                  rows={(data.quarters ?? []).map((q: any) => [
+                    `Q${q.quarter}`, "", fmtMoney(q.volume), fmtNum(q.deals), fmtMoney(q.commission),
+                    fmtMoney(q.deals ? q.commission / q.deals : 0), fmtBps(q.bps),
+                  ])}
+                />
+              </Section>
+            </>
+          )}
+
 
           {tab === "club" && (
             <>

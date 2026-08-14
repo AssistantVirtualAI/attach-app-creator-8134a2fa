@@ -4,7 +4,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 const KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
 const AGENT = Deno.env.get("ELEVENLABS_DEFAULT_AGENT_ID") ?? "";
-const OPS = Deno.env.get("PP_OPS_KEY") ?? "";
+const OPS = Deno.env.get("PP_DIAG_KEY") ?? "";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

@@ -947,7 +947,7 @@ export default function PlanipretMobile() {
         setProfileErrorDetail("");
         setProfile(cached);
         setLoading(false);
-        setTimeout(() => { void loadProfile(attempt + 1); }, 6000);
+        if (attempt < 3) setTimeout(() => { void loadProfile(attempt + 1); }, 6000);
         return;
       }
       setProfileErrorDetail(error.message || "");

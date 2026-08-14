@@ -93,11 +93,17 @@ export const audioRouter = {
     if (b?.setAudioRoute) {
       try { await b.setAudioRoute({ route }); handled = true; } catch {}
     }
-    // During a native PJSIP/CallKit call the engine also owns the output port.
-    const p = pjsip();
-    if (p?.setSpeaker) {
-      try { await p.setSpeaker({ enabled: route === "speaker" }); handled = true; } catch {}
+    // PpSipKeepAlive is the single owner of the audio session. Only fall back
+    // to the PJSIP speaker toggle when that plugin is unavailable — calling
+    // both made the two modules fight (quiet/muffled loudspeaker) and mapped
+    // "bluetooth" to "earpiece".
+    if (!handled) {
+      const p = pjsip();
+      if (p?.setSpeaker) {
+        try { await p.setSpeaker({ enabled: route === "speaker" }); handled = true; } catch {}
+      }
     }
+
     if (handled) return;
     // Web fallback: try matching sinkId on every <audio> tag.
     try {

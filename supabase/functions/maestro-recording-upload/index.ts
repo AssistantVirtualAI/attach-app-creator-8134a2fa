@@ -15,6 +15,7 @@ import {
   setPipelineStep,
   telecomAuth,
 } from "../_shared/maestro.ts";
+import { recordingPermalink } from "../_shared/recording-link.ts";
 
 function pickUrl(d: any): string | null {
   if (!d) return null;
@@ -124,21 +125,50 @@ Deno.serve(async (req) => {
     } catch (_) { /* non-fatal */ }
   }
 
-  if (url && source === "netsapiens") {
-    // Publier le lien dans Maestro (aucun endpoint d'upload côté Scott).
+  if (url) {
+    // Maestro n'accepte QUE `status`, `ended_reason`, `ai_summary` et `notes`
+    // sur PUT /calls/{id} (testé : recording_url → 500, POST /recording → 404).
+    // On publie donc un lien d'écoute PERMANENT dans les notes, en préservant
+    // le résumé IA et la transcription déjà poussés.
+    const permalink = await recordingPermalink(String(call_id));
+    const { data: aiCall } = await admin
+      .from("planipret_phone_calls")
+      .select("ai_summary, ai_summary_short, ai_key_points, ai_topics, next_actions, ai_action_items, transcript")
+      .eq("id", call_id)
+      .maybeSingle();
+    const arr = (v: unknown) => (Array.isArray(v) ? v : []);
+    const title = (a: any) => (typeof a === "string" ? a : a?.title ?? a?.description ?? a?.label ?? null);
+    const keyPoints = arr((aiCall as any)?.ai_key_points).length
+      ? arr((aiCall as any)?.ai_key_points)
+      : arr((aiCall as any)?.ai_topics);
+    const actions = arr((aiCall as any)?.next_actions).length
+      ? arr((aiCall as any)?.next_actions)
+      : arr((aiCall as any)?.ai_action_items);
+    const notes = [
+      `Enregistrement: ${permalink}`,
+      keyPoints.length ? `Points clés: ${keyPoints.map(String).join(" • ")}` : null,
+      actions.length ? `Prochaines actions: ${actions.map(title).filter(Boolean).join(" • ")}` : null,
+      (aiCall as any)?.transcript ? `Transcription:\n${String((aiCall as any).transcript).slice(0, 8000)}` : null,
+    ].filter(Boolean).join("\n\n");
+
     const put = await maestroFetch(cfg, {
       method: "PUT",
       path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls/${encodeURIComponent(String(maestroCallId))}`,
       token: auth.token,
       machine: auth.machine,
-      body: { recording_url: url, call_recording_url: url },
+      body: {
+        status: "ended",
+        ai_summary: (aiCall as any)?.ai_summary ?? (aiCall as any)?.ai_summary_short ?? undefined,
+        notes,
+      },
     });
     await pipelineLog(admin, {
       call_id, user_id: userId, step: "recording_push", status: put.ok ? "success" : "error",
       error_message: put.ok ? null : `maestro_put_${put.status}`,
-      payload: { maestro_call_id: maestroCallId, status: put.status, source },
+      payload: { maestro_call_id: maestroCallId, status: put.status, source, permalink },
     });
   }
+
 
   if (!url) {
     await admin.from("planipret_phone_calls").update({

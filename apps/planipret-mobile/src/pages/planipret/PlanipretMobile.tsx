@@ -866,10 +866,13 @@ export default function PlanipretMobile() {
       }
       if (!currentSession?.access_token) throw new Error("no_session");
 
-      const { data: fnData, error: fnError }: any = await ppWithTimeout(supabase.functions.invoke("pp-mobile-profile", {
-        body: { fields: "safe" },
-        headers: { Authorization: `Bearer ${currentSession.access_token}` },
-      }), 10000, "profile_fn");
+      const { data: fnData, error: fnError }: any = await retryWithBackoff(
+        () => supabase.functions.invoke("pp-mobile-profile", {
+          body: { fields: "safe" },
+          headers: { Authorization: `Bearer ${currentSession.access_token}` },
+        }),
+        { attempts: 2, timeoutMs: 10000, label: "profile_fn" },
+      );
       if (fnError) throw fnError;
       const fnProfile = (fnData as any)?.profile ?? null;
       if (!fnProfile) throw new Error((fnData as any)?.error ?? "missing_profile");
@@ -880,8 +883,18 @@ export default function PlanipretMobile() {
     let error: any = null;
 
     // 1) Stable path: direct RLS-backed profile read. Backend function is fallback only.
+    // Cellular links (LTE/5G) often lose the first request while the radio wakes
+    // up, so the read is retried with a growing budget instead of failing hard.
     try {
-      const direct: any = await ppWithTimeout(supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle(), 10000, "profile_query");
+      const direct: any = await retryWithBackoff(
+        () => supabase.from("planipret_profiles").select(PLANIPRET_PROFILE_BOOT_COLUMNS).eq("user_id", user.id).maybeSingle(),
+        {
+          attempts: 3,
+          timeoutMs: 9000,
+          label: "profile_query",
+          onRetry: (n, err) => console.warn(`[PlanipretMobile] profile query attempt ${n} failed`, err),
+        },
+      );
       data = direct.data as any;
       error = direct.error;
     } catch (directErr: any) {

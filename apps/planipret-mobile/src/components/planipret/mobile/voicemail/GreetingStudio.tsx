@@ -103,6 +103,13 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
     return () => { cancelled = true; window.clearTimeout(timeout); };
   }, [t]);
 
+  // Sélectionne automatiquement une voix : sans sélection le bouton
+  // « Générer » ne faisait rien et n'affichait aucun message.
+  useEffect(() => {
+    if (!selectedVoice && voices?.length) setSelectedVoice(voices[0].voice_id);
+  }, [voices, selectedVoice]);
+
+
   // Sign current greeting URL if it's a storage path
   useEffect(() => {
     const path = profile.voicemail_greeting_audio_url;

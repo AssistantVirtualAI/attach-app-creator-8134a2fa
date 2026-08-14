@@ -290,8 +290,25 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       }
     }
 
+    /// Mode audio adapté à la sortie : `.voiceChat` est calibré pour l'écouteur
+    /// (gain faible, filtrage agressif) et rend le haut-parleur sourd et bas.
+    /// `.videoChat` est le mode calibré haut-parleur mains-libres d'iOS.
+    private func modeFor(_ route: String) -> AVAudioSession.Mode {
+      return route == "speaker" ? .videoChat : .voiceChat
+    }
+
     private func applyAudioRoute() {
       let s = AVAudioSession.sharedInstance()
+      let speaker = preferredRoute == "speaker"
+      // 1) Mode adapté AVANT l'override : iOS recalcule le gain de sortie au
+      //    changement de mode et réinitialise l'override au passage.
+      let wantedMode = modeFor(preferredRoute)
+      if s.mode != wantedMode || s.category != .playAndRecord {
+        var opts: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP]
+        if speaker { opts.insert(.defaultToSpeaker) }
+        try? s.setCategory(.playAndRecord, mode: wantedMode, options: opts)
+      }
+      // 2) Route de sortie.
       switch preferredRoute {
       case "speaker":
         try? s.overrideOutputAudioPort(.speaker)
@@ -303,7 +320,10 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         // Auto: a connected Bluetooth headset always wins over the earpiece.
         if let bt = bluetoothInput() { try? s.setPreferredInput(bt) }
       }
+      NSLog("[PpSipKeepAlive] route wanted=%@ effective=%@ mode=%@ outputs=%d",
+            preferredRoute, currentAudioRoute(), s.mode.rawValue, s.currentRoute.outputs.count)
     }
+
 
     @objc func stopSipService(_ call: CAPPluginCall) {
       DispatchQueue.main.async {

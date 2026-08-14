@@ -35,6 +35,15 @@ const TEMPLATES: { key: string; label: string; lang: "fr" | "en"; body: (n: stri
     body: (n) => `Hello, you've reached ${n}, mortgage broker at Planiprêt. I'm currently unavailable. Please leave your name, number and the best time to reach you, and I'll return your call as soon as possible. Thank you and have a great day.` },
 ];
 
+// Repli si la liste ElevenLabs ne peut pas être chargée : sans voix,
+// le bouton « Générer » restait désactivé sans aucun message.
+const FALLBACK_VOICES: Voice[] = [
+  { voice_id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah", language: "EN", gender: "F", preview_url: "", category: "professional" },
+  { voice_id: "JBFqnCBsd6RMkjVDRZzb", name: "George", language: "EN", gender: "M", preview_url: "", category: "professional" },
+  { voice_id: "cgSgspJ2msm6clMCkdW9", name: "Jessica", language: "EN", gender: "F", preview_url: "", category: "natural" },
+  { voice_id: "TX3LPaxmHKxFdv7VOQHJ", name: "Liam", language: "EN", gender: "M", preview_url: "", category: "natural" },
+
+
 const TOKENS = {
   bg: "var(--pp-bg-base)",
   card: "var(--pp-bg-elevated)",

@@ -472,7 +472,8 @@ Deno.serve(async (req) => {
           const { data: logged, error: logError } = await supabase
             .from("planipret_phone_messages")
             .insert({
-              user_id: ctx.userId,
+              // FK fk_phone_messages_profile → planipret_profiles.id
+              user_id: ctx.profileId ?? ctx.userId,
               direction: "outbound",
               to_number: destination,
               from_number: fromNumber,

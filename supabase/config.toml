@@ -209,6 +209,3 @@ verify_jwt = true
 
 [functions.pp-recording-play]
 verify_jwt = false
-
-[functions.pp-sms-backfill-run]
-verify_jwt = false

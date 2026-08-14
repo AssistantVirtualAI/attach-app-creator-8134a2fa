@@ -99,8 +99,46 @@ Deno.serve(async (req) => {
     token: auth.token,
     machine: auth.machine,
   });
-  const url = res.ok ? pickUrl(res.data) : null;
+  let url = res.ok ? pickUrl(res.data) : null;
+  let source: "maestro" | "netsapiens" = "maestro";
   const meta = ((call as any)?.metadata ?? {}) as Record<string, unknown>;
+
+  // Maestro ne génère pas toujours le média (404 récurrent). L'audio réel vit
+  // dans NetSapiens : on le récupère et on pousse le lien dans la fiche
+  // d'appel Maestro, sinon l'enregistrement reste introuvable côté CRM.
+  if (!url) {
+    try {
+      const nsRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ns-get-recording`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({ call_db_id: call_id, prefer_url: true }),
+      });
+      const nsData = await nsRes.json().catch(() => ({} as any));
+      if (nsData?.available && (nsData.url || nsData.recording_url)) {
+        url = String(nsData.url ?? nsData.recording_url);
+        source = "netsapiens";
+      }
+    } catch (_) { /* non-fatal */ }
+  }
+
+  if (url && source === "netsapiens") {
+    // Publier le lien dans Maestro (aucun endpoint d'upload côté Scott).
+    const put = await maestroFetch(cfg, {
+      method: "PUT",
+      path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls/${encodeURIComponent(String(maestroCallId))}`,
+      token: auth.token,
+      machine: auth.machine,
+      body: { recording_url: url, call_recording_url: url },
+    });
+    await pipelineLog(admin, {
+      call_id, user_id: userId, step: "recording_push", status: put.ok ? "success" : "error",
+      error_message: put.ok ? null : `maestro_put_${put.status}`,
+      payload: { maestro_call_id: maestroCallId, status: put.status, source },
+    });
+  }
 
   if (!url) {
     await admin.from("planipret_phone_calls").update({
@@ -109,7 +147,7 @@ Deno.serve(async (req) => {
     await pipelineLog(admin, {
       call_id, user_id: userId, step: "recording_poll", status: "skipped",
       error_message: "media_not_ready",
-      payload: { maestro_call_id: maestroCallId, status: res.status },
+      payload: { maestro_call_id: maestroCallId, status: res.status, ns_fallback: "unavailable" },
     });
     await admin.from("planipret_recording_uploads").upsert({
       call_id, user_id: userId, maestro_call_id: maestroCallId, status: "pending",
@@ -117,6 +155,7 @@ Deno.serve(async (req) => {
     }, { onConflict: "call_id" }).then(() => {}, () => {});
     return json({ success: true, skipped: "media_not_ready", status: res.status });
   }
+
 
   await admin.from("planipret_phone_calls").update({
     recording_url: (call as any)?.recording_url ?? url,

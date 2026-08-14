@@ -52,13 +52,22 @@ export default function MMore() {
 
   const loadMs365Detection = async () => {
     setMs365Detection((d) => ({ ...d, loading: true }));
-    const { data } = await supabase.functions.invoke("ms365-status", { body: {} });
-    const pc = (data as any)?.detection ?? {};
-    setMs365Detection({
-      tenant_id: pc.tenant_id ?? null,
-      client_id: pc.client_id ?? null,
-      loading: false,
-    });
+    try {
+      // Retried: a single cellular timeout used to render Microsoft 365 as
+      // "not configured" even though the account is linked.
+      const { data }: any = await retryWithBackoff(
+        () => supabase.functions.invoke("ms365-status", { body: {} }),
+        { attempts: 3, timeoutMs: 10000, label: "ms365_status" },
+      );
+      const pc = (data as any)?.detection ?? {};
+      setMs365Detection({
+        tenant_id: pc.tenant_id ?? null,
+        client_id: pc.client_id ?? null,
+        loading: false,
+      });
+    } catch {
+      setMs365Detection((d) => ({ ...d, loading: false }));
+    }
   };
   useEffect(() => { loadMs365Detection(); }, []);
 

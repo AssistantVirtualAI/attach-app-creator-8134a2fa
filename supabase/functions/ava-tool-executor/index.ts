@@ -516,7 +516,17 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   async get_client_history(ctx, p) {
     try {
-      if (!p?.client_id) return { success: false, error: "client_id_required" };
+      // Résolution souple : client_id, sinon téléphone / nom (AVA reçoit souvent
+      // un numéro d'appelant plutôt qu'un identifiant Maestro).
+      if (!p?.client_id) {
+        const q = firstText(p?.phone, p?.phone_number, p?.number, p?.query, p?.client_name, p?.name);
+        if (!q) return { success: false, error: "client_id_or_phone_required" };
+        const found: any = await (TOOLS as any).search_client(ctx, { query: q });
+        const hit = found?.clients?.[0];
+        const cid = hit?.maestro_client_id ?? hit?.id ?? hit?.client_id;
+        if (!cid) return { success: false, error: "client_not_found", message: `Aucun client Maestro pour ${q}` };
+        p = { ...p, client_id: String(cid) };
+      }
       const uid = await maestroUserId(ctx);
       if (!uid) return MAESTRO_NOT_LINKED;
       const limit = p?.limit ?? 20;

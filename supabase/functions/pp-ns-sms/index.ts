@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
 
       // Historique local (planipret_phone_messages) : garantit que les SMS
       // envoyés/reçus restent visibles même si NS-API n'expose pas la session.
-      const localRows = await getLocalMessages(supabase, ctx.userId);
+      const localRows = await getLocalMessages(supabase, ctx.profileId ?? ctx.userId);
        const nsThreadByPeer = new Map<string, any>();
        for (const thread of threads) {
          const key = digitsOnly(
@@ -306,7 +306,7 @@ Deno.serve(async (req) => {
 
       // Fusion de l'historique local (dédupliqué par corps + minute).
       try {
-        const localRows = await getLocalMessages(supabase, ctx.userId);
+        const localRows = await getLocalMessages(supabase, ctx.profileId ?? ctx.userId);
         const hintKey = digitsOnly(phoneHint);
         const seen = new Set(
           messages.map((m: any) => `${String(m.text ?? m.message ?? m.body ?? "").trim()}|${String(m.timestamp ?? m.created_at ?? "").slice(0, 16)}`),
@@ -400,7 +400,7 @@ Deno.serve(async (req) => {
         const { data: dup } = await supabase
           .from("planipret_phone_messages")
           .select("id, thread_id, sent_at")
-          .eq("user_id", ctx.userId)
+          .eq("user_id", ctx.profileId ?? ctx.userId)
           .eq("direction", "outbound")
           .eq("to_number", destination)
           .eq("body", message)
@@ -472,7 +472,8 @@ Deno.serve(async (req) => {
           const { data: logged, error: logError } = await supabase
             .from("planipret_phone_messages")
             .insert({
-              user_id: ctx.userId,
+              // FK fk_phone_messages_profile → planipret_profiles.id
+              user_id: ctx.profileId ?? ctx.userId,
               direction: "outbound",
               to_number: destination,
               from_number: fromNumber,

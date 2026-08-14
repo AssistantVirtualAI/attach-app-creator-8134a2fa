@@ -146,8 +146,18 @@ export default function MMore() {
   };
 
   const connectMs365 = async () => {
-    const { data, error } = await supabase.functions.invoke("ms365-status", { body: {} });
-    if (error) { toast.error(t("screens.more.msInaccessible"), { description: error.message }); return; }
+    let data: any = null;
+    try {
+      const res: any = await retryWithBackoff(
+        () => supabase.functions.invoke("ms365-status", { body: {} }),
+        { attempts: 3, timeoutMs: 10000, label: "ms365_status" },
+      );
+      if (res.error) throw res.error;
+      data = res.data;
+    } catch (error: any) {
+      toast.error(t("screens.more.msInaccessible"), { description: error?.message });
+      return;
+    }
     const cfg = ((data as any)?.detection ?? {}) as any;
     if (!cfg.client_id) {
       toast.error(t("screens.more.msNotConfigured"));

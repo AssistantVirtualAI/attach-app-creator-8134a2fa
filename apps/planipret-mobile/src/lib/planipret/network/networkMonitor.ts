@@ -121,6 +121,9 @@ class NetworkMonitorImpl {
 
   private async checkSignalQuality() {
     if (!this.probeUrl) return;
+    // Never sample while the app is backgrounded: the measurement would only
+    // reflect the OS suspending the WebView.
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     const { rtt, loss } = await probeRtt(this.probeUrl);
     this.publish({ ...this.last, rtt, loss, quality: classify(rtt, loss, this.last.connected), ts: Date.now() });
   }

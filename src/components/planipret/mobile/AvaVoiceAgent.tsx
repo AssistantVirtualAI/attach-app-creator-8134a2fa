@@ -336,15 +336,10 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
         if (oa.prompt) overrides.agent.prompt = { prompt: c.system_prompt };
         if (oa.first_message) overrides.agent.firstMessage = c.first_message;
         if (oa.language) overrides.agent.language = lang;
-        if (oa.voice) {
-          overrides.tts.voiceId = c.voice_id;
-          if (c.voice_settings) {
-            overrides.tts.stability = c.voice_settings.stability;
-            overrides.tts.similarityBoost = c.voice_settings.similarity_boost;
-            overrides.tts.style = c.voice_settings.style;
-            if (c.voice_settings.speed) overrides.tts.speed = c.voice_settings.speed;
-          }
-        }
+        // Only voice_id is allowed by the agent's override config. Sending
+        // stability/similarity/style/speed closes the session with 1008
+        // ("Override for field 'x' is not allowed by config").
+        if (oa.voice && c.voice_id) overrides.tts.voiceId = c.voice_id;
         const hasOverrides = Object.keys(overrides.agent).length > 0 || Object.keys(overrides.tts).length > 0;
 
         const commonOptions: any = {

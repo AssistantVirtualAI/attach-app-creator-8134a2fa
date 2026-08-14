@@ -10278,9 +10278,14 @@ export type Database = {
       planipret_pipeline_logs: {
         Row: {
           call_id: string | null
+          correlation_id: string | null
           created_at: string
           duration_ms: number | null
+          endpoint: string | null
+          entity_id: string | null
+          entity_type: string | null
           error_message: string | null
+          http_status: number | null
           id: string
           payload: Json | null
           status: string
@@ -10289,9 +10294,14 @@ export type Database = {
         }
         Insert: {
           call_id?: string | null
+          correlation_id?: string | null
           created_at?: string
           duration_ms?: number | null
+          endpoint?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
           error_message?: string | null
+          http_status?: number | null
           id?: string
           payload?: Json | null
           status: string
@@ -10300,9 +10310,14 @@ export type Database = {
         }
         Update: {
           call_id?: string | null
+          correlation_id?: string | null
           created_at?: string
           duration_ms?: number | null
+          endpoint?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
           error_message?: string | null
+          http_status?: number | null
           id?: string
           payload?: Json | null
           status?: string

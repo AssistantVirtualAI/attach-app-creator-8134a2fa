@@ -591,8 +591,10 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       // and over) makes iOS re-arbitrate the route and drop every output —
       // that is the measured 'hadOutputs=n' silence. Only re-assert the route.
       if callKitAudioActive {
-        if s.category != .playAndRecord || s.mode != .voiceChat {
-          try? s.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+        if s.category != .playAndRecord || s.mode != modeFor(preferredRoute) {
+          var o: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP]
+          if preferredRoute == "speaker" { o.insert(.defaultToSpeaker) }
+          try? s.setCategory(.playAndRecord, mode: modeFor(preferredRoute), options: o)
         }
         applyAudioRoute()
         NSLog("[PpSipKeepAlive] audio owned by CallKit outputs=%d", s.currentRoute.outputs.count)
@@ -600,10 +602,12 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
       }
       // During a live call we must own the session exclusively: .mixWithOthers
       // lets WebKit interrupt it when the app goes background (no audio at all).
-      let opts: AVAudioSession.CategoryOptions = callActive
+      var opts: AVAudioSession.CategoryOptions = callActive
         ? [.allowBluetoothHFP, .allowBluetoothA2DP]
         : [.allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
-      try? s.setCategory(.playAndRecord, mode: .voiceChat, options: opts)
+      if preferredRoute == "speaker" { opts.insert(.defaultToSpeaker) }
+      try? s.setCategory(.playAndRecord, mode: modeFor(preferredRoute), options: opts)
+
       // Foreground in-app calls do not pass through CXProvider.didActivate.
       if !callKitAudioActive { try? s.setActive(true, options: []) }
       // Re-assert the user's choice: activating the session resets the override

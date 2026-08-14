@@ -149,7 +149,8 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
   };
 
   const generate = async (pushToNs: boolean) => {
-    if (!selectedVoice || text.length < 10) return;
+    if (!selectedVoice) { toast.error(t("greeting.voiceLoadFailed") || "Choisissez une voix"); return; }
+    if (text.trim().length < 10) { toast.error(t("greeting.draftTooShort")); return; }
     setGenerating(true);
     setGenStep(pushToNs ? t("greeting.activation") : t("greeting.generation"));
     const { data, error } = await supabase.functions.invoke("pp-greeting-generate", {
@@ -163,9 +164,15 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
     setGenerating(false);
     setGenStep("");
     if (error || !(data as any)?.success) {
-      toast.error((data as any)?.error ?? error?.message ?? t("greeting.generateFailed"));
+      const ctx = (error as any)?.context;
+      const detail = ctx?.text ? await ctx.text().catch(() => "") : "";
+      const d = data as any;
+      toast.error(
+        [d?.error, d?.detail, detail, error?.message].filter(Boolean)[0] ?? t("greeting.generateFailed"),
+      );
       return;
     }
+
     const d = data as any;
     setPreviewUrl(d.audio_url);
     setPreviewPath(d.storage_path);

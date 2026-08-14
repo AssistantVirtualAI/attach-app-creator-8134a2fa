@@ -826,7 +826,7 @@ export default function PlanipretMobile() {
     }
     let session: any = null;
     try {
-      const r: any = await ppWithTimeout(supabase.auth.getSession(), 8000, "get_session");
+      const r: any = await ppWithTimeout(supabase.auth.getSession(), adaptiveTimeout(8000), "get_session");
       session = r?.data?.session ?? null;
     } catch (e) {
       console.warn("[PlanipretMobile] getSession timeout", e);

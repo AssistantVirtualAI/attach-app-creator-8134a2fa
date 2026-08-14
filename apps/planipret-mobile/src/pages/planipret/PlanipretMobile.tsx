@@ -937,6 +937,19 @@ export default function PlanipretMobile() {
 
     if (error) {
       console.error("[PlanipretMobile] profile query error:", error.message, (error as any).code);
+      // Network failure (timeout / lost radio) → boot on the last known good
+      // profile instead of the dead-end error card, then refresh silently.
+      const cached = readCachedProfile(user.id);
+      const networkish = /timeout|fetch|network|load failed/i.test(String(error.message ?? ""));
+      if (cached && networkish) {
+        console.warn("[PlanipretMobile] booting from cached profile (slow network)");
+        setAccessError(null);
+        setProfileErrorDetail("");
+        setProfile(cached);
+        setLoading(false);
+        setTimeout(() => { void loadProfile(attempt + 1); }, 6000);
+        return;
+      }
       setProfileErrorDetail(error.message || "");
       recordRedirect(location.pathname, ROUTES.MPLANIPRET, "PlanipretMobile.loadProfile", "profile load failed");
       setAccessError("load_failed");

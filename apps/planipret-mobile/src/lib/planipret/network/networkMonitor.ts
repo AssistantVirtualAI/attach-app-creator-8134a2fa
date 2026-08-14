@@ -43,6 +43,9 @@ function classify(rtt: number | null, loss: number, connected: boolean): NetQual
   return "poor";
 }
 
+/** Any sample above this is a suspended/stalled request, not real latency. */
+const PROBE_TIMEOUT_MS = 4000;
+
 async function probeRtt(url: string, n = 3): Promise<{ rtt: number | null; loss: number }> {
   // The probe targets the backend auth health endpoint, which rejects
   // anonymous requests with 401 and floods the console. Sending the
@@ -56,9 +59,14 @@ async function probeRtt(url: string, n = 3): Promise<{ rtt: number | null; loss:
         method: "GET",
         cache: "no-store",
         headers: apikey ? { apikey, Authorization: `Bearer ${apikey}` } : undefined,
+        // Without an abort the timer keeps running while iOS suspends the
+        // WebView, which produced absurd readings (e.g. "64849 ms").
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       });
       if (!res.ok && res.status >= 500) throw new Error(String(res.status));
-      total += performance.now() - t;
+      const dt = performance.now() - t;
+      if (dt > PROBE_TIMEOUT_MS) continue; // app was backgrounded mid-probe
+      total += dt;
       ok++;
     } catch { /* lost */ }
   }

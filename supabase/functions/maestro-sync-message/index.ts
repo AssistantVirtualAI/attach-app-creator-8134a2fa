@@ -13,6 +13,8 @@ import {
   maestroFetchScoped,
   maestroSyncLog,
   normalizePhone,
+  pipelineLog,
+
 } from "../_shared/maestro.ts";
 
 Deno.serve(async (req) => {

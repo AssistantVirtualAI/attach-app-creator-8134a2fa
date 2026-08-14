@@ -133,11 +133,11 @@ Deno.serve(async (req) => {
     try {
       const { data: msgs } = await admin
         .from("planipret_phone_messages")
-        .select("id,status,maestro_message_id,created_at")
+        .select("id,status,maestro_synced,created_at")
         .gte("created_at", since)
         .limit(2000);
       smsTotal = msgs?.length ?? 0;
-      smsSynced = (msgs ?? []).filter((m: Record<string, unknown>) => m.maestro_message_id).length;
+      smsSynced = (msgs ?? []).filter((m: Record<string, unknown>) => m.maestro_synced).length;
       smsStuck = (msgs ?? []).filter((m: Record<string, unknown>) => m.status === "sending").length;
     } catch (_) { /* colonne absente */ }
 

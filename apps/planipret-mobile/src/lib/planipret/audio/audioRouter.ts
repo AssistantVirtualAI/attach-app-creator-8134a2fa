@@ -149,18 +149,22 @@ export const audioRouter = {
     await audioRouter.setRoute(route);
     // Some stacks (CallKit / AudioFocus) re-apply their own route ~1s after the
     // media session activates, so re-assert once.
+    // Some stacks (CallKit / AudioFocus) re-apply their own route ~1s after the
+    // media session activates, so re-assert once — but never overwrite a change
+    // the user made in the meantime (tap on « haut-parleur »).
     const generation = routeGeneration;
     reassertTimer = setTimeout(() => {
       reassertTimer = null;
       if (generation !== routeGeneration) return;
-      void audioRouter.setRoute(route);
+      void audioRouter.setRoute(currentRoute);
     }, 1200);
     // Second reset pass: NetSapiens/PJSIP can renegotiate media ~2.5 s after
     // answer, which silences the far end if the session was not re-armed.
     setTimeout(() => {
       if (generation !== routeGeneration) return;
-      void audioRouter.resetSession().then(() => audioRouter.setRoute(route));
+      void audioRouter.resetSession().then(() => audioRouter.setRoute(currentRoute));
     }, 2500);
+
     return route;
   },
 

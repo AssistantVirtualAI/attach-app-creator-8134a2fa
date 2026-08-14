@@ -561,8 +561,10 @@ public class PpSipKeepAlive: CAPPlugin, CAPBridgedPlugin, URLSessionWebSocketDel
         if !self.callKitAudioActive {
           try? s.setActive(false, options: [.notifyOthersOnDeactivation])
         }
-        try? s.setCategory(.playAndRecord, mode: .voiceChat,
-                           options: [.allowBluetoothHFP, .allowBluetoothA2DP])
+        var resetOpts: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP]
+        if self.preferredRoute == "speaker" { resetOpts.insert(.defaultToSpeaker) }
+        try? s.setCategory(.playAndRecord, mode: self.modeFor(self.preferredRoute), options: resetOpts)
+
         if !self.callKitAudioActive { try? s.setActive(true, options: []) }
         self.applyAudioRoute()
         // Deuxième passe : CallKit/PJSIP ré-arbitrent la route ~600 ms après

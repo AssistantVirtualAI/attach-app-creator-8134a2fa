@@ -965,6 +965,7 @@ export default function PlanipretMobile() {
     setAccessError(null);
     setProfileErrorDetail("");
     setProfile(data);
+    writeCachedProfile(user.id, data);
     setLoading(false);
     void supabase
       .from("planipret_profiles")
@@ -972,7 +973,7 @@ export default function PlanipretMobile() {
       .eq("user_id", user.id)
       .maybeSingle()
       .then(async ({ data: full, error: fullError }) => {
-        if (full) setProfile(full);
+        if (full) { setProfile(full); writeCachedProfile(user.id, full); }
         else if (fullError) {
           try {
             const fallbackFull = await loadProfileViaFunction();

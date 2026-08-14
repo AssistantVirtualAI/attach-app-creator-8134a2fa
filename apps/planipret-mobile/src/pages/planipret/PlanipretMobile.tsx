@@ -39,12 +39,37 @@ import { prefetchPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS, PLANIPRET_PROFILE_BOOT_COLUMNS } from "@/lib/planipret/profileColumns";
 import { useRemoteConfig } from "@/hooks/useRemoteConfig";
 
+import { retryWithBackoff, adaptiveTimeout } from "@/lib/net/resilient";
+
 /** Hard timeout guard: never let a hung network call freeze the app shell. */
 function ppWithTimeout<T>(p: PromiseLike<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`${label}_timeout`)), ms);
     p.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
   });
+}
+
+/**
+ * Last known good profile. On slow cellular the boot query can exceed its
+ * budget; rather than blocking the whole app behind an error card we boot on
+ * the cached copy and refresh in the background.
+ */
+const PP_PROFILE_CACHE_KEY = "pp_profile_boot_cache";
+function readCachedProfile(userId: string): any | null {
+  try {
+    const raw = localStorage.getItem(PP_PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.profile || parsed.userId !== userId) return null;
+    // 30 days: the profile rarely changes and a stale copy beats a dead app.
+    if (Date.now() - (parsed.at ?? 0) > 30 * 86_400_000) return null;
+    return parsed.profile;
+  } catch { return null; }
+}
+function writeCachedProfile(userId: string, profile: any) {
+  try {
+    localStorage.setItem(PP_PROFILE_CACHE_KEY, JSON.stringify({ userId, profile, at: Date.now() }));
+  } catch { /* quota — non-blocking */ }
 }
 
 

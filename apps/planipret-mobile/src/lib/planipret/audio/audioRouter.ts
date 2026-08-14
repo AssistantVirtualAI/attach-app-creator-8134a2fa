@@ -148,8 +148,7 @@ export const audioRouter = {
     currentRoute = route;
     await audioRouter.setRoute(route);
     // Some stacks (CallKit / AudioFocus) re-apply their own route ~1s after the
-    // media session activates, so re-assert once.
-    // Some stacks (CallKit / AudioFocus) re-apply their own route ~1s after the
+
     // media session activates, so re-assert once — but never overwrite a change
     // the user made in the meantime (tap on « haut-parleur »).
     const generation = routeGeneration;

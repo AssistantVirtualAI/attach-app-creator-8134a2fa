@@ -26,6 +26,7 @@ import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { ppSipProvider, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
 import { Radio } from "lucide-react";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
+import { retryWithBackoff } from "@/lib/net/resilient";
 
 const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";

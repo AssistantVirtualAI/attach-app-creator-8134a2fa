@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Play, Pause, Sparkles, Mic, RotateCw, Check, Settings2, ChevronDown, ChevronUp } from "lucide-react";
+import { Play, Pause, Sparkles, Mic, RotateCw, Check, Settings2, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
 type Voice = {
@@ -142,7 +142,28 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
       toast.success(d.pushed_to_ns ? t("greeting.activated") : `${t("greeting.pushFailed")}: ${d.push_error}`);
       onProfileChange?.();
     } else {
+      onProfileChange?.();
       toast.success(t("greeting.audioGenerated"));
+    }
+  };
+
+
+  const saveAudio = async () => {
+    if (!previewUrl) return;
+    try {
+      const res = await fetch(previewUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `message-vocal-${Date.now()}.mp3`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      toast.success(t("greeting.audioSaved"));
+    } catch {
+      window.open(previewUrl, "_blank");
     }
   };
 
@@ -337,6 +358,11 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
                 {t("greeting.voice")} : {previewVoiceName}
               </span>
             </div>
+            <button onClick={saveAudio}
+              className="w-full h-11 rounded-xl text-[13px] font-medium flex items-center justify-center gap-1.5 mb-2"
+              style={{ background: TOKENS.card, color: TOKENS.text, border: `1px solid ${TOKENS.border}` }}>
+              <Download className="w-4 h-4" /> {t("greeting.saveAudio")}
+            </button>
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => generate(false)} disabled={generating}
                 className="h-11 rounded-xl text-[13px] font-medium flex items-center justify-center gap-1.5"

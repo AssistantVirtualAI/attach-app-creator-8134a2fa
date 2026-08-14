@@ -75,12 +75,22 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
     const timeout = window.setTimeout(() => {
       if (!cancelled) setVoicesError(t("greeting.voiceLoadFailed") || "voice_load_timeout");
     }, 10_000);
-    supabase.functions.invoke("pp-greeting-voices").then(({ data, error }) => {
+    supabase.functions.invoke("pp-greeting-voices").then(async ({ data, error }) => {
       if (cancelled) return;
-      if (error) { setVoicesError(error.message); return; }
-      if ((data as any)?.success) setVoices((data as any).voices);
-      else setVoicesError((data as any)?.error ?? "unknown_error");
+      if (error) {
+        const ctx = (error as any)?.context;
+        const detail = ctx?.text ? await ctx.text().catch(() => "") : "";
+        setVoicesError(detail || error.message);
+        setVoices(FALLBACK_VOICES);
+        return;
+      }
+      if ((data as any)?.success && (data as any).voices?.length) setVoices((data as any).voices);
+      else {
+        setVoicesError((data as any)?.error ?? "unknown_error");
+        setVoices(FALLBACK_VOICES);
+      }
     }).finally(() => window.clearTimeout(timeout));
+
     return () => { cancelled = true; window.clearTimeout(timeout); };
   }, [t]);
 

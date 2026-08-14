@@ -503,12 +503,18 @@ final class PjsipEngine {
 
     func setSpeaker(_ enabled: Bool) {
         speakerOn = enabled
-        // CallKit possède la session : on ne change QUE la route de sortie.
+        // Un seul propriétaire de la session audio : PpSipKeepAlive. Deux
+        // modules qui appellent overrideOutputAudioPort avec des modes
+        // différents = haut-parleur bas et étouffé. On délègue.
         DispatchQueue.main.async {
-            let session = AVAudioSession.sharedInstance()
-            try? session.overrideOutputAudioPort(enabled ? .speaker : .none)
+            NotificationCenter.default.post(
+                name: Notification.Name("PpAudioRouteRequest"),
+                object: nil,
+                userInfo: ["route": enabled ? "speaker" : "earpiece"]
+            )
         }
     }
+
 
     func sendDTMF(_ digits: String) {
         guard activeCall >= 0, !digits.isEmpty else { return }

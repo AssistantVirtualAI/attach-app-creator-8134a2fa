@@ -224,9 +224,14 @@ export default function MHome() {
       try {
         const calStart = new Date(); calStart.setDate(1); calStart.setHours(0,0,0,0);
         const calEnd = new Date(calStart); calEnd.setMonth(calEnd.getMonth() + 2);
-        const { data: msData, error: msError } = await supabase.functions.invoke("ms365-actions", {
-          body: { action: "list_calendar_events", payload: { start: calStart.toISOString(), end: calEnd.toISOString(), top: 200 } },
-        });
+        // Cellular links drop the first request while the radio wakes up —
+        // retry before declaring Microsoft 365 unreachable.
+        const { data: msData, error: msError }: any = await retryWithBackoff(
+          () => supabase.functions.invoke("ms365-actions", {
+            body: { action: "list_calendar_events", payload: { start: calStart.toISOString(), end: calEnd.toISOString(), top: 200 } },
+          }),
+          { attempts: 3, timeoutMs: 12000, label: "ms365_calendar" },
+        );
         if (msError || (msData as any)?.success === false) {
           const errMsg = (msData as any)?.error ?? msError?.message ?? t("screens.home.calendarUnavailable");
           setMsCalendarError(errMsg);

@@ -7,8 +7,12 @@ import ReactMarkdown from "react-markdown";
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import { useAvaContext } from "@/hooks/useAvaContext";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import ReconnectStatus from "@/components/planipret/mobile/ReconnectStatus";
 
 type Msg = { role: "user" | "assistant"; content: string };
+
+/** Tentatives de reconnexion automatique du chatbot avant abandon. */
+const MAX_CHAT_RETRIES = 3;
 
 export default function AvaChatSheet({ userId, onClose }: { userId: string; onClose: () => void }) {
   const { lang } = useMplanipretLang();

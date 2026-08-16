@@ -377,6 +377,16 @@ export class NativeSipService {
       const state = (payload?.state ?? "failed") as SipRegistrationState;
       console.log("[SIP] REGISTER:", state, payload?.code ?? "", payload?.reason ?? "");
 
+      // Métriques terrain : latence REGISTER TLS, 407 tardifs, PJSIP_EBUSY.
+      const sipCode = Number(payload?.code ?? 0);
+      if (sipCode === 407 || sipCode === 401) this.registerTracker?.challenge(sipCode);
+      if (state === "registered") { this.registerTracker?.success(); this.registerTracker = null; }
+      else if (state === "failed") {
+        this.registerTracker?.failure(payload?.reason ?? `sip_${sipCode || "failed"}`);
+        this.registerTracker = null;
+      }
+
+
       if (state === "failed" && this.retryCount < this.maxRetries) {
         this.retryCount++;
         if (this.registrationRetryTimer) clearTimeout(this.registrationRetryTimer);

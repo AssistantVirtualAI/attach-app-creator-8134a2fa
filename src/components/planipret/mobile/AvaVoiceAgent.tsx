@@ -354,12 +354,10 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
           onConnect: () => {
             if (cancelled || generation !== connectionGenerationRef.current) return;
             connectedAtRef.current = Date.now();
-            automaticRecoveriesRef.current = 0;
             setState("listening");
           },
           onDisconnect: (info: any) => {
             if (cancelled || generation !== connectionGenerationRef.current) return;
-            const dur = connectedAtRef.current ? Date.now() - connectedAtRef.current : 0;
             const reason = info?.reason ?? info?.code ?? "closed";
             const recoverable = ![1000, 1008, "1000", "1008", "user_disconnected"].includes(reason);
             if (recoverable && automaticRecoveriesRef.current < 2) {

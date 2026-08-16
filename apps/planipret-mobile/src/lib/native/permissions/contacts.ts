@@ -75,7 +75,7 @@ export type NativeContactEntry = {
 
 export async function listDeviceContacts(): Promise<NativeContactEntry[]> {
   try {
-    if ((await getContactsPermissionStatus()) !== "granted") return [];
+    if ((await readContactsPermission()) !== "granted") return [];
     const { Contacts } = await import("@capacitor-community/contacts");
     const res = await Contacts.getContacts({
       projection: { name: true, phones: true, emails: true, organization: true },

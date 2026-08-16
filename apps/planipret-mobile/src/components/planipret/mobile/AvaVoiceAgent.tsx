@@ -361,6 +361,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
           onConnect: () => {
             if (cancelled || generation !== connectionGenerationRef.current) return;
             connectedAtRef.current = Date.now();
+            setReconnectInfo(null);
             setState("listening");
           },
           onDisconnect: (info: any) => {
@@ -376,12 +377,18 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
               const relaunch = () => {
                 if (recoveryTimerRef.current) { clearTimeout(recoveryTimerRef.current); recoveryTimerRef.current = null; }
                 window.removeEventListener("online", relaunch);
-                if (!cancelled && generation === connectionGenerationRef.current) setInitAttempt((n) => n + 1);
+                if (!cancelled && generation === connectionGenerationRef.current) {
+                  setReconnectInfo({ attempt: automaticRecoveriesRef.current, nextAt: null });
+                  setInitAttempt((n) => n + 1);
+                }
               };
               window.addEventListener("online", relaunch, { once: true });
-              recoveryTimerRef.current = setTimeout(relaunch, reconnectDelay(automaticRecoveriesRef.current));
+              const delay = reconnectDelay(automaticRecoveriesRef.current);
+              setReconnectInfo({ attempt: automaticRecoveriesRef.current, nextAt: Date.now() + delay });
+              recoveryTimerRef.current = setTimeout(relaunch, delay);
               return;
             }
+            setReconnectInfo(null);
             logSession({ disconnect_reason: reason, ended: true });
             setState("idle");
           },

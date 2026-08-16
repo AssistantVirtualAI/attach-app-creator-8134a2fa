@@ -218,6 +218,9 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
   const [initAttempt, setInitAttempt] = useState(0);
   const sessionRowIdRef = useRef<string | null>(null);
   const connectedAtRef = useRef<number>(0);
+  const connectionGenerationRef = useRef(0);
+  const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const automaticRecoveriesRef = useRef(0);
 
   const logSession = useCallback(async (patch: {
     connection_type?: string; agent_id?: string;
@@ -235,6 +238,8 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
         if (data?.id) sessionRowIdRef.current = data.id;
       }
       if (patch.ended || patch.disconnect_reason || patch.error_code) {
+        const sessionRowId = sessionRowIdRef.current;
+        if (!sessionRowId) return;
         const durationMs = connectedAtRef.current ? Date.now() - connectedAtRef.current : null;
         await supabase.from("planipret_ava_sessions").update({
           ended_at: new Date().toISOString(),
@@ -242,7 +247,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
           disconnect_reason: patch.disconnect_reason ?? null,
           error_code: patch.error_code ?? null,
           error_message: patch.error_message ?? null,
-        }).eq("id", sessionRowIdRef.current!);
+        }).eq("id", sessionRowId);
       }
     } catch (e) { console.warn("logSession failed", e); }
   }, [sessionId, userId]);
@@ -250,6 +255,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
   useEffect(() => {
     if (!aiConsent) return;
     let cancelled = false;
+    const generation = ++connectionGenerationRef.current;
     (async () => {
       try {
         setState("connecting");
@@ -311,6 +317,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
         //    we mint each transport lazily and never reuse an old one.
         const mintToken = async (kind: "webrtc" | "websocket") => {
           const { data, error } = await supabase.functions.invoke("pp-ava-webrtc-token", { body: { type: kind } });
+          if (cancelled || generation !== connectionGenerationRef.current) throw new Error("stale_connection_attempt");
           let d: any = data;
           if (error) {
             // FunctionsHttpError carries the response body in .context — read it
@@ -345,23 +352,28 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
         const commonOptions: any = {
           clientTools,
           onConnect: () => {
+            if (cancelled || generation !== connectionGenerationRef.current) return;
             connectedAtRef.current = Date.now();
             setState("listening");
           },
           onDisconnect: (info: any) => {
-            const dur = connectedAtRef.current ? Date.now() - connectedAtRef.current : 0;
+            if (cancelled || generation !== connectionGenerationRef.current) return;
             const reason = info?.reason ?? info?.code ?? "closed";
-            // Premature disconnect (< 2s after connect) = likely overrides
-            // or agent config problem. Log and let user retry.
-            if (connectedAtRef.current && dur < 2000) {
-              logSession({ disconnect_reason: `premature_${reason}`, ended: true });
-              setState("error");
+            const recoverable = ![1000, 1008, "1000", "1008", "user_disconnected"].includes(reason);
+            if (recoverable && automaticRecoveriesRef.current < 2) {
+              automaticRecoveriesRef.current += 1;
+              logSession({ disconnect_reason: `recovering_${reason}`, ended: true });
+              setState("connecting");
+              recoveryTimerRef.current = setTimeout(() => {
+                if (!cancelled && generation === connectionGenerationRef.current) setInitAttempt((n) => n + 1);
+              }, Math.min(1800, 500 * automaticRecoveriesRef.current));
               return;
             }
             logSession({ disconnect_reason: reason, ended: true });
             setState("idle");
           },
           onError: (err: any) => {
+            if (cancelled || generation !== connectionGenerationRef.current) return;
             console.error("AVA error", err);
             logSession({ error_code: "runtime", error_message: String(err?.message ?? err ?? "unknown") });
             setState("error");
@@ -392,7 +404,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
 
         // Try WebRTC first
         try {
-          const tok = await mintToken("webrtc");
+          const tok = await withBackoff(() => mintToken("webrtc"), 3, 500);
           await logSession({ connection_type: "webrtc", agent_id: c.agent_id });
           const dynamicVariables = tok.dynamic_variables ?? (tok.ava_session_token
             ? { ava_session_token: tok.ava_session_token, secret__ava_session_token: tok.ava_session_token }
@@ -408,7 +420,7 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
           usedTransport = "websocket";
           try {
             await new Promise((resolve) => setTimeout(resolve, 350));
-            const tok = await mintToken("websocket");
+            const tok = await withBackoff(() => mintToken("websocket"), 3, 500);
             await logSession({ connection_type: "websocket", agent_id: c.agent_id });
             const dynamicVariables = tok.dynamic_variables ?? (tok.ava_session_token
               ? { ava_session_token: tok.ava_session_token, secret__ava_session_token: tok.ava_session_token }
@@ -469,6 +481,8 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
     })();
     return () => {
       cancelled = true;
+      connectionGenerationRef.current += 1;
+      if (recoveryTimerRef.current) { clearTimeout(recoveryTimerRef.current); recoveryTimerRef.current = null; }
       try { convRef.current?.endSession(); } catch (_) { /* */ }
       if (initAttempt === 0) {
         // On unmount (not on retry), release mic.
@@ -480,11 +494,14 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
   }, [initAttempt, lang, aiConsent]);
 
   const retryConnection = useCallback(() => {
+    if (state === "connecting") return;
+    if (recoveryTimerRef.current) { clearTimeout(recoveryTimerRef.current); recoveryTimerRef.current = null; }
+    automaticRecoveriesRef.current = 0;
     sessionRowIdRef.current = null;
     connectedAtRef.current = 0;
     sessionIdRef.current = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     setInitAttempt((n) => n + 1);
-  }, []);
+  }, [state]);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 999999, behavior: "smooth" }); }, [transcript.length]);
 

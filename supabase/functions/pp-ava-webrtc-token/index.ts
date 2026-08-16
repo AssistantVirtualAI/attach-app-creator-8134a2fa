@@ -26,6 +26,19 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function fetchElevenLabs(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8_000);
+  try {
+    return await fetch(url, {
+      headers: { "xi-api-key": ELEVENLABS_API_KEY },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -77,15 +90,13 @@ Deno.serve(async (req) => {
 
     const [tokenRes, signedRes] = await Promise.all([
       needToken
-        ? fetch(
+        ? fetchElevenLabs(
             `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`,
-            { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
           )
         : Promise.resolve(null as any),
       needSigned
-        ? fetch(
+        ? fetchElevenLabs(
             `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`,
-            { headers: { "xi-api-key": ELEVENLABS_API_KEY } },
           )
         : Promise.resolve(null as any),
     ]);
@@ -140,6 +151,7 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("pp-ava-webrtc-token", e);
+    if ((e as Error)?.name === "AbortError") return json({ error: "elevenlabs_timeout" }, 504);
     return json({ error: (e as Error).message ?? "internal_error" }, 500);
   }
 });

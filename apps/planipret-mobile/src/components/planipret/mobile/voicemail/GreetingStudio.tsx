@@ -141,6 +141,16 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
     setPreviewing(v.voice_id);
   };
 
+  const saveAudio = () => {
+    if (!previewUrl) return;
+    const link = document.createElement("a");
+    link.href = previewUrl;
+    link.download = `message-vocal-${Date.now()}.mp3`;
+    link.rel = "noopener";
+    link.click();
+    toast.success(t("greeting.audioSaved"));
+  };
+
   const improveText = async () => {
     if (text.trim().length < 10) { toast.error(t("greeting.draftTooShort")); return; }
     setImproving(true);

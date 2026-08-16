@@ -35,6 +35,13 @@ const TEMPLATES: { key: string; label: string; lang: "fr" | "en"; body: (n: stri
     body: (n) => `Hello, you've reached ${n}, mortgage broker at Planiprêt. I'm currently unavailable. Please leave your name, number and the best time to reach you, and I'll return your call as soon as possible. Thank you and have a great day.` },
 ];
 
+const FALLBACK_VOICES: Voice[] = [
+  { voice_id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah", language: "EN", gender: "F", preview_url: "", category: "professional" },
+  { voice_id: "JBFqnCBsd6RMkjVDRZzb", name: "George", language: "EN", gender: "M", preview_url: "", category: "professional" },
+  { voice_id: "cgSgspJ2msm6clMCkdW9", name: "Jessica", language: "EN", gender: "F", preview_url: "", category: "natural" },
+  { voice_id: "TX3LPaxmHKxFdv7VOQHJ", name: "Liam", language: "EN", gender: "M", preview_url: "", category: "natural" },
+];
+
 const TOKENS = {
   bg: "var(--pp-bg-base)",
   card: "var(--pp-bg-elevated)",
@@ -71,12 +78,23 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
 
   // Load voices
   useEffect(() => {
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) { setVoicesError(t("greeting.voiceLoadFailed") || "voice_load_timeout"); setVoices(FALLBACK_VOICES); }
+    }, 10_000);
     supabase.functions.invoke("pp-greeting-voices").then(({ data, error }) => {
-      if (error) { setVoicesError(error.message); return; }
-      if ((data as any)?.success) setVoices((data as any).voices);
-      else setVoicesError((data as any)?.error ?? "unknown_error");
-    });
-  }, []);
+      if (cancelled) return;
+      if (error || !(data as any)?.success || !(data as any)?.voices?.length) {
+        setVoicesError((data as any)?.error ?? error?.message ?? "unknown_error");
+        setVoices(FALLBACK_VOICES);
+      } else setVoices((data as any).voices);
+    }).finally(() => window.clearTimeout(timeout));
+    return () => { cancelled = true; window.clearTimeout(timeout); };
+  }, [t]);
+
+  useEffect(() => {
+    if (!selectedVoice && voices?.length) setSelectedVoice(voices[0].voice_id);
+  }, [voices, selectedVoice]);
 
   // Sign current greeting URL if it's a storage path
   useEffect(() => {
@@ -117,7 +135,8 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
   };
 
   const generate = async (pushToNs: boolean) => {
-    if (!selectedVoice || text.length < 10) return;
+    if (!selectedVoice) { toast.error(t("greeting.voiceLoadFailed") || "Choisissez une voix"); return; }
+    if (text.trim().length < 10) { toast.error(t("greeting.draftTooShort")); return; }
     setGenerating(true);
     setGenStep(pushToNs ? t("greeting.activation") : t("greeting.generation"));
     const { data, error } = await supabase.functions.invoke("pp-greeting-generate", {
@@ -148,27 +167,18 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
   };
 
 
-  const saveAudio = async () => {
+  const saveAudio = () => {
     if (!previewUrl) return;
-    try {
-      const res = await fetch(previewUrl);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `message-vocal-${Date.now()}.mp3`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      toast.success(t("greeting.audioSaved"));
-    } catch {
-      window.open(previewUrl, "_blank");
-    }
+    const link = document.createElement("a");
+    link.href = previewUrl;
+    link.download = `message-vocal-${Date.now()}.mp3`;
+    link.rel = "noopener";
+    link.click();
+    toast.success(t("greeting.audioSaved"));
   };
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-4 pb-[calc(2rem+env(safe-area-inset-bottom))] overflow-visible">
       {/* Header */}
       <div>
         <h2 className="text-[18px] font-bold" style={{ color: TOKENS.text }}>{t("greeting.title")}</h2>
@@ -261,7 +271,7 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
             return <div className="text-[12px] p-3 rounded-xl text-center" style={{ background: TOKENS.card, color: TOKENS.muted, border: `1px solid ${TOKENS.border}` }}>Aucune voix ne correspond à ces filtres.</div>;
           }
           return (
-          <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1" role="radiogroup" aria-label={t("greeting.selectVoice")}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-1" role="radiogroup" aria-label={t("greeting.selectVoice")}>
             {filtered.map((v) => (
               <div
                 key={v.voice_id}

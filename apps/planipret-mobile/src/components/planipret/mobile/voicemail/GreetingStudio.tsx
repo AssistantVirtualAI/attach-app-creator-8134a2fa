@@ -305,7 +305,7 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
                 aria-checked={selectedVoice === v.voice_id}
                 aria-label={`${t("greeting.selectVoice")} ${v.name}`}
                 tabIndex={0}
-                onClick={() => setSelectedVoice(v.voice_id)}
+                onClick={() => { if (!generating) setSelectedVoice(v.voice_id); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedVoice(v.voice_id); }
                 }}
@@ -332,10 +332,15 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
                   {v.preview_url && (
                     <button type="button"
                       aria-label={`${t("greeting.preview")} ${v.name}`}
+                      disabled={generating || (audioBusy && previewing !== v.voice_id)}
+                      aria-busy={audioBusy && previewing === v.voice_id}
                       onClick={(e) => { e.stopPropagation(); playVoicePreview(v); }}
-                      className="text-[10px] px-2 py-0.5 rounded flex items-center gap-1 min-h-[28px]"
+                      className="text-[10px] px-2 py-0.5 rounded flex items-center gap-1 min-h-[28px] disabled:opacity-50"
                       style={{ background: "rgba(255,255,255,0.05)", color: TOKENS.text }}>
-                      {previewing === v.voice_id ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />} {t("greeting.preview")}
+                      {audioBusy && previewing === v.voice_id
+                        ? <RotateCw className="w-3 h-3 animate-spin" />
+                        : previewing === v.voice_id ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                      {t("greeting.preview")}
                     </button>
                   )}
                 </div>
@@ -377,7 +382,7 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
       {/* Step 3 - Generate */}
       <div>
         <div className="text-[10px] uppercase tracking-widest mb-2 font-semibold" style={{ color: TOKENS.muted }}>{t("greeting.previewGenerate")}</div>
-        <button onClick={() => generate(false)}
+        <button onClick={() => generate(false)} disabled={generating || audioBusy} aria-busy={generating}
           disabled={!selectedVoice || text.length < 10 || generating}
           className="w-full h-[52px] rounded-xl text-[15px] font-semibold text-white disabled:opacity-50 transition"
           style={{ background: "linear-gradient(135deg,#1A4A8A,#2E9BDC)" }}>

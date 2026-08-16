@@ -121,13 +121,24 @@ export function setDeviceContactSyncEnabled(enabled: boolean) {
   } catch { /* ignore */ }
 }
 
+let syncInFlight: Promise<number> | null = null;
+
 export async function syncDeviceContactsToServer(force = false): Promise<number> {
+  if (syncInFlight) return syncInFlight;
+  syncInFlight = runDeviceContactSync(force).finally(() => { syncInFlight = null; });
+  return syncInFlight;
+}
+
+async function runDeviceContactSync(force: boolean): Promise<number> {
   try {
     if (!isDeviceContactSyncEnabled()) return 0;
     if (!force) {
       const last = Number(localStorage.getItem(SYNC_KEY) ?? 0);
       if (last && Date.now() - last < SYNC_TTL_MS) return 0;
     }
+    // Marque la tentative immédiatement : sans cela, un échec (0 contact,
+    // erreur réseau) relançait la synchro en boucle à chaque vérification.
+    try { localStorage.setItem(SYNC_KEY, String(Date.now())); } catch { /* ignore */ }
     const entries = await listDeviceContacts();
     const contacts = entries
       .filter((c) => c.phone)

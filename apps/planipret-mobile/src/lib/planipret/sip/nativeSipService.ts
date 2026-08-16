@@ -92,6 +92,8 @@ export class NativeSipService {
   private lastState: SipRegistrationState = "unavailable";
   private registrationWaiters: Array<(registered: boolean) => void> = [];
   private registrationRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Chronomètre/métriques de la tentative REGISTER en cours. */
+  private registerTracker: RegisterTracker | null = null;
 
   static getInstance(): NativeSipService {
     if (!NativeSipService.instance) NativeSipService.instance = new NativeSipService();

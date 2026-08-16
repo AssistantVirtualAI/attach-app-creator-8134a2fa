@@ -26,6 +26,7 @@ export class AudioGuard {
   }
 
   private setBusy(v: boolean) {
+    if (this.running === v) return;
     this.running = v;
     this.listeners.forEach((l) => { try { l(v); } catch { /* noop */ } });
   }

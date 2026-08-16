@@ -46,6 +46,13 @@ const STATE_LABELS: Record<"fr" | "en", Record<AgentState, string>> = {
 // Retry any async op with exponential backoff. Returns the value or throws the
 // last error after `attempts` tries. Used to smooth over transient
 // ElevenLabs / edge-function hiccups before falling back to text chat.
+/** Reconnexion voicebot : 700 ms, 1.4 s, 2.8 s, 5.6 s (plafond 8 s) ±30 % de jitter. */
+const MAX_AUTO_RECOVERIES = 4;
+export function reconnectDelay(attempt: number, base = 700, cap = 8000): number {
+  const exp = Math.min(cap, base * Math.pow(2, Math.max(0, attempt - 1)));
+  return Math.round(exp * (0.7 + Math.random() * 0.6));
+}
+
 async function withBackoff<T>(fn: () => Promise<T>, attempts = 3, baseMs = 400): Promise<T> {
   let lastErr: any;
   for (let i = 0; i < attempts; i++) {
@@ -360,13 +367,19 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
             if (cancelled || generation !== connectionGenerationRef.current) return;
             const reason = info?.reason ?? info?.code ?? "closed";
             const recoverable = ![1000, 1008, "1000", "1008", "user_disconnected"].includes(reason);
-            if (recoverable && automaticRecoveriesRef.current < 2) {
+            // Boucle de reconnexion robuste : backoff exponentiel + jitter,
+            // plafonné, et reprise immédiate dès que le réseau revient.
+            if (recoverable && automaticRecoveriesRef.current < MAX_AUTO_RECOVERIES) {
               automaticRecoveriesRef.current += 1;
               logSession({ disconnect_reason: `recovering_${reason}`, ended: true });
               setState("connecting");
-              recoveryTimerRef.current = setTimeout(() => {
+              const relaunch = () => {
+                if (recoveryTimerRef.current) { clearTimeout(recoveryTimerRef.current); recoveryTimerRef.current = null; }
+                window.removeEventListener("online", relaunch);
                 if (!cancelled && generation === connectionGenerationRef.current) setInitAttempt((n) => n + 1);
-              }, Math.min(1800, 500 * automaticRecoveriesRef.current));
+              };
+              window.addEventListener("online", relaunch, { once: true });
+              recoveryTimerRef.current = setTimeout(relaunch, reconnectDelay(automaticRecoveriesRef.current));
               return;
             }
             logSession({ disconnect_reason: reason, ended: true });

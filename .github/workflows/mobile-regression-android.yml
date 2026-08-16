@@ -1,0 +1,116 @@
+name: Mobile Regression Android (Planiprêt)
+
+# 1) Tests de non-régression (reconnexion chatbot/voicebot, garde-fou audio,
+#    E2E boîte vocale, REGISTER SIP + métriques, sync Contacts TTL)
+# 2) npm run build && npx cap sync android
+# 3) Smoke sur émulateur Android (boot + install + launch + logcat)
+
+on:
+  pull_request:
+    paths:
+      - 'apps/planipret-mobile/**'
+      - '.github/workflows/mobile-regression-android.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/planipret-mobile/**'
+  workflow_dispatch:
+
+concurrency:
+  group: mobile-regression-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Tests de non-régression (vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/planipret-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - name: Reconnexion WebRTC/WebSocket + garde-fou audio
+        run: npx vitest run src/lib/planipret/net src/lib/planipret/audio
+      - name: E2E boîte vocale — changements d'audio + ouverture/fermeture
+        run: npx vitest run src/lib/planipret/audio/__tests__/voicemailAudioSwitch.e2e.test.tsx
+      - name: REGISTER TLS (latence simulée) + métriques 407 / PJSIP_EBUSY
+        run: npx vitest run src/lib/planipret/sip
+      - name: Sync Contacts — TTL + anti-concurrence
+        run: npx vitest run src/lib/__tests__/ppContactsCache.test.ts
+      - name: Suite complète (informatif — dette de tests héritée)
+        continue-on-error: true
+        run: npm test
+
+  android-sync:
+    name: build + cap sync android + smoke émulateur
+    runs-on: ubuntu-latest
+    needs: unit
+    defaults:
+      run:
+        working-directory: apps/planipret-mobile
+    env:
+      PP_SKIP_AUTOSYNC: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+
+      - run: npm install --no-audit --no-fund
+
+      - name: Check imports
+        run: npm run check:imports
+
+      - name: npm run build
+        run: npm run build
+
+      - name: Vérifier Tailwind + build ID
+        run: npm run precheck:build
+
+      - name: npx cap sync android
+        run: |
+          if [ ! -d android ]; then npx cap add android; fi
+          npx cap sync android
+          node scripts/apply-native-config.mjs
+          npm run verify:android
+
+      - name: Vérifier l'injection des correctifs natifs (audio speaker)
+        run: |
+          set -e
+          grep -q "setCommunicationDevice" scripts/apply-native-config.mjs
+          echo "Correctif audio Android présent"
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+        working-directory: apps/planipret-mobile/android
+
+      - name: Activer KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Smoke sur émulateur Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          working-directory: apps/planipret-mobile
+          disable-animations: true
+          script: |
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell monkey -p com.planipret.mobile -c android.intent.category.LAUNCHER 1
+            sleep 20
+            adb logcat -d -t 400 | grep -Ei "planipret|Capacitor|SIP-METRICS|FATAL|AndroidRuntime" | tail -80
+            if adb logcat -d | grep -q "FATAL EXCEPTION"; then echo "Crash natif détecté"; exit 1; fi

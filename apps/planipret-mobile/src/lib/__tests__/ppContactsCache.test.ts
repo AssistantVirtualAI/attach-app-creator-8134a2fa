@@ -52,7 +52,6 @@ describe("ppContactsCache — TTL et anti-concurrence", () => {
 
   it("libère le verrou in-flight après une erreur (pas de blocage définitif)", async () => {
     invoke.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
-    invoke.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
     await expect(mod.getPpContacts("directory")).rejects.toBeTruthy();
     invoke.mockResolvedValue({ data: { directory: [{ id: "2" }] }, error: null });
     await expect(mod.getPpContacts("directory")).resolves.toEqual([{ id: "2" }]);

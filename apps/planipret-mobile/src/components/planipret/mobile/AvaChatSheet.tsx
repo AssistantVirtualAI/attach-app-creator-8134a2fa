@@ -197,14 +197,26 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
             </div>
           </div>
         ))}
-        {loading && (
+        {reconnectInfo && (
+          <ReconnectStatus
+            attempt={reconnectInfo.attempt}
+            maxAttempts={MAX_CHAT_RETRIES}
+            nextAttemptAt={reconnectInfo.nextAt}
+            onCancel={cancelReconnect}
+            lang={lang === "fr" ? "fr" : "en"}
+            label={lang === "fr" ? "Reconnexion à AVA…" : "Reconnecting to AVA…"}
+          />
+        )}
+        {loading && !reconnectInfo && (
           <div className="flex justify-start">
             <div
               className="px-3.5 py-2.5 rounded-2xl flex items-center gap-2"
               style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)" }}
             >
               <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "var(--pp-agent)" }} />
-              <span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>AVA réfléchit…</span>
+              <span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
+                {lang === "fr" ? "AVA réfléchit…" : "AVA is thinking…"}
+              </span>
             </div>
           </div>
         )}

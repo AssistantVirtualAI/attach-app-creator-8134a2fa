@@ -10,6 +10,7 @@ import {
   releaseAorFromNative,
 } from "./aorArbitration";
 import { pinnedCoreHost } from "./sipEdgePolicy";
+import { trackRegisterAttempt, logRegisterMetricsSummary, type RegisterTracker } from "./registerMetrics";
 
 
 
@@ -205,6 +206,8 @@ export class NativeSipService {
     try {
       await this.bindListeners(pjsip);
 
+      this.registerTracker = trackRegisterAttempt("TLS");
+
       await pjsip.initialize({
         domain: String(creds.sip_domain ?? ""),
         username,
@@ -235,6 +238,9 @@ export class NativeSipService {
       const registered = await this.waitForRegistration(45_000);
       if (!registered) {
         console.error("[SIP] REGISTER absent après 45 s — restitution atomique à JsSIP");
+        this.registerTracker?.failure("watchdog_45s");
+        this.registerTracker = null;
+        logRegisterMetricsSummary("register_watchdog");
         if (this.registrationRetryTimer) {
           clearTimeout(this.registrationRetryTimer);
           this.registrationRetryTimer = null;
@@ -251,6 +257,8 @@ export class NativeSipService {
 
     } catch (err: any) {
       const code = String(err?.code ?? err?.message ?? err?.errorMessage ?? "error");
+      this.registerTracker?.failure(code);
+      this.registerTracker = null;
       // Détail complet : les erreurs Capacitor ne sérialisent pas via console.error.
       console.error("[SIP] Init échouée:", code, JSON.stringify({
         code: err?.code ?? null,

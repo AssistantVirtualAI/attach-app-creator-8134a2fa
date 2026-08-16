@@ -7,7 +7,13 @@ function mapContactsStatus(value: string | undefined | null): PermStatus {
   return "prompt";
 }
 
-export async function getContactsPermissionStatus(): Promise<PermStatus> {
+/**
+ * Raw permission read — never triggers the AVA sync. `listDeviceContacts()`
+ * uses this one: routing it through `getContactsPermissionStatus()` created an
+ * infinite mutual recursion (status → sync → list → status → …) that flooded
+ * the native bridge with `getContacts` / `checkPermissions` calls at boot.
+ */
+async function readContactsPermission(): Promise<PermStatus> {
   let status: PermStatus = "unavailable";
   try {
     if (!(await isNative())) return "unavailable";
@@ -16,10 +22,14 @@ export async function getContactsPermissionStatus(): Promise<PermStatus> {
     status = mapContactsStatus(check.contacts);
   } catch {
     status = "denied";
-  } finally {
-    await setPref("perm_contacts_v1", status);
-    if (status === "granted") void syncDeviceContactsToServer();
   }
+  return status;
+}
+
+export async function getContactsPermissionStatus(): Promise<PermStatus> {
+  const status = await readContactsPermission();
+  await setPref("perm_contacts_v1", status);
+  if (status === "granted") void syncDeviceContactsToServer();
   return status;
 }
 

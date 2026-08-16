@@ -629,6 +629,18 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
         </div>
       </div>
 
+      {/* Bandeau de reconnexion — spinner, compte à rebours, annulation */}
+      {reconnectInfo && (
+        <ReconnectStatus
+          attempt={reconnectInfo.attempt}
+          maxAttempts={MAX_AUTO_RECOVERIES}
+          nextAttemptAt={reconnectInfo.nextAt}
+          onCancel={cancelReconnect}
+          lang={lang}
+          label={L("Reconnexion vocale…", "Reconnecting voice…")}
+        />
+      )}
+
       {/* Tool notif */}
       {toolNotif && (
         <div className="mx-4 mt-3 px-4 py-2 rounded-xl text-[12px] flex items-center gap-2 animate-fade-in"

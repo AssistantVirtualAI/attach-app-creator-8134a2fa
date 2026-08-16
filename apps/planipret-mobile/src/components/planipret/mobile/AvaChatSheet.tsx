@@ -53,19 +53,61 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
     setMessages(next);
     setInput("");
     setLoading(true);
-    try {
-      if (!(await ensureAiConsent())) return;
+    cancelledRef.current = false;
+
+    const ask = async () => {
       const { data, error } = await supabase.functions.invoke("pp-ava-chat", {
         body: { messages: next, user_id: userId, context: avaContext, language: lang },
       });
       if (error) throw error;
-      const reply = (data as any)?.reply ?? (data as any)?.message ?? (lang === "fr" ? "Désolée, je n'ai pas de réponse pour le moment." : "Sorry, I don't have an answer right now.");
-      setMessages((m) => [...m, { role: "assistant", content: reply }]);
-    } catch (e: any) {
-      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${lang === "fr" ? "Erreur" : "Error"}: ${e?.message ?? (lang === "fr" ? "indisponible" : "unavailable")}` }]);
+      return (data as any)?.reply ?? (data as any)?.message
+        ?? (lang === "fr" ? "Désolée, je n'ai pas de réponse pour le moment." : "Sorry, I don't have an answer right now.");
+    };
+
+    try {
+      if (!(await ensureAiConsent())) return;
+      let lastErr: any;
+      for (let attempt = 1; attempt <= MAX_CHAT_RETRIES + 1; attempt++) {
+        if (cancelledRef.current) return;
+        try {
+          const reply = await ask();
+          if (cancelledRef.current) return;
+          setReconnectInfo(null);
+          setMessages((m) => [...m, { role: "assistant", content: reply }]);
+          return;
+        } catch (e: any) {
+          lastErr = e;
+          if (attempt > MAX_CHAT_RETRIES) break;
+          // Boucle de reconnexion visible : spinner + compte à rebours + annulation.
+          const delay = Math.round(Math.min(8000, 700 * 2 ** (attempt - 1)) * (0.7 + Math.random() * 0.6));
+          setReconnectInfo({ attempt, nextAt: Date.now() + delay });
+          const waited = await new Promise<boolean>((resolve) => {
+            const online = () => { cleanup(); resolve(true); };
+            const timer = setTimeout(() => { cleanup(); resolve(true); }, delay);
+            const poll = setInterval(() => { if (cancelledRef.current) { cleanup(); resolve(false); } }, 150);
+            const cleanup = () => { clearTimeout(timer); clearInterval(poll); window.removeEventListener("online", online); };
+            window.addEventListener("online", online, { once: true });
+          });
+          if (!waited || cancelledRef.current) return;
+          setReconnectInfo({ attempt: attempt + 1, nextAt: null });
+        }
+      }
+      setReconnectInfo(null);
+      setMessages((m) => [...m, { role: "assistant", content: `⚠️ ${lang === "fr" ? "Erreur" : "Error"}: ${lastErr?.message ?? (lang === "fr" ? "indisponible" : "unavailable")}` }]);
     } finally {
+      setReconnectInfo(null);
       setLoading(false);
     }
+  };
+
+  const cancelReconnect = () => {
+    cancelledRef.current = true;
+    setReconnectInfo(null);
+    setLoading(false);
+    setMessages((m) => [...m, {
+      role: "assistant",
+      content: lang === "fr" ? "⏹️ Reconnexion annulée. Réessayez quand vous voulez." : "⏹️ Reconnection cancelled. Try again anytime.",
+    }]);
   };
 
   return (

@@ -228,6 +228,8 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
   const connectionGenerationRef = useRef(0);
   const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const automaticRecoveriesRef = useRef(0);
+  /** État visible de la boucle de reconnexion (spinner + compte à rebours). */
+  const [reconnectInfo, setReconnectInfo] = useState<{ attempt: number; nextAt: number | null } | null>(null);
 
   const logSession = useCallback(async (patch: {
     connection_type?: string; agent_id?: string;

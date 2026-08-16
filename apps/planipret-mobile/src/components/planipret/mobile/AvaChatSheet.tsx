@@ -26,6 +26,8 @@ export default function AvaChatSheet({ userId, onClose }: { userId: string; onCl
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [lockedHeight, setLockedHeight] = useState<number | null>(null);
   const avaContext = useAvaContext();
+  const [reconnectInfo, setReconnectInfo] = useState<{ attempt: number; nextAt: number | null } | null>(null);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

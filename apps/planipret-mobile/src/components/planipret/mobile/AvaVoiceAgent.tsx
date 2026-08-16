@@ -10,6 +10,7 @@ import { X, Mic, Send, Settings, AlertTriangle, Sparkles, PhoneOutgoing, Message
 import avaLogo from "@/assets/ava-statistics-logo.png.asset.json";
 import AvaOrb, { useAnalyserLevel } from "@/components/planipret/mobile/AvaOrb";
 import AiConsentGate, { hasAiConsent } from "@/components/planipret/mobile/AiConsentGate";
+import ReconnectStatus from "@/components/planipret/mobile/ReconnectStatus";
 import VoiceSettingsSheet from "@/components/planipret/mobile/VoiceSettingsSheet";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { getAvaToolLabel } from "@/lib/i18n/avaToolLabels";

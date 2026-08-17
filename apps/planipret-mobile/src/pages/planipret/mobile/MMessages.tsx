@@ -878,7 +878,8 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
                 </div>
               </div>
             );
-          })
+          })}
+          </>
         )}
 
         <div ref={bottomRef} />
@@ -1034,8 +1035,7 @@ function TeamChat({ profile }: { profile: any }) {
                 </div>
               </div>
             );
-          })}
-          </>
+          })
         )}
         <div ref={bottomRef} />
       </div>

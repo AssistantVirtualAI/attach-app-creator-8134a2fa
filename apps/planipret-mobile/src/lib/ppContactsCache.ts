@@ -9,7 +9,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 type Action = "list" | "shared" | "directory" | "maestro" | "maestro_clients" | "maestro_brokers";
 const ALL_ACTIONS: Action[] = ["list", "shared", "directory", "maestro", "maestro_clients", "maestro_brokers"];
-type Entry = { at: number; value: any[] };
+type Entry = { at: number; value: any[]; scope?: string | null };
+
+/** Maestro-scoped lists must never be reused across Maestro accounts. */
+const MAESTRO_SCOPED: Action[] = ["maestro", "maestro_clients", "maestro_brokers"];
 
 const TTL_MS = 60_000;
 const LS_PREFIX = "pp:contacts:cache:v1:";
@@ -20,6 +23,20 @@ const inflight = new Map<Action, Promise<any[]>>();
 
 function lsKey(action: Action) { return `${LS_PREFIX}${action}`; }
 
+function currentScope(): string | null {
+  try { return localStorage.getItem("pp:contacts:maestro_user_id"); } catch { return null; }
+}
+
+/** A Maestro-scoped entry is only valid for the currently linked Maestro id. */
+function scopeValid(action: Action, entry: Entry | null | undefined): boolean {
+  if (!entry) return false;
+  if (!MAESTRO_SCOPED.includes(action)) return true;
+  const scope = currentScope();
+  // Unknown scope, or an entry written before scoping existed → do not trust it.
+  if (!scope || !entry.scope) return false;
+  return String(entry.scope) === String(scope);
+}
+
 function loadFromDisk(action: Action): Entry | null {
   try {
     const raw = localStorage.getItem(lsKey(action));
@@ -27,6 +44,7 @@ function loadFromDisk(action: Action): Entry | null {
     const parsed = JSON.parse(raw) as Entry;
     if (!parsed || !Array.isArray(parsed.value)) return null;
     if (Date.now() - parsed.at > LS_TTL_MS) return null;
+    if (!scopeValid(action, parsed)) { localStorage.removeItem(lsKey(action)); return null; }
     return parsed;
   } catch { return null; }
 }
@@ -130,7 +148,7 @@ export async function getPpContacts(
   const now = Date.now();
   if (!opts.force) {
     const hit = cache.get(action);
-    if (hit && now - hit.at < TTL_MS) return hit.value;
+    if (hit && now - hit.at < TTL_MS && scopeValid(action, hit)) return hit.value;
     const pending = inflight.get(action);
     if (pending) return pending;
   }
@@ -142,7 +160,7 @@ export async function getPpContacts(
       : action === "maestro_brokers"
       ? await fetchMaestroList("brokers", opts.limit ?? 500)
       : await fetchNs(action, opts.limit ?? 500);
-    const entry: Entry = { at: Date.now(), value };
+    const entry: Entry = { at: Date.now(), value, scope: currentScope() };
     cache.set(action, entry);
     saveToDisk(action, entry);
     return value;
@@ -168,7 +186,8 @@ export function invalidatePpContacts(action?: Action) {
 /** Synchronous peek — returns a cached value if it exists, even if it's stale (< 24h). */
 export function peekPpContacts(action: Action): any[] | null {
   const hit = cache.get(action);
-  if (hit) return hit.value;
+  if (hit && scopeValid(action, hit)) return hit.value;
+  if (hit) cache.delete(action);
   const disk = loadFromDisk(action);
   if (disk) { cache.set(action, disk); return disk.value; }
   return null;

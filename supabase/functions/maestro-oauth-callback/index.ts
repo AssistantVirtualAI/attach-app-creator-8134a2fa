@@ -203,6 +203,27 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Auto-detect the *telecom* user id for this broker (separate namespace
+      // from the CRM/OAuth broker id) so call/SMS/recording sync works right away.
+      try {
+        if ((prevProf as any)?.id) {
+          await admin.from("planipret_profiles")
+            .update({ maestro_telecom_user_id: null, maestro_telecom_linked_at: null })
+            .eq("id", (prevProf as any).id);
+        }
+        const tel = await resolveTelecomUserId(admin, userId, {
+          candidate: resolvedBrokerId,
+          force: true,
+        });
+        telecomUserId = tel.id;
+        telecomMatchedBy = tel.matched_by;
+        if (!tel.id) {
+          console.warn("[maestro-oauth-callback] telecom_id_unresolved", JSON.stringify({ user_id: userId, error: tel.error }));
+        }
+      } catch (e) {
+        console.error("[maestro-oauth-callback] telecom resolve failed", (e as Error).message);
+      }
+
       // Consume the state row.
       await admin.from("planipret_maestro_oauth_states").delete().eq("state", state);
     } else {

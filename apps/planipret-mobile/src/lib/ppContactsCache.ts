@@ -190,3 +190,9 @@ export function prefetchPpContacts(
     void getPpContacts(action, { limit }).catch(() => {});
   }
 }
+
+// A Maestro (re)connect can switch the broker's Maestro user id — drop every
+// cached contacts list so the next read hits the new account.
+if (typeof window !== "undefined") {
+  window.addEventListener("maestro:connected", () => invalidatePpContacts());
+}

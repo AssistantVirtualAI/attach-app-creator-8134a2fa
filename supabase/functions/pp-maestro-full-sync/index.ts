@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
   if (!profile) return json({ ok: false, error: "broker_profile_not_found" }, 404);
 
   const telecomId = profile.maestro_telecom_user_id ? String(profile.maestro_telecom_user_id) : null;
-  const userId = profile.user_id ?? profile.id;
+  const userIds = [profile.user_id, profile.id].filter(Boolean).map(String) as string[];
 
   const cfg = await getMaestroTelecomConfig(admin);
   if (!isMaestroTelecomConfigured(cfg)) return json({ ok: false, error: "maestro_telecom_not_configured" }, 200);
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     let mq = admin
       .from("planipret_phone_messages")
       .select("id, maestro_synced, created_at")
-      .eq("user_id", userId)
+      .in("user_id", userIds)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     const { data: calls } = await admin
       .from("planipret_phone_calls")
       .select("id, maestro_call_id, maestro_synced, started_at")
-      .eq("user_id", userId)
+      .in("user_id", userIds)
       .gte("started_at", since)
       .order("started_at", { ascending: false })
       .limit(limit);

@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
   const cfg = await getMaestroConfig(admin);
   const auth = await telecomAuth(admin, userId ?? "", false);
   if (!cfg.url || !cfg.key || !auth.brokerId) {
-    return json({ success: false, error: !auth.brokerId ? "maestro_broker_id_missing" : "maestro_not_configured" });
+    return json({ success: false, error: !auth.brokerId ? "maestro_telecom_user_id_missing" : "maestro_not_configured" });
   }
 
   const res = await maestroFetch(cfg, {

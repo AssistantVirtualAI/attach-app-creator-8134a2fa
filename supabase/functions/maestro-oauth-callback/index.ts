@@ -14,7 +14,7 @@ import {
   isMaestroOAuthConfigured,
   persistTokenSet,
 } from "../_shared/maestro-oauth.ts";
-import { resolveMaestroIdForUser } from "../_shared/maestro-broker-directory.ts";
+import { resolveMaestroIdForUser, resolveTelecomUserId } from "../_shared/maestro-broker-directory.ts";
 
 const j = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -113,6 +113,8 @@ Deno.serve(async (req) => {
     // in planipret_integration_secrets so nothing is lost.
     let resolvedBrokerId: string | null = null;
     let resolvedBy: string | null = null;
+    let telecomUserId: string | null = null;
+    let telecomMatchedBy: string | null = null;
     if (userId) {
       const isMobile = !!storedCodeVerifier;
       await persistTokenSet(admin, userId, exch.data, isMobile);
@@ -203,6 +205,27 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Auto-detect the *telecom* user id for this broker (separate namespace
+      // from the CRM/OAuth broker id) so call/SMS/recording sync works right away.
+      try {
+        if ((prevProf as any)?.id) {
+          await admin.from("planipret_profiles")
+            .update({ maestro_telecom_user_id: null, maestro_telecom_linked_at: null })
+            .eq("id", (prevProf as any).id);
+        }
+        const tel = await resolveTelecomUserId(admin, userId, {
+          candidate: resolvedBrokerId,
+          force: true,
+        });
+        telecomUserId = tel.id;
+        telecomMatchedBy = tel.matched_by;
+        if (!tel.id) {
+          console.warn("[maestro-oauth-callback] telecom_id_unresolved", JSON.stringify({ user_id: userId, error: tel.error }));
+        }
+      } catch (e) {
+        console.error("[maestro-oauth-callback] telecom resolve failed", (e as Error).message);
+      }
+
       // Consume the state row.
       await admin.from("planipret_maestro_oauth_states").delete().eq("state", state);
     } else {
@@ -220,6 +243,8 @@ Deno.serve(async (req) => {
       expires_in: exch.data.expires_in ?? null,
       maestro_broker_id: resolvedBrokerId,
       matched_by: resolvedBy,
+      maestro_telecom_user_id: telecomUserId,
+      telecom_matched_by: telecomMatchedBy,
     });
   } catch (e) {
     console.error("[maestro-oauth-callback]", e);

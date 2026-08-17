@@ -18,6 +18,18 @@ import { resolveMaestroIdForUser } from "../_shared/maestro-broker-directory.ts"
 const j = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+function brokerIdFromAccessToken(accessToken: string): string | null {
+  const parts = accessToken.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+    const candidate = payload?.broker_id ?? payload?.maestro_broker_id ?? payload?.user_id ?? payload?.sub ?? null;
+    return candidate === null || candidate === undefined ? null : String(candidate).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 async function saveIntegrationState(
   admin: ReturnType<typeof createClient>,
   provider: string,
@@ -115,10 +127,24 @@ Deno.serve(async (req) => {
         ? String((prevProf as any).maestro_broker_id).trim()
         : null;
 
+      // A reconnect must never retain a broker id from the previous Maestro
+      // account while the fresh identity is being resolved.
+      if ((prevProf as any)?.id) {
+        await admin.from("planipret_profiles").update({ maestro_broker_id: null }).eq("id", (prevProf as any).id);
+      }
+
       // Authoritative: GET /user with the *freshly issued* access token.
       const me = await fetchMaestroUserProfile(env, exch.data.access_token);
       if (me) {
-        const mid = (me as any).id ?? (me as any).user?.id ?? (me as any).user_id ?? null;
+        const mid = (me as any).broker_id
+          ?? (me as any).maestro_broker_id
+          ?? (me as any).broker?.id
+          ?? (me as any).user?.broker_id
+          ?? (me as any).data?.broker_id
+          ?? (me as any).id
+          ?? (me as any).user?.id
+          ?? (me as any).user_id
+          ?? null;
         const email = String((me as any).email ?? (me as any).user?.email ?? "").toLowerCase().trim();
         const remoteName = [(me as any).first_name, (me as any).last_name].filter(Boolean).join(" ").trim();
         const patch: Record<string, unknown> = {};
@@ -154,6 +180,21 @@ Deno.serve(async (req) => {
               maestro_name: remoteName, local_name: localName, local_email: (prof as any)?.email ?? null,
             }));
           }
+        }
+      }
+
+
+      // Some production OAuth responses expose the authenticated broker only
+      // in the signed access-token claims while GET /user is unavailable.
+      if (!resolvedBrokerId) {
+        const tokenBrokerId = brokerIdFromAccessToken(exch.data.access_token);
+        if (tokenBrokerId) {
+          resolvedBrokerId = tokenBrokerId;
+          resolvedBy = "oauth_token_claim";
+          const pid = (prevProf as any)?.id ?? null;
+          const upd = admin.from("planipret_profiles").update({ maestro_broker_id: tokenBrokerId });
+          const { error: tokenUpErr } = pid ? await upd.eq("id", pid) : await upd.eq("user_id", userId);
+          if (tokenUpErr) console.error("[maestro-oauth-callback] token broker id patch failed", tokenUpErr.message);
         }
       }
 

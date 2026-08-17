@@ -182,8 +182,8 @@ export async function loadBrokerProfile(
   admin: SupabaseClient,
   userId: string,
   diag?: BrokerAuthDiag,
-): Promise<{ id: string; maestro_broker_id: string | null; extension: string | null; phone: string | null } | null> {
-  const cols = "id, user_id, maestro_broker_id, extension, phone";
+): Promise<{ id: string; maestro_broker_id: string | null; maestro_telecom_user_id: string | null; extension: string | null; phone: string | null } | null> {
+  const cols = "id, user_id, maestro_broker_id, maestro_telecom_user_id, extension, phone";
   // planipret_phone_calls.user_id may hold either auth.users.id or the profile id.
   const both = await admin.from("planipret_profiles").select(cols).or(`user_id.eq.${userId},id.eq.${userId}`).limit(2);
   const rows = (both.data ?? []) as any[];
@@ -235,7 +235,9 @@ export async function getBrokerAuth(
       diag.reason = "no_planipret_profile_matches_user_id_or_profile_id";
       console.warn(`[maestro.brokerId] no profile for ${userId} (searched planipret_profiles.user_id then .id)`);
     }
-    brokerId = profile?.maestro_broker_id ? String(profile.maestro_broker_id).trim() : null;
+    // CRM OAuth identity and Telecom Communications identity are different
+    // namespaces. Never send the CRM broker id to /telecom/api/v1.
+    brokerId = profile?.maestro_telecom_user_id ? String(profile.maestro_telecom_user_id).trim() : null;
     diag.stored_broker_id = brokerId;
 
     if (brokerId && !/^\d+$/.test(brokerId)) {

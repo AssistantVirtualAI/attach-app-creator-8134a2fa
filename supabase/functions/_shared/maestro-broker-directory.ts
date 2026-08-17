@@ -148,7 +148,7 @@ export function findByEmail(entries: BrokerDirectoryEntry[], email: string): Bro
 }
 
 /**
- * Resolve + persist `planipret_profiles.maestro_broker_id` from the broker's
+ * Resolve + persist `planipret_profiles.maestro_telecom_user_id` from the broker's
  * email (Microsoft email first, then account email). Falls back to extension
  * and phone matching against the same directory.
  */
@@ -161,12 +161,13 @@ export async function linkBrokerIdByEmail(
     extension?: string | null;
     phone?: string | null;
     maestro_broker_id?: string | null;
+    maestro_telecom_user_id?: string | null;
     full_name?: string | null;
   },
   opts: { force?: boolean } = {},
 ): Promise<{ ok: boolean; maestro_broker_id: string | null; matched_by: string | null; error?: string }> {
-  if (!opts.force && profile.maestro_broker_id && /^\d+$/.test(String(profile.maestro_broker_id).trim())) {
-    return { ok: true, maestro_broker_id: String(profile.maestro_broker_id).trim(), matched_by: "already_linked" };
+  if (!opts.force && profile.maestro_telecom_user_id && /^\d+$/.test(String(profile.maestro_telecom_user_id).trim())) {
+    return { ok: true, maestro_broker_id: String(profile.maestro_telecom_user_id).trim(), matched_by: "already_linked" };
   }
   const { entries, error } = await loadBrokerDirectory(admin);
   if (!entries.length) return { ok: false, maestro_broker_id: null, matched_by: null, error: error ?? "directory_unavailable" };
@@ -201,7 +202,7 @@ export async function linkBrokerIdByEmail(
 
   const { error: upErr } = await admin
     .from("planipret_profiles")
-    .update({ maestro_broker_id: hit.id })
+    .update({ maestro_telecom_user_id: hit.id, maestro_telecom_linked_at: new Date().toISOString() })
     .eq("id", profile.id);
   if (upErr) return { ok: false, maestro_broker_id: hit.id, matched_by: matchedBy, error: upErr.message };
 
@@ -217,7 +218,7 @@ export async function resolveMaestroIdForUser(
 ): Promise<{ maestro_broker_id: string | null; matched_by: string | null; error?: string }> {
   const { data } = await admin
     .from("planipret_profiles")
-    .select("id, user_id, email, ms365_email, extension, phone, full_name, maestro_broker_id")
+    .select("id, user_id, email, ms365_email, extension, phone, full_name, maestro_broker_id, maestro_telecom_user_id")
     .or(`user_id.eq.${userId},id.eq.${userId}`)
     .limit(1)
     .maybeSingle();

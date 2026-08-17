@@ -101,10 +101,11 @@ async function maestroActions(ctx: Ctx, action: string, payload: Record<string, 
 async function maestroUserId(ctx: Ctx): Promise<string | null> {
   const { data: prof } = await ctx.admin
     .from("planipret_profiles")
-    .select("id, maestro_broker_id, email, ms365_email, extension, phone, full_name")
+    .select("id, maestro_broker_id, maestro_telecom_user_id, email, ms365_email, extension, phone, full_name")
     .eq("id", ctx.profile.id)
     .maybeSingle();
-  let uid = prof?.maestro_broker_id ?? ctx.profile.maestro_broker_id ?? null;
+  // /telecom/api/v1 only accepts the TELECOM user id, never the CRM broker id.
+  let uid = prof?.maestro_telecom_user_id ?? null;
   if ((!uid || !/^\d+$/.test(String(uid).trim())) && prof) {
     try {
       const linked = await linkBrokerIdByEmail(ctx.admin, prof as any);
@@ -488,7 +489,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       const digits = query.replace(/[^\d+]/g, "");
       if (digits.length >= 7) {
         try {
-          const result = await maestroFetch(ctx, `/users/${uid}/clients/lookup-by-phone`, {
+          const result = await maestroFetch(ctx, `/users/${uid}/lookup-by-phone`, {
             method: "POST",
             body: JSON.stringify({ phone: digits }),
           });

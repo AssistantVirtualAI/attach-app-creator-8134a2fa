@@ -9,7 +9,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 type Action = "list" | "shared" | "directory" | "maestro" | "maestro_clients" | "maestro_brokers";
 const ALL_ACTIONS: Action[] = ["list", "shared", "directory", "maestro", "maestro_clients", "maestro_brokers"];
-type Entry = { at: number; value: any[] };
+type Entry = { at: number; value: any[]; scope?: string | null };
+
+/** Maestro-scoped lists must never be reused across Maestro accounts. */
+const MAESTRO_SCOPED: Action[] = ["maestro", "maestro_clients", "maestro_brokers"];
 
 const TTL_MS = 60_000;
 const LS_PREFIX = "pp:contacts:cache:v1:";

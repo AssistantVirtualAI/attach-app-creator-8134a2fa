@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   try {
-    const { message_id, force } = await req.json().catch(() => ({}));
+    const { message_id, force, correlation_id: bodyCorrelationId } = await req.json().catch(() => ({}));
     if (!message_id) return json({ success: false, error: "message_id_required" }, 400);
 
     const admin = adminClient();
@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
       step: "message_push",
       status: res.ok || res.status === 409 ? "success" : "error",
       duration_ms: Date.now() - t0,
-      correlation_id: msg.id,
+      correlation_id: String(bodyCorrelationId ?? (meta.correlation_id as string | undefined) ?? msg.id),
       entity_type: "message",
       entity_id: String(res.data?.id ?? res.data?.message_id ?? msg.ns_message_id ?? msg.id),
       endpoint: res.path,

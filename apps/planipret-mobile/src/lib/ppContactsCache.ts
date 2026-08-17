@@ -186,7 +186,8 @@ export function invalidatePpContacts(action?: Action) {
 /** Synchronous peek — returns a cached value if it exists, even if it's stale (< 24h). */
 export function peekPpContacts(action: Action): any[] | null {
   const hit = cache.get(action);
-  if (hit) return hit.value;
+  if (hit && scopeValid(action, hit)) return hit.value;
+  if (hit) cache.delete(action);
   const disk = loadFromDisk(action);
   if (disk) { cache.set(action, disk); return disk.value; }
   return null;

@@ -113,6 +113,8 @@ Deno.serve(async (req) => {
     // in planipret_integration_secrets so nothing is lost.
     let resolvedBrokerId: string | null = null;
     let resolvedBy: string | null = null;
+    let telecomUserId: string | null = null;
+    let telecomMatchedBy: string | null = null;
     if (userId) {
       const isMobile = !!storedCodeVerifier;
       await persistTokenSet(admin, userId, exch.data, isMobile);

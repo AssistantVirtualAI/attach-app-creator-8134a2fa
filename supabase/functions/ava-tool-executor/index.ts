@@ -1297,22 +1297,24 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       // Production Maestro: les résumés d'appels sont poussés sur /users/{id}/calls.
       const result = await maestroFetch(ctx, `/users/${uid}/calls`, {
         method: "POST",
+        // Telecom REST spec: POST /users/{id}/calls accepts provider_call_id,
+        // to_user_id, to_user_number, status, direction.
         body: JSON.stringify({
-          client_id: clientId,
+          provider_call_id: call.provider_call_id ?? call.ns_call_id ?? call.id,
+          to_user_id: clientId,
+          to_user_number: call.direction === "inbound" ? call.from_number : call.to_number,
+          status: "ended",
           direction: call.direction ?? "outbound",
-          from: call.from_number,
-          to: call.to_number,
-          summary: p.summary ?? "",
-          notes: noteBody,
-          sentiment: p.sentiment,
-          duration: call.duration_seconds,
-          duration_seconds: call.duration_seconds,
-          occurred_at: call.created_at,
-          started_at: call.created_at,
-          external_call_id: call.id,
-          recording_url: call.recording_url ?? undefined,
         }),
       });
+      // Notes + résumé IA se poussent via PUT /users/{id}/calls/{callId}.
+      const createdId = result?.id ?? result?.call_id ?? result?.data?.id ?? null;
+      if (createdId) {
+        await maestroFetch(ctx, `/users/${uid}/calls/${encodeURIComponent(String(createdId))}`, {
+          method: "PUT",
+          body: JSON.stringify({ status: "ended", notes: noteBody, ai_summary: p.summary ?? noteBody }),
+        }).catch(() => null);
+      }
       // Marque local pour éviter les doublons
       await ctx.admin.from("planipret_phone_calls").update({ maestro_pushed_at: new Date().toISOString() }).eq("id", call.id).then(() => null).catch(() => null);
       return { success: true, communication_id: result?.id, message: "Résumé poussé vers Maestro." };

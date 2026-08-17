@@ -122,8 +122,10 @@ Deno.serve(async (req) => {
       entity_id: String(res.data?.id ?? res.data?.message_id ?? msg.ns_message_id ?? msg.id),
       endpoint: res.path,
       http_status: res.status,
-      error_message: res.ok || res.status === 409 ? undefined : (res.data?.error ?? `maestro_${res.status}`),
-      payload: { direction: msg.direction, contact },
+      error_message: res.ok || res.status === 409
+        ? undefined
+        : `maestro_${res.status}: ${typeof res.data === "string" ? res.data.slice(0, 300) : JSON.stringify(res.data ?? {}).slice(0, 300)}`,
+      payload: { direction: msg.direction, contact, response: res.data ?? null },
     }).catch(() => {});
 
 

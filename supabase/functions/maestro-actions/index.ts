@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
           }
           const liveIdentity = await fetchMaestroUserProfile(getMaestroOAuthEnv(), tokenForIdentity);
           const telecomUserId = extractMaestroBrokerId(liveIdentity);
-          if (!/^\d+$/.test(telecomUserId)) {
+          if (!telecomUserId || !/^\d+$/.test(telecomUserId)) {
             return j({ success: false, contacts: [], error: "Impossible de confirmer l'identité du compte Maestro connecté." });
           }
           if (String(prof.maestro_broker_id ?? "").trim() !== telecomUserId) {
@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
           }
           const d: any = r.data;
           const raw = Array.isArray(d) ? d : (Array.isArray(d?.clients) ? d.clients : (Array.isArray(d?.data) ? d.data : []));
-          return j({ success: true, contacts: raw.map(normalizeContact), total: d?.total_count ?? d?.total ?? raw.length });
+          return j({ success: true, contacts: raw.map(normalizeContact), total: d?.total_count ?? d?.total ?? raw.length, maestro_user_id: telecomUserId });
         } catch (err: any) {
           console.error("maestro list_contacts error", err?.message);
           return j({ success: false, contacts: [], error: err?.message ?? "Erreur Maestro" });

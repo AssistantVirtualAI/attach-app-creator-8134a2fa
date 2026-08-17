@@ -58,6 +58,12 @@ export default function PBMaestroClients() {
   useEffect(() => { setTerm(search); }, [search]);
 
   useEffect(() => {
+    const refreshAfterReconnect = () => setReloadKey((key) => key + 1);
+    window.addEventListener("maestro:connected", refreshAfterReconnect);
+    return () => window.removeEventListener("maestro:connected", refreshAfterReconnect);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);

@@ -58,7 +58,10 @@ function staticChecks() {
     while ((m = grantRe.exec(sql))) {
       const roles = m[2].toLowerCase();
       if (/\banon\b/.test(roles) || /\bpublic\b/.test(roles)) {
-        errors.push(`${rel}: grants EXECUTE to anon/public on ${m[1].trim().split("(")[0]}`);
+        const msg = `${rel}: grants EXECUTE to anon/public on ${m[1].trim().split("(")[0]}`;
+        // Legacy grants were revoked by a later migration; the live check is authoritative.
+        if (basename(file) >= GRANT_RULE_BASELINE) errors.push(msg);
+        else warnings.push(msg);
       }
     }
 

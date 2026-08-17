@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getMaestroTelecomConfig, isMaestroTelecomConfigured, maestroTelecomFetch } from "../_shared/maestro-telecom.ts";
 import { linkBrokerIdByEmail, loadBrokerDirectory, findByEmail } from "../_shared/maestro-broker-directory.ts";
-import { getMaestroOAuthEnv, getUserMaestroAccessToken, fetchMaestroUserProfile } from "../_shared/maestro-oauth.ts";
+import { getMaestroOAuthEnv, getUserMaestroAccessToken, fetchMaestroUserProfile, extractMaestroBrokerId } from "../_shared/maestro-oauth.ts";
 
 
 async function getMaestroConfig(admin: any) {
@@ -163,13 +163,19 @@ Deno.serve(async (req) => {
             .maybeSingle();
           if (!prof) return j({ success: false, contacts: [], error: "Profil courtier introuvable." });
 
-          let telecomUserId = prof.maestro_broker_id ? String(prof.maestro_broker_id).trim() : "";
-          if (!/^\d+$/.test(telecomUserId)) {
-            const linked = await linkBrokerIdByEmail(admin, prof as any);
-            if (linked.ok && linked.maestro_broker_id) telecomUserId = linked.maestro_broker_id;
+          const tokenForIdentity = await getUserMaestroAccessToken(admin, callerId).catch(() => null);
+          if (!tokenForIdentity) {
+            return j({ success: false, contacts: [], error: "Reconnectez votre compte Maestro pour actualiser vos clients." });
           }
+          const liveIdentity = await fetchMaestroUserProfile(getMaestroOAuthEnv(), tokenForIdentity);
+          const telecomUserId = extractMaestroBrokerId(liveIdentity);
           if (!/^\d+$/.test(telecomUserId)) {
-            return j({ success: false, contacts: [], error: "Votre compte n'est pas encore lié à Maestro." });
+            return j({ success: false, contacts: [], error: "Impossible de confirmer l'identité du compte Maestro connecté." });
+          }
+          if (String(prof.maestro_broker_id ?? "").trim() !== telecomUserId) {
+            await admin.from("planipret_profiles")
+              .update({ maestro_broker_id: telecomUserId, maestro_connected: true })
+              .eq("id", prof.id);
           }
 
           const tCfg = await getMaestroTelecomConfig(admin);
@@ -297,7 +303,7 @@ Deno.serve(async (req) => {
         const token = await getUserMaestroAccessToken(admin, uid).catch(() => null);
         if (!token) return j({ success: false, error: "maestro_not_connected", code: "maestro_not_connected" });
         const me = await fetchMaestroUserProfile(env, token);
-        const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
+        const mid = extractMaestroBrokerId(me);
         if (!mid) return j({ success: false, error: "maestro_me_unavailable" });
         await admin.from("planipret_profiles")
           .update({ maestro_broker_id: String(mid), maestro_connected: true })
@@ -339,29 +345,23 @@ Deno.serve(async (req) => {
             .maybeSingle();
           telecomUserId = prof?.maestro_broker_id ? String(prof.maestro_broker_id).trim() : null;
           isAdmin = prof?.role === "admin";
-          // Not linked yet → resolve from the Maestro broker directory using
-          // the broker's Microsoft email, then extension / phone / full name.
-          if ((!telecomUserId || !/^\d+$/.test(telecomUserId)) && prof) {
-            // 1) Authoritative: the broker's own Maestro OAuth session.
-            try {
-              const tok = await getUserMaestroAccessToken(admin, callerId);
-              if (tok) {
-                const me = await fetchMaestroUserProfile(getMaestroOAuthEnv(), tok);
-                const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
-                if (mid && /^\d+$/.test(String(mid))) {
-                  telecomUserId = String(mid);
-                  linkInfo = { matched_by: "oauth_me" };
-                  await admin.from("planipret_profiles")
-                    .update({ maestro_broker_id: telecomUserId, maestro_connected: true })
-                    .eq("id", (prof as any).id);
-                }
+          // A broker's current OAuth identity is authoritative on every read.
+          // Never serve clients from an old persisted/directory-linked id.
+          if (prof && !isAdmin) {
+            const tok = await getUserMaestroAccessToken(admin, callerId).catch(() => null);
+            if (!tok) {
+              telecomUserId = null;
+              linkInfo = { matched_by: null, error: "maestro_oauth_required" };
+            } else {
+              const liveId = extractMaestroBrokerId(await fetchMaestroUserProfile(getMaestroOAuthEnv(), tok));
+              telecomUserId = liveId;
+              linkInfo = { matched_by: liveId ? "oauth_live" : null, error: liveId ? undefined : "maestro_identity_unavailable" };
+              if (liveId && String(prof.maestro_broker_id ?? "").trim() !== liveId) {
+                await admin.from("planipret_profiles")
+                  .update({ maestro_broker_id: liveId, maestro_connected: true })
+                  .eq("id", (prof as any).id);
               }
-            } catch { /* fall through to directory match */ }
-          }
-          if ((!telecomUserId || !/^\d+$/.test(telecomUserId)) && prof) {
-            const linked = await linkBrokerIdByEmail(admin, prof as any);
-            linkInfo = { matched_by: linked.matched_by, error: linked.error };
-            if (linked.ok && linked.maestro_broker_id) telecomUserId = linked.maestro_broker_id;
+            }
           }
         }
         const requested = payload.user_id !== undefined && payload.user_id !== null

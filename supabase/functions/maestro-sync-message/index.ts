@@ -81,19 +81,11 @@ Deno.serve(async (req) => {
       brokerId: auth.brokerId,
       idempotencyKey: msg.id,
       body: {
-        message_id: msg.ns_message_id ?? msg.id,
-        maestro_broker_id: auth.brokerId,
-        direction: msg.direction,
+        provider_message_id: msg.ns_message_id ?? msg.id,
         from_number: fromUser,
         to_number: toUser,
-        from_user_number: fromUser,
-        to_user_number: toUser,
-        user_number: brokerNumber ?? (msg.direction === "inbound" ? toUser : fromUser),
-        contact_number: contact,
-        body: msg.body ?? "",
         message: msg.body ?? "",
-        sent_at: msg.sent_at ?? msg.created_at,
-        channel: "sms",
+        direction: msg.direction,
       },
 
 

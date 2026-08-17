@@ -110,7 +110,9 @@ Deno.serve(async (req) => {
     await updateCallPipeline(admin, call_id, { step: "client_lookup", started: true, error: null });
     await pipelineLog(admin, { call_id, user_id: call.user_id, step: "client_lookup", status: "started" });
 
-    const auth = await telecomAuth(admin, call.user_id, true);
+    // Telecom writes require the machine API key. Broker OAuth is only for the
+    // CRM identity/directory endpoints and causes HTTP 500 on call creation.
+    const auth = await telecomAuth(admin, call.user_id, false);
 
     // ── STEP 1: client lookup (cache-first) ─────────────────────
     let maestroClientId = call.maestro_client_id ?? null;
@@ -206,10 +208,8 @@ Deno.serve(async (req) => {
     const answeredAt = metaString(metadata, "call-answer-datetime") ?? metaString(metadata, "answered_at") ?? startedAt;
     const endedAt = call.ended_at ?? metaString(metadata, "call-disconnect-datetime") ?? metaString(metadata, "ended_at") ?? startedAt;
 
-    const body = {
+    const body: Record<string, unknown> = {
       provider_call_id: call.ns_call_id ?? call.id,
-      to_user_number: call.direction === "inbound" ? normalizePhone(call.from_number) : normalizePhone(call.to_number),
-      from_user_number: call.direction === "inbound" ? normalizePhone(call.to_number) : normalizePhone(call.from_number),
       status: "ended",
       direction: call.direction,
       duration_seconds: call.duration_seconds ?? 0,
@@ -220,6 +220,12 @@ Deno.serve(async (req) => {
       ai_summary: null,
       broker_ext: profile?.ns_extension ?? null,
     };
+    if (call.direction === "inbound") {
+      body.from_user_number = normalizePhone(call.from_number);
+      body.to_user_id = Number(auth.brokerId);
+    } else {
+      body.to_user_number = normalizePhone(call.to_number);
+    }
 
 
     const t0 = Date.now();
@@ -378,7 +384,12 @@ Deno.serve(async (req) => {
     const failure = summarizeMaestroFailure(res.status, res.data);
     await updateCallPipeline(admin, call_id, { step: "error", error: `${failure.error}_${res.status}` });
     await setPipelineStep(admin, call_id, "cdr", "error", { status: res.status });
-    await pipelineLog(admin, { call_id, user_id: call.user_id, step: "cdr_sync", status: "error", duration_ms: ms, error_message: failure.error });
+    await pipelineLog(admin, {
+      call_id, user_id: call.user_id, step: "cdr_sync", status: "error", duration_ms: ms,
+      correlation_id: call.id, entity_type: "call", entity_id: call.ns_call_id ?? call.id,
+      endpoint: res.endpoint, http_status: res.status, error_message: failure.error,
+      payload: { broker_id: auth.brokerId, client_id: maestroClientId, response: res.data ?? null },
+    });
     await maestroAudit(admin, "cdr_failed", { call_id, status: res.status, error: failure.error, detail: failure.detail });
     await broadcastPipeline(admin, call.user_id, "pipeline_error", { call_id, step: "cdr_sync", error: `${failure.error} (${res.status})` });
     const retry = await scheduleCdrRetry(admin, {

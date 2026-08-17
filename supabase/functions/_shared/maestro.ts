@@ -357,22 +357,38 @@ export async function maestroFetch(cfg: MaestroConfig, opts: CallOpts) {
   // `?machine=1` is present — always append it.
   const suffix = opts.machine === false ? "" : `${opts.path.includes("?") ? "&" : "?"}machine=1`;
   const endpoint = `${cfg.url}${opts.path}${suffix}`;
-  const res = await fetch(endpoint, {
-    method: opts.method ?? "GET",
-    headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  const text = await res.text();
-  let data: any = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { raw: text };
+  const retryable = new Set([0, 408, 425, 429, 500, 502, 503, 504]);
+  let last = { ok: false, status: 0, data: null as any, endpoint };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(endpoint, {
+        method: opts.method ?? "GET",
+        headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+        signal: controller.signal,
+      });
+      const text = await res.text();
+      let data: any = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = { raw: text };
+      }
+      const raw = typeof data?.raw === "string" ? data.raw : "";
+      const contentType = res.headers.get("content-type") ?? "";
+      const htmlLogin = /text\/html/i.test(contentType) || /<html|<body|form-signin|\/login/i.test(raw);
+      last = { ok: res.ok && !htmlLogin, status: res.status, data: htmlLogin ? { error: "maestro_html_login_response", raw } : data, endpoint };
+    } catch (error) {
+      last = { ok: false, status: 0, data: { error: (error as Error)?.message ?? "network_error" }, endpoint };
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (last.ok || !retryable.has(last.status) || attempt === 2) return last;
+    await new Promise((resolve) => setTimeout(resolve, 400 * (2 ** attempt) + Math.floor(Math.random() * 250)));
   }
-  const raw = typeof data?.raw === "string" ? data.raw : "";
-  const contentType = res.headers.get("content-type") ?? "";
-  const htmlLogin = /text\/html/i.test(contentType) || /<html|<body|form-signin|\/login/i.test(raw);
-  return { ok: res.ok && !htmlLogin, status: res.status, data: htmlLogin ? { error: "maestro_html_login_response", raw } : data, endpoint };
+  return last;
 }
 
 /**

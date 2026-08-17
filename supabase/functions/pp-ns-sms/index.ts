@@ -617,13 +617,15 @@ Deno.serve(async (req) => {
         return jsonResponse({
           ok: true, via: "ns", result, message_id: messageId,
           from: fromNumber, to: destination, thread_id: resolvedThreadId,
+          correlation_id: correlationId,
           verification,
         });
 
       }
 
+      await logSmsStep("error", null);
+      console.error("[pp-ns-sms] NS send failed", { correlation_id: correlationId, status: res.status, error: nsError ?? lastText?.slice(0, 200) });
 
-      console.error("[pp-ns-sms] NS send failed", res.status, nsError ?? lastText?.slice(0, 200));
 
       // ---- PAS de repli Maestro -------------------------------------------
       // `POST /users/{id}/messages` (Maestro) ignore `from`/`from_number` et

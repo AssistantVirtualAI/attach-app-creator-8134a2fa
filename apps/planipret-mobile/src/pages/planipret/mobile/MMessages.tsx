@@ -251,6 +251,13 @@ const msgIsOut = (m: any, myExt: string) => {
  * (copie « orig » + écho « term »). On dédoublonne sur corps + fenêtre de 2 min,
  * en gardant la copie sortante.
  */
+/** Hash court et stable d'une chaîne (clé d'idempotence). */
+const hashText = (str: string) => {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  return h;
+};
+
 const dedupeMessages = (list: any[], myExt: string) => {
   const kept: any[] = [];
   for (const m of list) {
@@ -653,6 +660,27 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollBoxRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
+  const [visibleCount, setVisibleCount] = useState(40);
+  const [showJump, setShowJump] = useState(false);
+  const [newCount, setNewCount] = useState(0);
+  const visibleMessages = messages.slice(-visibleCount);
+  const loadOlder = () => {
+    const box = scrollBoxRef.current;
+    const prevHeight = box?.scrollHeight ?? 0;
+    setVisibleCount((n) => n + 40);
+    // Compensation de hauteur : le point de lecture reste stable.
+    requestAnimationFrame(() => {
+      if (!box) return;
+      box.scrollTop += box.scrollHeight - prevHeight;
+    });
+  };
+  const jumpToBottom = () => {
+    const box = scrollBoxRef.current;
+    if (box) box.scrollTop = box.scrollHeight;
+    atBottomRef.current = true;
+    setShowJump(false);
+    setNewCount(0);
+  };
   const inputRef = useRef<HTMLInputElement>(null);
   const autoSentRef = useRef(false);
 
@@ -680,8 +708,10 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
   useEffect(() => {
     const box = scrollBoxRef.current;
     if (!box) return;
-    if (!atBottomRef.current) return; // ne pas voler le scroll si l'utilisateur lit plus haut
+    if (!atBottomRef.current) { setNewCount((n) => n + 1); setShowJump(true); return; } // ne pas voler le scroll si l'utilisateur lit plus haut
     box.scrollTop = box.scrollHeight;
+    setNewCount(0);
+    setShowJump(false);
   }, [messages.length]);
   useEffect(() => {
     const focus = () => inputRef.current?.focus({ preventScroll: true });
@@ -706,7 +736,9 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
     setMessages((prev) => dedupeMessages([...prev, optimistic], myExt));
     setText("");
     try {
-      const payload = { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) };
+      // Clé d'idempotence stable : survit au retry, au double tap et au refresh.
+      const idempotencyKey = optimistic.id.replace("tmp-", "sms-") + "-" + Math.abs(hashText(`${number}|${body}`)).toString(36);
+      const payload = { action: "send", to: number, message: body, idempotency_key: idempotencyKey, ...(currentThreadId ? { thread_id: currentThreadId } : {}) };
       console.info("[pp-ns-sms] send →", { to: number, len: body.length, thread_id: currentThreadId ?? null });
       // Retry automatique avec backoff exponentiel (2s → 6s → 18s).
       const d: any = await retryWithBackoff(async () => {
@@ -806,7 +838,19 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
             {error}
           </div>
         ) : (
-          messages.map((m, i) => {
+          <>
+          {messages.length > visibleCount && (
+            <div className="flex justify-center pb-2">
+              <button
+                onClick={loadOlder}
+                className="text-[11px] px-3 py-1.5 rounded-full"
+                style={{ background: "var(--pp-bg-surface)", color: "var(--pp-text-secondary)", border: "1px solid var(--pp-bg-border)" }}
+              >
+                Charger les messages plus anciens
+              </button>
+            </div>
+          )}
+          {visibleMessages.map((m, i) => {
             const out = msgIsOut(m, myExt);
             const body = msgBody(m);
             const prev = i > 0 ? messages[i - 1] : null;
@@ -990,10 +1034,21 @@ function TeamChat({ profile }: { profile: any }) {
                 </div>
               </div>
             );
-          })
+          })}
+          </>
         )}
         <div ref={bottomRef} />
       </div>
+
+      {showJump && (
+        <button
+          onClick={jumpToBottom}
+          className="absolute right-4 bottom-24 z-20 px-3 py-2 rounded-full text-xs font-semibold shadow-lg flex items-center gap-1.5"
+          style={{ background: "var(--pp-brand-accent)", color: "#fff" }}
+        >
+          ↓ {newCount > 0 ? `${newCount} nouveau${newCount > 1 ? "x" : ""}` : "Revenir en bas"}
+        </button>
+      )}
       <Composer text={text} setText={setText} onSend={send} sending={sending} placeholder={t("messages.teamPlaceholder")} />
 
       <AvaSummarizeSheet

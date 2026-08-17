@@ -10154,6 +10154,7 @@ export type Database = {
           direction: string
           from_number: string | null
           id: string
+          idempotency_key: string | null
           maestro_synced: boolean
           media_urls: Json
           metadata: Json
@@ -10173,6 +10174,7 @@ export type Database = {
           direction: string
           from_number?: string | null
           id?: string
+          idempotency_key?: string | null
           maestro_synced?: boolean
           media_urls?: Json
           metadata?: Json
@@ -10192,6 +10194,7 @@ export type Database = {
           direction?: string
           from_number?: string | null
           id?: string
+          idempotency_key?: string | null
           maestro_synced?: boolean
           media_urls?: Json
           metadata?: Json

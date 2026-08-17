@@ -634,7 +634,7 @@ Deno.serve(async (req) => {
       // avec un mauvais afficheur.
 
       return jsonResponse(
-        { ok: false, error: nsError ?? `Envoi SMS refusé par le PBX (${res.status}) — le message n'a pas été envoyé. Vérifiez que le DID ${fromNumber} est bien attribué à votre extension.`, status: res.status, body: lastText, from: fromNumber, to: destination, endpoint: path },
+        { ok: false, error: nsError ?? `Envoi SMS refusé par le PBX (${res.status}) — le message n'a pas été envoyé. Vérifiez que le DID ${fromNumber} est bien attribué à votre extension.`, status: res.status, body: lastText, from: fromNumber, to: destination, endpoint: path, correlation_id: correlationId },
         200,
       );
 

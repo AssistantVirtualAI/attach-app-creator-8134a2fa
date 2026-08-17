@@ -99,12 +99,19 @@ async function maestroActions(ctx: Ctx, action: string, payload: Record<string, 
  * when the profile has never been matched.
  */
 async function maestroUserId(ctx: Ctx): Promise<string | null> {
+  // /telecom/api/v1 only accepts the TELECOM user id, never the CRM broker id.
+  try {
+    const res = await resolveTelecomUserId(ctx.admin, ctx.userId ?? ctx.profile.id, {
+      candidate: (ctx.profile as any)?.maestro_broker_id ?? null,
+    });
+    if (res.id && /^\d+$/.test(res.id)) return res.id;
+  } catch { /* noop */ }
+
   const { data: prof } = await ctx.admin
     .from("planipret_profiles")
     .select("id, maestro_broker_id, maestro_telecom_user_id, email, ms365_email, extension, phone, full_name")
     .eq("id", ctx.profile.id)
     .maybeSingle();
-  // /telecom/api/v1 only accepts the TELECOM user id, never the CRM broker id.
   let uid = prof?.maestro_telecom_user_id ?? null;
   if ((!uid || !/^\d+$/.test(String(uid).trim())) && prof) {
     try {

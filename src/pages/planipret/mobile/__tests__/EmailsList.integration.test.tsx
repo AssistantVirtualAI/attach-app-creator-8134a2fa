@@ -16,6 +16,13 @@ vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: { invoke: (fn: string, opts: any) => invokeMock(fn, opts) },
     from: () => ({ select: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
+    auth: {
+      getSession: () => Promise.resolve({ data: { session: null } }),
+      getUser: () => Promise.resolve({ data: { user: null } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+    },
+    channel: () => ({ on: () => ({ subscribe: () => ({}) }), subscribe: () => ({}) }),
+    removeChannel: () => {},
   },
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));

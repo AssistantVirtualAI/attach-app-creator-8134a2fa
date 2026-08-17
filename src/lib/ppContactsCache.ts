@@ -115,7 +115,7 @@ export async function getPpContacts(
     const entry: Entry = { at: Date.now(), value: result.value, maestroUserId: result.maestroUserId };
     cache.set(action, entry);
     saveToDisk(action, entry);
-    return value;
+    return result.value;
   })();
   inflight.set(action, p);
   try {

@@ -73,9 +73,34 @@ Deno.serve(async (req) => {
     };
   }
 
+  // ── 1b. Optional minimal write probes (isolates payload vs server errors) ──
+  if (body?.write_probe === true) {
+    const stamp = Date.now();
+    const callProbe = await maestroTelecomFetch(cfg, `/users/${me}/calls`, {
+      method: "POST",
+      maxAttempts: 1,
+      body: { provider_call_id: `probe-${stamp}`, status: "dialing", direction: "outbound", to_user_number: "+15145550123" },
+    });
+    const msgProbe = await maestroTelecomFetch(cfg, `/users/${me}/messages`, {
+      method: "POST",
+      maxAttempts: 1,
+      body: { to_user_number: "+15145550123", message: `probe ${stamp}` },
+    });
+    return json({
+      ok: true,
+      broker: { email: profile.email, crm_id: profile.maestro_broker_id, telecom_id: telecomId },
+      endpoints,
+      write_probe: {
+        call: { status: callProbe.status, ok: callProbe.ok, data: callProbe.data, error: callProbe.error ?? null },
+        message: { status: msgProbe.status, ok: msgProbe.ok, data: msgProbe.data, error: msgProbe.error ?? null },
+      },
+    });
+  }
+
   if (probeOnly) {
     return json({ ok: true, broker: { email: profile.email, crm_id: profile.maestro_broker_id, telecom_id: telecomId }, endpoints });
   }
+
 
   const invoke = async (fn: string, payload: Record<string, unknown>) => {
     try {

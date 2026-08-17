@@ -13,6 +13,7 @@ import {
   isMaestroOAuthConfigured,
   persistTokenSet,
 } from "../_shared/maestro-oauth.ts";
+import { resolveMaestroIdForUser } from "../_shared/maestro-broker-directory.ts";
 
 const j = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -183,6 +184,8 @@ Deno.serve(async (req) => {
       user_bound: !!userId,
       has_refresh: !!exch.data.refresh_token,
       expires_in: exch.data.expires_in ?? null,
+      maestro_broker_id: resolvedBrokerId,
+      matched_by: resolvedBy,
     });
   } catch (e) {
     console.error("[maestro-oauth-callback]", e);

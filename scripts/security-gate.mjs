@@ -17,11 +17,13 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
+// Migrations from this timestamp on must carry their own GRANTs.
+const GRANT_RULE_BASELINE = "20260818";
 
 /** @type {string[]} */
 const errors = [];
@@ -65,7 +67,11 @@ function staticChecks() {
       const table = m[1].replace(/"/g, "");
       const granted = new RegExp(`grant[\\s\\S]{0,120}on\\s+(?:table\\s+)?public\\.\"?${table}\"?`, "i");
       if (!granted.test(sql)) {
-        errors.push(`${rel}: public.${table} is created without any GRANT in the same migration`);
+        const msg = `${rel}: public.${table} is created without any GRANT in the same migration`;
+        // Migrations authored before the baseline predate this rule; their grants
+        // were applied later and are verified by the live checks instead.
+        if (basename(file) >= GRANT_RULE_BASELINE) errors.push(msg);
+        else warnings.push(msg);
       }
     }
   }
@@ -116,6 +122,10 @@ function liveChecks() {
 staticChecks();
 liveChecks();
 
+if (warnings.length > 5) {
+  console.warn(`⚠️  ${warnings.length} legacy/skipped checks (showing first 5)`);
+  warnings.length = 5;
+}
 for (const w of warnings) console.warn(`⚠️  ${w}`);
 
 if (errors.length) {

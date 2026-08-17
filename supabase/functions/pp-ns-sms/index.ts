@@ -567,16 +567,18 @@ Deno.serve(async (req) => {
           ?? result?.messagesession
           ?? sessionId;
         const messageId = await logMessage(resolvedThreadId, result?.id ?? result?.message_id ?? result?.["message-id"]);
+        await logSmsStep("success", messageId);
         // Synchronisation Maestro : on NE renvoie PAS le SMS via Maestro
         // (mauvais afficheur) — on pousse seulement l'enregistrement pour que
         // la conversation apparaisse dans Maestro avec le vrai DID NS.
         if (messageId) {
           try {
-            await supabase.functions.invoke("maestro-sync-message", { body: { message_id: messageId } });
+            await supabase.functions.invoke("maestro-sync-message", { body: { message_id: messageId, correlation_id: correlationId } });
           } catch (syncErr) {
             console.warn("[pp-ns-sms] maestro sync failed (non-fatal):", syncErr);
           }
         }
+
 
         // ---- Vérification post-envoi ---------------------------------------
         // On relit la ligne réellement persistée pour confirmer (a) qu'elle est

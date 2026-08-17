@@ -246,6 +246,28 @@ const msgIsOut = (m: any, myExt: string) => {
   return fromStr === myExt || fromStr.startsWith(`${myExt}@`);
 };
 
+/**
+ * NetSapiens renvoie parfois deux enregistrements pour un même SMS envoyé
+ * (copie « orig » + écho « term »). On dédoublonne sur corps + fenêtre de 2 min,
+ * en gardant la copie sortante.
+ */
+const dedupeMessages = (list: any[], myExt: string) => {
+  const kept: any[] = [];
+  for (const m of list) {
+    const body = String(msgBody(m) ?? "").trim();
+    const ts = +new Date(msgTime(m));
+    const idx = kept.findIndex((k) => {
+      const kb = String(msgBody(k) ?? "").trim();
+      if (!kb || kb !== body) return false;
+      return Math.abs(+new Date(msgTime(k)) - ts) < 120_000;
+    });
+    if (idx === -1) { kept.push(m); continue; }
+    // conserve la version sortante si l'une des deux l'est
+    if (!msgIsOut(kept[idx], myExt) && msgIsOut(m, myExt)) kept[idx] = m;
+  }
+  return kept;
+};
+
 type SmsRecipient = {
   id: string;
   name: string;
@@ -629,6 +651,8 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
   const [error, setError] = useState<string | null>(null);
   const [currentThreadId, setCurrentThreadId] = useState<string>(thId);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollBoxRef = useRef<HTMLDivElement>(null);
+  const atBottomRef = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const autoSentRef = useRef(false);
 
@@ -643,7 +667,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       if (err) throw err;
       const list: NsMessage[] = (data as any)?.messages ?? [];
       list.sort((a, b) => +new Date(msgTime(a)) - +new Date(msgTime(b)));
-      setMessages(list);
+      setMessages(dedupeMessages(list, myExt));
     } catch (e: any) {
       console.error("[pp-ns-sms] messages", e);
       setError(e?.message ?? t("messages.sendFailed"));
@@ -653,7 +677,12 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
   };
 
   useEffect(() => { loadMessages(); /* eslint-disable-next-line */ }, [currentThreadId]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages.length]);
+  useEffect(() => {
+    const box = scrollBoxRef.current;
+    if (!box) return;
+    if (!atBottomRef.current) return; // ne pas voler le scroll si l'utilisateur lit plus haut
+    box.scrollTop = box.scrollHeight;
+  }, [messages.length]);
   useEffect(() => {
     const focus = () => inputRef.current?.focus({ preventScroll: true });
     const raf = window.requestAnimationFrame(focus);
@@ -673,7 +702,8 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       body,
       timestamp: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, optimistic]);
+    atBottomRef.current = true;
+    setMessages((prev) => dedupeMessages([...prev, optimistic], myExt));
     setText("");
     try {
       const payload = { action: "send", to: number, message: body, ...(currentThreadId ? { thread_id: currentThreadId } : {}) };

@@ -154,6 +154,9 @@ describe("EmailsList (mobile inbox)", () => {
   });
 
   it("downloads an attachment ≤3 MB via a Blob URL", async () => {
+    // jsdom does not always implement the Blob URL APIs — stub them before spying.
+    if (typeof URL.createObjectURL !== "function") (URL as any).createObjectURL = () => "";
+    if (typeof URL.revokeObjectURL !== "function") (URL as any).revokeObjectURL = () => {};
     const createSpy = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock-url");
     const revokeSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});

@@ -1035,8 +1035,7 @@ function TeamChat({ profile }: { profile: any }) {
                 </div>
               </div>
             );
-          })}
-          </>
+          })
         )}
         <div ref={bottomRef} />
       </div>

@@ -62,6 +62,8 @@ export default function MaestroCallback() {
           return;
         }
         completedCodes.add(code);
+        try { window.dispatchEvent(new Event("maestro:connected")); } catch { /* ignore */ }
+        try { localStorage.setItem("pp_maestro_just_connected", String(Date.now())); } catch { /* ignore */ }
         setStatus("ok");
         setMessage("Compte Maestro connecté avec succès. Vous pouvez fermer cet onglet.");
       } catch (e: any) {

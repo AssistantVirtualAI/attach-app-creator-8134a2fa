@@ -231,26 +231,26 @@ Deno.serve(async (req) => {
           `matched_by=${diag?.matched_by ?? "none"} stored=${diag?.stored_broker_id ?? "-"} ` +
           `sip_probe=${diag?.sip_probe_result ?? "-"} cooldown=${diag?.cooldown_active ?? false}`,
       );
-      await setPipelineStep(admin, call_id, "cdr", "error", { reason: "maestro_broker_id_missing", diag });
+      await setPipelineStep(admin, call_id, "cdr", "error", { reason: "maestro_telecom_user_id_missing", diag });
       await pipelineLog(admin, {
         call_id,
         user_id: call.user_id,
         step: "cdr",
         status: "error",
-        error_message: "maestro_broker_id_missing",
+        error_message: "maestro_telecom_user_id_missing",
         payload: { diag },
       });
       const retry = await scheduleCdrRetry(admin, {
         call_id,
         user_id: call.user_id,
-        reason: "maestro_broker_id_missing",
-        error: diag?.reason ?? "maestro_broker_id_missing",
+        reason: "maestro_telecom_user_id_missing",
+        error: diag?.reason ?? "maestro_telecom_user_id_missing",
         permanent: true,
       });
       return json({
         success: false,
-        error: "maestro_broker_id_missing",
-        hint: "Set maestro_broker_id (numeric Telecom user id, e.g. 67) via Admin → Telecom Mapping.",
+        error: "maestro_telecom_user_id_missing",
+        hint: "Reconnect the broker's Telecom identity so the numeric Telecom user ID is linked.",
         permanent: true,
         diag,
         retry,

@@ -73,11 +73,11 @@ async function seedIds(admin: SupabaseClient): Promise<string[]> {
   try {
     const { data } = await admin
       .from("planipret_profiles")
-      .select("maestro_broker_id")
-      .not("maestro_broker_id", "is", null)
+      .select("maestro_telecom_user_id")
+      .not("maestro_telecom_user_id", "is", null)
       .limit(25);
     for (const r of data ?? []) {
-      const v = String((r as any).maestro_broker_id ?? "").trim();
+      const v = String((r as any).maestro_telecom_user_id ?? "").trim();
       if (/^\d+$/.test(v) && !out.includes(v)) out.push(v);
     }
   } catch { /* ignore */ }

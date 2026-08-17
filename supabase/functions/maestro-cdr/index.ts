@@ -208,17 +208,12 @@ Deno.serve(async (req) => {
     const answeredAt = metaString(metadata, "call-answer-datetime") ?? metaString(metadata, "answered_at") ?? startedAt;
     const endedAt = call.ended_at ?? metaString(metadata, "call-disconnect-datetime") ?? metaString(metadata, "ended_at") ?? startedAt;
 
+    // Keep creation payload to Maestro's documented minimum. Completion data,
+    // summary and notes are sent afterward with PUT /calls/{id}.
     const body: Record<string, unknown> = {
       provider_call_id: call.ns_call_id ?? call.id,
-      status: "ended",
+      status: "dialing",
       direction: call.direction,
-      duration_seconds: call.duration_seconds ?? 0,
-      initiated_at: startedAt,
-      answered_at: answeredAt,
-      ended_at: endedAt,
-      notes: null,
-      ai_summary: null,
-      broker_ext: profile?.ns_extension ?? null,
     };
     if (call.direction === "inbound") {
       body.from_user_number = normalizePhone(call.from_number);

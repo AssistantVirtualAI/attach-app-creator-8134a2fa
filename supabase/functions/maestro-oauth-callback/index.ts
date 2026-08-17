@@ -243,6 +243,8 @@ Deno.serve(async (req) => {
       expires_in: exch.data.expires_in ?? null,
       maestro_broker_id: resolvedBrokerId,
       matched_by: resolvedBy,
+      maestro_telecom_user_id: telecomUserId,
+      telecom_matched_by: telecomMatchedBy,
     });
   } catch (e) {
     console.error("[maestro-oauth-callback]", e);

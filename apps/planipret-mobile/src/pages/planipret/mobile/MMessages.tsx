@@ -26,6 +26,7 @@ import EmailBodyFrame from "@/components/planipret/mobile/EmailBodyFrame";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
 import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365ConnectionNotice";
 import { useMs365Status } from "@/hooks/useMs365Status";
+import { dedupeSmsMessages } from "@/lib/planipret/smsDedupe";
 
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "history" | "roster";
@@ -246,33 +247,11 @@ const msgIsOut = (m: any, myExt: string) => {
   return fromStr === myExt || fromStr.startsWith(`${myExt}@`);
 };
 
-/**
- * NetSapiens renvoie parfois deux enregistrements pour un même SMS envoyé
- * (copie « orig » + écho « term »). On dédoublonne sur corps + fenêtre de 2 min,
- * en gardant la copie sortante.
- */
 /** Hash court et stable d'une chaîne (clé d'idempotence). */
 const hashText = (str: string) => {
   let h = 0;
   for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
   return h;
-};
-
-const dedupeMessages = (list: any[], myExt: string) => {
-  const kept: any[] = [];
-  for (const m of list) {
-    const body = String(msgBody(m) ?? "").trim();
-    const ts = +new Date(msgTime(m));
-    const idx = kept.findIndex((k) => {
-      const kb = String(msgBody(k) ?? "").trim();
-      if (!kb || kb !== body) return false;
-      return Math.abs(+new Date(msgTime(k)) - ts) < 120_000;
-    });
-    if (idx === -1) { kept.push(m); continue; }
-    // conserve la version sortante si l'une des deux l'est
-    if (!msgIsOut(kept[idx], myExt) && msgIsOut(m, myExt)) kept[idx] = m;
-  }
-  return kept;
 };
 
 type SmsRecipient = {
@@ -695,7 +674,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       if (err) throw err;
       const list: NsMessage[] = (data as any)?.messages ?? [];
       list.sort((a, b) => +new Date(msgTime(a)) - +new Date(msgTime(b)));
-      setMessages(dedupeMessages(list, myExt));
+      setMessages(dedupeSmsMessages(list, myExt));
     } catch (e: any) {
       console.error("[pp-ns-sms] messages", e);
       setError(e?.message ?? t("messages.sendFailed"));
@@ -733,7 +712,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       timestamp: new Date().toISOString(),
     };
     atBottomRef.current = true;
-    setMessages((prev) => dedupeMessages([...prev, optimistic], myExt));
+    setMessages((prev) => dedupeSmsMessages([...prev, optimistic], myExt));
     setText("");
     try {
       // Clé d'idempotence stable : survit au retry, au double tap et au refresh.

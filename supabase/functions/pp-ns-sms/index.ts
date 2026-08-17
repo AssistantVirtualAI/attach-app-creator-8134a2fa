@@ -148,6 +148,42 @@ function newMessageSessionId() {
 }
 
 const digitsOnly = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-10);
+const normalizeMessageBody = (v: unknown) => String(v ?? "")
+  .normalize("NFKC")
+  .replace(/[\u00a0\u2000-\u200d\u202f\u2060\ufeff]/g, " ")
+  .replace(/\s+/g, " ")
+  .trim();
+
+const messageDirection = (m: any) => {
+  const raw = String(m.direction ?? "").toLowerCase();
+  if (["outbound", "out", "sent", "orig"].includes(raw)) return "out";
+  if (["inbound", "in", "received", "term"].includes(raw)) return "in";
+  return "unknown";
+};
+
+const messageTimestamp = (m: any) => {
+  const raw = m.timestamp ?? m.created_at ?? m.sent_at ?? m["message-datetime"];
+  if (!raw) return Number.NaN;
+  return new Date(typeof raw === "string" && !raw.includes("T") ? `${raw.replace(" ", "T")}Z` : raw).getTime();
+};
+
+function dedupeMergedMessages(messages: any[]) {
+  const kept: any[] = [];
+  for (const message of messages) {
+    const body = normalizeMessageBody(message.body ?? message.message ?? message.text ?? message["message-text"]);
+    const timestamp = messageTimestamp(message);
+    const index = kept.findIndex((candidate) => {
+      if (!body || normalizeMessageBody(candidate.body ?? candidate.message ?? candidate.text ?? candidate["message-text"]) !== body) return false;
+      const candidateTimestamp = messageTimestamp(candidate);
+      if (!Number.isFinite(timestamp) || !Number.isFinite(candidateTimestamp) || Math.abs(timestamp - candidateTimestamp) >= 5 * 60_000) return false;
+      const differentSources = candidate.source === "local" || message.source === "local";
+      return differentSources || messageDirection(candidate) !== messageDirection(message);
+    });
+    if (index === -1) kept.push(message);
+    else if (message.source === "local" && messageDirection(message) === "out") kept[index] = message;
+  }
+  return kept;
+}
 
 /** Peer number of a locally logged message row. */
 function localPeer(row: any): string {
@@ -325,7 +361,7 @@ Deno.serve(async (req) => {
             source: "local",
           }))
           .filter((m: any) => !seen.has(`${String(m.text).trim()}|${String(m.timestamp).slice(0, 16)}`));
-        messages = [...messages, ...merged].sort(
+        messages = dedupeMergedMessages([...messages, ...merged]).sort(
           (a: any, b: any) => +new Date(a.timestamp ?? a.created_at ?? 0) - +new Date(b.timestamp ?? b.created_at ?? 0),
         );
       } catch (e) {

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "postbuild": "node scripts/verify-sip-bundle.mjs",
+    "postbuild": "node scripts/verify-sip-bundle.mjs && node scripts/security-gate.mjs",
+    "security:gate": "node scripts/security-gate.mjs",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview"

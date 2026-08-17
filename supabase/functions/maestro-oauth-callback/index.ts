@@ -121,10 +121,22 @@ Deno.serve(async (req) => {
         const email = String((me as any).email ?? (me as any).user?.email ?? "").toLowerCase().trim();
         const remoteName = [(me as any).first_name, (me as any).last_name].filter(Boolean).join(" ").trim();
         const patch: Record<string, unknown> = {};
-        if (mid) patch.maestro_broker_id = String(mid);
+        if (mid) {
+          resolvedBrokerId = String(mid).trim();
+          resolvedBy = "oauth_user_endpoint";
+          patch.maestro_broker_id = resolvedBrokerId;
+        }
         if (email) patch.maestro_email = email;
         if (Object.keys(patch).length) {
-          await admin.from("planipret_profiles").update(patch).eq("user_id", userId);
+          const pid = (prevProf as any)?.id ?? null;
+          const upd = admin.from("planipret_profiles").update(patch);
+          const { error: upErr } = pid ? await upd.eq("id", pid) : await upd.eq("user_id", userId);
+          if (upErr) console.error("[maestro-oauth-callback] profile patch failed", upErr.message);
+        }
+        if (previousId && resolvedBrokerId && previousId !== resolvedBrokerId) {
+          console.warn("[maestro-oauth-callback] maestro_broker_id_changed", JSON.stringify({
+            user_id: userId, previous: previousId, current: resolvedBrokerId,
+          }));
         }
         // Names are intentionally NOT copied: Maestro's first_name/last_name can be
         // stale on shared/test accounts. Log a mismatch so it can be fixed upstream.

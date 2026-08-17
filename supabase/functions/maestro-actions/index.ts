@@ -473,7 +473,7 @@ Deno.serve(async (req) => {
         if (refresh) cacheInvalidate(`${action}:${telecomUserId}:`);
         cacheSet(cacheKey, response);
 
-        return j({ ...response, cached: false });
+        return j({ ...response, maestro_user_id: telecomUserId, cached: false });
 
       }
       case "test": {

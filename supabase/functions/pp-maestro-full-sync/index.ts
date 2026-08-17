@@ -91,55 +91,67 @@ Deno.serve(async (req) => {
     }
   };
 
-  // ── 2. SMS backfill ───────────────────────────────────────────────
-  let mq = admin
-    .from("planipret_phone_messages")
-    .select("id, maestro_synced, created_at")
-    .eq("user_id", userId)
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (!force) mq = mq.eq("maestro_synced", false);
-  const { data: msgs } = await mq;
-  const messages: any[] = [];
-  for (const m of msgs ?? []) {
-    const r = await invoke("maestro-sync-message", { message_id: (m as any).id, force: true });
-    messages.push({ id: (m as any).id, success: r.success, status: r.status, error: (r.data as any)?.error ?? null });
+  const runBackfill = async () => {
+    // ── 2. SMS backfill ───────────────────────────────────────────────
+    let mq = admin
+      .from("planipret_phone_messages")
+      .select("id, maestro_synced, created_at")
+      .eq("user_id", userId)
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (!force) mq = mq.eq("maestro_synced", false);
+    const { data: msgs } = await mq;
+    const messages: any[] = [];
+    for (const m of msgs ?? []) {
+      const r = await invoke("maestro-sync-message", { message_id: (m as any).id, force: true });
+      messages.push({ id: (m as any).id, success: r.success, status: r.status, error: (r.data as any)?.error ?? null });
+    }
+
+    // ── 3. Calls / CDR backfill ───────────────────────────────────────
+    const { data: calls } = await admin
+      .from("planipret_phone_calls")
+      .select("id, maestro_call_id, maestro_synced, started_at")
+      .eq("user_id", userId)
+      .gte("started_at", since)
+      .order("started_at", { ascending: false })
+      .limit(limit);
+    const pending = (calls ?? []).filter((c: any) => force || !c.maestro_call_id || !c.maestro_synced);
+    const callResults: any[] = [];
+    for (const c of pending) {
+      const r = await invoke("maestro-sync-call", { call_id: (c as any).id, force: true });
+      callResults.push({ id: (c as any).id, success: r.success, status: r.status, error: (r.data as any)?.error ?? null });
+    }
+
+    // ── 4. Media poll (recordings + transcriptions) ───────────────────
+    const media = await invoke("maestro-media-poll", { limit: 25, max_age_hours: days * 24 });
+
+    return {
+      messages: {
+        processed: messages.length,
+        succeeded: messages.filter((m) => m.success).length,
+        results: messages.slice(0, 20),
+      },
+      calls: {
+        scanned: calls?.length ?? 0,
+        processed: callResults.length,
+        succeeded: callResults.filter((c) => c.success).length,
+        results: callResults.slice(0, 20),
+      },
+      media: media.data,
+    };
+  };
+
+  const broker = { email: profile.email, crm_id: profile.maestro_broker_id, telecom_id: telecomId };
+
+  if (body?.wait === true) {
+    const out = await runBackfill();
+    return json({ ok: true, broker, endpoints, ...out });
   }
 
-  // ── 3. Calls / CDR backfill ───────────────────────────────────────
-  const { data: calls } = await admin
-    .from("planipret_phone_calls")
-    .select("id, maestro_call_id, maestro_synced, started_at")
-    .eq("user_id", userId)
-    .gte("started_at", since)
-    .order("started_at", { ascending: false })
-    .limit(limit);
-  const pending = (calls ?? []).filter((c: any) => force || !c.maestro_call_id || !c.maestro_synced);
-  const callResults: any[] = [];
-  for (const c of pending) {
-    const r = await invoke("maestro-sync-call", { call_id: (c as any).id, force: true });
-    callResults.push({ id: (c as any).id, success: r.success, status: r.status, steps: (r.data as any)?.steps ?? null, error: (r.data as any)?.error ?? null });
-  }
-
-  // ── 4. Media poll (recordings + transcriptions) ───────────────────
-  const media = await invoke("maestro-media-poll", { limit: 25, max_age_hours: days * 24 });
-
-  return json({
-    ok: true,
-    broker: { email: profile.email, crm_id: profile.maestro_broker_id, telecom_id: telecomId },
-    endpoints,
-    messages: {
-      processed: messages.length,
-      succeeded: messages.filter((m) => m.success).length,
-      results: messages.slice(0, 20),
-    },
-    calls: {
-      scanned: calls?.length ?? 0,
-      processed: callResults.length,
-      succeeded: callResults.filter((c) => c.success).length,
-      results: callResults.slice(0, 20),
-    },
-    media: media.data,
-  });
+  // Default: run in the background so long backfills are not cut off.
+  // @ts-ignore EdgeRuntime is available in Supabase edge functions
+  EdgeRuntime.waitUntil(runBackfill().then((r) => console.log("[pp-maestro-full-sync] done", JSON.stringify(r))).catch((e) => console.error("[pp-maestro-full-sync] failed", e)));
+  return json({ ok: true, accepted: true, broker, endpoints });
 });
+

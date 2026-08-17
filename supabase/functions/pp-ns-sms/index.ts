@@ -363,11 +363,18 @@ Deno.serve(async (req) => {
       const type = (pick("type") as string) ?? "sms";
       const thread_id = pick("thread_id") as string | undefined;
       let from = pick("from") as string | undefined;
+      // Clé d'idempotence fournie par le client (mobile / AVA). Elle survit
+      // au rafraîchissement de page : deux envois portant la même clé ne
+      // peuvent jamais créer deux SMS.
+      const idempotencyKey = String(pick("idempotency_key") ?? "").trim().slice(0, 120) || null;
+      const correlationId = idempotencyKey ?? crypto.randomUUID();
 
       console.info("[pp-ns-sms] send request", {
+        correlation_id: correlationId, idempotency_key: idempotencyKey,
         userId: ctx.userId, extension: ctx.extension, domain: ctx.nsDomain,
         to_raw: to, from_raw: from, thread_id, msg_len: message?.length ?? 0,
       });
+
 
       if (!to || !message) {
         return jsonResponse({ ok: false, error: "Paramètres manquants: 'to' et 'message' sont requis", missing: { to: !to, message: !message } }, 400);

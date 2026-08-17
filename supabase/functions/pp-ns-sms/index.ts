@@ -510,19 +510,54 @@ Deno.serve(async (req) => {
               body: message,
               status: "sent",
               ns_message_id: nsMsgId,
-              metadata: { type },
+              idempotency_key: idempotencyKey,
+              metadata: { type, correlation_id: correlationId, idempotency_key: idempotencyKey },
               thread_id: threadId,
               sent_at: new Date().toISOString(),
             })
             .select("id")
             .maybeSingle();
-          if (logError) console.error("[pp-ns-sms] log insert error:", logError.message);
+          if (logError) {
+            // 23505 = collision sur la clé d'idempotence → la ligne existe déjà.
+            if ((logError as any).code === "23505" && idempotencyKey) {
+              const { data: existing } = await supabase
+                .from("planipret_phone_messages")
+                .select("id")
+                .eq("idempotency_key", idempotencyKey)
+                .maybeSingle();
+              console.warn("[pp-ns-sms] insert deduped by unique index", { correlation_id: correlationId, message_id: existing?.id });
+              return existing?.id ?? null;
+            }
+            console.error("[pp-ns-sms] log insert error:", logError.message);
+          }
           return logged?.id ?? null;
         } catch (logErr) {
           console.warn("[pp-ns-sms] log insert failed (non-fatal):", logErr);
           return null;
         }
       };
+
+      // Journal corrélé de la tentative d'envoi NS (une ligne par envoi).
+      const logSmsStep = async (status: "success" | "error", messageId: string | null) => {
+        try {
+          await supabase.from("planipret_pipeline_logs").insert({
+            call_id: null,
+            user_id: ctx.profileId ?? ctx.userId,
+            step: "sms_send",
+            status,
+            correlation_id: correlationId,
+            entity_type: "message",
+            entity_id: messageId,
+            endpoint: path,
+            http_status: res.status,
+            error_message: status === "error" ? String(nsError ?? `ns_${res.status}`) : null,
+            payload: { to: destination, from: fromNumber, len: message.length, idempotency_key: idempotencyKey },
+          });
+        } catch (e) {
+          console.warn("[pp-ns-sms] pipeline log failed (non-fatal):", e);
+        }
+      };
+
 
 
       if (!nsRejected) {

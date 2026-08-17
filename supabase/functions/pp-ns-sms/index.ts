@@ -397,11 +397,34 @@ Deno.serve(async (req) => {
 
 
 
+      // ---- Garde d'idempotence (clé explicite, fenêtre 24 h) --------------
+      if (idempotencyKey) {
+        try {
+          const { data: known } = await supabase
+            .from("planipret_phone_messages")
+            .select("id, thread_id, sent_at")
+            .eq("idempotency_key", idempotencyKey)
+            .maybeSingle();
+          if (known?.id) {
+            console.warn("[pp-ns-sms] idempotent replay", { correlation_id: correlationId, message_id: known.id });
+            return jsonResponse({
+              ok: true, success: true, duplicate: true,
+              message_id: known.id, thread_id: known.thread_id ?? thread_id ?? null,
+              to: destination, from: fromNumber, correlation_id: correlationId,
+              note: "SMS déjà envoyé (clé d'idempotence identique) — envoi ignoré.",
+            }, 200);
+          }
+        } catch (idemErr) {
+          console.warn("[pp-ns-sms] idempotency lookup failed (non-fatal):", idemErr);
+        }
+      }
+
       // ---- Garde d'idempotence -------------------------------------------
       // AVA (chatbot/voicebot) peut rejouer un tool call, et un double tap
       // mobile peut envoyer deux fois. On refuse tout SMS identique
       // (même courtier, même destinataire, même texte) dans les 90 dernières
       // secondes et on renvoie le succès du premier envoi.
+
       try {
         const since = new Date(Date.now() - 90_000).toISOString();
         const { data: dup } = await supabase

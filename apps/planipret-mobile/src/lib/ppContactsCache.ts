@@ -148,7 +148,7 @@ export async function getPpContacts(
   const now = Date.now();
   if (!opts.force) {
     const hit = cache.get(action);
-    if (hit && now - hit.at < TTL_MS) return hit.value;
+    if (hit && now - hit.at < TTL_MS && scopeValid(action, hit)) return hit.value;
     const pending = inflight.get(action);
     if (pending) return pending;
   }

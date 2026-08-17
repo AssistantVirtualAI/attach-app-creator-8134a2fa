@@ -156,6 +156,18 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Fallback when /user gives no id: force a fresh directory match by email
+      // (never trust the previously stored id after a reconnect).
+      if (!resolvedBrokerId) {
+        const r = await resolveMaestroIdForUser(admin, userId, { force: true });
+        if (r.maestro_broker_id) {
+          resolvedBrokerId = r.maestro_broker_id;
+          resolvedBy = r.matched_by ?? "directory";
+        } else {
+          console.warn("[maestro-oauth-callback] broker_id_unresolved", JSON.stringify({ user_id: userId, error: r.error }));
+        }
+      }
+
       // Consume the state row.
       await admin.from("planipret_maestro_oauth_states").delete().eq("state", state);
     } else {

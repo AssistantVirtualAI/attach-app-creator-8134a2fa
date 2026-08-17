@@ -273,18 +273,18 @@ export async function getMaestroBrokerId(admin: SupabaseClient, userId: string):
     // the caller — resolve both so the broker id is never silently missing.
     let { data } = await admin
       .from("planipret_profiles")
-      .select("maestro_broker_id")
+      .select("maestro_telecom_user_id")
       .eq("user_id", userId)
       .maybeSingle();
     if (!data) {
       const byId = await admin
         .from("planipret_profiles")
-        .select("maestro_broker_id")
+        .select("maestro_telecom_user_id")
         .eq("id", userId)
         .maybeSingle();
       data = byId.data as any;
     }
-    const raw = (data as any)?.maestro_broker_id;
+    const raw = (data as any)?.maestro_telecom_user_id;
     if (!raw) return null;
     const id = String(raw).trim();
     // Maestro identifies brokers by an internal numeric user id (e.g. "67").

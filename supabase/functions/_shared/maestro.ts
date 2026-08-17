@@ -164,7 +164,10 @@ export async function resolveBrokerIdFromTelecom(
     const ids = Array.from({ length: Math.min(25, maxId - start + 1) }, (_, i) => start + i);
     const found = (await Promise.all(ids.map(match))).find(Boolean);
     if (found) {
-      await admin.from("planipret_profiles").update({ maestro_broker_id: found }).eq("id", profile.id);
+      await admin.from("planipret_profiles").update({
+        maestro_telecom_user_id: found,
+        maestro_telecom_linked_at: new Date().toISOString(),
+      }).eq("id", profile.id);
       if (diag) diag.sip_probe_result = `matched_id_${found}`;
       console.log(`[maestro.brokerId] resolved broker id ${found} for user ${userId} (ext=${ext || "-"} phone=${phone || "-"})`);
       return found;

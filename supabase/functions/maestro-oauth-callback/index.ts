@@ -97,11 +97,24 @@ Deno.serve(async (req) => {
 
     // If we know the user, persist per-broker. Otherwise keep the global fallback
     // in planipret_integration_secrets so nothing is lost.
+    let resolvedBrokerId: string | null = null;
+    let resolvedBy: string | null = null;
     if (userId) {
       const isMobile = !!storedCodeVerifier;
       await persistTokenSet(admin, userId, exch.data, isMobile);
 
-      // Best-effort: hydrate maestro_broker_id + maestro_email from /users/me
+      // Read the id we had BEFORE this reconnect so we can detect a stale value.
+      const { data: prevProf } = await admin
+        .from("planipret_profiles")
+        .select("id, user_id, maestro_broker_id")
+        .or(`user_id.eq.${userId},id.eq.${userId}`)
+        .limit(1)
+        .maybeSingle();
+      const previousId = (prevProf as any)?.maestro_broker_id
+        ? String((prevProf as any).maestro_broker_id).trim()
+        : null;
+
+      // Authoritative: GET /user with the *freshly issued* access token.
       const me = await fetchMaestroUserProfile(env, exch.data.access_token);
       if (me) {
         const mid = (me as any).id ?? (me as any).user?.id ?? (me as any).user_id ?? null;

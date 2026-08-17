@@ -23,6 +23,20 @@ const inflight = new Map<Action, Promise<any[]>>();
 
 function lsKey(action: Action) { return `${LS_PREFIX}${action}`; }
 
+function currentScope(): string | null {
+  try { return localStorage.getItem("pp:contacts:maestro_user_id"); } catch { return null; }
+}
+
+/** A Maestro-scoped entry is only valid for the currently linked Maestro id. */
+function scopeValid(action: Action, entry: Entry | null | undefined): boolean {
+  if (!entry) return false;
+  if (!MAESTRO_SCOPED.includes(action)) return true;
+  const scope = currentScope();
+  // Unknown scope, or an entry written before scoping existed → do not trust it.
+  if (!scope || !entry.scope) return false;
+  return String(entry.scope) === String(scope);
+}
+
 function loadFromDisk(action: Action): Entry | null {
   try {
     const raw = localStorage.getItem(lsKey(action));
@@ -30,6 +44,7 @@ function loadFromDisk(action: Action): Entry | null {
     const parsed = JSON.parse(raw) as Entry;
     if (!parsed || !Array.isArray(parsed.value)) return null;
     if (Date.now() - parsed.at > LS_TTL_MS) return null;
+    if (!scopeValid(action, parsed)) { localStorage.removeItem(lsKey(action)); return null; }
     return parsed;
   } catch { return null; }
 }

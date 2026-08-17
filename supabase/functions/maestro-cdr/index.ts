@@ -300,7 +300,15 @@ Deno.serve(async (req) => {
           error_message: "maestro_call_id_missing",
           payload: { detail: summary.detail, response_status: res.status },
         });
-        return json({ success: false, error: "maestro_call_id_missing", detail: summary.detail, status: res.status }, 424);
+        const retry = await scheduleCdrRetry(admin, {
+          call_id,
+          user_id: call.user_id,
+          reason: "maestro_call_id_missing",
+          error: summary.detail,
+          status: res.status,
+          permanent: false,
+        });
+        return json({ success: false, error: "maestro_call_id_missing", detail: summary.detail, status: res.status, retry }, 424);
       }
       await admin
         .from("planipret_phone_calls")

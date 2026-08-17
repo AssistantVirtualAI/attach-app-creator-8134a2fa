@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getMaestroTelecomConfig, isMaestroTelecomConfigured, maestroTelecomFetch } from "../_shared/maestro-telecom.ts";
-import { linkBrokerIdByEmail, loadBrokerDirectory, findByEmail } from "../_shared/maestro-broker-directory.ts";
+import { linkBrokerIdByEmail, loadBrokerDirectory, findByEmail, resolveTelecomUserId } from "../_shared/maestro-broker-directory.ts";
 import { getMaestroOAuthEnv, getUserMaestroAccessToken, fetchMaestroUserProfile, extractMaestroBrokerId } from "../_shared/maestro-oauth.ts";
 
 
@@ -107,6 +107,54 @@ function cacheInvalidate(prefix: string) {
 }
 
 
+/**
+ * Fallback client list built from the documented Telecom endpoints when
+ * GET /users/{id}/clients is unavailable (it is not part of the published
+ * Telecom REST spec). Derives distinct counterparts from
+ * GET /users/{id}/communications/all and enriches them with
+ * POST /users/{id}/lookup-by-phone.
+ */
+async function clientsFromCommunications(cfg: any, uid: string, search: string): Promise<any[] | null> {
+  const r = await maestroTelecomFetch(cfg, `/users/${encodeURIComponent(uid)}/communications/all`, { method: "GET", timeoutMs: 12000, maxAttempts: 2 });
+  if (!r.ok) return null;
+  const d: any = r.data;
+  const rows: any[] = Array.isArray(d) ? d : (d?.communications ?? d?.data ?? d?.results ?? []);
+  const byPhone = new Map<string, any>();
+  for (const row of rows) {
+    const phone = String(
+      row?.contact_number ?? row?.to_user_number ?? row?.from_user_number ?? row?.phone ?? row?.number ?? "",
+    ).trim();
+    if (!phone) continue;
+    const key = phone.replace(/[^\d]/g, "").slice(-10);
+    if (!key) continue;
+    const prev = byPhone.get(key);
+    const name = row?.contact_name ?? row?.name ?? row?.display_name ?? null;
+    const last = row?.created_at ?? row?.occurred_at ?? row?.started_at ?? null;
+    if (!prev) {
+      byPhone.set(key, { id: row?.contact_id ?? row?.to_user_id ?? key, phone, name, last_activity_at: last, source: "communications" });
+    } else if (!prev.name && name) {
+      prev.name = name;
+    }
+  }
+  let list = [...byPhone.values()];
+  // Enrich the first entries with the documented phone lookup.
+  await Promise.all(list.slice(0, 25).map(async (c) => {
+    const lr = await maestroTelecomFetch(cfg, `/users/${encodeURIComponent(uid)}/lookup-by-phone`, {
+      method: "POST", body: { phone: c.phone }, maxAttempts: 1, timeoutMs: 7000,
+    });
+    if (lr.ok) {
+      const u: any = (lr.data as any)?.user ?? (lr.data as any)?.data ?? lr.data;
+      if (u && typeof u === "object") Object.assign(c, u, { phone: c.phone, source: "communications+lookup" });
+    }
+  }));
+  const q = search.trim().toLowerCase();
+  if (q) {
+    list = list.filter((c) => JSON.stringify(c).toLowerCase().includes(q));
+  }
+  return list;
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -163,19 +211,23 @@ Deno.serve(async (req) => {
             .maybeSingle();
           if (!prof) return j({ success: false, contacts: [], error: "Profil courtier introuvable." });
 
+          // CRM (OAuth) identity and Telecom identity are two namespaces.
+          // Refresh the CRM id opportunistically, but always call
+          // /telecom/api/v1 with the resolved TELECOM user id.
           const tokenForIdentity = await getUserMaestroAccessToken(admin, callerId).catch(() => null);
-          if (!tokenForIdentity) {
-            return j({ success: false, contacts: [], error: "Reconnectez votre compte Maestro pour actualiser vos clients." });
+          let crmId: string | null = null;
+          if (tokenForIdentity) {
+            crmId = extractMaestroBrokerId(await fetchMaestroUserProfile(getMaestroOAuthEnv(), tokenForIdentity).catch(() => null));
+            if (crmId && String(prof.maestro_broker_id ?? "").trim() !== crmId) {
+              await admin.from("planipret_profiles")
+                .update({ maestro_broker_id: crmId, maestro_connected: true })
+                .eq("id", prof.id);
+            }
           }
-          const liveIdentity = await fetchMaestroUserProfile(getMaestroOAuthEnv(), tokenForIdentity);
-          const telecomUserId = extractMaestroBrokerId(liveIdentity);
-          if (!telecomUserId || !/^\d+$/.test(telecomUserId)) {
-            return j({ success: false, contacts: [], error: "Impossible de confirmer l'identité du compte Maestro connecté." });
-          }
-          if (String(prof.maestro_broker_id ?? "").trim() !== telecomUserId) {
-            await admin.from("planipret_profiles")
-              .update({ maestro_broker_id: telecomUserId, maestro_connected: true })
-              .eq("id", prof.id);
+          const resolved = await resolveTelecomUserId(admin, callerId, { candidate: crmId });
+          const telecomUserId = resolved.id;
+          if (!telecomUserId) {
+            return j({ success: false, contacts: [], error: "Compte Maestro non lié au service télécom. Reconnectez Maestro dans Réglages.", code: "maestro_telecom_not_linked", link: { matched_by: resolved.matched_by, error: resolved.error } });
           }
 
           const tCfg = await getMaestroTelecomConfig(admin);
@@ -187,6 +239,10 @@ Deno.serve(async (req) => {
           const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
           if (!r.ok) {
             console.warn("maestro list_contacts non-ok", r.status, r.data);
+            const derived = await clientsFromCommunications(tCfg, telecomUserId, q).catch(() => null);
+            if (derived) {
+              return j({ success: true, contacts: derived.map(normalizeContact), total: derived.length, maestro_user_id: telecomUserId, source: "communications" });
+            }
             return j({ success: false, contacts: [], error: `Maestro indisponible (HTTP ${r.status || "?"})`, status: r.status });
           }
           const d: any = r.data;
@@ -339,29 +395,29 @@ Deno.serve(async (req) => {
         if (callerId) {
           const { data: prof } = await admin
             .from("planipret_profiles")
-            .select("id, maestro_broker_id, role, email, ms365_email, extension, phone, full_name")
+            .select("id, maestro_broker_id, maestro_telecom_user_id, role, email, ms365_email, extension, phone, full_name")
             .or(`user_id.eq.${callerId},id.eq.${callerId}`)
             .limit(1)
             .maybeSingle();
-          telecomUserId = prof?.maestro_broker_id ? String(prof.maestro_broker_id).trim() : null;
           isAdmin = prof?.role === "admin";
-          // A broker's current OAuth identity is authoritative on every read.
-          // Never serve clients from an old persisted/directory-linked id.
+          let crmId: string | null = null;
           if (prof && !isAdmin) {
             const tok = await getUserMaestroAccessToken(admin, callerId).catch(() => null);
-            if (!tok) {
-              telecomUserId = null;
-              linkInfo = { matched_by: null, error: "maestro_oauth_required" };
-            } else {
-              const liveId = extractMaestroBrokerId(await fetchMaestroUserProfile(getMaestroOAuthEnv(), tok));
-              telecomUserId = liveId;
-              linkInfo = { matched_by: liveId ? "oauth_live" : null, error: liveId ? undefined : "maestro_identity_unavailable" };
-              if (liveId && String(prof.maestro_broker_id ?? "").trim() !== liveId) {
+            if (tok) {
+              crmId = extractMaestroBrokerId(await fetchMaestroUserProfile(getMaestroOAuthEnv(), tok).catch(() => null));
+              if (crmId && String(prof.maestro_broker_id ?? "").trim() !== crmId) {
                 await admin.from("planipret_profiles")
-                  .update({ maestro_broker_id: liveId, maestro_connected: true })
+                  .update({ maestro_broker_id: crmId, maestro_connected: true })
                   .eq("id", (prof as any).id);
               }
+            } else {
+              linkInfo = { matched_by: null, error: "maestro_oauth_required" };
             }
+          }
+          if (prof) {
+            const resolved = await resolveTelecomUserId(admin, callerId, { candidate: crmId });
+            telecomUserId = resolved.id;
+            if (!telecomUserId) linkInfo = { matched_by: resolved.matched_by, error: resolved.error ?? linkInfo?.error };
           }
         }
         const requested = payload.user_id !== undefined && payload.user_id !== null
@@ -425,12 +481,20 @@ Deno.serve(async (req) => {
         const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 10000 });
         if (!r.ok) {
           console.error(`[maestro-actions] ${action} failed`, r.status, JSON.stringify(r.data)?.slice(0, 400));
-          return j({ success: false, clients: [], brokers: [], error: `Maestro indisponible (HTTP ${r.status ?? "?"})`, status: r.status, details: r.data });
+          const derived = action === "list_clients"
+            ? await clientsFromCommunications(tCfg, telecomUserId, String(payload.search ?? "")).catch(() => null)
+            : null;
+          if (!derived) {
+            return j({ success: false, clients: [], brokers: [], error: `Maestro indisponible (HTTP ${r.status ?? "?"})`, status: r.status, details: r.data });
+          }
+          all = derived;
+          totalFromResponse = derived.length;
+        } else {
+          const d: any = r.data;
+          const listRaw = Array.isArray(d) ? d : (d?.clients ?? d?.brokers ?? d?.data ?? d?.results ?? []);
+          all = Array.isArray(listRaw) ? listRaw : [];
+          totalFromResponse = d?.total_count ?? d?.total;
         }
-        const d: any = r.data;
-        const listRaw = Array.isArray(d) ? d : (d?.clients ?? d?.brokers ?? d?.data ?? d?.results ?? []);
-        all = Array.isArray(listRaw) ? listRaw : [];
-        totalFromResponse = d?.total_count ?? d?.total;
 
         const offset = Number(payload.offset ?? 0);
         const limit = Number(payload.limit ?? 25);

@@ -76,11 +76,19 @@ Deno.serve(async (req) => {
   // ── 1b. Optional minimal write probes (isolates payload vs server errors) ──
   if (body?.write_probe === true) {
     const stamp = Date.now();
-    const callProbe = await maestroTelecomFetch(cfg, `/users/${me}/calls`, {
-      method: "POST",
-      maxAttempts: 1,
-      body: { provider_call_id: `probe-${stamp}`, status: "dialing", direction: "outbound", to_user_number: "+15145550123" },
-    });
+    const variants: Array<{ name: string; body: Record<string, unknown> }> = Array.isArray(body?.variants)
+      ? (body.variants as any[])
+      : [
+          { name: "min_number", body: { provider_call_id: `probe-${stamp}-a`, status: "dialing", direction: "outbound", to_user_number: "+15145550123" } },
+          { name: "to_user_id", body: { provider_call_id: `probe-${stamp}-b`, status: "dialing", direction: "outbound", to_user_id: Number(telecomId) } },
+          { name: "bare", body: { provider_call_id: `probe-${stamp}-c` } },
+        ];
+    const variantResults: any[] = [];
+    for (const v of variants) {
+      const r = await maestroTelecomFetch(cfg, `/users/${me}/calls`, { method: "POST", maxAttempts: 1, body: v.body });
+      variantResults.push({ name: v.name, status: r.status, ok: r.ok, data: r.data, error: r.error ?? null });
+    }
+    const callProbe = { status: variantResults[0].status, ok: variantResults[0].ok, data: variantResults[0].data, error: variantResults[0].error };
     const msgProbe = await maestroTelecomFetch(cfg, `/users/${me}/messages`, {
       method: "POST",
       maxAttempts: 1,
@@ -91,6 +99,7 @@ Deno.serve(async (req) => {
       broker: { email: profile.email, crm_id: profile.maestro_broker_id, telecom_id: telecomId },
       endpoints,
       write_probe: {
+        variants: variantResults,
         call: { status: callProbe.status, ok: callProbe.ok, data: callProbe.data, error: callProbe.error ?? null },
         message: { status: msgProbe.status, ok: msgProbe.ok, data: msgProbe.data, error: msgProbe.error ?? null },
       },

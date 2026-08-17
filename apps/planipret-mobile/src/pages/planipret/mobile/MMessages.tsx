@@ -878,7 +878,8 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
                 </div>
               </div>
             );
-          })
+          })}
+          </>
         )}
 
         <div ref={bottomRef} />

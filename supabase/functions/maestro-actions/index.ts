@@ -405,7 +405,7 @@ Deno.serve(async (req) => {
 
         if (isList && !refresh) {
           const cached = cacheGet(cacheKey);
-          if (cached) return j({ success: true, ...(cached as object), cached: true });
+          if (cached) return j({ success: true, ...(cached as object), maestro_user_id: telecomUserId, cached: true });
         }
 
         let all: any[] | null = null;
@@ -473,7 +473,7 @@ Deno.serve(async (req) => {
         if (refresh) cacheInvalidate(`${action}:${telecomUserId}:`);
         cacheSet(cacheKey, response);
 
-        return j({ ...response, cached: false });
+        return j({ ...response, maestro_user_id: telecomUserId, cached: false });
 
       }
       case "test": {

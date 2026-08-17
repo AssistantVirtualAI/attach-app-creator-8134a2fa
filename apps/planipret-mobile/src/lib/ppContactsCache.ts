@@ -48,13 +48,33 @@ function keyFor(payload: any): any[] {
 const isTransient = (msg: string) =>
   /failed to send a request|failed to fetch|networkerror|aborted|load failed/i.test(msg);
 
+const LS_MAESTRO_ID = "pp:contacts:maestro_user_id";
+
+/**
+ * The Maestro list is scoped to the broker's Maestro user id. If that id
+ * changes (reconnect on another Maestro account), every cached list is stale
+ * and must be dropped — otherwise the Contacts screen keeps showing the
+ * previous account's clients.
+ */
+function syncMaestroScope(id: string | null | undefined) {
+  if (!id) return;
+  try {
+    const prev = localStorage.getItem(LS_MAESTRO_ID);
+    if (prev !== String(id)) {
+      localStorage.setItem(LS_MAESTRO_ID, String(id));
+      if (prev) invalidatePpContacts();
+    }
+  } catch { /* storage disabled */ }
+}
+
 /** Scott's new Maestro endpoints: /users/{id}/clients and /users/{id}/brokers. */
 async function fetchMaestroList(kind: "clients" | "brokers", limit: number): Promise<any[]> {
   const { data, error } = await supabase.functions.invoke("maestro-actions", {
-    body: { action: kind === "clients" ? "list_clients" : "list_brokers", payload: { limit } },
+    body: { action: kind === "clients" ? "list_clients" : "list_brokers", payload: { limit, refresh: true } },
   });
   const payload: any = data ?? {};
   if (error && !payload?.success) throw new Error(payload?.error || error.message || kind);
+  syncMaestroScope(payload?.maestro_user_id);
   const list = payload[kind];
   return Array.isArray(list) ? list : [];
 }
@@ -169,4 +189,10 @@ export function prefetchPpContacts(
     if (hit && Date.now() - hit.at < TTL_MS) continue;
     void getPpContacts(action, { limit }).catch(() => {});
   }
+}
+
+// A Maestro (re)connect can switch the broker's Maestro user id — drop every
+// cached contacts list so the next read hits the new account.
+if (typeof window !== "undefined") {
+  window.addEventListener("maestro:connected", () => invalidatePpContacts());
 }

@@ -234,19 +234,29 @@ export async function fetchMaestroUserProfile(env: MaestroOAuthEnv, accessToken:
   ).replace(/\/$/, "");
   // Confirmed with Scott: with an OAuth access token (no machine=1),
   // GET /user returns the authenticated broker profile { id, first_name, last_name, email }.
-  try {
-    const r = await fetchWithTimeout(`${root}/user`, {
-      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-    }, 6_000);
-    if (r.ok) {
-      const j = await r.json();
-      if (j && typeof j === "object" && Object.keys(j).length > 0) return j;
-      console.warn("[maestro-oauth] GET /user returned an empty object — token may be a machine key");
-    } else {
-      console.warn("[maestro-oauth] GET /user failed", r.status);
+  // Some deployments only answer on /users/me or /me, so try each in order.
+  const paths = ["/user", "/users/me", "/me", "/broker", "/brokers/me"];
+  for (const path of paths) {
+    try {
+      const r = await fetchWithTimeout(`${root}${path}`, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      }, 6_000);
+      const text = await r.text();
+      if (!r.ok) {
+        console.warn("[maestro-oauth] GET", path, "failed", r.status, text.slice(0, 200));
+        continue;
+      }
+      let j: any = null;
+      try { j = JSON.parse(text); } catch { j = null; }
+      const body = j?.data ?? j?.result ?? j?.user ?? j;
+      if (body && typeof body === "object" && Object.keys(body).length > 0) {
+        console.log("[maestro-oauth] identity resolved via", path, JSON.stringify(body).slice(0, 300));
+        return body;
+      }
+      console.warn("[maestro-oauth] GET", path, "returned empty payload", text.slice(0, 200));
+    } catch (e) {
+      console.warn("[maestro-oauth] GET", path, "error", (e as Error).message);
     }
-  } catch (e) {
-    console.warn("[maestro-oauth] GET /user error", (e as Error).message);
   }
   return null;
 }

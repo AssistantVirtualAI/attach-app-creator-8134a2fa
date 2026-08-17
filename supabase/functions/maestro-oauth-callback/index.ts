@@ -13,6 +13,7 @@ import {
   isMaestroOAuthConfigured,
   persistTokenSet,
 } from "../_shared/maestro-oauth.ts";
+import { resolveMaestroIdForUser } from "../_shared/maestro-broker-directory.ts";
 
 const j = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -97,21 +98,46 @@ Deno.serve(async (req) => {
 
     // If we know the user, persist per-broker. Otherwise keep the global fallback
     // in planipret_integration_secrets so nothing is lost.
+    let resolvedBrokerId: string | null = null;
+    let resolvedBy: string | null = null;
     if (userId) {
       const isMobile = !!storedCodeVerifier;
       await persistTokenSet(admin, userId, exch.data, isMobile);
 
-      // Best-effort: hydrate maestro_broker_id + maestro_email from /users/me
+      // Read the id we had BEFORE this reconnect so we can detect a stale value.
+      const { data: prevProf } = await admin
+        .from("planipret_profiles")
+        .select("id, user_id, maestro_broker_id")
+        .or(`user_id.eq.${userId},id.eq.${userId}`)
+        .limit(1)
+        .maybeSingle();
+      const previousId = (prevProf as any)?.maestro_broker_id
+        ? String((prevProf as any).maestro_broker_id).trim()
+        : null;
+
+      // Authoritative: GET /user with the *freshly issued* access token.
       const me = await fetchMaestroUserProfile(env, exch.data.access_token);
       if (me) {
         const mid = (me as any).id ?? (me as any).user?.id ?? (me as any).user_id ?? null;
         const email = String((me as any).email ?? (me as any).user?.email ?? "").toLowerCase().trim();
         const remoteName = [(me as any).first_name, (me as any).last_name].filter(Boolean).join(" ").trim();
         const patch: Record<string, unknown> = {};
-        if (mid) patch.maestro_broker_id = String(mid);
+        if (mid) {
+          resolvedBrokerId = String(mid).trim();
+          resolvedBy = "oauth_user_endpoint";
+          patch.maestro_broker_id = resolvedBrokerId;
+        }
         if (email) patch.maestro_email = email;
         if (Object.keys(patch).length) {
-          await admin.from("planipret_profiles").update(patch).eq("user_id", userId);
+          const pid = (prevProf as any)?.id ?? null;
+          const upd = admin.from("planipret_profiles").update(patch);
+          const { error: upErr } = pid ? await upd.eq("id", pid) : await upd.eq("user_id", userId);
+          if (upErr) console.error("[maestro-oauth-callback] profile patch failed", upErr.message);
+        }
+        if (previousId && resolvedBrokerId && previousId !== resolvedBrokerId) {
+          console.warn("[maestro-oauth-callback] maestro_broker_id_changed", JSON.stringify({
+            user_id: userId, previous: previousId, current: resolvedBrokerId,
+          }));
         }
         // Names are intentionally NOT copied: Maestro's first_name/last_name can be
         // stale on shared/test accounts. Log a mismatch so it can be fixed upstream.
@@ -131,6 +157,18 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Fallback when /user gives no id: force a fresh directory match by email
+      // (never trust the previously stored id after a reconnect).
+      if (!resolvedBrokerId) {
+        const r = await resolveMaestroIdForUser(admin, userId, { force: true });
+        if (r.maestro_broker_id) {
+          resolvedBrokerId = r.maestro_broker_id;
+          resolvedBy = r.matched_by ?? "directory";
+        } else {
+          console.warn("[maestro-oauth-callback] broker_id_unresolved", JSON.stringify({ user_id: userId, error: r.error }));
+        }
+      }
+
       // Consume the state row.
       await admin.from("planipret_maestro_oauth_states").delete().eq("state", state);
     } else {
@@ -146,6 +184,8 @@ Deno.serve(async (req) => {
       user_bound: !!userId,
       has_refresh: !!exch.data.refresh_token,
       expires_in: exch.data.expires_in ?? null,
+      maestro_broker_id: resolvedBrokerId,
+      matched_by: resolvedBy,
     });
   } catch (e) {
     console.error("[maestro-oauth-callback]", e);

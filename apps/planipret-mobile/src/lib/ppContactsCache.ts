@@ -20,6 +20,7 @@ const LS_TTL_MS = 24 * 60 * 60 * 1000; // keep stale copy up to 24h
 
 const cache = new Map<Action, Entry>();
 const inflight = new Map<Action, Promise<any[]>>();
+let cacheGeneration = 0;
 
 function lsKey(action: Action) { return `${LS_PREFIX}${action}`; }
 
@@ -153,6 +154,7 @@ export async function getPpContacts(
     if (pending) return pending;
   }
   const p = (async () => {
+    const generation = cacheGeneration;
     const value = action === "maestro"
       ? await fetchMaestro()
       : action === "maestro_clients"
@@ -160,6 +162,11 @@ export async function getPpContacts(
       : action === "maestro_brokers"
       ? await fetchMaestroList("brokers", opts.limit ?? 500)
       : await fetchNs(action, opts.limit ?? 500);
+    // A Maestro reconnect may happen while an old request is still running.
+    // Never let that old response repopulate the cache for the new account.
+    if (generation !== cacheGeneration) {
+      return getPpContacts(action, { ...opts, force: true });
+    }
     const entry: Entry = { at: Date.now(), value, scope: currentScope() };
     cache.set(action, entry);
     saveToDisk(action, entry);
@@ -174,9 +181,11 @@ export async function getPpContacts(
 }
 
 export function invalidatePpContacts(action?: Action) {
+  cacheGeneration += 1;
   if (action) { cache.delete(action); try { localStorage.removeItem(lsKey(action)); } catch {} }
   else {
     cache.clear();
+    inflight.clear();
     try {
       ALL_ACTIONS.forEach((a) => localStorage.removeItem(lsKey(a)));
     } catch {}

@@ -8,11 +8,12 @@
 import { supabase } from "@/integrations/supabase/client";
 
 type Action = "list" | "shared" | "directory" | "maestro";
-type Entry = { at: number; value: any[] };
+type Entry = { at: number; value: any[]; maestroUserId?: string };
 
 const TTL_MS = 60_000;
 const LS_PREFIX = "pp:contacts:cache:v1:";
 const LS_TTL_MS = 24 * 60 * 60 * 1000; // keep stale copy up to 24h
+const LS_MAESTRO_ID = `${LS_PREFIX}maestro-user-id`;
 
 const cache = new Map<Action, Entry>();
 const inflight = new Map<Action, Promise<any[]>>();
@@ -67,7 +68,7 @@ async function fetchNs(action: Exclude<Action, "maestro">, limit: number): Promi
 }
 
 
-async function fetchMaestro(): Promise<any[]> {
+async function fetchMaestro(): Promise<{ value: any[]; maestroUserId?: string }> {
   const { data, error } = await supabase.functions.invoke("maestro-actions", {
     body: { action: "list_contacts", payload: { query: "" } },
   });
@@ -75,7 +76,7 @@ async function fetchMaestro(): Promise<any[]> {
   if (error && !payload) throw new Error(error.message || "maestro");
   const list = Array.isArray(payload.contacts) ? payload.contacts : [];
   // Normalize Maestro contact shape to the dialer's expected fields.
-  return list.map((c: any) => ({
+  const value = list.map((c: any) => ({
     id: c.id ?? c.client_id ?? c.uuid,
     first_name: c.first_name ?? c.firstname,
     last_name: c.last_name ?? c.lastname,
@@ -89,6 +90,11 @@ async function fetchMaestro(): Promise<any[]> {
     home_phone: c.home_phone,
     maestro_client_id: c.id ?? c.client_id,
   }));
+  const maestroUserId = String(payload.maestro_user_id ?? "").trim() || undefined;
+  const previousId = localStorage.getItem(LS_MAESTRO_ID) ?? undefined;
+  if (previousId && maestroUserId && previousId !== maestroUserId) invalidatePpContacts();
+  if (maestroUserId) localStorage.setItem(LS_MAESTRO_ID, maestroUserId);
+  return { value, maestroUserId };
 }
 
 export async function getPpContacts(
@@ -103,13 +109,13 @@ export async function getPpContacts(
     if (pending) return pending;
   }
   const p = (async () => {
-    const value = action === "maestro"
+    const result = action === "maestro"
       ? await fetchMaestro()
-      : await fetchNs(action, opts.limit ?? 500);
-    const entry: Entry = { at: Date.now(), value };
+      : { value: await fetchNs(action, opts.limit ?? 500), maestroUserId: undefined };
+    const entry: Entry = { at: Date.now(), value: result.value, maestroUserId: result.maestroUserId };
     cache.set(action, entry);
     saveToDisk(action, entry);
-    return value;
+    return result.value;
   })();
   inflight.set(action, p);
   try {
@@ -117,6 +123,10 @@ export async function getPpContacts(
   } finally {
     inflight.delete(action);
   }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("maestro:connected", () => invalidatePpContacts());
 }
 
 export function invalidatePpContacts(action?: Action) {

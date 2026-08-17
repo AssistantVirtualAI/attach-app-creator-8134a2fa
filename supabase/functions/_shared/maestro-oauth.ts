@@ -260,3 +260,17 @@ export async function fetchMaestroUserProfile(env: MaestroOAuthEnv, accessToken:
   }
   return null;
 }
+
+/** Extract the authenticated Maestro broker/user id from identity payloads. */
+export function extractMaestroBrokerId(payload: any): string | null {
+  const candidates = [
+    payload?.broker_id, payload?.maestro_broker_id, payload?.broker?.id,
+    payload?.user?.broker_id, payload?.data?.broker_id, payload?.id,
+    payload?.user?.id, payload?.user_id, payload?.sub,
+  ];
+  for (const candidate of candidates) {
+    const value = String(candidate ?? "").trim();
+    if (/^\d+$/.test(value)) return value;
+  }
+  return null;
+}

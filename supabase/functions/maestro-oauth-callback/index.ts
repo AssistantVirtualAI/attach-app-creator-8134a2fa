@@ -8,6 +8,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   exchangeAuthorizationCode,
+  extractMaestroBrokerId,
   fetchMaestroUserProfile,
   getMaestroOAuthEnv,
   isMaestroOAuthConfigured,
@@ -136,15 +137,7 @@ Deno.serve(async (req) => {
       // Authoritative: GET /user with the *freshly issued* access token.
       const me = await fetchMaestroUserProfile(env, exch.data.access_token);
       if (me) {
-        const mid = (me as any).broker_id
-          ?? (me as any).maestro_broker_id
-          ?? (me as any).broker?.id
-          ?? (me as any).user?.broker_id
-          ?? (me as any).data?.broker_id
-          ?? (me as any).id
-          ?? (me as any).user?.id
-          ?? (me as any).user_id
-          ?? null;
+        const mid = extractMaestroBrokerId(me);
         const email = String((me as any).email ?? (me as any).user?.email ?? "").toLowerCase().trim();
         const remoteName = [(me as any).first_name, (me as any).last_name].filter(Boolean).join(" ").trim();
         const patch: Record<string, unknown> = {};

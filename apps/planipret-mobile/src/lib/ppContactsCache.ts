@@ -160,7 +160,7 @@ export async function getPpContacts(
       : action === "maestro_brokers"
       ? await fetchMaestroList("brokers", opts.limit ?? 500)
       : await fetchNs(action, opts.limit ?? 500);
-    const entry: Entry = { at: Date.now(), value };
+    const entry: Entry = { at: Date.now(), value, scope: currentScope() };
     cache.set(action, entry);
     saveToDisk(action, entry);
     return value;

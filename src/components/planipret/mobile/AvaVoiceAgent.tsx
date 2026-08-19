@@ -69,12 +69,7 @@ const TOOL_ICONS: Record<string, any> = {
   get_upcoming_meetings: Calendar,
 };
 
-const CONFIRM_REQUIRED = new Set([
-  "make_call", "send_sms", "send_email",
-  "create_task", "update_task", "delete_task", "create_appointment", "generate_voicemail_greeting",
-  "update_client",
-  "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
-]);
+const CONFIRM_REQUIRED = AVA_CONFIRM_REQUIRED;
 
 export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Props) {
   const navigate = useNavigate();

@@ -155,7 +155,7 @@ describe("TasksSection", () => {
   it("filters through the chips", async () => {
     render(<TasksSection userId="u1" lang="fr" />);
     await screen.findByText("Rappeler Jean");
-    fireEvent.click(screen.getByText(/En retard · 1/i, { selector: "button" }));
+    fireEvent.click(screen.getAllByRole("tab")[1]);
     await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith(expect.objectContaining({ filter: "overdue" })));
   });
 });

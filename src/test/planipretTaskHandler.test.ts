@@ -234,3 +234,57 @@ describe("planipret task handler — audit", () => {
     expect(JSON.stringify(log)).not.toContain("Appeler Jean");
   });
 });
+
+describe("planipret task handler — contract scope + live get", () => {
+  it("refuses a contract task whose xid is not mapped to the broker", async () => {
+    const { deps, apiFetch } = makeDeps();
+    const out = await handleTaskRequest(
+      { action: "create", xid: 999111, type: "contract", date: "2026-09-01 10:00:00", notes: "Suivi contrat" },
+      deps,
+    );
+    expect(out.body.success).toBe(false);
+    expect(out.body.error).toBe("target_mapping_required");
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("allows a contract task when the contract is in the broker's pipeline", async () => {
+    const admin = createMockAdmin({
+      planipret_pipeline: [{ id: "p1", user_id: USER, maestro_contact_id: "999111" }],
+    });
+    const { deps, apiFetch } = makeDeps({ admin });
+    const out = await handleTaskRequest(
+      { action: "create", xid: 999111, type: "contract", date: "2026-09-01 10:00:00", notes: "Suivi contrat" },
+      deps,
+    );
+    expect(out.body.success).toBe(true);
+    expect(apiFetch).toHaveBeenCalled();
+  });
+
+  it("get reads the live source first and falls back to the projection", async () => {
+    const live = { deps: null as any };
+    const { deps } = makeDeps({
+      listFetch: async () => ({
+        ok: true,
+        tasks: [{ id: 555, notes: "Live task", date: "2026-09-02 09:00:00", type: "user", xid: 387460525 }],
+        endpoint: "/users/387460525/tasks",
+        status: 200,
+      }),
+    });
+    void live;
+    const out = await handleTaskRequest({ action: "get", task_id: "555" }, deps);
+    expect(out.body.success).toBe(true);
+    expect(out.body.source).toBe("api");
+
+    const offline = makeDeps({
+      admin: createMockAdmin({
+        planipret_tasks_projection: [
+          { user_id: USER, task_id: "777", deleted_at: null, payload: { id: 777, notes: "Cached", type: "user" } },
+        ],
+      }),
+      listFetch: async () => ({ ok: false, tasks: [], endpoint: null, status: 500 }),
+    });
+    const out2 = await handleTaskRequest({ action: "get", task_id: "777" }, offline.deps);
+    expect(out2.body.success).toBe(true);
+    expect(out2.body.source).toBe("projection");
+  });
+});

@@ -10,13 +10,24 @@ import {
   saveTaskCache,
   updateTask as apiUpdate,
   type NormalizedTask,
+  type TaskFilterValue,
   type TaskSource,
 } from "@/lib/planipret/tasks";
+
+const PAGE_SIZE = 20;
 
 export interface UsePlanipretTasks {
   tasks: NormalizedTask[];
   buckets: { overdue: NormalizedTask[]; today: NormalizedTask[]; upcoming: NormalizedTask[] };
+  counts: { overdue: number; today: number; upcoming: number; open: number; all: number };
   openCount: number;
+  filter: TaskFilterValue;
+  setFilter: (f: TaskFilterValue) => void;
+  page: number;
+  total: number;
+  hasMore: boolean;
+  loadMore: () => Promise<void>;
+  loadingMore: boolean;
   loading: boolean;
   refreshing: boolean;
   source: TaskSource;
@@ -32,9 +43,15 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
   const [tasks, setTasks] = useState<NormalizedTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [source, setSource] = useState<TaskSource>("projection");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [filter, setFilterState] = useState<TaskFilterValue>("open");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [counts, setCounts] = useState({ overdue: 0, today: 0, upcoming: 0, open: 0, all: 0 });
   const generation = useRef(0);
 
   // Paint the per-user cache immediately.
@@ -48,13 +65,17 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
     if (!userId) return;
     const gen = ++generation.current;
     setRefreshing(true);
-    const res = await listTasks({ status: "pending", limit: 50 });
+    const res = await listTasks({ status: "pending", filter, page: 1, limit: PAGE_SIZE });
     if (gen !== generation.current) return; // stale identity/response
     setRefreshing(false);
     setLoading(false);
     setSource(res.source);
     setError(res.success ? (res.source === "unavailable" ? res.error ?? null : null) : res.error ?? "load_failed");
     setMessage(res.message ?? null);
+    setCounts(res.counts);
+    setPage(res.page);
+    setTotal(res.total);
+    setHasMore(res.has_more);
     if (res.success && res.source !== "unavailable") {
       setTasks(res.tasks);
       saveTaskCache(userId, res.tasks);
@@ -62,7 +83,31 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
       setTasks([]);
       clearTaskCache(userId);
     }
-  }, [userId]);
+  }, [userId, filter]);
+
+  const loadMore = useCallback(async () => {
+    if (!userId || !hasMore || loadingMore) return;
+    const gen = generation.current;
+    setLoadingMore(true);
+    const next = page + 1;
+    const res = await listTasks({ status: "pending", filter, page: next, limit: PAGE_SIZE });
+    setLoadingMore(false);
+    if (gen !== generation.current) return;
+    if (!res.success) return;
+    setPage(res.page);
+    setTotal(res.total);
+    setHasMore(res.has_more);
+    setCounts(res.counts);
+    setTasks((cur) => {
+      const seen = new Set(cur.map((t) => t.id));
+      return [...cur, ...res.tasks.filter((t) => !seen.has(t.id))];
+    });
+  }, [userId, filter, page, hasMore, loadingMore]);
+
+  const setFilter = useCallback((f: TaskFilterValue) => {
+    setFilterState(f);
+    setPage(1);
+  }, []);
 
   useEffect(() => { if (userId) void refresh(); }, [userId, refresh]);
 
@@ -99,7 +144,11 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
   }, [tasks, refresh]);
 
   const buckets = useMemo(() => bucketTasks(tasks), [tasks]);
-  const openCount = buckets.overdue.length + buckets.today.length + buckets.upcoming.length;
+  const openCount = counts.open || (buckets.overdue.length + buckets.today.length + buckets.upcoming.length);
 
-  return { tasks, buckets, openCount, loading, refreshing, source, error, message, refresh, create, update, remove };
+  return {
+    tasks, buckets, counts, openCount, filter, setFilter, page, total, hasMore,
+    loadMore, loadingMore, loading, refreshing, source, error, message,
+    refresh, create, update, remove,
+  };
 }

@@ -246,9 +246,14 @@ export function idempotencyKey(parts: Array<string | number | null | undefined>)
 
 const truthy = (v: unknown) => v === true || v === 1 || v === "1" || v === "true";
 
-export function normalizeTask(raw: any): NormalizedTask {
+export function normalizeTask(input: any): NormalizedTask {
+  // Re-normalizing an already normalized task must not nest `raw` inside `raw`.
+  const raw = input && typeof input === "object" && input.raw && typeof input.raw === "object"
+    ? { ...input.raw, ...input, raw: undefined }
+    : input;
   const id = String(raw?.id ?? raw?.task_id ?? raw?.xid ?? "");
   const typeRaw = String(raw?.type ?? raw?.task_type ?? "").toLowerCase();
+
   return {
     id,
     notes: String(raw?.notes ?? raw?.title ?? raw?.subject ?? "").trim(),

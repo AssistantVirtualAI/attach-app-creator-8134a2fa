@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Conversation } from "@elevenlabs/client";
+import { AVA_CONFIRM_REQUIRED } from "@/lib/planipret/avaMutations";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { X, Mic, Send, Settings, AlertTriangle, Sparkles, PhoneOutgoing, MessageSquare, Search, Calendar, Mail, Bot, Map } from "lucide-react";

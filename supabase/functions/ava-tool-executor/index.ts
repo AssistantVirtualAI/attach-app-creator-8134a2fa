@@ -138,6 +138,26 @@ async function broadcastNav(ctx: Ctx, route: string, extra?: any) {
   } catch (_) { /* noop */ }
 }
 
+/** Tell every open session (MHome, other devices) that tasks changed. */
+async function broadcastTasks(ctx: Ctx, event: string, taskId?: string | null) {
+  try {
+    const channel = ctx.admin.channel(`pp-tasks:${ctx.userId}`);
+    await channel.send({ type: "broadcast", event: "tasks", payload: { change: event, task_id: taskId ?? null, at: new Date().toISOString() } });
+    await ctx.admin.removeChannel(channel);
+  } catch (_) { /* noop */ }
+}
+
+/** Single secure gateway for every task read/write (never call Planiprêt directly). */
+async function taskApi(ctx: Ctx, body: Record<string, unknown>): Promise<ToolResult> {
+  const r = await callPlanipretFunction(ctx, "planipret-task-api", { ...body, source: "ava" });
+  const data = (r.data ?? {}) as ToolResult;
+  if (!r.httpOk && data.success === undefined) {
+    return { success: false, error: "task_api_unreachable", status: r.status };
+  }
+  return data;
+}
+
+
 // ─── helpers ────────────────────────────────────────────────────────────
 async function msAction(ctx: Ctx, action: string, payload: any) {
   const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ms365-actions`, {
@@ -587,25 +607,68 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     return r?.success ? { success: true, profile: r.profile ?? r.data ?? null } : { success: false, error: r?.error ?? "maestro_broker_profile_failed" };
   },
 
-  async create_task(ctx, p) {
-    const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-task`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        maestro_client_id: p.client_id,
-        title: p.title,
-        due_date: p.due_date ?? new Date(Date.now() + 86400000).toISOString(),
-        priority: p.priority ?? "medium",
-        notes: p.notes,
-        _user_id: ctx.userId,
-      }),
+  // ===== PLANIPRÊT TASK API (POST/PUT/DELETE /api/main/tasks) =====
+  async list_tasks(ctx, p) {
+    return await taskApi(ctx, {
+      action: "list",
+      status: p?.status ?? "pending",
+      from: p?.from, to: p?.to,
+      limit: p?.limit ?? 25,
     });
-    const j = await r.json().catch(() => ({}));
-    return { success: r.ok, task_id: j.task_id, message: `Tâche "${p.title}" créée` };
   },
+
+  async get_task(ctx, p) {
+    if (!p?.task_id) return { success: false, error: "task_id_required" };
+    return await taskApi(ctx, { action: "get", task_id: String(p.task_id) });
+  },
+
+  async create_task(ctx, p) {
+    const target = p?.target ?? p?.xid ?? p?.client_id;
+    const target_type = String(p?.target_type ?? p?.type ?? "").toLowerCase();
+    const notes = p?.notes ?? p?.title;
+    const due_at = p?.due_at ?? p?.date ?? p?.due_date;
+    if (!target || (target_type !== "user" && target_type !== "contract")) {
+      return { success: false, error: "clarification_needed", message: "Précise la cible (xid) et son type : « user » ou « contract »." };
+    }
+    if (!notes) return { success: false, error: "clarification_needed", message: "Quelle note veux-tu inscrire sur la tâche ?" };
+    if (!due_at) return { success: false, error: "clarification_needed", message: "Pour quelle date et heure (fuseau America/Toronto) ?" };
+    const r = await taskApi(ctx, {
+      action: "create", target, target_type, notes, due_at,
+      description: p?.description, assignee_id: p?.assignee_id, status: p?.status,
+      sync_calendar: p?.sync_calendar === true, notification: p?.notification === true,
+      recurrence: p?.recurrence ?? null,
+    });
+    if ((r as any)?.success) await broadcastTasks(ctx, "created", (r as any).task_id);
+    return r;
+  },
+
+  async update_task(ctx, p) {
+    if (!p?.task_id) return { success: false, error: "task_id_required" };
+    const changes = p?.changes ?? {};
+    if (!changes || typeof changes !== "object" || !Object.keys(changes).length) {
+      return { success: false, error: "clarification_needed", message: "Que dois-je modifier sur cette tâche ?" };
+    }
+    const r = await taskApi(ctx, { action: "update", task_id: String(p.task_id), changes });
+    if ((r as any)?.success) await broadcastTasks(ctx, "updated", String(p.task_id));
+    return r;
+  },
+
+  async delete_task(ctx, p) {
+    if (!p?.task_id) return { success: false, error: "task_id_required" };
+    // Deletion ALWAYS requires an explicit confirmation, even in autonomous mode.
+    if (p?.confirmed !== true) {
+      return {
+        success: false,
+        needs_confirmation: true,
+        error: "confirmation_required",
+        message: `Je vais supprimer la tâche ${p.task_id}. Confirme-tu la suppression ? Rappelle delete_task avec confirmed=true.`,
+      };
+    }
+    const r = await taskApi(ctx, { action: "delete", task_id: String(p.task_id) });
+    if ((r as any)?.success) await broadcastTasks(ctx, "deleted", String(p.task_id));
+    return r;
+  },
+
 
   async create_appointment(ctx, p) {
     const duration = p.duration_minutes ?? 60;
@@ -664,21 +727,10 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   },
 
   async get_pending_tasks(ctx, p) {
-    try {
-      const uid = await maestroUserId(ctx);
-      if (!uid) return MAESTRO_NOT_LINKED;
-      const limit = p?.limit ?? 10;
-      try {
-        const result = await maestroFetch(ctx, `/users/${uid}/tasks?status=pending&limit=${limit}`);
-        const tasks = result?.data ?? result?.tasks ?? result ?? [];
-        const now = Date.now();
-        const overdue = (Array.isArray(tasks) ? tasks : []).filter((t: any) => t.due_date && new Date(t.due_date).getTime() < now).length;
-        return { success: true, tasks, overdue_count: overdue, source: "maestro" };
-      } catch (_) {
-        return { success: true, tasks: [], overdue_count: 0, source: "none", message: "Maestro n'expose pas encore les tâches en production." };
-      }
-    } catch (e) { return { success: false, error: String(e) }; }
+    // Legacy alias — the Planiprêt Task API gateway is now the single source.
+    return await TOOLS.list_tasks(ctx, { status: "pending", limit: p?.limit ?? 10 });
   },
+
 
   async get_upcoming_appointments(ctx, p) {
     try {

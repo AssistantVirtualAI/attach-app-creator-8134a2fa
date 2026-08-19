@@ -22,6 +22,7 @@ import { ms365Connected } from "@/lib/planipret/ms365Connected";
 import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365ConnectionNotice";
 import { useMs365Status } from "@/hooks/useMs365Status";
 import BriefListenButton from "@/components/planipret/mobile/BriefListenButton";
+import TasksSection from "@/components/planipret/mobile/TasksSection";
 
 
 type Period = "day" | "week" | "month" | "shift";
@@ -594,56 +595,13 @@ export default function MHome() {
         </section>
       )}
 
-      {/* ===== RECENT CALLS ===== */}
-      <section className="pp-card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold pp-heading">{t("home.recentCalls")}</h2>
-          <button onClick={() => navigate("/mplanipret/calls")}
-            className="text-[11px] flex items-center gap-0.5" style={{ color: "var(--pp-brand-accent)" }}>
-            {t("home.seeAll")} <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
-        {statsLoading ? (
-          <div className="space-y-2">{[0,1,2].map((i) => <Shimmer key={i} className="h-10" />)}</div>
-        ) : recent.length === 0 ? (
-          <p className="text-sm py-4 text-center" style={{ color: "var(--pp-text-muted)" }}>{t("home.noCalls")}</p>
-        ) : (
-          <ul className="space-y-1">
-            {recent.map((c) => {
-              const inbound = c.direction === "inbound";
-              const missed = c.direction === "missed";
-              const Icon = missed ? X : inbound ? ArrowDownLeft : ArrowUpRight;
-              const color = missed ? "var(--pp-danger)" : inbound ? "var(--pp-brand-accent)" : "var(--pp-success)";
-              const name = inbound || missed ? (c.from_name || c.from_number) : (c.to_name || c.to_number);
-              const phone = inbound || missed ? c.from_number : c.to_number;
-              return (
-                <li key={c.id}
-                  className="flex items-center gap-3 py-2.5 px-2 rounded-lg active:opacity-70"
-                  onClick={() => openDialer(phone ?? undefined)}>
-                  <span className="w-8 h-8 rounded-full flex items-center justify-center"
-                    style={{ background: "#F0F4F9", color }}>
-                    <Icon className="w-3.5 h-3.5" />
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
-                      {name ?? t("common.unknown")}
-                      {c.ai_summary && (
-                        <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold"
-                          style={{ background: "rgba(108,92,231,0.10)", color: "var(--pp-agent)", border: "1px solid rgba(108,92,231,0.30)", fontFamily: "Urbanist,sans-serif" }}>
-                          🤖 {t("home.ai")}
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
-                      {c.started_at ? new Date(c.started_at).toLocaleTimeString(lang === "en" ? "en-CA" : "fr-CA", { hour: "2-digit", minute: "2-digit" }) : ""}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+      {/* ===== MY TASKS ===== */}
+      <TasksSection
+        userId={profile?.user_id ?? null}
+        lang={lang as "fr" | "en"}
+        defaultTarget={profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null}
+        onSeeAll={() => navigate("/planipret/mobile/calls")}
+      />
     </div>
   );
 }

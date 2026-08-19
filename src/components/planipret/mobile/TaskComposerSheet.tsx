@@ -19,6 +19,8 @@ interface Props {
   defaultTarget?: string | null;
   busy?: boolean;
   initial?: Partial<TaskComposerValue> & { task_id?: string };
+  /** Per-field validation errors returned by the gateway (HTTP 422). */
+  fieldErrors?: Record<string, string> | null;
   onClose: () => void;
   onSubmit: (value: TaskComposerValue) => void | Promise<void>;
 }
@@ -29,7 +31,16 @@ function defaultDue() {
   return iso.replace(" ", "T").slice(0, 16);
 }
 
-export default function TaskComposerSheet({ open, lang, defaultTarget, busy, initial, onClose, onSubmit }: Props) {
+const FIELD_ERROR_LABELS: Record<string, { fr: string; en: string }> = {
+  xid_required: { fr: "Cible (xid) requise.", en: "Target (xid) is required." },
+  target_required: { fr: "Cible (xid) requise.", en: "Target (xid) is required." },
+  notes_required: { fr: "La note est obligatoire.", en: "Notes are required." },
+  date_required: { fr: "Date et heure requises.", en: "Date and time are required." },
+  invalid_date: { fr: "Format de date invalide.", en: "Invalid date format." },
+  type_must_be_user_or_contract: { fr: "Type de cible invalide.", en: "Invalid target type." },
+};
+
+export default function TaskComposerSheet({ open, lang, defaultTarget, busy, initial, fieldErrors, onClose, onSubmit }: Props) {
   const L = (fr: string, en: string) => (lang === "en" ? en : fr);
   const [targetType, setTargetType] = useState<"user" | "contract">((initial?.target_type as any) ?? "user");
   const [target, setTarget] = useState(initial?.target ?? defaultTarget ?? "");
@@ -53,6 +64,23 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   }, [open, initial, defaultTarget]);
 
   if (!open) return null;
+
+  const fieldMsg = (...keys: string[]) => {
+    if (!fieldErrors) return null;
+    for (const k of keys) {
+      const raw = fieldErrors[k];
+      if (!raw) continue;
+      const known = FIELD_ERROR_LABELS[raw];
+      return known ? (lang === "en" ? known.en : known.fr) : raw;
+    }
+    return null;
+  };
+
+  const FieldError = ({ keys }: { keys: string[] }) => {
+    const msg = fieldMsg(...keys);
+    if (!msg) return null;
+    return <span className="text-[11px] block mt-1" role="alert" style={{ color: "var(--pp-danger)" }}>{msg}</span>;
+  };
 
   const submit = async () => {
     if (!target.trim()) return setErr(L("Cible (xid) requise.", "Target (xid) is required."));
@@ -107,18 +135,21 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
             <input className={field} style={fieldStyle} inputMode="numeric" value={target}
               aria-label={L("Cible xid", "Target xid")}
               onChange={(e) => setTarget(e.target.value)} placeholder="387460525" />
+            <FieldError keys={["xid", "target"]} />
           </label>
 
           <label className="block">
             <span className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{L("Note *", "Notes *")}</span>
             <input className={field} style={fieldStyle} value={notes} aria-label={L("Note", "Notes")}
               onChange={(e) => setNotes(e.target.value)} placeholder={L("Rappeler Jean", "Call Jean back")} />
+            <FieldError keys={["notes"]} />
           </label>
 
           <label className="block">
             <span className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{L("Échéance (America/Toronto) *", "Due (America/Toronto) *")}</span>
             <input type="datetime-local" className={field} style={fieldStyle} value={due}
               aria-label={L("Échéance", "Due date")} onChange={(e) => setDue(e.target.value)} />
+            <FieldError keys={["date", "due_at"]} />
           </label>
 
           <label className="block">

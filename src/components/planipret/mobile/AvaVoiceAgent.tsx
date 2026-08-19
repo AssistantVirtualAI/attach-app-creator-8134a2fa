@@ -71,7 +71,7 @@ const TOOL_ICONS: Record<string, any> = {
 
 const CONFIRM_REQUIRED = new Set([
   "make_call", "send_sms", "send_email",
-  "create_task", "create_appointment", "generate_voicemail_greeting",
+  "create_task", "update_task", "delete_task", "create_appointment", "generate_voicemail_greeting",
   "update_client",
   "create_calendar_event", "move_calendar_event", "cancel_calendar_event",
 ]);
@@ -197,9 +197,10 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
       "make_call", "get_active_calls", "hangup_call", "get_call_history",
       "get_recording", "get_transcript", "send_sms", "get_sms_conversations",
       "get_voicemails", "generate_voicemail_greeting",
+      "list_tasks", "get_task",
       "analyze_call", "get_hot_leads", "get_coaching_summary",
       "search_client", "get_client_profile", "get_client_history",
-      "create_task", "create_appointment", "get_pending_tasks",
+      "create_task", "update_task", "delete_task", "create_appointment", "get_pending_tasks",
       "get_upcoming_appointments", "update_client", "create_client",
       "read_emails", "summarize_email", "send_email",
       "get_calendar_today", "get_calendar_week",

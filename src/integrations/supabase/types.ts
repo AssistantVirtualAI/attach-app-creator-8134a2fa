@@ -11017,6 +11017,81 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_task_mutations: {
+        Row: {
+          action: string
+          completed_at: string | null
+          correlation_id: string | null
+          created_at: string
+          http_status: number | null
+          id: string
+          idempotency_key: string
+          response: Json | null
+          task_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          completed_at?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          http_status?: number | null
+          id?: string
+          idempotency_key: string
+          response?: Json | null
+          task_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          completed_at?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          http_status?: number | null
+          id?: string
+          idempotency_key?: string
+          response?: Json | null
+          task_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      planipret_tasks_projection: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          due_at: string | null
+          id: string
+          payload: Json
+          status: string | null
+          task_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          due_at?: string | null
+          id?: string
+          payload?: Json
+          status?: string | null
+          task_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          due_at?: string | null
+          id?: string
+          payload?: Json
+          status?: string | null
+          task_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_team_messages: {
         Row: {
           attachments: Json

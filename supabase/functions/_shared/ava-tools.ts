@@ -133,13 +133,35 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       client_id: { type: "string", description: "ID du client" },
       limit: { type: "number", description: "Nombre d'entrées (défaut: 20)" },
     }, ["client_id"]),
-    mk("create_task", "Crée une tâche de suivi dans Maestro. Demande confirmation.", {
-      client_id: { type: "string", description: "ID du client" },
-      title: { type: "string", description: "Description de la tâche" },
-      due_date: { type: "string", description: "ISO 8601 (optionnel)" },
-      priority: { type: "string", description: "low, medium ou high" },
-      notes: { type: "string", description: "Notes (optionnel)" },
-    }, ["client_id", "title"]),
+    // ── Planiprêt Task API (POST/PUT/DELETE /api/main/tasks) ──
+    mk("list_tasks", "Liste les tâches du courtier (en retard, aujourd'hui, à venir). Fuseau America/Toronto.", {
+      status: { type: "string", description: "pending, done ou all (défaut: pending)" },
+      from: { type: "string", description: "Date de début ISO (optionnel)" },
+      to: { type: "string", description: "Date de fin ISO (optionnel)" },
+      limit: { type: "number", description: "Nombre max (défaut: 25)" },
+    }),
+    mk("get_task", "Détail d'une tâche.", { task_id: { type: "string", description: "ID de la tâche" } }, ["task_id"]),
+    mk("create_task", "Crée une tâche Planiprêt. Résume et demande TOUJOURS confirmation avant d'appeler.", {
+      target: { type: "string", description: "xid Planiprêt : id utilisateur si target_type=user, id de contrat si target_type=contract" },
+      target_type: { type: "string", description: "user ou contract" },
+      notes: { type: "string", description: "Note de la tâche (obligatoire)" },
+      due_at: { type: "string", description: "Échéance, heure America/Toronto (YYYY-MM-DD HH:mm:ss ou ISO)" },
+      description: { type: "string", description: "Description longue (optionnel)" },
+      assignee_id: { type: "number", description: "users_id assigné (optionnel)" },
+      status: { type: "string", description: "Statut initial (optionnel)" },
+      sync_calendar: { type: "boolean", description: "Créer l'événement calendrier — false par défaut" },
+      notification: { type: "boolean", description: "Envoyer une notification — false par défaut" },
+      recurrence: { type: "object", description: "{ value, pattern: day|week|month|year, on: 0-6 }" },
+    }, ["target", "target_type", "notes", "due_at"]),
+    mk("update_task", "Modifie une tâche (date, notes, description, statut, récurrence). Demande confirmation.", {
+      task_id: { type: "string", description: "ID de la tâche" },
+      changes: { type: "object", description: "Champs modifiés : date, notes, description, status_option_id, update_status, is_recurring, recurring_value, recurring_pattern, next_send_date, recurring_on" },
+    }, ["task_id", "changes"]),
+    mk("delete_task", "Supprime une tâche (soft delete). Confirmation explicite OBLIGATOIRE : rappeler avec confirmed=true.", {
+      task_id: { type: "string", description: "ID de la tâche" },
+      confirmed: { type: "boolean", description: "true seulement après confirmation explicite du courtier" },
+    }, ["task_id"]),
+
     mk("create_appointment", "Crée un rendez-vous dans Maestro + M365.", {
       client_id: { type: "string", description: "ID du client" },
       title: { type: "string", description: "Titre" },
@@ -346,7 +368,7 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
 export const EXPECTED_TOOL_NAMES = [
   "make_call","get_active_calls","hangup_call","get_call_history","get_recording","get_transcript","send_sms","get_sms_conversations","get_voicemails",
   "analyze_call","get_hot_leads","get_coaching_summary",
-  "search_client","get_client_profile","get_client_history","update_client","create_task","create_appointment","get_pending_tasks","get_upcoming_appointments","create_client",
+  "search_client","get_client_profile","get_client_history","update_client","list_tasks","get_task","create_task","update_task","delete_task","create_appointment","get_pending_tasks","get_upcoming_appointments","create_client",
   "read_emails","get_unread_emails","get_recent_emails","summarize_email","send_email","search_contact","propose_email_reply","summarize_inbox",
   "update_calendar_event","delete_calendar_event","get_calendar_today","get_calendar_week","get_upcoming_meetings",
   "search_ms365_contacts","find_contact","search_directory","list_company_directory",

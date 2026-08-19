@@ -152,8 +152,10 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
 
   const payload: Record<string, unknown> = { xid, type, date, notes };
 
+  // Maestro's POST /api/main/tasks rejects (HTTP 500) a body without a
+  // description, so always send one — falling back to the note.
   const description = String(input.description ?? "").trim();
-  if (description) payload.description = description;
+  payload.description = description || notes;
 
   const assignee = input.users_id ?? input.assignee_id;
   if (assignee !== undefined && assignee !== null && String(assignee).trim() !== "") {
@@ -295,7 +297,7 @@ export function normalizeTask(input: any): NormalizedTask {
   const raw = input && typeof input === "object" && input.raw && typeof input.raw === "object"
     ? { ...input.raw, ...input, raw: undefined }
     : input;
-  const id = String(raw?.id ?? raw?.task_id ?? raw?.xid ?? "");
+  const id = String(raw?.id ?? raw?.task_id ?? "");
   const typeRaw = String(raw?.type ?? raw?.task_type ?? "").toLowerCase();
 
   return {

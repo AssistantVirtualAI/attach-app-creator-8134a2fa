@@ -3,6 +3,10 @@ import {
   bucketTasks,
   formatTaskDue,
   toApiDateTime,
+  filterTasks,
+  normalizeFilter,
+  paginate,
+  taskCounts,
   type NormalizedTask,
 } from "../../../supabase/functions/_shared/planipret-tasks";
 import { loadTaskCache, saveTaskCache, clearTaskCache } from "@/lib/planipret/tasks";
@@ -54,5 +58,42 @@ describe("task cache", () => {
   it("returns an empty list on corrupt cache", () => {
     localStorage.setItem("pp_tasks_cache_u1", "{{{");
     expect(loadTaskCache("u1")).toEqual([]);
+  });
+});
+
+describe("filters & pagination", () => {
+  const now = new Date("2026-05-10T15:00:00-04:00");
+  const list = [
+    task("a", new Date("2026-05-08T10:00:00-04:00")),
+    task("b", new Date("2026-05-10T20:00:00-04:00")),
+    task("c", new Date("2026-05-14T09:00:00-04:00")),
+    task("d", new Date("2026-05-15T09:00:00-04:00")),
+  ];
+
+  it("normalizes filter aliases", () => {
+    expect(normalizeFilter("retard")).toBe("overdue");
+    expect(normalizeFilter("à venir")).toBe("upcoming");
+    expect(normalizeFilter(undefined)).toBe("open");
+  });
+
+  it("filters by bucket", () => {
+    expect(filterTasks(list, "overdue", now).map((t) => t.id)).toEqual(["a"]);
+    expect(filterTasks(list, "today", now).map((t) => t.id)).toEqual(["b"]);
+    expect(filterTasks(list, "upcoming", now).map((t) => t.id)).toEqual(["c", "d"]);
+    expect(filterTasks(list, "open", now)).toHaveLength(4);
+  });
+
+  it("paginates deterministically", () => {
+    const p1 = paginate(list, 1, 2);
+    expect(p1.items).toHaveLength(2);
+    expect(p1.has_more).toBe(true);
+    const p2 = paginate(list, 2, 2);
+    expect(p2.has_more).toBe(false);
+    expect(p2.total).toBe(4);
+  });
+
+  it("counts each bucket", () => {
+    const c = taskCounts(list, now);
+    expect(c).toMatchObject({ overdue: 1, today: 1, upcoming: 2, open: 4, all: 4 });
   });
 });

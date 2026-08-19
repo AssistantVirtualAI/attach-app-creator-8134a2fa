@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock } from "lucide-react";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
-import { formatTaskDue, type NormalizedTask } from "@/lib/planipret/tasks";
+import { formatTaskDue, type NormalizedTask, type TaskFilterValue } from "@/lib/planipret/tasks";
 import TaskComposerSheet, { type TaskComposerValue } from "./TaskComposerSheet";
 import { toast } from "sonner";
 
@@ -18,7 +18,7 @@ function Shimmer({ className = "" }: { className?: string }) {
 
 export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: Props) {
   const L = (fr: string, en: string) => (lang === "en" ? en : fr);
-  const { buckets, openCount, loading, refreshing, source, error, message, refresh, create, update, remove } = usePlanipretTasks(userId);
+  const { buckets, counts, openCount, filter, setFilter, hasMore, loadMore, loadingMore, total, loading, refreshing, source, error, message, refresh, create, update, remove } = usePlanipretTasks(userId);
   const [composer, setComposer] = useState<null | { initial?: any }>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<NormalizedTask | null>(null);
@@ -92,6 +92,33 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
         </p>
       )}
 
+      <div className="flex items-center gap-1.5 mb-3 overflow-x-auto" role="tablist" aria-label={L("Filtrer les tâches", "Filter tasks")}>
+        {([
+          { key: "open", label: L("Toutes", "All"), count: counts.open },
+          { key: "overdue", label: L("En retard", "Overdue"), count: counts.overdue },
+          { key: "today", label: L("Aujourd'hui", "Today"), count: counts.today },
+          { key: "upcoming", label: L("À venir", "Upcoming"), count: counts.upcoming },
+        ] as Array<{ key: TaskFilterValue; label: string; count: number }>).map((f) => {
+          const active = filter === f.key;
+          return (
+            <button
+              key={f.key}
+              role="tab"
+              aria-selected={active}
+              onClick={() => setFilter(f.key)}
+              className="shrink-0 min-h-[36px] px-3 rounded-full text-[11px] font-semibold"
+              style={{
+                background: active ? "var(--pp-brand-accent)" : "var(--pp-bg-surface)",
+                color: active ? "#fff" : "var(--pp-text-muted)",
+                border: active ? "none" : "1px solid var(--pp-bg-border)",
+              }}
+            >
+              {f.label} · {f.count}
+            </button>
+          );
+        })}
+      </div>
+
       {loading ? (
         <div className="space-y-2" aria-busy="true">{[0, 1, 2].map((i) => <Shimmer key={i} className="h-12" />)}</div>
       ) : error === "tasks_unavailable" ? (
@@ -155,6 +182,17 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
               </ul>
             </div>
           ))}
+
+          {hasMore && (
+            <button
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              className="w-full min-h-[44px] rounded-xl text-sm font-medium"
+              style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" }}
+            >
+              {loadingMore ? L("Chargement…", "Loading…") : L(`Afficher plus (${total})`, `Load more (${total})`)}
+            </button>
+          )}
         </div>
       )}
 

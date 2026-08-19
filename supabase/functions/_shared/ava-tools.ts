@@ -136,9 +136,11 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
     // ── Planiprêt Task API (POST/PUT/DELETE /api/main/tasks) ──
     mk("list_tasks", "Liste les tâches du courtier (en retard, aujourd'hui, à venir). Fuseau America/Toronto.", {
       status: { type: "string", description: "pending, done ou all (défaut: pending)" },
+      filter: { type: "string", description: "overdue (en retard), today (aujourd'hui), upcoming (à venir), open (toutes les ouvertes, défaut) ou all" },
       from: { type: "string", description: "Date de début ISO (optionnel)" },
       to: { type: "string", description: "Date de fin ISO (optionnel)" },
-      limit: { type: "number", description: "Nombre max (défaut: 25)" },
+      page: { type: "number", description: "Page (défaut: 1)" },
+      limit: { type: "number", description: "Nombre max par page (défaut: 25)" },
     }),
     mk("get_task", "Détail d'une tâche.", { task_id: { type: "string", description: "ID de la tâche" } }, ["task_id"]),
     mk("create_task", "Crée une tâche Planiprêt. Résume et demande TOUJOURS confirmation avant d'appeler.", {

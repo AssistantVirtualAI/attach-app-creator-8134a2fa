@@ -7,12 +7,20 @@ import type { NormalizedTask, TaskBuckets } from "../../../supabase/functions/_s
 
 export type TaskSource = "api" | "projection" | "unavailable";
 
+export type TaskFilterValue = "overdue" | "today" | "upcoming" | "open" | "all";
+
 export interface TaskListResult {
   success: boolean;
   source: TaskSource;
   tasks: NormalizedTask[];
   buckets: TaskBuckets;
   overdue_count: number;
+  counts: { overdue: number; today: number; upcoming: number; open: number; all: number };
+  filter: TaskFilterValue;
+  page: number;
+  limit: number;
+  total: number;
+  has_more: boolean;
   error?: string;
   message?: string;
 }
@@ -23,14 +31,31 @@ async function invoke(body: Record<string, unknown>): Promise<any> {
   return data ?? { success: false, error: "empty_response" };
 }
 
-export async function listTasks(opts: { status?: string; from?: string; to?: string; limit?: number } = {}): Promise<TaskListResult> {
+export interface ListTaskOptions {
+  status?: string;
+  from?: string;
+  to?: string;
+  /** retard / aujourd'hui / à venir */
+  filter?: TaskFilterValue;
+  page?: number;
+  limit?: number;
+}
+
+export async function listTasks(opts: ListTaskOptions = {}): Promise<TaskListResult> {
   const d = await invoke({ action: "list", ...opts });
+  const tasks = Array.isArray(d?.tasks) ? d.tasks : [];
   return {
     success: !!d?.success,
     source: (d?.source ?? "unavailable") as TaskSource,
-    tasks: Array.isArray(d?.tasks) ? d.tasks : [],
+    tasks,
     buckets: d?.buckets ?? { overdue: [], today: [], upcoming: [] },
     overdue_count: d?.overdue_count ?? 0,
+    counts: d?.counts ?? { overdue: 0, today: 0, upcoming: 0, open: tasks.length, all: tasks.length },
+    filter: (d?.filter ?? opts.filter ?? "open") as TaskFilterValue,
+    page: d?.page ?? opts.page ?? 1,
+    limit: d?.limit ?? opts.limit ?? 20,
+    total: d?.total ?? tasks.length,
+    has_more: !!d?.has_more,
     error: d?.error,
     message: d?.message,
   };

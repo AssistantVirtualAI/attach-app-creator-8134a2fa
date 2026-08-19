@@ -308,3 +308,43 @@ export function mapTaskApiError(status: number, details?: unknown) {
   if (status >= 500) return { ...base, error: "upstream_error", message: "Erreur serveur Planiprêt — réessaie dans un instant." };
   return { ...base, error: "request_failed", message: "La requête vers Planiprêt a échoué." };
 }
+
+// ── Filtering & pagination ────────────────────────────────────────────────
+export type TaskFilter = "overdue" | "today" | "upcoming" | "open" | "all";
+
+export const TASK_FILTERS: TaskFilter[] = ["overdue", "today", "upcoming", "open", "all"];
+
+export function normalizeFilter(value: unknown): TaskFilter {
+  const v = String(value ?? "").trim().toLowerCase();
+  if (v === "retard" || v === "late" || v === "overdue") return "overdue";
+  if (v === "today" || v === "aujourdhui" || v === "aujourd'hui") return "today";
+  if (v === "upcoming" || v === "a_venir" || v === "à venir" || v === "avenir") return "upcoming";
+  if (v === "all") return "all";
+  return "open";
+}
+
+/** Apply an overdue/today/upcoming filter, using the same Toronto buckets. */
+export function filterTasks(tasks: NormalizedTask[], filter: TaskFilter = "open", now: Date = new Date()): NormalizedTask[] {
+  if (filter === "all") return [...tasks].sort((a, b) => (a.due_at ?? "9").localeCompare(b.due_at ?? "9"));
+  const b = bucketTasks(tasks, now);
+  if (filter === "overdue") return b.overdue;
+  if (filter === "today") return b.today;
+  if (filter === "upcoming") return b.upcoming;
+  return [...b.overdue, ...b.today, ...b.upcoming];
+}
+
+export interface Page<T> { items: T[]; page: number; limit: number; total: number; has_more: boolean }
+
+export function paginate<T>(items: T[], page = 1, limit = 20): Page<T> {
+  const size = Math.min(Math.max(Number(limit) || 20, 1), 200);
+  const p = Math.max(Number(page) || 1, 1);
+  const start = (p - 1) * size;
+  const slice = items.slice(start, start + size);
+  return { items: slice, page: p, limit: size, total: items.length, has_more: start + slice.length < items.length };
+}
+
+/** Counts per bucket — cheap enough to always return alongside a page. */
+export function taskCounts(tasks: NormalizedTask[], now: Date = new Date()) {
+  const b = bucketTasks(tasks, now);
+  return { overdue: b.overdue.length, today: b.today.length, upcoming: b.upcoming.length, open: b.overdue.length + b.today.length + b.upcoming.length, all: tasks.length };
+}

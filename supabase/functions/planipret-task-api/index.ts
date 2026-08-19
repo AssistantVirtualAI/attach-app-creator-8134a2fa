@@ -16,6 +16,10 @@ import { resolveTelecomUserId } from "../_shared/maestro-broker-directory.ts";
 import {
   bucketTasks,
   buildCreatePayload,
+  filterTasks,
+  normalizeFilter,
+  paginate,
+  taskCounts,
   buildUpdateBody,
   canDeleteTask,
   idempotencyKey,
@@ -145,15 +149,91 @@ async function loadProjection(admin: Admin, userId: string) {
   return (data ?? []).map((r: any) => normalizeTask(r.payload));
 }
 
+/**
+ * Full mirror of the upstream list into the projection. On an unfiltered sync
+ * we also soft-delete rows the API no longer returns, so the projection stays
+ * a faithful (offline-only) copy of the single source of truth.
+ */
+async function syncProjection(admin: Admin, userId: string, tasks: any[], opts: { full: boolean }) {
+  await projectionUpsert(admin, userId, tasks);
+  if (!opts.full) return;
+  const keep = tasks.map((t) => String(t.id)).filter(Boolean);
+  let q = admin.from("planipret_tasks_projection")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .is("deleted_at", null);
+  if (keep.length) q = q.not("task_id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`);
+  await q;
+}
+
+/**
+ * Listing by maestro id. Planiprêt documents no public GET, so we walk the
+ * known internal read paths in order and keep the first one that answers.
+ */
+async function fetchUpstreamTasks(
+  token: string,
+  maestroId: string,
+  opts: { status?: string | null; from?: string | null; to?: string | null },
+): Promise<{ ok: boolean; tasks: any[]; endpoint: string | null; status: number }> {
+  const qs = new URLSearchParams();
+  if (opts.status) qs.set("status", opts.status);
+  if (opts.from) qs.set("from", opts.from);
+  if (opts.to) qs.set("to", opts.to);
+  qs.set("limit", "200");
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+
+  const candidates = [
+    `${TELECOM_BASE}/users/${maestroId}/tasks${suffix}`,
+    `${API_BASE}/telecom/api/v1/users/${maestroId}/tasks${suffix}`,
+    `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}xid=${maestroId}&type=user`,
+  ];
+
+  let lastStatus = 0;
+  for (const url of candidates) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        signal: ctrl.signal,
+      });
+      lastStatus = res.status;
+      if (!res.ok) continue;
+      const j = await res.json().catch(() => null);
+      const raw = Array.isArray(j) ? j : (j?.data ?? j?.tasks ?? j?.items ?? []);
+      const tasks = (Array.isArray(raw) ? raw : []).map(normalizeTask).filter((t: any) => t.id);
+      return { ok: true, tasks, endpoint: url.split("?")[0], status: res.status };
+    } catch {
+      lastStatus = 599;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { ok: false, tasks: [], endpoint: null, status: lastStatus };
+}
+
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse({ success: false, error: "method_not_allowed" }, 405);
+  if (req.method !== "POST" && req.method !== "GET") {
+    return jsonResponse({ success: false, error: "method_not_allowed" }, 405);
+  }
 
   const auth = await authBroker(req);
   if ("error" in auth) return auth.error;
   const { admin, userId, profile } = auth as { admin: Admin; userId: string; profile: any };
 
-  const body = await req.json().catch(() => ({} as any));
+  // GET is the read-only listing surface:
+  //   GET ?maestro_id=387460525&filter=today&page=1&limit=20&status=pending
+  let body: any = {};
+  if (req.method === "GET") {
+    const q = new URL(req.url).searchParams;
+    body = Object.fromEntries(q.entries());
+    body.action = body.action ?? "list";
+  } else {
+    body = await req.json().catch(() => ({} as any));
+  }
   const action = String(body?.action ?? "list");
   const source = String(body?.source ?? "app");
   const sessionId = body?.session_id ?? null;
@@ -165,62 +245,71 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: "planipret_unauthorized", message: "Compte Maestro non connecté.", correlation_id }, 200);
   }
 
+
   try {
-    // ── LIST ──────────────────────────────────────────────────────────────
+    // ── LIST (GET-style listing by maestro id, filtered + paginated) ──────
     if (action === "list") {
-      const limit = Math.min(Number(body?.limit ?? 50) || 50, 200);
+      const filter = normalizeFilter(body?.filter);
+      const page = Math.max(Number(body?.page ?? 1) || 1, 1);
+      const limit = Math.min(Math.max(Number(body?.limit ?? 20) || 20, 1), 200);
       const status = body?.status ? String(body.status) : "pending";
+      const from = body?.from ? String(body.from) : null;
+      const to = body?.to ? String(body.to) : null;
+
+      // Authoritative identity: the broker's maestro / telecom id.
+      let maestroId: string | null = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
       let telecomId: string | null = null;
       try {
-        const r = await resolveTelecomUserId(admin, userId, { candidate: profile?.maestro_broker_id ?? null });
+        const r = await resolveTelecomUserId(admin, userId, { candidate: maestroId });
         telecomId = r.id;
+        maestroId = maestroId ?? r.id;
       } catch { /* keep null */ }
 
-      if (telecomId && token) {
-        const qs = new URLSearchParams({ status, limit: String(limit) });
-        if (body?.from) qs.set("from", String(body.from));
-        if (body?.to) qs.set("to", String(body.to));
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-        let res: Response | null = null;
-        try {
-          res = await fetch(`${TELECOM_BASE}/users/${telecomId}/tasks?${qs.toString()}`, {
-            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-            signal: ctrl.signal,
-          });
-        } catch { res = null; } finally { clearTimeout(timer); }
+      const upstream = telecomId && token
+        ? await fetchUpstreamTasks(token, telecomId, { status, from, to })
+        : { ok: false as const, tasks: [] as any[], endpoint: null, status: 0 };
 
-        if (res?.ok) {
-          const j = await res.json().catch(() => null);
-          const raw = Array.isArray(j) ? j : (j?.data ?? j?.tasks ?? []);
-          const tasks = (Array.isArray(raw) ? raw : []).map(normalizeTask).filter((t) => t.id);
-          await projectionUpsert(admin, userId, tasks);
-          const buckets = bucketTasks(tasks);
-          return jsonResponse({
-            success: true, source: "api", tasks, buckets,
-            overdue_count: buckets.overdue.length, correlation_id,
-          });
-        }
-        // 404/405/501 → not exposed; anything else → fall through to projection too.
+      let all: any[];
+      let src: "api" | "projection" | "unavailable";
+      if (upstream.ok) {
+        all = upstream.tasks;
+        src = "api";
+        await syncProjection(admin, userId, all, { full: !from && !to });
+      } else {
+        all = await loadProjection(admin, userId);
+        src = all.length ? "projection" : "unavailable";
       }
 
-      const cached = await loadProjection(admin, userId);
-      if (cached.length) {
-        const buckets = bucketTasks(cached);
-        return jsonResponse({
-          success: true, source: "projection", tasks: cached, buckets,
-          overdue_count: buckets.overdue.length, correlation_id,
-          message: "Dernier état connu (liste live indisponible).",
-        });
-      }
+      const now = new Date();
+      const counts = taskCounts(all, now);
+      const filtered = filterTasks(all, filter, now);
+      const pageOut = paginate(filtered, page, limit);
+      const buckets = bucketTasks(pageOut.items, now);
+
       return jsonResponse({
-        success: true, source: "unavailable", tasks: [],
-        buckets: { overdue: [], today: [], upcoming: [] }, overdue_count: 0,
-        error: "tasks_unavailable",
-        message: "Planiprêt n'expose pas encore d'endpoint public de liste des tâches.",
+        success: true,
+        source: src,
+        maestro_user_id: maestroId,
+        telecom_user_id: telecomId,
+        endpoint: upstream.endpoint,
+        filter,
+        tasks: pageOut.items,
+        buckets,
+        counts,
+        overdue_count: counts.overdue,
+        page: pageOut.page,
+        limit: pageOut.limit,
+        total: pageOut.total,
+        has_more: pageOut.has_more,
+        ...(src === "unavailable"
+          ? { error: "tasks_unavailable", message: "Liste des tâches indisponible pour le moment." }
+          : src === "projection"
+            ? { message: "Dernier état connu (liste live indisponible)." }
+            : {}),
         correlation_id,
       });
     }
+
 
     // ── GET ───────────────────────────────────────────────────────────────
     if (action === "get") {

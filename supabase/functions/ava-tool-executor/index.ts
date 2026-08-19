@@ -612,7 +612,9 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     return await taskApi(ctx, {
       action: "list",
       status: p?.status ?? "pending",
+      filter: p?.filter ?? "open",
       from: p?.from, to: p?.to,
+      page: p?.page ?? 1,
       limit: p?.limit ?? 25,
     });
   },

@@ -41,6 +41,36 @@ Aujourd'hui / À venir) avec créer, modifier, reporter (+24 h) et supprimer.
 L'historique d'appels reste intégralement dans l'onglet Appels; aucun code
 VoIP/PJSIP/JsSIP n'a été modifié.
 
+## Rôles
+- `admin`, `broker`, `advisor` : lecture, création, modification, suppression.
+- `assistant` : lecture, création, modification. **Suppression refusée côté
+  serveur** (`role_forbidden`), avant tout appel à Planiprêt.
+
+## Idempotence et audit
+Chaque mutation calcule une clé déterministe (`idempotencyKey`) enregistrée dans
+`planipret_task_mutations`. Un double tap, un retry réseau ou un tool-call AVA
+rejoué renvoient la première réponse avec `replayed: true` — aucune seconde
+écriture. Chaque action écrit dans `planipret_audit_log` : outil, source,
+session AVA, `task_id`, statut HTTP, résultat et `correlation_id` — jamais le
+contenu des notes.
+
+## Limites de l'endpoint de liste
+Planiprêt n'expose aucun GET public. La passerelle sonde, dans l'ordre :
+`/telecom/api/v1/users/{id}/tasks`, `/telecom/api/v1/users/{id}/tasks` sur la
+base principale, puis `/api/main/tasks?xid=…&type=user`. Si tout répond
+404/405/501, la réponse est `source: "projection"` (dernier état connu) ou
+`source: "unavailable"` avec `error: "tasks_unavailable"`. **Reste en attente
+d'une documentation officielle Planiprêt.**
+
 ## Tests
-`src/lib/__tests__/planipretTasks.test.ts` — formatage des dates, buckets,
-cache local par utilisateur.
+- `src/lib/__tests__/planipretTasks.test.ts` — dates, buckets, cache par user.
+- `src/test/planipretTaskHandler.test.ts` — passerelle : create/update/delete,
+  422 sans notes, `xid` hors périmètre, token expiré, rôle assistant,
+  isolation multi-tenant, `tasks_unavailable`, idempotence (double tap, retry,
+  concurrence), audit sans notes.
+- `src/test/avaTaskTools.test.ts` — schémas des 5 outils AVA et barrières de
+  confirmation partagées chat/voix (`src/lib/planipret/avaMutations.ts`).
+- `src/test/tasksSection.test.tsx` — buckets, vide, offline, erreur + Réessayer,
+  bouton `+`, report, suppression confirmée/annulée, refresh realtime, filtres.
+- `src/test/tasksHomeRegression.test.ts` — onglet Appels intact, aucun secret
+  côté client, tout passe par `planipret-task-api`.

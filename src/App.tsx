@@ -573,7 +573,9 @@ const App = () => (
                   <Route path="pipeline" element={<Suspense fallback={<MobilePageSkeleton />}><MPipeline /></Suspense>} />
                   <Route path="search" element={<Suspense fallback={<MobilePageSkeleton />}><MSearch /></Suspense>} />
                   <Route path="stats" element={<Suspense fallback={<MobilePageSkeleton />}><MStats /></Suspense>} />
+                  <Route path="tasks" element={<Suspense fallback={<MobilePageSkeleton />}><MTasks /></Suspense>} />
                   <Route path="ava" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaChat /></Suspense>} />
+
                   <Route path="change-password" element={<Suspense fallback={<MobilePageSkeleton />}><MChangePassword /></Suspense>} />
                   <Route path="privacy" element={<Suspense fallback={<MobilePageSkeleton />}><PlanipretPrivacy /></Suspense>} />
 

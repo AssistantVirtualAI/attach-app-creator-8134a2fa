@@ -111,7 +111,8 @@ describe("TasksSection", () => {
     render(<TasksSection userId="u1" lang="fr" />);
     await screen.findByText("Rappeler Jean");
     fireEvent.click(screen.getByLabelText("Nouvelle tâche"));
-    expect(await screen.findByText(/Nouvelle tâche|Créer/)).toBeInTheDocument();
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText("Note")).toBeInTheDocument();
   });
 
   it("requires a confirmation before deleting and then calls the API", async () => {

@@ -148,12 +148,15 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
   if (assignee !== undefined && assignee !== null && String(assignee).trim() !== "") {
     payload.users_id = Number(assignee);
   }
-  if (input.status !== undefined && input.status !== null && String(input.status).trim() !== "") {
-    payload.status = String(input.status);
-  }
+  // The API requires `option` OR `status` (required_without). Default to the
+  // "pending" slug so a plain broker task never trips validation.
   if (input.option !== undefined && input.option !== null && String(input.option).trim() !== "") {
     payload.option = input.option;
+  } else {
+    const status = String(input.status ?? "").trim();
+    payload.status = status || "pending";
   }
+
   // Notifications and calendar sync are OFF unless explicitly enabled by the broker.
   if (input.sync_cal === true || input.sync_calendar === true) payload.sync_cal = 1;
   if (input.send_notification === true || input.notification === true) payload.send_notification = 1;
@@ -171,14 +174,22 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
     payload.is_recurring = 1;
     payload.recurring_value = Number(recValue ?? 1);
     payload.recurring_pattern = recPattern;
-    const on = input.recurring_on ?? rec?.on;
-    if (on !== undefined && on !== null && String(on).trim() !== "") {
-      const n = Number(on);
-      if (!Number.isInteger(n) || n < 0 || n > 6) {
+    // `recurring_on` is an array of weekday numbers (0=Sunday … 6=Saturday).
+    const rawOn = input.recurring_on ?? rec?.on;
+    const list = Array.isArray(rawOn)
+      ? rawOn
+      : rawOn !== undefined && rawOn !== null && String(rawOn).trim() !== "" ? [rawOn] : [];
+    if (list.length) {
+      const days = list.map((d) => Number(d));
+      if (days.some((n) => !Number.isInteger(n) || n < 0 || n > 6)) {
         return { ok: false, error: "validation_failed", fields: { recurring_on: "must_be_0_to_6" } };
       }
-      payload.recurring_on = n;
+      payload.recurring_on = days;
+    } else if (recPattern === "week") {
+      const ref = new Date(String(date).replace(" ", "T"));
+      payload.recurring_on = [Number.isNaN(ref.getTime()) ? 1 : ref.getDay()];
     }
+
   }
   return { ok: true, payload };
 }
@@ -235,9 +246,14 @@ export function idempotencyKey(parts: Array<string | number | null | undefined>)
 
 const truthy = (v: unknown) => v === true || v === 1 || v === "1" || v === "true";
 
-export function normalizeTask(raw: any): NormalizedTask {
+export function normalizeTask(input: any): NormalizedTask {
+  // Re-normalizing an already normalized task must not nest `raw` inside `raw`.
+  const raw = input && typeof input === "object" && input.raw && typeof input.raw === "object"
+    ? { ...input.raw, ...input, raw: undefined }
+    : input;
   const id = String(raw?.id ?? raw?.task_id ?? raw?.xid ?? "");
   const typeRaw = String(raw?.type ?? raw?.task_type ?? "").toLowerCase();
+
   return {
     id,
     notes: String(raw?.notes ?? raw?.title ?? raw?.subject ?? "").trim(),

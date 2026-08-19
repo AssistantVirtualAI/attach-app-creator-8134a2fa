@@ -113,7 +113,18 @@ export interface CreateInput {
   recurring_on?: unknown;
   is_hidden?: unknown;
   update_status?: unknown;
+  // Optional notification / scheduling params documented on POST /api/main/tasks
+  send_notification_to?: unknown;
+  send_notification_client?: unknown;
+  send_notification_client_secondary?: unknown;
+  send_notification_assistant?: unknown;
+  assistant_users_id?: unknown;
+  send_notification_from?: unknown;
+  notification_users?: unknown;
+  scheduled?: unknown;
+  scheduled_at?: unknown;
 }
+
 
 export type ValidationResult =
   | { ok: true; payload: Record<string, unknown> }
@@ -162,6 +173,39 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
   if (input.send_notification === true || input.notification === true) payload.send_notification = 1;
   if (input.is_hidden === true) payload.is_hidden = 1;
   if (input.update_status === true) payload.update_status = 1;
+
+  // Optional notification / scheduling params (docs: POST /api/main/tasks).
+  const intList = (v: unknown): number[] | null => {
+    const arr = Array.isArray(v) ? v : v === undefined || v === null || String(v).trim() === "" ? [] : [v];
+    const nums = arr.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0);
+    return nums.length ? nums : null;
+  };
+  const posInt = (v: unknown): number | null => {
+    const n = Number(v);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  };
+  const notifyTo = intList(input.send_notification_to);
+  if (notifyTo) payload.send_notification_to = notifyTo;
+  if (input.send_notification_client === true) payload.send_notification_client = 1;
+  if (input.send_notification_client_secondary === true) payload.send_notification_client_secondary = 1;
+  if (input.send_notification_assistant === true) payload.send_notification_assistant = 1;
+  const assistantId = posInt(input.assistant_users_id);
+  if (assistantId) payload.assistant_users_id = assistantId;
+  const notifyFrom = posInt(input.send_notification_from);
+  if (notifyFrom) payload.send_notification_from = notifyFrom;
+  const notifUsers = intList(input.notification_users);
+  if (notifUsers) payload.notification_users = notifUsers;
+  if (input.scheduled === true) {
+    const at = toApiDateTime(input.scheduled_at as string);
+    if (!at) return { ok: false, error: "validation_failed", fields: { scheduled_at: "date_required_YYYY-MM-DD_HH:mm:ss" } };
+    payload.scheduled = 1;
+    payload.scheduled_at = at;
+  }
+  // The API requires notification_users when the client notification is on.
+  if (payload.send_notification_client === 1 && !payload.notification_users) {
+    return { ok: false, error: "validation_failed", fields: { notification_users: "required_when_send_notification_client" } };
+  }
+
 
   const rec = input.recurrence ?? null;
   const recValue = input.recurring_value ?? rec?.value;

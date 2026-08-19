@@ -70,9 +70,10 @@ describe("TasksSection", () => {
   it("renders the overdue / today / upcoming buckets", async () => {
     render(<TasksSection userId="u1" lang="fr" />);
     expect(await screen.findByText("Rappeler Jean")).toBeInTheDocument();
-    expect(screen.getByText(/En retard · 1/)).toBeInTheDocument();
-    expect(screen.getByText(/Aujourd'hui · 1/)).toBeInTheDocument();
-    expect(screen.getByText(/À venir · 1/)).toBeInTheDocument();
+    expect(screen.getByText("Signer le dossier")).toBeInTheDocument();
+    expect(screen.getByText("Suivi Sophie")).toBeInTheDocument();
+    const tabs = screen.getAllByRole("tab").map((t) => t.textContent?.replace(/\s+/g, " ").trim());
+    expect(tabs).toEqual(["Toutes · 3", "En retard · 1", "Aujourd'hui · 1", "À venir · 1"]);
   });
 
   it("shows the empty state", async () => {

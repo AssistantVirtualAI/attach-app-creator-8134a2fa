@@ -8,27 +8,6 @@ import { buildCreatePayload, buildUpdateBody } from "../_shared/planipret-tasks.
 
 const API_BASE = (Deno.env.get("PLANIPRET_API_BASE_URL") ?? "https://client.planipret.com").replace(/\/$/, "");
 
-async function call(token: string, path: string, method: string, payload?: unknown) {
-  const url = `${API_BASE}${path}`;
-  const started = Date.now();
-  const res = await fetch(url, {
-    method,
-    body: payload === undefined ? undefined : JSON.stringify(payload),
-    headers: {
-      Authorization: "Bearer ***",
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    } as any,
-  }).catch((e) => ({ status: 599, text: async () => String(e) } as any));
-  const text = await res.text().catch(() => "");
-  let data: unknown;
-  try { data = text ? JSON.parse(text) : null; } catch { data = text.slice(0, 1500); }
-  return {
-    request: { method, url, headers: { Authorization: "Bearer <redacted>", "Content-Type": "application/json" }, body: payload ?? null },
-    response: { status: res.status, ms: Date.now() - started, body: data },
-  };
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const key = Deno.env.get("PLANIPRET_E2E_KEY") ?? "";

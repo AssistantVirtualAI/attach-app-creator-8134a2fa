@@ -146,7 +146,32 @@ async function syncProjection(admin: any, userId: string, tasks: any[], opts: { 
   await q;
 }
 
+/**
+ * A `contract` task may only target a contract that is officially mapped to
+ * this broker (pipeline entry, synced Maestro contact, or an existing task).
+ */
+async function contractIsMapped(admin: any, userId: string, xid: string): Promise<boolean> {
+  if (!xid) return false;
+  try {
+    const { data: pipe } = await admin.from("planipret_pipeline")
+      .select("id").eq("user_id", userId).eq("maestro_contact_id", xid).limit(1);
+    if (pipe?.length) return true;
+  } catch { /* ignore */ }
+  try {
+    const { data: contact } = await admin.from("planipret_contacts")
+      .select("id").eq("user_id", userId).eq("external_id", xid).limit(1);
+    if (contact?.length) return true;
+  } catch { /* ignore */ }
+  try {
+    const { data: known } = await admin.from("planipret_tasks_projection")
+      .select("payload").eq("user_id", userId).is("deleted_at", null).limit(200);
+    return (known ?? []).some((r: any) => String(r?.payload?.xid ?? "") === xid);
+  } catch { /* ignore */ }
+  return false;
+}
+
 export async function handleTaskRequest(
+
   body: any,
   deps: TaskDeps,
 ): Promise<{ status: number; body: Record<string, unknown> }> {

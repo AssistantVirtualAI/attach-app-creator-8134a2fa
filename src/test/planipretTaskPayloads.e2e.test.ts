@@ -61,7 +61,7 @@ describe("POST /api/main/tasks — doc-aligned payload", () => {
     expect(r.ok).toBe(true);
     expect((r as any).payload).toEqual({
       xid: 387460525, type: "user", date: "2026-08-21 09:30:00",
-      notes: "Rappel client", status: "pending",
+      notes: "Rappel client", description: "Rappel client", status: "pending",
     });
   });
 

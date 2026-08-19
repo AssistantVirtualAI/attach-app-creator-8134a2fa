@@ -595,13 +595,6 @@ export default function MHome() {
         </section>
       )}
 
-      {/* ===== MY TASKS ===== */}
-      <TasksSection
-        userId={profile?.user_id ?? null}
-        lang={lang as "fr" | "en"}
-        defaultTarget={profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null}
-        onSeeAll={() => navigate("/planipret/mobile/calls")}
-      />
     </div>
   );
 }

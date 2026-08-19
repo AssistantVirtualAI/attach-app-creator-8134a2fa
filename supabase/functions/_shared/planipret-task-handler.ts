@@ -247,7 +247,7 @@ export async function handleTaskRequest(
   // ── CREATE ─────────────────────────────────────────────────────────────────
   if (action === "create") {
     const built = buildCreatePayload(body ?? {});
-    if (!built.ok) return { status: 200, body: { ...built, correlation_id } };
+    if (!built.ok) return { status: 200, body: { success: false, ...built, correlation_id } };
     const payload = built.payload;
 
     // Scope check: a `user` task must target the broker's own Planiprêt id.

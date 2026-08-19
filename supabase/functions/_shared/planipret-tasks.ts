@@ -148,12 +148,15 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
   if (assignee !== undefined && assignee !== null && String(assignee).trim() !== "") {
     payload.users_id = Number(assignee);
   }
-  if (input.status !== undefined && input.status !== null && String(input.status).trim() !== "") {
-    payload.status = String(input.status);
-  }
+  // The API requires `option` OR `status` (required_without). Default to the
+  // "pending" slug so a plain broker task never trips validation.
   if (input.option !== undefined && input.option !== null && String(input.option).trim() !== "") {
     payload.option = input.option;
+  } else {
+    const status = String(input.status ?? "").trim();
+    payload.status = status || "pending";
   }
+
   // Notifications and calendar sync are OFF unless explicitly enabled by the broker.
   if (input.sync_cal === true || input.sync_calendar === true) payload.sync_cal = 1;
   if (input.send_notification === true || input.notification === true) payload.send_notification = 1;

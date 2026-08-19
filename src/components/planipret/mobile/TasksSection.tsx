@@ -21,6 +21,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
   const { buckets, counts, openCount, filter, setFilter, hasMore, loadMore, loadingMore, total, loading, refreshing, source, error, message, refresh, create, update, remove } = usePlanipretTasks(userId);
   const [composer, setComposer] = useState<null | { initial?: any }>(null);
   const [busy, setBusy] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string> | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<NormalizedTask | null>(null);
 
   const sections = useMemo(() => ([
@@ -28,6 +29,13 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
     { key: "today", label: L("Aujourd'hui", "Today"), items: buckets.today, accent: "var(--pp-brand-accent)" },
     { key: "upcoming", label: L("À venir", "Upcoming"), items: buckets.upcoming, accent: "var(--pp-text-muted)" },
   ]), [buckets, lang]);
+
+  // Optional group: tasks created by AVA in the last 24 h.
+  const recentAva = useMemo(() => {
+    const cutoff = Date.now() - 24 * 3600 * 1000;
+    const all = [...buckets.overdue, ...buckets.today, ...buckets.upcoming];
+    return all.filter((t: any) => t.created_by_ava && (t.created_at ? new Date(t.created_at).getTime() >= cutoff : true));
+  }, [buckets]);
 
   const submit = async (v: TaskComposerValue) => {
     setBusy(true);
@@ -38,11 +46,14 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
     setBusy(false);
     if (r?.success) {
       toast.success(editing ? L("Tâche modifiée", "Task updated") : L("Tâche créée", "Task created"));
+      setFieldErrors(null);
       setComposer(null);
     } else {
+      setFieldErrors(r?.fields && typeof r.fields === "object" ? r.fields : null);
       toast.error(r?.message ?? L("Échec de l'enregistrement", "Save failed"));
     }
   };
+
 
   const doDelete = async (task: NormalizedTask) => {
     setConfirmDelete(null);
@@ -141,7 +152,13 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
         </p>
       ) : (
         <div className="space-y-3">
+          {recentAva.length > 0 && (
+            <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--pp-agent)", fontWeight: 700 }}>
+              {L("Récentes (AVA, 24 h)", "Recent (AVA, 24 h)")} · {recentAva.length}
+            </p>
+          )}
           {sections.filter((s) => s.items.length > 0).map((s) => (
+
             <div key={s.key}>
               <p className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: s.accent, fontWeight: 700 }}>
                 {s.label} · {s.items.length}
@@ -200,9 +217,11 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
         open={!!composer} lang={lang} busy={busy}
         defaultTarget={defaultTarget}
         initial={composer?.initial}
-        onClose={() => setComposer(null)}
+        fieldErrors={fieldErrors}
+        onClose={() => { setFieldErrors(null); setComposer(null); }}
         onSubmit={submit}
       />
+
 
       {confirmDelete && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-6" role="alertdialog" aria-modal="true">

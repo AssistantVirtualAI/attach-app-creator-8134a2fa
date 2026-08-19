@@ -146,7 +146,32 @@ async function syncProjection(admin: any, userId: string, tasks: any[], opts: { 
   await q;
 }
 
+/**
+ * A `contract` task may only target a contract that is officially mapped to
+ * this broker (pipeline entry, synced Maestro contact, or an existing task).
+ */
+async function contractIsMapped(admin: any, userId: string, xid: string): Promise<boolean> {
+  if (!xid) return false;
+  try {
+    const { data: pipe } = await admin.from("planipret_pipeline")
+      .select("id").eq("user_id", userId).eq("maestro_contact_id", xid).limit(1);
+    if (pipe?.length) return true;
+  } catch { /* ignore */ }
+  try {
+    const { data: contact } = await admin.from("planipret_contacts")
+      .select("id").eq("user_id", userId).eq("external_id", xid).limit(1);
+    if (contact?.length) return true;
+  } catch { /* ignore */ }
+  try {
+    const { data: known } = await admin.from("planipret_tasks_projection")
+      .select("payload").eq("user_id", userId).is("deleted_at", null).limit(200);
+    return (known ?? []).some((r: any) => String(r?.payload?.xid ?? "") === xid);
+  } catch { /* ignore */ }
+  return false;
+}
+
 export async function handleTaskRequest(
+
   body: any,
   deps: TaskDeps,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
@@ -229,12 +254,29 @@ export async function handleTaskRequest(
     };
   }
 
-  // ── GET ────────────────────────────────────────────────────────────────────
+  // ── GET (live first, projection fallback) ─────────────────────────────────
   if (action === "get") {
     const taskId = String(body?.task_id ?? "").trim();
     if (!taskId) {
       return { status: 200, body: { success: false, error: "validation_failed", fields: { task_id: "task_id_required" }, correlation_id } };
     }
+
+    // 1) Authoritative source: same connector as `list`.
+    try {
+      let maestroId: string | null = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
+      const telecomId = await deps.resolveTelecomUserId(maestroId);
+      if (telecomId && token) {
+        const upstream = await deps.listFetch(telecomId, { status: null, from: null, to: null });
+        if (upstream.ok) {
+          const all = (upstream.tasks ?? []).map((t: any) => normalizeTask(t));
+          await projectionUpsert(admin, userId, all);
+          const hit = all.find((t: any) => String(t.id) === taskId);
+          if (hit) return { status: 200, body: { success: true, source: "api", task: hit, correlation_id } };
+        }
+      }
+    } catch { /* fall through to projection */ }
+
+    // 2) Offline fallback.
     const { data: row } = await admin
       .from("planipret_tasks_projection")
       .select("payload")
@@ -261,6 +303,25 @@ export async function handleTaskRequest(
         return { status: 200, body: { success: false, error: "xid_out_of_scope", message: "Cette cible n'appartient pas à ton périmètre.", correlation_id } };
       }
     }
+
+    // Scope check: a `contract` task must target a contract mapped to this user.
+    if (payload.type === "contract") {
+      const xid = String(payload.xid ?? "");
+      const mapped = await contractIsMapped(admin, userId, xid);
+      if (!mapped) {
+        await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "target_mapping_required" });
+        return {
+          status: 200,
+          body: {
+            success: false,
+            error: "target_mapping_required",
+            message: "Ce contrat n'est pas rattaché à ton compte Planiprêt.",
+            correlation_id,
+          },
+        };
+      }
+    }
+
 
     const key = String(body?.idempotency_key ?? idempotencyKey(["create", userId, payload.xid as any, payload.type as any, payload.date as any, payload.notes as any]));
     const out = await withIdempotency(admin, userId, key, "create", async () => {

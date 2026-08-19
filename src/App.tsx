@@ -38,6 +38,8 @@ const MContacts = lazyWithRetry(() => import("./pages/planipret/mobile/MContacts
 const MPipeline = lazyWithRetry(() => import("./pages/planipret/mobile/MPipeline"));
 const MSearch = lazyWithRetry(() => import("./pages/planipret/mobile/MSearch"));
 const MStats = lazyWithRetry(() => import("./pages/planipret/mobile/MStats"));
+const MTasks = lazyWithRetry(() => import("./pages/planipret/mobile/MTasks"));
+
 const MAvaChat = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaChat"));
 const MChangePassword = lazyWithRetry(() => import("./pages/planipret/mobile/MChangePassword"));
 
@@ -571,7 +573,9 @@ const App = () => (
                   <Route path="pipeline" element={<Suspense fallback={<MobilePageSkeleton />}><MPipeline /></Suspense>} />
                   <Route path="search" element={<Suspense fallback={<MobilePageSkeleton />}><MSearch /></Suspense>} />
                   <Route path="stats" element={<Suspense fallback={<MobilePageSkeleton />}><MStats /></Suspense>} />
+                  <Route path="tasks" element={<Suspense fallback={<MobilePageSkeleton />}><MTasks /></Suspense>} />
                   <Route path="ava" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaChat /></Suspense>} />
+
                   <Route path="change-password" element={<Suspense fallback={<MobilePageSkeleton />}><MChangePassword /></Suspense>} />
                   <Route path="privacy" element={<Suspense fallback={<MobilePageSkeleton />}><PlanipretPrivacy /></Suspense>} />
 

@@ -122,7 +122,15 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
 
   const create = useCallback(async (input: Record<string, unknown>) => {
     const r = await apiCreate(input);
-    if (r?.success) await refresh();
+    if (r?.success) {
+      // Paint the new task immediately — the upstream list endpoint is
+      // eventually consistent (and currently undocumented).
+      if (r.task?.id) {
+        setTasks((cur) => (cur.some((t) => t.id === r.task.id) ? cur : [...cur, r.task]));
+        setCounts((c) => ({ ...c, open: c.open + 1, all: c.all + 1 }));
+      }
+      await refresh();
+    }
     return r;
   }, [refresh]);
 

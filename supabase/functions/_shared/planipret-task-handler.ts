@@ -288,7 +288,17 @@ export async function handleTaskRequest(
 
   // ── CREATE ─────────────────────────────────────────────────────────────────
   if (action === "create") {
-    const built = buildCreatePayload(body ?? {});
+    // A `user` task defaults to the broker's own Planiprêt id when the client
+    // did not provide a target.
+    const createInput = { ...(body ?? {}) } as any;
+    const ownXid = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : "";
+    const hasTarget = String(createInput.xid ?? createInput.target ?? "").trim() !== "";
+    const wantsUser = String(createInput.type ?? createInput.target_type ?? "user").toLowerCase() === "user";
+    if (!hasTarget && wantsUser && ownXid) {
+      createInput.xid = ownXid;
+      createInput.type = "user";
+    }
+    const built = buildCreatePayload(createInput);
     if (!built.ok) return { status: 200, body: { success: false, ...built, correlation_id } };
     const payload = built.payload;
 
@@ -323,7 +333,7 @@ export async function handleTaskRequest(
     }
 
 
-    const key = String(body?.idempotency_key ?? idempotencyKey(["create", userId, payload.xid as any, payload.type as any, payload.date as any, payload.notes as any]));
+    const key = String(createInput?.idempotency_key ?? idempotencyKey(["create", userId, payload.xid as any, payload.type as any, payload.date as any, payload.notes as any]));
     const out = await withIdempotency(admin, userId, key, "create", async () => {
       const res = await deps.apiFetch("/api/main/tasks", { method: "POST", body: JSON.stringify(payload) });
       if (!res.ok) {

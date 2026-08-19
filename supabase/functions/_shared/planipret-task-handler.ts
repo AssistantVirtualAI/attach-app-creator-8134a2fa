@@ -188,7 +188,7 @@ export async function handleTaskRequest(
     let all: any[];
     let src: "api" | "projection" | "unavailable";
     if (upstream.ok) {
-      all = upstream.tasks;
+      all = (upstream.tasks ?? []).map((t: any) => normalizeTask(t));
       src = "api";
       await syncProjection(admin, userId, all, { full: !from && !to });
     } else {

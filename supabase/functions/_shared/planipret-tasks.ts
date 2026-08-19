@@ -113,7 +113,18 @@ export interface CreateInput {
   recurring_on?: unknown;
   is_hidden?: unknown;
   update_status?: unknown;
+  // Optional notification / scheduling params documented on POST /api/main/tasks
+  send_notification_to?: unknown;
+  send_notification_client?: unknown;
+  send_notification_client_secondary?: unknown;
+  send_notification_assistant?: unknown;
+  assistant_users_id?: unknown;
+  send_notification_from?: unknown;
+  notification_users?: unknown;
+  scheduled?: unknown;
+  scheduled_at?: unknown;
 }
+
 
 export type ValidationResult =
   | { ok: true; payload: Record<string, unknown> }

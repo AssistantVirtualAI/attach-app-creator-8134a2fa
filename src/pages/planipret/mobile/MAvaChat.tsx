@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { supabase } from "@/integrations/supabase/client";
+import { AVA_MUTATING_ACTIONS } from "@/lib/planipret/avaMutations";
 import { Button } from "@/components/ui/button";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -29,7 +30,7 @@ type Msg = { id: string; role: "user" | "assistant"; message: string; created_at
 const isPagerSuggestion = (s: AvaSuggestion) => s.id.startsWith("maestro-prev-") || s.id.startsWith("maestro-next-");
 type Session = { id: string; title: string; last_message_at: string };
 
-const MUTATING_ACTIONS = new Set(["send_email", "create_calendar_event", "update_calendar_event", "delete_calendar_event", "send_teams_message", "reply_teams_message", "create_task", "update_task", "delete_task"]);
+const MUTATING_ACTIONS = AVA_MUTATING_ACTIONS;
 const CONFIRM_RE = /^(oui|ok|okay|confirm[eé]?|confirm[eé] pour envoyer|j['’]?autorise|autorise|vas-y|go|envoie|envoyer|appelle|appel|cr[eé]e|supprime|delete|yes|yep|approved?|approuv[eé])\b/i;
 const CANCEL_RE = /^(non|annule|annuler|stop|cancel|cancelled?|no|n\b)/i;
 

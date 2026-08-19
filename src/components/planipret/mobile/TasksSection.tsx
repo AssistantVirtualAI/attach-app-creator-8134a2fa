@@ -152,7 +152,13 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
         </p>
       ) : (
         <div className="space-y-3">
+          {recentAva.length > 0 && (
+            <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--pp-agent)", fontWeight: 700 }}>
+              {L("Récentes (AVA, 24 h)", "Recent (AVA, 24 h)")} · {recentAva.length}
+            </p>
+          )}
           {sections.filter((s) => s.items.length > 0).map((s) => (
+
             <div key={s.key}>
               <p className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: s.accent, fontWeight: 700 }}>
                 {s.label} · {s.items.length}

@@ -210,12 +210,14 @@ Deno.serve(async (req) => {
 
     // Keep creation payload to Maestro's documented minimum. Completion data,
     // summary and notes are sent afterward with PUT /calls/{id}.
+    // Maestro only accepts "inbound" | "outbound"; missed/no-answer legs are inbound.
+    const apiDirection = call.direction === "outbound" ? "outbound" : "inbound";
     const body: Record<string, unknown> = {
       provider_call_id: call.ns_call_id ?? call.id,
       status: "dialing",
-      direction: call.direction,
+      direction: apiDirection,
     };
-    if (call.direction === "inbound") {
+    if (apiDirection === "inbound") {
       body.from_user_number = normalizePhone(call.from_number);
       body.to_user_id = Number(auth.brokerId);
     } else {

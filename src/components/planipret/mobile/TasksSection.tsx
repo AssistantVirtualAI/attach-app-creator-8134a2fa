@@ -211,9 +211,11 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
         open={!!composer} lang={lang} busy={busy}
         defaultTarget={defaultTarget}
         initial={composer?.initial}
-        onClose={() => setComposer(null)}
+        fieldErrors={fieldErrors}
+        onClose={() => { setFieldErrors(null); setComposer(null); }}
         onSubmit={submit}
       />
+
 
       {confirmDelete && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-6" role="alertdialog" aria-modal="true">

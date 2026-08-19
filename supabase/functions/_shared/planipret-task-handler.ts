@@ -282,7 +282,7 @@ export async function handleTaskRequest(
   if (action === "update") {
     const taskId = String(body?.task_id ?? "").trim();
     const built = buildUpdateBody(taskId, body?.changes ?? {});
-    if (!built.ok) return { status: 200, body: { ...built, correlation_id } };
+    if (!built.ok) return { status: 200, body: { success: false, ...built, correlation_id } };
     const key = String(body?.idempotency_key ?? idempotencyKey(["update", userId, taskId, JSON.stringify(built.payload)]));
     const out = await withIdempotency(admin, userId, key, "update", async () => {
       const res = await deps.apiFetch(`/api/main/tasks/${encodeURIComponent(taskId)}`, {

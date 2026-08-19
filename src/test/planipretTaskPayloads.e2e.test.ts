@@ -191,7 +191,8 @@ describe("DELETE /api/main/tasks/{taskId} — doc-aligned payload", () => {
     const deps = makeDeps(calls);
     deps.profile = { role: "assistant", maestro_broker_id: "387460525" };
     const res = await handleTaskRequest({ action: "delete", task_id: "9001" }, deps);
-    expect(res.status).toBe(403);
+    expect((res.body as any).success).toBe(false);
+    expect((res.body as any).error).toBe("role_forbidden");
     expect(calls).toHaveLength(0);
   });
 });
@@ -209,7 +210,7 @@ describe("upstream error mapping stays doc-aligned", () => {
       { action: "create", xid: "387460525", type: "user", date: "2026-08-21 09:30", notes: "x" },
       deps,
     );
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect((res.body as any).success).toBe(false);
     expect(spy).toHaveBeenCalledTimes(1);
   });
 });

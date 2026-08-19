@@ -174,14 +174,22 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
     payload.is_recurring = 1;
     payload.recurring_value = Number(recValue ?? 1);
     payload.recurring_pattern = recPattern;
-    const on = input.recurring_on ?? rec?.on;
-    if (on !== undefined && on !== null && String(on).trim() !== "") {
-      const n = Number(on);
-      if (!Number.isInteger(n) || n < 0 || n > 6) {
+    // `recurring_on` is an array of weekday numbers (0=Sunday … 6=Saturday).
+    const rawOn = input.recurring_on ?? rec?.on;
+    const list = Array.isArray(rawOn)
+      ? rawOn
+      : rawOn !== undefined && rawOn !== null && String(rawOn).trim() !== "" ? [rawOn] : [];
+    if (list.length) {
+      const days = list.map((d) => Number(d));
+      if (days.some((n) => !Number.isInteger(n) || n < 0 || n > 6)) {
         return { ok: false, error: "validation_failed", fields: { recurring_on: "must_be_0_to_6" } };
       }
-      payload.recurring_on = n;
+      payload.recurring_on = days;
+    } else if (recPattern === "week") {
+      const ref = new Date(String(date).replace(" ", "T"));
+      payload.recurring_on = [Number.isNaN(ref.getTime()) ? 1 : ref.getDay()];
     }
+
   }
   return { ok: true, payload };
 }

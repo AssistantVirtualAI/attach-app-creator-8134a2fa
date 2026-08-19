@@ -159,3 +159,28 @@ describe("TasksSection", () => {
     await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith(expect.objectContaining({ filter: "overdue" })));
   });
 });
+
+describe("TasksSection — see all + field errors", () => {
+  it("calls onSeeAll when 'Voir tout' is pressed", async () => {
+    const onSeeAll = vi.fn();
+    render(<TasksSection userId="u1" lang="fr" onSeeAll={onSeeAll} />);
+    await waitFor(() => expect(listTasks).toHaveBeenCalled());
+    fireEvent.click(screen.getByText(/Voir tout/));
+    expect(onSeeAll).toHaveBeenCalled();
+  });
+
+  it("shows per-field 422 errors returned by the gateway", async () => {
+    createTask.mockResolvedValue({
+      success: false,
+      error: "validation_failed",
+      message: "Champs invalides",
+      fields: { notes: "notes_required" },
+    });
+    render(<TasksSection userId="u1" lang="fr" defaultTarget="387460525" />);
+    await waitFor(() => expect(listTasks).toHaveBeenCalled());
+    fireEvent.click(screen.getByLabelText("Nouvelle tâche"));
+    fireEvent.change(screen.getByLabelText("Note"), { target: { value: "x" } });
+    fireEvent.click(screen.getByText("Enregistrer"));
+    await waitFor(() => expect(screen.getByText("La note est obligatoire.")).toBeInTheDocument());
+  });
+});

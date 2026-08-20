@@ -267,12 +267,67 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
         style={{ background: "var(--pp-bg-base, #fff)", maxHeight: frame ? "92%" : "calc(100dvh - max(1rem, env(safe-area-inset-top)))", paddingBottom: "calc(1rem + env(safe-area-inset-bottom))", WebkitOverflowScrolling: "touch" }}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 pt-4 pb-3" style={{ background: "var(--pp-bg-base, #fff)" }}>
-          <h2 className="text-base font-semibold pp-heading">{initial?.task_id ? L("Modifier la tâche", "Edit task") : L("Nouvelle tâche", "New task")}</h2>
+          <div className="flex items-center gap-2 min-w-0">
+            {step === "form" && !initial?.task_id && (
+              <button type="button" onClick={() => setStep("pick")} aria-label={L("Retour", "Back")}
+                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={fieldStyle}>
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
+            <h2 className="text-base font-semibold pp-heading truncate">{initial?.task_id ? L("Modifier la tâche", "Edit task") : L("Nouvelle tâche", "New task")}</h2>
+          </div>
           <button type="button" onClick={onClose} disabled={busy} aria-label={L("Fermer", "Close")} className="w-11 h-11 rounded-xl flex items-center justify-center disabled:opacity-50" style={fieldStyle}>
             <X className="w-4 h-4" />
           </button>
         </div>
 
+        {step === "pick" && (
+          <div className="px-4 pb-4" data-testid="task-catalog">
+            {/* Tabs — mirrors Maestro's Custom Tasks / Quick Tasks */}
+            <div className="flex gap-4 border-b mb-3" style={{ borderColor: "var(--pp-bg-border)" }}>
+              {(["custom", "quick"] as const).map((tt) => (
+                <button key={tt} type="button" onClick={() => setTab(tt)} aria-pressed={tab === tt}
+                  className="pb-2 text-sm font-semibold"
+                  style={{
+                    color: tab === tt ? "var(--pp-brand-accent)" : "var(--pp-text-muted)",
+                    borderBottom: tab === tt ? "2px solid var(--pp-brand-accent)" : "2px solid transparent",
+                  }}>
+                  {tt === "custom" ? L("Tâches personnalisées", "Custom Tasks") : L("Tâches rapides", "Quick Tasks")}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-[11px] font-semibold mb-2" style={labelStyle}>{L("Choisir un jalon", "Choose milestone")}</p>
+
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--pp-bg-border)" }}>
+              {(tab === "quick" ? QUICK_TASKS : MILESTONES).map((item, i) => (
+                <button key={item.id} type="button"
+                  onClick={() => { setPicked(item); setNotes(item.id === "other" ? "" : catalogLabel(item, lang)); setStep("form"); }}
+                  className="w-full flex items-center gap-3 px-3 py-3 text-left min-h-[52px]"
+                  style={{
+                    background: "var(--pp-bg-surface)",
+                    borderTop: i === 0 ? "none" : "1px solid var(--pp-bg-border)",
+                    color: "var(--pp-text-primary)",
+                  }}>
+                  {tab === "custom" && (
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ background: item.color || "var(--pp-text-muted)" }} />
+                  )}
+                  <span className="flex-1 text-sm">{catalogLabel(item, lang)}</span>
+                  {tab === "quick" && <Plus className="w-4 h-4 shrink-0" style={{ color: "var(--pp-success, #12B76A)" }} />}
+                </button>
+              ))}
+            </div>
+
+            <button type="button" onClick={() => { setPicked(null); setNotes(""); setStep("form"); }}
+              className="w-full mt-3 min-h-[48px] rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+              style={fieldStyle}>
+              <Plus className="w-4 h-4" />
+              {L("Nouvelle tâche personnalisée", "New Custom Task")}
+            </button>
+          </div>
+        )}
+
+        {step === "form" && (
         <form className="space-y-3 px-4" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
           <div className="flex gap-2">
             {(["user", "contract"] as const).map((tt) => (
@@ -438,6 +493,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
             {busy ? L("Enregistrement…", "Saving…") : L("Enregistrer", "Save")}
           </button>
         </form>
+        )}
       </div>
     </div>
   ), host);

@@ -257,8 +257,12 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const clientMatches = q.length >= 2
     ? clients.filter((c: any) => `${contactName(c)} ${c?.email ?? ""} ${c?.phone ?? ""}`.toLowerCase().includes(q)).slice(0, 25)
     : [];
+  // Maestro rule: a task can only be assigned to yourself, unless the account
+  // is set up with team members (assistants) allowed to take tasks under your
+  // profile. So we only offer assistants, never the whole broker directory.
   const assignableUsers = people
     .filter((u: any) => /^\d+$/.test(String(u?.id ?? u?.broker_id ?? u?.user_id ?? "")))
+    .filter((u: any) => /assistant/i.test(String(u?.role ?? u?.type ?? u?.title ?? u?.position ?? "")))
     .map((u: any) => ({ ...u, id: u?.id ?? u?.broker_id ?? u?.user_id }));
 
   const frame = typeof document !== "undefined" ? document.getElementById("pp-mobile-frame") : null;

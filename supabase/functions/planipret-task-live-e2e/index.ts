@@ -11,7 +11,12 @@ const API_BASE = (Deno.env.get("PLANIPRET_API_BASE_URL") ?? "https://client.plan
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const key = Deno.env.get("PLANIPRET_E2E_KEY") ?? "";
-  if (!key || req.headers.get("x-e2e-key") !== key) return jsonResponse({ success: false, error: "forbidden" }, 403);
+  const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  let bearerRole = "";
+  try { bearerRole = JSON.parse(atob(bearer.split(".")[1] ?? "")).role ?? ""; } catch { /* not a jwt */ }
+  const authorized = (key && req.headers.get("x-e2e-key") === key) || (svc && bearer === svc) || bearerRole === "service_role";
+  if (!authorized) return jsonResponse({ success: false, error: "forbidden", seen_role: bearerRole || null, has_bearer: !!bearer }, 403);
 
   const body = await req.json().catch(() => ({}));
   const email = String(body?.email ?? "");
@@ -25,6 +30,63 @@ Deno.serve(async (req) => {
 
   const token = await getUserMaestroAccessToken(admin, profile.id).catch((e) => { throw e; });
   if (!token) return jsonResponse({ success: false, error: "no_maestro_token" }, 409);
+
+  // Probe mode: discover the official GET listing route for a user.
+  if (body?.mode === "probe_list") {
+    const xid = String(profile.maestro_broker_id ?? "");
+    const tid = String(profile.maestro_telecom_user_id ?? xid);
+    const paths = [
+      `/api/main/tasks?xid=${xid}&type=user`,
+      `/api/main/tasks/user/${xid}`,
+      `/api/main/tasks/list?xid=${xid}&type=user`,
+      `/api/main/users/${xid}/tasks`,
+      `/api/main/tasks/index?xid=${xid}&type=user`,
+      `/api/main/task?xid=${xid}&type=user`,
+      `/api/main/tasks?user_id=${xid}`,
+      `/telecom/api/v1/users/${tid}/tasks`,
+      `/telecom/api/v1/tasks?user_id=${tid}`,
+      `/api/v1/tasks?xid=${xid}&type=user`,
+    ];
+    const results: unknown[] = [];
+    for (const path of paths) {
+      const r = await callWithToken(token, path, "GET");
+      results.push({ path, status: (r.response as any).status, body: (r.response as any).body });
+    }
+    return jsonResponse({ success: true, api_base: API_BASE, xid, telecom_user_id: tid, results });
+  }
+
+  // Create-only mode: leaves the task in Maestro and mirrors it into the
+  // projection so it shows up on the mobile home screen.
+  if (body?.mode === "create_only") {
+    const when = String(body?.date ?? "");
+    const n = new Date(Date.now() + 24 * 3600 * 1000);
+    const p2 = (x: number) => String(x).padStart(2, "0");
+    const date = when || `${n.getUTCFullYear()}-${p2(n.getUTCMonth() + 1)}-${p2(n.getUTCDate())} 09:30:00`;
+    const notes = String(body?.notes ?? "Tâche de test créée depuis l'application Planiprêt");
+    const b = buildCreatePayload({
+      xid: String(profile.maestro_broker_id ?? ""),
+      type: "user",
+      date,
+      notes,
+      description: String(body?.description ?? notes),
+    });
+    if (!b.ok) return jsonResponse({ success: false, error: "local_validation_failed", built: b }, 200);
+    const res = await callWithToken(token, "/api/main/tasks", "POST", b.payload);
+    const rd: any = (res.response as any).body;
+    const id = String(rd?.data?.task_id ?? rd?.data?.id ?? rd?.task?.id ?? rd?.task_id ?? rd?.id ?? "").trim();
+    if (id) {
+      const task = { ...b.payload, id, status: "pending", due_at: new Date(date.replace(" ", "T") + "-04:00").toISOString() };
+      await admin.from("planipret_tasks_projection").upsert({
+        user_id: profile.id,
+        task_id: id,
+        due_at: task.due_at,
+        status: "pending",
+        payload: task,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,task_id" });
+    }
+    return jsonResponse({ success: true, task_id: id || null, create: res });
+  }
 
   const steps: Record<string, unknown> = {};
   const now = new Date(Date.now() + 24 * 3600 * 1000);
@@ -44,7 +106,7 @@ Deno.serve(async (req) => {
   steps.create = created;
 
   const cdata: any = created.response.body;
-  const taskId = String(cdata?.data?.id ?? cdata?.task?.id ?? cdata?.id ?? cdata?.data?.task_id ?? "").trim();
+  const taskId = String(cdata?.data?.task_id ?? cdata?.data?.id ?? cdata?.task?.id ?? cdata?.task_id ?? cdata?.id ?? "").trim();
   steps.resolved_task_id = taskId || null;
 
   if (taskId) {

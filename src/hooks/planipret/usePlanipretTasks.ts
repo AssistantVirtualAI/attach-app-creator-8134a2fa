@@ -53,6 +53,18 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
   const [hasMore, setHasMore] = useState(false);
   const [counts, setCounts] = useState({ overdue: 0, today: 0, upcoming: 0, open: 0, all: 0 });
   const generation = useRef(0);
+  /** Tasks created locally in the last 5 min — merged in until the server list catches up. */
+  const pending = useRef<Map<string, { task: NormalizedTask; at: number }>>(new Map());
+
+  const mergePending = useCallback((list: NormalizedTask[]): NormalizedTask[] => {
+    const cutoff = Date.now() - 5 * 60 * 1000;
+    for (const [id, v] of pending.current) {
+      if (v.at < cutoff) pending.current.delete(id);
+      else if (list.some((t) => String(t.id) === id)) pending.current.delete(id);
+    }
+    if (!pending.current.size) return list;
+    return [...list, ...Array.from(pending.current.values()).map((v) => v.task)];
+  }, []);
 
   // Paint the per-user cache immediately.
   useEffect(() => {
@@ -77,13 +89,16 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
     setTotal(res.total);
     setHasMore(res.has_more);
     if (res.success && res.source !== "unavailable") {
-      setTasks(res.tasks);
-      saveTaskCache(userId, res.tasks);
+      const merged = mergePending(res.tasks);
+      setTasks(merged);
+      saveTaskCache(userId, merged);
     } else if (res.source === "unavailable") {
-      setTasks([]);
-      clearTaskCache(userId);
+      // Planiprêt exposes no upstream GET: never wipe what we already know.
+      const fallback = mergePending(loadTaskCache(userId));
+      setTasks(fallback);
+      if (!fallback.length) clearTaskCache(userId);
     }
-  }, [userId, filter]);
+  }, [userId, filter, mergePending]);
 
   const loadMore = useCallback(async () => {
     if (!userId || !hasMore || loadingMore) return;
@@ -111,6 +126,18 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
 
   useEffect(() => { if (userId) void refresh(); }, [userId, refresh]);
 
+  // Refresh when the home screen comes back to the foreground.
+  useEffect(() => {
+    if (!userId) return;
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [userId, refresh]);
+
   // Realtime: AVA (or another device) mutated a task.
   useEffect(() => {
     if (!userId) return;
@@ -126,7 +153,9 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
       // Paint the new task immediately — the upstream list endpoint is
       // eventually consistent (and currently undocumented).
       if (r.task?.id) {
-        setTasks((cur) => (cur.some((t) => t.id === r.task.id) ? cur : [...cur, r.task]));
+        const id = String(r.task.id);
+        pending.current.set(id, { task: r.task, at: Date.now() });
+        setTasks((cur) => (cur.some((t) => String(t.id) === id) ? cur : [...cur, r.task]));
         setCounts((c) => ({ ...c, open: c.open + 1, all: c.all + 1 }));
       }
       await refresh();
@@ -146,6 +175,7 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
   const remove = useCallback(async (taskId: string) => {
     const previous = tasks;
     setTasks((cur) => cur.filter((t) => t.id !== taskId));
+    pending.current.delete(String(taskId));
     const r = await apiDelete(taskId);
     if (!r?.success) setTasks(previous); else await refresh();
     return r;

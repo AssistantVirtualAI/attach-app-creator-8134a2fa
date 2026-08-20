@@ -138,7 +138,7 @@ export default function Ms365Callback() {
       async function invokeAndParse(fn: string, body: unknown): Promise<{ data: any; errMsg: string | null }> {
         const { data, error: e } = await withTimeout(
           supabase.functions.invoke(fn, { body: body as any }),
-          25000,
+          15000,
           fn,
         );
         if (!e) return { data, errMsg: null };

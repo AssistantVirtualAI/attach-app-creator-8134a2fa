@@ -188,7 +188,7 @@ export default function Ms365Callback() {
             body: { code, redirect_uri, code_verifier },
             headers: { Authorization: `Bearer ${session.access_token}` },
           }),
-          25000,
+          15000,
           "ms365-oauth-exchange",
         );
         const errMsg = exchangeError?.message ?? null;

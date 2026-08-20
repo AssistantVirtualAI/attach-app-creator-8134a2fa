@@ -15,8 +15,11 @@ import {
   filterTasks,
   idempotencyKey,
   mapTaskApiError,
+  diagnoseTaskResponse,
+  filterByAssignee,
   normalizeFilter,
   normalizeTask,
+  readAssignment,
   paginate,
   taskCounts,
 } from "./planipret-tasks.ts";
@@ -214,6 +217,10 @@ export async function handleTaskRequest(
     let src: "api" | "projection" | "unavailable";
     if (upstream.ok) {
       all = (upstream.tasks ?? []).map((t: any) => normalizeTask(t));
+      // Align the calendar/list on the real assignment source: keep tasks
+      // assigned to this broker AND tasks whose assignment Maestro returned
+      // empty but which target him (otherwise they vanish from the calendar).
+      all = filterByAssignee(all, [maestroId, telecomId, profile?.maestro_telecom_user_id]);
       src = "api";
       await syncProjection(admin, userId, all, { full: !from && !to });
     } else {
@@ -348,10 +355,55 @@ export async function handleTaskRequest(
         return { status: 200, body: { ...mapTaskApiError(res.status, res.data), correlation_id } };
       }
       const raw = res.data?.data ?? res.data?.task ?? res.data ?? {};
-      const task = normalizeTask({ ...payload, ...raw, created_by_ava: source !== "app" });
+      let task = normalizeTask({ ...payload, ...raw, created_by_ava: source !== "app" });
+
+      // Maestro sometimes answers 200 with `users: []` even though `users_id`
+      // was accepted. Try once to force the link, then report what happened.
+      const wantedAssignee = payload.users_id !== undefined ? String(payload.users_id) : "";
+      let assignment_repair: "not_needed" | "repaired" | "failed" | "skipped" = "not_needed";
+      if (wantedAssignee && task.id && readAssignment(raw).source !== "users") {
+        const rep = await deps.apiFetch(`/api/main/tasks/${encodeURIComponent(task.id)}`, {
+          method: "PUT",
+          body: JSON.stringify({ task_id: Number(task.id) || task.id, users_id: Number(wantedAssignee) }),
+        });
+        if (rep.ok) {
+          const repRaw = rep.data?.data ?? rep.data?.task ?? rep.data ?? {};
+          const merged = normalizeTask({ ...payload, ...raw, ...repRaw, created_by_ava: source !== "app" });
+          assignment_repair = readAssignment(merged.raw ?? merged).source === "users" ? "repaired" : "failed";
+          if (assignment_repair === "repaired") task = merged;
+        } else {
+          assignment_repair = "failed";
+        }
+      } else if (!wantedAssignee) {
+        assignment_repair = "skipped";
+      }
+
+      const diag = diagnoseTaskResponse({ sentDate: payload.date, sentAssignee: wantedAssignee, task });
       if (task.id) await projectionUpsert(admin, userId, [task]);
-      await audit(admin, { action: "task_created", user_id: userId, task_id: task.id, source, session_id: sessionId, status: res.status, correlation_id, result: "ok" });
-      return { status: 200, body: { success: true, task, task_id: task.id, correlation_id } };
+      await audit(admin, {
+        action: "task_created", user_id: userId, task_id: task.id, source, session_id: sessionId,
+        status: res.status, correlation_id, result: diag.ok ? "ok" : "ok_with_warnings",
+      });
+      if (!diag.ok) console.warn("[task-create-diagnostics]", correlation_id, JSON.stringify(diag.issues));
+      return {
+        status: 200,
+        body: {
+          success: true,
+          task,
+          task_id: task.id,
+          diagnostics: {
+            ok: diag.ok,
+            issues: diag.issues,
+            assignment_repair,
+            expected_assignee: wantedAssignee || null,
+            returned_assignees: task.assignee_ids,
+            assignment_source: task.assignment_source,
+            sent_date_toronto: payload.date ?? null,
+            returned_due_at_utc: task.due_at,
+          },
+          correlation_id,
+        },
+      };
     });
     return { status: 200, body: out.body };
   }

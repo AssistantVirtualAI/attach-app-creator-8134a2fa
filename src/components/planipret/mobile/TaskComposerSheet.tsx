@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { toApiDateTime } from "@/lib/planipret/tasks";
 
@@ -53,6 +54,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [pattern, setPattern] = useState("week");
   const [recValue, setRecValue] = useState(1);
   const [err, setErr] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -61,7 +63,28 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     setNotes(initial?.notes ?? "");
     setDescription(initial?.description ?? "");
     setDue(initial?.due_at ?? defaultDue());
+    setTargetType(initial?.target_type ?? "user");
+    setSyncCal(initial?.sync_calendar ?? false);
+    setNotify(initial?.notification ?? false);
+    setRecurring(Boolean(initial?.recurrence));
+    setPattern(initial?.recurrence?.pattern ?? "week");
+    setRecValue(initial?.recurrence?.value ?? 1);
+    requestAnimationFrame(() => panelRef.current?.scrollTo({ top: 0 }));
   }, [open, initial, defaultTarget]);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open, busy, onClose]);
 
   if (!open) return null;
 
@@ -102,24 +125,25 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const field = "w-full rounded-xl px-3 py-3 text-sm";
   const fieldStyle = { background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" } as const;
 
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end" role="dialog" aria-modal="true" aria-label={L("Nouvelle tâche", "New task")}>
+  return createPortal((
+    <div className="fixed inset-0 z-[100] flex items-end" role="dialog" aria-modal="true" aria-label={L("Nouvelle tâche", "New task")}>
       <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose} />
       <div
-        className="relative w-full rounded-t-3xl p-4 max-h-[88vh] overflow-y-auto"
-        style={{ background: "var(--pp-bg-base, #fff)", paddingBottom: "calc(1rem + env(safe-area-inset-bottom))", WebkitOverflowScrolling: "touch" }}
+        ref={panelRef}
+        className="relative w-full rounded-t-3xl overflow-y-auto overscroll-contain"
+        style={{ background: "var(--pp-bg-base, #fff)", maxHeight: "calc(100dvh - max(1rem, env(safe-area-inset-top)))", paddingBottom: "calc(1rem + env(safe-area-inset-bottom))", WebkitOverflowScrolling: "touch" }}
       >
-        <div className="flex items-center justify-between mb-3">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-4 pt-4 pb-3" style={{ background: "var(--pp-bg-base, #fff)" }}>
           <h2 className="text-base font-semibold pp-heading">{initial?.task_id ? L("Modifier la tâche", "Edit task") : L("Nouvelle tâche", "New task")}</h2>
-          <button onClick={onClose} aria-label={L("Fermer", "Close")} className="w-11 h-11 rounded-xl flex items-center justify-center" style={fieldStyle}>
+          <button type="button" onClick={onClose} disabled={busy} aria-label={L("Fermer", "Close")} className="w-11 h-11 rounded-xl flex items-center justify-center disabled:opacity-50" style={fieldStyle}>
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="space-y-3">
+        <form className="space-y-3 px-4" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
           <div className="flex gap-2">
             {(["user", "contract"] as const).map((tt) => (
-              <button key={tt} onClick={() => setTargetType(tt)}
+              <button type="button" key={tt} onClick={() => setTargetType(tt)}
                 aria-pressed={targetType === tt}
                 className="flex-1 min-h-[44px] rounded-xl text-sm font-medium"
                 style={targetType === tt
@@ -179,20 +203,21 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
 
           {err && <p className="text-xs" role="alert" style={{ color: "var(--pp-danger)" }}>{err}</p>}
 
-          <button onClick={submit} disabled={busy}
+          <button type="submit" disabled={busy}
             className="w-full min-h-[48px] rounded-xl font-semibold text-white disabled:opacity-60"
             style={{ background: "var(--pp-brand-accent)" }}>
             {busy ? L("Enregistrement…", "Saving…") : L("Enregistrer", "Save")}
           </button>
-        </div>
+        </form>
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
+      type="button"
       role="switch" aria-checked={checked} aria-label={label}
       onClick={() => onChange(!checked)}
       className="w-full min-h-[44px] flex items-center justify-between rounded-xl px-3 text-sm"

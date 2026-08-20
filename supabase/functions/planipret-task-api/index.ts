@@ -62,6 +62,8 @@ function makeApiFetch(token: string | null) {
  * Listing by maestro id. Planiprêt documents no public GET, so we walk the
  * known internal read paths in order and keep the first one that answers.
  */
+let noUpstreamListUntil = 0; // negative cache: upstream exposes no GET (404/405)
+
 function makeListFetch(token: string | null) {
   return async (
     maestroId: string,
@@ -80,7 +82,12 @@ function makeListFetch(token: string | null) {
       `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}xid=${maestroId}&type=user`,
     ];
 
+    if (Date.now() < noUpstreamListUntil) {
+      return { ok: false, tasks: [], endpoint: null, status: 405 };
+    }
+
     let lastStatus = 0;
+    let allMissing = true;
     for (const url of candidates) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -90,17 +97,24 @@ function makeListFetch(token: string | null) {
           signal: ctrl.signal,
         });
         lastStatus = res.status;
-        if (!res.ok) continue;
+        if (!res.ok) {
+          if (res.status !== 404 && res.status !== 405 && res.status !== 501) allMissing = false;
+          continue;
+        }
         const j = await res.json().catch(() => null);
         const raw = Array.isArray(j) ? j : (j?.data ?? j?.tasks ?? j?.items ?? []);
         const tasks = (Array.isArray(raw) ? raw : []).map(normalizeTask).filter((t: any) => t.id);
         return { ok: true, tasks, endpoint: url.split("?")[0], status: res.status };
       } catch {
         lastStatus = 599;
+        allMissing = false;
       } finally {
         clearTimeout(timer);
       }
     }
+    // Every documented/known read route answered 404/405 → stop hammering
+    // Planiprêt for 10 minutes and serve the local mirror instead.
+    if (allMissing) noUpstreamListUntil = Date.now() + 10 * 60 * 1000;
     return { ok: false, tasks: [], endpoint: null, status: lastStatus };
   };
 }

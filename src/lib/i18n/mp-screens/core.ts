@@ -165,6 +165,7 @@ export const coreFr: Record<string, any> = {
   },
   shell: {
     maestroDisconnected: "Maestro déconnecté",
+    sessionExpired: "Session expirée — veuillez vous reconnecter.",
     reconnectAccount: "Reconnectez votre compte pour reprendre la synchronisation.",
     connectionsLabel: "Connexions",
     openDiagnostics: "Ouvrir le diagnostic des connexions.",

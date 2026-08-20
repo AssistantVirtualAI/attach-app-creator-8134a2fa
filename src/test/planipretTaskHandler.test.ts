@@ -21,6 +21,7 @@ function makeDeps(over: Partial<TaskDeps> & { apiResponses?: any[] } = {}) {
     apiFetch: apiFetch as any,
     listFetch: async () => ({ ok: false, tasks: [], endpoint: null, status: 404 }),
     resolveTelecomUserId: async () => "387460525",
+    resolveTaskAssigneeId: async () => "93135",
     ...over,
   };
   return { deps, admin, apiFetch, calls };
@@ -44,6 +45,7 @@ describe("planipret task handler — create", () => {
     expect(calls[0].init.method).toBe("POST");
     const payload = JSON.parse(calls[0].init.body);
     expect(payload).toMatchObject({ xid: 387460525, type: "user", date: "2026-09-01 10:00:00", notes: "Appeler Jean" });
+    expect(payload.users_id).toBe(93135);
     // Notifications / calendar sync are opt-in only.
     expect(payload.send_notification).toBeUndefined();
     expect(payload.sync_cal).toBeUndefined();
@@ -62,6 +64,12 @@ describe("planipret task handler — create", () => {
     const { deps } = makeDeps({ apiResponses: [{ status: 422, ok: false, data: { message: "invalid" } }] });
     const out = await handleTaskRequest(validCreate, deps);
     expect(out.body).toMatchObject({ success: false, error: "validation_failed", status: 422 });
+  });
+
+  it("preserves an explicitly selected Maestro assignee", async () => {
+    const { deps, calls } = makeDeps();
+    await handleTaskRequest({ ...validCreate, users_id: 77 }, deps);
+    expect(JSON.parse(calls[0].init.body).users_id).toBe(77);
   });
 
   it("refuses an xid outside the broker scope", async () => {

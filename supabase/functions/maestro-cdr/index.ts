@@ -424,7 +424,10 @@ Deno.serve(async (req) => {
       return json({ success: true, maestro_call_id: maestroCallId, client_id: maestroClientId, retry: { status: "succeeded" } });
     }
 
+    // Failed POST → release the claim so a retry can publish this call later.
+    await releaseClaim(admin, { userId: call.user_id, dedupeKey });
     const failure = summarizeMaestroFailure(res.status, res.data);
+
     await updateCallPipeline(admin, call_id, { step: "error", error: `${failure.error}_${res.status}` });
     await setPipelineStep(admin, call_id, "cdr", "error", { status: res.status });
     await pipelineLog(admin, {

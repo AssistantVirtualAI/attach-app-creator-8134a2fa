@@ -47,6 +47,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
           date: v.due_at,
           notes: v.notes,
           description: v.description,
+          users_id: v.users_id,
           update_status: v.update_status,
           ...(v.recurrence
             ? {

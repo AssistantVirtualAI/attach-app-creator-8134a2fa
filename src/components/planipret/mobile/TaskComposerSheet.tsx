@@ -121,7 +121,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [clientQuery, setClientQuery] = useState("");
   const [clientName, setClientName] = useState("");
   const [clients, setClients] = useState<any[]>(() => peekPpContacts("maestro") ?? []);
-  const [people, setPeople] = useState<any[]>(() => peekPpContacts("directory") ?? []);
+  const [people, setPeople] = useState<any[]>(() => peekPpContacts("maestro_brokers") ?? []);
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -176,7 +176,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!open || step !== "form") return;
     let alive = true;
     void getPpContacts("maestro").then((v) => { if (alive) setClients(v || []); }).catch(() => {});
-    void getPpContacts("directory").then((v) => { if (alive) setPeople(v || []); }).catch(() => {});
+    void getPpContacts("maestro_brokers", { force: true, limit: 500 }).then((v) => { if (alive) setPeople(v || []); }).catch(() => {});
     return () => { alive = false; };
   }, [open, step]);
 
@@ -257,7 +257,9 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const clientMatches = q.length >= 2
     ? clients.filter((c: any) => `${contactName(c)} ${c?.email ?? ""} ${c?.phone ?? ""}`.toLowerCase().includes(q)).slice(0, 25)
     : [];
-  const assignableUsers = people.filter((u: any) => /^\d+$/.test(String(u?.id ?? "")));
+  const assignableUsers = people
+    .filter((u: any) => /^\d+$/.test(String(u?.id ?? u?.broker_id ?? u?.user_id ?? "")))
+    .map((u: any) => ({ ...u, id: u?.id ?? u?.broker_id ?? u?.user_id }));
 
   const frame = typeof document !== "undefined" ? document.getElementById("pp-mobile-frame") : null;
   const host = frame ?? (typeof document !== "undefined" ? document.body : null);
@@ -434,7 +436,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
               </span>
               <select className={field} style={fieldStyle} value={assignee}
                 aria-label={L("Assigné à", "Assigned to")} onChange={(e) => setAssignee(e.target.value)}>
-                <option value="">{L("- moi -", "- me -")}</option>
+                <option value="">{L("Moi (assignation automatique)", "Me (automatic assignment)")}</option>
                 {assignableUsers.map((u: any) => (
                   <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
                 ))}

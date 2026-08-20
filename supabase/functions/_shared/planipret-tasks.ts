@@ -246,7 +246,7 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
 
 const UPDATABLE = new Set([
   "date", "notes", "description", "status_option_id", "update_status",
-  "is_recurring", "recurring_value", "recurring_pattern", "next_send_date", "recurring_on",
+  "is_recurring", "recurring_value", "recurring_pattern", "next_send_date", "recurring_on", "users_id",
 ]);
 
 /** Body for PUT /api/main/tasks/{taskId} — task_id + only the changed fields. */
@@ -266,6 +266,14 @@ export function buildUpdateBody(taskId: string | number, changes: Record<string,
     }
     if (k === "recurring_pattern" && !PATTERNS.has(String(v).toLowerCase())) {
       return { ok: false, error: "validation_failed", fields: { recurring_pattern: "pattern_must_be_day_week_month_year" } };
+    }
+    if (k === "users_id") {
+      const assignee = Number(v);
+      if (!Number.isInteger(assignee) || assignee <= 0) {
+        return { ok: false, error: "validation_failed", fields: { users_id: "users_id_required_integer" } };
+      }
+      body.users_id = assignee;
+      continue;
     }
     if (k === "is_recurring" || k === "update_status") { body[k] = v === true || v === 1 || v === "1" ? 1 : 0; continue; }
     body[k] = v;

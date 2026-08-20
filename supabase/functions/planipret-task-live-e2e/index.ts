@@ -11,7 +11,10 @@ const API_BASE = (Deno.env.get("PLANIPRET_API_BASE_URL") ?? "https://client.plan
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const key = Deno.env.get("PLANIPRET_E2E_KEY") ?? "";
-  if (!key || req.headers.get("x-e2e-key") !== key) return jsonResponse({ success: false, error: "forbidden" }, 403);
+  const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  const authorized = (key && req.headers.get("x-e2e-key") === key) || (svc && bearer === svc);
+  if (!authorized) return jsonResponse({ success: false, error: "forbidden" }, 403);
 
   const body = await req.json().catch(() => ({}));
   const email = String(body?.email ?? "");

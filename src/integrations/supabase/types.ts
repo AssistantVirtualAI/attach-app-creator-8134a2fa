@@ -9504,6 +9504,42 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_maestro_call_dedupe: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          id: string
+          local_call_id: string | null
+          maestro_call_id: string | null
+          provider_call_id: string | null
+          source: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          id?: string
+          local_call_id?: string | null
+          maestro_call_id?: string | null
+          provider_call_id?: string | null
+          source?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          id?: string
+          local_call_id?: string | null
+          maestro_call_id?: string | null
+          provider_call_id?: string | null
+          source?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       planipret_maestro_cdr_retries: {
         Row: {
           abandoned_at: string | null

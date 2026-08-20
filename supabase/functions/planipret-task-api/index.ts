@@ -154,6 +154,30 @@ Deno.serve(async (req) => {
         const r = await resolveTelecomUserId(admin, userId, { candidate });
         return r?.id ?? null;
       },
+      listAllowedAssignees: async () => {
+        // Maestro rule: self only, plus assistants explicitly authorized to
+        // work under this broker's profile.
+        const ids = new Set<string>();
+        const { data: full } = await admin.from("planipret_profiles")
+          .select("maestro_broker_id, maestro_telecom_user_id").eq("id", profile?.id).maybeSingle();
+        for (const v of [profile?.maestro_broker_id, (full as any)?.maestro_broker_id, (full as any)?.maestro_telecom_user_id]) {
+          const s = String(v ?? "").trim();
+          if (s) ids.add(s);
+        }
+        try {
+          const r = await resolveMaestroIdForUser(admin, userId, {});
+          if (r?.maestro_broker_id) ids.add(String(r.maestro_broker_id));
+        } catch { /* ignore */ }
+        try {
+          const { data: rows } = await admin.from("planipret_task_assistants")
+            .select("assistant_maestro_id").eq("owner_user_id", userId).eq("active", true);
+          for (const row of rows ?? []) {
+            const s = String((row as any).assistant_maestro_id ?? "").trim();
+            if (s) ids.add(s);
+          }
+        } catch { /* table may be empty */ }
+        return [...ids];
+      },
       resolveTaskAssigneeId: async () => {
         // Force an email-backed directory match instead of trusting the CRM id
         // previously copied into maestro_telecom_user_id.

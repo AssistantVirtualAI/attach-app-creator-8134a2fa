@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     if (!b.ok) return jsonResponse({ success: false, error: "local_validation_failed", built: b }, 200);
     const res = await callWithToken(token, "/api/main/tasks", "POST", b.payload);
     const rd: any = (res.response as any).body;
-    const id = String(rd?.data?.id ?? rd?.task?.id ?? rd?.id ?? "").trim();
+    const id = String(rd?.data?.task_id ?? rd?.data?.id ?? rd?.task?.id ?? rd?.task_id ?? rd?.id ?? "").trim();
     if (id) {
       const task = { ...b.payload, id, status: "pending", due_at: new Date(date.replace(" ", "T") + "-04:00").toISOString() };
       await admin.from("planipret_tasks_projection").upsert({
@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
   steps.create = created;
 
   const cdata: any = created.response.body;
-  const taskId = String(cdata?.data?.id ?? cdata?.task?.id ?? cdata?.id ?? cdata?.data?.task_id ?? "").trim();
+  const taskId = String(cdata?.data?.task_id ?? cdata?.data?.id ?? cdata?.task?.id ?? cdata?.task_id ?? cdata?.id ?? "").trim();
   steps.resolved_task_id = taskId || null;
 
   if (taskId) {

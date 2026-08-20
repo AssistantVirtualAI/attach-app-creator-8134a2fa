@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock } from "lucide-react";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
-import { formatTaskDue, type NormalizedTask, type TaskFilterValue } from "@/lib/planipret/tasks";
+import { describeTaskDiagnostics, formatTaskDue, type NormalizedTask, type TaskFilterValue } from "@/lib/planipret/tasks";
 import TaskComposerSheet, { type TaskComposerValue } from "./TaskComposerSheet";
 import { toast } from "sonner";
 
@@ -23,6 +23,8 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
   const [busy, setBusy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string> | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<NormalizedTask | null>(null);
+  /** Non-blocking Maestro warning (empty `users`, shifted `due_at`) for the last save. */
+  const [diagnostic, setDiagnostic] = useState<{ text: string; correlationId?: string } | null>(null);
 
   const sections = useMemo(() => ([
     { key: "overdue", label: L("En retard", "Overdue"), items: buckets.overdue, accent: "var(--pp-danger)" },
@@ -61,6 +63,9 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
       toast.success(editing ? L("Tâche modifiée", "Task updated") : L("Tâche créée", "Task created"));
       setFieldErrors(null);
       setComposer(null);
+      const warn = describeTaskDiagnostics(r?.diagnostics, lang);
+      setDiagnostic(warn ? { text: warn, correlationId: r?.correlation_id } : null);
+      if (warn) toast.warning(L("Réponse Maestro incohérente", "Inconsistent Maestro response"), { description: warn });
     } else {
       setFieldErrors(r?.fields && typeof r.fields === "object" ? r.fields : null);
       toast.error(r?.message ?? L("Échec de l'enregistrement", "Save failed"));
@@ -109,6 +114,21 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
           </button>
         </div>
       </div>
+
+      {diagnostic && (
+        <div role="status" className="mb-2 rounded-lg px-2.5 py-2 text-[11px] flex items-start gap-1.5"
+          style={{ background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.35)", color: "var(--pp-text-primary)" }}>
+          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: "#B45309" }} />
+          <span className="flex-1">
+            <strong>{L("Diagnostic Maestro", "Maestro diagnostic")} : </strong>{diagnostic.text}
+            {diagnostic.correlationId && (
+              <span style={{ color: "var(--pp-text-muted)" }}> · ID {diagnostic.correlationId}</span>
+            )}
+          </span>
+          <button onClick={() => setDiagnostic(null)} aria-label={L("Masquer", "Dismiss")}
+            className="px-1" style={{ color: "var(--pp-text-muted)" }}>×</button>
+        </div>
+      )}
 
       {source === "projection" && !loading && (
         <p className="text-[11px] mb-2" style={{ color: "var(--pp-text-muted)" }}>

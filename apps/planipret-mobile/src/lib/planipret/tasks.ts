@@ -68,6 +68,43 @@ export async function listTasks(opts: ListTaskOptions = {}): Promise<TaskListRes
 
 export const getTask = (task_id: string) => invoke({ action: "get", task_id });
 
+/**
+ * Raw upstream read used to troubleshoot visibility: what Maestro really
+ * stores for a task (assignment source, due date, calendar visibility).
+ */
+export const diagnoseTasks = (task_id?: string) =>
+  invoke({ action: "diagnose", ...(task_id ? { task_id } : {}) });
+
+export interface TaskDiagnostics {
+  ok: boolean;
+  issues: Array<{ code: "assignment_not_persisted" | "due_at_shifted"; message: string; expected: string | null; actual: string | null }>;
+  assignment_repair: "not_needed" | "repaired" | "failed" | "skipped";
+  expected_assignee: string | null;
+  returned_assignees: string[];
+  assignment_source: string;
+  sent_date_toronto: string | null;
+  returned_due_at_utc: string | null;
+}
+
+/** Human-readable banner text for a create response with diagnostics. */
+export function describeTaskDiagnostics(d: TaskDiagnostics | undefined | null, lang: "fr" | "en" = "fr"): string | null {
+  if (!d || d.ok) return null;
+  const parts = d.issues.map((i) =>
+    i.code === "assignment_not_persisted"
+      ? (lang === "en"
+          ? `Maestro did not persist the assignment (users empty, expected ${i.expected})`
+          : `Maestro n'a pas enregistré l'assignation (users vide, attendu ${i.expected})`)
+      : (lang === "en"
+          ? `Due date mismatch: sent ${d.sent_date_toronto} (Toronto), Maestro returned ${i.actual}`
+          : `Échéance différente : envoyé ${d.sent_date_toronto} (Toronto), Maestro renvoie ${i.actual}`));
+  if (d.assignment_repair === "repaired") {
+    parts.push(lang === "en" ? "auto-repaired via PUT" : "réparé automatiquement via PUT");
+  } else if (d.assignment_repair === "failed") {
+    parts.push(lang === "en" ? "auto-repair failed — report to Maestro" : "réparation auto échouée — à remonter à Maestro");
+  }
+  return parts.join(" · ");
+}
+
 export const createTask = (input: Record<string, unknown>) =>
   invoke({ action: "create", ...input });
 

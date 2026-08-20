@@ -13,7 +13,7 @@
 // Body: { action: "list" | "get" | "create" | "update" | "delete", ... }
 import { authBroker, corsHeaders, jsonResponse, supaAdmin } from "../_shared/ns-broker.ts";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
-import { resolveTelecomUserId } from "../_shared/maestro-broker-directory.ts";
+import { resolveMaestroIdForUser, resolveTelecomUserId } from "../_shared/maestro-broker-directory.ts";
 import { normalizeTask } from "../_shared/planipret-tasks.ts";
 import { handleTaskRequest, newCorrelationId, type UpstreamList } from "../_shared/planipret-task-handler.ts";
 
@@ -153,6 +153,12 @@ Deno.serve(async (req) => {
       resolveTelecomUserId: async (candidate) => {
         const r = await resolveTelecomUserId(admin, userId, { candidate });
         return r?.id ?? null;
+      },
+      resolveTaskAssigneeId: async () => {
+        // Force an email-backed directory match instead of trusting the CRM id
+        // previously copied into maestro_telecom_user_id.
+        const r = await resolveMaestroIdForUser(admin, userId, { force: true });
+        return r?.maestro_broker_id ?? null;
       },
     });
     return jsonResponse(out.body, out.status);

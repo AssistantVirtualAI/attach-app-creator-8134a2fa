@@ -46,6 +46,8 @@ export interface TaskDeps {
     opts: { status?: string | null; from?: string | null; to?: string | null },
   ) => Promise<UpstreamList>;
   resolveTelecomUserId: (candidate: string | null) => Promise<string | null>;
+  /** Resolve the numeric internal Maestro user id accepted by `users_id`. */
+  resolveTaskAssigneeId?: () => Promise<string | null>;
   now?: () => Date;
 }
 
@@ -341,8 +343,13 @@ export async function handleTaskRequest(
     // Auto-assignment: a task is assigned to its creator unless the broker
     // explicitly assigns it to someone else (users_id / assignee_id).
     const explicitAssignee = createInput.users_id ?? createInput.assignee_id;
-    if ((explicitAssignee === undefined || explicitAssignee === null || String(explicitAssignee).trim() === "") && ownXid) {
-      createInput.users_id = ownXid;
+    if (explicitAssignee === undefined || explicitAssignee === null || String(explicitAssignee).trim() === "") {
+      // `xid` is the CRM/OAuth broker id. Maestro's task `users_id` belongs to
+      // its internal user directory and can be different (for example 387… vs
+      // 93135). Sending the CRM id is accepted but leaves `users: []`, so the
+      // task never appears in the assignee's Maestro calendar.
+      const internalAssignee = await deps.resolveTaskAssigneeId?.().catch(() => null);
+      if (internalAssignee || ownXid) createInput.users_id = internalAssignee ?? ownXid;
     }
     const built = buildCreatePayload(createInput);
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import TaskAssignmentDiagnostic from "@/components/planipret/mobile/TaskAssignmentDiagnostic";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 import { hasAiConsent, revokeAiConsent } from "@/components/planipret/mobile/AiConsentGate";
 import { Capacitor } from "@capacitor/core";
@@ -41,6 +42,7 @@ export default function MMore() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [dndOpen, setDndOpen] = useState(false);
+  const [taskDiagOpen, setTaskDiagOpen] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState<boolean>(() => localStorage.getItem("planipret_notif") === "1");
   const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem("planipret_dark") === "1");
@@ -294,6 +296,9 @@ export default function MMore() {
         <Row icon={<Info className="w-4 h-4" style={{ color: "#5EC2FF" }} />} label={t("screens.more.connectionsDiagnostic")}
           sub={t("screens.more.integrationsSub")}
           onClick={() => navigate("/mplanipret/connections")} chevron />
+        <Row icon={<Info className="w-4 h-4" style={{ color: "#22c55e" }} />} label="Diagnostic — assignation de tâche"
+          sub="Teste une tâche dans le module Task de Maestro et vérifie users"
+          onClick={() => setTaskDiagOpen(true)} chevron />
         <Row icon={<Info className="w-4 h-4" style={{ color: "#F5A623" }} />} label={t("screens.more.maestroSyncHistory")}
           sub={t("screens.more.maestroSyncSub")}
           onClick={() => navigate("/mplanipret/maestro-sync")} chevron />
@@ -871,5 +876,6 @@ function DndSheet({ profile, onClose, onSaved }: { profile: any; onClose: () => 
         {busy ? "…" : t("common.save")}
       </button>
     </Sheet>
+      {taskDiagOpen && <TaskAssignmentDiagnostic onClose={() => setTaskDiagOpen(false)} />}
   );
 }

@@ -143,18 +143,19 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       limit: { type: "number", description: "Nombre max par page (défaut: 25)" },
     }),
     mk("get_task", "Détail d'une tâche.", { task_id: { type: "string", description: "ID de la tâche" } }, ["task_id"]),
-    mk("create_task", "Crée une tâche Planiprêt. Résume et demande TOUJOURS confirmation avant d'appeler.", {
-      target: { type: "string", description: "xid Planiprêt : id utilisateur si target_type=user, id de contrat si target_type=contract" },
-      target_type: { type: "string", description: "user ou contract" },
+    mk("create_task", "Crée une tâche Planiprêt. Sans cible, la tâche vise et s'auto-assigne au courtier connecté. Résume et demande TOUJOURS confirmation avant d'appeler.", {
+      target: { type: "string", description: "xid Planiprêt (optionnel pour une tâche personnelle) : id utilisateur si target_type=user, id de contrat si target_type=contract" },
+      target_type: { type: "string", description: "user (défaut) ou contract" },
       notes: { type: "string", description: "Note de la tâche (obligatoire)" },
       due_at: { type: "string", description: "Échéance, heure America/Toronto (YYYY-MM-DD HH:mm:ss ou ISO)" },
       description: { type: "string", description: "Description longue (optionnel)" },
-      assignee_id: { type: "number", description: "users_id assigné (optionnel)" },
+      assignee_id: { type: "number", description: "users_id assigné — par défaut le Maestro ID du créateur ; fournir pour assigner à quelqu'un d'autre" },
       status: { type: "string", description: "Statut initial (optionnel)" },
       sync_calendar: { type: "boolean", description: "Créer l'événement calendrier — false par défaut" },
       notification: { type: "boolean", description: "Envoyer une notification — false par défaut" },
       recurrence: { type: "object", description: "{ value, pattern: day|week|month|year, on: 0-6 }" },
-    }, ["target", "target_type", "notes", "due_at"]),
+    }, ["notes", "due_at"]),
+
     mk("update_task", "Modifie une tâche (date, notes, description, statut, récurrence). Demande confirmation.", {
       task_id: { type: "string", description: "ID de la tâche" },
       changes: { type: "object", description: "Champs modifiés : date, notes, description, status_option_id, update_status, is_recurring, recurring_value, recurring_pattern, next_send_date, recurring_on" },

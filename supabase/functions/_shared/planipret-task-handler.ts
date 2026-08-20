@@ -349,7 +349,7 @@ export async function handleTaskRequest(
 
     const requested = String(body?.users_id ?? "").trim();
     const guard = assertAssigneeAllowed(requested, allowedIds);
-    if (!guard.ok) {
+    if (guard.ok === false) {
       steps.push({ step: "assignee_guard", ok: false, detail: guard.message });
       return { status: 200, body: { success: false, ok: false, steps, ...guard, correlation_id } };
     }
@@ -366,7 +366,7 @@ export async function handleTaskRequest(
       notes: String(body?.notes ?? `Diagnostic AVA — vérification d'assignation (${correlation_id})`),
     });
     if (!built.ok) {
-      steps.push({ step: "payload", ok: false, detail: JSON.stringify(built.fields ?? {}) });
+      steps.push({ step: "payload", ok: false, detail: JSON.stringify((built as any).fields ?? {}) });
       return { status: 200, body: { success: false, ok: false, steps, correlation_id } };
     }
     steps.push({ step: "payload", ok: true, detail: `users_id=${internal}, date=${built.payload.date}` });

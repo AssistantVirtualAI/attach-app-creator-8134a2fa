@@ -394,7 +394,8 @@ export async function handleTaskRequest(
       // was accepted. Try once to force the link, then report what happened.
       const wantedAssignee = payload.users_id !== undefined ? String(payload.users_id) : "";
       let assignment_repair: "not_needed" | "repaired" | "failed" | "skipped" = "not_needed";
-      if (wantedAssignee && task.id && readAssignment(raw).source !== "users") {
+      const usersEchoed = Array.isArray((raw as any)?.users);
+      if (wantedAssignee && task.id && usersEchoed && readAssignment(raw).source !== "users") {
         const rep = await deps.apiFetch(`/api/main/tasks/${encodeURIComponent(task.id)}`, {
           method: "PUT",
           body: JSON.stringify({ task_id: Number(task.id) || task.id, users_id: Number(wantedAssignee) }),
@@ -407,7 +408,7 @@ export async function handleTaskRequest(
         } else {
           assignment_repair = "failed";
         }
-      } else if (!wantedAssignee) {
+      } else if (!wantedAssignee || !usersEchoed) {
         assignment_repair = "skipped";
       }
 

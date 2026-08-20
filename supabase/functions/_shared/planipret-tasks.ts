@@ -462,8 +462,11 @@ export function diagnoseTaskResponse(args: {
 }): { ok: boolean; issues: TaskDiagnostic[] } {
   const issues: TaskDiagnostic[] = [];
   const expectedAssignee = String(args.sentAssignee ?? "").trim();
-  if (expectedAssignee) {
-    const persisted = readAssignment(args.task.raw ?? args.task);
+  const rawTask: any = args.task.raw ?? args.task;
+  // Only judge the assignment when Maestro actually returned a `users` array —
+  // otherwise we cannot tell "not persisted" from "not echoed".
+  if (expectedAssignee && Array.isArray(rawTask?.users)) {
+    const persisted = readAssignment(rawTask);
     if (persisted.source !== "users" || !persisted.ids.includes(expectedAssignee)) {
       issues.push({
         code: "assignment_not_persisted",

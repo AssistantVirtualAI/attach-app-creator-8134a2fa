@@ -84,6 +84,9 @@ const WEEKDAYS: Array<{ n: number; fr: string; en: string }> = [
 const idList = (s: string): number[] =>
   s.split(/[,;\s]+/).map((x) => Number(x.trim())).filter((n) => Number.isInteger(n) && n > 0);
 
+const contactName = (c: any): string =>
+  String(c?.display_name || c?.name || [c?.first_name, c?.last_name].filter(Boolean).join(" ") || c?.email || `#${c?.id ?? ""}`).trim();
+
 export default function TaskComposerSheet({ open, lang, defaultTarget, busy, initial, fieldErrors, onClose, onSubmit }: Props) {
   const L = (fr: string, en: string) => (lang === "en" ? en : fr);
   const [targetType, setTargetType] = useState<"user" | "contract">((initial?.target_type as any) ?? "user");
@@ -250,6 +253,12 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const labelCls = "text-[11px]";
   const labelStyle = { color: "var(--pp-text-muted)" } as const;
 
+  const q = clientQuery.trim().toLowerCase();
+  const clientMatches = q.length >= 2
+    ? clients.filter((c: any) => `${contactName(c)} ${c?.email ?? ""} ${c?.phone ?? ""}`.toLowerCase().includes(q)).slice(0, 25)
+    : [];
+  const assignableUsers = people.filter((u: any) => /^\d+$/.test(String(u?.id ?? "")));
+
   const frame = typeof document !== "undefined" ? document.getElementById("pp-mobile-frame") : null;
   const host = frame ?? (typeof document !== "undefined" ? document.body : null);
   if (!host) return null;
@@ -342,31 +351,71 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
             ))}
           </div>
 
-          <label className="block">
-            <span className={labelCls} style={labelStyle}>{L("Cible (xid Planiprêt)", "Target (Planiprêt xid)")}</span>
-            <input className={field} style={fieldStyle} inputMode="numeric" value={target}
+          {/* Contract / client — "Choose a client" in Maestro */}
+          <div>
+            <span className="text-[12px] font-bold block mb-1" style={{ color: "var(--pp-text-primary)" }}>
+              {targetType === "contract" ? L("Contrat", "Contract") : L("Client", "Client")}
+            </span>
+            {clientName ? (
+              <div className="flex items-center gap-2 rounded-xl px-3 py-3" style={fieldStyle}>
+                <span className="flex-1 text-sm truncate">{clientName}</span>
+                <span className="text-[11px]" style={labelStyle}>#{target}</span>
+                <button type="button" aria-label={L("Changer de client", "Change client")}
+                  onClick={() => { setClientName(""); setTarget(""); }} className="p-1"><X className="w-4 h-4" /></button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--pp-text-muted)" }} />
+                <input className={`${field} pl-9`} style={fieldStyle} value={clientQuery}
+                  aria-label={L("Choisir un client", "Choose a client")}
+                  onChange={(e) => setClientQuery(e.target.value)} placeholder={L("Choisir un client", "Choose a client")} />
+              </div>
+            )}
+            {!clientName && clientQuery.trim().length >= 2 && (
+              <div className="mt-1 rounded-xl overflow-hidden max-h-52 overflow-y-auto" style={{ border: "1px solid var(--pp-bg-border)" }}>
+                {clientMatches.length === 0 && (
+                  <p className="px-3 py-3 text-xs" style={labelStyle}>{L("Aucun client trouvé", "No client found")}</p>
+                )}
+                {clientMatches.map((c: any) => (
+                  <button type="button" key={String(c.id)} onClick={() => { setClientName(contactName(c)); setTarget(String(c.id ?? "")); setClientQuery(""); }}
+                    className="w-full text-left px-3 py-2.5 text-sm" style={{ background: "var(--pp-bg-surface)", color: "var(--pp-text-primary)" }}>
+                    {contactName(c)}
+                    <span className="block text-[11px]" style={labelStyle}>{c.email || c.phone || `#${c.id}`}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <input className={`${field} mt-2`} style={fieldStyle} inputMode="numeric" value={target}
               aria-label={L("Cible xid", "Target xid")}
-              onChange={(e) => setTarget(e.target.value)} placeholder="387460525" />
+              onChange={(e) => { setTarget(e.target.value); setClientName(""); }} placeholder={L("ou saisir un xid", "or enter an xid")} />
             <FieldError keys={["xid", "target"]} />
-          </label>
+          </div>
 
           <label className="block">
-            <span className={labelCls} style={labelStyle}>{L("Note *", "Notes *")}</span>
+            <span className={labelCls} style={labelStyle}>{L("Progression *", "Progress *")}</span>
             <input className={field} style={fieldStyle} value={notes} aria-label={L("Note", "Notes")}
               onChange={(e) => setNotes(e.target.value)} placeholder={L("Rappeler Jean", "Call Jean back")} />
             <FieldError keys={["notes"]} />
           </label>
 
-          <label className="block">
-            <span className={labelCls} style={labelStyle}>{L("Échéance (America/Toronto) *", "Due (America/Toronto) *")}</span>
-            <input type="datetime-local" className={field} style={fieldStyle} value={due}
-              aria-label={L("Échéance", "Due date")} onChange={(e) => setDue(e.target.value)} />
+          <div>
+            <span className="text-[12px] font-bold block mb-1" style={{ color: "var(--pp-text-primary)" }}>
+              <span style={{ color: "var(--pp-danger)" }}>* </span>{L("Date de suivi (America/Toronto)", "Follow-up Date (America/Toronto)")}
+            </span>
+            <div className="flex gap-2">
+              <input type="date" className={field} style={fieldStyle} value={dueDate}
+                aria-label={L("Date de suivi", "Follow-up date")}
+                onChange={(e) => setDue(`${e.target.value}T${dueTime || "09:00"}`)} />
+              <input type="time" className={field} style={fieldStyle} value={dueTime}
+                aria-label={L("Heure", "Time")}
+                onChange={(e) => setDue(`${dueDate || new Date().toISOString().slice(0, 10)}T${e.target.value}`)} />
+            </div>
             <FieldError keys={["date", "due_at"]} />
-          </label>
+          </div>
 
           <label className="block">
-            <span className={labelCls} style={labelStyle}>{L("Description (optionnel)", "Description (optional)")}</span>
-            <textarea className={field} style={fieldStyle} rows={2} value={description}
+            <span className={labelCls} style={labelStyle}>{L("Message au référent ou au client", "Message to referral or client")}</span>
+            <textarea className={field} style={fieldStyle} rows={4} value={description}
               aria-label={L("Description", "Description")} onChange={(e) => setDescription(e.target.value)} />
           </label>
 
@@ -380,13 +429,21 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
               <FieldError keys={["status", "option"]} />
             </label>
             <label className="block flex-1">
-              <span className={labelCls} style={labelStyle}>{L("Assigné à (users_id)", "Assigned to (users_id)")}</span>
-              <input className={field} style={fieldStyle} inputMode="numeric" value={assignee}
-                aria-label={L("Assigné à", "Assigned to")} onChange={(e) => setAssignee(e.target.value)} placeholder={L("Moi", "Me")} />
+              <span className={labelCls} style={labelStyle}>
+                <span style={{ color: "var(--pp-danger)" }}>* </span>{L("Assigné à", "Assigned to")}
+              </span>
+              <select className={field} style={fieldStyle} value={assignee}
+                aria-label={L("Assigné à", "Assigned to")} onChange={(e) => setAssignee(e.target.value)}>
+                <option value="">{L("- moi -", "- me -")}</option>
+                {assignableUsers.map((u: any) => (
+                  <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
+                ))}
+              </select>
               <FieldError keys={["users_id"]} />
             </label>
           </div>
 
+          <Toggle label={L("Masquer la tâche aux conseillers", "Hide task from advisors")} checked={hidden} onChange={setHidden} />
           <Toggle label={L("Créer l'événement calendrier", "Create calendar event")} checked={syncCal} onChange={setSyncCal} />
           <Toggle label={L("Envoyer une notification", "Send a notification")} checked={notify} onChange={setNotify} />
           <Toggle label={L("Tâche récurrente", "Recurring task")} checked={recurring} onChange={setRecurring} />
@@ -480,7 +537,6 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                 </label>
               )}
 
-              <Toggle label={L("Tâche masquée", "Hidden task")} checked={hidden} onChange={setHidden} />
               <Toggle label={L("Mettre à jour le statut du dossier", "Update the file status")} checked={updateStatus} onChange={setUpdateStatus} />
             </div>
           )}

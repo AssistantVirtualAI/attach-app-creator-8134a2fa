@@ -221,12 +221,19 @@ async function post(
   for (let attempt = 1; attempt <= POST_MAX_ATTEMPTS; attempt++) {
     upsert(callId, { direction, number, attempts: attempt, state: "pending", reason: `posting_attempt_${attempt}` });
     try {
-      await maestroTelecom.createCall({
-        provider_call_id: callId,
-        to_user_number: e164,
-        status: direction === "outbound" ? "dialing" : "created",
-        direction,
+      // Server-side single publisher: it claims a shared dedupe key so the
+      // CDR pipeline never creates a second Maestro record for this call.
+      const { data, error } = await supabase.functions.invoke("maestro-call-post", {
+        body: {
+          provider_call_id: callId,
+          number: e164 ?? number,
+          direction,
+          status: direction === "outbound" ? "dialing" : "created",
+          started_at: new Date().toISOString(),
+        },
       });
+      if (error) throw new Error(error.message || "maestro-call-post failed");
+      if ((data as any)?.success === false) throw new Error(String((data as any)?.error ?? "maestro_post_failed"));
       const rec = upsert(callId, { direction, number, state: "posted", reason: "posted", lastError: null });
       log("posted", { callId, dedupKey, direction, number, classification, attempts: attempt });
       return rec;

@@ -111,6 +111,7 @@ describe("TasksSection", () => {
     render(<TasksSection userId="u1" lang="fr" />);
     await screen.findByText("Rappeler Jean");
     fireEvent.click(screen.getByLabelText("Nouvelle tâche"));
+    fireEvent.click(screen.getByText("Nouvelle tâche personnalisée"));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getByLabelText("Note")).toBeInTheDocument();
   });
@@ -179,6 +180,7 @@ describe("TasksSection — see all + field errors", () => {
     render(<TasksSection userId="u1" lang="fr" defaultTarget="387460525" />);
     await waitFor(() => expect(listTasks).toHaveBeenCalled());
     fireEvent.click(screen.getByLabelText("Nouvelle tâche"));
+    fireEvent.click(screen.getByText("Nouvelle tâche personnalisée"));
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "x" } });
     fireEvent.click(screen.getByText("Enregistrer"));
     await waitFor(() => expect(screen.getByText("La note est obligatoire.")).toBeInTheDocument());

@@ -626,23 +626,28 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
 
   async create_task(ctx, p) {
     const target = p?.target ?? p?.xid ?? p?.client_id;
-    const target_type = String(p?.target_type ?? p?.type ?? "").toLowerCase();
+    const target_type = String(p?.target_type ?? p?.type ?? "user").toLowerCase();
     const notes = p?.notes ?? p?.title;
     const due_at = p?.due_at ?? p?.date ?? p?.due_date;
-    if (!target || (target_type !== "user" && target_type !== "contract")) {
-      return { success: false, error: "clarification_needed", message: "Précise la cible (xid) et son type : « user » ou « contract »." };
+    if (target_type !== "user" && target_type !== "contract") {
+      return { success: false, error: "clarification_needed", message: "Le type de cible doit être « user » ou « contract »." };
+    }
+    if (target_type === "contract" && !target) {
+      return { success: false, error: "clarification_needed", message: "Quel contrat (xid) veux-tu cibler ?" };
     }
     if (!notes) return { success: false, error: "clarification_needed", message: "Quelle note veux-tu inscrire sur la tâche ?" };
     if (!due_at) return { success: false, error: "clarification_needed", message: "Pour quelle date et heure (fuseau America/Toronto) ?" };
     const r = await taskApi(ctx, {
+      // No target → the gateway auto-targets and auto-assigns the broker.
       action: "create", target, target_type, notes, due_at,
-      description: p?.description, assignee_id: p?.assignee_id, status: p?.status,
+      description: p?.description, assignee_id: p?.assignee_id ?? p?.users_id, status: p?.status,
       sync_calendar: p?.sync_calendar === true, notification: p?.notification === true,
       recurrence: p?.recurrence ?? null,
     });
     if ((r as any)?.success) await broadcastTasks(ctx, "created", (r as any).task_id);
     return r;
   },
+
 
   async update_task(ctx, p) {
     if (!p?.task_id) return { success: false, error: "task_id_required" };

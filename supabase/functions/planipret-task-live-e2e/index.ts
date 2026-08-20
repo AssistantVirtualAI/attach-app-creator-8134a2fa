@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
   let bearerRole = "";
   try { bearerRole = JSON.parse(atob(bearer.split(".")[1] ?? "")).role ?? ""; } catch { /* not a jwt */ }
   const authorized = (key && req.headers.get("x-e2e-key") === key) || (svc && bearer === svc) || bearerRole === "service_role";
-  if (!authorized) return jsonResponse({ success: false, error: "forbidden" }, 403);
+  if (!authorized) return jsonResponse({ success: false, error: "forbidden", seen_role: bearerRole || null, has_bearer: !!bearer }, 403);
 
   const body = await req.json().catch(() => ({}));
   const email = String(body?.email ?? "");

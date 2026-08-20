@@ -49,6 +49,8 @@ describe("security — no Planiprêt/Maestro secret reaches the client bundle", 
   });
 
   it("routes every task operation through the edge function gateway", () => {
-    expect(read("src/lib/planipret/tasks.ts")).toContain('functions.invoke("planipret-task-api"');
+    // Goes through the shared auth guard, which is the only edge caller.
+    expect(read("src/lib/planipret/tasks.ts")).toContain('invokeEdge("planipret-task-api"');
+    expect(read("src/lib/planipret/edgeAuth.ts")).toContain("supabase.functions.invoke(functionName");
   });
 });

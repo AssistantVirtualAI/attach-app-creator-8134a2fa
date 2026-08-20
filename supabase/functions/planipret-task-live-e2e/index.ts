@@ -56,6 +56,39 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: true, api_base: API_BASE, xid, telecom_user_id: tid, results });
   }
 
+  // Create-only mode: leaves the task in Maestro and mirrors it into the
+  // projection so it shows up on the mobile home screen.
+  if (body?.mode === "create_only") {
+    const when = String(body?.date ?? "");
+    const n = new Date(Date.now() + 24 * 3600 * 1000);
+    const p2 = (x: number) => String(x).padStart(2, "0");
+    const date = when || `${n.getUTCFullYear()}-${p2(n.getUTCMonth() + 1)}-${p2(n.getUTCDate())} 09:30:00`;
+    const notes = String(body?.notes ?? "Tâche de test créée depuis l'application Planiprêt");
+    const b = buildCreatePayload({
+      xid: String(profile.maestro_broker_id ?? ""),
+      type: "user",
+      date,
+      notes,
+      description: String(body?.description ?? notes),
+    });
+    if (!b.ok) return jsonResponse({ success: false, error: "local_validation_failed", built: b }, 200);
+    const res = await callWithToken(token, "/api/main/tasks", "POST", b.payload);
+    const rd: any = (res.response as any).body;
+    const id = String(rd?.data?.id ?? rd?.task?.id ?? rd?.id ?? "").trim();
+    if (id) {
+      const task = { ...b.payload, id, status: "pending", due_at: new Date(date.replace(" ", "T") + "-04:00").toISOString() };
+      await admin.from("planipret_tasks_projection").upsert({
+        user_id: profile.id,
+        task_id: id,
+        due_at: task.due_at,
+        status: "pending",
+        payload: task,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,task_id" });
+    }
+    return jsonResponse({ success: true, task_id: id || null, create: res });
+  }
+
   const steps: Record<string, unknown> = {};
   const now = new Date(Date.now() + 24 * 3600 * 1000);
   const pad = (n: number) => String(n).padStart(2, "0");

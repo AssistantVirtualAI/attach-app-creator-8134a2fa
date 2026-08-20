@@ -2,7 +2,7 @@
 // edge function so the client and the server never disagree on formatting.
 export * from "../../../supabase/functions/_shared/planipret-tasks";
 
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdge } from "@/lib/planipret/edgeAuth";
 import type { NormalizedTask, TaskBuckets } from "../../../supabase/functions/_shared/planipret-tasks";
 
 export type TaskSource = "api" | "projection" | "unavailable";

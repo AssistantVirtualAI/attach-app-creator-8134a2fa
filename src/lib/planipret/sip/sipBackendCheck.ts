@@ -8,7 +8,7 @@
  *
  * READ-ONLY on NetSapiens — never touches routing, answering rules or DIDs.
  */
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdge } from "@/lib/planipret/edgeAuth";
 
 export type SipBackendCheck = {
   ok: boolean;

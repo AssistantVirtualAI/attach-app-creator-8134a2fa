@@ -321,6 +321,7 @@ export default function MMore() {
         <Row icon={<Info className="w-4 h-4" style={{ color: "#22c55e" }} />} label="Diagnostic — assignation de tâche"
           sub="Teste une tâche dans le module Task de Maestro et vérifie users"
           onClick={() => setTaskDiagOpen(true)} chevron />
+        {taskDiagOpen && <TaskAssignmentDiagnostic onClose={() => setTaskDiagOpen(false)} />}
         <Row icon={<Info className="w-4 h-4" style={{ color: "#F5A623" }} />} label={t("screens.more.maestroSyncHistory")}
           sub={t("screens.more.maestroSyncSub")}
           onClick={() => navigate("/mplanipret/maestro-sync")} chevron />
@@ -898,6 +899,5 @@ function DndSheet({ profile, onClose, onSaved }: { profile: any; onClose: () => 
         {busy ? "…" : t("common.save")}
       </button>
     </Sheet>
-      {taskDiagOpen && <TaskAssignmentDiagnostic onClose={() => setTaskDiagOpen(false)} />}
   );
 }

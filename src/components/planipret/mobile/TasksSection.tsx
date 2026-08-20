@@ -41,7 +41,20 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
     setBusy(true);
     const editing = composer?.initial?.task_id as string | undefined;
     const r = editing
-      ? await update(editing, { date: v.due_at, notes: v.notes, description: v.description })
+      ? await update(editing, {
+          date: v.due_at,
+          notes: v.notes,
+          description: v.description,
+          update_status: v.update_status,
+          ...(v.recurrence
+            ? {
+                is_recurring: true,
+                recurring_value: v.recurrence.value,
+                recurring_pattern: v.recurrence.pattern,
+                ...(v.recurrence.on?.length ? { recurring_on: v.recurrence.on } : {}),
+              }
+            : { is_recurring: false }),
+        })
       : await create(v as any);
     setBusy(false);
     if (r?.success) {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock } from "lucide-react";
+import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock, ExternalLink, ShieldCheck, Loader2 } from "lucide-react";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
-import { describeTaskDiagnostics, formatTaskDue, toTorontoLocalInput, type NormalizedTask, type TaskFilterValue } from "@/lib/planipret/tasks";
+import { describeTaskDiagnostics, formatTaskDue, toTorontoLocalInput, verifyTask, maestroTaskUrl, type NormalizedTask, type TaskFilterValue, type TaskVerifyResult } from "@/lib/planipret/tasks";
 import TaskComposerSheet, { type TaskComposerValue } from "./TaskComposerSheet";
 import { toast } from "sonner";
 
@@ -25,6 +25,21 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
   const [confirmDelete, setConfirmDelete] = useState<NormalizedTask | null>(null);
   /** Non-blocking Maestro warning (empty `users`, shifted `due_at`) for the last save. */
   const [diagnostic, setDiagnostic] = useState<{ text: string; correlationId?: string } | null>(null);
+  /** Per-task Maestro visibility check: créée → relue → visible dans Maestro. */
+  const [verif, setVerif] = useState<Record<string, TaskVerifyResult | "loading">>({});
+
+  const checkTask = async (taskId: string) => {
+    setVerif((v) => ({ ...v, [taskId]: "loading" }));
+    const r = await verifyTask(taskId);
+    setVerif((v) => ({ ...v, [taskId]: r }));
+    if (r?.visible_in_maestro) toast.success(L("Visible dans Maestro", "Visible in Maestro"));
+    else if (r?.read_back) toast.warning(L("Relue dans Maestro, mais non assignée à vous", "Read back in Maestro, but not assigned to you"));
+    else toast.warning(L("Non relue via l'API Maestro", "Not read back from the Maestro API"));
+  };
+
+  const openInMaestro = (taskId: string) => {
+    window.open(maestroTaskUrl(taskId), "_blank", "noopener");
+  };
 
   const sections = useMemo(() => ([
     { key: "overdue", label: L("En retard", "Overdue"), items: buckets.overdue, accent: "var(--pp-danger)" },

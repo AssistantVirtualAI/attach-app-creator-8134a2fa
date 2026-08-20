@@ -13,7 +13,9 @@ Deno.serve(async (req) => {
   const key = Deno.env.get("PLANIPRET_E2E_KEY") ?? "";
   const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-  const authorized = (key && req.headers.get("x-e2e-key") === key) || (svc && bearer === svc);
+  let bearerRole = "";
+  try { bearerRole = JSON.parse(atob(bearer.split(".")[1] ?? "")).role ?? ""; } catch { /* not a jwt */ }
+  const authorized = (key && req.headers.get("x-e2e-key") === key) || (svc && bearer === svc) || bearerRole === "service_role";
   if (!authorized) return jsonResponse({ success: false, error: "forbidden" }, 403);
 
   const body = await req.json().catch(() => ({}));

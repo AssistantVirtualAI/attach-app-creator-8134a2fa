@@ -229,9 +229,17 @@ Deno.serve(async (req) => {
         body: {
           status: "ended",
           ai_summary: summary,
+          ai_coaching: call.ai_coaching ?? null,
+          coaching_score: call.coaching_score ?? null,
+          lead_score: call.lead_score ?? null,
+          lead_temperature: call.lead_temperature ?? null,
+          transcript: transcript ? String(transcript).slice(0, 20000) : null,
           notes: [
+            summary ? `Résumé IA: ${summary}` : null,
             keyPoints.length ? `Points clés: ${keyPoints.map(String).join(" • ")}` : null,
             nextActions.length ? `Prochaines actions: ${nextActions.map(actionTitle).filter(Boolean).join(" • ")}` : null,
+            call.ai_coaching ? `Coaching IA${call.coaching_score != null ? ` (${call.coaching_score}/100)` : ""}:\n${String(call.ai_coaching).slice(0, 4000)}` : null,
+            call.lead_score != null ? `Score du lead: ${call.lead_score}${call.lead_temperature ? ` (${call.lead_temperature})` : ""}` : null,
             transcript ? `Transcription:\n${String(transcript).slice(0, 8000)}` : null,
           ].filter(Boolean).join("\n\n") || null,
         },

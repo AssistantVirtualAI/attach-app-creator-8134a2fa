@@ -515,14 +515,6 @@ export default function MHome() {
         </div>
       </section>
 
-      {/* ===== MY TASKS (under the AVA brief, before the agenda) ===== */}
-      <TasksSection
-        userId={profile?.user_id ?? null}
-        lang={lang as "fr" | "en"}
-        defaultTarget={profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null}
-        onSeeAll={() => navigate("/mplanipret/tasks")}
-      />
-
       {/* ===== STATS GRID (6 KPI) ===== */}
       <section className="grid grid-cols-3 gap-2.5">
         {statsLoading ? (
@@ -550,6 +542,15 @@ export default function MHome() {
         error={msCalendarError}
         lang={lang}
       />
+
+      {/* ===== MY TASKS (under the Microsoft calendar) ===== */}
+      <TasksSection
+        userId={profile?.user_id ?? null}
+        lang={lang as "fr" | "en"}
+        defaultTarget={profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null}
+        onSeeAll={() => navigate("/mplanipret/tasks")}
+      />
+
 
       {/* ===== SIP DEBUG SHORTCUT ===== */}
       <button

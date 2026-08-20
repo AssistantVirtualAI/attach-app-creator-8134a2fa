@@ -5,6 +5,7 @@
 import { corsHeaders, jsonResponse, supaAdmin } from "../_shared/ns-broker.ts";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
 import { buildCreatePayload, buildUpdateBody } from "../_shared/planipret-tasks.ts";
+import { handleTaskRequest } from "../_shared/planipret-task-handler.ts";
 
 const API_BASE = (Deno.env.get("PLANIPRET_API_BASE_URL") ?? "https://client.planipret.com").replace(/\/$/, "");
 

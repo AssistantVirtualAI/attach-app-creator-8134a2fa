@@ -11,6 +11,7 @@ import {
   bucketTasks,
   buildCreatePayload,
   buildUpdateBody,
+  assertAssigneeAllowed,
   canDeleteTask,
   filterTasks,
   idempotencyKey,
@@ -48,6 +49,8 @@ export interface TaskDeps {
   resolveTelecomUserId: (candidate: string | null) => Promise<string | null>;
   /** Resolve the numeric internal Maestro user id accepted by `users_id`. */
   resolveTaskAssigneeId?: () => Promise<string | null>;
+  /** Ids this broker may assign a task to: self + authorized team assistants. */
+  listAllowedAssignees?: () => Promise<string[]>;
   now?: () => Date;
 }
 
@@ -356,6 +359,16 @@ export async function handleTaskRequest(
     if (!built.ok) return { status: 200, body: { success: false, ...built, correlation_id } };
     const payload = built.payload;
 
+    // Assignment scope: self or authorized team assistants only (Maestro rule).
+    if (payload.users_id !== undefined && payload.users_id !== null) {
+      const allowedIds = (await deps.listAllowedAssignees?.().catch(() => [])) ?? [];
+      const check = assertAssigneeAllowed(payload.users_id, allowedIds);
+      if (!check.ok) {
+        await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "assignee_not_allowed" });
+        return { status: 200, body: { success: false, ...check, correlation_id } };
+      }
+    }
+
     // Scope check: a `user` task must target the broker's own Planiprêt id.
     if (payload.type === "user") {
       const own = String(profile?.maestro_broker_id ?? "");
@@ -454,6 +467,14 @@ export async function handleTaskRequest(
     const taskId = String(body?.task_id ?? "").trim();
     const built = buildUpdateBody(taskId, body?.changes ?? {});
     if (!built.ok) return { status: 200, body: { success: false, ...built, correlation_id } };
+    if (built.payload.users_id !== undefined && built.payload.users_id !== null) {
+      const allowedIds = (await deps.listAllowedAssignees?.().catch(() => [])) ?? [];
+      const check = assertAssigneeAllowed(built.payload.users_id, allowedIds);
+      if (!check.ok) {
+        await audit(admin, { action: "task_update_denied", user_id: userId, task_id: taskId, source, session_id: sessionId, correlation_id, result: "assignee_not_allowed" });
+        return { status: 200, body: { success: false, ...check, correlation_id } };
+      }
+    }
     const key = String(body?.idempotency_key ?? idempotencyKey(["update", userId, taskId, JSON.stringify(built.payload)]));
     const out = await withIdempotency(admin, userId, key, "update", async () => {
       const res = await deps.apiFetch(`/api/main/tasks/${encodeURIComponent(taskId)}`, {

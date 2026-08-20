@@ -21,6 +21,7 @@ import {
   updateCallPipeline,
 } from "../_shared/maestro.ts";
 import { markCdrRetrySucceeded, scheduleCdrRetry } from "../_shared/maestro-cdr-retry.ts";
+import { callDedupeKey, claimCallPost, releaseClaim, saveClaimResult } from "../_shared/maestro-call-dedupe.ts";
 
 function metaString(meta: unknown, key: string): string | null {
   const value = (meta as Record<string, unknown> | null)?.[key];

@@ -331,6 +331,118 @@ export async function handleTaskRequest(
     };
   }
 
+  // ── ASSIGNMENT SELF-TEST ──────────────────────────────────────────────────
+  // Creates a real task in the Maestro Task module assigned to the caller (or
+  // an authorized assistant), reads it back and reports whether `users` is
+  // populated. The task is KEPT by default so it can be seen in Maestro.
+  if (action === "assignment_selftest") {
+    const steps: Array<{ step: string; ok: boolean; detail: string }> = [];
+    const cleanup = body?.cleanup === true;
+    const ownXid = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : "";
+
+    const allowedIds = (await deps.listAllowedAssignees?.().catch(() => [])) ?? [];
+    steps.push({
+      step: "allowed_assignees",
+      ok: allowedIds.length > 0,
+      detail: allowedIds.length ? allowedIds.join(", ") : "aucun id autorisé résolu",
+    });
+
+    const requested = String(body?.users_id ?? "").trim();
+    const guard = assertAssigneeAllowed(requested, allowedIds);
+    if (!guard.ok) {
+      steps.push({ step: "assignee_guard", ok: false, detail: guard.message });
+      return { status: 200, body: { success: false, ok: false, steps, ...guard, correlation_id } };
+    }
+    steps.push({ step: "assignee_guard", ok: true, detail: requested ? `users_id ${requested} autorisé` : "auto-assignation (moi)" });
+
+    const internal = requested || (await deps.resolveTaskAssigneeId?.().catch(() => null)) || ownXid;
+    const now = nowFn();
+    const stamp = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+    const built = buildCreatePayload({
+      type: "user",
+      xid: ownXid,
+      users_id: internal,
+      date: stamp,
+      notes: String(body?.notes ?? `Diagnostic AVA — vérification d'assignation (${correlation_id})`),
+    });
+    if (!built.ok) {
+      steps.push({ step: "payload", ok: false, detail: JSON.stringify(built.fields ?? {}) });
+      return { status: 200, body: { success: false, ok: false, steps, correlation_id } };
+    }
+    steps.push({ step: "payload", ok: true, detail: `users_id=${internal}, date=${built.payload.date}` });
+
+    const res = await deps.apiFetch("/api/main/tasks", { method: "POST", body: JSON.stringify(built.payload) });
+    if (!res.ok) {
+      steps.push({ step: "create", ok: false, detail: `HTTP ${res.status}` });
+      await audit(admin, { action: "task_selftest", user_id: userId, source, session_id: sessionId, status: res.status, correlation_id, result: "create_failed" });
+      return { status: 200, body: { success: false, ok: false, steps, ...mapTaskApiError(res.status, res.data), correlation_id } };
+    }
+    const raw = res.data?.data ?? res.data?.task ?? res.data ?? {};
+    const created = normalizeTask({ ...built.payload, ...raw });
+    steps.push({ step: "create", ok: !!created.id, detail: created.id ? `tâche #${created.id} créée dans Maestro` : "aucun id retourné" });
+    if (created.id) await projectionUpsert(admin, userId, [created]);
+
+    // Read-back: single GET first, then the list connector.
+    let readback: any = null;
+    let readSource = "none";
+    if (created.id) {
+      const single = await deps.apiFetch(`/api/main/tasks/${encodeURIComponent(created.id)}`, { method: "GET" });
+      if (single.ok) {
+        readback = single.data?.data ?? single.data?.task ?? single.data ?? null;
+        if (readback) readSource = "GET /api/main/tasks/{id}";
+      }
+      if (!readback) {
+        let telecomId: string | null = null;
+        try { telecomId = await deps.resolveTelecomUserId(ownXid || null); } catch { /* ignore */ }
+        if (telecomId) {
+          const up = await deps.listFetch(telecomId, { status: null, from: null, to: null });
+          const hit = (up.tasks ?? []).find((t: any) => String(normalizeTask(t).id) === String(created.id));
+          if (hit) { readback = (hit as any).raw ?? hit; readSource = up.endpoint ?? "list"; }
+        }
+      }
+    }
+    const assignment = readback ? readAssignment(readback) : { ids: [], source: "none" as const };
+    const usersOk = assignment.source === "users" && assignment.ids.includes(String(internal));
+    steps.push({
+      step: "readback",
+      ok: !!readback,
+      detail: readback ? `lu via ${readSource}` : "aucune lecture disponible (endpoint GET non exposé)",
+    });
+    steps.push({
+      step: "users_populated",
+      ok: usersOk,
+      detail: usersOk
+        ? `users contient ${internal}`
+        : `users=${JSON.stringify(assignment.ids)} (source: ${assignment.source})`,
+    });
+
+    if (cleanup && created.id) {
+      const del = await deps.apiFetch(`/api/main/tasks/${encodeURIComponent(created.id)}`, {
+        method: "DELETE", body: JSON.stringify({ task_id: Number(created.id) || created.id }),
+      });
+      steps.push({ step: "cleanup", ok: del.ok, detail: del.ok ? "tâche de test supprimée" : `HTTP ${del.status}` });
+    }
+
+    const ok = steps.every((s) => s.ok);
+    await audit(admin, { action: "task_selftest", user_id: userId, task_id: created.id, source, session_id: sessionId, correlation_id, result: ok ? "ok" : "warnings" });
+    return {
+      status: 200,
+      body: {
+        success: true,
+        ok,
+        steps,
+        task: created,
+        task_id: created.id,
+        expected_assignee: String(internal),
+        returned_assignees: assignment.ids,
+        assignment_source: assignment.source,
+        maestro_task_url: created.id ? `https://client.planipret.com/main/tasks?task_id=${created.id}` : null,
+        kept: !cleanup,
+        correlation_id,
+      },
+    };
+  }
+
   // ── CREATE ─────────────────────────────────────────────────────────────────
   if (action === "create") {
     // A `user` task defaults to the broker's own Planiprêt id when the client

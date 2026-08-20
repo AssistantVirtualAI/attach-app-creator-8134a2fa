@@ -506,6 +506,13 @@ export default function PlanipretMobile() {
   const handlePull = async () => { if (refreshFn.current) await refreshFn.current(); };
   const { ref: scrollRef, pullDist, refreshing, threshold } = usePullToRefresh(handlePull);
 
+  // Any Edge Function rejecting the session (401) routes here: clear message,
+  // then back to the login screen instead of a silent failure / blank screen.
+  useEffect(() => onAuthRequired(() => {
+    toast.error(t("screens.shell.sessionExpired") || "Session expirée — veuillez vous reconnecter.");
+    setAccessError("unauthenticated");
+  }), [t]);
+
   // Keep Microsoft 365 + Maestro OAuth sessions alive: refresh on boot, on
   // foreground, and every 20 minutes so connections never silently drop.
   useEffect(() => {

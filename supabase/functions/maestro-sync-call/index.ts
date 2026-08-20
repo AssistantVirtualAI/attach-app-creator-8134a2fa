@@ -226,14 +226,11 @@ Deno.serve(async (req) => {
         method: "PUT",
         path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId ?? ""))}/calls/${encodeURIComponent(String(mId))}`,
         token: auth.token,
+        // Maestro n'accepte que `status`, `ai_summary` et `notes` sur ce PUT :
+        // tout le reste (coaching, scores, transcription) part dans `notes`.
         body: {
           status: "ended",
           ai_summary: summary,
-          ai_coaching: call.ai_coaching ?? null,
-          coaching_score: call.coaching_score ?? null,
-          lead_score: call.lead_score ?? null,
-          lead_temperature: call.lead_temperature ?? null,
-          transcript: transcript ? String(transcript).slice(0, 20000) : null,
           notes: [
             summary ? `Résumé IA: ${summary}` : null,
             keyPoints.length ? `Points clés: ${keyPoints.map(String).join(" • ")}` : null,

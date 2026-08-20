@@ -69,7 +69,9 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     setRecurring(Boolean(initial?.recurrence));
     setPattern(initial?.recurrence?.pattern ?? "week");
     setRecValue(initial?.recurrence?.value ?? 1);
-    requestAnimationFrame(() => panelRef.current?.scrollTo({ top: 0 }));
+    requestAnimationFrame(() => {
+      if (panelRef.current) panelRef.current.scrollTop = 0;
+    });
   }, [open, initial, defaultTarget]);
 
   useEffect(() => {

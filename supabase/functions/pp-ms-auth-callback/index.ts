@@ -91,8 +91,10 @@ Deno.serve(async (req) => {
     const msToken = token.data;
     const meRes = await fetch(
       "https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName",
-      { headers: { Authorization: `Bearer ${msToken.access_token}` } },
-    );
+      { headers: { Authorization: `Bearer ${msToken.access_token}` }, signal: AbortSignal.timeout(8000) },
+    ).catch(() => null);
+    if (!meRes) return json({ success: false, error: "microsoft_profile_timeout" }, 504);
+
     const me = await meRes.json().catch(() => ({}));
     const msEmail = normalizeEmail(me?.mail) ?? normalizeEmail(me?.userPrincipalName);
     if (!msEmail) return json({ success: false, error: "microsoft_email_missing" }, 400);

@@ -26,6 +26,12 @@ export interface TaskListResult {
 }
 
 async function invoke(body: Record<string, unknown>): Promise<any> {
+  // No session yet (boot / signed out): don't call the gateway, it would 401
+  // and surface as a runtime error overlay.
+  const { data: sess } = await supabase.auth.getSession();
+  if (!sess?.session?.access_token) {
+    return { success: false, source: "unavailable", error: "unauthenticated" };
+  }
   const { data, error } = await supabase.functions.invoke("planipret-task-api", { body });
   if (error) return { success: false, error: "network_error", message: error.message };
   return data ?? { success: false, error: "empty_response" };

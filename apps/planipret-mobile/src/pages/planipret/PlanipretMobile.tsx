@@ -544,7 +544,11 @@ export default function PlanipretMobile() {
     const ping = () => {
       if (Date.now() - last < 60_000) return;
       last = Date.now();
-      supabase.functions.invoke("pp-connections-keepalive", { body: {} }).catch(() => {});
+      void (async () => {
+        const { data: sess } = await supabase.auth.getSession();
+        if (!sess?.session?.access_token) return;
+        await supabase.functions.invoke("pp-connections-keepalive", { body: {} }).catch(() => {});
+      })();
     };
     ping();
     const onVis = () => { if (document.visibilityState === "visible") ping(); };

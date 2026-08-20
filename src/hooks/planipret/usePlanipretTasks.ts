@@ -58,12 +58,18 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
 
   const mergePending = useCallback((list: NormalizedTask[]): NormalizedTask[] => {
     const cutoff = Date.now() - 5 * 60 * 1000;
-    for (const [id, v] of pending.current) {
-      if (v.at < cutoff) pending.current.delete(id);
-      else if (list.some((t) => String(t.id) === id)) pending.current.delete(id);
-    }
+    for (const [id, v] of pending.current) if (v.at < cutoff) pending.current.delete(id);
     if (!pending.current.size) return list;
-    return [...list, ...Array.from(pending.current.values()).map((v) => v.task)];
+    // Locally-known versions win over the eventually-consistent server list.
+    const seen = new Set<string>();
+    const merged = list.map((t) => {
+      const p = pending.current.get(String(t.id));
+      if (!p) return t;
+      seen.add(String(t.id));
+      return p.task;
+    });
+    for (const [id, v] of pending.current) if (!seen.has(id)) merged.push(v.task);
+    return merged;
   }, []);
 
   // Paint the per-user cache immediately.

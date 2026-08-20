@@ -46,6 +46,12 @@ export interface TaskDeps {
     telecomId: string,
     opts: { status?: string | null; from?: string | null; to?: string | null },
   ) => Promise<UpstreamList>;
+  /** Best-effort single-task read (undocumented upstream). */
+  singleFetch?: (
+    taskId: string,
+    telecomId: string | null,
+  ) => Promise<{ ok: boolean; task: any | null; endpoint: string | null; status: number }>;
+
   resolveTelecomUserId: (candidate: string | null) => Promise<string | null>;
   /** Resolve the numeric internal Maestro user id accepted by `users_id`. */
   resolveTaskAssigneeId?: () => Promise<string | null>;

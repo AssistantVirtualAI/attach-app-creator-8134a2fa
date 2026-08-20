@@ -88,6 +88,66 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: true, task_id: id || null, create: res });
   }
 
+  // AVA flow mode: exercises the exact gateway logic used by the chatbot and
+  // the voicebot (auto-assignment, assignment to a colleague, update, delete).
+  if (body?.mode === "ava_flow") {
+    const n = new Date(Date.now() + 24 * 3600 * 1000);
+    const p2 = (x: number) => String(x).padStart(2, "0");
+    const due = `${n.getUTCFullYear()}-${p2(n.getUTCMonth() + 1)}-${p2(n.getUTCDate())} 10:15:00`;
+    const deps = {
+      admin,
+      userId: profile.id,
+      profile,
+      token,
+      apiFetch: async (path: string, init: { method: string; body?: string }) => {
+        const r = await callWithToken(token, path, init.method, init.body ? JSON.parse(init.body) : undefined);
+        const resp = r.response as any;
+        return { status: resp.status, ok: resp.status >= 200 && resp.status < 300, data: resp.body };
+      },
+      listFetch: async () => ({ ok: false, tasks: [], endpoint: null, status: 405 }),
+      resolveTelecomUserId: async (c: string | null) => c ?? String(profile.maestro_telecom_user_id ?? profile.maestro_broker_id ?? ""),
+    } as any;
+
+    const source = String(body?.source ?? "ava");
+    const steps: Record<string, unknown> = {};
+
+    // 1) create with NO target → auto-target + auto-assign to the creator
+    const c1 = await handleTaskRequest({
+      action: "create", source, notes: `AVA auto-assign ${new Date().toISOString()}`,
+      description: "Test AVA — auto-assignation au créateur", due_at: due,
+      idempotency_key: `ava_auto_${Date.now()}`,
+    }, deps);
+    steps.create_auto_assign = c1.body;
+    const id1 = String((c1.body as any)?.task_id ?? "");
+
+    // 2) create assigned to someone else
+    const other = body?.assignee_id ?? null;
+    if (other) {
+      const c2 = await handleTaskRequest({
+        action: "create", source, notes: `AVA assigné à ${other}`, due_at: due,
+        assignee_id: other, idempotency_key: `ava_other_${Date.now()}`,
+      }, deps);
+      steps.create_assigned_other = c2.body;
+    }
+
+    // 3) update + 4) delete on the first task
+    if (id1) {
+      const u = await handleTaskRequest({
+        action: "update", source, task_id: id1,
+        changes: { notes: "AVA — tâche modifiée", date: due },
+        idempotency_key: `ava_upd_${Date.now()}`,
+      }, deps);
+      steps.update = u.body;
+      const d = await handleTaskRequest({
+        action: "delete", source, task_id: id1, idempotency_key: `ava_del_${Date.now()}`,
+      }, deps);
+      steps.delete = d.body;
+    }
+
+    return jsonResponse({ success: true, broker_xid: profile.maestro_broker_id, steps });
+  }
+
+
   const steps: Record<string, unknown> = {};
   const now = new Date(Date.now() + 24 * 3600 * 1000);
   const pad = (n: number) => String(n).padStart(2, "0");

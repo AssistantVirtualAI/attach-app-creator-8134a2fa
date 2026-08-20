@@ -9,9 +9,22 @@ export interface TaskComposerValue {
   notes: string;
   due_at: string;
   description?: string;
+  status?: string;
+  users_id?: number;
+  is_hidden?: boolean;
+  update_status?: boolean;
   sync_calendar?: boolean;
   notification?: boolean;
-  recurrence?: { value: number; pattern: string } | null;
+  send_notification_to?: number[];
+  send_notification_client?: boolean;
+  send_notification_client_secondary?: boolean;
+  send_notification_assistant?: boolean;
+  assistant_users_id?: number;
+  send_notification_from?: number;
+  notification_users?: number[];
+  scheduled?: boolean;
+  scheduled_at?: string;
+  recurrence?: { value: number; pattern: string; on?: number[] } | null;
 }
 
 interface Props {
@@ -34,12 +47,40 @@ function defaultDue() {
 
 const FIELD_ERROR_LABELS: Record<string, { fr: string; en: string }> = {
   xid_required: { fr: "Cible (xid) requise.", en: "Target (xid) is required." },
+  xid_required_integer: { fr: "Cible (xid) requise (nombre).", en: "Target (xid) must be a number." },
   target_required: { fr: "Cible (xid) requise.", en: "Target (xid) is required." },
   notes_required: { fr: "La note est obligatoire.", en: "Notes are required." },
   date_required: { fr: "Date et heure requises.", en: "Date and time are required." },
+  "date_required_YYYY-MM-DD_HH:mm:ss": { fr: "Date et heure requises.", en: "Date and time are required." },
   invalid_date: { fr: "Format de date invalide.", en: "Invalid date format." },
+  invalid_datetime: { fr: "Format de date invalide.", en: "Invalid date format." },
   type_must_be_user_or_contract: { fr: "Type de cible invalide.", en: "Invalid target type." },
+  pattern_must_be_day_week_month_year: { fr: "Fréquence invalide.", en: "Invalid recurrence pattern." },
+  must_be_0_to_6: { fr: "Jours de récurrence invalides.", en: "Invalid recurrence weekdays." },
+  required_when_send_notification_client: {
+    fr: "Choisissez au moins un destinataire de notification.",
+    en: "Pick at least one notification recipient.",
+  },
 };
+
+const STATUSES = [
+  { value: "pending", fr: "En attente", en: "Pending" },
+  { value: "in_progress", fr: "En cours", en: "In progress" },
+  { value: "done", fr: "Terminée", en: "Done" },
+];
+
+const WEEKDAYS: Array<{ n: number; fr: string; en: string }> = [
+  { n: 0, fr: "D", en: "S" },
+  { n: 1, fr: "L", en: "M" },
+  { n: 2, fr: "M", en: "T" },
+  { n: 3, fr: "M", en: "W" },
+  { n: 4, fr: "J", en: "T" },
+  { n: 5, fr: "V", en: "F" },
+  { n: 6, fr: "S", en: "S" },
+];
+
+const idList = (s: string): number[] =>
+  s.split(/[,;\s]+/).map((x) => Number(x.trim())).filter((n) => Number.isInteger(n) && n > 0);
 
 export default function TaskComposerSheet({ open, lang, defaultTarget, busy, initial, fieldErrors, onClose, onSubmit }: Props) {
   const L = (fr: string, en: string) => (lang === "en" ? en : fr);
@@ -48,11 +89,26 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [due, setDue] = useState(initial?.due_at ?? defaultDue());
+  const [status, setStatus] = useState(initial?.status ?? "pending");
+  const [assignee, setAssignee] = useState(initial?.users_id ? String(initial.users_id) : "");
+  const [hidden, setHidden] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState(false);
   const [syncCal, setSyncCal] = useState(false);
   const [notify, setNotify] = useState(false);
+  const [notifyTo, setNotifyTo] = useState("");
+  const [notifyClient, setNotifyClient] = useState(false);
+  const [notifyClientSecondary, setNotifyClientSecondary] = useState(false);
+  const [notifyAssistant, setNotifyAssistant] = useState(false);
+  const [assistantId, setAssistantId] = useState("");
+  const [notifyFrom, setNotifyFrom] = useState("");
+  const [notificationUsers, setNotificationUsers] = useState("");
+  const [scheduled, setScheduled] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState("");
   const [recurring, setRecurring] = useState(false);
   const [pattern, setPattern] = useState("week");
   const [recValue, setRecValue] = useState(1);
+  const [recOn, setRecOn] = useState<number[]>([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -64,11 +120,26 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     setDescription(initial?.description ?? "");
     setDue(initial?.due_at ?? defaultDue());
     setTargetType(initial?.target_type ?? "user");
+    setStatus(initial?.status ?? "pending");
+    setAssignee(initial?.users_id ? String(initial.users_id) : "");
+    setHidden(initial?.is_hidden ?? false);
+    setUpdateStatus(initial?.update_status ?? false);
     setSyncCal(initial?.sync_calendar ?? false);
     setNotify(initial?.notification ?? false);
+    setNotifyTo((initial?.send_notification_to ?? []).join(", "));
+    setNotifyClient(initial?.send_notification_client ?? false);
+    setNotifyClientSecondary(initial?.send_notification_client_secondary ?? false);
+    setNotifyAssistant(initial?.send_notification_assistant ?? false);
+    setAssistantId(initial?.assistant_users_id ? String(initial.assistant_users_id) : "");
+    setNotifyFrom(initial?.send_notification_from ? String(initial.send_notification_from) : "");
+    setNotificationUsers((initial?.notification_users ?? []).join(", "));
+    setScheduled(initial?.scheduled ?? false);
+    setScheduledAt(initial?.scheduled_at ?? "");
     setRecurring(Boolean(initial?.recurrence));
     setPattern(initial?.recurrence?.pattern ?? "week");
     setRecValue(initial?.recurrence?.value ?? 1);
+    setRecOn(initial?.recurrence?.on ?? []);
+    setShowAdvanced(false);
     requestAnimationFrame(() => {
       if (panelRef.current) panelRef.current.scrollTop = 0;
     });
@@ -111,6 +182,11 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!target.trim()) return setErr(L("Cible (xid) requise.", "Target (xid) is required."));
     if (!notes.trim()) return setErr(L("La note est obligatoire.", "Notes are required."));
     if (!due) return setErr(L("Date et heure requises.", "Date and time are required."));
+    if (scheduled && !scheduledAt) return setErr(L("Date d'envoi programmée requise.", "Scheduled send date is required."));
+    const notifUsers = idList(notificationUsers);
+    if (notifyClient && !notifUsers.length) {
+      return setErr(L("Destinataires de notification requis (IDs).", "Notification recipients (IDs) are required."));
+    }
     setErr(null);
     await onSubmit({
       target: target.trim(),
@@ -118,14 +194,29 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
       notes: notes.trim(),
       due_at: due,
       description: description.trim() || undefined,
+      status,
+      users_id: assignee.trim() ? Number(assignee.trim()) : undefined,
+      is_hidden: hidden,
+      update_status: updateStatus,
       sync_calendar: syncCal,
       notification: notify,
-      recurrence: recurring ? { value: recValue, pattern } : null,
+      send_notification_to: idList(notifyTo),
+      send_notification_client: notifyClient,
+      send_notification_client_secondary: notifyClientSecondary,
+      send_notification_assistant: notifyAssistant,
+      assistant_users_id: assistantId.trim() ? Number(assistantId.trim()) : undefined,
+      send_notification_from: notifyFrom.trim() ? Number(notifyFrom.trim()) : undefined,
+      notification_users: notifUsers,
+      scheduled,
+      scheduled_at: scheduled ? scheduledAt : undefined,
+      recurrence: recurring ? { value: recValue, pattern, on: recOn } : null,
     });
   };
 
   const field = "w-full rounded-xl px-3 py-3 text-sm";
   const fieldStyle = { background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" } as const;
+  const labelCls = "text-[11px]";
+  const labelStyle = { color: "var(--pp-text-muted)" } as const;
 
   const frame = typeof document !== "undefined" ? document.getElementById("pp-mobile-frame") : null;
   const host = frame ?? (typeof document !== "undefined" ? document.body : null);
@@ -165,7 +256,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
           </div>
 
           <label className="block">
-            <span className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{L("Cible (xid Planiprêt)", "Target (Planiprêt xid)")}</span>
+            <span className={labelCls} style={labelStyle}>{L("Cible (xid Planiprêt)", "Target (Planiprêt xid)")}</span>
             <input className={field} style={fieldStyle} inputMode="numeric" value={target}
               aria-label={L("Cible xid", "Target xid")}
               onChange={(e) => setTarget(e.target.value)} placeholder="387460525" />
@@ -173,41 +264,137 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
           </label>
 
           <label className="block">
-            <span className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{L("Note *", "Notes *")}</span>
+            <span className={labelCls} style={labelStyle}>{L("Note *", "Notes *")}</span>
             <input className={field} style={fieldStyle} value={notes} aria-label={L("Note", "Notes")}
               onChange={(e) => setNotes(e.target.value)} placeholder={L("Rappeler Jean", "Call Jean back")} />
             <FieldError keys={["notes"]} />
           </label>
 
           <label className="block">
-            <span className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{L("Échéance (America/Toronto) *", "Due (America/Toronto) *")}</span>
+            <span className={labelCls} style={labelStyle}>{L("Échéance (America/Toronto) *", "Due (America/Toronto) *")}</span>
             <input type="datetime-local" className={field} style={fieldStyle} value={due}
               aria-label={L("Échéance", "Due date")} onChange={(e) => setDue(e.target.value)} />
             <FieldError keys={["date", "due_at"]} />
           </label>
 
           <label className="block">
-            <span className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>{L("Description (optionnel)", "Description (optional)")}</span>
+            <span className={labelCls} style={labelStyle}>{L("Description (optionnel)", "Description (optional)")}</span>
             <textarea className={field} style={fieldStyle} rows={2} value={description}
               aria-label={L("Description", "Description")} onChange={(e) => setDescription(e.target.value)} />
           </label>
+
+          <div className="flex gap-2">
+            <label className="block flex-1">
+              <span className={labelCls} style={labelStyle}>{L("Statut", "Status")}</span>
+              <select className={field} style={fieldStyle} value={status} aria-label={L("Statut", "Status")}
+                onChange={(e) => setStatus(e.target.value)}>
+                {STATUSES.map((s) => <option key={s.value} value={s.value}>{lang === "en" ? s.en : s.fr}</option>)}
+              </select>
+              <FieldError keys={["status", "option"]} />
+            </label>
+            <label className="block flex-1">
+              <span className={labelCls} style={labelStyle}>{L("Assigné à (users_id)", "Assigned to (users_id)")}</span>
+              <input className={field} style={fieldStyle} inputMode="numeric" value={assignee}
+                aria-label={L("Assigné à", "Assigned to")} onChange={(e) => setAssignee(e.target.value)} placeholder={L("Moi", "Me")} />
+              <FieldError keys={["users_id"]} />
+            </label>
+          </div>
 
           <Toggle label={L("Créer l'événement calendrier", "Create calendar event")} checked={syncCal} onChange={setSyncCal} />
           <Toggle label={L("Envoyer une notification", "Send a notification")} checked={notify} onChange={setNotify} />
           <Toggle label={L("Tâche récurrente", "Recurring task")} checked={recurring} onChange={setRecurring} />
 
           {recurring && (
-            <div className="flex gap-2">
-              <input type="number" min={1} className={field} style={fieldStyle} value={recValue}
-                aria-label={L("Valeur de récurrence", "Recurrence value")}
-                onChange={(e) => setRecValue(Math.max(1, Number(e.target.value) || 1))} />
-              <select className={field} style={fieldStyle} value={pattern} aria-label={L("Fréquence", "Pattern")}
-                onChange={(e) => setPattern(e.target.value)}>
-                <option value="day">{L("Jour", "Day")}</option>
-                <option value="week">{L("Semaine", "Week")}</option>
-                <option value="month">{L("Mois", "Month")}</option>
-                <option value="year">{L("Année", "Year")}</option>
-              </select>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input type="number" min={1} className={field} style={fieldStyle} value={recValue}
+                  aria-label={L("Valeur de récurrence", "Recurrence value")}
+                  onChange={(e) => setRecValue(Math.max(1, Number(e.target.value) || 1))} />
+                <select className={field} style={fieldStyle} value={pattern} aria-label={L("Fréquence", "Pattern")}
+                  onChange={(e) => setPattern(e.target.value)}>
+                  <option value="day">{L("Jour", "Day")}</option>
+                  <option value="week">{L("Semaine", "Week")}</option>
+                  <option value="month">{L("Mois", "Month")}</option>
+                  <option value="year">{L("Année", "Year")}</option>
+                </select>
+              </div>
+              {pattern === "week" && (
+                <div>
+                  <span className={labelCls} style={labelStyle}>{L("Jours", "Days")}</span>
+                  <div className="flex gap-1 mt-1">
+                    {WEEKDAYS.map((d) => {
+                      const on = recOn.includes(d.n);
+                      return (
+                        <button key={d.n} type="button" aria-pressed={on}
+                          aria-label={`${L("Jour", "Day")} ${d.n}`}
+                          onClick={() => setRecOn((prev) => (on ? prev.filter((x) => x !== d.n) : [...prev, d.n].sort()))}
+                          className="flex-1 min-h-[40px] rounded-xl text-xs font-semibold"
+                          style={on ? { background: "var(--pp-brand-accent)", color: "#fff" } : fieldStyle}>
+                          {lang === "en" ? d.en : d.fr}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <FieldError keys={["recurring_on"]} />
+                </div>
+              )}
+              <FieldError keys={["recurring_pattern", "recurring_value"]} />
+            </div>
+          )}
+
+          <button type="button" onClick={() => setShowAdvanced((v) => !v)}
+            aria-expanded={showAdvanced}
+            className="w-full min-h-[44px] rounded-xl text-sm font-medium" style={fieldStyle}>
+            {showAdvanced ? L("Masquer les options avancées", "Hide advanced options") : L("Options avancées", "Advanced options")}
+          </button>
+
+          {showAdvanced && (
+            <div className="space-y-3">
+              <Toggle label={L("Notifier le client", "Notify the client")} checked={notifyClient} onChange={setNotifyClient} />
+              <Toggle label={L("Notifier le client secondaire", "Notify the secondary client")} checked={notifyClientSecondary} onChange={setNotifyClientSecondary} />
+              <Toggle label={L("Notifier l'adjoint(e)", "Notify the assistant")} checked={notifyAssistant} onChange={setNotifyAssistant} />
+              {notifyAssistant && (
+                <label className="block">
+                  <span className={labelCls} style={labelStyle}>{L("Adjoint(e) (users_id)", "Assistant (users_id)")}</span>
+                  <input className={field} style={fieldStyle} inputMode="numeric" value={assistantId}
+                    aria-label={L("Adjoint", "Assistant")} onChange={(e) => setAssistantId(e.target.value)} />
+                  <FieldError keys={["assistant_users_id"]} />
+                </label>
+              )}
+              <label className="block">
+                <span className={labelCls} style={labelStyle}>{L("Notifier ces utilisateurs (IDs)", "Notify these users (IDs)")}</span>
+                <input className={field} style={fieldStyle} value={notifyTo}
+                  aria-label={L("Notifier ces utilisateurs", "Notify these users")}
+                  onChange={(e) => setNotifyTo(e.target.value)} placeholder="1024, 2048" />
+                <FieldError keys={["send_notification_to"]} />
+              </label>
+              <label className="block">
+                <span className={labelCls} style={labelStyle}>{L("Destinataires de la notification client (IDs)", "Client notification recipients (IDs)")}</span>
+                <input className={field} style={fieldStyle} value={notificationUsers}
+                  aria-label={L("Destinataires de la notification", "Notification recipients")}
+                  onChange={(e) => setNotificationUsers(e.target.value)} placeholder="387460525" />
+                <FieldError keys={["notification_users"]} />
+              </label>
+              <label className="block">
+                <span className={labelCls} style={labelStyle}>{L("Expéditeur de la notification (users_id)", "Notification sender (users_id)")}</span>
+                <input className={field} style={fieldStyle} inputMode="numeric" value={notifyFrom}
+                  aria-label={L("Expéditeur de la notification", "Notification sender")}
+                  onChange={(e) => setNotifyFrom(e.target.value)} />
+                <FieldError keys={["send_notification_from"]} />
+              </label>
+
+              <Toggle label={L("Programmer l'envoi", "Schedule the send")} checked={scheduled} onChange={setScheduled} />
+              {scheduled && (
+                <label className="block">
+                  <span className={labelCls} style={labelStyle}>{L("Envoyer le (America/Toronto)", "Send on (America/Toronto)")}</span>
+                  <input type="datetime-local" className={field} style={fieldStyle} value={scheduledAt}
+                    aria-label={L("Date d'envoi", "Send date")} onChange={(e) => setScheduledAt(e.target.value)} />
+                  <FieldError keys={["scheduled_at"]} />
+                </label>
+              )}
+
+              <Toggle label={L("Tâche masquée", "Hidden task")} checked={hidden} onChange={setHidden} />
+              <Toggle label={L("Mettre à jour le statut du dossier", "Update the file status")} checked={updateStatus} onChange={setUpdateStatus} />
             </div>
           )}
 
@@ -221,7 +408,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
         </form>
       </div>
     </div>
-  ), document.body);
+  ), host);
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
@@ -232,8 +419,8 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
       onClick={() => onChange(!checked)}
       className="w-full min-h-[44px] flex items-center justify-between rounded-xl px-3 text-sm"
       style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" }}>
-      <span>{label}</span>
-      <span className="w-10 h-6 rounded-full flex items-center px-0.5"
+      <span className="text-left pr-2">{label}</span>
+      <span className="w-10 h-6 rounded-full flex items-center px-0.5 shrink-0"
         style={{ background: checked ? "var(--pp-brand-accent)" : "var(--pp-bg-border)" }}>
         <span className="w-5 h-5 rounded-full bg-white transition-transform"
           style={{ transform: checked ? "translateX(16px)" : "translateX(0)" }} />

@@ -48,6 +48,8 @@ const records = new Map<string, MaestroPostRecord>();
 const inflight = new Map<string, Promise<MaestroPostRecord>>();
 /** dedupKey → { callId, at } for cross-callId de-duplication. */
 const recentDedup = new Map<string, { callId: string; at: number }>();
+/** local provider call id → Maestro call id returned by the server publisher. */
+const maestroIds = new Map<string, string>();
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -219,6 +221,8 @@ async function post(
       });
       if (error) throw new Error(error.message || "maestro-call-post failed");
       if ((data as any)?.success === false) throw new Error(String((data as any)?.error ?? "maestro_post_failed"));
+      const returnedId = (data as any)?.maestro_call_id;
+      if (returnedId) maestroIds.set(callId, String(returnedId));
       const rec = upsert(callId, { direction, number, state: "posted", reason: "posted", lastError: null });
       log("posted", { callId, dedupKey, direction, number, classification, attempts: attempt });
       return rec;
@@ -317,7 +321,15 @@ export async function updateCallIfPosted(
     return "blocked";
   }
   try {
-    await maestroTelecom.updateCall(id, body as any);
+    const maestroId = maestroIds.get(id);
+    if (!maestroId) {
+      // No Maestro record id (deduped against another publisher): the server
+      // pipeline sends the completion update, so skip it here.
+      upsert(id, { direction: rec.direction, number: rec.number, endedUpdate: "blocked" });
+      log("update_blocked_no_maestro_id", { callId: id });
+      return "blocked";
+    }
+    await maestroTelecom.updateCall(maestroId, body as any);
     upsert(id, { direction: rec.direction, number: rec.number, endedUpdate: "sent" });
     log("update_sent", { callId: id, dedupKey: rec.dedupKey, body });
     return "sent";
@@ -332,6 +344,7 @@ export async function updateCallIfPosted(
 /** Test/diagnostic helper. */
 export function resetMaestroCallPostingCache() {
   records.clear();
+  maestroIds.clear();
   inflight.clear();
   recentDedup.clear();
   brokerNumbers = null;

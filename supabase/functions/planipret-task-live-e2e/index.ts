@@ -11,12 +11,11 @@ const API_BASE = (Deno.env.get("PLANIPRET_API_BASE_URL") ?? "https://client.plan
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const key = Deno.env.get("PLANIPRET_E2E_KEY") ?? "";
-  const body_mode_probe_bypass = req.headers.get("x-probe-list") === "1";
   const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
   let bearerRole = "";
   try { bearerRole = JSON.parse(atob(bearer.split(".")[1] ?? "")).role ?? ""; } catch { /* not a jwt */ }
-  const authorized = (key && req.headers.get("x-e2e-key") === key) || (svc && bearer === svc) || bearerRole === "service_role" || (body_mode_probe_bypass && bearerRole === "authenticated");
+  const authorized = (key && req.headers.get("x-e2e-key") === key) || (svc && bearer === svc) || bearerRole === "service_role";
   if (!authorized) return jsonResponse({ success: false, error: "forbidden", seen_role: bearerRole || null, has_bearer: !!bearer }, 403);
 
   const body = await req.json().catch(() => ({}));

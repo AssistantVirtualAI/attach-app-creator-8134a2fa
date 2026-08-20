@@ -204,7 +204,31 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
         <Ms365PendingBanner onRetry={signInWithMicrosoft} />
 
 
-        {/* Email/password fallback */}
+        {/* Microsoft SSO — primary sign-in method */}
+        <div className="px-6">
+          <button type="button" onClick={signInWithMicrosoft} disabled={loading}
+            className="w-full rounded-xl py-3.5 font-bold flex items-center justify-center gap-2.5 disabled:opacity-60"
+            style={{ background: "#FFFFFF", border: "1px solid rgba(0,0,0,0.10)", color: "#1B1B1F", fontSize: 15, minHeight: 50, boxShadow: "0 8px 26px rgba(0,0,0,0.28)" }}>
+            <svg width="18" height="18" viewBox="0 0 23 23" aria-hidden>
+              <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
+              <rect x="12" y="1" width="10" height="10" fill="#7FBA00"/>
+              <rect x="1" y="12" width="10" height="10" fill="#00A4EF"/>
+              <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
+            </svg>
+            {t("auth.signInMs")}
+          </button>
+          <p style={{ fontSize: 11.5, color: "var(--pp-text-muted)", textAlign: "center", marginTop: 8 }}>
+            {lang === "fr" ? "Méthode recommandée pour les courtiers Planiprêt" : "Recommended for Planiprêt brokers"}
+          </p>
+
+          <div className="flex items-center gap-2 mt-4 mb-1" style={{ color: "var(--pp-text-faint)", fontSize: 11 }}>
+            <div className="flex-1 h-px" style={{ background: "var(--pp-bg-border)" }} />
+            <span className="uppercase tracking-wider">{t("auth.or")}</span>
+            <div className="flex-1 h-px" style={{ background: "var(--pp-bg-border)" }} />
+          </div>
+        </div>
+
+        {/* Email/password (secondary) */}
         <form onSubmit={submit} className="px-6 space-y-3">
           <div>
             <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--pp-text-muted)", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: 4 }}>{t("auth.email")}</label>
@@ -226,8 +250,8 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
             </div>
           )}
           <button type="submit" disabled={loading} onClick={(e) => { e.preventDefault(); void submit(); }}
-            className="w-full rounded-xl py-3 font-bold text-white disabled:opacity-60"
-            style={{ background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)", boxShadow: "0 6px 22px rgba(46,155,220,0.40)", fontSize: 14 }}>
+            className="w-full rounded-xl py-3 font-bold disabled:opacity-60"
+            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)", fontSize: 14 }}>
             {loading ? t("auth.signingIn") : t("auth.signIn")}
           </button>
 
@@ -237,27 +261,6 @@ export default function MobileAuthScreen({ onLoggedIn, msRedirect = "/mplanipret
             {t("auth.forgot")}
           </button>
         </form>
-
-        {/* Microsoft SSO (secondary) */}
-        <div className="px-6 mt-4">
-          <div className="flex items-center gap-2 mb-3" style={{ color: "var(--pp-text-faint)", fontSize: 11 }}>
-            <div className="flex-1 h-px" style={{ background: "var(--pp-bg-border)" }} />
-            <span className="uppercase tracking-wider">{t("auth.or")}</span>
-            <div className="flex-1 h-px" style={{ background: "var(--pp-bg-border)" }} />
-          </div>
-          <button type="button" onClick={signInWithMicrosoft} disabled={loading}
-            className="w-full rounded-xl py-3 font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
-            style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-primary)", fontSize: 14, minHeight: 44 }}>
-            <svg width="16" height="16" viewBox="0 0 23 23" aria-hidden>
-              <rect x="1" y="1" width="10" height="10" fill="#F25022"/>
-              <rect x="12" y="1" width="10" height="10" fill="#7FBA00"/>
-              <rect x="1" y="12" width="10" height="10" fill="#00A4EF"/>
-              <rect x="12" y="12" width="10" height="10" fill="#FFB900"/>
-            </svg>
-            {t("auth.signInMs")}
-          </button>
-        </div>
-
 
         <p style={{ fontSize: 11.5, color: "var(--pp-text-muted)", textAlign: "center", marginTop: 14, padding: "0 24px" }}>
           {t("auth.separate")}

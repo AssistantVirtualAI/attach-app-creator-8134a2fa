@@ -350,6 +350,8 @@ Deno.serve(async (req) => {
           maestro_call_id: maestroCallId,
         })
         .eq("id", call.id);
+      await saveClaimResult(admin, { userId: call.user_id, dedupeKey, maestroCallId: String(maestroCallId) });
+
       await updateCallPipeline(admin, call_id, { step: "cdr_sent" });
       await setPipelineStep(admin, call_id, "cdr", "done", { conflict: res.status === 409 });
       await pipelineLog(admin, {

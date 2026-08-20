@@ -127,8 +127,16 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const field = "w-full rounded-xl px-3 py-3 text-sm";
   const fieldStyle = { background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" } as const;
 
+  const frame = typeof document !== "undefined" ? document.getElementById("pp-mobile-frame") : null;
+  const host = frame ?? (typeof document !== "undefined" ? document.body : null);
+  if (!host) return null;
+
   return createPortal((
-    <div className="fixed inset-0 z-[100] flex items-end" role="dialog" aria-modal="true" aria-label={L("Nouvelle tâche", "New task")}>
+    <div
+      className={`${frame ? "absolute" : "fixed"} inset-0 z-[100] flex items-end`}
+      data-testid="task-composer-overlay"
+      role="dialog" aria-modal="true" aria-label={L("Nouvelle tâche", "New task")}
+    >
       <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.45)" }} onClick={onClose} />
       <div
         ref={panelRef}

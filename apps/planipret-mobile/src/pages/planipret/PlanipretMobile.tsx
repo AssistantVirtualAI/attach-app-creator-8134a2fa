@@ -28,6 +28,7 @@ import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { ROUTES } from "@/lib/routes";
 import { recordRedirect } from "@/lib/debug/navDebug";
+import { invokeEdge, onAuthRequired } from "@/lib/planipret/edgeAuth";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import MicDeniedBanner from "@/components/planipret/mobile/MicDeniedBanner";
 import { requestPermissionsAfterLogin } from "@/lib/native/requestPermissionsAfterLogin";

@@ -141,7 +141,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
       <div
         ref={panelRef}
         className="relative w-full rounded-t-3xl overflow-y-auto overscroll-contain"
-        style={{ background: "var(--pp-bg-base, #fff)", maxHeight: "calc(100dvh - max(1rem, env(safe-area-inset-top)))", paddingBottom: "calc(1rem + env(safe-area-inset-bottom))", WebkitOverflowScrolling: "touch" }}
+        style={{ background: "var(--pp-bg-base, #fff)", maxHeight: frame ? "92%" : "calc(100dvh - max(1rem, env(safe-area-inset-top)))", paddingBottom: "calc(1rem + env(safe-area-inset-bottom))", WebkitOverflowScrolling: "touch" }}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 pt-4 pb-3" style={{ background: "var(--pp-bg-base, #fff)" }}>
           <h2 className="text-base font-semibold pp-heading">{initial?.task_id ? L("Modifier la tâche", "Edit task") : L("Nouvelle tâche", "New task")}</h2>

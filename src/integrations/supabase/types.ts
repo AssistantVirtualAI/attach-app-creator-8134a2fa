@@ -11059,6 +11059,33 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_task_assistants: {
+        Row: {
+          active: boolean
+          assistant_maestro_id: string
+          created_at: string
+          id: string
+          label: string | null
+          owner_user_id: string
+        }
+        Insert: {
+          active?: boolean
+          assistant_maestro_id: string
+          created_at?: string
+          id?: string
+          label?: string | null
+          owner_user_id: string
+        }
+        Update: {
+          active?: boolean
+          assistant_maestro_id?: string
+          created_at?: string
+          id?: string
+          label?: string | null
+          owner_user_id?: string
+        }
+        Relationships: []
+      }
       planipret_task_mutations: {
         Row: {
           action: string

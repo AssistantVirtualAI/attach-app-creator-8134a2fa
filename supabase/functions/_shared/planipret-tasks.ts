@@ -499,3 +499,26 @@ export function diagnoseTaskResponse(args: {
   }
   return { ok: issues.length === 0, issues };
 }
+
+/**
+ * Maestro rule: a task can only be assigned to yourself, unless the account is
+ * set up with team assistants allowed to work under your Maestro profile.
+ * Guard applied BEFORE any POST/PUT so we never push an unauthorized users_id.
+ */
+export function assertAssigneeAllowed(
+  assignee: unknown,
+  allowed: Array<string | number | null | undefined>,
+): { ok: true } | { ok: false; error: string; message: string; fields: Record<string, string>; allowed: string[] } {
+  const want = String(assignee ?? "").trim();
+  const list = [...new Set(allowed.map((a) => String(a ?? "").trim()).filter(Boolean))];
+  if (!want) return { ok: true };
+  if (list.includes(want)) return { ok: true };
+  return {
+    ok: false,
+    error: "assignee_not_allowed",
+    message:
+      "Assignation refusée : dans Maestro, une tâche ne peut être assignée qu'à vous-même ou à un(e) adjoint(e) autorisé(e) sous votre profil. Demandez à Tania d'ajouter cet utilisateur comme adjoint(e) d'équipe.",
+    fields: { users_id: "assignee_not_allowed" },
+    allowed: list,
+  };
+}

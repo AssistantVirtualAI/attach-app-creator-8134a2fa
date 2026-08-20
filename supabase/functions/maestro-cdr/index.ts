@@ -297,8 +297,10 @@ Deno.serve(async (req) => {
     }
 
     const res = await maestroFetch(cfg, {
-      method: force && existingMaestroCallId ? "PUT" : "POST",
-      path: force && existingMaestroCallId
+      // Retries, webhooks and sweepers must update the existing Maestro row.
+      // POSTing again whenever `force` is false created orphan duplicates.
+      method: existingMaestroCallId ? "PUT" : "POST",
+      path: existingMaestroCallId
         ? `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls/${encodeURIComponent(String(existingMaestroCallId))}`
         : `/api/v1/users/${encodeURIComponent(String(auth.brokerId))}/calls`,
       token: auth.token,

@@ -339,6 +339,7 @@ export const coreEn: Record<string, any> = {
   },
   shell: {
     maestroDisconnected: "Maestro disconnected",
+    sessionExpired: "Session expired — please sign in again.",
     reconnectAccount: "Reconnect your account to resume syncing.",
     connectionsLabel: "Connections",
     openDiagnostics: "Open connections diagnostics.",

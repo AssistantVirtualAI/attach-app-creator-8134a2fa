@@ -259,7 +259,42 @@ Deno.serve(async (req) => {
       }, 200);
     }
 
-    const existingMaestroCallId = (call as any).maestro_call_id ?? null;
+    let existingMaestroCallId = (call as any).maestro_call_id ?? null;
+
+    // ── De-duplication: one Maestro record per physical call ──
+    // NetSapiens emits several legs per call and the mobile app may already
+    // have posted the same call live. Claim a shared key first.
+    const dedupeKey = callDedupeKey({
+      direction: apiDirection,
+      remoteNumber: apiDirection === "inbound" ? call.from_number : call.to_number,
+      startedAt: startedAt ?? call.started_at,
+      fallback: call.ns_call_id ?? call.id,
+    });
+    if (!existingMaestroCallId) {
+      const claim = await claimCallPost(admin, {
+        userId: call.user_id,
+        dedupeKey,
+        providerCallId: call.ns_call_id ?? call.id,
+        localCallId: call.id,
+        source: "maestro-cdr",
+      });
+      if (!claim.owner) {
+        if (claim.maestroCallId) {
+          await admin
+            .from("planipret_phone_calls")
+            .update({ maestro_synced: true, maestro_call_id: claim.maestroCallId })
+            .eq("id", call.id);
+          await setPipelineStep(admin, call_id, "cdr", "done", { deduped: true, maestro_call_id: claim.maestroCallId });
+          console.log(`[maestro-cdr] dedupe reuse call=${call_id} key=${dedupeKey} maestro=${claim.maestroCallId}`);
+          return json({ success: true, deduped: true, maestro_call_id: claim.maestroCallId });
+        }
+        // Another publisher is mid-flight: do not create a second record.
+        console.log(`[maestro-cdr] dedupe wait call=${call_id} key=${dedupeKey}`);
+        await setPipelineStep(admin, call_id, "cdr", "running", { deduped_pending: true });
+        return json({ success: true, deduped: true, pending: true });
+      }
+    }
+
     const res = await maestroFetch(cfg, {
       method: force && existingMaestroCallId ? "PUT" : "POST",
       path: force && existingMaestroCallId
@@ -271,6 +306,7 @@ Deno.serve(async (req) => {
       idempotencyKey: call.id,
     }) as any;
     const ms = Date.now() - t0;
+
 
     await maestroSyncLog(admin, {
       user_id: call.user_id,

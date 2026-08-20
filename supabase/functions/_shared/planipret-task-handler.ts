@@ -46,6 +46,12 @@ export interface TaskDeps {
     telecomId: string,
     opts: { status?: string | null; from?: string | null; to?: string | null },
   ) => Promise<UpstreamList>;
+  /** Best-effort single-task read (undocumented upstream). */
+  singleFetch?: (
+    taskId: string,
+    telecomId: string | null,
+  ) => Promise<{ ok: boolean; task: any | null; endpoint: string | null; status: number }>;
+
   resolveTelecomUserId: (candidate: string | null) => Promise<string | null>;
   /** Resolve the numeric internal Maestro user id accepted by `users_id`. */
   resolveTaskAssigneeId?: () => Promise<string | null>;
@@ -273,17 +279,24 @@ export async function handleTaskRequest(
       return { status: 200, body: { success: false, error: "validation_failed", fields: { task_id: "task_id_required" }, correlation_id } };
     }
 
-    // 1) Authoritative source: same connector as `list`.
+    // 1) Authoritative source: direct single read, then the list connector.
     try {
-      let maestroId: string | null = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
+      const maestroId: string | null = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
       const telecomId = await deps.resolveTelecomUserId(maestroId);
+      if (token && deps.singleFetch) {
+        const one = await deps.singleFetch(taskId, telecomId);
+        if (one.ok && one.task) {
+          await projectionUpsert(admin, userId, [one.task]);
+          return { status: 200, body: { success: true, source: "api", endpoint: one.endpoint, task: one.task, correlation_id } };
+        }
+      }
       if (telecomId && token) {
         const upstream = await deps.listFetch(telecomId, { status: null, from: null, to: null });
         if (upstream.ok) {
           const all = (upstream.tasks ?? []).map((t: any) => normalizeTask(t));
           await projectionUpsert(admin, userId, all);
           const hit = all.find((t: any) => String(t.id) === taskId);
-          if (hit) return { status: 200, body: { success: true, source: "api", task: hit, correlation_id } };
+          if (hit) return { status: 200, body: { success: true, source: "api", endpoint: upstream.endpoint, task: hit, correlation_id } };
         }
       }
     } catch { /* fall through to projection */ }
@@ -297,6 +310,68 @@ export async function handleTaskRequest(
     if (!row) return { status: 200, body: { success: false, error: "task_not_found", correlation_id } };
     return { status: 200, body: { success: true, source: "projection", task: normalizeTask(row.payload), correlation_id } };
   }
+
+  // ── VERIFY (created / read back / visible in Maestro) ─────────────────────
+  if (action === "verify") {
+    const taskId = String(body?.task_id ?? "").trim();
+    if (!taskId) {
+      return { status: 200, body: { success: false, error: "validation_failed", fields: { task_id: "task_id_required" }, correlation_id } };
+    }
+    const maestroId: string | null = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
+    let telecomId: string | null = null;
+    try { telecomId = await deps.resolveTelecomUserId(maestroId); } catch { /* keep null */ }
+
+    let task: any = null;
+    let endpoint: string | null = null;
+    let readBack = false;
+
+    if (token && deps.singleFetch) {
+      const one = await deps.singleFetch(taskId, telecomId).catch(() => null);
+      if (one?.ok && one.task) { task = one.task; endpoint = one.endpoint; readBack = true; }
+    }
+    if (!task && telecomId && token) {
+      const up = await deps.listFetch(telecomId, { status: null, from: null, to: null }).catch(() => null);
+      if (up?.ok) {
+        const hit = (up.tasks ?? []).map((t: any) => normalizeTask(t)).find((t: any) => String(t.id) === taskId);
+        if (hit) { task = hit; endpoint = up.endpoint; readBack = true; }
+      }
+    }
+    if (task) await projectionUpsert(admin, userId, [task]);
+
+    let created = readBack;
+    if (!task) {
+      const { data: row } = await admin
+        .from("planipret_tasks_projection")
+        .select("payload")
+        .eq("user_id", userId).eq("task_id", taskId).is("deleted_at", null)
+        .maybeSingle();
+      if (row) { task = normalizeTask(row.payload); created = true; }
+    }
+
+    const assignment = task ? readAssignment(task.raw ?? task) : { ids: [], source: "none" as const };
+    const visible = readBack
+      ? filterByAssignee([task], [maestroId, telecomId, profile?.maestro_telecom_user_id]).length > 0
+      : false;
+
+    return {
+      status: 200,
+      body: {
+        success: true,
+        task_id: taskId,
+        created,
+        read_back: readBack,
+        visible_in_maestro: visible,
+        source: readBack ? "api" : task ? "projection" : "unavailable",
+        endpoint,
+        assignment_source: assignment.source,
+        returned_assignees: assignment.ids,
+        maestro_task_url: `https://client.planipret.com/main/tasks?task_id=${encodeURIComponent(taskId)}`,
+        task,
+        correlation_id,
+      },
+    };
+  }
+
 
   // ── DIAGNOSE (raw upstream read, for visibility troubleshooting) ──────────
   // GET ?action=diagnose[&task_id=946257] → what Maestro really stores.

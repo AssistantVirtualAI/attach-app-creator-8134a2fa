@@ -80,7 +80,11 @@ function makeListFetch(token: string | null) {
       `${TELECOM_BASE}/users/${maestroId}/tasks${suffix}`,
       `${API_BASE}/telecom/api/v1/users/${maestroId}/tasks${suffix}`,
       `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}xid=${maestroId}&type=user`,
+      `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}users_id=${maestroId}`,
+      `${API_BASE}/api/main/tasks/list${suffix}${suffix ? "&" : "?"}users_id=${maestroId}`,
+      `${API_BASE}/api/main/users/${maestroId}/tasks${suffix}`,
     ];
+
 
     if (Date.now() < noUpstreamListUntil) {
       return { ok: false, tasks: [], endpoint: null, status: 405 };
@@ -119,6 +123,52 @@ function makeListFetch(token: string | null) {
   };
 }
 
+/**
+ * Single-task read. Maestro exposes no documented GET, so we walk every known
+ * shape and report which one answered (used by the "visible dans Maestro" badge).
+ */
+function makeSingleFetch(token: string | null, telecomBase: string) {
+  return async (taskId: string, telecomId: string | null) => {
+    const paths = [
+      `${API_BASE}/api/main/tasks/${encodeURIComponent(taskId)}`,
+      `${API_BASE}/api/main/task/${encodeURIComponent(taskId)}`,
+      `${API_BASE}/api/main/tasks?task_id=${encodeURIComponent(taskId)}`,
+      ...(telecomId
+        ? [
+            `${telecomBase}/users/${telecomId}/tasks/${encodeURIComponent(taskId)}`,
+            `${telecomBase}/tasks/${encodeURIComponent(taskId)}`,
+          ]
+        : []),
+    ];
+    let lastStatus = 0;
+    for (const url of paths) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+      try {
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          signal: ctrl.signal,
+        });
+        lastStatus = res.status;
+        if (!res.ok) continue;
+        const j = await res.json().catch(() => null);
+        const raw = Array.isArray(j) ? j[0] : (j?.data ?? j?.task ?? j);
+        const row = Array.isArray(raw) ? raw[0] : raw;
+        if (row && (row.id || row.task_id)) {
+          return { ok: true, task: normalizeTask(row), endpoint: url.split("?")[0], status: res.status };
+        }
+      } catch {
+        lastStatus = 599;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    return { ok: false, task: null, endpoint: null, status: lastStatus };
+  };
+}
+
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST" && req.method !== "GET") {
@@ -150,6 +200,7 @@ Deno.serve(async (req) => {
       token,
       apiFetch: makeApiFetch(token),
       listFetch: makeListFetch(token),
+      singleFetch: makeSingleFetch(token, TELECOM_BASE),
       resolveTelecomUserId: async (candidate) => {
         const r = await resolveTelecomUserId(admin, userId, { candidate });
         return r?.id ?? null;

@@ -135,3 +135,15 @@ export function saveTaskCache(userId: string, tasks: NormalizedTask[]) {
 export function clearTaskCache(userId: string) {
   try { localStorage.removeItem(cacheKey(userId)); } catch { /* noop */ }
 }
+
+/** ISO timestamp -> `YYYY-MM-DDTHH:mm` wall clock in America/Toronto (for <input type="datetime-local">). */
+export function toTorontoLocalInput(iso: string | null | undefined): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return undefined;
+  const p = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(d).reduce<Record<string, string>>((a, x) => { a[x.type] = x.value; return a; }, {});
+  return `${p.year}-${p.month}-${p.day}T${p.hour === "24" ? "00" : p.hour}:${p.minute}`;
+}

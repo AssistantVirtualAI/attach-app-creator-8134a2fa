@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock } from "lucide-react";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
-import { describeTaskDiagnostics, formatTaskDue, type NormalizedTask, type TaskFilterValue } from "@/lib/planipret/tasks";
+import { describeTaskDiagnostics, formatTaskDue, toTorontoLocalInput, type NormalizedTask, type TaskFilterValue } from "@/lib/planipret/tasks";
 import TaskComposerSheet, { type TaskComposerValue } from "./TaskComposerSheet";
 import { toast } from "sonner";
 

@@ -52,6 +52,11 @@ const recentDedup = new Map<string, { callId: string; at: number }>();
 const maestroIds = new Map<string, string>();
 const listeners = new Set<() => void>();
 
+// The server CDR pipeline is the only call creator. The browser previously
+// created a live row with its SIP id while the server later created another
+// with the NetSapiens id, which produced repeated Maestro communications.
+const DEVICE_CREATES_CALLS = false;
+
 function emit() {
   for (const l of listeners) {
     try { l(); } catch { /* listener errors must not break call flow */ }
@@ -201,6 +206,11 @@ async function post(
 ): Promise<MaestroPostRecord> {
   const dedupKey = buildDedupKey(direction, number);
   recentDedup.set(dedupKey, { callId, at: Date.now() });
+  if (!DEVICE_CREATES_CALLS) {
+    const rec = upsert(callId, { direction, number, classification, state: "skipped", reason: "server_owns_creation" });
+    log("skipped_server_owns_creation", { callId, dedupKey, direction, number, classification });
+    return rec;
+  }
   upsert(callId, { direction, number, classification, state: "pending", reason: "posting" });
 
   const e164 = toE164(number);

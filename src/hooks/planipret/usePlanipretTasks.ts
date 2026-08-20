@@ -165,12 +165,47 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
 
   const update = useCallback(async (taskId: string, changes: Record<string, unknown>) => {
     const previous = tasks;
-    // Optimistic, reversible.
-    setTasks((cur) => cur.map((t) => (t.id === taskId ? { ...t, ...(changes.date || changes.due_at ? { due_at: new Date(String(changes.date ?? changes.due_at)).toISOString() } : {}), ...(changes.notes ? { notes: String(changes.notes) } : {}) } : t)));
+    const id = String(taskId);
+    const patch = (t: NormalizedTask): NormalizedTask => {
+      const next: NormalizedTask = { ...t };
+      const due = changes.date ?? changes.due_at;
+      if (due) {
+        const d = new Date(String(due));
+        if (!Number.isNaN(d.getTime())) next.due_at = d.toISOString();
+      }
+      if (changes.notes !== undefined) next.notes = String(changes.notes);
+      if (changes.description !== undefined) next.description = changes.description ? String(changes.description) : null;
+      if (changes.status !== undefined) next.status = changes.status ? String(changes.status) : null;
+      if (changes.target !== undefined || changes.xid !== undefined) next.xid = String(changes.target ?? changes.xid ?? "") || null;
+      if (changes.target_type !== undefined) next.type = (changes.target_type as NormalizedTask["type"]) ?? next.type;
+      const assignee = changes.users_id ?? changes.assignee_id;
+      if (assignee !== undefined && assignee !== null && String(assignee)) {
+        next.assignee_ids = [String(assignee)];
+        next.assignment_source = "users_id";
+      }
+      return next;
+    };
+    setTasks((cur) => cur.map((t) => (String(t.id) === id ? patch(t) : t)));
     const r = await apiUpdate(taskId, changes);
-    if (!r?.success) setTasks(previous); else await refresh();
+    if (!r?.success) { setTasks(previous); return r; }
+
+    // Maestro's list endpoint is eventually consistent (and sometimes absent):
+    // keep the edited version pinned locally so re-opening shows the changes.
+    const base = previous.find((t) => String(t.id) === id);
+    const edited: NormalizedTask | null = r.task?.id
+      ? { ...(base ?? ({} as NormalizedTask)), ...r.task }
+      : base ? patch(base) : null;
+    if (edited) {
+      pending.current.set(id, { task: edited, at: Date.now() });
+      setTasks((cur) => {
+        const merged = cur.map((t) => (String(t.id) === id ? edited : t));
+        if (userId) saveTaskCache(userId, merged);
+        return merged;
+      });
+    }
+    await refresh();
     return r;
-  }, [tasks, refresh]);
+  }, [tasks, refresh, userId]);
 
   const remove = useCallback(async (taskId: string) => {
     const previous = tasks;

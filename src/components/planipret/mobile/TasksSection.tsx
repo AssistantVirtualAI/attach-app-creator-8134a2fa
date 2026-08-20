@@ -232,8 +232,15 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
                           {task.target_name ? ` · ${task.target_name}` : task.xid ? ` · #${task.xid}` : ""}
                           {task.status ? ` · ${task.status}` : ""}
                         </p>
+                        <TaskStatusChip lang={lang} source={source} state={verif[task.id]} />
                       </div>
                       <div className="flex items-center gap-0.5">
+                        <IconBtn label={L("Vérifier dans Maestro", "Verify in Maestro")} onClick={() => void checkTask(task.id)}>
+                          {verif[task.id] === "loading"
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <ShieldCheck className="w-3.5 h-3.5" />}
+                        </IconBtn>
+                        <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
                         <IconBtn label={L("Reporter", "Snooze")} onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /></IconBtn>
                         <IconBtn label={L("Modifier", "Edit")} onClick={() => setComposer({ initial: {
                           task_id: task.id, notes: task.notes, description: task.description ?? "",
@@ -296,6 +303,38 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
         </div>
       )}
     </section>
+  );
+}
+
+function TaskStatusChip({ lang, source, state }: { lang: "fr" | "en"; source: string; state?: TaskVerifyResult | "loading" }) {
+  const L = (fr: string, en: string) => (lang === "en" ? en : fr);
+  let label = L("Créée", "Created");
+  let bg = "rgba(100,116,139,0.12)";
+  let color = "var(--pp-text-muted)";
+
+  if (state === "loading") {
+    label = L("Vérification…", "Checking…");
+  } else if (state && typeof state === "object") {
+    if (state.visible_in_maestro) {
+      label = L("Visible dans Maestro", "Visible in Maestro");
+      bg = "rgba(16,185,129,0.12)"; color = "#047857";
+    } else if (state.read_back) {
+      label = L("Relue", "Read back");
+      bg = "rgba(245,158,11,0.14)"; color = "#B45309";
+    } else {
+      label = L("Non relue via API", "Not read back via API");
+      bg = "rgba(239,68,68,0.12)"; color = "var(--pp-danger)";
+    }
+  } else if (source === "api") {
+    label = L("Relue", "Read back");
+    bg = "rgba(245,158,11,0.14)"; color = "#B45309";
+  }
+
+  return (
+    <span className="mt-1 inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+      style={{ background: bg, color }}>
+      {label}
+    </span>
   );
 }
 

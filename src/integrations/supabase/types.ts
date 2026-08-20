@@ -9985,6 +9985,8 @@ export type Database = {
           maestro_client_company: string | null
           maestro_client_id: string | null
           maestro_client_name: string | null
+          maestro_media_sync_error: string | null
+          maestro_media_synced_at: string | null
           maestro_mortgage_stage: string | null
           maestro_synced: boolean
           maestro_tasks_created: Json
@@ -10059,6 +10061,8 @@ export type Database = {
           maestro_client_company?: string | null
           maestro_client_id?: string | null
           maestro_client_name?: string | null
+          maestro_media_sync_error?: string | null
+          maestro_media_synced_at?: string | null
           maestro_mortgage_stage?: string | null
           maestro_synced?: boolean
           maestro_tasks_created?: Json
@@ -10133,6 +10137,8 @@ export type Database = {
           maestro_client_company?: string | null
           maestro_client_id?: string | null
           maestro_client_name?: string | null
+          maestro_media_sync_error?: string | null
+          maestro_media_synced_at?: string | null
           maestro_mortgage_stage?: string | null
           maestro_synced?: boolean
           maestro_tasks_created?: Json

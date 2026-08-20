@@ -435,7 +435,8 @@ export function isAssignedTo(task: NormalizedTask, ids: Array<string | number | 
   const mine = new Set(ids.map((v) => String(v ?? "").trim()).filter(Boolean));
   if (!mine.size) return true;
   if (task.assignee_ids.some((a) => mine.has(a))) return true;
-  if (task.assignment_source === "none" && task.xid && mine.has(String(task.xid))) return true;
+  // Maestro gave us no explicit assignment (`users: []`) — never hide the task.
+  if (task.assignment_source === "none" || task.assignment_source === "xid") return true;
   return false;
 }
 

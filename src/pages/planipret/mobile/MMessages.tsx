@@ -6,7 +6,6 @@ import { useOutletContext, useSearchParams } from "react-router-dom";
 import { retryWithBackoff } from "@/lib/planipret/retryBackoff";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { retryWithBackoff } from "@/lib/net/resilient";
 import {
   Plus, X, ArrowLeft, Phone, Send, Paperclip, MessageSquare, Zap,
   Users, Mail, Sparkles, Loader2, RefreshCw, Reply, Circle, CheckCircle2, AlertTriangle, RotateCw,
@@ -1088,7 +1087,7 @@ export function EmailsList({ profile, initialTo, initialName }: { profile: any; 
         () => supabase.functions.invoke("ms365-actions", {
           body: { action: "read_emails", payload: { top: PAGE_SIZE, skip: 0 } },
         }),
-        { attempts: 3, timeoutMs: 20000, label: "ms365_read_emails" },
+        { attempts: 3, baseDelayMs: 1200 },
       );
       data = res?.data; error = res?.error;
     } catch (e) { error = e; }

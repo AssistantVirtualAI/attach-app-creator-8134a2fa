@@ -24,6 +24,10 @@ export interface NormalizedTask {
   is_recurring: boolean;
   recurring_pattern: string | null;
   created_by_ava: boolean;
+  /** Maestro user ids this task is assigned to (from `users`, `users_id`, …). */
+  assignee_ids: string[];
+  /** Where the assignment was read from — `none` means Maestro returned nothing. */
+  assignment_source: "users" | "users_id" | "xid" | "none";
   raw?: unknown;
 }
 
@@ -292,6 +296,28 @@ export function idempotencyKey(parts: Array<string | number | null | undefined>)
 
 const truthy = (v: unknown) => v === true || v === 1 || v === "1" || v === "true";
 
+/**
+ * Maestro returns the assignment in several shapes and sometimes returns an
+ * EMPTY `users: []` right after a create even though `users_id` was accepted.
+ * Read every known source so the app never loses the assignment.
+ */
+export function readAssignment(raw: any): { ids: string[]; source: "users" | "users_id" | "xid" | "none" } {
+  const clean = (v: unknown) =>
+    (Array.isArray(v) ? v : v === undefined || v === null || String(v).trim() === "" ? [] : [v])
+      .map((u: any) => String(u?.id ?? u?.users_id ?? u?.user_id ?? u ?? "").trim())
+      .filter((x) => x && x !== "null" && x !== "undefined");
+
+  const fromUsers = clean(raw?.users);
+  if (fromUsers.length) return { ids: fromUsers, source: "users" };
+  const fromUsersId = clean(raw?.users_id ?? raw?.assignee_id ?? raw?.assigned_to ?? raw?.user_id);
+  if (fromUsersId.length) return { ids: fromUsersId, source: "users_id" };
+  // Last resort: a `user` task implicitly belongs to its target.
+  const type = String(raw?.type ?? raw?.task_type ?? "").toLowerCase();
+  const xid = clean(raw?.xid);
+  if (type === "user" && xid.length) return { ids: xid, source: "xid" };
+  return { ids: [], source: "none" };
+}
+
 export function normalizeTask(input: any): NormalizedTask {
   // Re-normalizing an already normalized task must not nest `raw` inside `raw`.
   const raw = input && typeof input === "object" && input.raw && typeof input.raw === "object"
@@ -299,6 +325,7 @@ export function normalizeTask(input: any): NormalizedTask {
     : input;
   const id = String(raw?.id ?? raw?.task_id ?? "");
   const typeRaw = String(raw?.type ?? raw?.task_type ?? "").toLowerCase();
+  const assignment = readAssignment(raw);
 
   return {
     id,
@@ -312,6 +339,8 @@ export function normalizeTask(input: any): NormalizedTask {
     is_recurring: truthy(raw?.is_recurring),
     recurring_pattern: raw?.recurring_pattern ? String(raw.recurring_pattern) : null,
     created_by_ava: truthy(raw?.created_by_ava) || String(raw?.source ?? "").toLowerCase().includes("ava"),
+    assignee_ids: assignment.ids,
+    assignment_source: assignment.source,
     raw,
   };
 }
@@ -393,4 +422,68 @@ export function paginate<T>(items: T[], page = 1, limit = 20): Page<T> {
 export function taskCounts(tasks: NormalizedTask[], now: Date = new Date()) {
   const b = bucketTasks(tasks, now);
   return { overdue: b.overdue.length, today: b.today.length, upcoming: b.upcoming.length, open: b.overdue.length + b.today.length + b.upcoming.length, all: tasks.length };
+}
+
+
+/**
+ * Calendar/list filter aligned on the real assignment source. A task counts as
+ * "mine" when any known assignment field matches — and, when Maestro returns
+ * NO assignment at all (`users: []`), we fall back to the task target so the
+ * task is never hidden from the broker who owns it.
+ */
+export function isAssignedTo(task: NormalizedTask, ids: Array<string | number | null | undefined>): boolean {
+  const mine = new Set(ids.map((v) => String(v ?? "").trim()).filter(Boolean));
+  if (!mine.size) return true;
+  if (task.assignee_ids.some((a) => mine.has(a))) return true;
+  if (task.assignment_source === "none" && task.xid && mine.has(String(task.xid))) return true;
+  return false;
+}
+
+export function filterByAssignee(tasks: NormalizedTask[], ids: Array<string | number | null | undefined>): NormalizedTask[] {
+  return tasks.filter((t) => isAssignedTo(t, ids));
+}
+
+export interface TaskDiagnostic {
+  code: "assignment_not_persisted" | "due_at_shifted";
+  message: string;
+  expected: string | null;
+  actual: string | null;
+}
+
+/**
+ * Compare what we sent to Maestro with what Maestro returned, so the app can
+ * tell the broker immediately what to report (empty `users`, shifted `due_at`).
+ */
+export function diagnoseTaskResponse(args: {
+  sentDate?: unknown;          // "YYYY-MM-DD HH:mm:ss" Toronto wall-clock
+  sentAssignee?: unknown;      // users_id we sent
+  task: NormalizedTask;
+}): { ok: boolean; issues: TaskDiagnostic[] } {
+  const issues: TaskDiagnostic[] = [];
+  const expectedAssignee = String(args.sentAssignee ?? "").trim();
+  if (expectedAssignee) {
+    const persisted = readAssignment(args.task.raw ?? args.task);
+    if (persisted.source !== "users" || !persisted.ids.includes(expectedAssignee)) {
+      issues.push({
+        code: "assignment_not_persisted",
+        message: `Maestro n'a pas enregistré l'assignation (users vide) pour l'utilisateur ${expectedAssignee}.`,
+        expected: expectedAssignee,
+        actual: persisted.ids.length ? persisted.ids.join(",") : "[]",
+      });
+    }
+  }
+  const sent = args.sentDate ? String(args.sentDate) : "";
+  if (sent) {
+    const expected = fromApiDateTime(sent);
+    const actual = args.task.due_at;
+    if (expected && actual && Math.abs(new Date(expected).getTime() - new Date(actual).getTime()) > 60_000) {
+      issues.push({
+        code: "due_at_shifted",
+        message: `L'échéance renvoyée par Maestro ne correspond pas à la date demandée (${sent} America/Toronto).`,
+        expected,
+        actual,
+      });
+    }
+  }
+  return { ok: issues.length === 0, issues };
 }

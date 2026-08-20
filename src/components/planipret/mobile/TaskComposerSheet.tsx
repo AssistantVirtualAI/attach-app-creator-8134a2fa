@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { ChevronLeft, Plus, Search, X } from "lucide-react";
 import { toApiDateTime } from "@/lib/planipret/tasks";
+import { MILESTONES, QUICK_TASKS, catalogLabel, type TaskCatalogItem } from "@/lib/planipret/taskMilestones";
+import { getPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 
 export interface TaskComposerValue {
   target: string;
@@ -109,6 +111,16 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [recValue, setRecValue] = useState(1);
   const [recOn, setRecOn] = useState<number[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  /** Maestro parity: pick a Quick Task / milestone first, then fill the form. */
+  const [step, setStep] = useState<"pick" | "form">("pick");
+  const [tab, setTab] = useState<"quick" | "custom">("quick");
+  const [picked, setPicked] = useState<TaskCatalogItem | null>(null);
+  const [clientQuery, setClientQuery] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [clients, setClients] = useState<any[]>(() => peekPpContacts("maestro") ?? []);
+  const [people, setPeople] = useState<any[]>(() => peekPpContacts("directory") ?? []);
+  const [dueDate, setDueDate] = useState("");
+  const [dueTime, setDueTime] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -140,10 +152,30 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     setRecValue(initial?.recurrence?.value ?? 1);
     setRecOn(initial?.recurrence?.on ?? []);
     setShowAdvanced(false);
+    setStep(initial?.task_id ? "form" : "pick");
+    setTab("quick");
+    setPicked(null);
+    setClientQuery("");
+    setClientName("");
     requestAnimationFrame(() => {
       if (panelRef.current) panelRef.current.scrollTop = 0;
     });
   }, [open, initial, defaultTarget]);
+
+  // `due` is the source of truth; the UI splits it into date + time like Maestro.
+  useEffect(() => {
+    const [d = "", t = ""] = String(due || "").split("T");
+    setDueDate(d);
+    setDueTime((t || "").slice(0, 5));
+  }, [due]);
+
+  useEffect(() => {
+    if (!open || step !== "form") return;
+    let alive = true;
+    void getPpContacts("maestro").then((v) => { if (alive) setClients(v || []); }).catch(() => {});
+    void getPpContacts("directory").then((v) => { if (alive) setPeople(v || []); }).catch(() => {});
+    return () => { alive = false; };
+  }, [open, step]);
 
   useEffect(() => {
     if (!open) return;

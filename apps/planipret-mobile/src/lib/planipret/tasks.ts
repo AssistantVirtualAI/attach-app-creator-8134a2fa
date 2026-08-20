@@ -147,3 +147,25 @@ export function toTorontoLocalInput(iso: string | null | undefined): string | un
   }).formatToParts(d).reduce<Record<string, string>>((a, x) => { a[x.type] = x.value; return a; }, {});
   return `${p.year}-${p.month}-${p.day}T${p.hour === "24" ? "00" : p.hour}:${p.minute}`;
 }
+
+// ── Maestro visibility ─────────────────────────────────────────────────────
+export interface TaskVerifyResult {
+  success: boolean;
+  task_id?: string;
+  created?: boolean;
+  read_back?: boolean;
+  visible_in_maestro?: boolean;
+  source?: TaskSource;
+  endpoint?: string | null;
+  maestro_task_url?: string | null;
+  message?: string;
+}
+
+/** Ask the gateway whether a task exists upstream and is visible for me. */
+export const verifyTask = (task_id: string): Promise<TaskVerifyResult> =>
+  invoke({ action: "verify", task_id });
+
+/** Deep link to the task inside Maestro. */
+export function maestroTaskUrl(taskId: string | number): string {
+  return `https://client.planipret.com/main/tasks?task_id=${encodeURIComponent(String(taskId))}`;
+}

@@ -200,6 +200,7 @@ Deno.serve(async (req) => {
       token,
       apiFetch: makeApiFetch(token),
       listFetch: makeListFetch(token),
+      singleFetch: makeSingleFetch(token, TELECOM_BASE),
       resolveTelecomUserId: async (candidate) => {
         const r = await resolveTelecomUserId(admin, userId, { candidate });
         return r?.id ?? null;

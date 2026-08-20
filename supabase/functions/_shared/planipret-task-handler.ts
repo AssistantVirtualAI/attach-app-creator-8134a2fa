@@ -293,6 +293,39 @@ export async function handleTaskRequest(
     return { status: 200, body: { success: true, source: "projection", task: normalizeTask(row.payload), correlation_id } };
   }
 
+  // ── DIAGNOSE (raw upstream read, for visibility troubleshooting) ──────────
+  // GET ?action=diagnose[&task_id=946257] → what Maestro really stores.
+  if (action === "diagnose") {
+    const taskId = String(body?.task_id ?? "").trim();
+    let maestroId: string | null = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
+    let telecomId: string | null = null;
+    try { telecomId = await deps.resolveTelecomUserId(maestroId); } catch { /* keep null */ }
+    const upstream = telecomId && token
+      ? await deps.listFetch(telecomId, { status: null, from: null, to: null })
+      : { ok: false as const, tasks: [] as any[], endpoint: null, status: 0 };
+    const all = (upstream.tasks ?? []).map((t: any) => normalizeTask(t));
+    const mine = filterByAssignee(all, [maestroId, telecomId]);
+    const hit = taskId ? all.find((t: any) => String(t.id) === taskId) ?? null : null;
+    return {
+      status: 200,
+      body: {
+        success: true,
+        maestro_user_id: maestroId,
+        telecom_user_id: telecomId,
+        endpoint: upstream.endpoint,
+        upstream_ok: upstream.ok,
+        upstream_status: upstream.status,
+        total_upstream: all.length,
+        total_mine: mine.length,
+        task: hit,
+        assignment: hit ? readAssignment(hit.raw ?? hit) : null,
+        visible_in_my_calendar: hit ? filterByAssignee([hit], [maestroId, telecomId]).length > 0 : null,
+        tasks: taskId ? undefined : mine,
+        correlation_id,
+      },
+    };
+  }
+
   // ── CREATE ─────────────────────────────────────────────────────────────────
   if (action === "create") {
     // A `user` task defaults to the broker's own Planiprêt id when the client

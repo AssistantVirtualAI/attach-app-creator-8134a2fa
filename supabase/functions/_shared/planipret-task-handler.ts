@@ -298,7 +298,14 @@ export async function handleTaskRequest(
       createInput.xid = ownXid;
       createInput.type = "user";
     }
+    // Auto-assignment: a task is assigned to its creator unless the broker
+    // explicitly assigns it to someone else (users_id / assignee_id).
+    const explicitAssignee = createInput.users_id ?? createInput.assignee_id;
+    if ((explicitAssignee === undefined || explicitAssignee === null || String(explicitAssignee).trim() === "") && ownXid) {
+      createInput.users_id = ownXid;
+    }
     const built = buildCreatePayload(createInput);
+
     if (!built.ok) return { status: 200, body: { success: false, ...built, correlation_id } };
     const payload = built.payload;
 

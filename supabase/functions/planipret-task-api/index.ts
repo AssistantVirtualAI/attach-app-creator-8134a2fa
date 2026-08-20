@@ -80,7 +80,11 @@ function makeListFetch(token: string | null) {
       `${TELECOM_BASE}/users/${maestroId}/tasks${suffix}`,
       `${API_BASE}/telecom/api/v1/users/${maestroId}/tasks${suffix}`,
       `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}xid=${maestroId}&type=user`,
+      `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}users_id=${maestroId}`,
+      `${API_BASE}/api/main/tasks/list${suffix}${suffix ? "&" : "?"}users_id=${maestroId}`,
+      `${API_BASE}/api/main/users/${maestroId}/tasks${suffix}`,
     ];
+
 
     if (Date.now() < noUpstreamListUntil) {
       return { ok: false, tasks: [], endpoint: null, status: 405 };

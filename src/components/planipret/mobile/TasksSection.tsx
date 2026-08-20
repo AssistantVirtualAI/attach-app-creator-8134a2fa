@@ -222,7 +222,9 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
                         <IconBtn label={L("Modifier", "Edit")} onClick={() => setComposer({ initial: {
                           task_id: task.id, notes: task.notes, description: task.description ?? "",
                           target: task.xid ?? "", target_type: task.type ?? "user",
-                          due_at: task.due_at ? new Date(task.due_at).toISOString().slice(0, 16) : undefined,
+                          users_id: task.assignee_ids?.[0] ?? "",
+                          status: task.status ?? undefined,
+                          due_at: toTorontoLocalInput(task.due_at),
                         } })}><Pencil className="w-3.5 h-3.5" /></IconBtn>
                         <IconBtn label={L("Supprimer", "Delete")} danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
                       </div>

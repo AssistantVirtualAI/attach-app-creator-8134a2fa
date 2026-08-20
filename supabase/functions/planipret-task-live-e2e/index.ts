@@ -26,6 +26,30 @@ Deno.serve(async (req) => {
   const token = await getUserMaestroAccessToken(admin, profile.id).catch((e) => { throw e; });
   if (!token) return jsonResponse({ success: false, error: "no_maestro_token" }, 409);
 
+  // Probe mode: discover the official GET listing route for a user.
+  if (body?.mode === "probe_list") {
+    const xid = String(profile.maestro_broker_id ?? "");
+    const tid = String(profile.maestro_telecom_user_id ?? xid);
+    const paths = [
+      `/api/main/tasks?xid=${xid}&type=user`,
+      `/api/main/tasks/user/${xid}`,
+      `/api/main/tasks/list?xid=${xid}&type=user`,
+      `/api/main/users/${xid}/tasks`,
+      `/api/main/tasks/index?xid=${xid}&type=user`,
+      `/api/main/task?xid=${xid}&type=user`,
+      `/api/main/tasks?user_id=${xid}`,
+      `/telecom/api/v1/users/${tid}/tasks`,
+      `/telecom/api/v1/tasks?user_id=${tid}`,
+      `/api/v1/tasks?xid=${xid}&type=user`,
+    ];
+    const results: unknown[] = [];
+    for (const path of paths) {
+      const r = await callWithToken(token, path, "GET");
+      results.push({ path, status: (r.response as any).status, body: (r.response as any).body });
+    }
+    return jsonResponse({ success: true, api_base: API_BASE, xid, telecom_user_id: tid, results });
+  }
+
   const steps: Record<string, unknown> = {};
   const now = new Date(Date.now() + 24 * 3600 * 1000);
   const pad = (n: number) => String(n).padStart(2, "0");

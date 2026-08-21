@@ -1838,6 +1838,7 @@ export const MP_DICT = {
         sipDiagnostic: "SIP diagnostic",
         compliance: "Compliance",
         auditChecklist: "Audit",
+        accessLog: "Access log",
       },
       sections: {
         pilotage: "Overview",

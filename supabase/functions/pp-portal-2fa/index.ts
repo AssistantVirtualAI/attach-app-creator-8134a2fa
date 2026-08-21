@@ -48,6 +48,30 @@ function newMessageSessionId() {
     .map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** Human-friendly one-time recovery codes, e.g. "4F7K-2QD9". */
+function newBackupCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const s = Array.from(bytes).map((b) => alphabet[b % alphabet.length]).join("");
+  return `${s.slice(0, 4)}-${s.slice(4)}`;
+}
+
+/** Replaces every backup code of a user with a fresh set; returns plaintext (shown once). */
+async function regenerateBackupCodes(admin: any, userId: string): Promise<string[]> {
+  await admin.from("planipret_portal_2fa_backup_codes").delete().eq("user_id", userId);
+  const codes: string[] = [];
+  const rows: { user_id: string; code_hash: string }[] = [];
+  for (let i = 0; i < BACKUP_CODE_COUNT; i++) {
+    const code = newBackupCode();
+    codes.push(code);
+    rows.push({ user_id: userId, code_hash: await sha256(`${userId}:${code.replace("-", "")}`) });
+  }
+  await admin.from("planipret_portal_2fa_backup_codes").insert(rows);
+  return codes;
+}
+
+
+
 /** Best-effort lookup of an SMS-capable DID for this broker. */
 async function resolveFromNumber(admin: any, extension: string, domain: string): Promise<string | null> {
   try {

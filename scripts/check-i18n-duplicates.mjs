@@ -5,7 +5,7 @@
  *
  * Usage: node scripts/check-i18n-duplicates.mjs [globRoots...]
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import ts from "typescript";
 
@@ -81,6 +81,35 @@ function sourceLink(f) {
   return `file://${join(process.cwd(), f.file)}:${f.line}:${f.column}`;
 }
 
+// ---- Rapport CI (artifact) -------------------------------------------------
+const REPORT_DIR = process.env.I18N_REPORT_DIR || "i18n-report";
+mkdirSync(REPORT_DIR, { recursive: true });
+
+const scannedFiles = ROOTS.flatMap((r) => walk(r)).map((f) => relative(process.cwd(), f));
+const report = {
+  generatedAt: new Date().toISOString(),
+  roots: ROOTS,
+  scannedFiles,
+  duplicates: findings.map((f) => ({ ...f, source: sourceLink(f) })),
+};
+writeFileSync(join(REPORT_DIR, "duplicates.json"), JSON.stringify(report, null, 2));
+writeFileSync(
+  join(REPORT_DIR, "duplicates.md"),
+  [
+    "# i18n duplicate key report",
+    "",
+    `Generated: ${report.generatedAt}`,
+    `Scanned files: ${scannedFiles.length}`,
+    `Collisions: ${findings.length}`,
+    "",
+    ...(findings.length
+      ? ["| file | line:col | key | first defined | source |", "|---|---|---|---|---|",
+         ...findings.map((f) => `| ${f.file} | ${f.line}:${f.column} | \`${f.key}\` | L${f.firstLine} | ${sourceLink(f)} |`)]
+      : ["No duplicate keys detected."]),
+    "",
+  ].join("\n"),
+);
+
 if (findings.length) {
   console.error(`\n✖ i18n duplicate keys detected (${findings.length}):\n`);
   for (const f of findings) {
@@ -94,8 +123,10 @@ if (findings.length) {
       );
     }
   }
+  console.error(`\nRapport: ${join(REPORT_DIR, "duplicates.md")}`);
   console.error("\nCorrigez ces collisions avant de compiler (TS1117).\n");
   process.exit(1);
 }
 
-console.log("✓ i18n duplicate key check passed");
+console.log(`✓ i18n duplicate key check passed (rapport: ${join(REPORT_DIR, "duplicates.md")})`);
+

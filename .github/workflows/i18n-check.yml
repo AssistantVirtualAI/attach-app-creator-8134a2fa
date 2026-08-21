@@ -18,3 +18,12 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Check i18n duplicate keys
         run: npm run check:i18n
+      - name: Check i18n locale parity (FR/EN)
+        run: npx vitest run src/test/i18n-integrity.test.ts --reporter=verbose
+      - name: Upload i18n report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-report
+          path: i18n-report/
+          if-no-files-found: warn

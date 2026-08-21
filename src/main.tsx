@@ -39,6 +39,10 @@ idle(() => {
   import("./lib/buildVersionPoller");
   import("./lib/sentry").then((m) => m.initSentry?.());
   import("./lib/perfMetrics").then((m) => m.initPerfMetrics?.());
+  // i18n integrity: logs + Sentry grouping, never blocks the UI.
+  import("./lib/i18n/runtimeCheck")
+    .then((m) => m.verifyI18nAtRuntime?.())
+    .catch((e) => console.warn("[i18n] runtime check unavailable", e));
 
   // Consume ?ava_token=... in the background — Supabase auth state listener
   // will pick up the resulting session and route accordingly.

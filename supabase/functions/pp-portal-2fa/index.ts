@@ -127,6 +127,32 @@ Deno.serve(async (req) => {
     const user = userData?.user;
     if (userErr || !user) return json({ error: "Unauthorized" }, 401);
 
+    const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+      ?? req.headers.get("cf-connecting-ip") ?? null;
+    const userAgent = req.headers.get("user-agent") ?? null;
+
+    const logAccess = async (
+      event: string,
+      reason: string | null,
+      extra: Record<string, unknown> = {},
+    ) => {
+      try {
+        await admin.from("planipret_portal_access_log").insert({
+          user_id: user.id,
+          email: user.email ?? null,
+          event,
+          reason,
+          provider: String((user.app_metadata as any)?.provider ?? "email"),
+          portal: String((extra as any)?.portal ?? "planipret"),
+          ip: clientIp,
+          user_agent: userAgent,
+          metadata: extra,
+        });
+      } catch (e) {
+        console.warn("[pp-portal-2fa] access log failed", e);
+      }
+    };
+
     // Hard lock: only @planipret accounts (or platform super admins) may use the portal.
     {
       const addr = String(user.email ?? "").toLowerCase();
@@ -137,6 +163,7 @@ Deno.serve(async (req) => {
         const { data: isSuper } = await admin.rpc("is_super_admin", { _user_id: user.id });
         if (isSuper !== true) {
           console.warn("[pp-portal-2fa] blocked non-planipret account", { user: user.id, addr });
+          await logAccess("blocked", "domain_not_allowed", { domain });
           return json({ error: "Portail réservé aux comptes @planipret", code: "domain_blocked", blocked: true }, 403);
         }
       }
@@ -160,6 +187,21 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "status");
 
+    /** One "session opened" row per portal session (deduped on session_id). */
+    const logSessionOnce = async (reason: string) => {
+      if (action !== "status" || sessionId === "no-session") return;
+      const { data: seen } = await admin
+        .from("planipret_portal_access_log")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("event", "session_opened")
+        .contains("metadata", { session_id: sessionId })
+        .limit(1)
+        .maybeSingle();
+      if (seen) return;
+      await logAccess("session_opened", reason, { session_id: sessionId, via: viaMicrosoft ? "microsoft" : "password" });
+    };
+
     // Planiprêt scope only — everyone else is never challenged.
     const { data: isMember } = await admin.rpc("is_planipret_member", { _user_id: user.id });
     const { data: profile } = await admin
@@ -170,8 +212,12 @@ Deno.serve(async (req) => {
 
     const inScope = isMember === true && profile?.organization_id === AVA_ORG_ID;
     if (!inScope || viaMicrosoft) {
+      await logSessionOnce(!inScope ? "out_of_scope" : "microsoft_sso");
       return json({ ok: true, required: false, verified: true, reason: !inScope ? "out_of_scope" : "microsoft_sso" });
     }
+    await logSessionOnce("password_2fa_scope");
+
+
 
     const { data: verifiedRow } = await admin
       .from("planipret_portal_2fa_sessions")
@@ -342,6 +388,7 @@ Deno.serve(async (req) => {
         .eq("id", challenge.id);
 
       await markVerified("sms");
+      await logAccess("2fa_verified", "sms");
       return json({ ok: true, verified: true });
     }
 
@@ -360,6 +407,7 @@ Deno.serve(async (req) => {
         .is("used_at", null)
         .maybeSingle();
       if (!match) {
+        await logAccess("2fa_failed", "backup_invalid");
         return json({ ok: false, error: "Code de secours invalide ou déjà utilisé.", code: "backup_invalid" }, 400);
       }
       await admin
@@ -367,6 +415,7 @@ Deno.serve(async (req) => {
         .update({ used_at: new Date().toISOString() })
         .eq("id", match.id);
       await markVerified("backup_code");
+      await logAccess("2fa_verified", "backup_code");
       const { count: left } = await admin
         .from("planipret_portal_2fa_backup_codes")
         .select("id", { count: "exact", head: true })

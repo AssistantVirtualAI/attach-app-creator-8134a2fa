@@ -72,8 +72,12 @@ async function regenerateBackupCodes(admin: any, userId: string): Promise<string
 
 
 
+/** Cached per isolate — the NS lookup was adding seconds to every send. */
+const fromNumberCache = new Map<string, { value: string; at: number }>();
+const FROM_CACHE_TTL_MS = 60 * 60 * 1000;
+
 /** Best-effort lookup of an SMS-capable DID for this broker. */
-async function resolveFromNumber(admin: any, extension: string, domain: string): Promise<string | null> {
+async function resolveFromNumberUncached(admin: any, extension: string, domain: string): Promise<string | null> {
   try {
     const res = await nsFetch(
       `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}/smsnumbers`,

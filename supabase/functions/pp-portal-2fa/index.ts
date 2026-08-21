@@ -388,6 +388,7 @@ Deno.serve(async (req) => {
         .eq("id", challenge.id);
 
       await markVerified("sms");
+      await logAccess("2fa_verified", "sms");
       return json({ ok: true, verified: true });
     }
 
@@ -406,6 +407,7 @@ Deno.serve(async (req) => {
         .is("used_at", null)
         .maybeSingle();
       if (!match) {
+        await logAccess("2fa_failed", "backup_invalid");
         return json({ ok: false, error: "Code de secours invalide ou déjà utilisé.", code: "backup_invalid" }, 400);
       }
       await admin
@@ -413,6 +415,7 @@ Deno.serve(async (req) => {
         .update({ used_at: new Date().toISOString() })
         .eq("id", match.id);
       await markVerified("backup_code");
+      await logAccess("2fa_verified", "backup_code");
       const { count: left } = await admin
         .from("planipret_portal_2fa_backup_codes")
         .select("id", { count: "exact", head: true })

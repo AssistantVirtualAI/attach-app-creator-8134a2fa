@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { PrefetchNavLink } from "@/components/PrefetchLink";
 import { supabase } from "@/integrations/supabase/client";
+import Portal2FAGate from "@/components/planipret/Portal2FAGate";
 import {
   LayoutDashboard, Users, Phone, MessageSquare, Mic, Plug,
   BarChart3, LogOut, Sun, Moon, ShieldCheck, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket,
@@ -327,6 +328,7 @@ export default function PlanipretAdminLayout() {
   };
 
   return (
+    <Portal2FAGate>
     <div data-pp-theme={theme} className="planipret-scope planipret-admin-scope min-h-screen flex"
       style={{ background: "var(--pp-bg-base)", fontFamily: "'Epilogue', sans-serif" }}>
       {/* Mobile redirect notice (dismissible) */}
@@ -540,5 +542,6 @@ export default function PlanipretAdminLayout() {
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <SessionTimeoutModal />
     </div>
+    </Portal2FAGate>
   );
 }

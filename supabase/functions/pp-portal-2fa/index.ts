@@ -127,6 +127,22 @@ Deno.serve(async (req) => {
     const user = userData?.user;
     if (userErr || !user) return json({ error: "Unauthorized" }, 401);
 
+    // Hard lock: only @planipret accounts (or platform super admins) may use the portal.
+    {
+      const addr = String(user.email ?? "").toLowerCase();
+      const domain = addr.split("@")[1] ?? "";
+      const planipretEmail = domain === "planipret.com" || domain === "planipret.ca"
+        || domain.endsWith(".planipret.com") || domain.endsWith(".planipret.ca");
+      if (!planipretEmail) {
+        const { data: isSuper } = await admin.rpc("is_super_admin", { _user_id: user.id });
+        if (isSuper !== true) {
+          console.warn("[pp-portal-2fa] blocked non-planipret account", { user: user.id, addr });
+          return json({ error: "Portail réservé aux comptes @planipret", code: "domain_blocked", blocked: true }, 403);
+        }
+      }
+    }
+
+
     // Session id + provider come from the JWT itself.
     let claims: any = {};
     try {

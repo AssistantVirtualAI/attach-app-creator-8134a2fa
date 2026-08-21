@@ -151,7 +151,7 @@ export default function Ms365Callback() {
           }
         } catch {}
         const details = parsed?.details;
-        const msg = parsed?.error ?? e.message ?? "Échec OAuth";
+        const msg = parsed?.message ?? parsed?.error ?? e.message ?? "Échec OAuth";
         const full = details ? `${msg} — ${details.error_description ?? details.error ?? ""}`.trim() : msg;
         return { data: parsed, errMsg: full };
       }

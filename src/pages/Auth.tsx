@@ -229,7 +229,7 @@ const AuthPage = () => {
                   </Button>
                 )}
 
-                {msStatus === "enabled" && (
+                {msStatus !== "disabled" && (
                   <Button
                     type="button"
                     variant="outline"

@@ -10,7 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, nsFetch } from "../_shared/planipret-ns.ts";
 
 const AVA_ORG_ID = "17d6507f-a9ca-409d-8e49-371d50332615";
-const CODE_TTL_MS = 10 * 60 * 1000;
+const CODE_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 45_000;

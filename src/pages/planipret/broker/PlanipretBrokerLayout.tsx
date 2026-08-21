@@ -11,6 +11,7 @@ import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { resolveBrokerAccess } from "@/lib/planipret/brokerAccess";
 import BrokerOmniSearch from "@/components/planipret/broker/BrokerOmniSearch";
+import Portal2FAGate from "@/components/planipret/Portal2FAGate";
 import HighReadabilityToggle from "@/components/planipret/broker/HighReadabilityToggle";
 
 export type BrokerCtx = { userId: string; authUserId: string; profile: any };
@@ -147,6 +148,7 @@ export default function PlanipretBrokerLayout() {
   const dateLabel = new Date().toLocaleDateString(lang === "en" ? "en-CA" : "fr-CA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   return (
+    <Portal2FAGate>
     <div className="planipret-scope planipret-admin-scope planipret-broker-scope min-h-screen flex" data-pp-theme={theme}
       style={{ background: "var(--pp-bg-base)", fontFamily: "'Epilogue', sans-serif" }}>
       {/* Sidebar (desktop) */}
@@ -252,5 +254,6 @@ export default function PlanipretBrokerLayout() {
         </main>
       </div>
     </div>
+    </Portal2FAGate>
   );
 }

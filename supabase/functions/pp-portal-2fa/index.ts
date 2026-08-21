@@ -104,6 +104,16 @@ async function resolveFromNumberUncached(admin: any, extension: string, domain: 
   return normalizeE164(data?.phone_number_e164 ?? data?.phone_number_digits ?? null);
 }
 
+async function resolveFromNumber(admin: any, extension: string, domain: string): Promise<string | null> {
+  const key = `${domain}/${extension}`;
+  const hit = fromNumberCache.get(key);
+  if (hit && Date.now() - hit.at < FROM_CACHE_TTL_MS) return hit.value;
+  const value = await resolveFromNumberUncached(admin, extension, domain);
+  if (value) fromNumberCache.set(key, { value, at: Date.now() });
+  return value;
+}
+
+
 async function sendSms(from: string, to: string, message: string, extension: string, domain: string) {
   const path = `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}/messagesessions/${newMessageSessionId()}/messages`;
   const res = await nsFetch(path, {

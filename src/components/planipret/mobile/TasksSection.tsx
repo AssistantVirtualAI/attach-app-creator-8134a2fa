@@ -37,8 +37,17 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
     else toast.warning(L("Non relue via l'API Maestro", "Not read back from the Maestro API"));
   };
 
-  const openInMaestro = (taskId: string) => {
-    window.open(maestroTaskUrl(taskId), "_blank", "noopener");
+  const openInMaestro = async (taskId: string) => {
+    const known = verif[taskId];
+    const fromState = typeof known === "object" && known ? known.maestro_task_url : null;
+    let url = maestroTaskUrl(taskId, fromState);
+    if (!fromState) {
+      const r = await verifyTask(taskId);
+      setVerif((v) => ({ ...v, [taskId]: r }));
+      url = maestroTaskUrl(taskId, r?.maestro_task_url);
+    }
+    if (url) window.open(url, "_blank", "noopener");
+    else toast.error(L("Lien Maestro indisponible", "Maestro link unavailable"));
   };
 
   const sections = useMemo(() => ([

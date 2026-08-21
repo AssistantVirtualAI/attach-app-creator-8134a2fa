@@ -184,6 +184,32 @@ async function contractIsMapped(admin: any, userId: string, xid: string): Promis
   return false;
 }
 
+
+/**
+ * Allowed assignees = whatever the caller-provided resolver returns, always
+ * merged with the broker's own identifiers (CRM id, telecom id and the
+ * internal Maestro directory id). Without this merge a self-assignment could
+ * be rejected when the resolver is unavailable or returns a different id space.
+ */
+async function resolveAllowedAssignees(deps: any, profile: any): Promise<string[]> {
+  const ids = new Set<string>();
+  const list = (await deps.listAllowedAssignees?.().catch(() => [])) ?? [];
+  for (const v of list) {
+    const s = String(v ?? "").trim();
+    if (s) ids.add(s);
+  }
+  for (const v of [profile?.maestro_broker_id, profile?.maestro_telecom_user_id]) {
+    const s = String(v ?? "").trim();
+    if (s) ids.add(s);
+  }
+  try {
+    const internal = await deps.resolveTaskAssigneeId?.();
+    const s = String(internal ?? "").trim();
+    if (s) ids.add(s);
+  } catch { /* optional */ }
+  return [...ids];
+}
+
 export async function handleTaskRequest(
 
   body: any,
@@ -415,7 +441,7 @@ export async function handleTaskRequest(
     const cleanup = body?.cleanup === true;
     const ownXid = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : "";
 
-    const allowedIds = (await deps.listAllowedAssignees?.().catch(() => [])) ?? [];
+    const allowedIds = await resolveAllowedAssignees(deps, profile);
     steps.push({
       step: "allowed_assignees",
       ok: allowedIds.length > 0,
@@ -548,7 +574,7 @@ export async function handleTaskRequest(
 
     // Assignment scope: self or authorized team assistants only (Maestro rule).
     if (payload.users_id !== undefined && payload.users_id !== null) {
-      const allowedIds = (await deps.listAllowedAssignees?.().catch(() => [])) ?? [];
+      const allowedIds = await resolveAllowedAssignees(deps, profile);
       const check = assertAssigneeAllowed(payload.users_id, allowedIds);
       if (!check.ok) {
         await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "assignee_not_allowed" });
@@ -655,7 +681,7 @@ export async function handleTaskRequest(
     const built = buildUpdateBody(taskId, body?.changes ?? {});
     if (!built.ok) return { status: 200, body: { success: false, ...built, correlation_id } };
     if (built.payload.users_id !== undefined && built.payload.users_id !== null) {
-      const allowedIds = (await deps.listAllowedAssignees?.().catch(() => [])) ?? [];
+      const allowedIds = await resolveAllowedAssignees(deps, profile);
       const check = assertAssigneeAllowed(built.payload.users_id, allowedIds);
       if (!check.ok) {
         await audit(admin, { action: "task_update_denied", user_id: userId, task_id: taskId, source, session_id: sessionId, correlation_id, result: "assignee_not_allowed" });

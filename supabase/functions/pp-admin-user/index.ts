@@ -171,6 +171,32 @@ const nsExtOf = (u: any) => String(u?.user ?? u?.extension ?? u?.user_id ?? u?.i
 
 
 
+/** Ensure the user is a member of the org so portal guards (organizations list) let them in. */
+async function ensureOrgMembership(
+  admin: ReturnType<typeof supaAdmin>,
+  userId: string,
+  orgId: string,
+  isAdmin: boolean,
+) {
+  try {
+    const { data: existing } = await admin.from("organization_members")
+      .select("id").eq("user_id", userId).eq("organization_id", orgId).maybeSingle();
+    if (!existing) {
+      await admin.from("organization_members").insert({
+        user_id: userId,
+        organization_id: orgId,
+        accepted_at: new Date().toISOString(),
+      });
+    }
+  } catch (e) { console.error("organization_members", e); }
+  try {
+    await admin.from("org_members").upsert(
+      { user_id: userId, org_id: orgId, role: isAdmin ? "customer_admin" : "user" },
+      { onConflict: "user_id,org_id" },
+    );
+  } catch (e) { console.error("org_members", e); }
+}
+
 function randomPassword(len = 22): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
   const buf = new Uint8Array(len);
@@ -303,6 +329,7 @@ Deno.serve(async (req) => {
         organization_id: profile.organization_id,
         role: "planipret_broker",
       }, { onConflict: "user_id,organization_id" });
+      await ensureOrgMembership(admin, created.user.id, profile.organization_id, false);
 
       // 4) Dedicated {ext}_mobile device so the mobile app rings in parallel
       //    with the widget (widget device is NEVER touched here).
@@ -414,6 +441,7 @@ Deno.serve(async (req) => {
         organization_id: profile.organization_id,
         role: "planipret_broker",
       }, { onConflict: "user_id,organization_id" });
+      await ensureOrgMembership(admin, userId, profile.organization_id, false);
 
       await logAudit(admin, req, {
         admin_id: profile.id, action: "USER_PROVISION_FROM_NS",
@@ -682,6 +710,7 @@ Deno.serve(async (req) => {
           { user_id, organization_id: orgId, role: "planipret_admin" },
           { onConflict: "user_id,organization_id" },
         );
+        await ensureOrgMembership(admin, user_id, orgId, true);
       } else {
         await admin
           .from("user_roles")
@@ -778,6 +807,7 @@ Deno.serve(async (req) => {
         organization_id: existing?.organization_id ?? profile.organization_id,
         role: "planipret_admin",
       }, { onConflict: "user_id,organization_id" });
+      await ensureOrgMembership(admin, userId, existing?.organization_id ?? profile.organization_id, true);
 
 
       await logAudit(admin, req, {

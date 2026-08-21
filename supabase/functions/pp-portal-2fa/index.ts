@@ -140,13 +140,50 @@ Deno.serve(async (req) => {
 
     const phone = normalizeE164(profile?.phone);
 
+    const markVerified = async (via: string) => {
+      await admin
+        .from("planipret_portal_2fa_sessions")
+        .upsert({
+          user_id: user.id,
+          session_id: sessionId,
+          verified_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
+        }, { onConflict: "user_id,session_id" });
+      console.log("[pp-portal-2fa] verified", { user: user.id, via });
+    };
+
+    // Sends in the last hour (used for cooldown + hourly cap).
+    const sendsWindow = async () => {
+      const { data } = await admin
+        .from("planipret_portal_2fa_challenges")
+        .select("created_at")
+        .eq("user_id", user.id)
+        .gt("created_at", new Date(Date.now() - RESEND_WINDOW_MS).toISOString())
+        .order("created_at", { ascending: false });
+      const list = (data ?? []) as { created_at: string }[];
+      const last = list[0]?.created_at ? new Date(list[0].created_at).getTime() : 0;
+      return {
+        count: list.length,
+        cooldownLeft: last ? Math.max(0, Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - last)) / 1000)) : 0,
+      };
+    };
+
     if (action === "status") {
+      const { count, cooldownLeft } = await sendsWindow();
+      const { count: backupLeft } = await admin
+        .from("planipret_portal_2fa_backup_codes")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .is("used_at", null);
       return json({
         ok: true,
         required: !verified,
         verified,
         has_phone: !!phone,
         phone_masked: phone ? maskPhone(phone) : null,
+        backup_codes_remaining: backupLeft ?? 0,
+        cooldown_seconds: cooldownLeft,
+        sends_remaining: Math.max(0, MAX_SENDS_PER_HOUR - count),
       });
     }
 
@@ -155,7 +192,7 @@ Deno.serve(async (req) => {
       if (!phone) {
         return json({
           ok: false,
-          error: "Aucun numéro de mobile enregistré pour ce compte — contactez un administrateur.",
+          error: "Aucun numéro de mobile enregistré pour ce compte — utilisez un code de secours ou contactez un administrateur.",
           code: "no_phone",
         }, 400);
       }
@@ -165,16 +202,23 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Configuration téléphonie manquante pour ce compte.", code: "no_extension" }, 400);
       }
 
-      // Throttle: max 1 code / 45 s
-      const { data: recent } = await admin
-        .from("planipret_portal_2fa_challenges")
-        .select("created_at")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (recent?.created_at && Date.now() - new Date(recent.created_at).getTime() < 45_000) {
-        return json({ ok: false, error: "Un code vient d'être envoyé. Réessayez dans quelques secondes.", code: "throttled" }, 429);
+      const { count, cooldownLeft } = await sendsWindow();
+      if (count >= MAX_SENDS_PER_HOUR) {
+        return json({
+          ok: false,
+          error: `Limite de renvois atteinte (${MAX_SENDS_PER_HOUR} par heure). Utilisez un code de secours ou réessayez plus tard.`,
+          code: "rate_limited",
+          cooldown_seconds: 0,
+          sends_remaining: 0,
+        }, 429);
+      }
+      if (cooldownLeft > 0) {
+        return json({
+          ok: false,
+          error: `Un code vient d'être envoyé. Réessayez dans ${cooldownLeft} s.`,
+          code: "throttled",
+          cooldown_seconds: cooldownLeft,
+        }, 429);
       }
 
       const code = String(Math.floor(100000 + Math.random() * 900000));
@@ -192,7 +236,7 @@ Deno.serve(async (req) => {
       );
       if (!sent.ok) {
         console.error("[pp-portal-2fa] sms failed", sent);
-        return json({ ok: false, error: "Échec de l'envoi du code par texto. Réessayez.", code: "sms_failed" }, 502);
+        return json({ ok: false, error: "Échec de l'envoi du code par texto. Réessayez ou utilisez un code de secours.", code: "sms_failed" }, 502);
       }
 
       await admin.from("planipret_portal_2fa_challenges").insert({
@@ -204,7 +248,13 @@ Deno.serve(async (req) => {
         expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
       });
 
-      return json({ ok: true, sent: true, phone_masked: maskPhone(phone) });
+      return json({
+        ok: true,
+        sent: true,
+        phone_masked: maskPhone(phone),
+        cooldown_seconds: Math.ceil(RESEND_COOLDOWN_MS / 1000),
+        sends_remaining: Math.max(0, MAX_SENDS_PER_HOUR - (count + 1)),
+      });
     }
 
     if (action === "verify") {
@@ -228,11 +278,18 @@ Deno.serve(async (req) => {
       }
 
       if (await sha256(code) !== challenge.code_hash) {
+        const attempts = (challenge.attempts ?? 0) + 1;
         await admin
           .from("planipret_portal_2fa_challenges")
-          .update({ attempts: (challenge.attempts ?? 0) + 1 })
+          .update({ attempts })
           .eq("id", challenge.id);
-        return json({ ok: false, error: "Code incorrect.", code: "mismatch" }, 400);
+        const left = Math.max(0, MAX_ATTEMPTS - attempts);
+        return json({
+          ok: false,
+          error: left > 0 ? `Code incorrect — ${left} tentative(s) restante(s).` : "Trop de tentatives — demandez un nouveau code.",
+          code: left > 0 ? "mismatch" : "locked",
+          attempts_left: left,
+        }, left > 0 ? 400 : 429);
       }
 
       await admin
@@ -240,17 +297,73 @@ Deno.serve(async (req) => {
         .update({ consumed_at: new Date().toISOString() })
         .eq("id", challenge.id);
 
-      await admin
-        .from("planipret_portal_2fa_sessions")
-        .upsert({
-          user_id: user.id,
-          session_id: sessionId,
-          verified_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
-        }, { onConflict: "user_id,session_id" });
-
+      await markVerified("sms");
       return json({ ok: true, verified: true });
     }
+
+    // ---- Recovery: one-time backup code (no phone needed) ----
+    if (action === "verify_backup") {
+      if (verified) return json({ ok: true, verified: true });
+      const raw = String(body?.code ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (raw.length < 8) return json({ ok: false, error: "Code de secours invalide.", code: "bad_backup" }, 400);
+
+      const hash = await sha256(`${user.id}:${raw}`);
+      const { data: match } = await admin
+        .from("planipret_portal_2fa_backup_codes")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("code_hash", hash)
+        .is("used_at", null)
+        .maybeSingle();
+      if (!match) {
+        return json({ ok: false, error: "Code de secours invalide ou déjà utilisé.", code: "backup_invalid" }, 400);
+      }
+      await admin
+        .from("planipret_portal_2fa_backup_codes")
+        .update({ used_at: new Date().toISOString() })
+        .eq("id", match.id);
+      await markVerified("backup_code");
+      const { count: left } = await admin
+        .from("planipret_portal_2fa_backup_codes")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .is("used_at", null);
+      return json({ ok: true, verified: true, backup_codes_remaining: left ?? 0 });
+    }
+
+    // ---- Generate a fresh set of backup codes for myself (must be verified) ----
+    if (action === "generate_backup_codes") {
+      if (!verified) return json({ ok: false, error: "Vérification requise avant de générer des codes de secours.", code: "not_verified" }, 403);
+      const codes = await regenerateBackupCodes(admin, user.id);
+      return json({ ok: true, codes });
+    }
+
+    // ---- Admin reset: issue new backup codes for another Planiprêt user ----
+    if (action === "admin_reset") {
+      const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: user.id });
+      if (isAdmin !== true) return json({ ok: false, error: "Réservé aux administrateurs Planiprêt.", code: "forbidden" }, 403);
+
+      const targetEmail = String(body?.email ?? "").trim().toLowerCase();
+      const targetUserId = String(body?.user_id ?? "").trim();
+      let targetId = targetUserId;
+      if (!targetId && targetEmail) {
+        const { data: prof } = await admin
+          .from("planipret_profiles")
+          .select("user_id, organization_id")
+          .ilike("email", targetEmail)
+          .maybeSingle();
+        targetId = String(prof?.user_id ?? "");
+      }
+      if (!targetId) return json({ ok: false, error: "Utilisateur introuvable.", code: "not_found" }, 404);
+
+      // Clear challenges + verified sessions so the user must re-verify.
+      await admin.from("planipret_portal_2fa_sessions").delete().eq("user_id", targetId);
+      await admin.from("planipret_portal_2fa_challenges").delete().eq("user_id", targetId);
+      const codes = await regenerateBackupCodes(admin, targetId);
+      console.log("[pp-portal-2fa] admin_reset", { by: user.id, target: targetId });
+      return json({ ok: true, user_id: targetId, codes });
+    }
+
 
     return json({ ok: false, error: "Unknown action" }, 400);
   } catch (e: any) {

@@ -10,7 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, nsFetch } from "../_shared/planipret-ns.ts";
 
 const AVA_ORG_ID = "17d6507f-a9ca-409d-8e49-371d50332615";
-const CODE_TTL_MS = 10 * 60 * 1000;
+const CODE_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 45_000;
@@ -72,8 +72,12 @@ async function regenerateBackupCodes(admin: any, userId: string): Promise<string
 
 
 
+/** Cached per isolate — the NS lookup was adding seconds to every send. */
+const fromNumberCache = new Map<string, { value: string; at: number }>();
+const FROM_CACHE_TTL_MS = 60 * 60 * 1000;
+
 /** Best-effort lookup of an SMS-capable DID for this broker. */
-async function resolveFromNumber(admin: any, extension: string, domain: string): Promise<string | null> {
+async function resolveFromNumberUncached(admin: any, extension: string, domain: string): Promise<string | null> {
   try {
     const res = await nsFetch(
       `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}/smsnumbers`,
@@ -99,6 +103,16 @@ async function resolveFromNumber(admin: any, extension: string, domain: string):
     .maybeSingle();
   return normalizeE164(data?.phone_number_e164 ?? data?.phone_number_digits ?? null);
 }
+
+async function resolveFromNumber(admin: any, extension: string, domain: string): Promise<string | null> {
+  const key = `${domain}/${extension}`;
+  const hit = fromNumberCache.get(key);
+  if (hit && Date.now() - hit.at < FROM_CACHE_TTL_MS) return hit.value;
+  const value = await resolveFromNumberUncached(admin, extension, domain);
+  if (value) fromNumberCache.set(key, { value, at: Date.now() });
+  return value;
+}
+
 
 async function sendSms(from: string, to: string, message: string, extension: string, domain: string) {
   const path = `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}/messagesessions/${newMessageSessionId()}/messages`;
@@ -317,18 +331,14 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Aucun numéro SMS (DID) disponible pour envoyer le code.", code: "no_did" }, 400);
       }
 
-      const sent = await sendSms(
-        from,
-        phone,
-        `Planiprêt — votre code de connexion est ${code}. Valide 10 minutes. Ne le partagez jamais.`,
-        extension,
-        domain,
-      );
-      if (!sent.ok) {
-        console.error("[pp-portal-2fa] sms failed", sent);
-        return json({ ok: false, error: "Échec de l'envoi du code par texto. Réessayez ou utilisez un code de secours.", code: "sms_failed" }, 502);
-      }
+      // Only the newest code is ever valid: kill every pending challenge first.
+      await admin
+        .from("planipret_portal_2fa_challenges")
+        .update({ consumed_at: new Date().toISOString() })
+        .eq("user_id", user.id)
+        .is("consumed_at", null);
 
+      // Persist before sending so the code works the instant the texto lands.
       await admin.from("planipret_portal_2fa_challenges").insert({
         user_id: user.id,
         session_id: sessionId,
@@ -337,6 +347,19 @@ Deno.serve(async (req) => {
         sent_via: "netsapiens",
         expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
       });
+
+      const sent = await sendSms(
+        from,
+        phone,
+        `Planiprêt — code ${code} (valide 5 min). Ignorez les codes précédents.`,
+        extension,
+        domain,
+      );
+      if (!sent.ok) {
+        console.error("[pp-portal-2fa] sms failed", sent);
+        return json({ ok: false, error: "Échec de l'envoi du code par texto. Réessayez ou utilisez un code de secours.", code: "sms_failed" }, 502);
+      }
+
 
       return json({
         ok: true,

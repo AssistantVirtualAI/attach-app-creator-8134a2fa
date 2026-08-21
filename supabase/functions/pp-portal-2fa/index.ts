@@ -13,6 +13,10 @@ const AVA_ORG_ID = "17d6507f-a9ca-409d-8e49-371d50332615";
 const CODE_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
+const RESEND_COOLDOWN_MS = 45_000;
+const RESEND_WINDOW_MS = 60 * 60 * 1000;
+const MAX_SENDS_PER_HOUR = 5;
+const BACKUP_CODE_COUNT = 8;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

@@ -10,7 +10,8 @@
     "security:gate": "node scripts/security-gate.mjs",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:i18n": "node scripts/check-i18n-duplicates.mjs"
   },
   "dependencies": {
     "@11labs/react": "^0.2.0",

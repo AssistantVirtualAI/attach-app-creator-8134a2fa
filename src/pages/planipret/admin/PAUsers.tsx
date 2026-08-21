@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Search, Plus, Edit3, Trash2, ExternalLink, X, AlertTriangle, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp, MoreHorizontal, KeyRound, Copy, Smartphone, Bot, Phone, Sparkles, Upload } from "lucide-react";
+import { Search, Plus, Edit3, Trash2, ExternalLink, X, AlertTriangle, Eye, EyeOff, RefreshCw, ChevronDown, ChevronUp, MoreHorizontal, KeyRound, ShieldCheck, Copy, Smartphone, Bot, Phone, Sparkles, Upload } from "lucide-react";
 import Pagination from "@/components/planipret/admin/Pagination";
 import DebugPanel, { type DebugEntry } from "@/components/planipret/admin/DebugPanel";
 import { TableErrorState, TableEmptyState } from "@/components/planipret/admin/TableStates";
@@ -1138,8 +1138,25 @@ export default function PAUsers() {
                           >
                             <KeyRound className="w-3.5 h-3.5 mr-2 opacity-60" /> {t.sendResetEmail}
                           </DropdownMenuItem>
-                        )}
-                        {!u.ns_only && <DropdownMenuSeparator />}
+                         )}
+                         {!u.ns_only && (
+                           <DropdownMenuItem
+                             className="rounded-lg cursor-pointer"
+                             onClick={async () => {
+                               if (!confirm(`Réinitialiser le 2FA de ${u.email} ? De nouveaux codes de secours seront générés (les anciens seront invalidés).`)) return;
+                               const { data, error } = await supabase.functions.invoke("pp-portal-2fa", { body: { action: "admin_reset", user_id: u.user_id, email: u.email } });
+                               const codes: string[] = (data as any)?.codes ?? [];
+                               if (error || !(data as any)?.ok) { toast.error((data as any)?.error ?? "Échec de la réinitialisation 2FA"); return; }
+                               await navigator.clipboard.writeText(codes.join("\n")).catch(() => {});
+                               window.alert(`Codes de secours pour ${u.email} (copiés dans le presse-papiers, affichés une seule fois) :\n\n${codes.join("\n")}`);
+                               toast.success("2FA réinitialisé — codes de secours générés");
+                             }}
+                           >
+                             <ShieldCheck className="w-3.5 h-3.5 mr-2" /> Réinitialiser le 2FA (codes de secours)
+                           </DropdownMenuItem>
+                         )}
+                         {!u.ns_only && <DropdownMenuSeparator />}
+
                         {!u.ns_only && (
                           <DropdownMenuItem onClick={() => toggleField(u, "mobile_app_enabled")}>
                             <Smartphone className="w-3.5 h-3.5 mr-2" />

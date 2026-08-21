@@ -331,18 +331,14 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: "Aucun numéro SMS (DID) disponible pour envoyer le code.", code: "no_did" }, 400);
       }
 
-      const sent = await sendSms(
-        from,
-        phone,
-        `Planiprêt — votre code de connexion est ${code}. Valide 10 minutes. Ne le partagez jamais.`,
-        extension,
-        domain,
-      );
-      if (!sent.ok) {
-        console.error("[pp-portal-2fa] sms failed", sent);
-        return json({ ok: false, error: "Échec de l'envoi du code par texto. Réessayez ou utilisez un code de secours.", code: "sms_failed" }, 502);
-      }
+      // Only the newest code is ever valid: kill every pending challenge first.
+      await admin
+        .from("planipret_portal_2fa_challenges")
+        .update({ consumed_at: new Date().toISOString() })
+        .eq("user_id", user.id)
+        .is("consumed_at", null);
 
+      // Persist before sending so the code works the instant the texto lands.
       await admin.from("planipret_portal_2fa_challenges").insert({
         user_id: user.id,
         session_id: sessionId,
@@ -351,6 +347,19 @@ Deno.serve(async (req) => {
         sent_via: "netsapiens",
         expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
       });
+
+      const sent = await sendSms(
+        from,
+        phone,
+        `Planiprêt — code ${code} (valide 5 min). Ignorez les codes précédents.`,
+        extension,
+        domain,
+      );
+      if (!sent.ok) {
+        console.error("[pp-portal-2fa] sms failed", sent);
+        return json({ ok: false, error: "Échec de l'envoi du code par texto. Réessayez ou utilisez un code de secours.", code: "sms_failed" }, 502);
+      }
+
 
       return json({
         ok: true,

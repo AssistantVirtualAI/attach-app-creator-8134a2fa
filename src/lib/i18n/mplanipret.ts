@@ -793,7 +793,6 @@ export const MP_DICT = {
         sipDiagnostic: "Diagnostic SIP",
         compliance: "Conformité",
         auditChecklist: "Audit",
-        accessLog: "Access log",
         accessLog: "Journal des accès",
       },
       sections: {

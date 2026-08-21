@@ -73,14 +73,25 @@ for (const root of ROOTS) {
   }
 }
 
+/** Lien cliquable vers la ligne exacte (GitHub) ou chemin local sinon. */
+function sourceLink(f) {
+  const repo = process.env.GITHUB_REPOSITORY;
+  const sha = process.env.GITHUB_SHA;
+  if (repo && sha) return `https://github.com/${repo}/blob/${sha}/${f.file}#L${f.line}`;
+  return `file://${join(process.cwd(), f.file)}:${f.line}:${f.column}`;
+}
+
 if (findings.length) {
   console.error(`\n✖ i18n duplicate keys detected (${findings.length}):\n`);
   for (const f of findings) {
     const msg = `${f.file}:${f.line}:${f.column} — duplicate key "${f.key}" (first defined at line ${f.firstLine})`;
     console.error(`  - ${msg}`);
-    // Annotation GitHub Actions: fichier + ligne + clé visibles dans le job log
+    console.error(`    source: ${sourceLink(f)}`);
+    // Annotation GitHub Actions: fichier + ligne + colonne + clé visibles dans le job log
     if (process.env.GITHUB_ACTIONS) {
-      console.error(`::error file=${f.file},line=${f.line},col=${f.column},title=Duplicate i18n key::${msg}`);
+      console.error(
+        `::error file=${f.file},line=${f.line},col=${f.column},title=Duplicate i18n key "${f.key}"::${msg} — ${sourceLink(f)}`,
+      );
     }
   }
   console.error("\nCorrigez ces collisions avant de compiler (TS1117).\n");

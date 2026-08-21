@@ -66,10 +66,24 @@ describe("planipret task handler — create", () => {
     expect(out.body).toMatchObject({ success: false, error: "validation_failed", status: 422 });
   });
 
-  it("preserves an explicitly selected Maestro assignee", async () => {
-    const { deps, calls } = makeDeps();
+  it("preserves an explicitly selected assignee when it is an authorized assistant", async () => {
+    const { deps, calls } = makeDeps({ listAllowedAssignees: async () => ["387460525", "77"] } as any);
     await handleTaskRequest({ ...validCreate, users_id: 77 }, deps);
     expect(JSON.parse(calls[0].init.body).users_id).toBe(77);
+  });
+
+  it("refuses an assignee that is neither the broker nor an authorized assistant", async () => {
+    const { deps, apiFetch } = makeDeps({ listAllowedAssignees: async () => ["387460525"] } as any);
+    const out = await handleTaskRequest({ ...validCreate, users_id: 999999 }, deps);
+    expect(out.body).toMatchObject({ success: false, error: "assignee_not_allowed" });
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("still allows self-assignment when no assistant resolver is configured", async () => {
+    const { deps, calls } = makeDeps({ listAllowedAssignees: undefined } as any);
+    const out = await handleTaskRequest({ ...validCreate, users_id: "93135" }, deps);
+    expect(out.body.success).toBe(true);
+    expect(String(JSON.parse(calls[0].init.body).users_id)).toBe("93135");
   });
 
   it("refuses an xid outside the broker scope", async () => {

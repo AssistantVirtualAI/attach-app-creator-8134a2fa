@@ -252,6 +252,13 @@ async function callClaude(system: string, userText: string): Promise<string | nu
   return j.choices?.[0]?.message?.content ?? null;
 }
 
+// Telephony rows are written with either the auth user id or the Planiprêt
+// profile id depending on the ingest path (webhook vs app). Query both.
+function ownerIds(ctx: Ctx): string[] {
+  return [...new Set([ctx.userId, (ctx.profile as any)?.id, (ctx.profile as any)?.user_id]
+    .filter(Boolean).map(String))];
+}
+
 // ─── tool implementations ───────────────────────────────────────────────
 const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   // ===== TELEPHONY =====
@@ -359,7 +366,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const days = p?.days ?? 7;
     const since = new Date(Date.now() - days * 86400000).toISOString();
     let q = ctx.admin.from("planipret_phone_calls").select("*")
-      .eq("user_id", ctx.userId).gte("created_at", since)
+      .in("user_id", ownerIds(ctx)).gte("created_at", since)
       .order("created_at", { ascending: false }).limit(limit);
     if (p?.direction) q = q.ilike("direction", `%${p.direction}%`);
     const { data } = await q;
@@ -440,13 +447,13 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
   async get_sms_conversations(ctx, p) {
     const limit = Math.min(p?.limit ?? 10, 30);
     const { data } = await ctx.admin.from("planipret_phone_messages")
-      .select("*").eq("user_id", ctx.userId).order("created_at", { ascending: false }).limit(limit);
+      .select("*").in("user_id", ownerIds(ctx)).order("created_at", { ascending: false }).limit(limit);
     return { success: true, messages: data ?? [], count: data?.length ?? 0 };
   },
 
   async get_voicemails(ctx, p) {
     const { data } = await ctx.admin.from("planipret_voicemails")
-      .select("*").eq("user_id", ctx.userId).eq("folder", p?.folder ?? "inbox")
+      .select("*").in("user_id", ownerIds(ctx)).eq("folder", p?.folder ?? "inbox")
       .order("created_at", { ascending: false }).limit(p?.limit ?? 10);
     const unread = (data ?? []).filter((v: any) => !v.is_read).length;
     return { success: true, voicemails: data ?? [], unread_count: unread };
@@ -483,7 +490,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const since = new Date(Date.now() - 7 * 86400000).toISOString();
     const { data } = await ctx.admin.from("planipret_phone_calls")
       .select("contact_name, contact_number, lead_score, lead_temperature, created_at, ai_client_insights")
-      .eq("user_id", ctx.userId).eq("lead_temperature", "hot")
+      .in("user_id", ownerIds(ctx)).eq("lead_temperature", "hot")
       .gte("created_at", since).order("lead_score", { ascending: false }).limit(limit);
     return { success: true, leads: data ?? [], count: data?.length ?? 0 };
   },
@@ -492,7 +499,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const days = p?.period === "month" ? 30 : p?.period === "today" ? 1 : 7;
     const since = new Date(Date.now() - days * 86400000).toISOString();
     const { data } = await ctx.admin.from("planipret_phone_calls")
-      .select("ai_coaching").eq("user_id", ctx.userId).gte("created_at", since).not("ai_coaching", "is", null);
+      .select("ai_coaching").in("user_id", ownerIds(ctx)).gte("created_at", since).not("ai_coaching", "is", null);
     const scores = (data ?? []).map((r: any) => r.ai_coaching?.score).filter((n: any) => typeof n === "number");
     const avg = scores.length ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
     return { success: true, avg_score: Math.round(avg * 10) / 10, calls_analyzed: scores.length };
@@ -1268,7 +1275,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const since = new Date(Date.now() - days * 86400000).toISOString();
     const { data } = await ctx.admin.from("planipret_phone_calls")
       .select("direction, duration_seconds, lead_temperature, ai_coaching")
-      .eq("user_id", ctx.userId).gte("created_at", since);
+      .in("user_id", ownerIds(ctx)).gte("created_at", since);
     const rows = data ?? [];
     const total = rows.length;
     const out = rows.filter((c: any) => /out/i.test(c.direction ?? "")).length;

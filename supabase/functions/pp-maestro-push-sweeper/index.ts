@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
 
   let q = admin
     .from("planipret_phone_calls")
-    .select("id, user_id, maestro_call_id, transcript, ai_summary, ai_coaching, recording_storage_path, recording_url, ns_recording_url, maestro_media_synced_at")
+    .select("id, user_id, duration_seconds, maestro_call_id, transcript, ai_summary, ai_coaching, recording_storage_path, recording_url, ns_recording_url, maestro_media_synced_at")
     .not("maestro_call_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(limit * 3);
@@ -71,15 +71,27 @@ Deno.serve(async (req) => {
         body: JSON.stringify({ call_id: call.id, force }),
       });
       const data = await res.json().catch(() => ({} as any));
-      const ok = res.ok && data?.success !== false;
+      let ok = res.ok && data?.success !== false;
+      // A call with no answered audio (0 s) can never produce a transcript.
+      // Treat it as done instead of retrying it forever every 5 minutes.
+      const noAudio = Number((call as any).duration_seconds ?? 0) <= 1;
+      const onlyTranscriptMissing = data?.error === "transcript_unavailable";
+      const closedAsNoAudio = !ok && noAudio && onlyTranscriptMissing;
+      if (closedAsNoAudio) ok = true;
       await admin
         .from("planipret_phone_calls")
         .update({
           maestro_media_synced_at: ok ? new Date().toISOString() : null,
-          maestro_media_sync_error: ok ? null : (data?.error ?? `http_${res.status}`),
+          maestro_media_sync_error: ok ? (closedAsNoAudio ? "no_audio_no_transcript" : null) : (data?.error ?? `http_${res.status}`),
         })
         .eq("id", call.id);
-      results.push({ call_id: call.id, ok, error: ok ? null : (data?.error ?? `http_${res.status}`), steps: data?.steps ?? null });
+      results.push({
+        call_id: call.id,
+        ok,
+        skipped: closedAsNoAudio ? "no_audio_no_transcript" : undefined,
+        error: ok ? null : (data?.error ?? `http_${res.status}`),
+        steps: data?.steps ?? null,
+      });
     } catch (e) {
       results.push({ call_id: call.id, ok: false, error: (e as Error).message });
     }

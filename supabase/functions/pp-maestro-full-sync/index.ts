@@ -10,6 +10,7 @@
 //    the Maestro Communications page.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { getUser } from "../_shared/mobile-admin.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -28,6 +29,24 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
   const body = await req.json().catch(() => ({} as any));
+
+  // Auth: the caller must be signed in. Non-admins may only run the sync for
+  // their own broker profile — never for an arbitrary user_id / email.
+  const caller = await getUser(req);
+  if (!caller) return json({ ok: false, error: "unauthorized" }, 401);
+  const [{ data: isPpAdmin }, { data: isSuper }] = await Promise.all([
+    admin.rpc("is_planipret_admin", { _user_id: caller.id }),
+    admin.rpc("is_super_admin", { _user_id: caller.id }),
+  ]);
+  const isAdmin = isPpAdmin === true || isSuper === true;
+  if (!isAdmin) {
+    if ((body?.user_id && String(body.user_id) !== caller.id) || body?.email) {
+      return json({ ok: false, error: "forbidden" }, 403);
+    }
+    body.user_id = caller.id;
+  }
+  // Default target = the caller's own broker profile (never an arbitrary one).
+  if (!body?.user_id && !body?.email) body.user_id = caller.id;
   const days = Math.min(Math.max(Number(body?.days ?? 14), 1), 90);
   const limit = Math.min(Math.max(Number(body?.limit ?? 30), 1), 200);
   const force = body?.force === true;

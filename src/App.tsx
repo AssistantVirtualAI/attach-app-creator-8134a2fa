@@ -56,6 +56,7 @@ const Ms365Callback = lazyWithRetry(() => import("./pages/planipret/Ms365Callbac
 const MaestroCallback = lazyWithRetry(() => import("./pages/auth/MaestroCallback"));
 const Ms365Diagnostics = lazyWithRetry(() => import("./pages/planipret/Ms365Diagnostics"));
 const MStyleDiagnosticsWeb = lazyWithRetry(() => import("./pages/MStyleDiagnosticsWeb"));
+const I18nDiagnostics = lazyWithRetry(() => import("./pages/I18nDiagnostics"));
 const SoftphoneSetup = lazyWithRetry(() => import("./pages/lemtel/SoftphoneSetup"));
 // Lazy-load admin pages (each is its own chunk)
 const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin/PlanipretAdminLayout"));

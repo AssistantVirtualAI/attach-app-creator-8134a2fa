@@ -48,6 +48,13 @@ const numOf = (v: unknown) => {
   const n = Number(String(v ?? "").replace(/[^0-9.\-]/g, ""));
   return Number.isFinite(n) ? n : 0;
 };
+/** Masque raisonnable des noms de clients dans les aperçus de liste. */
+const mask = (name: string | null | undefined) => {
+  const v = String(name ?? "").trim();
+  if (!v) return "";
+  return v.split(/\s+/).map((w, i) => (i === 0 ? w : `${w[0]}.`)).join(" ");
+};
+
 
 /** Fenêtre de dates America/Toronto pour la période choisie. */
 function rangeFor(period: Period, customFrom: string, customTo: string) {

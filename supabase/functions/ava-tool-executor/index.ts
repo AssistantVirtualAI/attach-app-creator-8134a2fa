@@ -5,6 +5,20 @@ import { authBroker, corsHeaders, jsonResponse, nsBrokerFetch } from "../_shared
 import { normalizePhoneE164 } from "../_shared/phone-normalize.ts";
 import { linkBrokerIdByEmail, resolveTelecomUserId } from "../_shared/maestro-broker-directory.ts";
 import { claudeText } from "../_shared/anthropic.ts";
+import {
+  getMaestroOAuthEnv,
+  getUserMaestroAccessToken,
+  fetchMaestroUserProfile,
+  extractMaestroBrokerId,
+} from "../_shared/maestro-oauth.ts";
+import {
+  buildDepositQuery,
+  commissionGet,
+  summarize,
+  institutionLabel,
+  num,
+} from "../_shared/commission-reports.ts";
+
 
 
 

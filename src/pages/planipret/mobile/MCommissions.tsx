@@ -147,7 +147,9 @@ export default function MCommissions() {
     if (!allowed) return;
     call({ action: "preference" }).then((d) => setAvaPref(d.ava_include_commissions === true)).catch(() => setAvaPref(null));
     call({ action: "institutions" }).then((d) => setInstitutions(d.institutions ?? [])).catch(() => setInstitutions([]));
+    call({ action: "agents" }).then((d) => setAgents(d.agents ?? [])).catch(() => setAgents([]));
   }, [allowed, call]);
+
 
   const loadMore = async () => {
     if (loadingMore || rows.length >= total) return;

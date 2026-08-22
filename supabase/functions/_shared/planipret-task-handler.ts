@@ -672,35 +672,55 @@ export async function handleTaskRequest(
       }
     }
 
-    // Scope check: a `user` task must target the broker's own Planiprêt id.
+    // Scope check — Maestro rule: a task only shows on the Tasks page when it
+    // targets a valid `task_targets` entry from the Client List API. Own-broker
+    // ids stay valid for personal tasks.
+    const { data: full } = await admin.from("planipret_profiles")
+      .select("maestro_broker_id, maestro_telecom_user_id").eq("id", profile?.id).maybeSingle();
+    const ownIds = [
+      String(profile?.maestro_broker_id ?? ""),
+      String(full?.maestro_broker_id ?? ""),
+      String(full?.maestro_telecom_user_id ?? ""),
+    ].filter(Boolean);
+
     if (payload.type === "user") {
-      const own = String(profile?.maestro_broker_id ?? "");
-      const { data: full } = await admin.from("planipret_profiles")
-        .select("maestro_broker_id, maestro_telecom_user_id").eq("id", profile?.id).maybeSingle();
-      const allowed = new Set([own, String(full?.maestro_broker_id ?? ""), String(full?.maestro_telecom_user_id ?? "")].filter(Boolean));
-      if (allowed.size && !allowed.has(String(payload.xid))) {
-        await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "out_of_scope" });
-        return { status: 200, body: { success: false, error: "xid_out_of_scope", message: "Cette cible n'appartient pas à ton périmètre.", correlation_id } };
+      if (!ownIds.includes(String(payload.xid))) {
+        const targets = await loadClientTargets(deps, profile);
+        const ok = targets.length === 0 || targetAllowed(targets, "user", String(payload.xid), ownIds);
+        if (!ok) {
+          await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "out_of_scope" });
+          return {
+            status: 200,
+            body: {
+              success: false,
+              error: "xid_out_of_scope",
+              message: "Cette cible n'appartient pas à ton périmètre (task_targets.user).",
+              correlation_id,
+            },
+          };
+        }
       }
     }
 
-    // Scope check: a `contract` task must target a contract mapped to this user.
+    // Scope check: a `contract` task must target one of the client's contracts.
     if (payload.type === "contract") {
       const xid = String(payload.xid ?? "");
-      const mapped = await contractIsMapped(admin, userId, xid);
-      if (!mapped) {
+      const targets = await loadClientTargets(deps, profile);
+      const ok = targetAllowed(targets, "contract", xid, ownIds) || await contractIsMapped(admin, userId, xid);
+      if (!ok) {
         await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "target_mapping_required" });
         return {
           status: 200,
           body: {
             success: false,
             error: "target_mapping_required",
-            message: "Ce contrat n'est pas rattaché à ton compte Planiprêt.",
+            message: "Ce contrat n'est pas une cible valide (task_targets.contracts) pour ton compte.",
             correlation_id,
           },
         };
       }
     }
+
 
 
     const key = String(createInput?.idempotency_key ?? idempotencyKey(["create", userId, payload.xid as any, payload.type as any, payload.date as any, payload.notes as any]));

@@ -534,6 +534,9 @@ export default function MHome() {
         )}
       </section>
 
+      <CommissionHomeCard profile={profile} lang={lang} />
+
+
       {/* ===== MICROSOFT CALENDAR (month grid + agenda) ===== */}
       <MsCalendarSection
         profile={profile}

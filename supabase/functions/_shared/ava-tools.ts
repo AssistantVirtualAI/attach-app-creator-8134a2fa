@@ -204,6 +204,31 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       broker_id: { type: "string", description: "ID du courtier Maestro" },
     }, ["broker_id"]),
 
+    // Commissions (API officielle Planiprêt — données financières sensibles)
+    mk("get_commission_summary", "Résumé agrégé des commissions du courtier connecté (total, nombre de dépôts, moyenne, volume de prêts, top institutions). Ne jamais divulguer de détail client à voix haute. Nécessite que le courtier ait activé « Inclure les commissions dans AVA ».", {
+      period: { type: "string", description: "month (défaut), quarter, year, ytd ou custom" },
+      date_from: { type: "string", description: "AAAA-MM-JJ si period=custom" },
+      date_to: { type: "string", description: "AAAA-MM-JJ si period=custom" },
+      commission_type: { type: "string", description: "base (défaut), bonus, bonus2 ou perform" },
+    }),
+    mk("get_commission_by_lender", "Répartition des commissions par institution financière (prêteur) sur une période.", {
+      period: { type: "string", description: "month (défaut), quarter, year, ytd ou custom" },
+      date_from: { type: "string", description: "AAAA-MM-JJ si period=custom" },
+      date_to: { type: "string", description: "AAAA-MM-JJ si period=custom" },
+      limit: { type: "number", description: "Nombre d'institutions (défaut 5)" },
+    }),
+    mk("compare_commission_periods", "Compare les commissions de la période courante avec la précédente (mois, trimestre ou année).", {
+      period: { type: "string", description: "month (défaut), quarter ou year" },
+    }),
+    mk("list_commission_deposits", "Liste détaillée des dépôts de commissions (contrat, institution, montant, date). Données sensibles : à utiliser seulement sur demande explicite du courtier.", {
+      period: { type: "string", description: "month (défaut), quarter, year, ytd ou custom" },
+      date_from: { type: "string", description: "AAAA-MM-JJ si period=custom" },
+      date_to: { type: "string", description: "AAAA-MM-JJ si period=custom" },
+      limit: { type: "number", description: "Nombre de dépôts (défaut 10, max 50)" },
+    }),
+    mk("list_financial_institutions", "Liste des institutions financières disponibles pour filtrer les rapports de commissions."),
+
+
 
 
     // Microsoft 365

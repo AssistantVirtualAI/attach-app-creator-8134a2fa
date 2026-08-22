@@ -91,6 +91,8 @@ export default function MHome() {
   const [msCalendarError, setMsCalendarError] = useState<string | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [brief, setBrief] = useState<any | null>(null);
+  const [briefExpanded, setBriefExpanded] = useState(false);
+
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefAt, setBriefAt] = useState<number | null>(null);
   const [briefErr, setBriefErr] = useState<string | null>(null);

@@ -7,6 +7,50 @@ import { generateText } from "npm:ai";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
+import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
+import { commissionGet, summarize } from "../_shared/commission-reports.ts";
+
+/**
+ * Commissions in the daily brief are OPT-IN only.
+ * `planipret_settings.preferences.ava_include_commissions` must be explicitly true.
+ * Returns null when disabled, not connected, or on any error (never blocks the brief).
+ */
+async function buildCommissionStats(admin: any, authUserId: string, sinceIso: string) {
+  try {
+    const { data: settings } = await admin.from("planipret_settings")
+      .select("preferences").eq("user_id", authUserId).maybeSingle();
+    const prefs = (settings?.preferences ?? {}) as Record<string, unknown>;
+    if (prefs.ava_include_commissions !== true) return null;
+
+    const token = await getUserMaestroAccessToken(admin, authUserId);
+    if (!token) return { enabled: true, connected: false };
+
+    const qs = new URLSearchParams({
+      commission_type: "base",
+      date_from: sinceIso.slice(0, 10),
+      date_to: new Date().toISOString().slice(0, 10),
+      per_page: "200",
+      page: "1",
+      order_by: "date_trans",
+      sort: "desc",
+    });
+    const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, `brief-${authUserId.slice(0, 8)}`);
+    if (!r.ok) return { enabled: true, connected: true, error: true };
+    const rows = Array.isArray(r.data?.data) ? r.data.data : [];
+    const s = summarize(rows);
+    return {
+      enabled: true,
+      connected: true,
+      total_amount: s.total_amount,
+      deposits_count: s.count,
+      average_amount: s.average_amount,
+      by_institution: (s.by_institution ?? []).slice(0, 5),
+    };
+  } catch {
+    return null;
+  }
+}
+
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 

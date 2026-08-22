@@ -79,8 +79,15 @@ export default function MCommissions() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [commissionType, setCommissionType] = useState<string>("base");
+  const [splitType, setSplitType] = useState<string>("");
+  const [numberPrefix, setNumberPrefix] = useState<string>("");
+  const [orderBy, setOrderBy] = useState<string>("date_trans");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [institutionId, setInstitutionId] = useState<string>("");
   const [institutions, setInstitutions] = useState<{ id: number; label: string }[]>([]);
+  const [agents, setAgents] = useState<{ users_id: number; name: string }[]>([]);
+  const [agentId, setAgentId] = useState<string>("");
+  const [detail, setDetail] = useState<DepositRow | null>(null);
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<DepositRow[]>([]);
@@ -99,8 +106,14 @@ export default function MCommissions() {
     date_from: range.from,
     date_to: range.to,
     commission_type: commissionType,
+    order_by: orderBy,
+    sort: sortDir,
     ...(institutionId ? { financial_inst_id: institutionId } : {}),
-  }), [range.from, range.to, commissionType, institutionId]);
+    ...(splitType ? { split_type: splitType } : {}),
+    ...(numberPrefix.trim() ? { number_prefix: numberPrefix.trim() } : {}),
+    ...(agentId ? { users_id: agentId } : {}),
+  }), [range.from, range.to, commissionType, institutionId, splitType, numberPrefix, orderBy, sortDir, agentId]);
+
 
   const call = useCallback(async (body: Record<string, unknown>) => {
     const { data, error: fnErr } = await supabase.functions.invoke("planipret-commission-reports", { body });

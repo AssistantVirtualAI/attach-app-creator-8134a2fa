@@ -122,6 +122,31 @@ export async function listClientTargets(search?: string): Promise<ClientTaskTarg
   return Array.isArray((d as any)?.targets) ? ((d as any).targets as ClientTaskTarget[]) : [];
 }
 
+export interface TargetValidationResult {
+  ok: boolean;
+  type: "user" | "contract";
+  xid: string;
+  error?: "xid_out_of_scope" | "target_mapping_required" | "validation_failed";
+  message?: string;
+  reason?: string;
+  available?: { users: string[]; contracts: string[] };
+  targets_source?: "clients_api" | "unavailable";
+  matched?: { client_id: string; name: string } | null;
+}
+
+/** Dry-run target check: detailed errors without creating anything. */
+export async function validateTaskTarget(
+  type: "user" | "contract",
+  xid: string,
+): Promise<{ valid: boolean; validation: TargetValidationResult; own_ids: string[] }> {
+  const d = await invoke({ action: "validate_target", type, xid }) as any;
+  return {
+    valid: !!d?.valid,
+    validation: (d?.validation ?? { ok: false, type, xid, error: "validation_failed" }) as TargetValidationResult,
+    own_ids: Array.isArray(d?.own_ids) ? d.own_ids : [],
+  };
+}
+
 export const createTask = (input: Record<string, unknown>) =>
   invoke({ action: "create", ...input });
 

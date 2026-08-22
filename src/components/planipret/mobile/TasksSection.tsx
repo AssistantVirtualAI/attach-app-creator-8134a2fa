@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock, ExternalLink, ShieldCheck, Loader2 } from "lucide-react";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
-import { describeTaskDiagnostics, formatTaskDue, toTorontoLocalInput, verifyTask, maestroTaskUrl, type NormalizedTask, type TaskFilterValue, type TaskVerifyResult } from "@/lib/planipret/tasks";
+import { describeTaskDiagnostics, describeTaskSync, formatTaskDue, toTorontoLocalInput, verifyTask, maestroTaskUrl, type NormalizedTask, type TaskFilterValue, type TaskVerifyResult } from "@/lib/planipret/tasks";
 import TaskComposerSheet, { type TaskComposerValue } from "./TaskComposerSheet";
 import { toast } from "sonner";
 
@@ -10,6 +10,27 @@ interface Props {
   lang: "fr" | "en";
   defaultTarget?: string | null;
   onSeeAll?: () => void;
+}
+
+function SyncChip({ task, lang }: { task: NormalizedTask; lang: "fr" | "en" }) {
+  const status = (task as any).sync_status ?? "unknown";
+  const reason = (task as any).sync_reason ?? "unknown";
+  const { label, detail } = describeTaskSync(status, reason, lang);
+  const color = status === "synced" ? "var(--pp-success, #16A34A)"
+    : status === "pending" ? "var(--pp-warning, #B45309)"
+    : status === "not_synced" ? "var(--pp-danger, #DC2626)"
+    : "var(--pp-text-muted)";
+  return (
+    <span
+      data-testid={`sync-chip-${task.id}`}
+      title={detail}
+      aria-label={`${label} — ${detail}`}
+      className="text-[10px] px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 mt-1"
+      style={{ color, border: `1px solid ${color}`, background: "transparent" }}
+    >
+      <RefreshCw className="w-2.5 h-2.5" /> {label}
+    </span>
+  );
 }
 
 function Shimmer({ className = "" }: { className?: string }) {
@@ -241,7 +262,10 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll }: 
                           {task.target_name ? ` · ${task.target_name}` : task.xid ? ` · #${task.xid}` : ""}
                           {task.status ? ` · ${task.status}` : ""}
                         </p>
-                        <TaskStatusChip lang={lang} source={source} state={verif[task.id]} />
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <TaskStatusChip lang={lang} source={source} state={verif[task.id]} />
+                          <SyncChip task={task} lang={lang} />
+                        </div>
                       </div>
                       <div className="flex items-center gap-0.5">
                         <IconBtn label={L("Vérifier dans Maestro", "Verify in Maestro")} onClick={() => void checkTask(task.id)}>

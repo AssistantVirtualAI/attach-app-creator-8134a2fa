@@ -41,10 +41,11 @@ async function buildCommissionStats(admin: any, authUserId: string, sinceIso: st
     return {
       enabled: true,
       connected: true,
-      total_amount: s.total_amount,
-      deposits_count: s.count,
-      average_amount: s.average_amount,
-      by_institution: (s.by_institution ?? []).slice(0, 5),
+      total_commission: s.total_commission,
+      deposit_count: s.deposit_count,
+      average_commission: s.average_commission,
+      total_loan_volume: s.total_loan_volume,
+      top_institutions: s.top_institutions.slice(0, 5),
     };
   } catch {
     return null;
@@ -507,6 +508,8 @@ Deno.serve(async (req) => {
         buildMicrosoftStats(admin, profile, sinceIso).catch(() => ({ connected: false })),
         new Promise((res) => setTimeout(() => res({ connected: false, timeout: true }), 15000)),
       ]),
+      // Opt-in only (planipret_settings.preferences.ava_include_commissions === true)
+      commissions: await buildCommissionStats(admin, effectiveUserId ?? profile.user_id, sinceIso),
     };
 
 

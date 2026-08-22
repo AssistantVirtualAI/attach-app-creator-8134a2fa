@@ -381,21 +381,65 @@ export default function MCommissions() {
               </div>
             </div>
 
-            <div className="mb-5">
+            <div className="mb-4">
               <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Institution" : "Lender"}</div>
               <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)}
-                className="w-full rounded-xl px-3 py-2.5 text-[13px]"
-                style={{ background: "rgba(155,127,232,0.08)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))", color: "var(--pp-text-primary, #E8EDF5)" }}>
+                className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
                 <option value="">{fr ? "Toutes" : "All"}</option>
                 {institutions.map((i) => <option key={i.id} value={String(i.id)}>{i.label}</option>)}
               </select>
             </div>
 
+            {agents.length > 1 && (
+              <div className="mb-4">
+                <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Courtier" : "Broker"}</div>
+                <select value={agentId} onChange={(e) => setAgentId(e.target.value)}
+                  className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
+                  <option value="">{fr ? "Tous les courtiers" : "All brokers"}</option>
+                  {agents.map((a) => <option key={a.users_id} value={String(a.users_id)}>{a.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="mb-4">
+              <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Type de partage" : "Split type"}</div>
+              <select value={splitType} onChange={(e) => setSplitType(e.target.value)}
+                className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
+                <option value="">{fr ? "Tous" : "All"}</option>
+                {SPLIT_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Préfixe de contrat" : "Contract prefix"}</div>
+              <input value={numberPrefix} onChange={(e) => setNumberPrefix(e.target.value)} inputMode="text"
+                placeholder={fr ? "ex. 2026" : "e.g. 2026"}
+                className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle} />
+            </div>
+
+            <div className="mb-5 flex gap-2">
+              <div className="flex-1">
+                <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Trier par" : "Order by"}</div>
+                <select value={orderBy} onChange={(e) => setOrderBy(e.target.value)}
+                  className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
+                  {ORDER_BY.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div style={{ width: 110 }}>
+                <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Sens" : "Sort"}</div>
+                <select value={sortDir} onChange={(e) => setSortDir(e.target.value as "asc" | "desc")}
+                  className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
+                  <option value="desc">desc</option>
+                  <option value="asc">asc</option>
+                </select>
+              </div>
+            </div>
+
             <button onClick={() => { setFiltersOpen(false); load(); }}
-              className="w-full py-3 rounded-xl text-[14px] font-bold"
-              style={{ background: "var(--pp-brand-accent, #9B7FE8)", color: "#0A1628" }}>
+              className="w-full py-3 rounded-xl text-[14px] font-bold" style={{ minHeight: 44, background: "var(--pp-brand-accent, #9B7FE8)", color: "#0A1628" }}>
               {fr ? "Appliquer" : "Apply"}
             </button>
+
           </div>
         </div>
       )}

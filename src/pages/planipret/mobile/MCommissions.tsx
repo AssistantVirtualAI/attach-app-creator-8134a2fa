@@ -101,15 +101,23 @@ export default function MCommissions() {
   const role = String(profile?.role ?? "");
   const allowed = role === "broker" || role === "admin";
 
-  const [period, setPeriod] = useState<Period>("month");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [commissionType, setCommissionType] = useState<string>("base");
+  // Deep-link AVA : /mplanipret/commissions?period=…&commission_type=…
+  const [sp] = useSearchParams();
+  const spPeriod = sp.get("period");
+  const [period, setPeriod] = useState<Period>(
+    (["month", "quarter", "year", "ytd", "custom"] as string[]).includes(String(spPeriod)) ? (spPeriod as Period) : "month",
+  );
+  const [customFrom, setCustomFrom] = useState(sp.get("date_from") ?? "");
+  const [customTo, setCustomTo] = useState(sp.get("date_to") ?? "");
+  const [commissionType, setCommissionType] = useState<string>(
+    (COMMISSION_TYPES as readonly string[]).includes(String(sp.get("commission_type"))) ? String(sp.get("commission_type")) : "base",
+  );
   const [splitType, setSplitType] = useState<string>("");
   const [numberPrefix, setNumberPrefix] = useState<string>("");
   const [orderBy, setOrderBy] = useState<string>("date_trans");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [institutionId, setInstitutionId] = useState<string>("");
+  const [institutionId, setInstitutionId] = useState<string>(/^\d+$/.test(String(sp.get("financial_inst_id"))) ? String(sp.get("financial_inst_id")) : "");
+
   const [institutions, setInstitutions] = useState<{ id: number; label: string }[]>([]);
   const [agents, setAgents] = useState<{ users_id: number; name: string }[]>([]);
   const [agentId, setAgentId] = useState<string>("");

@@ -125,11 +125,15 @@ export default function AvaVoiceAgent({ onClose, userId, onFallbackToChat }: Pro
     }
     const d = data as any;
     if (d?.message) showToolNotif("✅ " + d.message);
+    if (typeof d?.navigate === "string" && d.navigate.startsWith("/")) {
+      appendTranscript({ role: "nav", text: `🗺️ ${d.navigate}` });
+      navigate(d.navigate);
+    }
     if (toolName === "navigate_to") {
       appendTranscript({ role: "nav", text: `🗺️ ${d.message ?? "Navigation"}` });
     }
     return d;
-  }, [sessionId, toolLabel, L]);
+  }, [sessionId, toolLabel, L, navigate]);
 
   // Client-only tools execute in the browser (no server round-trip).
   const CLIENT_ONLY: Record<string, (p: any) => any> = useMemo(() => ({

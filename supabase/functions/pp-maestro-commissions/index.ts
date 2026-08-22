@@ -172,20 +172,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Resolve the internal numeric Maestro users_id.
-    let maestroId = prof.maestro_broker_id ? String(prof.maestro_broker_id).trim() : null;
-    if (!maestroId || !/^\d+$/.test(maestroId)) {
-      try {
-        const me = await fetchMaestroUserProfile(getMaestroOAuthEnv(), oauthToken);
-        const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
-        if (mid && /^\d+$/.test(String(mid))) {
-          maestroId = String(mid);
-          await admin.from("planipret_profiles")
-            .update({ maestro_broker_id: maestroId, maestro_connected: true })
-            .eq("id", prof.id);
-        }
-      } catch { /* not connected */ }
-    }
+    // Always re-resolve the Maestro users_id from /user (the official Commission
+    // API's users_id is the telecom/internal id, e.g. 93135 — NOT the CRM id that
+    // may be cached on the profile). Trusting the stored value returned 0 rows.
+    let maestroId: string | null = null;
+    try {
+      const me = await fetchMaestroUserProfile(getMaestroOAuthEnv(), oauthToken);
+      const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
+      if (mid && /^\d+$/.test(String(mid))) {
+        maestroId = String(mid);
+        await admin.from("planipret_profiles")
+          .update({ maestro_broker_id: maestroId, maestro_connected: true })
+          .eq("id", prof.id);
+      }
+    } catch { /* not connected */ }
     if (!maestroId || !/^\d+$/.test(maestroId)) {
       return j({
         success: false, rows: [],
@@ -203,6 +203,16 @@ Deno.serve(async (req) => {
       perPage: 100,
       maxPages: 80,
     });
+    if (body?.debug_raw) {
+      return j({
+        debug: true, ok: r.ok, status: r.status, error: r.error,
+        users_id: probeId, resolved_id: maestroId,
+        rows_returned: r.rows.length, pages: r.pages,
+        meta: r.meta,
+        sample: r.rows.slice(0, 2),
+      });
+    }
+
     if (!r.ok) {
       return j({
         success: false, rows: [],
@@ -212,6 +222,7 @@ Deno.serve(async (req) => {
         maestro_user_id: maestroId,
       });
     }
+
 
     const deals = r.rows.map(normalizeDeal);
     // Official data is already clean — every row counts.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { supabase } from "@/integrations/supabase/client";
 import { AVA_MUTATING_ACTIONS } from "@/lib/planipret/avaMutations";
@@ -58,6 +58,7 @@ export default function MAvaChat() {
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const avaContext = useAvaContext();
+  const navigate = useNavigate();
   const outlet = useOutletContext<PlanipretMobileContext>() as any;
   const { t, lang } = useMplanipretLang();
 

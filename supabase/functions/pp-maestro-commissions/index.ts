@@ -1,16 +1,15 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { getMaestroTelecomConfig, isMaestroTelecomConfigured, maestroTelecomFetch } from "../_shared/maestro-telecom.ts";
 import { getMaestroOAuthEnv, getUserMaestroAccessToken, fetchMaestroUserProfile } from "../_shared/maestro-oauth.ts";
-import { resolveRevenue, auditSummary, isStrictMappingEnabled } from "../_shared/maestro-commission-map.ts";
+import { fetchCommissionDeposits, type CommissionDeposit } from "../_shared/maestro-commissions-api.ts";
 
 /**
- * Broker commissions sourced from Maestro.
+ * Broker commissions sourced from Maestro's OFFICIAL Commission Reports API
+ * (GET /api/main/commissions/reports/deposits).
  *
- * Fetches the caller's funded deals/mortgages from Maestro and aggregates
- * them into the same `CommissionRow` shape the commission dashboard already
- * renders (sections: kpi, lender, quarter, product_mix, term_mix, matrix).
- * The frontend can then display Maestro data without any schema change.
+ * Fetches the caller's commission deposit rows and aggregates them into the
+ * same `CommissionRow` shape the commission dashboard already renders
+ * (sections: kpi, lender, quarter, product_mix, term_mix, matrix).
  */
 
 type Row = {
@@ -39,36 +38,44 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const pick = (o: any, keys: string[]): any => {
-  for (const k of keys) {
-    if (o && o[k] != null && o[k] !== "") return o[k];
-  }
-  return null;
-};
-
-const COMMISSION_FALLBACK_FIELDS = ["commission", "commission_amount", "total_commission", "broker_commission", "revenue", "Case amount"];
-
-function normalizeDeal(d: any) {
-  const dateRaw = pick(d, ["funding_date", "funded_at", "closing_date", "close_date", "completion_date", "date", "created_at"]);
-  const date = dateRaw ? new Date(String(dateRaw)) : null;
-  const amount = num(pick(d, ["mortgage_amount", "loan_amount", "amount", "volume", "financing_amount", "principal"]));
-  // Provenance: the commission is the RAW value of the exact Maestro field selected
-  // by the (record type + stage) mapping. No recalculation is ever applied.
-  const provenance = resolveRevenue(d, COMMISSION_FALLBACK_FIELDS);
-  const commission = num(provenance.revenue_raw);
-  const lender = String(pick(d, ["lender", "lender_name", "institution", "bank", "financial_institution"]) ?? "—").trim() || "—";
-  const product = String(pick(d, ["product_type", "product", "rate_type", "mortgage_type", "type"]) ?? "—").trim() || "—";
-  const termRaw = pick(d, ["term", "term_years", "term_length", "duration"]);
-  const term = termRaw == null ? "" : String(termRaw).trim();
-  const status = String(pick(d, ["status", "state", "stage"]) ?? "").toLowerCase();
-  return { date, amount, commission, lender, product, term, status, provenance, raw: d };
+interface NormalizedDeal {
+  date: Date | null;
+  amount: number;       // loan_amt (volume)
+  commission: number;   // amount (commission)
+  lender: string;
+  product: string;
+  term: string;
+  status: string;
+  provenance: { rule_matched: boolean; revenue_raw: number; field: string };
+  raw: CommissionDeposit;
 }
 
+/** Official endpoint already exposes clean field names — no guessing. */
+function normalizeDeal(d: CommissionDeposit): NormalizedDeal {
+  const dateRaw = d.date_trans ? String(d.date_trans).slice(0, 10) : null;
+  const date = dateRaw ? new Date(`${dateRaw}T00:00:00Z`) : null;
+  const amount = num(d.loan_amt);
+  const commission = num(d.amount);
+  const lender = String(d.institution ?? "—").trim() || "—";
+  const product = String(d.mortgage_type ?? "—").trim() || "—";
+  const term = d.term == null ? "" : String(d.term).trim();
+  return {
+    date,
+    amount,
+    commission,
+    lender,
+    product,
+    term,
+    status: "",
+    provenance: { rule_matched: true, revenue_raw: commission, field: "amount" },
+    raw: d,
+  };
+}
 
 function fiscalYearOf(d: Date) { return d.getUTCFullYear(); }
 function quarterOf(d: Date) { return `Q${Math.floor(d.getUTCMonth() / 3) + 1}`; }
 
-function aggregate(deals: ReturnType<typeof normalizeDeal>[], brokerName: string, brokerUserId: string | null, cy: number) {
+function aggregate(deals: NormalizedDeal[], brokerName: string, brokerUserId: string | null, cy: number) {
   const py = cy - 1;
   const rows: Row[] = [];
   let seq = 0;
@@ -88,7 +95,7 @@ function aggregate(deals: ReturnType<typeof normalizeDeal>[], brokerName: string
   });
 
   const bucket = new Map<string, Row>();
-  const add = (section: string, dimension: string | null, sub: string | null, d: ReturnType<typeof normalizeDeal>, year: number) => {
+  const add = (section: string, dimension: string | null, sub: string | null, d: NormalizedDeal, year: number) => {
     const key = `${section}|${dimension}|${sub}`;
     let r = bucket.get(key);
     if (!r) { r = mk(section, dimension, sub); bucket.set(key, r); rows.push(r); }
@@ -109,8 +116,6 @@ function aggregate(deals: ReturnType<typeof normalizeDeal>[], brokerName: string
     add("product_mix", d.product, null, d, y);
     add("term_mix", d.term || "Other", null, d, y);
     add("matrix", d.product, d.term || "Other", d, y);
-    if (d.status) add("pipeline", d.status, null, d, y);
-
   }
 
   const yoy = (c: number, p: number) => (p ? ((c - p) / p) * 100 : null);
@@ -132,15 +137,6 @@ function aggregate(deals: ReturnType<typeof normalizeDeal>[], brokerName: string
   return rows;
 }
 
-/** Maestro has no single documented commissions endpoint: probe the known shapes. */
-const DEAL_PATHS = (uid: string) => [
-  `/users/${uid}/deals`,
-  `/users/${uid}/mortgages`,
-  `/users/${uid}/commissions`,
-  `/users/${uid}/files`,
-  `/users/${uid}/applications`,
-];
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const j = (body: unknown, status = 200) =>
@@ -150,6 +146,7 @@ Deno.serve(async (req) => {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const body = await req.json().catch(() => ({}));
     const fiscalYear = Number(body?.fiscal_year) || new Date().getUTCFullYear();
+    const py = fiscalYear - 1;
 
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader) return j({ success: false, rows: [], error: "unauthorized", code: "unauthorized" }, 401);
@@ -165,63 +162,60 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!prof) return j({ success: false, rows: [], error: "profil introuvable", code: "no_profile" });
 
-    let telecomUserId = prof.maestro_broker_id ? String(prof.maestro_broker_id).trim() : null;
-    if (!telecomUserId || !/^\d+$/.test(telecomUserId)) {
-      try {
-        const tok = await getUserMaestroAccessToken(admin, callerId);
-        if (tok) {
-          const me = await fetchMaestroUserProfile(getMaestroOAuthEnv(), tok);
-          const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
-          if (mid && /^\d+$/.test(String(mid))) {
-            telecomUserId = String(mid);
-            await admin.from("planipret_profiles")
-              .update({ maestro_broker_id: telecomUserId, maestro_connected: true })
-              .eq("id", prof.id);
-          }
-        }
-      } catch { /* not connected */ }
-    }
-    if (!telecomUserId || !/^\d+$/.test(telecomUserId)) {
+    // Broker must have a live Maestro OAuth token.
+    const oauthToken = await getUserMaestroAccessToken(admin, callerId).catch(() => null);
+    if (!oauthToken) {
       return j({
-        success: false,
-        rows: [],
+        success: false, rows: [],
         code: "maestro_not_connected",
         error: "Connectez votre compte Maestro dans Réglages → Maestro pour voir vos commissions.",
       });
     }
 
-    const tCfg = await getMaestroTelecomConfig(admin);
-    if (!isMaestroTelecomConfigured(tCfg)) {
-      return j({ success: false, rows: [], code: "not_configured", error: "Intégration Maestro non configurée." });
+    // Resolve the internal numeric Maestro users_id.
+    let maestroId = prof.maestro_broker_id ? String(prof.maestro_broker_id).trim() : null;
+    if (!maestroId || !/^\d+$/.test(maestroId)) {
+      try {
+        const me = await fetchMaestroUserProfile(getMaestroOAuthEnv(), oauthToken);
+        const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
+        if (mid && /^\d+$/.test(String(mid))) {
+          maestroId = String(mid);
+          await admin.from("planipret_profiles")
+            .update({ maestro_broker_id: maestroId, maestro_connected: true })
+            .eq("id", prof.id);
+        }
+      } catch { /* not connected */ }
     }
-
-    let raw: any[] = [];
-    let usedPath: string | null = null;
-    const attempts: Array<{ path: string; status: number | null }> = [];
-    for (const path of DEAL_PATHS(telecomUserId)) {
-      const r = await maestroTelecomFetch(tCfg, path, { method: "GET", timeoutMs: 12000 });
-      attempts.push({ path, status: r.status ?? null });
-      if (!r.ok) continue;
-      const d: any = r.data;
-      const list = Array.isArray(d) ? d : (d?.deals ?? d?.mortgages ?? d?.commissions ?? d?.files ?? d?.applications ?? d?.data ?? d?.results ?? []);
-      if (Array.isArray(list) && list.length) { raw = list; usedPath = path; break; }
-      if (Array.isArray(list) && usedPath == null) { usedPath = path; }
-    }
-
-    if (!usedPath) {
+    if (!maestroId || !/^\d+$/.test(maestroId)) {
       return j({
-        success: false,
-        rows: [],
-        code: "no_endpoint",
-        error: "Aucun endpoint de dossiers Maestro n'a répondu pour ce courtier.",
-        attempts,
+        success: false, rows: [],
+        code: "maestro_not_connected",
+        error: "Impossible de résoudre votre identifiant Maestro. Reconnectez votre compte.",
       });
     }
 
-    const deals = raw.map(normalizeDeal);
-    const strict = isStrictMappingEnabled();
-    // In strict mode, unmapped lines are NEVER folded into the totals.
-    const counted = strict ? deals.filter((d) => d.provenance.rule_matched) : deals;
+    // Fetch deposit rows spanning current + previous fiscal year.
+    const r = await fetchCommissionDeposits({
+      token: oauthToken,
+      usersId: maestroId,
+      dateFrom: `${py}-01-01 00:00:00`,
+      dateTo: `${fiscalYear}-12-31 23:59:59`,
+      perPage: 100,
+      maxPages: 80,
+    });
+    if (!r.ok) {
+      return j({
+        success: false, rows: [],
+        code: "api_error",
+        status: r.status,
+        error: r.error ?? `HTTP ${r.status}`,
+        maestro_user_id: maestroId,
+      });
+    }
+
+    const deals = r.rows.map(normalizeDeal);
+    // Official data is already clean — every row counts.
+    const counted = deals;
     const brokerName = String(prof.full_name ?? prof.email ?? "Courtier");
     const rows = aggregate(counted, brokerName, prof.user_id ?? prof.id ?? null, fiscalYear);
 
@@ -232,20 +226,26 @@ Deno.serve(async (req) => {
       product: d.product,
       amount: d.amount,
       commission: d.commission,
-      counted: strict ? d.provenance.rule_matched : true,
+      counted: true,
     }));
+
+    const audit = {
+      total: deals.length,
+      matched: deals.length,
+      unmatched: 0,
+      matched_pct: deals.length ? 100 : 0,
+    };
 
     return j({
       success: true,
       rows,
       source: "maestro",
-      maestro_user_id: telecomUserId,
-      path: usedPath,
+      maestro_user_id: maestroId,
       deal_count: deals.length,
       counted_count: counted.length,
       fiscal_year: fiscalYear,
       provenance,
-      audit: auditSummary(deals.map((d) => d.provenance)),
+      audit,
     });
 
   } catch (e: any) {

@@ -172,20 +172,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Resolve the internal numeric Maestro users_id.
-    let maestroId = prof.maestro_broker_id ? String(prof.maestro_broker_id).trim() : null;
-    if (!maestroId || !/^\d+$/.test(maestroId)) {
-      try {
-        const me = await fetchMaestroUserProfile(getMaestroOAuthEnv(), oauthToken);
-        const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
-        if (mid && /^\d+$/.test(String(mid))) {
-          maestroId = String(mid);
-          await admin.from("planipret_profiles")
-            .update({ maestro_broker_id: maestroId, maestro_connected: true })
-            .eq("id", prof.id);
-        }
-      } catch { /* not connected */ }
-    }
+    // Always re-resolve the Maestro users_id from /user (the official Commission
+    // API's users_id is the telecom/internal id, e.g. 93135 — NOT the CRM id that
+    // may be cached on the profile). Trusting the stored value returned 0 rows.
+    let maestroId: string | null = null;
+    try {
+      const me = await fetchMaestroUserProfile(getMaestroOAuthEnv(), oauthToken);
+      const mid = (me as any)?.id ?? (me as any)?.user?.id ?? (me as any)?.user_id ?? null;
+      if (mid && /^\d+$/.test(String(mid))) {
+        maestroId = String(mid);
+        await admin.from("planipret_profiles")
+          .update({ maestro_broker_id: maestroId, maestro_connected: true })
+          .eq("id", prof.id);
+      }
+    } catch { /* not connected */ }
     if (!maestroId || !/^\d+$/.test(maestroId)) {
       return j({
         success: false, rows: [],

@@ -52,6 +52,17 @@ export interface TaskDeps {
     telecomId: string | null,
   ) => Promise<{ ok: boolean; task: any | null; endpoint: string | null; status: number }>;
 
+  /**
+   * Client List API (`GET /users/{telecomId}/clients`). Each row may carry a
+   * `task_targets` object describing the ONLY valid task targets:
+   *   task_targets.user      → { id, eligible_broker_ids[] }  (type: "user")
+   *   task_targets.contracts → [{ id, number }]               (type: "contract")
+   */
+  clientTargetsFetch?: (
+    telecomId: string | null,
+    search?: string | null,
+  ) => Promise<any[]>;
+
   resolveTelecomUserId: (candidate: string | null) => Promise<string | null>;
   /** Resolve the numeric internal Maestro user id accepted by `users_id`. */
   resolveTaskAssigneeId?: () => Promise<string | null>;

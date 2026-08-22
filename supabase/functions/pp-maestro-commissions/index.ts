@@ -218,6 +218,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (!r.ok) {
       return j({
         success: false, rows: [],
         code: "api_error",
@@ -226,6 +227,7 @@ Deno.serve(async (req) => {
         maestro_user_id: maestroId,
       });
     }
+
 
     const deals = r.rows.map(normalizeDeal);
     // Official data is already clean — every row counts.

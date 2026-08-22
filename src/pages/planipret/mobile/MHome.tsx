@@ -91,6 +91,8 @@ export default function MHome() {
   const [msCalendarError, setMsCalendarError] = useState<string | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [brief, setBrief] = useState<any | null>(null);
+  const [briefExpanded, setBriefExpanded] = useState(false);
+
   const [briefLoading, setBriefLoading] = useState(false);
   const [briefAt, setBriefAt] = useState<number | null>(null);
   const [briefErr, setBriefErr] = useState<string | null>(null);
@@ -437,7 +439,7 @@ export default function MHome() {
               </p>
               {brief.priorities?.length > 0 && (
                 <ol className="mt-3 space-y-1.5">
-                  {brief.priorities.slice(0, 5).map((p: string, i: number) => (
+                  {brief.priorities.slice(0, 3).map((p: string, i: number) => (
                     <li key={i} className="flex items-start gap-2 text-[13px]" style={{ color: "var(--pp-text-secondary)" }}>
                       <span
                         className="mt-[2px] inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold flex-shrink-0"
@@ -449,34 +451,56 @@ export default function MHome() {
                   ))}
                 </ol>
               )}
-              {brief.tips?.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {brief.tips.slice(0, 5).map((tip: any, i: number) => (
-                    <div key={i} className="rounded-xl p-2.5"
-                      style={{ background: "rgba(59,111,160,0.06)", border: "1px solid rgba(59,111,160,0.18)" }}>
-                      <p className="text-[12px] font-semibold" style={{ color: "var(--pp-brand-accent-2)", fontFamily: "Urbanist,sans-serif" }}>
-                        💡 {tip.title}
-                      </p>
-                      <p className="text-[12px] mt-0.5" style={{ color: "var(--pp-text-secondary)" }}>{tip.detail}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
               {brief.focus && (
                 <p className="mt-3 text-[12px] font-semibold" style={{ color: "var(--pp-brand-accent-2)" }}>
                   🎯 {brief.focus}
                 </p>
               )}
-              {brief.risks?.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {brief.risks.map((r: string, i: number) => (
-                    <span key={i} className="pp-pill pp-pill-warning">⚠ {r}</span>
-                  ))}
-                </div>
+
+              {briefExpanded && (
+                <>
+                  {brief.overview && (
+                    <p className="mt-3 text-[12px] leading-relaxed" style={{ color: "var(--pp-text-secondary)" }}>
+                      {brief.overview}
+                    </p>
+                  )}
+                  {brief.tips?.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {brief.tips.slice(0, 2).map((tip: any, i: number) => (
+                        <div key={i} className="rounded-xl p-2.5"
+                          style={{ background: "rgba(59,111,160,0.06)", border: "1px solid rgba(59,111,160,0.18)" }}>
+                          <p className="text-[12px] font-semibold" style={{ color: "var(--pp-brand-accent-2)", fontFamily: "Urbanist,sans-serif" }}>
+                            💡 {tip.title}
+                          </p>
+                          <p className="text-[12px] mt-0.5" style={{ color: "var(--pp-text-secondary)" }}>{tip.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {brief.risks?.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {brief.risks.slice(0, 2).map((r: string, i: number) => (
+                        <span key={i} className="pp-pill pp-pill-warning">⚠ {r}</span>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
+
+              {(brief.overview || brief.tips?.length > 0 || brief.risks?.length > 0) && (
+                <button
+                  onClick={() => setBriefExpanded((v) => !v)}
+                  className="mt-2 text-[11px] font-semibold"
+                  style={{ color: "var(--pp-brand-accent-2)", fontFamily: "Urbanist,sans-serif" }}>
+                  {briefExpanded
+                    ? (lang === "en" ? "Show less" : "Voir moins")
+                    : (lang === "en" ? "Show more" : "Voir plus")}
+                </button>
+              )}
+
               {brief.suggestions?.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  {brief.suggestions.map((s: any, i: number) => (
+                  {brief.suggestions.slice(0, 3).map((s: any, i: number) => (
                     <button key={i} onClick={() => handleSuggestion(s)}
                       className="pp-pill pp-pill-accent active:scale-95 transition">
                       {s.kind === "call" ? "📞" : s.kind === "sms" ? "💬" : s.kind === "email" ? "✉" : "⏰"} {s.label}
@@ -485,6 +509,7 @@ export default function MHome() {
                 </div>
               )}
             </>
+
           ) : (
             <p className="text-xs" style={{ color: "var(--pp-text-muted)" }}>{t("home.preparingBrief")}</p>
           )}

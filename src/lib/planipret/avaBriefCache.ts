@@ -5,7 +5,7 @@
  */
 export const AVA_BRIEF_TTL_MS = 24 * 60 * 60 * 1000;
 
-const KEY_PREFIX = "planipret.ava.brief.v1";
+const KEY_PREFIX = "planipret.ava.brief.v2";
 
 export type AvaBriefCacheEntry = { brief: any; generatedAt: number; lang: string };
 

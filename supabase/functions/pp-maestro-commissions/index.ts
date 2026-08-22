@@ -194,10 +194,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    // DEBUG: allow forcing an alternate users_id to probe which id the
+    // deposits endpoint actually accepts.
+    const debugId = body?.debug_users_id ? String(body.debug_users_id) : null;
+    const probeId = debugId && /^\d+$/.test(debugId) ? debugId : maestroId;
+
     // Fetch deposit rows spanning current + previous fiscal year.
     const r = await fetchCommissionDeposits({
       token: oauthToken,
-      usersId: maestroId,
+      usersId: probeId,
       dateFrom: `${py}-01-01 00:00:00`,
       dateTo: `${fiscalYear}-12-31 23:59:59`,
       perPage: 100,

@@ -34,8 +34,18 @@ type DepositRow = {
   commission_type: string | null;
   split_type: string | null;
   primary_client_name: string | null;
+  secondary_client_name?: string | null;
+  points?: string | number | null;
+  buy_down?: string | number | null;
+  mortgage_type?: string | null;
+  term?: string | number | null;
+  agent_name?: string | null;
+  target_name?: string | null;
+  cabinet?: string | null;
+  agent_company?: string | null;
   is_adjustment: number | null;
 };
+
 
 const COMMISSION_TYPES = ["base", "bonus", "bonus2", "perform"] as const;
 const SPLIT_TYPES = ["planipret", "planipret_override", "planipret_external"] as const;

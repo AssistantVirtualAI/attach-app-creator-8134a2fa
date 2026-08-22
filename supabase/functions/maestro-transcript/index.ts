@@ -160,6 +160,10 @@ Deno.serve(async (req) => {
         const apiKey = Deno.env.get("LOVABLE_API_KEY");
         if (apiKey) {
           const blob = await proxyRes.blob();
+          // Empty-recording guard: header-only audio is always rejected (HTTP 400).
+          if (blob.size < MIN_AUDIO_BYTES) {
+            console.warn("[maestro-transcript] empty recording, skipping STT", { bytes: blob.size });
+          } else {
           const form = new FormData();
           form.append("file", blob, "call.wav");
           form.append("model", "openai/gpt-4o-mini-transcribe");
@@ -172,7 +176,9 @@ Deno.serve(async (req) => {
             const data = await stt.json().catch(() => ({}));
             if (data?.text) result = { text: data.text, segments: data.segments ?? [] };
           }
+          }
         }
+
       }
       source = result ? "lovable" as any : source;
     }

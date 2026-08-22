@@ -296,15 +296,16 @@ export default function MCommissions() {
             ) : (
               <div className="space-y-2">
                 {rows.map((r, idx) => (
-                  <div key={`${r.number ?? "row"}-${idx}`} className="rounded-xl px-3 py-2.5"
-                    style={{ background: "rgba(155,127,232,0.06)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.2))" }}>
+                  <button key={`${r.number ?? "row"}-${idx}`} onClick={() => setDetail(r)}
+                    className="w-full text-left rounded-xl px-3 py-2.5"
+                    style={{ minHeight: 44, background: "rgba(155,127,232,0.06)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.2))" }}>
                     <div className="flex justify-between items-start gap-2">
                       <div className="min-w-0">
                         <div className="text-[13px] font-semibold truncate" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>
                           {r.institution ?? "—"}
                         </div>
                         <div className="text-[11.5px] truncate" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
-                          {[r.number, r.primary_client_name, r.date_trans ? String(r.date_trans).slice(0, 10) : null].filter(Boolean).join(" · ")}
+                          {[r.number, mask(r.primary_client_name), r.date_trans ? String(r.date_trans).slice(0, 10) : null].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -314,8 +315,9 @@ export default function MCommissions() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
+
                 {rows.length < total && (
                   <button onClick={loadMore} disabled={loadingMore}
                     className="w-full py-2.5 rounded-xl text-[13px] font-semibold"

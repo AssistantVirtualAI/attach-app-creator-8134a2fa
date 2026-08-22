@@ -208,7 +208,16 @@ Deno.serve(async (req) => {
       perPage: 100,
       maxPages: 80,
     });
-    if (!r.ok) {
+    if (body?.debug_raw) {
+      return j({
+        debug: true, ok: r.ok, status: r.status, error: r.error,
+        users_id: probeId, resolved_id: maestroId,
+        rows_returned: r.rows.length, pages: r.pages,
+        meta: r.meta,
+        sample: r.rows.slice(0, 2),
+      });
+    }
+
       return j({
         success: false, rows: [],
         code: "api_error",

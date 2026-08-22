@@ -704,7 +704,7 @@ export async function handleTaskRequest(
     if (payload.type === "user") {
       if (!ownIds.includes(String(payload.xid))) {
         const targets = await loadClientTargets(deps, profile);
-        const ok = targets.length === 0 || targetAllowed(targets, "user", String(payload.xid), ownIds);
+        const ok = targetAllowed(targets, "user", String(payload.xid), ownIds);
         if (!ok) {
           await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "out_of_scope" });
           return {

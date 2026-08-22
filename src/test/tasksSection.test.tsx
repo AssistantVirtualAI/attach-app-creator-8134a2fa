@@ -29,6 +29,7 @@ vi.mock("@/lib/planipret/tasks", async () => {
     createTask: (...a: any[]) => createTask(...a),
     updateTask: (...a: any[]) => updateTask(...a),
     deleteTask: (...a: any[]) => deleteTask(...a),
+    listClientTargets: async () => [],
     loadTaskCache: () => [],
     saveTaskCache: () => {},
     clearTaskCache: () => {},

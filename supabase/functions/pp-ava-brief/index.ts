@@ -553,12 +553,18 @@ You must cover TWO sources: telephony (calls, texts, voicemails, leads) AND Micr
       ? `Statistiques réelles (JSON):\n${JSON.stringify(stats).slice(0, 24000)}\n\nUtilise ces chiffres exacts (appels, manqués, minutes, textos, boîtes vocales, leads chauds, rendez-vous, contacts actifs) ET les données Microsoft 365 du champ "microsoft" (courriels, non lus, expéditeurs, réunions Outlook à venir, tâches To Do). N'invente rien. Réponds uniquement en français du Québec : chaque champ (headline, overview, metrics.label, highlights, priorities, risks, tips.title, tips.detail, focus, suggestions.label) doit être rédigé en français, sans aucun mot anglais.`
       : `Real statistics (JSON):\n${JSON.stringify(stats).slice(0, 24000)}\n\nUse these exact numbers (calls, missed, minutes, texts, voicemails, hot leads, meetings, active contacts) AND the Microsoft 365 data in the "microsoft" field (emails, unread, senders, upcoming Outlook meetings, To Do tasks). Do not invent anything. Answer strictly in English: every field (headline, overview, metrics.label, highlights, priorities, risks, tips.title, tips.detail, focus, suggestions.label) must be written in English, with no French words.`;
 
+    const commissionNote = (stats as any).commissions
+      ? (lang === "fr"
+        ? `\n\nLe courtier a activé l'inclusion des commissions : utilise stats.commissions (total, nombre de dépôts, moyenne, volume de prêts, top institutions) dans une phrase de l'overview et un indicateur metrics. Ne divulgue aucun nom de client.`
+        : `\n\nThe broker enabled commission inclusion: use stats.commissions (total, deposit count, average, loan volume, top lenders) in one overview sentence and one metric. Never disclose client names.`)
+      : (lang === "fr" ? `\n\nN'évoque JAMAIS les commissions ou revenus : la préférence est désactivée.` : `\n\nNEVER mention commissions or revenue: the preference is disabled.`);
+
     let result: any;
     try {
       const r = await generateText({
         model: gateway("google/gemini-2.5-flash"),
         system: `${system}\n\nRéponds UNIQUEMENT avec un objet JSON valide (pas de texte autour, pas de balises markdown) respectant exactement ces clés: headline (string), overview (string), priorities (string[]), risks (string[]), highlights (string[]), metrics ({label,value}[]), tips ({title,detail}[]), focus (string), suggestions ({label,kind,number}[]).`,
-        prompt: userPrompt,
+        prompt: userPrompt + commissionNote,
       });
       let out: any = (r as any).text;
       if (typeof out === "string") {

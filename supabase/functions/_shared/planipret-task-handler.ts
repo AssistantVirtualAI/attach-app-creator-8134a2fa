@@ -52,6 +52,17 @@ export interface TaskDeps {
     telecomId: string | null,
   ) => Promise<{ ok: boolean; task: any | null; endpoint: string | null; status: number }>;
 
+  /**
+   * Client List API (`GET /users/{telecomId}/clients`). Each row may carry a
+   * `task_targets` object describing the ONLY valid task targets:
+   *   task_targets.user      → { id, eligible_broker_ids[] }  (type: "user")
+   *   task_targets.contracts → [{ id, number }]               (type: "contract")
+   */
+  clientTargetsFetch?: (
+    telecomId: string | null,
+    search?: string | null,
+  ) => Promise<any[]>;
+
   resolveTelecomUserId: (candidate: string | null) => Promise<string | null>;
   /** Resolve the numeric internal Maestro user id accepted by `users_id`. */
   resolveTaskAssigneeId?: () => Promise<string | null>;
@@ -183,6 +194,85 @@ async function contractIsMapped(admin: any, userId: string, xid: string): Promis
   } catch { /* ignore */ }
   return false;
 }
+
+export interface ClientTarget {
+  client_id: string;
+  name: string;
+  email: string | null;
+  /** `type: "user"` target (task shows on the client's Maestro Tasks page). */
+  user: { id: string; eligible_broker_ids: string[] } | null;
+  /** `type: "contract"` targets. */
+  contracts: Array<{ id: string; number: string | null }>;
+}
+
+const clientLabel = (c: any): string =>
+  String(
+    c?.display_name || c?.name ||
+    [c?.first_name, c?.last_name].filter(Boolean).join(" ") ||
+    c?.email || `#${c?.id ?? ""}`,
+  ).trim();
+
+/** Read the `task_targets` metadata exposed by the Client List API. */
+export function normalizeClientTarget(row: any): ClientTarget | null {
+  if (!row || typeof row !== "object") return null;
+  const tt = row.task_targets ?? row.taskTargets ?? null;
+  const userRaw = tt?.user ?? null;
+  const contractsRaw = Array.isArray(tt?.contracts) ? tt.contracts : [];
+  const user = userRaw?.id
+    ? {
+        id: String(userRaw.id),
+        eligible_broker_ids: (Array.isArray(userRaw.eligible_broker_ids) ? userRaw.eligible_broker_ids : [])
+          .map((v: any) => String(v)).filter(Boolean),
+      }
+    : null;
+  const contracts = contractsRaw
+    .filter((c: any) => c?.id !== undefined && c?.id !== null)
+    .map((c: any) => ({ id: String(c.id), number: c?.number != null ? String(c.number) : null }));
+  if (!user && !contracts.length) return null;
+  return {
+    client_id: String(row.id ?? user?.id ?? ""),
+    name: clientLabel(row),
+    email: row.email ? String(row.email) : null,
+    user,
+    contracts,
+  };
+}
+
+/** All task targets this broker may legitimately use, from the Client List API. */
+async function loadClientTargets(deps: any, profile: any, search?: string | null): Promise<ClientTarget[]> {
+  if (!deps.clientTargetsFetch) return [];
+  let telecomId: string | null = null;
+  try {
+    telecomId = await deps.resolveTelecomUserId(profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null);
+  } catch { /* ignore */ }
+  const rows = await deps.clientTargetsFetch(telecomId, search ?? null).catch(() => []);
+  return (Array.isArray(rows) ? rows : []).map(normalizeClientTarget).filter(Boolean) as ClientTarget[];
+}
+
+/** Is `xid` a valid target of the given type according to `task_targets`? */
+export function targetAllowed(
+  targets: ClientTarget[],
+  type: "user" | "contract",
+  xid: string,
+  brokerIds: string[],
+): boolean {
+  const id = String(xid ?? "");
+  if (!id) return false;
+  for (const t of targets) {
+    if (type === "user") {
+      if (t.user && t.user.id === id) {
+        if (!t.user.eligible_broker_ids.length) return true;
+        if (!brokerIds.length) return true;
+        if (t.user.eligible_broker_ids.some((b) => brokerIds.includes(b))) return true;
+      }
+    } else if (t.contracts.some((c) => c.id === id)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
 
 
 /**
@@ -544,6 +634,24 @@ export async function handleTaskRequest(
     };
   }
 
+  // ── CLIENT TASK TARGETS ────────────────────────────────────────────────────
+  // Exposes the `task_targets` metadata of the Client List API so the app and
+  // AVA can pick a valid xid (client user id or one of its contract ids).
+  if (action === "client_targets") {
+    const search = body?.search ? String(body.search) : null;
+    const targets = await loadClientTargets(deps, profile, search);
+    return {
+      status: 200,
+      body: {
+        success: true,
+        targets,
+        count: targets.length,
+        source: deps.clientTargetsFetch ? "clients_api" : "unavailable",
+        correlation_id,
+      },
+    };
+  }
+
   // ── CREATE ─────────────────────────────────────────────────────────────────
   if (action === "create") {
     // A `user` task defaults to the broker's own Planiprêt id when the client
@@ -582,35 +690,55 @@ export async function handleTaskRequest(
       }
     }
 
-    // Scope check: a `user` task must target the broker's own Planiprêt id.
+    // Scope check — Maestro rule: a task only shows on the Tasks page when it
+    // targets a valid `task_targets` entry from the Client List API. Own-broker
+    // ids stay valid for personal tasks.
+    const { data: full } = await admin.from("planipret_profiles")
+      .select("maestro_broker_id, maestro_telecom_user_id").eq("id", profile?.id).maybeSingle();
+    const ownIds = [
+      String(profile?.maestro_broker_id ?? ""),
+      String(full?.maestro_broker_id ?? ""),
+      String(full?.maestro_telecom_user_id ?? ""),
+    ].filter(Boolean);
+
     if (payload.type === "user") {
-      const own = String(profile?.maestro_broker_id ?? "");
-      const { data: full } = await admin.from("planipret_profiles")
-        .select("maestro_broker_id, maestro_telecom_user_id").eq("id", profile?.id).maybeSingle();
-      const allowed = new Set([own, String(full?.maestro_broker_id ?? ""), String(full?.maestro_telecom_user_id ?? "")].filter(Boolean));
-      if (allowed.size && !allowed.has(String(payload.xid))) {
-        await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "out_of_scope" });
-        return { status: 200, body: { success: false, error: "xid_out_of_scope", message: "Cette cible n'appartient pas à ton périmètre.", correlation_id } };
+      if (!ownIds.includes(String(payload.xid))) {
+        const targets = await loadClientTargets(deps, profile);
+        const ok = targetAllowed(targets, "user", String(payload.xid), ownIds);
+        if (!ok) {
+          await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "out_of_scope" });
+          return {
+            status: 200,
+            body: {
+              success: false,
+              error: "xid_out_of_scope",
+              message: "Cette cible n'appartient pas à ton périmètre (task_targets.user).",
+              correlation_id,
+            },
+          };
+        }
       }
     }
 
-    // Scope check: a `contract` task must target a contract mapped to this user.
+    // Scope check: a `contract` task must target one of the client's contracts.
     if (payload.type === "contract") {
       const xid = String(payload.xid ?? "");
-      const mapped = await contractIsMapped(admin, userId, xid);
-      if (!mapped) {
+      const targets = await loadClientTargets(deps, profile);
+      const ok = targetAllowed(targets, "contract", xid, ownIds) || await contractIsMapped(admin, userId, xid);
+      if (!ok) {
         await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "target_mapping_required" });
         return {
           status: 200,
           body: {
             success: false,
             error: "target_mapping_required",
-            message: "Ce contrat n'est pas rattaché à ton compte Planiprêt.",
+            message: "Ce contrat n'est pas une cible valide (task_targets.contracts) pour ton compte.",
             correlation_id,
           },
         };
       }
     }
+
 
 
     const key = String(createInput?.idempotency_key ?? idempotencyKey(["create", userId, payload.xid as any, payload.type as any, payload.date as any, payload.notes as any]));

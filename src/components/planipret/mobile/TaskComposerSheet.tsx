@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, Plus, Search, X } from "lucide-react";
-import { toApiDateTime } from "@/lib/planipret/tasks";
+import { toApiDateTime, listClientTargets, type ClientTaskTarget } from "@/lib/planipret/tasks";
 import { MILESTONES, QUICK_TASKS, catalogLabel, type TaskCatalogItem } from "@/lib/planipret/taskMilestones";
 import { getPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 
@@ -121,6 +121,10 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [clientQuery, setClientQuery] = useState("");
   const [clientName, setClientName] = useState("");
   const [clients, setClients] = useState<any[]>(() => peekPpContacts("maestro") ?? []);
+  // Maestro rule: a task only lands on the Tasks page when its xid comes from
+  // the Client List API `task_targets` metadata.
+  const [targets, setTargets] = useState<ClientTaskTarget[]>([]);
+  const [selectedTarget, setSelectedTarget] = useState<ClientTaskTarget | null>(null);
   const [people, setPeople] = useState<any[]>(() => peekPpContacts("maestro_brokers") ?? []);
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
@@ -160,6 +164,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     setPicked(null);
     setClientQuery("");
     setClientName("");
+    setSelectedTarget(null);
     requestAnimationFrame(() => {
       if (panelRef.current) panelRef.current.scrollTop = 0;
     });
@@ -176,6 +181,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!open || step !== "form") return;
     let alive = true;
     void getPpContacts("maestro").then((v) => { if (alive) setClients(v || []); }).catch(() => {});
+    void listClientTargets().then((v) => { if (alive) setTargets(v || []); }).catch(() => {});
     void getPpContacts("maestro_brokers", { force: true, limit: 500 }).then((v) => { if (alive) setPeople(v || []); }).catch(() => {});
     return () => { alive = false; };
   }, [open, step]);
@@ -254,9 +260,30 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const labelStyle = { color: "var(--pp-text-muted)" } as const;
 
   const q = clientQuery.trim().toLowerCase();
+  const targetRows: ClientTaskTarget[] = targets.length
+    ? targets
+    : clients.map((c: any) => ({
+        client_id: String(c?.id ?? ""),
+        name: contactName(c),
+        email: c?.email ?? null,
+        user: c?.id ? { id: String(c.id), eligible_broker_ids: [] } : null,
+        contracts: [],
+      }));
   const clientMatches = q.length >= 2
-    ? clients.filter((c: any) => `${contactName(c)} ${c?.email ?? ""} ${c?.phone ?? ""}`.toLowerCase().includes(q)).slice(0, 25)
+    ? targetRows.filter((t) => `${t.name} ${t.email ?? ""}`.toLowerCase().includes(q)).slice(0, 25)
     : [];
+  const pickTarget = (t: ClientTaskTarget) => {
+    setSelectedTarget(t);
+    setClientName(t.name);
+    setClientQuery("");
+    if (targetType === "contract") setTarget(t.contracts[0]?.id ?? "");
+    else setTarget(t.user?.id ?? t.client_id);
+  };
+  const chooseTargetType = (tt: "user" | "contract") => {
+    setTargetType(tt);
+    if (!selectedTarget) return;
+    setTarget(tt === "contract" ? (selectedTarget.contracts[0]?.id ?? "") : (selectedTarget.user?.id ?? selectedTarget.client_id));
+  };
   // Maestro rule: a task can only be assigned to yourself, unless the account
   // is set up with team members (assistants) allowed to take tasks under your
   // profile. So we only offer assistants, never the whole broker directory.
@@ -346,7 +373,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
         <form className="space-y-3 px-4" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
           <div className="flex gap-2">
             {(["user", "contract"] as const).map((tt) => (
-              <button type="button" key={tt} onClick={() => setTargetType(tt)}
+              <button type="button" key={tt} onClick={() => chooseTargetType(tt)}
                 aria-pressed={targetType === tt}
                 className="flex-1 min-h-[44px] rounded-xl text-sm font-medium"
                 style={targetType === tt
@@ -367,7 +394,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                 <span className="flex-1 text-sm truncate">{clientName}</span>
                 <span className="text-[11px]" style={labelStyle}>#{target}</span>
                 <button type="button" aria-label={L("Changer de client", "Change client")}
-                  onClick={() => { setClientName(""); setTarget(""); }} className="p-1"><X className="w-4 h-4" /></button>
+                  onClick={() => { setClientName(""); setTarget(""); setSelectedTarget(null); }} className="p-1"><X className="w-4 h-4" /></button>
               </div>
             ) : (
               <div className="relative">
@@ -383,17 +410,34 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                   <p className="px-3 py-3 text-xs" style={labelStyle}>{L("Aucun client trouvé", "No client found")}</p>
                 )}
                 {clientMatches.map((c: any) => (
-                  <button type="button" key={String(c.id)} onClick={() => { setClientName(contactName(c)); setTarget(String(c.id ?? "")); setClientQuery(""); }}
+  <button type="button" key={c.client_id} onClick={() => pickTarget(c)}
                     className="w-full text-left px-3 py-2.5 text-sm" style={{ background: "var(--pp-bg-surface)", color: "var(--pp-text-primary)" }}>
-                    {contactName(c)}
-                    <span className="block text-[11px]" style={labelStyle}>{c.email || c.phone || `#${c.id}`}</span>
+                    {c.name}
+                    <span className="block text-[11px]" style={labelStyle}>
+                      {c.email || `#${c.client_id}`}
+                      {c.contracts.length ? ` · ${c.contracts.length} ${L("contrat(s)", "contract(s)")}` : ""}
+                    </span>
                   </button>
                 ))}
               </div>
             )}
+            {targetType === "contract" && selectedTarget && (
+              selectedTarget.contracts.length ? (
+                <select className={`${field} mt-2`} style={fieldStyle} value={target}
+                  aria-label={L("Contrat", "Contract")} onChange={(e) => setTarget(e.target.value)}>
+                  {selectedTarget.contracts.map((ct) => (
+                    <option key={ct.id} value={ct.id}>{ct.number ? `${ct.number} · #${ct.id}` : `#${ct.id}`}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-[11px] mt-2" role="alert" style={{ color: "var(--pp-danger)" }}>
+                  {L("Aucun contrat disponible pour ce client.", "No contract available for this client.")}
+                </p>
+              )
+            )}
             <input className={`${field} mt-2`} style={fieldStyle} inputMode="numeric" value={target}
               aria-label={L("Cible xid", "Target xid")}
-              onChange={(e) => { setTarget(e.target.value); setClientName(""); }} placeholder={L("ou saisir un xid", "or enter an xid")} />
+              onChange={(e) => { setTarget(e.target.value); setClientName(""); setSelectedTarget(null); }} placeholder={L("ou saisir un xid", "or enter an xid")} />
             <FieldError keys={["xid", "target"]} />
           </div>
 

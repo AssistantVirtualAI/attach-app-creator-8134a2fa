@@ -169,6 +169,36 @@ function makeSingleFetch(token: string | null, telecomBase: string) {
 
 
 
+/**
+ * Client List API — the only source of truth for valid task targets
+ * (`task_targets.user` and `task_targets.contracts`).
+ */
+function makeClientTargetsFetch(token: string | null) {
+  return async (telecomId: string | null, search?: string | null): Promise<any[]> => {
+    if (!telecomId) return [];
+    const q = search ? `?search=${encodeURIComponent(search)}&limit=200` : "?limit=200";
+    const urls = [
+      `${TELECOM_BASE}/users/${telecomId}/clients${q}`,
+      `${API_BASE}/telecom/api/v1/users/${telecomId}/clients${q}`,
+    ];
+    for (const url of urls) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+      try {
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          signal: ctrl.signal,
+        });
+        if (!res.ok) continue;
+        const j = await res.json().catch(() => null);
+        const raw = Array.isArray(j) ? j : (j?.clients ?? j?.data ?? j?.items ?? j?.results ?? []);
+        if (Array.isArray(raw)) return raw;
+      } catch { /* try next */ } finally { clearTimeout(timer); }
+    }
+    return [];
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST" && req.method !== "GET") {
@@ -201,6 +231,7 @@ Deno.serve(async (req) => {
       apiFetch: makeApiFetch(token),
       listFetch: makeListFetch(token),
       singleFetch: makeSingleFetch(token, TELECOM_BASE),
+      clientTargetsFetch: makeClientTargetsFetch(token),
       resolveTelecomUserId: async (candidate) => {
         const r = await resolveTelecomUserId(admin, userId, { candidate });
         return r?.id ?? null;

@@ -105,6 +105,23 @@ export function describeTaskDiagnostics(d: TaskDiagnostics | undefined | null, l
   return parts.join(" · ");
 }
 
+export interface ClientTaskTarget {
+  client_id: string;
+  name: string;
+  email: string | null;
+  user: { id: string; eligible_broker_ids: string[] } | null;
+  contracts: Array<{ id: string; number: string | null }>;
+}
+
+/**
+ * Valid task targets from the Maestro Client List API (`task_targets`).
+ * A task only shows up on the Maestro Tasks page when it uses one of these.
+ */
+export async function listClientTargets(search?: string): Promise<ClientTaskTarget[]> {
+  const d = await invoke({ action: "client_targets", ...(search ? { search } : {}) });
+  return Array.isArray((d as any)?.targets) ? ((d as any).targets as ClientTaskTarget[]) : [];
+}
+
 export const createTask = (input: Record<string, unknown>) =>
   invoke({ action: "create", ...input });
 

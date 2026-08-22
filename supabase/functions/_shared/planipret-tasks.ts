@@ -28,7 +28,74 @@ export interface NormalizedTask {
   assignee_ids: string[];
   /** Where the assignment was read from — `none` means Maestro returned nothing. */
   assignment_source: "users" | "users_id" | "xid" | "none";
+  /**
+   * Calendar (Nylas) synchronisation state. Maestro's calendar only shows
+   * tasks that were synchronised with Nylas; the Tasks page shows them all.
+   */
+  sync_status: TaskSyncStatus;
+  /** Machine readable reason explaining `sync_status`. */
+  sync_reason: TaskSyncReason;
   raw?: unknown;
+}
+
+export type TaskSyncStatus = "synced" | "pending" | "not_synced" | "unknown";
+export type TaskSyncReason =
+  | "nylas_event_linked"
+  | "awaiting_nylas"
+  | "calendar_sync_disabled"
+  | "assignment_missing"
+  | "sync_failed"
+  | "not_created_yet"
+  | "unknown";
+
+const NYLAS_ID_KEYS = [
+  "nylas_id", "nylas_event_id", "nylas_event", "calendar_event_id",
+  "event_id", "external_event_id", "nylasEventId",
+];
+
+/** Derive the Nylas/calendar sync state of a task from the Maestro payload. */
+export function computeTaskSync(raw: any, assigneeIds: string[] = []): { sync_status: TaskSyncStatus; sync_reason: TaskSyncReason } {
+  if (!raw || typeof raw !== "object") return { sync_status: "unknown", sync_reason: "unknown" };
+  const has = (k: string) => {
+    const v = (raw as any)[k];
+    return v !== undefined && v !== null && String(v).trim() !== "" && String(v) !== "0";
+  };
+  if (NYLAS_ID_KEYS.some(has)) return { sync_status: "synced", sync_reason: "nylas_event_linked" };
+  const state = String(raw.sync_status ?? raw.nylas_status ?? "").toLowerCase();
+  if (state === "synced" || state === "success") return { sync_status: "synced", sync_reason: "nylas_event_linked" };
+  if (state === "failed" || state === "error") return { sync_status: "not_synced", sync_reason: "sync_failed" };
+  if (!String(raw.id ?? raw.task_id ?? "").trim()) return { sync_status: "not_synced", sync_reason: "not_created_yet" };
+  const wantsCalendar = truthy(raw.sync_calendar ?? raw.syncCalendar ?? raw.calendar_sync);
+  if (!wantsCalendar) return { sync_status: "not_synced", sync_reason: "calendar_sync_disabled" };
+  if (!assigneeIds.length) return { sync_status: "not_synced", sync_reason: "assignment_missing" };
+  return { sync_status: "pending", sync_reason: "awaiting_nylas" };
+}
+
+/** Human readable explanation of a task sync state. */
+export function describeTaskSync(
+  status: TaskSyncStatus,
+  reason: TaskSyncReason,
+  lang: "fr" | "en" = "fr",
+): { label: string; detail: string } {
+  const en = lang === "en";
+  const label = status === "synced"
+    ? (en ? "Calendar synced" : "Calendrier synchro")
+    : status === "pending"
+      ? (en ? "Sync pending" : "Synchro en attente")
+      : status === "not_synced"
+        ? (en ? "Not synced" : "Non synchronisée")
+        : (en ? "Unknown" : "Inconnu");
+  const details: Record<TaskSyncReason, [string, string]> = {
+    nylas_event_linked: ["Événement Nylas lié — visible dans le calendrier Maestro.", "Nylas event linked — visible in the Maestro calendar."],
+    awaiting_nylas: ["En attente de la synchronisation Nylas côté Maestro.", "Waiting for Maestro's Nylas synchronisation."],
+    calendar_sync_disabled: ["Synchronisation calendrier non demandée — visible uniquement dans la page Tâches.", "Calendar sync not requested — only visible on the Tasks page."],
+    assignment_missing: ["Maestro n'a pas enregistré l'assignation (users vide).", "Maestro did not persist the assignment (users empty)."],
+    sync_failed: ["Maestro signale un échec de synchronisation Nylas.", "Maestro reports a failed Nylas synchronisation."],
+    not_created_yet: ["Tâche pas encore créée dans Maestro.", "Task not created in Maestro yet."],
+    unknown: ["État de synchronisation inconnu.", "Unknown synchronisation state."],
+  };
+  const d = details[reason] ?? details.unknown;
+  return { label, detail: en ? d[1] : d[0] };
 }
 
 /** Date/time parts of `date` rendered in America/Toronto. */
@@ -349,6 +416,7 @@ export function normalizeTask(input: any): NormalizedTask {
     created_by_ava: truthy(raw?.created_by_ava) || String(raw?.source ?? "").toLowerCase().includes("ava"),
     assignee_ids: assignment.ids,
     assignment_source: assignment.source,
+    ...computeTaskSync(raw, assignment.ids),
     raw,
   };
 }

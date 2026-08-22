@@ -452,7 +452,49 @@ export default function MCommissions() {
           </div>
         </div>
       )}
+
+      {/* Détail d'un dépôt (lecture seule) */}
+      {detail && (
+        <div className="fixed inset-0 z-[75] flex items-end" style={{ background: "rgba(4,11,22,0.7)" }} onClick={() => setDetail(null)}>
+          <div className="w-full rounded-t-2xl p-5 pb-8 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}
+            style={{ background: "var(--pp-bg-surface, #0A1628)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))", WebkitOverflowScrolling: "touch" }}>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[15px] font-bold" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>{fr ? "Détail du dépôt" : "Deposit detail"}</span>
+              <button onClick={() => setDetail(null)} aria-label={fr ? "Fermer" : "Close"} style={{ minWidth: 44, minHeight: 44 }}>
+                <X className="w-4 h-4" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {([
+                [fr ? "Contrat" : "Contract", detail.number],
+                [fr ? "Date" : "Date", detail.date_trans ? String(detail.date_trans).slice(0, 10) : null],
+                [fr ? "Institution" : "Lender", detail.institution],
+                [fr ? "Client" : "Client", detail.primary_client_name],
+                [fr ? "Co-emprunteur" : "Co-borrower", detail.secondary_client_name],
+                [fr ? "Montant" : "Amount", cad2(numOf(detail.amount))],
+                [fr ? "Montant du prêt" : "Loan amount", cad2(numOf(detail.loan_amt))],
+                ["Points", detail.points],
+                ["Buy down", detail.buy_down],
+                [fr ? "Type de commission" : "Commission type", detail.commission_type],
+                [fr ? "Type de partage" : "Split type", detail.split_type],
+                [fr ? "Type de prêt" : "Mortgage type", detail.mortgage_type],
+                [fr ? "Terme" : "Term", detail.term],
+                [fr ? "Courtier" : "Broker", detail.agent_name],
+                [fr ? "Cible" : "Target", detail.target_name],
+                [fr ? "Cabinet" : "Firm", detail.cabinet ?? detail.agent_company],
+                [fr ? "Ajustement" : "Adjustment", Number(detail.is_adjustment) === 1 ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")],
+              ] as [string, unknown][]).filter(([, v]) => v != null && String(v).trim() !== "").map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-3 text-[12.5px]">
+                  <span style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{k}</span>
+                  <span className="text-right font-semibold" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>{String(v)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </Shell>
+
   );
 }
 

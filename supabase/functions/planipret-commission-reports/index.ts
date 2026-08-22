@@ -150,23 +150,28 @@ Deno.serve(async (req) => {
       }, 200, cid);
     }
 
-    // ---- Agents ----------------------------------------------------------
+    // ---- Agents (admin: tous ; broker: soi-même + son équipe, filtré par Maestro) ----
     if (action === "agents") {
-      if (role !== "admin") {
-        return json({ error: "forbidden", message: "Liste des courtiers réservée aux administrateurs." }, 403, cid);
-      }
       const r = await commissionGet("/api/main/commissions/reports/agents", token, cid);
       if (!r.ok) return upstream(r, cid);
       const list = Array.isArray(r.data?.data) ? r.data.data : Array.isArray(r.data) ? r.data : [];
-      return json({
-        ok: true,
-        agents: list.map((a: any) => ({
-          users_id: a?.users_id ?? a?.id ?? null,
-          name: String(a?.agent_name ?? a?.name ?? "—"),
-        })).filter((a: any) => a.users_id != null),
-        correlation_id: cid,
-      }, 200, cid);
+      const pick = (a: any) =>
+        [a?.agent_name, a?.name, a?.full_name,
+          [a?.first_name, a?.last_name].filter(Boolean).join(" ").trim(),
+          a?.target_name, a?.email]
+          .map((v: any) => (v == null ? "" : String(v).trim()))
+          .find((v: string) => v.length > 0) ?? "—";
+      let agents = list
+        .map((a: any) => ({ users_id: a?.users_id ?? a?.agent_name_id ?? a?.id ?? null, name: pick(a) }))
+        .filter((a: any) => a.users_id != null);
+      // Défense en profondeur : un broker ne voit jamais un courtier hors de sa portée.
+      if (role === "broker" && resolvedUsersId) {
+        agents = agents.filter((a: any) => String(a.users_id) === String(resolvedUsersId));
+        if (!agents.length) agents = [{ users_id: Number(resolvedUsersId), name: String(profile.full_name ?? "Moi") }];
+      }
+      return json({ ok: true, agents, correlation_id: cid }, 200, cid);
     }
+
 
     // ---- Deposits (paginated passthrough) --------------------------------
     if (action === "deposits") {

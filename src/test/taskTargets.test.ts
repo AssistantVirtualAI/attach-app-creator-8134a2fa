@@ -93,7 +93,7 @@ describe("task creation with task_targets", () => {
     const { deps, apiFetch } = makeDeps();
     const out = await handleTaskRequest({ ...base, type: "user", xid: 999999 }, deps);
     expect(out.body).toMatchObject({ success: false, error: "xid_out_of_scope" });
-    expect(out.body.validation.available.users).toEqual(["387428079"]);
+    expect(out.body as any.validation.available.users).toEqual(["387428079"]);
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -117,7 +117,7 @@ describe("task creation with task_targets", () => {
     const { deps, apiFetch } = makeDeps({ clientTargetsFetch: undefined });
     const out = await handleTaskRequest({ ...base, type: "user", xid: 387428079 }, deps);
     expect(out.body.error).toBe("xid_out_of_scope");
-    expect(out.body.validation.reason).toBe("clients_api_unavailable");
+    expect(out.body as any.validation.reason).toBe("clients_api_unavailable");
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -147,7 +147,7 @@ describe("client_targets & validate_target endpoints", () => {
     const { deps, apiFetch } = makeDeps();
     const out = await handleTaskRequest({ action: "validate_target", type: "user", xid: "387428079" }, deps);
     expect(out.body.valid).toBe(true);
-    expect(out.body.validation.matched.name).toBe("Test Address");
+    expect(out.body as any.validation.matched.name).toBe("Test Address");
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -156,13 +156,13 @@ describe("client_targets & validate_target endpoints", () => {
     const out = await handleTaskRequest({ action: "validate_target", type: "user", xid: "1" }, deps);
     expect(out.body.valid).toBe(false);
     expect(out.body.validation).toMatchObject({ error: "xid_out_of_scope", targets_source: "clients_api" });
-    expect(out.body.validation.available.contracts).toEqual(["311059"]);
+    expect(out.body as any.validation.available.contracts).toEqual(["311059"]);
   });
 
   it("returns target_mapping_required for an unknown contract", async () => {
     const { deps } = makeDeps();
     const out = await handleTaskRequest({ action: "validate_target", type: "contract", xid: "1" }, deps);
-    expect(out.body.validation.error).toBe("target_mapping_required");
+    expect(out.body as any.validation.error).toBe("target_mapping_required");
   });
 
   it("rejects an unsupported target type", async () => {
@@ -174,7 +174,7 @@ describe("client_targets & validate_target endpoints", () => {
   it("requires an xid", async () => {
     const { deps } = makeDeps();
     const out = await handleTaskRequest({ action: "validate_target", type: "user", xid: "" }, deps);
-    expect(out.body.validation.reason).toBe("xid_required");
+    expect(out.body as any.validation.reason).toBe("xid_required");
   });
 });
 

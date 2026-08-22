@@ -300,6 +300,68 @@ async function resolveAllowedAssignees(deps: any, profile: any): Promise<string[
   return [...ids];
 }
 
+export interface TargetValidation {
+  ok: boolean;
+  type: "user" | "contract";
+  xid: string;
+  error?: "xid_out_of_scope" | "target_mapping_required" | "validation_failed";
+  message?: string;
+  reason?: string;
+  /** What the Client List API exposes for this broker, for troubleshooting. */
+  available?: { users: string[]; contracts: string[] };
+  targets_source?: "clients_api" | "unavailable";
+  matched?: { client_id: string; name: string } | null;
+}
+
+/**
+ * Single source of truth for the Maestro `task_targets` scope rule, shared by
+ * the `create` action and the dedicated `validate_target` endpoint.
+ */
+async function validateTaskTarget(
+  deps: any,
+  admin: any,
+  profile: any,
+  userId: string,
+  type: "user" | "contract",
+  xidIn: unknown,
+  ownIds: string[],
+): Promise<TargetValidation> {
+  const xid = String(xidIn ?? "").trim();
+  const base: TargetValidation = { ok: false, type, xid };
+  if (!xid) {
+    return { ...base, error: "validation_failed", reason: "xid_required", message: "Aucune cible (xid) fournie." };
+  }
+  if (type === "user" && ownIds.includes(xid)) {
+    return { ok: true, type, xid, reason: "own_broker_id", matched: null };
+  }
+  const targets = await loadClientTargets(deps, profile);
+  const available = {
+    users: targets.map((t) => t.user?.id).filter(Boolean) as string[],
+    contracts: targets.flatMap((t) => t.contracts.map((c) => c.id)),
+  };
+  const targets_source: "clients_api" | "unavailable" = deps.clientTargetsFetch ? "clients_api" : "unavailable";
+  if (targetAllowed(targets, type, xid, ownIds)) {
+    const hit = targets.find((t) => (type === "user" ? t.user?.id === xid : t.contracts.some((c) => c.id === xid)));
+    return { ok: true, type, xid, reason: `task_targets.${type}`, available, targets_source, matched: hit ? { client_id: hit.client_id, name: hit.name } : null };
+  }
+  if (type === "contract" && await contractIsMapped(admin, userId, xid)) {
+    return { ok: true, type, xid, reason: "locally_mapped_contract", available, targets_source, matched: null };
+  }
+  return type === "user"
+    ? {
+        ...base, available, targets_source,
+        error: "xid_out_of_scope",
+        reason: targets_source === "unavailable" ? "clients_api_unavailable" : "no_matching_task_targets_user",
+        message: "Cette cible n'appartient pas à ton périmètre (task_targets.user).",
+      }
+    : {
+        ...base, available, targets_source,
+        error: "target_mapping_required",
+        reason: targets_source === "unavailable" ? "clients_api_unavailable" : "no_matching_task_targets_contract",
+        message: "Ce contrat n'est pas une cible valide (task_targets.contracts) pour ton compte.",
+      };
+}
+
 export async function handleTaskRequest(
 
   body: any,
@@ -652,6 +714,26 @@ export async function handleTaskRequest(
     };
   }
 
+  // ── TARGET VALIDATION (dry run) ────────────────────────────────────────────
+  // Detailed, non-mutating validation of a would-be task target. Returns the
+  // exact error code (`xid_out_of_scope` / `target_mapping_required`) plus the
+  // list of valid targets so callers can correct the request.
+  if (action === "validate_target") {
+    const type = String(body?.type ?? body?.target_type ?? "user").toLowerCase();
+    if (type !== "user" && type !== "contract") {
+      return { status: 200, body: { success: false, error: "validation_failed", fields: { type: "type_must_be_user_or_contract" }, correlation_id } };
+    }
+    const { data: fullV } = await admin.from("planipret_profiles")
+      .select("maestro_broker_id, maestro_telecom_user_id").eq("id", profile?.id).maybeSingle();
+    const ownIdsV = [
+      String(profile?.maestro_broker_id ?? ""),
+      String(fullV?.maestro_broker_id ?? ""),
+      String(fullV?.maestro_telecom_user_id ?? ""),
+    ].filter(Boolean);
+    const check = await validateTaskTarget(deps, admin, profile, userId, type as "user" | "contract", body?.xid ?? body?.target, ownIdsV);
+    return { status: 200, body: { success: true, valid: check.ok, validation: check, own_ids: ownIdsV, correlation_id } };
+  }
+
   // ── CREATE ─────────────────────────────────────────────────────────────────
   if (action === "create") {
     // A `user` task defaults to the broker's own Planiprêt id when the client
@@ -701,40 +783,16 @@ export async function handleTaskRequest(
       String(full?.maestro_telecom_user_id ?? ""),
     ].filter(Boolean);
 
-    if (payload.type === "user") {
-      if (!ownIds.includes(String(payload.xid))) {
-        const targets = await loadClientTargets(deps, profile);
-        const ok = targetAllowed(targets, "user", String(payload.xid), ownIds);
-        if (!ok) {
-          await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "out_of_scope" });
-          return {
-            status: 200,
-            body: {
-              success: false,
-              error: "xid_out_of_scope",
-              message: "Cette cible n'appartient pas à ton périmètre (task_targets.user).",
-              correlation_id,
-            },
-          };
-        }
-      }
-    }
-
-    // Scope check: a `contract` task must target one of the client's contracts.
-    if (payload.type === "contract") {
-      const xid = String(payload.xid ?? "");
-      const targets = await loadClientTargets(deps, profile);
-      const ok = targetAllowed(targets, "contract", xid, ownIds) || await contractIsMapped(admin, userId, xid);
-      if (!ok) {
-        await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "target_mapping_required" });
+    if (payload.type === "user" || payload.type === "contract") {
+      const check = await validateTaskTarget(deps, admin, profile, userId, payload.type, payload.xid, ownIds);
+      if (!check.ok) {
+        await audit(admin, {
+          action: "task_create_denied", user_id: userId, source, session_id: sessionId,
+          correlation_id, result: check.error === "xid_out_of_scope" ? "out_of_scope" : String(check.error),
+        });
         return {
           status: 200,
-          body: {
-            success: false,
-            error: "target_mapping_required",
-            message: "Ce contrat n'est pas une cible valide (task_targets.contracts) pour ton compte.",
-            correlation_id,
-          },
+          body: { success: false, error: check.error, message: check.message, validation: check, correlation_id },
         };
       }
     }

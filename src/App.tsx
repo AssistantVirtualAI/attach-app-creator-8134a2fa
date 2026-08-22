@@ -38,6 +38,8 @@ const MContacts = lazyWithRetry(() => import("./pages/planipret/mobile/MContacts
 const MPipeline = lazyWithRetry(() => import("./pages/planipret/mobile/MPipeline"));
 const MSearch = lazyWithRetry(() => import("./pages/planipret/mobile/MSearch"));
 const MStats = lazyWithRetry(() => import("./pages/planipret/mobile/MStats"));
+const MCommissions = lazyWithRetry(() => import("./pages/planipret/mobile/MCommissions"));
+
 const MTasks = lazyWithRetry(() => import("./pages/planipret/mobile/MTasks"));
 
 const MAvaChat = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaChat"));

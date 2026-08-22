@@ -57,6 +57,7 @@ const MaestroCallback = lazyWithRetry(() => import("./pages/auth/MaestroCallback
 const Ms365Diagnostics = lazyWithRetry(() => import("./pages/planipret/Ms365Diagnostics"));
 const MStyleDiagnosticsWeb = lazyWithRetry(() => import("./pages/MStyleDiagnosticsWeb"));
 const I18nDiagnostics = lazyWithRetry(() => import("./pages/I18nDiagnostics"));
+const TaskTargetsDiagnostics = lazyWithRetry(() => import("./pages/planipret/TaskTargetsDiagnostics"));
 const SoftphoneSetup = lazyWithRetry(() => import("./pages/lemtel/SoftphoneSetup"));
 // Lazy-load admin pages (each is its own chunk)
 const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin/PlanipretAdminLayout"));
@@ -599,6 +600,8 @@ const App = () => (
                 <Route path="/planipret/style-diagnostics" element={<MStyleDiagnosticsWeb />} />
                 <Route path="/planipret/i18n-diagnostics" element={<I18nDiagnostics />} />
                 <Route path="/mplanipret/i18n-diagnostics" element={<I18nDiagnostics />} />
+                <Route path="/planipret/task-targets" element={<TaskTargetsDiagnostics />} />
+                <Route path="/mplanipret/task-targets" element={<TaskTargetsDiagnostics />} />
                 <Route path="/mplanipret/deep-link-debug" element={<MDeepLinkDebug />} />
 
                 <Route path="/planipret/audit" element={<AppSeparationGuard app="planipret"><PlanipretAudit /></AppSeparationGuard>} />

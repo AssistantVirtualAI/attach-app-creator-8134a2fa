@@ -631,6 +631,10 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     return await taskApi(ctx, { action: "get", task_id: String(p.task_id) });
   },
 
+  async list_task_targets(ctx, p) {
+    return await taskApi(ctx, { action: "client_targets", search: p?.search ? String(p.search) : undefined });
+  },
+
   async create_task(ctx, p) {
     const target = p?.target ?? p?.xid ?? p?.client_id;
     const target_type = String(p?.target_type ?? p?.type ?? "user").toLowerCase();

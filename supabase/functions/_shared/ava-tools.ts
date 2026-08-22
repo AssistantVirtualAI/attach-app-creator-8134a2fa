@@ -143,6 +143,9 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
       limit: { type: "number", description: "Nombre max par page (défaut: 25)" },
     }),
     mk("get_task", "Détail d'une tâche.", { task_id: { type: "string", description: "ID de la tâche" } }, ["task_id"]),
+    mk("list_task_targets", "Cibles de tâche valides (task_targets de l'API Clients) : id utilisateur du client et ids de contrats. À utiliser AVANT create_task pour obtenir le bon xid.", {
+      search: { type: "string", description: "Nom ou courriel du client (optionnel)" },
+    }),
     mk("create_task", "Crée une tâche Planiprêt. Sans cible, la tâche vise et s'auto-assigne au courtier connecté. Résume et demande TOUJOURS confirmation avant d'appeler.", {
       target: { type: "string", description: "xid Planiprêt (optionnel pour une tâche personnelle) : id utilisateur si target_type=user, id de contrat si target_type=contract" },
       target_type: { type: "string", description: "user (défaut) ou contract" },
@@ -371,7 +374,7 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
 export const EXPECTED_TOOL_NAMES = [
   "make_call","get_active_calls","hangup_call","get_call_history","get_recording","get_transcript","send_sms","get_sms_conversations","get_voicemails",
   "analyze_call","get_hot_leads","get_coaching_summary",
-  "search_client","get_client_profile","get_client_history","update_client","list_tasks","get_task","create_task","update_task","delete_task","create_appointment","get_pending_tasks","get_upcoming_appointments","create_client",
+  "search_client","get_client_profile","get_client_history","update_client","list_tasks","get_task","list_task_targets","create_task","update_task","delete_task","create_appointment","get_pending_tasks","get_upcoming_appointments","create_client",
   "read_emails","get_unread_emails","get_recent_emails","summarize_email","send_email","search_contact","propose_email_reply","summarize_inbox",
   "update_calendar_event","delete_calendar_event","get_calendar_today","get_calendar_week","get_upcoming_meetings",
   "search_ms365_contacts","find_contact","search_directory","list_company_directory",

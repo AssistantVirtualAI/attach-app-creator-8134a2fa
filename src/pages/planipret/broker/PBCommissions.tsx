@@ -3,6 +3,7 @@ import { TrendingUp, Cloud, CheckCircle2 } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
+import MaestroCommissionsLive from "@/components/planipret/commissions/MaestroCommissionsLive";
 import MaestroConnectCard from "@/components/planipret/mobile/MaestroConnectCard";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -61,6 +62,7 @@ export default function PBCommissions() {
         </p>
       )}
 
+      {maestroConnected === true && <MaestroCommissionsLive lang={isFr ? "fr" : "en"} scope="broker" />}
       <RegisterCommissions lang={isFr ? "fr" : "en"} />
     </PAPage>
   );

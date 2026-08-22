@@ -3,6 +3,7 @@ import { TrendingUp, Lock } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
+import MaestroCommissionsLive from "@/components/planipret/commissions/MaestroCommissionsLive";
 import { supabase } from "@/integrations/supabase/client";
 
 /** Only these emails can open the commissions page. */
@@ -58,6 +59,7 @@ export default function PACommissions() {
           : "Vue globale sur tous les courtiers — volume, dossiers, prêteurs et commissions"}
       />
 
+      <MaestroCommissionsLive lang={lang === "en" ? "en" : "fr"} scope="admin" />
       <RegisterCommissions lang={lang === "en" ? "en" : "fr"} scope="admin" />
     </PAPage>
   );

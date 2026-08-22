@@ -195,6 +195,85 @@ async function contractIsMapped(admin: any, userId: string, xid: string): Promis
   return false;
 }
 
+export interface ClientTarget {
+  client_id: string;
+  name: string;
+  email: string | null;
+  /** `type: "user"` target (task shows on the client's Maestro Tasks page). */
+  user: { id: string; eligible_broker_ids: string[] } | null;
+  /** `type: "contract"` targets. */
+  contracts: Array<{ id: string; number: string | null }>;
+}
+
+const clientLabel = (c: any): string =>
+  String(
+    c?.display_name || c?.name ||
+    [c?.first_name, c?.last_name].filter(Boolean).join(" ") ||
+    c?.email || `#${c?.id ?? ""}`,
+  ).trim();
+
+/** Read the `task_targets` metadata exposed by the Client List API. */
+export function normalizeClientTarget(row: any): ClientTarget | null {
+  if (!row || typeof row !== "object") return null;
+  const tt = row.task_targets ?? row.taskTargets ?? null;
+  const userRaw = tt?.user ?? null;
+  const contractsRaw = Array.isArray(tt?.contracts) ? tt.contracts : [];
+  const user = userRaw?.id
+    ? {
+        id: String(userRaw.id),
+        eligible_broker_ids: (Array.isArray(userRaw.eligible_broker_ids) ? userRaw.eligible_broker_ids : [])
+          .map((v: any) => String(v)).filter(Boolean),
+      }
+    : null;
+  const contracts = contractsRaw
+    .filter((c: any) => c?.id !== undefined && c?.id !== null)
+    .map((c: any) => ({ id: String(c.id), number: c?.number != null ? String(c.number) : null }));
+  if (!user && !contracts.length) return null;
+  return {
+    client_id: String(row.id ?? user?.id ?? ""),
+    name: clientLabel(row),
+    email: row.email ? String(row.email) : null,
+    user,
+    contracts,
+  };
+}
+
+/** All task targets this broker may legitimately use, from the Client List API. */
+async function loadClientTargets(deps: any, profile: any, search?: string | null): Promise<ClientTarget[]> {
+  if (!deps.clientTargetsFetch) return [];
+  let telecomId: string | null = null;
+  try {
+    telecomId = await deps.resolveTelecomUserId(profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null);
+  } catch { /* ignore */ }
+  const rows = await deps.clientTargetsFetch(telecomId, search ?? null).catch(() => []);
+  return (Array.isArray(rows) ? rows : []).map(normalizeClientTarget).filter(Boolean) as ClientTarget[];
+}
+
+/** Is `xid` a valid target of the given type according to `task_targets`? */
+export function targetAllowed(
+  targets: ClientTarget[],
+  type: "user" | "contract",
+  xid: string,
+  brokerIds: string[],
+): boolean {
+  const id = String(xid ?? "");
+  if (!id) return false;
+  for (const t of targets) {
+    if (type === "user") {
+      if (t.user && t.user.id === id) {
+        if (!t.user.eligible_broker_ids.length) return true;
+        if (!brokerIds.length) return true;
+        if (t.user.eligible_broker_ids.some((b) => brokerIds.includes(b))) return true;
+      }
+    } else if (t.contracts.some((c) => c.id === id)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
+
 
 /**
  * Allowed assignees = whatever the caller-provided resolver returns, always

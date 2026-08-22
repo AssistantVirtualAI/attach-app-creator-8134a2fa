@@ -170,7 +170,14 @@ export default function CommissionHomeCard({ profile, lang }: { profile: any; la
                 const h = Math.max(6, Math.round((p.amount / maxSeries) * 56));
                 const isLast = i === state.series.length - 1;
                 return (
-                  <button key={p.key} onClick={() => open({ month: p.key })}
+                  <button key={p.key} onClick={() => {
+                    const [y, mo] = p.key.split("-").map(Number);
+                    open({
+                      period: "custom",
+                      date_from: pad(new Date(y, mo - 1, 1)),
+                      date_to: pad(new Date(y, mo, 0)),
+                    });
+                  }}
                     className="flex-1 flex flex-col items-center justify-end gap-1">
                     <span className="w-full rounded-t-md transition-all"
                       style={{

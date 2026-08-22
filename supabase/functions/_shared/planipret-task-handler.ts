@@ -634,6 +634,24 @@ export async function handleTaskRequest(
     };
   }
 
+  // ── CLIENT TASK TARGETS ────────────────────────────────────────────────────
+  // Exposes the `task_targets` metadata of the Client List API so the app and
+  // AVA can pick a valid xid (client user id or one of its contract ids).
+  if (action === "client_targets") {
+    const search = body?.search ? String(body.search) : null;
+    const targets = await loadClientTargets(deps, profile, search);
+    return {
+      status: 200,
+      body: {
+        success: true,
+        targets,
+        count: targets.length,
+        source: deps.clientTargetsFetch ? "clients_api" : "unavailable",
+        correlation_id,
+      },
+    };
+  }
+
   // ── CREATE ─────────────────────────────────────────────────────────────────
   if (action === "create") {
     // A `user` task defaults to the broker's own Planiprêt id when the client

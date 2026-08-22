@@ -1559,7 +1559,58 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
       institutions: list.map((i: any) => ({ id: i?.id ?? null, label: institutionLabel(i) })).filter((i: any) => i.id != null),
     };
   },
+
+  // ---- Alias conformes au contrat officiel ----
+  async get_commission_deposits(ctx, p) {
+    const range = p?.date_from || p?.date_to
+      ? { period: "custom", date_from: p?.date_from, date_to: p?.date_to }
+      : { period: p?.period ?? "month" };
+    return await TOOLS.list_commission_deposits(ctx, { ...p, ...range });
+  },
+
+  async get_commission_agents(ctx) {
+    const g = await commissionGuard(ctx);
+    if ("error" in g) return g.error;
+    const res = await commissionGet("/api/main/commissions/reports/agents", g.token, g.cid);
+    if (!res.ok) return commissionUpstreamError(res);
+    const list = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
+    return { success: true, agents: list.map(mapCommissionAgent).filter((a: any) => a.users_id != null) };
+  },
+
+  async get_financial_institutions(ctx) {
+    return await TOOLS.list_financial_institutions(ctx, {});
+  },
+
+  async open_commission_report(ctx, p) {
+    const role = String((ctx.profile as any)?.role ?? "");
+    if (role !== "broker" && role !== "admin") {
+      return { success: false, error: "forbidden", message: "Les rapports de commissions sont réservés aux courtiers et administrateurs." };
+    }
+    const qp = new URLSearchParams();
+    for (const k of ["period", "date_from", "date_to", "commission_type", "financial_inst_id"]) {
+      const v = p?.[k] ?? p?.filters?.[k];
+      if (v != null && String(v).trim() !== "") qp.set(k, String(v).trim().slice(0, 40));
+    }
+    const path = `/mplanipret/commissions${qp.toString() ? `?${qp}` : ""}`;
+    return {
+      success: true,
+      navigate: path,
+      action: "navigate",
+      message: "J'ouvre le rapport de commissions détaillé.",
+    };
+  },
 };
+
+/** Agent row → { users_id, name } tolerant to Maestro field shapes. */
+function mapCommissionAgent(a: any) {
+  const name = [a?.agent_name, a?.name, a?.full_name,
+    [a?.first_name, a?.last_name].filter(Boolean).join(" ").trim(),
+    a?.target_name, a?.email]
+    .map((v) => (v == null ? "" : String(v).trim()))
+    .find((v) => v.length > 0) ?? "—";
+  return { users_id: a?.users_id ?? a?.agent_name_id ?? a?.id ?? null, name };
+}
+
 
 const fmtCad = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n || 0);

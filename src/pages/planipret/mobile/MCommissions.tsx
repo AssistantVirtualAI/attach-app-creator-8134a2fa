@@ -2,7 +2,7 @@
 // Données financières sensibles : lecture seule, aucune donnée mise en cache
 // hors de la session, aucun jeton Maestro côté client.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useOutletContext, useNavigate } from "react-router-dom";
+import { useOutletContext, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ArrowLeft, RefreshCw, SlidersHorizontal, TrendingUp, Wallet,
@@ -34,11 +34,30 @@ type DepositRow = {
   commission_type: string | null;
   split_type: string | null;
   primary_client_name: string | null;
+  secondary_client_name?: string | null;
+  points?: string | number | null;
+  buy_down?: string | number | null;
+  mortgage_type?: string | null;
+  term?: string | number | null;
+  agent_name?: string | null;
+  target_name?: string | null;
+  cabinet?: string | null;
+  agent_company?: string | null;
   is_adjustment: number | null;
 };
 
+
 const COMMISSION_TYPES = ["base", "bonus", "bonus2", "perform"] as const;
+const SPLIT_TYPES = ["planipret", "planipret_override", "planipret_external"] as const;
+const ORDER_BY = ["date_trans", "amount", "loan_amt", "institution", "number", "points", "commission_type", "split_type", "agent_name", "target_name"] as const;
+const selStyle: React.CSSProperties = {
+  minHeight: 44,
+  background: "rgba(155,127,232,0.08)",
+  border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))",
+  color: "var(--pp-text-primary, #E8EDF5)",
+};
 const PER_PAGE = 25;
+
 
 const cad = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n || 0);
@@ -48,6 +67,13 @@ const numOf = (v: unknown) => {
   const n = Number(String(v ?? "").replace(/[^0-9.\-]/g, ""));
   return Number.isFinite(n) ? n : 0;
 };
+/** Masque raisonnable des noms de clients dans les aperçus de liste. */
+const mask = (name: string | null | undefined) => {
+  const v = String(name ?? "").trim();
+  if (!v) return "";
+  return v.split(/\s+/).map((w, i) => (i === 0 ? w : `${w[0]}.`)).join(" ");
+};
+
 
 /** Fenêtre de dates America/Toronto pour la période choisie. */
 function rangeFor(period: Period, customFrom: string, customTo: string) {
@@ -75,12 +101,27 @@ export default function MCommissions() {
   const role = String(profile?.role ?? "");
   const allowed = role === "broker" || role === "admin";
 
-  const [period, setPeriod] = useState<Period>("month");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [commissionType, setCommissionType] = useState<string>("base");
-  const [institutionId, setInstitutionId] = useState<string>("");
+  // Deep-link AVA : /mplanipret/commissions?period=…&commission_type=…
+  const [sp] = useSearchParams();
+  const spPeriod = sp.get("period");
+  const [period, setPeriod] = useState<Period>(
+    (["month", "quarter", "year", "ytd", "custom"] as string[]).includes(String(spPeriod)) ? (spPeriod as Period) : "month",
+  );
+  const [customFrom, setCustomFrom] = useState(sp.get("date_from") ?? "");
+  const [customTo, setCustomTo] = useState(sp.get("date_to") ?? "");
+  const [commissionType, setCommissionType] = useState<string>(
+    (COMMISSION_TYPES as readonly string[]).includes(String(sp.get("commission_type"))) ? String(sp.get("commission_type")) : "base",
+  );
+  const [splitType, setSplitType] = useState<string>("");
+  const [numberPrefix, setNumberPrefix] = useState<string>("");
+  const [orderBy, setOrderBy] = useState<string>("date_trans");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [institutionId, setInstitutionId] = useState<string>(/^\d+$/.test(String(sp.get("financial_inst_id"))) ? String(sp.get("financial_inst_id")) : "");
+
   const [institutions, setInstitutions] = useState<{ id: number; label: string }[]>([]);
+  const [agents, setAgents] = useState<{ users_id: number; name: string }[]>([]);
+  const [agentId, setAgentId] = useState<string>("");
+  const [detail, setDetail] = useState<DepositRow | null>(null);
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<DepositRow[]>([]);
@@ -99,8 +140,14 @@ export default function MCommissions() {
     date_from: range.from,
     date_to: range.to,
     commission_type: commissionType,
+    order_by: orderBy,
+    sort: sortDir,
     ...(institutionId ? { financial_inst_id: institutionId } : {}),
-  }), [range.from, range.to, commissionType, institutionId]);
+    ...(splitType ? { split_type: splitType } : {}),
+    ...(numberPrefix.trim() ? { number_prefix: numberPrefix.trim() } : {}),
+    ...(agentId ? { users_id: agentId } : {}),
+  }), [range.from, range.to, commissionType, institutionId, splitType, numberPrefix, orderBy, sortDir, agentId]);
+
 
   const call = useCallback(async (body: Record<string, unknown>) => {
     const { data, error: fnErr } = await supabase.functions.invoke("planipret-commission-reports", { body });
@@ -134,7 +181,9 @@ export default function MCommissions() {
     if (!allowed) return;
     call({ action: "preference" }).then((d) => setAvaPref(d.ava_include_commissions === true)).catch(() => setAvaPref(null));
     call({ action: "institutions" }).then((d) => setInstitutions(d.institutions ?? [])).catch(() => setInstitutions([]));
+    call({ action: "agents" }).then((d) => setAgents(d.agents ?? [])).catch(() => setAgents([]));
   }, [allowed, call]);
+
 
   const loadMore = async () => {
     if (loadingMore || rows.length >= total) return;
@@ -281,15 +330,16 @@ export default function MCommissions() {
             ) : (
               <div className="space-y-2">
                 {rows.map((r, idx) => (
-                  <div key={`${r.number ?? "row"}-${idx}`} className="rounded-xl px-3 py-2.5"
-                    style={{ background: "rgba(155,127,232,0.06)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.2))" }}>
+                  <button key={`${r.number ?? "row"}-${idx}`} onClick={() => setDetail(r)}
+                    className="w-full text-left rounded-xl px-3 py-2.5"
+                    style={{ minHeight: 44, background: "rgba(155,127,232,0.06)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.2))" }}>
                     <div className="flex justify-between items-start gap-2">
                       <div className="min-w-0">
                         <div className="text-[13px] font-semibold truncate" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>
                           {r.institution ?? "—"}
                         </div>
                         <div className="text-[11.5px] truncate" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>
-                          {[r.number, r.primary_client_name, r.date_trans ? String(r.date_trans).slice(0, 10) : null].filter(Boolean).join(" · ")}
+                          {[r.number, mask(r.primary_client_name), r.date_trans ? String(r.date_trans).slice(0, 10) : null].filter(Boolean).join(" · ")}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -299,8 +349,9 @@ export default function MCommissions() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
+
                 {rows.length < total && (
                   <button onClick={loadMore} disabled={loadingMore}
                     className="w-full py-2.5 rounded-xl text-[13px] font-semibold"
@@ -357,25 +408,111 @@ export default function MCommissions() {
               </div>
             </div>
 
-            <div className="mb-5">
+            <div className="mb-4">
               <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Institution" : "Lender"}</div>
               <select value={institutionId} onChange={(e) => setInstitutionId(e.target.value)}
-                className="w-full rounded-xl px-3 py-2.5 text-[13px]"
-                style={{ background: "rgba(155,127,232,0.08)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))", color: "var(--pp-text-primary, #E8EDF5)" }}>
+                className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
                 <option value="">{fr ? "Toutes" : "All"}</option>
                 {institutions.map((i) => <option key={i.id} value={String(i.id)}>{i.label}</option>)}
               </select>
             </div>
 
+            {agents.length > 1 && (
+              <div className="mb-4">
+                <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Courtier" : "Broker"}</div>
+                <select value={agentId} onChange={(e) => setAgentId(e.target.value)}
+                  className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
+                  <option value="">{fr ? "Tous les courtiers" : "All brokers"}</option>
+                  {agents.map((a) => <option key={a.users_id} value={String(a.users_id)}>{a.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div className="mb-4">
+              <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Type de partage" : "Split type"}</div>
+              <select value={splitType} onChange={(e) => setSplitType(e.target.value)}
+                className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
+                <option value="">{fr ? "Tous" : "All"}</option>
+                {SPLIT_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Préfixe de contrat" : "Contract prefix"}</div>
+              <input value={numberPrefix} onChange={(e) => setNumberPrefix(e.target.value)} inputMode="text"
+                placeholder={fr ? "ex. 2026" : "e.g. 2026"}
+                className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle} />
+            </div>
+
+            <div className="mb-5 flex gap-2">
+              <div className="flex-1">
+                <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Trier par" : "Order by"}</div>
+                <select value={orderBy} onChange={(e) => setOrderBy(e.target.value)}
+                  className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
+                  {ORDER_BY.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div style={{ width: 110 }}>
+                <div className="text-[12px] mb-2" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{fr ? "Sens" : "Sort"}</div>
+                <select value={sortDir} onChange={(e) => setSortDir(e.target.value as "asc" | "desc")}
+                  className="w-full rounded-xl px-3 py-2.5 text-[13px]" style={selStyle}>
+                  <option value="desc">desc</option>
+                  <option value="asc">asc</option>
+                </select>
+              </div>
+            </div>
+
             <button onClick={() => { setFiltersOpen(false); load(); }}
-              className="w-full py-3 rounded-xl text-[14px] font-bold"
-              style={{ background: "var(--pp-brand-accent, #9B7FE8)", color: "#0A1628" }}>
+              className="w-full py-3 rounded-xl text-[14px] font-bold" style={{ minHeight: 44, background: "var(--pp-brand-accent, #9B7FE8)", color: "#0A1628" }}>
               {fr ? "Appliquer" : "Apply"}
             </button>
+
+          </div>
+        </div>
+      )}
+
+      {/* Détail d'un dépôt (lecture seule) */}
+      {detail && (
+        <div className="fixed inset-0 z-[75] flex items-end" style={{ background: "rgba(4,11,22,0.7)" }} onClick={() => setDetail(null)}>
+          <div className="w-full rounded-t-2xl p-5 pb-8 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}
+            style={{ background: "var(--pp-bg-surface, #0A1628)", border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))", WebkitOverflowScrolling: "touch" }}>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[15px] font-bold" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>{fr ? "Détail du dépôt" : "Deposit detail"}</span>
+              <button onClick={() => setDetail(null)} aria-label={fr ? "Fermer" : "Close"} style={{ minWidth: 44, minHeight: 44 }}>
+                <X className="w-4 h-4" style={{ color: "var(--pp-text-secondary, #B4C6D8)" }} />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {([
+                [fr ? "Contrat" : "Contract", detail.number],
+                [fr ? "Date" : "Date", detail.date_trans ? String(detail.date_trans).slice(0, 10) : null],
+                [fr ? "Institution" : "Lender", detail.institution],
+                [fr ? "Client" : "Client", detail.primary_client_name],
+                [fr ? "Co-emprunteur" : "Co-borrower", detail.secondary_client_name],
+                [fr ? "Montant" : "Amount", cad2(numOf(detail.amount))],
+                [fr ? "Montant du prêt" : "Loan amount", cad2(numOf(detail.loan_amt))],
+                ["Points", detail.points],
+                ["Buy down", detail.buy_down],
+                [fr ? "Type de commission" : "Commission type", detail.commission_type],
+                [fr ? "Type de partage" : "Split type", detail.split_type],
+                [fr ? "Type de prêt" : "Mortgage type", detail.mortgage_type],
+                [fr ? "Terme" : "Term", detail.term],
+                [fr ? "Courtier" : "Broker", detail.agent_name],
+                [fr ? "Cible" : "Target", detail.target_name],
+                [fr ? "Cabinet" : "Firm", detail.cabinet ?? detail.agent_company],
+                [fr ? "Ajustement" : "Adjustment", Number(detail.is_adjustment) === 1 ? (fr ? "Oui" : "Yes") : (fr ? "Non" : "No")],
+              ] as [string, unknown][]).filter(([, v]) => v != null && String(v).trim() !== "").map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-3 text-[12.5px]">
+                  <span style={{ color: "var(--pp-text-secondary, #B4C6D8)" }}>{k}</span>
+                  <span className="text-right font-semibold" style={{ color: "var(--pp-text-primary, #E8EDF5)" }}>{String(v)}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
     </Shell>
+
   );
 }
 

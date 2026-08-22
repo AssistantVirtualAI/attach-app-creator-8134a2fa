@@ -7,6 +7,51 @@ import { generateText } from "npm:ai";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
+import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
+import { commissionGet, summarize } from "../_shared/commission-reports.ts";
+
+/**
+ * Commissions in the daily brief are OPT-IN only.
+ * `planipret_settings.preferences.ava_include_commissions` must be explicitly true.
+ * Returns null when disabled, not connected, or on any error (never blocks the brief).
+ */
+async function buildCommissionStats(admin: any, authUserId: string, sinceIso: string) {
+  try {
+    const { data: settings } = await admin.from("planipret_settings")
+      .select("preferences").eq("user_id", authUserId).maybeSingle();
+    const prefs = (settings?.preferences ?? {}) as Record<string, unknown>;
+    if (prefs.ava_include_commissions !== true) return null;
+
+    const token = await getUserMaestroAccessToken(admin, authUserId);
+    if (!token) return { enabled: true, connected: false };
+
+    const qs = new URLSearchParams({
+      commission_type: "base",
+      date_from: sinceIso.slice(0, 10),
+      date_to: new Date().toISOString().slice(0, 10),
+      per_page: "200",
+      page: "1",
+      order_by: "date_trans",
+      sort: "desc",
+    });
+    const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, `brief-${authUserId.slice(0, 8)}`);
+    if (!r.ok) return { enabled: true, connected: true, error: true };
+    const rows = Array.isArray(r.data?.data) ? r.data.data : [];
+    const s = summarize(rows);
+    return {
+      enabled: true,
+      connected: true,
+      total_commission: s.total_commission,
+      deposit_count: s.deposit_count,
+      average_commission: s.average_commission,
+      total_loan_volume: s.total_loan_volume,
+      top_institutions: s.top_institutions.slice(0, 5),
+    };
+  } catch {
+    return null;
+  }
+}
+
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
@@ -463,6 +508,8 @@ Deno.serve(async (req) => {
         buildMicrosoftStats(admin, profile, sinceIso).catch(() => ({ connected: false })),
         new Promise((res) => setTimeout(() => res({ connected: false, timeout: true }), 15000)),
       ]),
+      // Opt-in only (planipret_settings.preferences.ava_include_commissions === true)
+      commissions: await buildCommissionStats(admin, effectiveUserId ?? profile.user_id, sinceIso),
     };
 
 
@@ -506,12 +553,18 @@ You must cover TWO sources: telephony (calls, texts, voicemails, leads) AND Micr
       ? `Statistiques réelles (JSON):\n${JSON.stringify(stats).slice(0, 24000)}\n\nUtilise ces chiffres exacts (appels, manqués, minutes, textos, boîtes vocales, leads chauds, rendez-vous, contacts actifs) ET les données Microsoft 365 du champ "microsoft" (courriels, non lus, expéditeurs, réunions Outlook à venir, tâches To Do). N'invente rien. Réponds uniquement en français du Québec : chaque champ (headline, overview, metrics.label, highlights, priorities, risks, tips.title, tips.detail, focus, suggestions.label) doit être rédigé en français, sans aucun mot anglais.`
       : `Real statistics (JSON):\n${JSON.stringify(stats).slice(0, 24000)}\n\nUse these exact numbers (calls, missed, minutes, texts, voicemails, hot leads, meetings, active contacts) AND the Microsoft 365 data in the "microsoft" field (emails, unread, senders, upcoming Outlook meetings, To Do tasks). Do not invent anything. Answer strictly in English: every field (headline, overview, metrics.label, highlights, priorities, risks, tips.title, tips.detail, focus, suggestions.label) must be written in English, with no French words.`;
 
+    const commissionNote = (stats as any).commissions
+      ? (lang === "fr"
+        ? `\n\nLe courtier a activé l'inclusion des commissions : utilise stats.commissions (total, nombre de dépôts, moyenne, volume de prêts, top institutions) dans une phrase de l'overview et un indicateur metrics. Ne divulgue aucun nom de client.`
+        : `\n\nThe broker enabled commission inclusion: use stats.commissions (total, deposit count, average, loan volume, top lenders) in one overview sentence and one metric. Never disclose client names.`)
+      : (lang === "fr" ? `\n\nN'évoque JAMAIS les commissions ou revenus : la préférence est désactivée.` : `\n\nNEVER mention commissions or revenue: the preference is disabled.`);
+
     let result: any;
     try {
       const r = await generateText({
         model: gateway("google/gemini-2.5-flash"),
         system: `${system}\n\nRéponds UNIQUEMENT avec un objet JSON valide (pas de texte autour, pas de balises markdown) respectant exactement ces clés: headline (string), overview (string), priorities (string[]), risks (string[]), highlights (string[]), metrics ({label,value}[]), tips ({title,detail}[]), focus (string), suggestions ({label,kind,number}[]).`,
-        prompt: userPrompt,
+        prompt: userPrompt + commissionNote,
       });
       let out: any = (r as any).text;
       if (typeof out === "string") {

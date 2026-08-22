@@ -228,6 +228,30 @@ function buildSpecs(mk: (name: string, description: string, properties?: Record<
     }),
     mk("list_financial_institutions", "Liste des institutions financières disponibles pour filtrer les rapports de commissions."),
 
+    // Alias conformes au contrat officiel (mêmes schémas chat + ElevenLabs)
+    mk("get_commission_deposits", "Dépôts de commissions filtrés (contrat, institution, montant, date). Données sensibles : sur demande explicite seulement.", {
+      date_from: { type: "string", description: "AAAA-MM-JJ (avec date_to)" },
+      date_to: { type: "string", description: "AAAA-MM-JJ (avec date_from)" },
+      financial_inst_id: { type: "string", description: "ID institution financière (optionnel)" },
+      commission_type: { type: "string", description: "base (défaut), bonus, bonus2 ou perform" },
+      split_type: { type: "string", description: "planipret, planipret_override ou planipret_external" },
+      number_prefix: { type: "string", description: "Préfixe de numéro de contrat" },
+      order_by: { type: "string", description: "date_trans (défaut), amount, institution, number…" },
+      sort: { type: "string", description: "asc ou desc (défaut desc)" },
+      limit: { type: "number", description: "Nombre de dépôts (défaut 10, max 50)" },
+    }),
+    mk("get_commission_agents", "Liste des courtiers disponibles pour filtrer les rapports de commissions (soi-même et son équipe ; tous les courtiers pour un admin)."),
+    mk("get_financial_institutions", "Liste des institutions financières (nom français en priorité) pour filtrer les commissions."),
+    mk("open_commission_report", "Ouvre la page mobile détaillée des commissions dans l'application avec les filtres demandés.", {
+      period: { type: "string", description: "month, quarter, year, ytd ou custom" },
+      date_from: { type: "string", description: "AAAA-MM-JJ (optionnel)" },
+      date_to: { type: "string", description: "AAAA-MM-JJ (optionnel)" },
+      commission_type: { type: "string", description: "base, bonus, bonus2 ou perform" },
+      financial_inst_id: { type: "string", description: "ID institution (optionnel)" },
+    }),
+
+
+
 
 
 

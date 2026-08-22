@@ -38,7 +38,16 @@ type DepositRow = {
 };
 
 const COMMISSION_TYPES = ["base", "bonus", "bonus2", "perform"] as const;
+const SPLIT_TYPES = ["planipret", "planipret_override", "planipret_external"] as const;
+const ORDER_BY = ["date_trans", "amount", "loan_amt", "institution", "number", "points", "commission_type", "split_type", "agent_name", "target_name"] as const;
+const selStyle: React.CSSProperties = {
+  minHeight: 44,
+  background: "rgba(155,127,232,0.08)",
+  border: "1px solid var(--pp-bg-border, rgba(155,127,232,0.28))",
+  color: "var(--pp-text-primary, #E8EDF5)",
+};
 const PER_PAGE = 25;
+
 
 const cad = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n || 0);

@@ -6,8 +6,9 @@
 // Read-only. Never mutates a commission. The Bearer token stays server-side.
 
 export const COMMISSION_API_BASE = (
-  Deno.env.get("PLANIPRET_API_BASE_URL") ?? "https://client.planipret.com"
+  (globalThis as any).Deno?.env?.get("PLANIPRET_API_BASE_URL") ?? "https://client.planipret.com"
 ).replace(/\/$/, "");
+
 
 export const COMMISSION_TYPES = ["base", "bonus", "bonus2", "perform"] as const;
 export const SPLIT_TYPES = ["planipret", "planipret_override", "planipret_external"] as const;

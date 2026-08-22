@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { supabase } from "@/integrations/supabase/client";
 import { AVA_MUTATING_ACTIONS } from "@/lib/planipret/avaMutations";
@@ -58,6 +58,7 @@ export default function MAvaChat() {
   const chunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const avaContext = useAvaContext();
+  const navigate = useNavigate();
   const outlet = useOutletContext<PlanipretMobileContext>() as any;
   const { t, lang } = useMplanipretLang();
 
@@ -195,6 +196,16 @@ export default function MAvaChat() {
         }, 2200);
         setMessages((m) => [...m, { id: `dial-${Date.now()}`, role: "assistant", message: t("avaChat.dialerOpening").replace("{number}", number), created_at: new Date().toISOString() }]);
         toast.success(t("avaChat.callInProgress"));
+        return;
+      }
+
+      if (suggestion.kind === "open_commissions") {
+        const qp = new URLSearchParams();
+        for (const k of ["period", "date_from", "date_to", "commission_type", "financial_inst_id"]) {
+          const v = (suggestion.payload as any)?.[k];
+          if (v != null && String(v).trim() !== "") qp.set(k, String(v).trim().slice(0, 40));
+        }
+        navigate(`/mplanipret/commissions${qp.toString() ? `?${qp}` : ""}`);
         return;
       }
 
@@ -602,7 +613,7 @@ function parseAvaReply(raw: string, suggestions: AvaSuggestion[]): { text: strin
       for (const item of parsed) {
         if (!item || typeof item !== "object") continue;
         const kind = String((item as any).kind ?? "");
-        if (!["call", "sms", "email", "reminder", "maestro_action", "ms365_action", "open_voice", "open_coach"].includes(kind)) continue;
+        if (!["call", "sms", "email", "reminder", "maestro_action", "ms365_action", "open_voice", "open_coach", "commission_action", "open_commissions"].includes(kind)) continue;
         found.push({
           id: String((item as any).id ?? `${kind}-${Date.now()}-${found.length}`),
           label: String((item as any).label ?? (kind === "call" ? "Appeler" : kind === "sms" ? "Texto" : "Action")),

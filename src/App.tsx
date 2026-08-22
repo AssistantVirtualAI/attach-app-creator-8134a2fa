@@ -38,6 +38,8 @@ const MContacts = lazyWithRetry(() => import("./pages/planipret/mobile/MContacts
 const MPipeline = lazyWithRetry(() => import("./pages/planipret/mobile/MPipeline"));
 const MSearch = lazyWithRetry(() => import("./pages/planipret/mobile/MSearch"));
 const MStats = lazyWithRetry(() => import("./pages/planipret/mobile/MStats"));
+const MCommissions = lazyWithRetry(() => import("./pages/planipret/mobile/MCommissions"));
+
 const MTasks = lazyWithRetry(() => import("./pages/planipret/mobile/MTasks"));
 
 const MAvaChat = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaChat"));
@@ -576,6 +578,8 @@ const App = () => (
                   <Route path="pipeline" element={<Suspense fallback={<MobilePageSkeleton />}><MPipeline /></Suspense>} />
                   <Route path="search" element={<Suspense fallback={<MobilePageSkeleton />}><MSearch /></Suspense>} />
                   <Route path="stats" element={<Suspense fallback={<MobilePageSkeleton />}><MStats /></Suspense>} />
+                  <Route path="commissions" element={<Suspense fallback={<MobilePageSkeleton />}><MCommissions /></Suspense>} />
+
                   <Route path="tasks" element={<Suspense fallback={<MobilePageSkeleton />}><MTasks /></Suspense>} />
                   <Route path="ava" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaChat /></Suspense>} />
 

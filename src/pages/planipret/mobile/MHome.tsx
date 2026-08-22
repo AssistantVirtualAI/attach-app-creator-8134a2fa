@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import PWAInstallBanner from "@/components/planipret/PWAInstallBanner";
 import ExtensionSyncBanner from "@/components/planipret/mobile/ExtensionSyncBanner";
 import PermissionBanners from "@/components/planipret/mobile/PermissionBanners";
+import CommissionHomeCard from "@/components/planipret/mobile/CommissionHomeCard";
+
 import { TEMP_EMOJI } from "@/components/planipret/leadHelpers";
 import { useMaestroPipelineToasts } from "@/hooks/useMaestroPipelineToasts";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
@@ -533,6 +535,9 @@ export default function MHome() {
           </>
         )}
       </section>
+
+      <CommissionHomeCard profile={profile} lang={lang} />
+
 
       {/* ===== MICROSOFT CALENDAR (month grid + agenda) ===== */}
       <MsCalendarSection

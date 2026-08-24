@@ -238,13 +238,22 @@ Deno.serve(async (req) => {
       // Postes rattachés à un vrai courtier (profil + compte utilisateur).
       const { data: profs } = await db
         .from("planipret_profiles")
-        .select("extension, user_id")
+        .select("extension, user_id, full_name, email")
         .not("extension", "is", null);
       const brokerExts = new Set(
         (profs ?? [])
           .filter((p: any) => !!p.user_id && (liveExts.size === 0 || liveExts.has(String(p.extension))))
           .map((p: any) => String(p.extension)),
       );
+      const brokerByExt = new Map<string, { name: string | null; user_id: string | null }>(
+        (profs ?? []).map((p: any) => [
+          String(p.extension),
+          { name: p.full_name ?? p.email ?? null, user_id: p.user_id ?? null },
+        ]),
+      );
+      const jobId = crypto.randomUUID();
+      const auditRows: any[] = [];
+
 
       const single = String(body?.e164 ?? body?.phone_number ?? "").trim();
       let query = db

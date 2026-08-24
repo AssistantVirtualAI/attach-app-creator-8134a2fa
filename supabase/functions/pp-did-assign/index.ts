@@ -57,10 +57,15 @@ Deno.serve(async (req) => {
       }
     }
 
+    let actorId: string | null = null;
+    let actorEmail: string | null = null;
     if (!isService) {
       const auth = await requirePlanipretAdmin(req);
       if ("error" in auth) return auth.error;
+      actorId = (auth as any)?.profile?.user_id ?? (auth as any)?.user?.id ?? null;
+      actorEmail = (auth as any)?.profile?.email ?? (auth as any)?.user?.email ?? null;
     }
+
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "verify");

@@ -21,6 +21,7 @@ import {
   yoy,
 } from "../_shared/commission-engine.ts";
 import { agentKey } from "../_shared/broker-identity.ts";
+import { fetchLiveRegisterRows, dedupeKey } from "../_shared/commission-live.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -113,7 +114,29 @@ Deno.serve(async (req) => {
       .limit(200000);
     if (error) return json({ error: error.message }, 500);
 
-    const allRows = (allRowsRaw ?? []) as RegisterRow[];
+    const registerRows = (allRowsRaw ?? []) as RegisterRow[];
+
+    // ---- Live Maestro deposits merged into the same dataset ---------------
+    // One single page: the register (historical import) and the live API feed
+    // the very same KPIs / charts / tables, deduplicated by deal.
+    const cid = crypto.randomUUID().slice(0, 8);
+    let live: Awaited<ReturnType<typeof fetchLiveRegisterRows>> = {
+      rows: [], coverage: { connected: 0, total: 0 }, failures: [], brokers: [],
+    };
+    try {
+      live = await fetchLiveRegisterRows(admin, user.id, isAdmin && scope === "all", years, cid);
+    } catch (e) {
+      console.warn("[pp-commission-stats] live merge failed", e);
+    }
+    const seenDeals = new Set(registerRows.map((r) => dedupeKey(r as any)));
+    const liveMerged = live.rows.filter((r) => {
+      if (!r.date_trans || !years.includes(Number(r.date_trans.slice(0, 4)))) return false;
+      const k = dedupeKey(r as any);
+      if (seenDeals.has(k)) return false;
+      seenDeals.add(k);
+      return true;
+    });
+    const allRows = [...registerRows, ...(liveMerged as unknown as RegisterRow[])];
 
     const { data: prof } = await admin
       .from("planipret_profiles")
@@ -728,6 +751,15 @@ Deno.serve(async (req) => {
       detail,
       integrity,
       deals,
+      // Live Maestro provenance shown as a single coverage banner on the page.
+      liveMerge: {
+        rows: liveMerged.length,
+        registerRows: registerRows.length,
+        coverage: live.coverage,
+        brokers: live.brokers,
+        failures: live.failures.slice(0, 10),
+      },
+      syncedAt: new Date().toISOString(),
 
 
     });

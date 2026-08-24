@@ -27,7 +27,7 @@ export default function RegisterFilters({
   lang, years, year, onYear,
   granularity, onGranularity,
   periodIndex, onPeriodIndex,
-  agents, agent, onAgent,
+  agents, agent, onAgent, agentsWithData = [],
   showAgent,
   lenders = [], lender = "", onLender,
 }: {
@@ -40,7 +40,9 @@ export default function RegisterFilters({
   periodIndex: number;
   onPeriodIndex: (i: number) => void;
   agents: string[];
+  agentsWithData?: string[];
   agent: string;
+
   onAgent: (a: string) => void;
   showAgent: boolean;
   lenders?: string[];

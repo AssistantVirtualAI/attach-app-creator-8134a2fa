@@ -101,6 +101,8 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
         wantsByAgent ? callGateway("by_agent", base) : Promise.resolve(null),
       ]);
       setSummary(s?.summary ?? null);
+      setCoverage((s?.coverage ?? a?.coverage) ?? null);
+
       setRows(Array.isArray(d?.rows) ? d.rows : Array.isArray(d?.data) ? d.data : []);
       setByAgent(Array.isArray(a?.agents) ? a.agents : []);
       setByAgentMeta(a ? { truncated: a.truncated, scanned: a.scanned, sources: a.sources, scope: a.scope } : null);

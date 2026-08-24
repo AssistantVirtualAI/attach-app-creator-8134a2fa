@@ -22,6 +22,8 @@ import {
   e164Of,
   pbxNumberId,
   verifyDidRouting,
+  listLiveExtensions,
+  releaseDid,
 } from "../_shared/pp-did-routing.ts";
 
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";

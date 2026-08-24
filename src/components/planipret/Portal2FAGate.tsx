@@ -21,6 +21,8 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const [sendsLeft, setSendsLeft] = useState<number | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+
   const startedRef = useRef(false);
 
   // Cooldown ticker

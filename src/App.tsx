@@ -391,6 +391,19 @@ const AvaPlatformOrgOnly = ({ children }: { children: React.ReactNode }) => {
 };
 
 /**
+ * Never show the AVA Statistic login for Planiprêt portal routes: bounce the
+ * visitor back to the Microsoft-only portal sign-in screen instead.
+ */
+const PlanipretLoginBounce = ({ children }: { children: React.ReactNode }) => {
+  const { search } = useLocation();
+  const target = new URLSearchParams(search).get("redirect") || "";
+  if (target.startsWith("/planipret/admin") || target.startsWith("/planipret/broker")) {
+    return <Navigate to={target} replace />;
+  }
+  return <>{children}</>;
+};
+
+/**
  * Restrict the AVA admin portal (the main /dashboard and its sub-routes)
  * to the Planipret organization. If the user is a member of Planipret but
  * has another org selected, auto-switch. Otherwise redirect to /portal.
@@ -565,7 +578,7 @@ const App = () => (
                 <Route path="/m" element={<MobileEmbed />} />
                 
                 {/* Universal login - redirects based on user type */}
-                <Route path="/login" element={<UniversalLogin />} />
+                <Route path="/login" element={<PlanipretLoginBounce><UniversalLogin /></PlanipretLoginBounce>} />
                 <Route path="/portal" element={<Navigate to="/login" replace />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 

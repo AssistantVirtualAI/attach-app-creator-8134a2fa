@@ -333,36 +333,34 @@ Deno.serve(async (req) => {
     }
 
 
-    // ---- Summary (server-side aggregation over all pages) -----------------
-
+    // ---- Summary (agrégat serveur, multi-courtiers pour les admins) -------
     if (action === "summary") {
+      const sources = await collectSources();
+      const single = sources.length === 1;
       const all: CommissionDepositRow[] = [];
-      let page = 1, lastPage = 1, truncated = false, total = 0;
-      while (page <= SUMMARY_MAX_PAGES) {
-        const qs = buildDepositQuery({ ...filters, page, per_page: 200 });
-        const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
-        if (!r.ok) return upstream(r, cid);
-        const rows: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
-        all.push(...rows);
-        const meta = r.data?.meta ?? {};
-        lastPage = Number(meta.last_page ?? 1);
-        total = Number(meta.total ?? all.length);
-        if (page >= lastPage || rows.length === 0) break;
-        page += 1;
+      let truncated = false, total = 0;
+      for (const src of sources) {
+        const res = await fetchAllDeposits(src, single);
+        if (res.fatal) return upstream(res.fatal, cid);
+        all.push(...res.rows);
+        truncated = truncated || res.truncated;
+        total += res.total;
       }
-      if (page >= SUMMARY_MAX_PAGES && lastPage > SUMMARY_MAX_PAGES) truncated = true;
 
       const summary = summarize(all, truncated);
-      log("summary rows", all.length, "total", summary.total_commission);
+      log("summary rows", all.length, "total", summary.total_commission, "from", sources.length, "tokens");
       return json({
         ok: true,
         summary,
         total_available: total,
-        scope: { role, users_id: filters.users_id ?? null },
+        coverage,
+        sources: { queried: sources.length, failed: failures.length, failures: failures.slice(0, 10) },
+        scope: { role, users_id: filters.users_id ?? null, mode: sources.length > 1 ? "all_brokers" : "token_owner" },
         filters,
         correlation_id: cid,
       }, 200, cid);
     }
+
 
     return json({ error: "unknown_action", message: `Action inconnue: ${action}` }, 400, cid);
   } catch (e) {

@@ -8756,6 +8756,51 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_commission_live_cache: {
+        Row: {
+          agent_name: string | null
+          broker_label: string | null
+          broker_user_id: string | null
+          created_at: string
+          date_trans: string | null
+          dedupe_key: string
+          fiscal_year: number | null
+          id: string
+          maestro_broker_id: string | null
+          row_data: Json
+          synced_at: string
+          updated_at: string
+        }
+        Insert: {
+          agent_name?: string | null
+          broker_label?: string | null
+          broker_user_id?: string | null
+          created_at?: string
+          date_trans?: string | null
+          dedupe_key: string
+          fiscal_year?: number | null
+          id?: string
+          maestro_broker_id?: string | null
+          row_data?: Json
+          synced_at?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_name?: string | null
+          broker_label?: string | null
+          broker_user_id?: string | null
+          created_at?: string
+          date_trans?: string | null
+          dedupe_key?: string
+          fiscal_year?: number | null
+          id?: string
+          maestro_broker_id?: string | null
+          row_data?: Json
+          synced_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       planipret_commission_mappings: {
         Row: {
           created_at: string
@@ -8992,6 +9037,102 @@ export type Database = {
           sub_dimension?: string | null
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      planipret_commission_sync_diag: {
+        Row: {
+          broker_email: string | null
+          broker_label: string | null
+          broker_user_id: string
+          connected: boolean
+          created_at: string
+          http_status: number | null
+          id: string
+          last_attempt_at: string | null
+          last_ok_at: string | null
+          maestro_broker_id: string | null
+          reason: string | null
+          rows_count: number
+          source: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          broker_email?: string | null
+          broker_label?: string | null
+          broker_user_id: string
+          connected?: boolean
+          created_at?: string
+          http_status?: number | null
+          id?: string
+          last_attempt_at?: string | null
+          last_ok_at?: string | null
+          maestro_broker_id?: string | null
+          reason?: string | null
+          rows_count?: number
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          broker_email?: string | null
+          broker_label?: string | null
+          broker_user_id?: string
+          connected?: boolean
+          created_at?: string
+          http_status?: number | null
+          id?: string
+          last_attempt_at?: string | null
+          last_ok_at?: string | null
+          maestro_broker_id?: string | null
+          reason?: string | null
+          rows_count?: number
+          source?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      planipret_commission_sync_runs: {
+        Row: {
+          admin_token_used: boolean
+          brokers_connected: number
+          brokers_total: number
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          rows_upserted: number
+          started_at: string
+          trigger_source: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_token_used?: boolean
+          brokers_connected?: number
+          brokers_total?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          rows_upserted?: number
+          started_at?: string
+          trigger_source?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_token_used?: boolean
+          brokers_connected?: number
+          brokers_total?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          rows_upserted?: number
+          started_at?: string
+          trigger_source?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

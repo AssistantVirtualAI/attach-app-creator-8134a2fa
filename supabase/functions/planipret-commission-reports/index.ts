@@ -39,6 +39,12 @@ const json = (body: unknown, status = 200, cid?: string) =>
 
 const SUMMARY_MAX_PAGES = 10; // 10 × 200 = 2000 rows max per summary
 
+const num = (v: unknown) => {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -195,7 +201,57 @@ Deno.serve(async (req) => {
       }, 200, cid);
     }
 
+    // ---- Par courtier (agrégat serveur sur toutes les pages) --------------
+    if (action === "by_agent") {
+      const buckets = new Map<string, {
+        users_id: number | null; name: string; total: number; count: number; loan_volume: number;
+      }>();
+      let page = 1, lastPage = 1, scanned = 0, truncated = false;
+      while (page <= SUMMARY_MAX_PAGES) {
+        const qs = buildDepositQuery({ ...filters, page, per_page: 200 });
+        const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
+        if (!r.ok) return upstream(r, cid);
+        const rows: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
+        for (const row of rows) {
+          const id = row.agent_name_id ?? null;
+          const name = String(row.agent_name ?? row.target_name ?? "—").trim() || "—";
+          const key = id != null ? `id:${id}` : `n:${name.toLowerCase()}`;
+          const b = buckets.get(key) ?? { users_id: id, name, total: 0, count: 0, loan_volume: 0 };
+          b.total += num(row.amount);
+          b.loan_volume += num(row.loan_amt);
+          b.count += 1;
+          buckets.set(key, b);
+        }
+        scanned += rows.length;
+        const meta = r.data?.meta ?? {};
+        lastPage = Number(meta.last_page ?? 1);
+        if (page >= lastPage || rows.length === 0) break;
+        page += 1;
+      }
+      if (page >= SUMMARY_MAX_PAGES && lastPage > SUMMARY_MAX_PAGES) truncated = true;
+
+      const agents = Array.from(buckets.values())
+        .map((b) => ({ ...b, average: b.count ? b.total / b.count : 0 }))
+        .sort((a, b) => b.total - a.total);
+
+      log("by_agent", agents.length, "brokers over", scanned, "deposits");
+      return json({
+        ok: true,
+        agents,
+        totals: {
+          total: agents.reduce((s, a) => s + a.total, 0),
+          count: agents.reduce((s, a) => s + a.count, 0),
+          loan_volume: agents.reduce((s, a) => s + a.loan_volume, 0),
+          brokers: agents.length,
+        },
+        truncated,
+        scope: { role, users_id: filters.users_id ?? null },
+        correlation_id: cid,
+      }, 200, cid);
+    }
+
     // ---- Summary (server-side aggregation over all pages) -----------------
+
     if (action === "summary") {
       const all: CommissionDepositRow[] = [];
       let page = 1, lastPage = 1, truncated = false, total = 0;

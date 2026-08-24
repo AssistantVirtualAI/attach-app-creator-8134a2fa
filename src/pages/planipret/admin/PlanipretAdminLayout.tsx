@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import BrokerAuthScreen from "@/components/planipret/broker/BrokerAuthScreen";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { PrefetchNavLink } from "@/components/PrefetchLink";
 import { supabase } from "@/integrations/supabase/client";

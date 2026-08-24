@@ -250,11 +250,15 @@ Deno.serve(async (req) => {
       if (single) query = query.eq("phone_number_digits", pbxNumberId(single));
       const { data: rows } = await query;
 
+      // Orphelin = aucun poste, ou un poste qui n'appartient à aucun courtier
+      // réel / n'existe plus dans le PBX. On inclut aussi les numéros déjà
+      // « available » côté portail mais encore routés dans NetSapiens.
       const orphans = (rows ?? []).filter((r: any) => {
         const ext = String(r.extension ?? "").trim();
-        if (!ext) return r.status !== "available";
+        if (!ext) return true;
         return !brokerExts.has(ext);
       });
+
 
       const results: any[] = [];
       for (const r of orphans as any[]) {

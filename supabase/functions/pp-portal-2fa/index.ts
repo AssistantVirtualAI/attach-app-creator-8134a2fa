@@ -1,13 +1,13 @@
-// pp-portal-2fa — SMS two-factor for the Planiprêt portal.
+// pp-portal-2fa — email two-factor for the Planiprêt portal.
 //
 // Only Planiprêt organization members signing in with email + password are
 // challenged. Microsoft (azure) sign-ins are exempt.
 //
-// POST { action: "status" }                 → { required, verified, phone_masked }
-// POST { action: "start" }                  → sends a 6-digit SMS code
+// POST { action: "status" }                 → { required, verified, email_masked }
+// POST { action: "start" }                  → emails a 6-digit code
 // POST { action: "verify", code: "123456" } → marks the current session verified
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, nsFetch } from "../_shared/planipret-ns.ts";
+import { corsHeaders } from "../_shared/planipret-ns.ts";
 
 const AVA_ORG_ID = "17d6507f-a9ca-409d-8e49-371d50332615";
 const CODE_TTL_MS = 5 * 60 * 1000;
@@ -25,27 +25,9 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function normalizeE164(raw: unknown): string | null {
-  const digits = String(raw ?? "").replace(/\D/g, "");
-  if (!digits) return null;
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  if (digits.length >= 11 && digits.length <= 15) return `+${digits}`;
-  return null;
-}
-
-function maskPhone(e164: string) {
-  return `••• ••• ${e164.slice(-4)}`;
-}
-
 async function sha256(text: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function newMessageSessionId() {
-  return Array.from(crypto.getRandomValues(new Uint8Array(16)))
-    .map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /** Human-friendly one-time recovery codes, e.g. "4F7K-2QD9". */
@@ -388,8 +370,8 @@ Deno.serve(async (req) => {
         .update({ consumed_at: new Date().toISOString() })
         .eq("id", challenge.id);
 
-      await markVerified("sms");
-      await logAccess("2fa_verified", "sms");
+      await markVerified("email");
+      await logAccess("2fa_verified", "email");
       return json({ ok: true, verified: true });
     }
 

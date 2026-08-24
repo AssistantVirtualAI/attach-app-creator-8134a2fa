@@ -13,6 +13,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
 import { buildDepositQuery, commissionGet, type CommissionDepositRow } from "../_shared/commission-reports.ts";
 import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
+import { agentKey } from "../_shared/broker-identity.ts";
 
 const MAX_PAGES = 15;
 const PER_PAGE = 200;
@@ -76,6 +77,39 @@ Deno.serve(async (req) => {
     .limit(1000);
 
   const list = (profiles ?? []).filter((p: any) => p.user_id);
+
+  // A firm credential can expose Maestro's complete agents directory. Resolve
+  // missing local IDs before fan-out so brokers do not remain permanently
+  // classified as "not connected" merely because their ID was never cached.
+  if (adminTok.token) {
+    const directory = await commissionGet("/api/main/commissions/reports/agents", adminTok.token, cid);
+    const agentRows: any[] = directory.ok
+      ? (Array.isArray(directory.data?.data) ? directory.data.data : Array.isArray(directory.data) ? directory.data : [])
+      : [];
+    const byName = new Map<string, string>();
+    const byEmail = new Map<string, string>();
+    for (const a of agentRows) {
+      const id = a?.users_id ?? a?.agent_name_id ?? a?.id;
+      if (id == null) continue;
+      const name = String(a?.agent_name ?? a?.name ?? a?.full_name ?? [a?.first_name, a?.last_name].filter(Boolean).join(" ") ?? "").trim();
+      const email = String(a?.email ?? "").trim().toLowerCase();
+      const nk = agentKey(name);
+      if (nk) byName.set(nk, String(id));
+      if (email) byEmail.set(email, String(id));
+    }
+    const resolved: { user_id: string; maestro_broker_id: string }[] = [];
+    for (const p of list as any[]) {
+      if (p.maestro_broker_id != null) continue;
+      const id = byEmail.get(String(p.email ?? "").trim().toLowerCase())
+        ?? (agentKey(String(p.full_name ?? "")) ? byName.get(agentKey(String(p.full_name ?? "")) as string) : undefined);
+      if (!id) continue;
+      p.maestro_broker_id = id;
+      resolved.push({ user_id: p.user_id, maestro_broker_id: id });
+    }
+    for (const p of resolved) {
+      await admin.from("planipret_profiles").update({ maestro_broker_id: p.maestro_broker_id }).eq("user_id", p.user_id);
+    }
+  }
   let connectedCount = 0;
   let upserted = 0;
   const diagRows: any[] = [];

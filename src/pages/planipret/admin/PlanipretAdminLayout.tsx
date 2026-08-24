@@ -290,7 +290,24 @@ export default function PlanipretAdminLayout() {
     }
   };
 
+  if (anon) {
+    return (
+      <div data-pp-theme={theme} className="planipret-scope planipret-admin-scope">
+        <BrokerAuthScreen
+          msRedirect={location.pathname.startsWith("/planipret/admin") ? location.pathname : "/planipret/admin/overview"}
+          title={lang === "en" ? "Admin sign-in" : "Connexion administrateur"}
+          subtitle={
+            lang === "en"
+              ? "Sign in with your Microsoft 365 @planipret account."
+              : "Connectez-vous avec votre compte Microsoft 365 @planipret."
+          }
+        />
+      </div>
+    );
+  }
+
   if (loading) {
+
     return (
       <div data-pp-theme={theme} className="planipret-scope planipret-admin-scope min-h-screen flex items-center justify-center"
         style={{ color: "var(--pp-text-muted)", fontFamily: "'Epilogue', sans-serif" }}>

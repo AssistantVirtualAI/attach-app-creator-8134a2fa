@@ -10412,9 +10412,10 @@ export type Database = {
           code_hash: string
           consumed_at: string | null
           created_at: string
+          email: string | null
           expires_at: string
           id: string
-          phone_e164: string
+          phone_e164: string | null
           sent_via: string | null
           session_id: string | null
           user_id: string
@@ -10424,9 +10425,10 @@ export type Database = {
           code_hash: string
           consumed_at?: string | null
           created_at?: string
+          email?: string | null
           expires_at: string
           id?: string
-          phone_e164: string
+          phone_e164?: string | null
           sent_via?: string | null
           session_id?: string | null
           user_id: string
@@ -10436,9 +10438,10 @@ export type Database = {
           code_hash?: string
           consumed_at?: string | null
           created_at?: string
+          email?: string | null
           expires_at?: string
           id?: string
-          phone_e164?: string
+          phone_e164?: string | null
           sent_via?: string | null
           session_id?: string | null
           user_id?: string

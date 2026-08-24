@@ -1,13 +1,13 @@
-// pp-portal-2fa — SMS two-factor for the Planiprêt portal.
+// pp-portal-2fa — email two-factor for the Planiprêt portal.
 //
 // Only Planiprêt organization members signing in with email + password are
 // challenged. Microsoft (azure) sign-ins are exempt.
 //
-// POST { action: "status" }                 → { required, verified, phone_masked }
-// POST { action: "start" }                  → sends a 6-digit SMS code
+// POST { action: "status" }                 → { required, verified, email_masked }
+// POST { action: "start" }                  → emails a 6-digit code
 // POST { action: "verify", code: "123456" } → marks the current session verified
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, nsFetch } from "../_shared/planipret-ns.ts";
+import { corsHeaders } from "../_shared/planipret-ns.ts";
 
 const AVA_ORG_ID = "17d6507f-a9ca-409d-8e49-371d50332615";
 const CODE_TTL_MS = 5 * 60 * 1000;
@@ -25,27 +25,9 @@ function json(body: unknown, status = 200) {
   });
 }
 
-function normalizeE164(raw: unknown): string | null {
-  const digits = String(raw ?? "").replace(/\D/g, "");
-  if (!digits) return null;
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  if (digits.length >= 11 && digits.length <= 15) return `+${digits}`;
-  return null;
-}
-
-function maskPhone(e164: string) {
-  return `••• ••• ${e164.slice(-4)}`;
-}
-
 async function sha256(text: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function newMessageSessionId() {
-  return Array.from(crypto.getRandomValues(new Uint8Array(16)))
-    .map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /** Human-friendly one-time recovery codes, e.g. "4F7K-2QD9". */
@@ -72,57 +54,47 @@ async function regenerateBackupCodes(admin: any, userId: string): Promise<string
 
 
 
-/** Cached per isolate — the NS lookup was adding seconds to every send. */
-const fromNumberCache = new Map<string, { value: string; at: number }>();
-const FROM_CACHE_TTL_MS = 60 * 60 * 1000;
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 
-/** Best-effort lookup of an SMS-capable DID for this broker. */
-async function resolveFromNumberUncached(admin: any, extension: string, domain: string): Promise<string | null> {
-  try {
-    const res = await nsFetch(
-      `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}/smsnumbers`,
-      { method: "GET" },
-    );
-    if (res.ok) {
-      const raw = await res.json();
-      const list = Array.isArray(raw) ? raw : (raw?.smsnumbers ?? raw?.data ?? []);
-      for (const n of list) {
-        const e164 = normalizeE164(
-          typeof n === "string" ? n : (n?.["from-number"] ?? n?.number ?? n?.phone_number_e164 ?? n?.did),
-        );
-        if (e164) return e164;
-      }
-    }
-  } catch (_e) { /* fall through */ }
-
-  const { data } = await admin
-    .from("planipret_did_assignments")
-    .select("phone_number_e164, phone_number_digits")
-    .eq("extension", extension)
-    .limit(1)
-    .maybeSingle();
-  return normalizeE164(data?.phone_number_e164 ?? data?.phone_number_digits ?? null);
+function maskEmail(addr: string) {
+  const [local, domain] = addr.split("@");
+  if (!domain) return addr;
+  const head = local.slice(0, 2);
+  return `${head}${"•".repeat(Math.max(2, local.length - 2))}@${domain}`;
 }
 
-async function resolveFromNumber(admin: any, extension: string, domain: string): Promise<string | null> {
-  const key = `${domain}/${extension}`;
-  const hit = fromNumberCache.get(key);
-  if (hit && Date.now() - hit.at < FROM_CACHE_TTL_MS) return hit.value;
-  const value = await resolveFromNumberUncached(admin, extension, domain);
-  if (value) fromNumberCache.set(key, { value, at: Date.now() });
-  return value;
+function otpHtml(code: string, name: string) {
+  return `<!DOCTYPE html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1c1c1e">
+    <div style="max-width:520px;margin:0 auto;padding:24px">
+      <p>Bonjour ${name || ""},</p>
+      <p>Voici votre code de vérification pour accéder au portail Planiprêt :</p>
+      <div style="font-size:32px;letter-spacing:10px;font-weight:800;text-align:center;padding:18px;background:#f4f5f7;border-radius:10px">${code}</div>
+      <p style="font-size:13px;color:#6b7280">Ce code expire dans 5 minutes. Si vous n'avez pas demandé ce code, ignorez ce courriel.</p>
+    </div></body></html>`;
 }
 
-
-async function sendSms(from: string, to: string, message: string, extension: string, domain: string) {
-  const path = `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}/messagesessions/${newMessageSessionId()}/messages`;
-  const res = await nsFetch(path, {
-    method: "POST",
-    body: JSON.stringify({ type: "sms", destination: to, message, "from-number": from }),
-  });
-  const text = await res.text().catch(() => "");
-  return { ok: res.ok, status: res.status, body: text.slice(0, 300) };
+/** Sends the OTP by email (Resend), with a sender-domain fallback. */
+async function sendOtpEmail(to: string, code: string, name: string) {
+  if (!RESEND_API_KEY) return { ok: false, status: 500, body: "resend_not_configured" };
+  const payload = {
+    to: [to],
+    subject: `Planiprêt — code de vérification ${code}`,
+    html: otpHtml(code, name),
+  };
+  const send = (from: string) =>
+    fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, ...payload }),
+    });
+  let r = await send("Planiprêt <noreply@ava-telecom.ca>");
+  if (!r.ok && (r.status === 403 || r.status === 422)) {
+    r = await send("Planiprêt <noreply@assistantvirtualai.com>");
+  }
+  const text = await r.text().catch(() => "");
+  return { ok: r.ok, status: r.status, body: text.slice(0, 300) };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -220,7 +192,7 @@ Deno.serve(async (req) => {
     const { data: isMember } = await admin.rpc("is_planipret_member", { _user_id: user.id });
     const { data: profile } = await admin
       .from("planipret_profiles")
-      .select("id, phone, extension, ns_extension, ns_domain, organization_id, full_name")
+      .select("id, phone, email, login_email, extension, ns_extension, ns_domain, organization_id, full_name")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -242,7 +214,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const verified = !!verifiedRow;
 
-    const phone = normalizeE164(profile?.phone);
+    const otpEmail = String((profile as any)?.login_email ?? (profile as any)?.email ?? user.email ?? "")
+      .trim().toLowerCase();
+
 
     const markVerified = async (via: string) => {
       await admin
@@ -283,8 +257,9 @@ Deno.serve(async (req) => {
         ok: true,
         required: !verified,
         verified,
-        has_phone: !!phone,
-        phone_masked: phone ? maskPhone(phone) : null,
+        channel: "email",
+        has_email: !!otpEmail,
+        email_masked: otpEmail ? maskEmail(otpEmail) : null,
         backup_codes_remaining: backupLeft ?? 0,
         cooldown_seconds: cooldownLeft,
         sends_remaining: Math.max(0, MAX_SENDS_PER_HOUR - count),
@@ -293,17 +268,12 @@ Deno.serve(async (req) => {
 
     if (action === "start") {
       if (verified) return json({ ok: true, required: false, verified: true });
-      if (!phone) {
+      if (!otpEmail) {
         return json({
           ok: false,
-          error: "Aucun numéro de mobile enregistré pour ce compte — utilisez un code de secours ou contactez un administrateur.",
-          code: "no_phone",
+          error: "Aucune adresse courriel enregistrée pour ce compte — utilisez un code de secours ou contactez un administrateur.",
+          code: "no_email",
         }, 400);
-      }
-      const extension = String(profile?.extension ?? profile?.ns_extension ?? "").trim();
-      const domain = String(profile?.ns_domain ?? Deno.env.get("NS_API_DOMAIN") ?? "").trim();
-      if (!extension || !domain) {
-        return json({ ok: false, error: "Configuration téléphonie manquante pour ce compte.", code: "no_extension" }, 400);
       }
 
       const { count, cooldownLeft } = await sendsWindow();
@@ -326,10 +296,6 @@ Deno.serve(async (req) => {
       }
 
       const code = String(Math.floor(100000 + Math.random() * 900000));
-      const from = await resolveFromNumber(admin, extension, domain);
-      if (!from) {
-        return json({ ok: false, error: "Aucun numéro SMS (DID) disponible pour envoyer le code.", code: "no_did" }, 400);
-      }
 
       // Only the newest code is ever valid: kill every pending challenge first.
       await admin
@@ -338,37 +304,31 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id)
         .is("consumed_at", null);
 
-      // Persist before sending so the code works the instant the texto lands.
+      // Persist before sending so the code works the instant the courriel lands.
       await admin.from("planipret_portal_2fa_challenges").insert({
         user_id: user.id,
         session_id: sessionId,
-        phone_e164: phone,
+        email: otpEmail,
         code_hash: await sha256(code),
-        sent_via: "netsapiens",
+        sent_via: "email",
         expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
       });
 
-      const sent = await sendSms(
-        from,
-        phone,
-        `Planiprêt — code ${code} (valide 5 min). Ignorez les codes précédents.`,
-        extension,
-        domain,
-      );
+      const sent = await sendOtpEmail(otpEmail, code, String(profile?.full_name ?? "").split(" ")[0] ?? "");
       if (!sent.ok) {
-        console.error("[pp-portal-2fa] sms failed", sent);
-        return json({ ok: false, error: "Échec de l'envoi du code par texto. Réessayez ou utilisez un code de secours.", code: "sms_failed" }, 502);
+        console.error("[pp-portal-2fa] email failed", sent);
+        return json({ ok: false, error: "Échec de l'envoi du code par courriel. Réessayez ou utilisez un code de secours.", code: "email_failed" }, 502);
       }
-
 
       return json({
         ok: true,
         sent: true,
-        phone_masked: maskPhone(phone),
+        email_masked: maskEmail(otpEmail),
         cooldown_seconds: Math.ceil(RESEND_COOLDOWN_MS / 1000),
         sends_remaining: Math.max(0, MAX_SENDS_PER_HOUR - (count + 1)),
       });
     }
+
 
     if (action === "verify") {
       if (verified) return json({ ok: true, verified: true });
@@ -410,8 +370,8 @@ Deno.serve(async (req) => {
         .update({ consumed_at: new Date().toISOString() })
         .eq("id", challenge.id);
 
-      await markVerified("sms");
-      await logAccess("2fa_verified", "sms");
+      await markVerified("email");
+      await logAccess("2fa_verified", "email");
       return json({ ok: true, verified: true });
     }
 

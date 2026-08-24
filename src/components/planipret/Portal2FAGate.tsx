@@ -6,7 +6,7 @@ import { Loader2, ShieldCheck, LogOut, LifeBuoy } from "lucide-react";
 type Status = "checking" | "required" | "ok" | "error";
 
 /**
- * SMS two-factor gate for the Planiprêt portal.
+ * Email two-factor gate for the Planiprêt portal.
  * Only email + password sessions of Planiprêt members are challenged;
  * Microsoft sign-ins are exempt (decided server-side).
  * Recovery: one-time backup codes, or an admin reset from the users page.
@@ -15,8 +15,8 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
   const [status, setStatus] = useState<Status>("checking");
   const [code, setCode] = useState("");
   const [backupCode, setBackupCode] = useState("");
-  const [mode, setMode] = useState<"sms" | "backup">("sms");
-  const [phoneMasked, setPhoneMasked] = useState<string | null>(null);
+  const [mode, setMode] = useState<"email" | "backup">("email");
+  const [emailMasked, setEmailMasked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
@@ -48,11 +48,11 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
       if (typeof res?.sends_remaining === "number") setSendsLeft(res.sends_remaining);
       if (!res?.ok) {
         setError(res?.error || "Envoi impossible");
-        if (res?.code === "rate_limited" || res?.code === "no_phone" || res?.code === "sms_failed") setMode("backup");
+        if (res?.code === "rate_limited" || res?.code === "no_email" || res?.code === "email_failed") setMode("backup");
         return;
       }
-      setPhoneMasked(res.phone_masked ?? null);
-      toast.success("Code envoyé par texto");
+      setEmailMasked(res.email_masked ?? null);
+      toast.success("Code envoyé par courriel");
     } catch (e: any) {
       setError(e?.message || "Envoi impossible");
     } finally {
@@ -66,13 +66,13 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
       try {
         const res = await call("status");
         if (cancelled) return;
-        setPhoneMasked(res?.phone_masked ?? null);
+        setEmailMasked(res?.email_masked ?? null);
         if (typeof res?.cooldown_seconds === "number") setCooldown(res.cooldown_seconds);
         if (typeof res?.sends_remaining === "number") setSendsLeft(res.sends_remaining);
         if (res?.required) {
           setStatus("required");
-          if (!res?.has_phone) setMode("backup");
-          if (!startedRef.current && res?.has_phone) { startedRef.current = true; void sendCode(); }
+          if (!res?.has_email) setMode("backup");
+          if (!startedRef.current && res?.has_email) { startedRef.current = true; void sendCode(); }
         } else {
           setStatus("ok");
         }
@@ -159,12 +159,12 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
           </h1>
         </div>
 
-        {mode === "sms" ? (
+        {mode === "email" ? (
           <>
             <p style={{ fontSize: 13, color: "var(--pp-text-muted)", marginBottom: 18 }}>
-              {phoneMasked
-                ? `Nous avons envoyé un code à 6 chiffres au ${phoneMasked}.`
-                : "Nous vous envoyons un code à 6 chiffres par texto."}
+              {emailMasked
+                ? `Nous avons envoyé un code à 6 chiffres à ${emailMasked}.`
+                : "Nous vous envoyons un code à 6 chiffres par courriel."}
             </p>
 
             <input
@@ -214,7 +214,7 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
         ) : (
           <>
             <p style={{ fontSize: 13, color: "var(--pp-text-muted)", marginBottom: 18 }}>
-              Pas accès à votre téléphone ? Entrez un de vos codes de secours à usage unique
+              Pas accès à votre courriel ? Entrez un de vos codes de secours à usage unique
               (format <span style={{ fontFamily: "monospace" }}>ABCD-1234</span>). Sinon, demandez à un
               administrateur Planiprêt de réinitialiser votre 2FA.
             </p>
@@ -241,11 +241,11 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
 
         <div className="flex items-center justify-between mt-5 pt-4" style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
           <button
-            onClick={() => { setError(null); setMode(mode === "sms" ? "backup" : "sms"); }}
+            onClick={() => { setError(null); setMode(mode === "email" ? "backup" : "email"); }}
             className="flex items-center gap-1"
             style={{ fontSize: 12, color: "var(--pp-text-muted)" }}
           >
-            <LifeBuoy size={13} /> {mode === "sms" ? "Je n'ai pas accès à mon téléphone" : "Revenir au code par texto"}
+            <LifeBuoy size={13} /> {mode === "email" ? "Je n'ai pas accès à mon courriel" : "Revenir au code par courriel"}
           </button>
           <button
             onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}

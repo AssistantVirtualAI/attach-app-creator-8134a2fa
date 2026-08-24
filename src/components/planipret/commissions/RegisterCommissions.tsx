@@ -213,6 +213,10 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   // Bumped after a Maestro sync to refetch the stats.
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Per-broker "why is there no data" explanation (admin view only).
+  const [coverage, setCoverage] = useState<CoverageMap>({});
+  const [coverageMeta, setCoverageMeta] = useState<{ adminScopeConfigured: boolean; counts: Record<CoverageCause, number> } | null>(null);
+
   // Broker drill-down
   const [drillAgent, setDrillAgent] = useState<string | null>(null);
   const [drillData, setDrillData] = useState<any>(null);

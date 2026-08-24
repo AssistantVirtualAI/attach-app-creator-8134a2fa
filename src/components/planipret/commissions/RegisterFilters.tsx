@@ -131,9 +131,15 @@ export default function RegisterFilters({
             </option>
             {agents.map((a) => {
               const hasData = agentsWithData.length === 0 || agentsWithData.includes(a);
+              const cause = coverage ? coverageFor(coverage, a).cause : null;
+              const why = !hasData
+                ? cause && cause !== "ok"
+                  ? causeLabel(cause, isFr)
+                  : (isFr ? "aucune donnée" : "no data")
+                : null;
               return (
-                <option key={a} value={a}>
-                  {hasData ? a : `${a} — ${isFr ? "aucune donnée" : "no data"}`}
+                <option key={a} value={a} title={why ?? undefined}>
+                  {why ? `${a} — ${why}` : a}
                 </option>
               );
             })}

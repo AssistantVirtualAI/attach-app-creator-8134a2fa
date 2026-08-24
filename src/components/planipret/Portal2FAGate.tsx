@@ -62,6 +62,26 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
     }
   }, [call]);
 
+  /** Re-reads the address the code is sent to (in case an admin just fixed it). */
+  const refreshEmail = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await call("status");
+      setEmailMasked(res?.email_masked ?? null);
+      if (typeof res?.cooldown_seconds === "number") setCooldown(res.cooldown_seconds);
+      if (typeof res?.sends_remaining === "number") setSendsLeft(res.sends_remaining);
+      if (res?.has_email) toast.success(`Adresse confirmée : ${res.email_masked}`);
+      else setError("Aucune adresse courriel enregistrée — contactez un administrateur Planiprêt.");
+    } catch (e: any) {
+      setError(e?.message || "Vérification impossible");
+    } finally {
+      setBusy(false);
+    }
+  }, [call]);
+
+
+
   useEffect(() => {
     let cancelled = false;
     (async () => {

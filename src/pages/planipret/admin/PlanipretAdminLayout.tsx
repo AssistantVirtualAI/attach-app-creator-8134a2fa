@@ -5,7 +5,6 @@ import { signOutMicrosoft } from "@/lib/ms365AuthLogin";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { PrefetchNavLink } from "@/components/PrefetchLink";
 import { supabase } from "@/integrations/supabase/client";
-import Portal2FAGate from "@/components/planipret/Portal2FAGate";
 import PortalDomainGate from "@/components/planipret/PortalDomainGate";
 import {
   LayoutDashboard, Users, Phone, MessageSquare, Mic, Plug,
@@ -384,7 +383,6 @@ export default function PlanipretAdminLayout() {
 
   return (
     <PortalDomainGate>
-    <Portal2FAGate>
     <div data-pp-theme={theme} className="planipret-scope planipret-admin-scope min-h-screen flex"
       style={{ background: "var(--pp-bg-base)", fontFamily: "'Epilogue', sans-serif" }}>
       {/* Mobile redirect notice (dismissible) */}
@@ -598,7 +596,6 @@ export default function PlanipretAdminLayout() {
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <SessionTimeoutModal />
     </div>
-    </Portal2FAGate>
     </PortalDomainGate>
   );
 }

@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, RefreshCw, PhoneOff, PhoneForwarded, RotateCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import DidReclaimPanel from "@/components/planipret/admin/DidReclaimPanel";
+
 
 type Did = {
   e164: string;
@@ -121,7 +123,10 @@ export default function PAPhoneNumbers() {
         </Button>
       </div>
 
+      <DidReclaimPanel />
+
       <div className="flex flex-wrap gap-2">
+
         {(["available", "assigned", "all"] as const).map((k) => (
           <Button key={k} size="sm" variant={tab === k ? "default" : "outline"} onClick={() => setTab(k)}>
             {k === "available" ? `Disponibles (${counts.available})`

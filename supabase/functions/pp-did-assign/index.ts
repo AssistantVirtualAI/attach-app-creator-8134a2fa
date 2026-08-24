@@ -57,10 +57,15 @@ Deno.serve(async (req) => {
       }
     }
 
+    let actorId: string | null = null;
+    let actorEmail: string | null = null;
     if (!isService) {
       const auth = await requirePlanipretAdmin(req);
       if ("error" in auth) return auth.error;
+      actorId = (auth as any)?.profile?.user_id ?? (auth as any)?.user?.id ?? null;
+      actorEmail = (auth as any)?.profile?.email ?? (auth as any)?.user?.email ?? null;
     }
+
 
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "verify");
@@ -233,13 +238,22 @@ Deno.serve(async (req) => {
       // Postes rattachés à un vrai courtier (profil + compte utilisateur).
       const { data: profs } = await db
         .from("planipret_profiles")
-        .select("extension, user_id")
+        .select("extension, user_id, full_name, email")
         .not("extension", "is", null);
       const brokerExts = new Set(
         (profs ?? [])
           .filter((p: any) => !!p.user_id && (liveExts.size === 0 || liveExts.has(String(p.extension))))
           .map((p: any) => String(p.extension)),
       );
+      const brokerByExt = new Map<string, { name: string | null; user_id: string | null }>(
+        (profs ?? []).map((p: any) => [
+          String(p.extension),
+          { name: p.full_name ?? p.email ?? null, user_id: p.user_id ?? null },
+        ]),
+      );
+      const jobId = crypto.randomUUID();
+      const auditRows: any[] = [];
+
 
       const single = String(body?.e164 ?? body?.phone_number ?? "").trim();
       let query = db
@@ -269,21 +283,43 @@ Deno.serve(async (req) => {
         });
 
       const results: any[] = [];
+      const source = isService ? "cron_release" : "admin_release";
       for (const r of orphans as any[]) {
         const pn = r.pn as string;
+        const prevExt = r.liveExt || r.extension || null;
+        const prevBroker = prevExt ? brokerByExt.get(String(prevExt)) : undefined;
+        const reason = r.liveExt ? "poste sans courtier actif" : "routage vide";
+        const auditBase = {
+          job_id: jobId,
+          domain,
+          phone_number: pn,
+          phone_number_e164: e164Of(pn),
+          previous_extension: prevExt,
+          previous_broker_name: prevBroker?.name ?? r.display_name ?? null,
+          previous_broker_user_id: prevBroker?.user_id ?? null,
+          reason,
+          dry_run: dryRun,
+          triggered_by: actorId,
+          triggered_by_email: actorEmail,
+          source,
+        };
+
         if (dryRun) {
-          results.push({
-            e164: e164Of(pn),
-            previous_extension: r.liveExt || r.extension || null,
-            reason: r.liveExt ? "poste sans courtier actif" : "routage vide",
-            released: null,
-          });
+          auditRows.push({ ...auditBase, success: false, error_message: "simulation" });
+          results.push({ e164: e164Of(pn), previous_extension: prevExt, reason, released: null });
           continue;
         }
-        const rel = r.liveExt
-          ? await releaseDid(domain, pn)
-          : { released: true, phone_number: pn, write_status: 0, live: { destination_user: null, dial_rule_application: null, dial_rule_parameter: null, description: null, enabled: null } as any };
 
+        let rel: any;
+        let failure: string | null = null;
+        try {
+          rel = r.liveExt
+            ? await releaseDid(domain, pn)
+            : { released: true, phone_number: pn, write_status: 0, live: { destination_user: null, dial_rule_application: null, dial_rule_parameter: null, description: null, enabled: null } };
+        } catch (err) {
+          failure = String((err as Error)?.message ?? err);
+          rel = { released: false, write_status: null, live: {} };
+        }
 
         if (rel.released) {
           await db.from("planipret_did_assignments")
@@ -300,19 +336,38 @@ Deno.serve(async (req) => {
         await db.from("planipret_did_routing_snapshots").insert({
           domain,
           phone_number: pn,
-          destination_user: rel.live.destination_user,
-          dial_rule_application: rel.live.dial_rule_application,
-          dial_rule_parameter: rel.live.dial_rule_parameter,
-          description: rel.live.description,
-          enabled: rel.live.enabled,
-          source: isService ? "cron_release" : "admin_release",
+          destination_user: rel.live?.destination_user ?? null,
+          dial_rule_application: rel.live?.dial_rule_application ?? null,
+          dial_rule_parameter: rel.live?.dial_rule_parameter ?? null,
+          description: rel.live?.description ?? null,
+          enabled: rel.live?.enabled ?? null,
+          source,
+        });
+        auditRows.push({
+          ...auditBase,
+          success: !!rel.released,
+          write_status: typeof rel.write_status === "number" ? rel.write_status : null,
+          error_message: failure ?? (rel.released ? null : "écriture PBX refusée"),
         });
         results.push({
           e164: e164Of(pn),
-          previous_extension: r.extension ?? null,
+          previous_extension: prevExt,
+          previous_broker_name: auditBase.previous_broker_name,
+          reason,
           released: rel.released,
           write_status: rel.write_status,
+          error: failure,
         });
+      }
+
+      // Journal d'audit (best-effort, ne bloque jamais la libération).
+      if (auditRows.length) {
+        for (let i = 0; i < auditRows.length; i += 200) {
+          const { error: auditErr } = await db
+            .from("planipret_did_release_audit")
+            .insert(auditRows.slice(i, i + 200));
+          if (auditErr) console.error("[pp-did-assign] audit insert failed", auditErr.message);
+        }
       }
 
       const freed = results.filter((r) => r.released).length;
@@ -320,16 +375,19 @@ Deno.serve(async (req) => {
         success: true,
         action: "release_orphans",
         domain,
+        job_id: jobId,
         dry_run: dryRun,
         live_extensions: liveExts.size,
         broker_extensions: brokerExts.size,
         candidates: orphans.length,
         released: freed,
+        failed: dryRun ? 0 : orphans.length - freed,
         summary: dryRun
           ? `${orphans.length} numéro(s) ne pointent vers aucun courtier réel (simulation, rien de modifié).`
           : `${freed}/${orphans.length} numéro(s) libérés et remis en « disponible » pour réassignation.`,
         results,
       });
+
     }
 
     return json({ success: false, error: `unknown action ${action}` }, 400);

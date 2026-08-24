@@ -83,6 +83,8 @@ async function nsFetch(path: string, init: RequestInit = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
+import { assignDidToExtension } from "../_shared/pp-did-routing.ts";
+
 function nsUserPayload(fullName: string, email: string, extension: string, password?: string) {
   const [firstName, ...rest] = String(fullName || extension).trim().split(/\s+/);
   const lastName = rest.join(" ") || "Courtier";
@@ -264,6 +266,55 @@ async function ensureMobileDevice(
   return { device_id: targetId, created: true };
 }
 
+/**
+ * Assigne automatiquement le premier DID disponible à un nouveau poste.
+ * Écriture ciblée d'UN numéro (payload complet) + relecture obligatoire :
+ * sans `dial-rule-translation-destination-user`, le PBX répond
+ * « the number can't be completed as dialled ».
+ */
+async function autoAssignDid(admin: any, extension: string, fullName?: string) {
+  try {
+    const { data: free } = await admin
+      .from("planipret_did_assignments")
+      .select("phone_number_e164")
+      .eq("domain", NS_DEFAULT_DOMAIN)
+      .eq("status", "available")
+      .is("extension", null)
+      .order("phone_number_digits")
+      .limit(1)
+      .maybeSingle();
+    const e164 = String(free?.phone_number_e164 ?? "");
+    if (!e164) {
+      return { assigned: false, reason: "no_available_did", diagnostic: "Aucun numéro disponible dans l'inventaire DID." };
+    }
+    const r = await assignDidToExtension(NS_DEFAULT_DOMAIN, e164, extension);
+    if (r.verified) {
+      await admin.from("planipret_did_assignments")
+        .update({
+          status: "assigned",
+          extension,
+          display_name: fullName ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("domain", NS_DEFAULT_DOMAIN)
+        .eq("phone_number_digits", r.phone_number);
+    }
+    await admin.from("planipret_did_routing_snapshots").insert({
+      domain: NS_DEFAULT_DOMAIN,
+      phone_number: r.phone_number,
+      destination_user: r.live.destination_user,
+      dial_rule_application: r.live.dial_rule_application,
+      dial_rule_parameter: r.live.dial_rule_parameter,
+      description: r.live.description,
+      enabled: r.live.enabled,
+      source: "auto_assign_new_user",
+    });
+    return { assigned: r.verified, e164, extension, diagnostic: r.diagnostic };
+  } catch (e) {
+    return { assigned: false, reason: "error", diagnostic: String((e as Error)?.message ?? e) };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -338,18 +389,12 @@ Deno.serve(async (req) => {
       // 5) Assignation automatique d'un DID au nouveau poste : sans destination
       //    `user_XXXX` dans le PBX, l'opérateur répond « the number can't be
       //    completed as dialled ». Écriture ciblée + relecture obligatoire.
-      let did: any = { success: false, error: "not_attempted" };
-      try {
-        const r = await assignDidToExtension(NS_DEFAULT_DOMAIN, "", ns_extension);
-        did = r;
-      } catch (e) {
-        did = { success: false, error: String((e as Error)?.message ?? e) };
-      }
+      const did = await autoAssignDid(admin, ns_extension, full_name);
 
       await logAudit(admin, req, {
         admin_id: profile.id, action: "USER_CREATE",
         resource_type: "user", resource_id: created.user.id,
-        metadata: { email, extension: ns_extension, ns_status: nsUserRes.status, mobile_device: mobile.device_id, mobile_error: mobile.error ?? null },
+        metadata: { email, extension: ns_extension, ns_status: nsUserRes.status, mobile_device: mobile.device_id, mobile_error: mobile.error ?? null, did: did },
       });
 
       // Welcome sequence (best-effort)

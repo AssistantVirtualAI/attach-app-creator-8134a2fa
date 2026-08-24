@@ -267,7 +267,15 @@ Deno.serve(async (req) => {
           results.push({ e164: e164Of(pn), previous_extension: r.extension ?? null, released: null });
           continue;
         }
+        // Déjà libre côté PBX et côté portail : rien à réécrire.
+        const before = await verifyDidRouting(domain, pn, null).catch(() => null);
+        const beforeDest = (before as any)?.live?.destination_user ?? (before as any)?.destination_user ?? null;
+        if (!beforeDest && r.status === "available" && !r.extension) {
+          results.push({ e164: e164Of(pn), previous_extension: null, released: true, skipped: "already_free" });
+          continue;
+        }
         const rel = await releaseDid(domain, pn);
+
         if (rel.released) {
           await db.from("planipret_did_assignments")
             .update({

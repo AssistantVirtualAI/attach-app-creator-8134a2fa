@@ -61,6 +61,11 @@ export default function PACommissions() {
           : "Vue globale sur tous les courtiers — volume, dossiers, prêteurs et commissions"}
       />
 
+      <div className="mb-2">
+        <MaestroReconnectButton lang={lang === "en" ? "en" : "fr"} />
+      </div>
+      <MaestroSyncDiagnostics lang={lang === "en" ? "en" : "fr"} canSync />
+
       <RegisterCommissions lang={lang === "en" ? "en" : "fr"} scope="admin" />
     </PAPage>
   );

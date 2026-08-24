@@ -12,7 +12,6 @@ import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import planipretLogo from "@/assets/planipret-logo.png.asset.json";
 import { resolveBrokerAccess } from "@/lib/planipret/brokerAccess";
 import BrokerOmniSearch from "@/components/planipret/broker/BrokerOmniSearch";
-import Portal2FAGate from "@/components/planipret/Portal2FAGate";
 import PortalDomainGate from "@/components/planipret/PortalDomainGate";
 import HighReadabilityToggle from "@/components/planipret/broker/HighReadabilityToggle";
 
@@ -153,7 +152,6 @@ export default function PlanipretBrokerLayout() {
 
   return (
     <PortalDomainGate>
-    <Portal2FAGate>
     <div className="planipret-scope planipret-admin-scope planipret-broker-scope min-h-screen flex" data-pp-theme={theme}
       style={{ background: "var(--pp-bg-base)", fontFamily: "'Epilogue', sans-serif" }}>
       {/* Sidebar (desktop) */}
@@ -259,7 +257,6 @@ export default function PlanipretBrokerLayout() {
         </main>
       </div>
     </div>
-    </Portal2FAGate>
     </PortalDomainGate>
   );
 }

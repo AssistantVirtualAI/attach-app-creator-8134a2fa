@@ -38,7 +38,24 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
-    const isService = !!SERVICE_KEY && authHeader === `Bearer ${SERVICE_KEY}`;
+    const db = createClient(SUPABASE_URL, SERVICE_KEY);
+    let isService = !!SERVICE_KEY && authHeader === `Bearer ${SERVICE_KEY}`;
+
+    // Jeton d'opération temporaire (maintenance) stocké en base et expirable.
+    const opsToken = req.headers.get("x-ops-token") ?? "";
+    if (!isService && opsToken) {
+      const { data: cfg } = await db
+        .from("planipret_integration_config")
+        .select("config_data, is_enabled")
+        .eq("integration_key", "did_release_ops")
+        .maybeSingle();
+      const stored = String((cfg as any)?.config_data?.token ?? "");
+      const exp = Date.parse(String((cfg as any)?.config_data?.expires_at ?? ""));
+      if ((cfg as any)?.is_enabled && stored && stored === opsToken && Number.isFinite(exp) && exp > Date.now()) {
+        isService = true;
+      }
+    }
+
     if (!isService) {
       const auth = await requirePlanipretAdmin(req);
       if ("error" in auth) return auth.error;
@@ -47,7 +64,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "verify");
     const domain = String(body?.domain ?? NS_DEFAULT_DOMAIN);
-    const db = createClient(SUPABASE_URL, SERVICE_KEY);
+
 
     /* ---------------- verify (re-synchronisation lecture seule) ---------------- */
     if (action === "verify") {

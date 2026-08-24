@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, TrendingUp, Settings, LogOut, Mail, ShieldAlert, Users, Sun, Moon,
+  LayoutDashboard, Phone, MessageSquare, Voicemail, Mic, TrendingUp, Settings, LogOut, Mail, ShieldAlert, Users, Sun, Moon, CheckSquare,
 } from "lucide-react";
 import BrokerAuthScreen from "@/components/planipret/broker/BrokerAuthScreen";
 import { PlanipretLangSwitch } from "@/components/planipret/PlanipretLangSwitch";
@@ -26,6 +26,7 @@ const NAV = [
   { to: "/planipret/broker/microsoft",  Icon: Mail,            fr: "Microsoft 365",  en: "Microsoft 365" },
   { to: "/planipret/broker/commissions", Icon: TrendingUp,     fr: "Commissions",    en: "Commissions" },
   { to: "/planipret/broker/maestro-clients", Icon: Users, fr: "Clients Maestro", en: "Maestro clients" },
+  { to: "/planipret/broker/tasks", Icon: CheckSquare, fr: "Tâches", en: "Tasks" },
   
   { to: "/planipret/broker/settings",   Icon: Settings,        fr: "Réglages",       en: "Settings" },
 ];

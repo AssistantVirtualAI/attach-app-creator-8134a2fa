@@ -18,6 +18,7 @@
  */
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { nsFetch, requirePlanipretBroker, jsonResponse } from "../_shared/planipret-ns.ts";
+import { buildCdrE2eReport } from "../_shared/pp-cdr-e2e.ts";
 
 const CORE_HOST = /(^|\.)core\d+\.[^/]*ucstack\.io$/i;
 const PORTAL_HOST = /(^|\.)(portal\d*|voice)[^/]*\.(ucstack\.io|ava-telecom\.ca)$/i;
@@ -302,6 +303,7 @@ Deno.serve(async (req) => {
         ? `${warned.length} avertissement(s) — les appels peuvent être instables.`
         : "Chaîne d'appel complète et cohérente.",
     checks,
+    cdr_e2e: { verdict: e2e.verdict, summary: e2e.summary, last_call_at: lastCallAt, last_maestro_push_at: lastPushAt },
     checked_at: new Date().toISOString(),
   });
 });

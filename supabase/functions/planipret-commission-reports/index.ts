@@ -325,7 +325,9 @@ Deno.serve(async (req) => {
         },
         truncated,
         scanned,
+        coverage,
         sources: { queried: sources.length, failed: failures.length, failures: failures.slice(0, 10) },
+
         filters,
         scope: { role, users_id: filters.users_id ?? null, mode: sources.length > 1 ? "all_brokers" : "token_owner" },
         correlation_id: cid,

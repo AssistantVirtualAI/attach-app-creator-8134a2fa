@@ -250,31 +250,39 @@ Deno.serve(async (req) => {
       if (single) query = query.eq("phone_number_digits", pbxNumberId(single));
       const { data: rows } = await query;
 
-      // Orphelin = aucun poste, ou un poste qui n'appartient à aucun courtier
-      // réel / n'existe plus dans le PBX. On inclut aussi les numéros déjà
-      // « available » côté portail mais encore routés dans NetSapiens.
-      const orphans = (rows ?? []).filter((r: any) => {
-        const ext = String(r.extension ?? "").trim();
-        if (!ext) return true;
-        return !brokerExts.has(ext);
-      });
+      // Source de vérité : le routage RÉEL du PBX (le miroir DB peut être périmé).
+      const liveDids = await listLiveDids(domain);
 
+      // Orphelin = destination vide, ou poste qui n'appartient à aucun courtier
+      // réel / n'existe plus dans le PBX.
+      const orphans = (rows ?? [])
+        .map((r: any) => {
+          const pn = pbxNumberId(r.phone_number_digits || r.phone_number_e164);
+          const liveExt = (liveDids.get(pn) ?? "").split("@")[0].trim();
+          return { ...r, pn, liveExt, known: liveDids.has(pn) };
+        })
+        .filter((r: any) => {
+          if (!r.known) return false;                 // numéro absent du PBX : on ne touche pas
+          if (!r.liveExt) return r.status !== "available" || !!r.extension; // déjà libre : rien à faire
+          return !brokerExts.has(r.liveExt);          // routé vers un poste sans courtier réel
+        });
 
       const results: any[] = [];
       for (const r of orphans as any[]) {
-        const pn = pbxNumberId(r.phone_number_digits || r.phone_number_e164);
+        const pn = r.pn as string;
         if (dryRun) {
-          results.push({ e164: e164Of(pn), previous_extension: r.extension ?? null, released: null });
+          results.push({
+            e164: e164Of(pn),
+            previous_extension: r.liveExt || r.extension || null,
+            reason: r.liveExt ? "poste sans courtier actif" : "routage vide",
+            released: null,
+          });
           continue;
         }
-        // Déjà libre côté PBX et côté portail : rien à réécrire.
-        const before = await verifyDidRouting(domain, pn, null).catch(() => null);
-        const beforeDest = (before as any)?.live?.destination_user ?? (before as any)?.destination_user ?? null;
-        if (!beforeDest && r.status === "available" && !r.extension) {
-          results.push({ e164: e164Of(pn), previous_extension: null, released: true, skipped: "already_free" });
-          continue;
-        }
-        const rel = await releaseDid(domain, pn);
+        const rel = r.liveExt
+          ? await releaseDid(domain, pn)
+          : { released: true, phone_number: pn, write_status: 0, live: { destination_user: null, dial_rule_application: null, dial_rule_parameter: null, description: null, enabled: null } as any };
+
 
         if (rel.released) {
           await db.from("planipret_did_assignments")

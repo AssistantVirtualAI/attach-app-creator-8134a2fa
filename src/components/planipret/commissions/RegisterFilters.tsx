@@ -1,6 +1,5 @@
 import { Users, Landmark } from "lucide-react";
 import { causeLabel, coverageFor, type CoverageMap } from "@/lib/planipret/brokerCoverage";
-import { causeLabel, coverageFor, type CoverageMap } from "@/lib/planipret/brokerCoverage";
 
 export type Granularity = "week" | "month" | "quarter" | "year" | "ytd";
 

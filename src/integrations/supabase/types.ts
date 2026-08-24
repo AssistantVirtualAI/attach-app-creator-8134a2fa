@@ -9330,6 +9330,66 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_did_release_audit: {
+        Row: {
+          created_at: string
+          domain: string
+          dry_run: boolean
+          error_message: string | null
+          id: string
+          job_id: string
+          phone_number: string
+          phone_number_e164: string | null
+          previous_broker_name: string | null
+          previous_broker_user_id: string | null
+          previous_extension: string | null
+          reason: string
+          source: string
+          success: boolean
+          triggered_by: string | null
+          triggered_by_email: string | null
+          write_status: number | null
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          dry_run?: boolean
+          error_message?: string | null
+          id?: string
+          job_id: string
+          phone_number: string
+          phone_number_e164?: string | null
+          previous_broker_name?: string | null
+          previous_broker_user_id?: string | null
+          previous_extension?: string | null
+          reason: string
+          source?: string
+          success?: boolean
+          triggered_by?: string | null
+          triggered_by_email?: string | null
+          write_status?: number | null
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          dry_run?: boolean
+          error_message?: string | null
+          id?: string
+          job_id?: string
+          phone_number?: string
+          phone_number_e164?: string | null
+          previous_broker_name?: string | null
+          previous_broker_user_id?: string | null
+          previous_extension?: string | null
+          reason?: string
+          source?: string
+          success?: boolean
+          triggered_by?: string | null
+          triggered_by_email?: string | null
+          write_status?: number | null
+        }
+        Relationships: []
+      }
       planipret_did_routing_snapshots: {
         Row: {
           created_at: string

@@ -9656,6 +9656,7 @@ export type Database = {
           code_verifier: string | null
           created_at: string
           expires_at: string
+          platform: string
           redirect_uri: string | null
           state: string
           user_id: string
@@ -9664,6 +9665,7 @@ export type Database = {
           code_verifier?: string | null
           created_at?: string
           expires_at?: string
+          platform?: string
           redirect_uri?: string | null
           state: string
           user_id: string
@@ -9672,6 +9674,7 @@ export type Database = {
           code_verifier?: string | null
           created_at?: string
           expires_at?: string
+          platform?: string
           redirect_uri?: string | null
           state?: string
           user_id?: string

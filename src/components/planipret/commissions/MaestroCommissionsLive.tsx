@@ -57,6 +57,8 @@ async function callGateway(action: string, payload: Record<string, unknown> = {}
   return data as any;
 }
 
+type AgentAgg = { users_id: number | null; name: string; total: number; count: number; loan_volume: number; average: number };
+
 /** Live Maestro commission reports for the desktop portal (admin = all brokers, broker = own scope). */
 export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "en"; scope: "admin" | "broker" }) {
   const fr = lang === "fr";
@@ -65,33 +67,41 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
   const [agentId, setAgentId] = useState("");
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<DepositRow[]>([]);
+  const [byAgent, setByAgent] = useState<AgentAgg[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notConnected, setNotConnected] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setNotConnected(false);
     try {
       const range = rangeFor(period);
       const base: Record<string, unknown> = { ...range, commission_type: "base" };
       if (agentId) base.users_id = Number(agentId);
-      const [s, d] = await Promise.all([
+      const wantsByAgent = scope === "admin" && !agentId;
+      const [s, d, a] = await Promise.all([
         callGateway("summary", base),
         callGateway("deposits", { ...base, per_page: 50, page: 1, order_by: "date_trans", sort: "desc" }),
+        wantsByAgent ? callGateway("by_agent", base) : Promise.resolve(null),
       ]);
       setSummary(s?.summary ?? null);
-      setRows(Array.isArray(d?.data) ? d.data : []);
+      setRows(Array.isArray(d?.rows) ? d.rows : Array.isArray(d?.data) ? d.data : []);
+      setByAgent(Array.isArray(a?.agents) ? a.agents : []);
     } catch (e) {
-      setError((e as Error).message);
-      setSummary(null); setRows([]);
+      const msg = (e as Error).message || "";
+      if (/maestro_not_connected/i.test(msg)) setNotConnected(true);
+      else setError(msg);
+      setSummary(null); setRows([]); setByAgent([]);
     } finally {
       setLoading(false);
     }
-  }, [period, agentId]);
+  }, [period, agentId, scope]);
 
   useEffect(() => {
     if (scope !== "admin") return;
     callGateway("agents").then((r) => setAgents(Array.isArray(r?.agents) ? r.agents : [])).catch(() => setAgents([]));
   }, [scope]);
+
 
   useEffect(() => { void load(); }, [load]);
 

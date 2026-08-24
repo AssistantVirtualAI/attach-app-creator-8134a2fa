@@ -23,13 +23,31 @@ export default function PlanipretPortalGuard({ portal, children }: { portal: Por
   const [reason, setReason] = useState<string>("");
   const [redirect, setRedirect] = useState<string | null>(null);
 
-  const evaluate = async () => {
+  /** Vrai pendant ~20 s après un callback Microsoft réussi. */
+  const justSignedIn = () => {
+    try {
+      const ts = Number(sessionStorage.getItem("pp_portal_just_signed_in") ?? 0);
+      return Number.isFinite(ts) && Date.now() - ts < 20000;
+    } catch { return false; }
+  };
+
+  const evaluate = async (attempt = 0) => {
     const access = await resolvePortalAccess();
     if (access.state === "anon") {
+      // Premier rendu juste après le callback : la session n'est pas encore
+      // hydratée. On patiente au lieu de renvoyer vers l'écran d'auth
+      // (source des boucles de redirection).
+      if (attempt < 8 && justSignedIn()) {
+        setState("checking");
+        await new Promise((r) => setTimeout(r, 300));
+        return evaluate(attempt + 1);
+      }
       setState("anon");
       setReason("");
       return;
     }
+    try { sessionStorage.removeItem("pp_portal_just_signed_in"); } catch { /* ignore */ }
+
     if (access.state === "denied") {
       logPortalLogin({ portal, outcome: "failure", reason: access.reason, path: location.pathname });
       // A non-Microsoft session must never keep a portal page mounted.

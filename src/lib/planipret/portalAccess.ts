@@ -46,9 +46,24 @@ export async function resolvePortalAccess(): Promise<PortalAccess> {
 
   const email = user.email ?? "";
 
-  if (!isMicrosoftUser(user)) {
+  let microsoft = isMicrosoftUser(user);
+  if (!microsoft) {
+    // Repli : le profil Planiprêt garde la trace de la connexion Microsoft
+    // (sessions émises par `pp-ms-auth-callback` avant l'estampille).
+    try {
+      const { data: prof } = await supabase
+        .from("planipret_profiles")
+        .select("auth_method, ms365_email")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const method = String((prof as any)?.auth_method ?? "").toLowerCase();
+      microsoft = method === "microsoft" || Boolean((prof as any)?.ms365_email);
+    } catch { /* ignore */ }
+  }
+  if (!microsoft) {
     return { state: "denied", reason: "not-microsoft" };
   }
+
 
   let isSuper = false;
   try {

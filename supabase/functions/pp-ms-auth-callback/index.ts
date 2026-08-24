@@ -152,6 +152,25 @@ Deno.serve(async (req) => {
       auth_method: "microsoft",
     }).eq("id", profile.id);
 
+    // Marque la session comme provenant de Microsoft : le portail refuse toute
+    // session non-Microsoft, sinon l'utilisateur est renvoyé vers l'écran d'auth.
+    try {
+      await admin.auth.admin.updateUserById(profile.user_id, {
+        user_metadata: {
+          ...(authUser.user.user_metadata ?? {}),
+          auth_provider: "microsoft",
+          ms_oid: me?.id ?? null,
+          ms365_email: msEmail,
+          ms_display_name: me?.displayName ?? null,
+          ms_last_login_at: new Date().toISOString(),
+        },
+      });
+    } catch (e) {
+      console.error("[pp-ms-auth-callback] stamp_metadata_failed", String((e as Error)?.message ?? e));
+    }
+
+
+
     const { data: link, error: linkError } = await admin.auth.admin.generateLink({
       type: "magiclink",
       email: authUser.user.email,

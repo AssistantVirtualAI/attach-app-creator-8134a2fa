@@ -217,6 +217,20 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const [coverage, setCoverage] = useState<CoverageMap>({});
   const [coverageMeta, setCoverageMeta] = useState<{ adminScopeConfigured: boolean; counts: Record<CoverageCause, number> } | null>(null);
 
+  useEffect(() => {
+    if (!isAdminView) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await loadBrokerCoverage((data?.agentsWithData ?? []) as string[]);
+        if (cancelled) return;
+        setCoverage(res.map);
+        setCoverageMeta({ adminScopeConfigured: res.adminScopeConfigured, counts: res.counts });
+      } catch { /* diagnostics are best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isAdminView, data?.agentsWithData, refreshKey]);
+
   // Broker drill-down
   const [drillAgent, setDrillAgent] = useState<string | null>(null);
   const [drillData, setDrillData] = useState<any>(null);

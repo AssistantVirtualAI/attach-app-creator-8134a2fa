@@ -6,22 +6,25 @@ import RegisterCommissions from "@/components/planipret/commissions/RegisterComm
 import MaestroCommissionsLive from "@/components/planipret/commissions/MaestroCommissionsLive";
 import { supabase } from "@/integrations/supabase/client";
 
-/** Only these emails can open the commissions page. */
-const COMMISSIONS_ALLOWED_EMAILS = ["mhassoun@assistantvirtualai.com"];
-
 export default function PACommissions() {
   const { lang } = useMplanipretLang();
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
+  // Accès réservé aux administrateurs Planiprêt (le serveur applique la même règle).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      const email = (user?.email ?? "").toLowerCase();
-      if (!cancelled) setAllowed(COMMISSIONS_ALLOWED_EMAILS.includes(email));
+      if (!user) { if (!cancelled) setAllowed(false); return; }
+      const [{ data: profile }, { data: isSuper }] = await Promise.all([
+        supabase.from("planipret_profiles").select("role").eq("user_id", user.id).maybeSingle(),
+        supabase.rpc("is_super_admin", { _user_id: user.id }),
+      ]);
+      if (!cancelled) setAllowed(profile?.role === "admin" || isSuper === true);
     })();
     return () => { cancelled = true; };
   }, []);
+
 
   if (allowed === null) {
     return (

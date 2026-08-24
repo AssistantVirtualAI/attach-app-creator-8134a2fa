@@ -323,6 +323,9 @@ export default function PlanipretAdminLayout() {
         <BrokerAuthScreen
           msRedirect={location.pathname.startsWith("/planipret/admin") ? location.pathname : "/planipret/admin/overview"}
           initialError={authError}
+          variant="admin"
+          title="Connexion administrateur"
+          subtitle="Accédez aux appels, commissions, utilisateurs et rapports Planiprêt."
         />
       </div>
     );

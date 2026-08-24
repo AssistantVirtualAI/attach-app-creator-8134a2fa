@@ -61,6 +61,15 @@ async function callGateway(action: string, payload: Record<string, unknown> = {}
 
 type AgentAgg = { users_id: number | null; name: string; total: number; count: number; loan_volume: number; average: number };
 
+type ByAgentMeta = {
+  truncated?: boolean;
+  scanned?: number;
+  sources?: { queried: number; failed: number; failures: { broker: string; status: number; message: string }[] };
+  scope?: { mode?: string };
+};
+
+const PER_PAGE = 25;
+
 /** Live Maestro commission reports for the desktop portal (admin = all brokers, broker = own scope). */
 export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "en"; scope: "admin" | "broker" }) {
   const fr = lang === "fr";
@@ -70,6 +79,9 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<DepositRow[]>([]);
   const [byAgent, setByAgent] = useState<AgentAgg[]>([]);
+  const [byAgentMeta, setByAgentMeta] = useState<ByAgentMeta | null>(null);
+  const [byAgentPage, setByAgentPage] = useState(1);
+  const [byAgentError, setByAgentError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notConnected, setNotConnected] = useState(false);
@@ -89,11 +101,15 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
       setSummary(s?.summary ?? null);
       setRows(Array.isArray(d?.rows) ? d.rows : Array.isArray(d?.data) ? d.data : []);
       setByAgent(Array.isArray(a?.agents) ? a.agents : []);
+      setByAgentMeta(a ? { truncated: a.truncated, scanned: a.scanned, sources: a.sources, scope: a.scope } : null);
+      setByAgentPage(1);
+      setByAgentError(null);
     } catch (e) {
       const msg = (e as Error).message || "";
       if (/maestro_not_connected/i.test(msg)) setNotConnected(true);
       else setError(msg);
-      setSummary(null); setRows([]); setByAgent([]);
+      setByAgentError(msg || null);
+      setSummary(null); setRows([]); setByAgent([]); setByAgentMeta(null);
     } finally {
       setLoading(false);
     }
@@ -110,6 +126,37 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
   const chart = useMemo(
     () => (summary?.by_date ?? []).map((b) => ({ date: b.date.slice(5), amount: b.amount })),
     [summary],
+  );
+
+  const agentName = useMemo(
+    () => agents.find((a) => String(a.users_id) === agentId)?.name ?? null,
+    [agents, agentId],
+  );
+
+  const filterLabel = useMemo(() => {
+    const r = rangeFor(period);
+    const periodTxt = period === "all"
+      ? (fr ? "toutes les périodes" : "all time")
+      : `${r.date_from} → ${r.date_to}`;
+    const who = agentId
+      ? (fr ? `courtier : ${agentName ?? agentId}` : `broker: ${agentName ?? agentId}`)
+      : scope === "admin" ? (fr ? "tous les courtiers" : "all brokers") : (fr ? "mon portefeuille" : "my book");
+    return fr
+      ? `Filtre appliqué — période : ${periodTxt} · ${who} · type : base`
+      : `Applied filter — period: ${periodTxt} · ${who} · type: base`;
+  }, [period, agentId, agentName, scope, fr]);
+
+  const byAgentTotals = useMemo(() => ({
+    brokers: byAgent.length,
+    count: byAgent.reduce((s, a) => s + a.count, 0),
+    total: byAgent.reduce((s, a) => s + a.total, 0),
+    loan_volume: byAgent.reduce((s, a) => s + a.loan_volume, 0),
+  }), [byAgent]);
+
+  const byAgentPages = Math.max(1, Math.ceil(byAgent.length / PER_PAGE));
+  const pagedAgents = useMemo(
+    () => byAgent.slice((byAgentPage - 1) * PER_PAGE, byAgentPage * PER_PAGE),
+    [byAgent, byAgentPage],
   );
 
   const periods: { k: Period; fr: string; en: string }[] = [
@@ -170,6 +217,8 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
 
 
 
+      <div className="text-[11px] mb-3 opacity-70" data-testid="commission-filter-label">{filterLabel}</div>
+
       {summary && (
         <>
           <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
@@ -200,8 +249,58 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
             </div>
           )}
 
-          {scope === "admin" && byAgent.length > 0 && (
+          {scope === "admin" && !agentId && (
             <>
+              {byAgentError && (
+                <div className="rounded-xl border p-3 text-xs mb-4" data-testid="by-agent-error"
+                  style={{ borderColor: "rgba(239,68,68,0.4)", color: "#ef4444" }}>
+                  <div className="font-semibold mb-1">{fr ? "Échec du rapport « Par courtier »" : "\"By broker\" report failed"}</div>
+                  <div>{byAgentError}</div>
+                  <div className="opacity-80 mt-1">{filterLabel}</div>
+                </div>
+              )}
+
+              {!byAgentError && !loading && byAgent.length === 0 && (
+                <div className="rounded-xl border p-4 text-xs mb-4 text-center" data-testid="by-agent-empty"
+                  style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))" }}>
+                  <div className="font-semibold mb-1">{fr ? "Aucune commission pour ce filtre" : "No commissions for this filter"}</div>
+                  <div className="opacity-70">{filterLabel}</div>
+                  <div className="opacity-70 mt-1">
+                    {byAgentMeta?.sources
+                      ? (fr
+                          ? `${byAgentMeta.sources.queried} compte(s) Maestro interrogé(s), ${byAgentMeta.sources.failed} en erreur.`
+                          : `${byAgentMeta.sources.queried} Maestro account(s) queried, ${byAgentMeta.sources.failed} failed.`)
+                      : (fr ? "Essayez la période « Tout »." : "Try the \"All time\" period.")}
+                  </div>
+                  <button onClick={() => setPeriod("all")} className="mt-2 px-3 py-1.5 rounded-lg border text-xs"
+                    style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))" }}>
+                    {fr ? "Voir toutes les périodes" : "Show all time"}
+                  </button>
+                </div>
+              )}
+
+              {byAgentMeta?.sources?.failed ? (
+                <div className="rounded-xl border p-3 text-[11px] mb-4"
+                  style={{ borderColor: "rgba(245,158,11,0.45)", color: "#b45309" }}>
+                  {fr
+                    ? `${byAgentMeta.sources.failed} courtier(s) n'ont pas pu être interrogés :`
+                    : `${byAgentMeta.sources.failed} broker(s) could not be queried:`}
+                  <ul className="list-disc ml-4 mt-1">
+                    {(byAgentMeta.sources.failures ?? []).map((f, i) => (
+                      <li key={i}>{f.broker} — {f.message} (HTTP {f.status})</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {byAgentMeta?.truncated && (
+                <div className="text-[11px] mb-3" style={{ color: "#b45309" }}>
+                  {fr ? "Résultats tronqués (limite de pages Maestro atteinte) — affinez la période." : "Results truncated (Maestro page limit) — narrow the period."}
+                </div>
+              )}
+
+              {byAgent.length > 0 && (
+              <>
               <div className="rounded-xl border p-3 mb-4" style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))", height: 260 }}>
                 <div className="text-[11px] uppercase tracking-wide opacity-70 mb-1">
                   {fr ? "Top 10 courtiers" : "Top 10 brokers"}
@@ -229,7 +328,7 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
                     </tr>
                   </thead>
                   <tbody>
-                    {byAgent.map((a, i) => (
+                    {pagedAgents.map((a, i) => (
                       <tr key={`${a.users_id ?? a.name}-${i}`} className="border-t"
                         style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.18))" }}>
                         <td className="p-2">
@@ -245,15 +344,38 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
                       </tr>
                     ))}
                     <tr className="border-t font-semibold" style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.35))" }}>
-                      <td className="p-2">{fr ? `Total — ${byAgent.length} courtiers` : `Total — ${byAgent.length} brokers`}</td>
-                      <td className="p-2 text-right">{byAgent.reduce((s, a) => s + a.count, 0)}</td>
-                      <td className="p-2 text-right">{cad(byAgent.reduce((s, a) => s + a.loan_volume, 0))}</td>
+                      <td className="p-2">{fr ? `Total — ${byAgentTotals.brokers} courtiers` : `Total — ${byAgentTotals.brokers} brokers`}</td>
+                      <td className="p-2 text-right">{byAgentTotals.count}</td>
+                      <td className="p-2 text-right">{cad(byAgentTotals.loan_volume)}</td>
                       <td className="p-2 text-right">—</td>
-                      <td className="p-2 text-right">{cad2(byAgent.reduce((s, a) => s + a.total, 0))}</td>
+                      <td className="p-2 text-right">{cad2(byAgentTotals.total)}</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
+
+              <div className="flex items-center justify-between text-[11px] mb-4" data-testid="by-agent-pagination">
+                <span className="opacity-70">
+                  {fr
+                    ? `${byAgentTotals.brokers} courtiers · ${byAgentTotals.count} dépôts · ${cad2(byAgentTotals.total)}`
+                    : `${byAgentTotals.brokers} brokers · ${byAgentTotals.count} deposits · ${cad2(byAgentTotals.total)}`}
+                </span>
+                <span className="flex items-center gap-2">
+                  <button disabled={byAgentPage <= 1} onClick={() => setByAgentPage((p) => Math.max(1, p - 1))}
+                    className="px-2 py-1 rounded-lg border disabled:opacity-40"
+                    style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))" }}>
+                    {fr ? "Précédent" : "Previous"}
+                  </button>
+                  <span>{byAgentPage} / {byAgentPages}</span>
+                  <button disabled={byAgentPage >= byAgentPages} onClick={() => setByAgentPage((p) => Math.min(byAgentPages, p + 1))}
+                    className="px-2 py-1 rounded-lg border disabled:opacity-40"
+                    style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))" }}>
+                    {fr ? "Suivant" : "Next"}
+                  </button>
+                </span>
+              </div>
+              </>
+              )}
             </>
           )}
 

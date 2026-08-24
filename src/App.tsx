@@ -66,6 +66,7 @@ const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin
 const PAOverview = lazyWithRetry(() => import("./pages/planipret/admin/PAOverview"));
 const PAUsers = lazyWithRetry(() => import("./pages/planipret/admin/PAUsers"));
 const PACommissions = lazyWithRetry(() => import("./pages/planipret/admin/PACommissions"));
+const PATasks = lazyWithRetry(() => import("./pages/planipret/admin/PATasks"));
 const PAMobileApp = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileApp"));
 const PACalls = lazyWithRetry(() => import("./pages/planipret/admin/PACalls"));
 const PAMessages = lazyWithRetry(() => import("./pages/planipret/admin/PAMessages"));
@@ -102,6 +103,7 @@ const PBVoicemail = lazyWithRetry(() => import("./pages/planipret/broker/PBVoice
 const PBRecordings = lazyWithRetry(() => import("./pages/planipret/broker/PBRecordings"));
 
 const PBCommissions = lazyWithRetry(() => import("./pages/planipret/broker/PBCommissions"));
+const PBTasks = lazyWithRetry(() => import("./pages/planipret/broker/PBTasks"));
 const PBMicrosoft = lazyWithRetry(() => import("./pages/planipret/broker/PBMicrosoft"));
 const PBMaestroClients = lazyWithRetry(() => import("./pages/planipret/broker/PBMaestroClients"));
 
@@ -656,6 +658,7 @@ const App = () => (
                   <Route path="phone-numbers" element={<Suspense fallback={<AdminPageSkeleton />}><PAPhoneNumbers /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
+                  <Route path="tasks" element={<Suspense fallback={<AdminPageSkeleton />}><PATasks /></Suspense>} />
 
                   <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />
                 </Route>
@@ -680,6 +683,7 @@ const App = () => (
                   <Route path="microsoft" element={<Suspense fallback={<AdminPageSkeleton />}><PBMicrosoft /></Suspense>} />
                   
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PBCommissions /></Suspense>} />
+                  <Route path="tasks" element={<Suspense fallback={<AdminPageSkeleton />}><PBTasks /></Suspense>} />
                   <Route path="maestro-clients" element={<Suspense fallback={<AdminPageSkeleton />}><PBMaestroClients /></Suspense>} />
                   <Route path="search" element={<Navigate to="/planipret/broker/overview" replace />} />
                   <Route path="settings" element={<Suspense fallback={<AdminPageSkeleton />}><PBSettings /></Suspense>} />

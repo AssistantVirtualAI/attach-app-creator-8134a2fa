@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, RefreshCw, PhoneOff, PhoneForwarded } from "lucide-react";
+import { Loader2, RefreshCw, PhoneOff, PhoneForwarded, RotateCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 type Did = {
@@ -23,6 +23,35 @@ export default function PAPhoneNumbers() {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<"all" | "available" | "assigned">("available");
   const [pick, setPick] = useState<Record<string, string>>({});
+  const [routing, setRouting] = useState<Record<string, { ok: boolean; diagnostic: string }>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+
+  /**
+   * Re-synchronise le routage d'UN numéro : recharge la config depuis le PBX
+   * après réassignation dans NetSapiens et vérifie que la destination pointe
+   * bien vers le bon `user_XXXX`.
+   */
+  const resync = async (e164: string, extension: string | null) => {
+    setBusy(e164);
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-did-assign", {
+        body: { action: "verify", e164, extension, domain: "planipret.ca" },
+      });
+      if (error) throw error;
+      const r = data?.results?.[0];
+      const ok = !!r?.matches;
+      const diagnostic = r?.diagnostic || data?.summary || "Réponse inattendue du PBX.";
+      setRouting((p) => ({ ...p, [e164]: { ok, diagnostic } }));
+      ok ? toast.success(diagnostic) : toast.error(diagnostic);
+      qc.invalidateQueries({ queryKey: ["pa-phone-numbers"] });
+    } catch (e: any) {
+      const diagnostic = e?.message || "Échec de la re-synchronisation.";
+      setRouting((p) => ({ ...p, [e164]: { ok: false, diagnostic } }));
+      toast.error(diagnostic);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const { data, isFetching, refetch } = useQuery({
     queryKey: ["pa-phone-numbers"],
@@ -41,15 +70,21 @@ export default function PAPhoneNumbers() {
 
   const mutate = useMutation({
     mutationFn: async (payload: { action: "assign" | "release"; e164: string; extension?: string }) => {
-      const { data, error } = await supabase.functions.invoke("pp-admin-did-assignments", {
+      // L'assignation écrit réellement le routage dans le PBX (destination
+      // user_XXXX) puis relit la config; la libération reste côté portail.
+      const fn = payload.action === "assign" ? "pp-did-assign" : "pp-admin-did-assignments";
+      const { data, error } = await supabase.functions.invoke(fn, {
         body: { ...payload, domain: "planipret.ca" },
       });
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Erreur");
+      if (!data?.success) throw new Error(data?.diagnostic || data?.error || "Erreur");
       return data;
     },
-    onSuccess: (_d, v) => {
-      toast.success(v.action === "assign" ? "Numéro assigné" : "Numéro libéré");
+    onSuccess: (d: any, v) => {
+      if (v.action === "assign" && d?.diagnostic) {
+        setRouting((p) => ({ ...p, [v.e164]: { ok: true, diagnostic: d.diagnostic } }));
+      }
+      toast.success(v.action === "assign" ? (d?.diagnostic || "Numéro assigné") : "Numéro libéré");
       qc.invalidateQueries({ queryKey: ["pa-phone-numbers"] });
     },
     onError: (e: any) => toast.error(e.message || "Erreur"),
@@ -134,11 +169,31 @@ export default function PAPhoneNumbers() {
                   </td>
                   <td className="py-2 pr-3">
                     {n.status === "assigned" ? (
-                      <Button size="sm" variant="outline" className="gap-2"
-                        disabled={mutate.isPending}
-                        onClick={() => mutate.mutate({ action: "release", e164: n.e164 })}>
-                        <PhoneOff className="w-3.5 h-3.5" /> Libérer
-                      </Button>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" className="gap-2"
+                            disabled={busy === n.e164}
+                            onClick={() => resync(n.e164, n.extension)}>
+                            {busy === n.e164
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <RotateCw className="w-3.5 h-3.5" />}
+                            Re-synchroniser DID
+                          </Button>
+                          <Button size="sm" variant="outline" className="gap-2"
+                            disabled={mutate.isPending}
+                            onClick={() => mutate.mutate({ action: "release", e164: n.e164 })}>
+                            <PhoneOff className="w-3.5 h-3.5" /> Libérer
+                          </Button>
+                        </div>
+                        {routing[n.e164] && (
+                          <p className={`flex items-start gap-1 text-xs ${routing[n.e164].ok ? "text-muted-foreground" : "text-destructive"}`}>
+                            {routing[n.e164].ok
+                              ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                              : <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+                            <span>{routing[n.e164].diagnostic}</span>
+                          </p>
+                        )}
+                      </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <Select value={pick[n.e164] ?? ""} onValueChange={(v) => setPick((p) => ({ ...p, [n.e164]: v }))}>

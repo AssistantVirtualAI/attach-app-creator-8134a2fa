@@ -82,6 +82,8 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
   const [byAgentMeta, setByAgentMeta] = useState<ByAgentMeta | null>(null);
   const [byAgentPage, setByAgentPage] = useState(1);
   const [byAgentError, setByAgentError] = useState<string | null>(null);
+  const [coverage, setCoverage] = useState<{ connected: number; total: number } | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notConnected, setNotConnected] = useState(false);
@@ -99,6 +101,8 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
         wantsByAgent ? callGateway("by_agent", base) : Promise.resolve(null),
       ]);
       setSummary(s?.summary ?? null);
+      setCoverage((s?.coverage ?? a?.coverage) ?? null);
+
       setRows(Array.isArray(d?.rows) ? d.rows : Array.isArray(d?.data) ? d.data : []);
       setByAgent(Array.isArray(a?.agents) ? a.agents : []);
       setByAgentMeta(a ? { truncated: a.truncated, scanned: a.scanned, sources: a.sources, scope: a.scope } : null);
@@ -215,9 +219,17 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
         </div>
       )}
 
-
+      {scope === "admin" && coverage && (
+        <div className="rounded-lg border p-3 text-xs mb-3" data-testid="commission-coverage"
+          style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))" }}>
+          {fr
+            ? `Portée Maestro : ${coverage.connected} courtier(s) connecté(s) sur ${coverage.total}. L'API de commissions ne renvoie que les dépôts du courtier propriétaire du jeton — les courtiers non connectés à Maestro n'apparaissent pas dans les chiffres en direct.`
+            : `Maestro scope: ${coverage.connected} connected broker(s) out of ${coverage.total}. The commissions API only returns deposits owned by each token holder — brokers not connected to Maestro are excluded from live figures.`}
+        </div>
+      )}
 
       <div className="text-[11px] mb-3 opacity-70" data-testid="commission-filter-label">{filterLabel}</div>
+
 
       {summary && (
         <>

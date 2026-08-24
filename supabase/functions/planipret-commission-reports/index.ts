@@ -174,29 +174,112 @@ Deno.serve(async (req) => {
       if (role === "broker" && resolvedUsersId) {
         agents = agents.filter((a: any) => String(a.users_id) === String(resolvedUsersId));
         if (!agents.length) agents = [{ users_id: Number(resolvedUsersId), name: String(profile.full_name ?? "Moi") }];
+      } else if (role === "admin") {
+        // Maestro ne renvoie que le propriétaire du jeton : on complète avec
+        // les courtiers Planiprêt dont l'identifiant Maestro est déjà résolu.
+        const { data: locals } = await admin
+          .from("planipret_profiles")
+          .select("full_name, email, maestro_broker_id")
+          .not("maestro_broker_id", "is", null)
+          .limit(500);
+        const seen = new Set(agents.map((a: any) => String(a.users_id)));
+        for (const p of locals ?? []) {
+          const id = String((p as any).maestro_broker_id);
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          agents.push({ users_id: Number(id), name: String((p as any).full_name ?? (p as any).email ?? id) });
+        }
+        agents.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), "fr"));
       }
       return json({ ok: true, agents, correlation_id: cid }, 200, cid);
     }
 
 
-    // ---- Deposits (paginated passthrough) --------------------------------
+    // ---- Sources (fan-out admin) -----------------------------------------
+    // Un jeton Maestro ne voit que les dépôts de son propriétaire. Pour un
+    // admin sans filtre de courtier, on interroge Maestro avec le jeton de
+    // chaque courtier connecté et on agrège les résultats.
+    type Src = { token: string; label: string; user_id: string | null };
+    const failures: { broker: string; status: number; message: string }[] = [];
+    let coverage = { connected: 1, total: 1 };
+
+    async function collectSources(): Promise<Src[]> {
+      const list: Src[] = [{ token, label: String(profile.full_name ?? profile.email ?? "moi"), user_id: user.id }];
+      if (role !== "admin" || filters.users_id) return list;
+      const [{ data: peers }, { count: totalBrokers }] = await Promise.all([
+        admin.from("planipret_profiles")
+          .select("id, user_id, full_name, email")
+          .eq("maestro_connected", true)
+          .not("maestro_broker_token", "is", null)
+          .limit(200),
+        admin.from("planipret_profiles").select("id", { count: "exact", head: true }),
+      ]);
+      for (const p of peers ?? []) {
+        const pid = (p as any).user_id ?? (p as any).id;
+        if (!pid || pid === user.id) continue;
+        const t = await getUserMaestroAccessToken(admin, pid).catch(() => null);
+        const label = String((p as any).full_name ?? (p as any).email ?? pid);
+        if (!t) { failures.push({ broker: label, status: 409, message: "maestro_not_connected" }); continue; }
+        list.push({ token: t, label, user_id: pid });
+      }
+      coverage = { connected: list.length, total: Number(totalBrokers ?? list.length) };
+      return list;
+    }
+
+    /** Parcourt toutes les pages de dépôts pour un jeton donné. */
+    async function fetchAllDeposits(src: Src, single: boolean) {
+      const out: CommissionDepositRow[] = [];
+      let page = 1, lastPage = 1, truncated = false, total = 0;
+      while (page <= SUMMARY_MAX_PAGES) {
+        const qs = buildDepositQuery({ ...filters, page, per_page: 200 });
+        const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, src.token, cid);
+        if (!r.ok) {
+          if (single) return { rows: out, truncated, total, fatal: r };
+          failures.push({ broker: src.label, status: r.status, message: String(r.data?.message ?? `HTTP ${r.status}`) });
+          break;
+        }
+        const rows: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
+        for (const row of rows) out.push({ ...row, agent_name: (row as any).agent_name ?? src.label } as CommissionDepositRow);
+        const meta = r.data?.meta ?? {};
+        lastPage = Number(meta.last_page ?? 1);
+        total += Number(meta.total ?? rows.length);
+        if (page >= lastPage || rows.length === 0) break;
+        page += 1;
+      }
+      if (page >= SUMMARY_MAX_PAGES && lastPage > SUMMARY_MAX_PAGES) truncated = true;
+      return { rows: out, truncated, total, fatal: null as any };
+    }
+
+    // ---- Deposits (agrégé pour les admins, passthrough sinon) -------------
     if (action === "deposits") {
-      const qs = buildDepositQuery(filters);
-      const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
-      if (!r.ok) return upstream(r, cid);
-      const rows: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
-      const meta = r.data?.meta ?? {};
-      log("deposits", rows.length, "of", meta.total ?? "?", `${r.durationMs}ms`);
+      const sources = await collectSources();
+      const single = sources.length === 1;
+      const merged: CommissionDepositRow[] = [];
+      let truncated = false;
+      for (const src of sources) {
+        const res = await fetchAllDeposits(src, single);
+        if (res.fatal) return upstream(res.fatal, cid);
+        merged.push(...res.rows);
+        truncated = truncated || res.truncated;
+      }
+      merged.sort((a, b) => String(b.date_trans ?? "").localeCompare(String(a.date_trans ?? "")));
+      const perPage = Number(filters.per_page ?? 50);
+      const pageNo = Number(filters.page ?? 1);
+      const slice = merged.slice((pageNo - 1) * perPage, pageNo * perPage);
+      log("deposits", slice.length, "of", merged.length, "from", sources.length, "tokens");
       return json({
         ok: true,
-        rows,
+        rows: slice,
         pagination: {
-          page: Number(meta.current_page ?? filters.page ?? 1),
-          per_page: Number(meta.per_page ?? filters.per_page ?? 50),
-          total: Number(meta.total ?? rows.length),
-          last_page: Number(meta.last_page ?? 1),
+          page: pageNo,
+          per_page: perPage,
+          total: merged.length,
+          last_page: Math.max(1, Math.ceil(merged.length / perPage)),
         },
-        scope: { role, users_id: filters.users_id ?? null },
+        truncated,
+        coverage,
+        sources: { queried: sources.length, failed: failures.length, failures: failures.slice(0, 10) },
+        scope: { role, users_id: filters.users_id ?? null, mode: sources.length > 1 ? "all_brokers" : "token_owner" },
         correlation_id: cid,
       }, 200, cid);
     }
@@ -209,28 +292,8 @@ Deno.serve(async (req) => {
       let truncated = false;
       let scanned = 0;
 
-      // Portée admin : le jeton Maestro d'un courtier ne voit que ses propres
-      // dépôts. Quand un admin demande « tous les courtiers », on interroge
-      // Maestro avec le jeton de chaque courtier connecté et on agrège.
-      type Src = { token: string; label: string; user_id: string | null };
-      const sources: Src[] = [{ token, label: String(profile.full_name ?? profile.email ?? "moi"), user_id: user.id }];
-      const failures: { broker: string; status: number; message: string }[] = [];
+      const sources = await collectSources();
 
-      if (role === "admin" && !filters.users_id) {
-        const { data: peers } = await admin
-          .from("planipret_profiles")
-          .select("id, user_id, full_name, email, maestro_connected, maestro_broker_token")
-          .eq("maestro_connected", true)
-          .not("maestro_broker_token", "is", null)
-          .limit(200);
-        for (const p of peers ?? []) {
-          const pid = (p as any).user_id ?? (p as any).id;
-          if (!pid || pid === user.id) continue;
-          const t = await getUserMaestroAccessToken(admin, pid).catch(() => null);
-          if (!t) { failures.push({ broker: String((p as any).full_name ?? (p as any).email ?? pid), status: 409, message: "maestro_not_connected" }); continue; }
-          sources.push({ token: t, label: String((p as any).full_name ?? (p as any).email ?? pid), user_id: pid });
-        }
-      }
 
       for (const src of sources) {
         let page = 1, lastPage = 1;
@@ -279,7 +342,9 @@ Deno.serve(async (req) => {
         },
         truncated,
         scanned,
+        coverage,
         sources: { queried: sources.length, failed: failures.length, failures: failures.slice(0, 10) },
+
         filters,
         scope: { role, users_id: filters.users_id ?? null, mode: sources.length > 1 ? "all_brokers" : "token_owner" },
         correlation_id: cid,
@@ -287,36 +352,34 @@ Deno.serve(async (req) => {
     }
 
 
-    // ---- Summary (server-side aggregation over all pages) -----------------
-
+    // ---- Summary (agrégat serveur, multi-courtiers pour les admins) -------
     if (action === "summary") {
+      const sources = await collectSources();
+      const single = sources.length === 1;
       const all: CommissionDepositRow[] = [];
-      let page = 1, lastPage = 1, truncated = false, total = 0;
-      while (page <= SUMMARY_MAX_PAGES) {
-        const qs = buildDepositQuery({ ...filters, page, per_page: 200 });
-        const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
-        if (!r.ok) return upstream(r, cid);
-        const rows: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
-        all.push(...rows);
-        const meta = r.data?.meta ?? {};
-        lastPage = Number(meta.last_page ?? 1);
-        total = Number(meta.total ?? all.length);
-        if (page >= lastPage || rows.length === 0) break;
-        page += 1;
+      let truncated = false, total = 0;
+      for (const src of sources) {
+        const res = await fetchAllDeposits(src, single);
+        if (res.fatal) return upstream(res.fatal, cid);
+        all.push(...res.rows);
+        truncated = truncated || res.truncated;
+        total += res.total;
       }
-      if (page >= SUMMARY_MAX_PAGES && lastPage > SUMMARY_MAX_PAGES) truncated = true;
 
       const summary = summarize(all, truncated);
-      log("summary rows", all.length, "total", summary.total_commission);
+      log("summary rows", all.length, "total", summary.total_commission, "from", sources.length, "tokens");
       return json({
         ok: true,
         summary,
         total_available: total,
-        scope: { role, users_id: filters.users_id ?? null },
+        coverage,
+        sources: { queried: sources.length, failed: failures.length, failures: failures.slice(0, 10) },
+        scope: { role, users_id: filters.users_id ?? null, mode: sources.length > 1 ? "all_brokers" : "token_owner" },
         filters,
         correlation_id: cid,
       }, 200, cid);
     }
+
 
     return json({ error: "unknown_action", message: `Action inconnue: ${action}` }, 400, cid);
   } catch (e) {

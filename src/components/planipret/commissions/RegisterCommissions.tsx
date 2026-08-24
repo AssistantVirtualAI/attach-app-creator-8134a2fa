@@ -565,6 +565,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             onPeriodIndex={setPeriodIndex}
             agents={data?.availableAgents ?? []}
             agentsWithData={data?.agentsWithData ?? []}
+            coverage={coverage}
 
             agent={agent}
             onAgent={setAgent}

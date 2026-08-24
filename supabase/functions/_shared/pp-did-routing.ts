@@ -196,3 +196,16 @@ export async function releaseDid(domain: string, rawNumber: string) {
   const released = !live.destination_user;
   return { released, phone_number: pn, write_status: write.status, live };
 }
+
+/** Liste les DID du domaine avec leur destination réelle (source de vérité PBX). */
+export async function listLiveDids(domain: string): Promise<Map<string, string>> {
+  const r = await nsCall(`/domains/${encodeURIComponent(domain)}/phonenumbers?limit=2000`);
+  const rows: any[] = Array.isArray(r.data) ? r.data : ((r.data as any)?.data ?? []);
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    const pn = pbxNumberId(row?.phonenumber ?? row?.number ?? row?.["phonenumber"]);
+    if (!pn) continue;
+    map.set(pn, destinationUserOf(row) ?? "");
+  }
+  return map;
+}

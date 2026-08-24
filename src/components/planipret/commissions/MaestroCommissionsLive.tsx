@@ -36,7 +36,8 @@ const numOf = (v: unknown) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-function rangeFor(period: Period): { date_from: string; date_to: string } {
+function rangeFor(period: Period): { date_from?: string; date_to?: string } {
+  if (period === "all") return {};
   const now = new Date();
   const to = now.toISOString().slice(0, 10);
   const d = new Date(now);
@@ -45,6 +46,7 @@ function rangeFor(period: Period): { date_from: string; date_to: string } {
   else if (period === "year" || period === "ytd") { d.setMonth(0); d.setDate(1); }
   return { date_from: d.toISOString().slice(0, 10), date_to: to };
 }
+
 
 async function callGateway(action: string, payload: Record<string, unknown> = {}) {
   const { data: { session } } = await supabase.auth.getSession();

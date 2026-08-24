@@ -50,6 +50,26 @@ export default function MaestroCallback() {
     (async () => {
       try {
         const isNative = Capacitor.isNativePlatform();
+
+        // Le flux a-t-il été démarré depuis l'application mobile ? Maestro
+        // ne connaît que le callback https, donc on renvoie le code à l'app
+        // via le deep link planipret:// au lieu d'afficher cette page.
+        if (!isNative && state) {
+          try {
+            const { data: info } = await supabase.functions.invoke("maestro-oauth-state-info", {
+              body: { state },
+            });
+            if ((info as any)?.platform === "mobile") {
+              const deepLink = `planipret://auth/maestro/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+              setStatus("ok");
+              setMessage("Retour à l'application Planiprêt…");
+              setDeepLink(deepLink);
+              inflightCodes.delete(code);
+              window.location.href = deepLink;
+              return;
+            }
+          } catch { /* on continue en mode web */ }
+        }
         const redirect_uri = isNative
           ? "planipret://auth/maestro/callback"
           : `${window.location.origin}/auth/maestro/callback`;

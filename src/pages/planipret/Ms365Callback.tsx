@@ -5,7 +5,7 @@ import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { clearRememberedMs365RedirectUri, getRememberedMs365CodeVerifierAsync, getRememberedMs365RedirectUriAsync } from "@/lib/ms365OAuth";
 import { clearMs365Pending } from "@/lib/ms365Pending";
 import { clearMs365CallbackUrl, recoverMs365CallbackParams } from "@/lib/ms365CallbackStore";
-import { clearMicrosoftSignInIntentAsync, getMicrosoftSignInIntentAsync, getMicrosoftSignInNextAsync } from "@/lib/ms365AuthLogin";
+import { clearMicrosoftSignInIntentAsync, decodeNextFromState, getMicrosoftSignInIntentAsync, getMicrosoftSignInNextAsync } from "@/lib/ms365AuthLogin";
 import { resolvePortalRedirect } from "@/lib/planipret/portalAccess";
 import { logPortalLogin } from "@/lib/planipret/portalAudit";
 

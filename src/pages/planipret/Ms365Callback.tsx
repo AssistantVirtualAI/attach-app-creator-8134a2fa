@@ -55,9 +55,10 @@ export default function Ms365Callback() {
       const { data } = await supabase.auth.getSession();
       if (data.session?.access_token) {
         clearRememberedMs365RedirectUri();
+        const next = await getMicrosoftSignInNextAsync("/mplanipret/home");
         await clearMicrosoftSignInIntentAsync();
         setStatus("ok");
-        navigate("/mplanipret/home", { replace: true });
+        navigate(next, { replace: true });
         return true;
       }
     } catch {}
@@ -66,8 +67,20 @@ export default function Ms365Callback() {
 
   const failWithGuard = async (message: string) => {
     if (await homeIfSignedIn()) return;
+    // Portal flows (/planipret/*) show the failure on their own Microsoft-only
+    // auth screen instead of this generic card.
+    try {
+      const next = await getMicrosoftSignInNextAsync("/mplanipret/home");
+      if (next.startsWith("/planipret/")) {
+        const base = next.startsWith("/planipret/admin") ? "/planipret/admin" : "/planipret/broker";
+        await clearMicrosoftSignInIntentAsync();
+        navigate(`${base}?ms_error=${encodeURIComponent(message)}`, { replace: true });
+        return;
+      }
+    } catch {}
     setStatus("error");
     setError(message);
+
   };
 
   const retrySignIn = () => {

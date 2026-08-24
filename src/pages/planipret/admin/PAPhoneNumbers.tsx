@@ -121,7 +121,10 @@ export default function PAPhoneNumbers() {
         </Button>
       </div>
 
+      <DidReclaimPanel />
+
       <div className="flex flex-wrap gap-2">
+
         {(["available", "assigned", "all"] as const).map((k) => (
           <Button key={k} size="sm" variant={tab === k ? "default" : "outline"} onClick={() => setTab(k)}>
             {k === "available" ? `Disponibles (${counts.available})`

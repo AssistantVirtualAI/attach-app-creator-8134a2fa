@@ -100,8 +100,11 @@ const NAV_REGULAR: typeof NAV = [
       { to: "/planipret/admin/calls",      key: "calls",       Icon: Phone, badge: "missed" },
       { to: "/planipret/admin/messages",   key: "messages",    Icon: MessageSquare },
       { to: "/planipret/admin/recordings", key: "recordings",  Icon: Mic },
+      { to: "/planipret/admin/commissions", key: "commissions", Icon: BarChart3 },
+      { to: "/planipret/admin/tasks",      key: "tasks",       Icon: CheckSquare },
       { to: "/planipret/admin/hold-music", key: "holdMusic",   Icon: Music },
       { to: "/planipret/admin/access-log", key: "accessLog",  Icon: ShieldAlert },
+
     ],
   },
 ];

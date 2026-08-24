@@ -57,16 +57,23 @@ export default function BrokerAuthScreen({
   msRedirect = "/planipret/broker/overview",
   title,
   subtitle,
+  initialError,
 }: {
   onLoggedIn?: () => Promise<void> | void;
   msRedirect?: string;
   title?: string;
   subtitle?: string;
+  /** Message shown immediately (e.g. blocked non-@planipret account). */
+  initialError?: string | null;
 }) {
   const { t, lang, toggle: toggleLang } = useMplanipretLang();
   const { theme, toggle: toggleTheme } = useMplanipretTheme();
   const [loading, setLoading] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(initialError ?? null);
+
+  useEffect(() => {
+    if (initialError) setFormError(initialError);
+  }, [initialError]);
 
   // Surface failures handed back by the Microsoft callback (?ms_error=...).
   useEffect(() => {

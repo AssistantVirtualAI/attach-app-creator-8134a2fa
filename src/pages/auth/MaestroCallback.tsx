@@ -18,6 +18,7 @@ export default function MaestroCallback() {
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [message, setMessage] = useState<string>("Traitement de l'autorisation Maestro…");
   const [details, setDetails] = useState<Record<string, string>>({});
+  const [deepLink, setDeepLink] = useState<string | null>(null);
 
   useEffect(() => {
     if (ran.current) return;
@@ -85,7 +86,8 @@ export default function MaestroCallback() {
         try { window.dispatchEvent(new Event("maestro:connected")); } catch { /* ignore */ }
         try { localStorage.setItem("pp_maestro_just_connected", String(Date.now())); } catch { /* ignore */ }
         setStatus("ok");
-        setMessage("Compte Maestro connecté avec succès. Vous pouvez fermer cet onglet.");
+        setMessage("Compte Maestro connecté avec succès. Redirection…");
+        window.setTimeout(() => { if (!navigatedAway) { navigatedAway = true; navigate("/planipret/broker", { replace: true }); } }, 1200);
       } catch (e: any) {
         setStatus("error");
         setMessage(e?.message ?? "Erreur inconnue");
@@ -112,7 +114,12 @@ export default function MaestroCallback() {
           </div>
         </div>
         <p style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.9 }}>{message}</p>
-        {Object.keys(details).length > 0 && (
+        {deepLink && (
+          <a href={deepLink} style={{ display: "inline-block", marginTop: 16, padding: "10px 16px", borderRadius: 10, background: "#2563eb", color: "#fff", fontSize: 14, textDecoration: "none" }}>
+            Ouvrir l'application Planiprêt
+          </a>
+        )}
+        {!deepLink && Object.keys(details).length > 0 && (
           <pre style={{ marginTop: 16, padding: 12, background: "#0b1220", border: "1px solid #1f2a44", borderRadius: 8, fontSize: 11, overflow: "auto" }}>
             {JSON.stringify(details, null, 2)}
           </pre>

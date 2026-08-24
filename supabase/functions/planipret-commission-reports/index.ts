@@ -174,9 +174,26 @@ Deno.serve(async (req) => {
       if (role === "broker" && resolvedUsersId) {
         agents = agents.filter((a: any) => String(a.users_id) === String(resolvedUsersId));
         if (!agents.length) agents = [{ users_id: Number(resolvedUsersId), name: String(profile.full_name ?? "Moi") }];
+      } else if (role === "admin") {
+        // Maestro ne renvoie que le propriétaire du jeton : on complète avec
+        // les courtiers Planiprêt dont l'identifiant Maestro est déjà résolu.
+        const { data: locals } = await admin
+          .from("planipret_profiles")
+          .select("full_name, email, maestro_broker_id")
+          .not("maestro_broker_id", "is", null)
+          .limit(500);
+        const seen = new Set(agents.map((a: any) => String(a.users_id)));
+        for (const p of locals ?? []) {
+          const id = String((p as any).maestro_broker_id);
+          if (!id || seen.has(id)) continue;
+          seen.add(id);
+          agents.push({ users_id: Number(id), name: String((p as any).full_name ?? (p as any).email ?? id) });
+        }
+        agents.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), "fr"));
       }
       return json({ ok: true, agents, correlation_id: cid }, 200, cid);
     }
+
 
     // ---- Sources (fan-out admin) -----------------------------------------
     // Un jeton Maestro ne voit que les dépôts de son propriétaire. Pour un

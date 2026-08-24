@@ -215,9 +215,17 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
         </div>
       )}
 
-
+      {scope === "admin" && coverage && (
+        <div className="rounded-lg border p-3 text-xs mb-3" data-testid="commission-coverage"
+          style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))" }}>
+          {fr
+            ? `Portée Maestro : ${coverage.connected} courtier(s) connecté(s) sur ${coverage.total}. L'API de commissions ne renvoie que les dépôts du courtier propriétaire du jeton — les courtiers non connectés à Maestro n'apparaissent pas dans les chiffres en direct.`
+            : `Maestro scope: ${coverage.connected} connected broker(s) out of ${coverage.total}. The commissions API only returns deposits owned by each token holder — brokers not connected to Maestro are excluded from live figures.`}
+        </div>
+      )}
 
       <div className="text-[11px] mb-3 opacity-70" data-testid="commission-filter-label">{filterLabel}</div>
+
 
       {summary && (
         <>

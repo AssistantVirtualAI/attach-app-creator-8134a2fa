@@ -776,6 +776,9 @@ Deno.serve(async (req) => {
       rowCount: mine.length,
       availableYears,
       availableAgents,
+      agentsWithData,
+      directoryBrokers,
+
       brokers,
       brokerYearly,
       brokerYears: yearsWithData,

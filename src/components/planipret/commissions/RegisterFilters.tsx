@@ -42,6 +42,7 @@ export default function RegisterFilters({
   onPeriodIndex: (i: number) => void;
   agents: string[];
   agentsWithData?: string[];
+  coverage?: CoverageMap;
   agent: string;
 
   onAgent: (a: string) => void;

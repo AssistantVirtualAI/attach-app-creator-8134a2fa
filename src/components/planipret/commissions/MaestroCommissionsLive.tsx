@@ -82,6 +82,8 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
   const [byAgentMeta, setByAgentMeta] = useState<ByAgentMeta | null>(null);
   const [byAgentPage, setByAgentPage] = useState(1);
   const [byAgentError, setByAgentError] = useState<string | null>(null);
+  const [coverage, setCoverage] = useState<{ connected: number; total: number } | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notConnected, setNotConnected] = useState(false);

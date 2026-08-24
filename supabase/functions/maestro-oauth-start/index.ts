@@ -77,6 +77,7 @@ Deno.serve(async (req) => {
       state,
       user_id: u.user.id,
       redirect_uri: redirectUri,
+      platform,
       ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
     });
 

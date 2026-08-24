@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Globe, Moon, Sun, ShieldCheck, PhoneCall, BarChart3, Mail, Loader2 } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
@@ -8,23 +8,90 @@ import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
 import { startMicrosoftSignIn } from "@/lib/ms365AuthLogin";
 import { Ms365PendingBanner } from "@/components/planipret/mobile/Ms365PendingBanner";
 
+/**
+ * Turns a raw Microsoft/OAuth failure into a message a broker can act on.
+ * `access_denied` covers both an explicit cancel and a refused consent.
+ */
+export function describeMsAuthError(raw: string | null | undefined, lang: "fr" | "en"): string | null {
+  if (!raw) return null;
+  const v = raw.toLowerCase();
+  const fr = lang === "fr";
+  if (v.includes("access_denied") || v.includes("cancel") || v.includes("annul")) {
+    return fr
+      ? "Connexion Microsoft annulée. Aucun accès n'a été accordé — réessayez pour continuer."
+      : "Microsoft sign-in was cancelled. No access was granted — try again to continue.";
+  }
+  if (v.includes("domain") || v.includes("planipret")) {
+    return fr
+      ? "Ce compte Microsoft n'est pas un compte @planipret. Utilisez votre compte professionnel Planiprêt."
+      : "This Microsoft account is not a @planipret account. Use your Planiprêt work account.";
+  }
+  if (v.includes("consent") || v.includes("aadsts65004")) {
+    return fr
+      ? "Autorisation refusée dans Microsoft 365. Acceptez les permissions demandées pour accéder au portail."
+      : "Permission was declined in Microsoft 365. Accept the requested permissions to access the portal.";
+  }
+  if (v.includes("timeout") || v.includes("network") || v.includes("fetch")) {
+    return fr
+      ? "Microsoft n'a pas répondu à temps. Vérifiez votre connexion et réessayez."
+      : "Microsoft did not respond in time. Check your connection and try again.";
+  }
+  if (v.includes("not configured") || v.includes("n'est pas configuré")) {
+    return fr
+      ? "La connexion Microsoft n'est pas configurée. Contactez un administrateur Planiprêt."
+      : "Microsoft sign-in is not configured. Contact a Planiprêt administrator.";
+  }
+  if (v.includes("session")) {
+    return fr
+      ? "La session Microsoft n'a pas pu être finalisée. Reconnectez-vous."
+      : "The Microsoft session could not be completed. Please sign in again.";
+  }
+  return fr
+    ? `Échec de la connexion Microsoft : ${raw}`
+    : `Microsoft sign-in failed: ${raw}`;
+}
+
 /** Desktop-first auth screen for the Planiprêt portals — Microsoft 365 only. */
 export default function BrokerAuthScreen({
   onLoggedIn,
   msRedirect = "/planipret/broker/overview",
   title,
   subtitle,
+  initialError,
 }: {
   onLoggedIn?: () => Promise<void> | void;
   msRedirect?: string;
   title?: string;
   subtitle?: string;
+  /** Message shown immediately (e.g. blocked non-@planipret account). */
+  initialError?: string | null;
 }) {
   const { t, lang, toggle: toggleLang } = useMplanipretLang();
   const { theme, toggle: toggleTheme } = useMplanipretTheme();
   const [loading, setLoading] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(initialError ?? null);
 
+  useEffect(() => {
+    if (initialError) setFormError(initialError);
+  }, [initialError]);
+
+  // Surface failures handed back by the Microsoft callback (?ms_error=...).
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const raw =
+      url.searchParams.get("ms_error") ||
+      url.searchParams.get("error_description") ||
+      url.searchParams.get("error");
+    if (!raw) return;
+    const message = describeMsAuthError(raw, lang === "en" ? "en" : "fr");
+    if (message) {
+      setFormError(message);
+      toast.error(message);
+    }
+    ["ms_error", "error", "error_description"].forEach((k) => url.searchParams.delete(k));
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const signInWithMicrosoft = async () => {
     setLoading(true);
@@ -32,12 +99,14 @@ export default function BrokerAuthScreen({
     try {
       await startMicrosoftSignIn(msRedirect, { prompt: "login" });
     } catch (error: any) {
-      setFormError(error?.message || t("auth.msUnavailable"));
-      toast.error(error?.message || t("auth.msUnavailable"));
+      const message = describeMsAuthError(error?.message, lang === "en" ? "en" : "fr") || t("auth.msUnavailable");
+      setFormError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   };
+
 
 
   const highlights = [

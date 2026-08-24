@@ -111,3 +111,28 @@ export async function clearMicrosoftSignInIntentAsync(): Promise<void> {
   await nativeRemove(INTENT_KEY);
   await nativeRemove(NEXT_KEY);
 }
+
+/**
+ * Full sign-out: clears the Supabase session, drops the pending Microsoft
+ * intent, then ends the Microsoft 365 session and returns to `returnPath`.
+ */
+export async function signOutMicrosoft(returnPath = "/planipret/admin"): Promise<void> {
+  try { await supabase.auth.signOut(); } catch {}
+  await clearMicrosoftSignInIntentAsync();
+  try { localStorage.removeItem("pp_ms365_callback_url"); } catch {}
+
+  const safePath = returnPath.startsWith("/") && !returnPath.startsWith("//") ? returnPath : "/planipret/admin";
+  if (Capacitor.isNativePlatform()) {
+    window.location.replace(safePath);
+    return;
+  }
+  let tenant = "common";
+  try {
+    const cfg = await fetchStartConfig();
+    if (cfg?.tenant_id) tenant = cfg.tenant_id;
+  } catch {}
+  const post = `${window.location.origin}${safePath}`;
+  window.location.replace(
+    `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/logout?post_logout_redirect_uri=${encodeURIComponent(post)}`,
+  );
+}

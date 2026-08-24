@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import BrokerAuthScreen from "@/components/planipret/broker/BrokerAuthScreen";
+import { isPlanipretEmail } from "@/components/planipret/PortalDomainGate";
+import { signOutMicrosoft } from "@/lib/ms365AuthLogin";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { PrefetchNavLink } from "@/components/PrefetchLink";
 import { supabase } from "@/integrations/supabase/client";
@@ -150,6 +152,7 @@ export default function PlanipretAdminLayout() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [anon, setAnon] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const [missingIntegrations, setMissingIntegrations] = useState(0);
   const [missedCalls, setMissedCalls] = useState(0);
@@ -264,7 +267,24 @@ export default function PlanipretAdminLayout() {
       }
       if (cancelled) return;
       if (!session?.user) { setAnon(true); setLoading(false); return; }
+      // Hard gate: only Microsoft 365 @planipret accounts (or platform super
+      // admins) may reach the admin interface. Anything else is signed out.
+      const email = session.user.email ?? "";
+      if (!isPlanipretEmail(email)) {
+        const { data: isSuper } = await supabase.rpc("is_super_admin", { _user_id: session.user.id });
+        if (cancelled) return;
+        if (isSuper !== true) {
+          try { await supabase.auth.signOut(); } catch { /* ignore */ }
+          setAnon(true);
+          setAuthError(
+            "Ce compte Microsoft n'est pas un compte @planipret. Utilisez votre compte professionnel Planiprêt.",
+          );
+          setLoading(false);
+          return;
+        }
+      }
       setAnon(false);
+      setAuthError(null);
 
       await loadProfile(session.user);
     })();
@@ -272,7 +292,13 @@ export default function PlanipretAdminLayout() {
     return () => { cancelled = true; };
   }, [navigate]);
 
-  const logout = async () => { await supabase.auth.signOut(); setAnon(true); setLoading(false); navigate("/planipret/admin", { replace: true }); };
+  const logout = async () => {
+    setAnon(true);
+    setLoading(false);
+    // Ends the Supabase session AND the Microsoft 365 session, then returns
+    // to the Planiprêt admin portal sign-in screen.
+    await signOutMicrosoft("/planipret/admin");
+  };
 
   const startWebCall = async () => {
     const destination = dialNumber.trim();
@@ -296,6 +322,7 @@ export default function PlanipretAdminLayout() {
       <div className="planipret-scope planipret-admin-scope planipret-broker-scope" data-pp-theme={theme}>
         <BrokerAuthScreen
           msRedirect={location.pathname.startsWith("/planipret/admin") ? location.pathname : "/planipret/admin/overview"}
+          initialError={authError}
         />
       </div>
     );

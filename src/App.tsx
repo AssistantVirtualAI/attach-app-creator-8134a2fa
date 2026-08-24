@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -396,6 +397,19 @@ const AvaPlatformOrgOnly = ({ children }: { children: React.ReactNode }) => {
  */
 const PlanipretOrgOnly = ({ children }: { children: React.ReactNode }) => {
   const { selectedOrgId, organizations, setSelectedOrgId, isLoading, isSuperAdmin } = useOrganization();
+  const [authed, setAuthed] = useState<boolean | null>(null);
+
+  // Anonymous visitors must land on the Planiprêt Microsoft-only sign-in
+  // screen rendered by the portal layout — never the generic /login page.
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => { if (!cancelled) setAuthed(Boolean(data.session?.user)); });
+    const sub = supabase.auth.onAuthStateChange((_e, s) => setAuthed(Boolean(s?.user)));
+    return () => { cancelled = true; sub.data.subscription.unsubscribe(); };
+  }, []);
+
+  if (authed === null) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
+  if (authed === false) return <>{children}</>;
   if (isLoading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>;
   if (selectedOrgId === PLANIPRET_ORG_ID) return <>{children}</>;
   const isMember = organizations.some((o: any) => (o.id || o.organization?.id) === PLANIPRET_ORG_ID);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { signOutMicrosoft } from "@/lib/ms365AuthLogin";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -96,10 +97,11 @@ export default function PlanipretBrokerLayout() {
   }, []);
 
   const logout = async () => {
-    await supabase.auth.signOut();
     setState("anon");
-    navigate("/planipret/broker", { replace: true });
+    // Ends the Supabase + Microsoft 365 sessions, then returns to the portal.
+    await signOutMicrosoft("/planipret/broker");
   };
+
 
 
   if (state === "checking") {

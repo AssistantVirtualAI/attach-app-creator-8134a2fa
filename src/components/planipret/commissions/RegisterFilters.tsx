@@ -28,7 +28,7 @@ export default function RegisterFilters({
   lang, years, year, onYear,
   granularity, onGranularity,
   periodIndex, onPeriodIndex,
-  agents, agent, onAgent, agentsWithData = [],
+  agents, agent, onAgent, agentsWithData = [], coverage,
   showAgent,
   lenders = [], lender = "", onLender,
 }: {

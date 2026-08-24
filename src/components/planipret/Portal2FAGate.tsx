@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, ShieldCheck, LogOut, LifeBuoy } from "lucide-react";
+import { Loader2, ShieldCheck, LogOut, LifeBuoy, MailQuestion } from "lucide-react";
 
 type Status = "checking" | "required" | "ok" | "error";
 
@@ -21,6 +21,8 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
   const [error, setError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const [sendsLeft, setSendsLeft] = useState<number | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+
   const startedRef = useRef(false);
 
   // Cooldown ticker
@@ -59,6 +61,26 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
       setBusy(false);
     }
   }, [call]);
+
+  /** Re-reads the address the code is sent to (in case an admin just fixed it). */
+  const refreshEmail = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await call("status");
+      setEmailMasked(res?.email_masked ?? null);
+      if (typeof res?.cooldown_seconds === "number") setCooldown(res.cooldown_seconds);
+      if (typeof res?.sends_remaining === "number") setSendsLeft(res.sends_remaining);
+      if (res?.has_email) toast.success(`Adresse confirmée : ${res.email_masked}`);
+      else setError("Aucune adresse courriel enregistrée — contactez un administrateur Planiprêt.");
+    } catch (e: any) {
+      setError(e?.message || "Vérification impossible");
+    } finally {
+      setBusy(false);
+    }
+  }, [call]);
+
+
 
   useEffect(() => {
     let cancelled = false;
@@ -210,7 +232,71 @@ export default function Portal2FAGate({ children }: { children: React.ReactNode 
                 <span style={{ fontSize: 11, color: "var(--pp-text-faint)" }}>{sendsLeft} renvoi(s) restant(s)</span>
               )}
             </div>
+
+            <button
+              onClick={() => setShowHelp((v) => !v)}
+              className="flex items-center gap-1 mt-3"
+              style={{ fontSize: 12, color: "var(--pp-text-muted)" }}
+            >
+              <MailQuestion size={13} /> Je n'ai pas reçu le courriel
+            </button>
+
+            {showHelp && (
+              <div
+                className="mt-3 rounded-xl p-4"
+                style={{ background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }}
+              >
+                <p style={{ fontSize: 12, color: "var(--pp-text-muted)", marginBottom: 10 }}>
+                  Le courriel peut prendre jusqu'à une minute. Vérifiez aussi vos dossiers
+                  « Indésirables » et « Courrier pourriel ».
+                </p>
+                <p style={{ fontSize: 12, color: "var(--pp-text-primary)", marginBottom: 12 }}>
+                  Adresse utilisée : <strong>{emailMasked ?? "inconnue"}</strong>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => void sendCode()}
+                    disabled={busy || cooldown > 0 || sendsLeft === 0}
+                    className="rounded-lg px-3 py-2"
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: "var(--pp-brand-accent)",
+                      color: "#fff",
+                      opacity: busy || cooldown > 0 || sendsLeft === 0 ? 0.55 : 1,
+                    }}
+                  >
+                    {cooldown > 0 ? `Renvoyer (${cooldown} s)` : "Renvoyer"}
+                  </button>
+                  <button
+                    onClick={() => void refreshEmail()}
+                    disabled={busy}
+                    className="rounded-lg px-3 py-2"
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: "transparent",
+                      border: "1px solid var(--pp-bg-border-2)",
+                      color: "var(--pp-text-primary)",
+                    }}
+                  >
+                    Vérifier mon adresse e-mail
+                  </button>
+                </div>
+                {sendsLeft === 0 && (
+                  <p style={{ fontSize: 11, color: "#f87171", marginTop: 10 }}>
+                    Limite de renvois atteinte (5 par heure). Utilisez un code de secours ou
+                    réessayez plus tard.
+                  </p>
+                )}
+                <p style={{ fontSize: 11, color: "var(--pp-text-faint)", marginTop: 10 }}>
+                  Si l'adresse est erronée, contactez un administrateur Planiprêt pour la corriger,
+                  ou utilisez un code de secours.
+                </p>
+              </div>
+            )}
           </>
+
         ) : (
           <>
             <p style={{ fontSize: 13, color: "var(--pp-text-muted)", marginBottom: 18 }}>

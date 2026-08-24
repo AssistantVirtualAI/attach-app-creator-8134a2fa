@@ -196,6 +196,64 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
             </div>
           )}
 
+          {scope === "admin" && byAgent.length > 0 && (
+            <>
+              <div className="rounded-xl border p-3 mb-4" style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))", height: 260 }}>
+                <div className="text-[11px] uppercase tracking-wide opacity-70 mb-1">
+                  {fr ? "Top 10 courtiers" : "Top 10 brokers"}
+                </div>
+                <ResponsiveContainer width="100%" height="90%">
+                  <BarChart data={byAgent.slice(0, 10).map((a) => ({ name: a.name, amount: a.total }))} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                    <XAxis type="number" tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={140} />
+                    <Tooltip formatter={(v: number) => cad2(v)} />
+                    <Bar dataKey="amount" fill="var(--pp-brand-accent, #9B7FE8)" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border mb-4" style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))" }}>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left opacity-70">
+                      <th className="p-2">{fr ? "Courtier" : "Broker"}</th>
+                      <th className="p-2 text-right">{fr ? "Dépôts" : "Deposits"}</th>
+                      <th className="p-2 text-right">{fr ? "Volume de prêts" : "Loan volume"}</th>
+                      <th className="p-2 text-right">{fr ? "Moyenne" : "Average"}</th>
+                      <th className="p-2 text-right">{fr ? "Commissions" : "Commissions"}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {byAgent.map((a, i) => (
+                      <tr key={`${a.users_id ?? a.name}-${i}`} className="border-t"
+                        style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.18))" }}>
+                        <td className="p-2">
+                          {a.users_id != null ? (
+                            <button className="underline underline-offset-2"
+                              onClick={() => setAgentId(String(a.users_id))}>{a.name}</button>
+                          ) : a.name}
+                        </td>
+                        <td className="p-2 text-right">{a.count}</td>
+                        <td className="p-2 text-right">{cad(a.loan_volume)}</td>
+                        <td className="p-2 text-right">{cad(a.average)}</td>
+                        <td className="p-2 text-right font-semibold">{cad2(a.total)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t font-semibold" style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.35))" }}>
+                      <td className="p-2">{fr ? `Total — ${byAgent.length} courtiers` : `Total — ${byAgent.length} brokers`}</td>
+                      <td className="p-2 text-right">{byAgent.reduce((s, a) => s + a.count, 0)}</td>
+                      <td className="p-2 text-right">{cad(byAgent.reduce((s, a) => s + a.loan_volume, 0))}</td>
+                      <td className="p-2 text-right">—</td>
+                      <td className="p-2 text-right">{cad2(byAgent.reduce((s, a) => s + a.total, 0))}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+
           <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))" }}>
             <table className="w-full text-xs">
               <thead>

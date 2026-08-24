@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import BrokerAuthScreen from "@/components/planipret/broker/BrokerAuthScreen";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { PrefetchNavLink } from "@/components/PrefetchLink";
 import { supabase } from "@/integrations/supabase/client";
@@ -148,6 +149,8 @@ export default function PlanipretAdminLayout() {
   const [profile, setProfile] = useState<any>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [anon, setAnon] = useState(false);
+
   const [missingIntegrations, setMissingIntegrations] = useState(0);
   const [missedCalls, setMissedCalls] = useState(0);
   const [brokerCount, setBrokerCount] = useState(0);
@@ -260,14 +263,16 @@ export default function PlanipretAdminLayout() {
         });
       }
       if (cancelled) return;
-      if (!session?.user) { navigate("/login", { replace: true }); return; }
+      if (!session?.user) { setAnon(true); setLoading(false); return; }
+      setAnon(false);
+
       await loadProfile(session.user);
     })();
 
     return () => { cancelled = true; };
   }, [navigate]);
 
-  const logout = async () => { await supabase.auth.signOut(); navigate("/login", { replace: true }); };
+  const logout = async () => { await supabase.auth.signOut(); setAnon(true); setLoading(false); navigate("/planipret/admin", { replace: true }); };
 
   const startWebCall = async () => {
     const destination = dialNumber.trim();
@@ -286,7 +291,24 @@ export default function PlanipretAdminLayout() {
     }
   };
 
+  if (anon) {
+    return (
+      <div data-pp-theme={theme} className="planipret-scope planipret-admin-scope">
+        <BrokerAuthScreen
+          msRedirect={location.pathname.startsWith("/planipret/admin") ? location.pathname : "/planipret/admin/overview"}
+          title={lang === "en" ? "Admin sign-in" : "Connexion administrateur"}
+          subtitle={
+            lang === "en"
+              ? "Sign in with your Microsoft 365 @planipret account."
+              : "Connectez-vous avec votre compte Microsoft 365 @planipret."
+          }
+        />
+      </div>
+    );
+  }
+
   if (loading) {
+
     return (
       <div data-pp-theme={theme} className="planipret-scope planipret-admin-scope min-h-screen flex items-center justify-center"
         style={{ color: "var(--pp-text-muted)", fontFamily: "'Epilogue', sans-serif" }}>

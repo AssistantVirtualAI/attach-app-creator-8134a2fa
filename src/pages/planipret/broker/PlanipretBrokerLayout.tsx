@@ -96,10 +96,11 @@ export default function PlanipretBrokerLayout() {
   }, []);
 
   const logout = async () => {
-    await supabase.auth.signOut();
     setState("anon");
-    navigate("/planipret/broker", { replace: true });
+    // Ends the Supabase + Microsoft 365 sessions, then returns to the portal.
+    await signOutMicrosoft("/planipret/broker");
   };
+
 
 
   if (state === "checking") {

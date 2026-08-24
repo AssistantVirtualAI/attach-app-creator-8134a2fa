@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { TrendingUp, Lock } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import MaestroReconnectButton from "@/components/planipret/commissions/MaestroReconnectButton";
+import MaestroSyncDiagnostics from "@/components/planipret/commissions/MaestroSyncDiagnostics";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -60,6 +62,11 @@ export default function PACommissions() {
           ? "Global view across all brokers — volume, deals, lenders and commissions"
           : "Vue globale sur tous les courtiers — volume, dossiers, prêteurs et commissions"}
       />
+
+      <div className="mb-2">
+        <MaestroReconnectButton lang={lang === "en" ? "en" : "fr"} />
+      </div>
+      <MaestroSyncDiagnostics lang={lang === "en" ? "en" : "fr"} canSync />
 
       <RegisterCommissions lang={lang === "en" ? "en" : "fr"} scope="admin" />
     </PAPage>

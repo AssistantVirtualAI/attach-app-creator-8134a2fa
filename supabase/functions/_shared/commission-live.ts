@@ -6,10 +6,6 @@
 // view is to fan out over every broker who connected their Maestro account.
 // Whatever the API can't cover stays covered by the imported register.
 
-import { getUserMaestroAccessToken } from "./maestro-oauth.ts";
-import { buildDepositQuery, commissionGet, type CommissionDepositRow } from "./commission-reports.ts";
-
-const MAX_PAGES = 10; // 10 × 200 rows per broker
 
 export type LiveRegisterRow = {
   number: string | null;
@@ -39,6 +35,7 @@ export type LiveResult = {
   coverage: { connected: number; total: number };
   failures: { broker: string; status: number; message: string }[];
   brokers: string[];
+  syncedAt?: string | null;
 };
 
 /** `number|date|amount|type` — stable across the register and the API. */
@@ -66,119 +63,82 @@ const num = (v: unknown) => {
  * Pulls live deposits for the caller (and, for admins, every broker with a
  * connected Maestro account) and shapes them like register rows.
  */
+/**
+ * Reads the asynchronously synced Maestro deposits from
+ * `planipret_commission_live_cache` (filled by `pp-commission-live-sync`) and
+ * shapes them like register rows. Reading a cache keeps the dashboards fast
+ * and makes every broker visible as soon as the sweeper covered them.
+ */
 export async function fetchLiveRegisterRows(
   admin: any,
   userId: string,
   isAdmin: boolean,
   years: number[],
-  cid: string,
+  _cid: string,
   agentFilter?: string | null,
 ): Promise<LiveResult> {
-  const failures: LiveResult["failures"] = [];
-  const brokers: string[] = [];
   const out: LiveRegisterRow[] = [];
+  const failures: LiveResult["failures"] = [];
+  const brokers = new Set<string>();
 
-  const from = `${Math.min(...years)}-01-01 00:00:00`;
-  const to = `${Math.max(...years)}-12-31 23:59:59`;
+  let q = admin
+    .from("planipret_commission_live_cache")
+    .select("broker_user_id, broker_label, maestro_broker_id, agent_name, date_trans, fiscal_year, row_data, synced_at")
+    .in("fiscal_year", years)
+    .limit(20000);
+  if (!isAdmin) q = q.eq("broker_user_id", userId);
+  if (agentFilter) q = q.ilike("agent_name", agentFilter);
 
-  type Src = { token: string; label: string; user_id: string; maestro_id: string | null };
-  const sources: Src[] = [];
+  const { data: cached, error } = await q;
+  if (error) failures.push({ broker: "cache", status: 500, message: error.message });
 
-  const { data: me } = await admin
-    .from("planipret_profiles")
-    .select("user_id, full_name, email, maestro_broker_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  const myToken = await getUserMaestroAccessToken(admin, userId).catch(() => null);
-  if (myToken) {
-    sources.push({
-      token: myToken,
-      label: String(me?.full_name ?? me?.email ?? "moi"),
-      user_id: userId,
-      maestro_id: me?.maestro_broker_id != null ? String(me.maestro_broker_id) : null,
+  let seq = -1;
+  let syncedAt: string | null = null;
+  for (const c of (cached ?? []) as any[]) {
+    const d = c.row_data ?? {};
+    const name = String(c.agent_name ?? c.broker_label ?? "").trim();
+    brokers.add(name || String(c.broker_label ?? ""));
+    if (!syncedAt || (c.synced_at && c.synced_at > syncedAt)) syncedAt = c.synced_at ?? syncedAt;
+    out.push({
+      number: d.number ?? null,
+      loan_amt: num(d.loan_amt),
+      institution: d.institution ?? null,
+      amount: num(d.amount),
+      mortgage_type: d.mortgage_type ?? null,
+      term: d.term != null ? String(d.term) : null,
+      agent_name: name || null,
+      target_name: d.target_name ?? null,
+      date_trans: c.date_trans ?? null,
+      commission_type: d.commission_type ?? "base",
+      source_row: seq--,
+      broker_user_id: c.broker_user_id ?? null,
+      maestro_broker_id: c.maestro_broker_id ?? null,
+      cabinet: d.cabinet ?? null,
+      fiscal_year: c.fiscal_year ?? null,
+      agent_key: null,
+      first_name: null,
+      last_name: null,
+      sheet_name: "maestro",
+      provenance: "maestro",
     });
   }
 
+  // Coverage comes from the per-broker diagnostics written by the sweeper.
+  let connected = 0;
   let total = 1;
-  if (isAdmin) {
-    const [{ data: peers }, { count }] = await Promise.all([
-      admin
-        .from("planipret_profiles")
-        .select("id, user_id, full_name, email, maestro_broker_id")
-        .eq("maestro_connected", true)
-        .limit(300),
-      admin.from("planipret_profiles").select("id", { count: "exact", head: true }),
-    ]);
-    total = Number(count ?? 0) || 1;
-    for (const p of peers ?? []) {
-      const pid = (p as any).user_id ?? (p as any).id;
-      if (!pid || pid === userId) continue;
-      const label = String((p as any).full_name ?? (p as any).email ?? pid);
-      const t = await getUserMaestroAccessToken(admin, pid).catch(() => null);
-      if (!t) {
-        failures.push({ broker: label, status: 409, message: "maestro_not_connected" });
-        continue;
-      }
-      sources.push({
-        token: t,
-        label,
-        user_id: pid,
-        maestro_id: (p as any).maestro_broker_id != null ? String((p as any).maestro_broker_id) : null,
-      });
+  const { data: diag } = await admin
+    .from("planipret_commission_sync_diag")
+    .select("broker_label, connected, status, reason, http_status")
+    .limit(1000);
+  const { count } = await admin.from("planipret_profiles").select("id", { count: "exact", head: true });
+  total = Number(count ?? 0) || 1;
+  for (const d of (diag ?? []) as any[]) {
+    if (d.connected) connected += 1;
+    if (isAdmin && d.status === "error") {
+      failures.push({ broker: String(d.broker_label ?? "?"), status: Number(d.http_status ?? 0), message: String(d.reason ?? "") });
     }
   }
+  if (!isAdmin) { connected = Math.min(connected, 1); total = 1; }
 
-  let seq = -1;
-  for (const src of sources) {
-    brokers.push(src.label);
-    let page = 1;
-    while (page <= MAX_PAGES) {
-      const qs = buildDepositQuery({ date_from: from, date_to: to, page, per_page: 200 });
-      const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, src.token, cid);
-      if (!r.ok) {
-        failures.push({ broker: src.label, status: r.status, message: String(r.data?.message ?? `HTTP ${r.status}`) });
-        break;
-      }
-      const rows: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
-      for (const row of rows) {
-        const date = row.date_trans ? String(row.date_trans).slice(0, 10) : null;
-        const name = String(row.agent_name ?? row.target_name ?? src.label ?? "").trim() || src.label;
-        if (agentFilter && name.toLowerCase() !== agentFilter.toLowerCase()) continue;
-        out.push({
-          number: row.number ?? null,
-          loan_amt: num(row.loan_amt),
-          institution: row.institution ?? null,
-          amount: num(row.amount),
-          mortgage_type: row.mortgage_type ?? null,
-          term: row.term != null ? String(row.term) : null,
-          agent_name: name,
-          target_name: row.target_name ?? null,
-          date_trans: date,
-          commission_type: row.commission_type ?? "base",
-          source_row: seq--,
-          broker_user_id: src.user_id,
-          maestro_broker_id: row.agent_name_id != null ? String(row.agent_name_id) : src.maestro_id,
-          cabinet: row.cabinet ?? null,
-          fiscal_year: date ? Number(date.slice(0, 4)) : null,
-          agent_key: null,
-          first_name: null,
-          last_name: null,
-          sheet_name: "maestro",
-          provenance: "maestro",
-        });
-      }
-      const meta = r.data?.meta ?? {};
-      const lastPage = Number(meta.last_page ?? 1);
-      if (page >= lastPage || rows.length === 0) break;
-      page += 1;
-    }
-  }
-
-  return {
-    rows: out,
-    coverage: { connected: sources.length, total: Math.max(total, sources.length) },
-    failures,
-    brokers,
-  };
+  return { rows: out, coverage: { connected, total: Math.max(total, connected) }, failures, brokers: [...brokers], syncedAt };
 }

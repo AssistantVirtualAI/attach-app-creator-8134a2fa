@@ -756,6 +756,7 @@ Deno.serve(async (req) => {
         rows: liveMerged.length,
         registerRows: registerRows.length,
         coverage: live.coverage,
+        liveSyncedAt: live.syncedAt ?? null,
         brokers: live.brokers,
         failures: live.failures.slice(0, 10),
       },

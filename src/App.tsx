@@ -66,6 +66,8 @@ const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin
 const PAOverview = lazyWithRetry(() => import("./pages/planipret/admin/PAOverview"));
 const PAUsers = lazyWithRetry(() => import("./pages/planipret/admin/PAUsers"));
 const PACommissions = lazyWithRetry(() => import("./pages/planipret/admin/PACommissions"));
+const PACommissionRegistry = lazyWithRetry(() => import("./pages/planipret/admin/PACommissionRegistry"));
+const PAMaestroScope = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroScope"));
 const PATasks = lazyWithRetry(() => import("./pages/planipret/admin/PATasks"));
 const PAMobileApp = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileApp"));
 const PACalls = lazyWithRetry(() => import("./pages/planipret/admin/PACalls"));

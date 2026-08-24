@@ -751,6 +751,15 @@ Deno.serve(async (req) => {
       detail,
       integrity,
       deals,
+      // Live Maestro provenance shown as a single coverage banner on the page.
+      liveMerge: {
+        rows: liveMerged.length,
+        registerRows: registerRows.length,
+        coverage: live.coverage,
+        brokers: live.brokers,
+        failures: live.failures.slice(0, 10),
+      },
+      syncedAt: new Date().toISOString(),
 
 
     });

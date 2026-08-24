@@ -56,12 +56,14 @@ export default function PlanipretPortalGuard({ portal, children }: { portal: Por
       setState("denied");
       return;
     }
-    if (access.portal !== portal) {
-      // Claims say the user belongs to the other portal — send them there.
+    // Un admin peut consulter les deux portails : seul un courtier est renvoyé
+    // vers son propre portail s'il tente d'ouvrir l'admin.
+    if (access.portal !== portal && !(access.isAdmin && portal === "broker")) {
       logPortalLogin({ portal, outcome: "failure", email: access.email, reason: "wrong-portal", path: location.pathname });
       setRedirect(portalHome(access.portal));
       return;
     }
+
     logPortalLogin({ portal, outcome: "success", email: access.email, path: location.pathname });
     setState("ready");
   };

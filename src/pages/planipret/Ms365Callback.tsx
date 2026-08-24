@@ -205,14 +205,15 @@ export default function Ms365Callback() {
         // (cold start natif, autre onglet) et évite de retomber sur l'auth.
         const stateNext = decodeNextFromState(state);
         let next = stateNext ?? (await getMicrosoftSignInNextAsync("/mplanipret/home"));
-        // Claim-based mapping: when the destination is a portal root (or the
-        // intent was lost), send the user to the portal matching their role.
-        const isPortalRoot = ["/planipret", "/planipret/", "/planipret/admin", "/planipret/broker"].includes(next);
-        if (isPortalRoot || next === "/mplanipret/home" || next === "/post-login") {
+        // Le portail demandé est prioritaire : un admin qui se connecte depuis
+        // /planipret/broker reste sur le portail courtier.
+        if (next === "/planipret/broker" || next === "/planipret/broker/") {
+          next = "/planipret/broker/overview";
+        } else if (["/planipret", "/planipret/", "/planipret/admin", "/planipret/admin/", "/mplanipret/home", "/post-login"].includes(next)) {
           const resolved = await resolvePortalRedirect("");
           if (resolved) next = resolved;
-          else if (isPortalRoot) next = await resolvePortalRedirect(next);
         }
+
         await clearMicrosoftSignInIntentAsync();
         if (next.startsWith("/planipret/")) {
           logPortalLogin({ portal: portalOf(next), outcome: "success", email: hydrated.user?.email ?? null, path: next });

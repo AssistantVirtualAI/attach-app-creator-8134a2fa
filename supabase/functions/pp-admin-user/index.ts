@@ -335,6 +335,17 @@ Deno.serve(async (req) => {
       //    with the widget (widget device is NEVER touched here).
       const mobile = await ensureMobileDevice(admin, newProfile.id, ns_extension, NS_DEFAULT_DOMAIN);
 
+      // 5) Assignation automatique d'un DID au nouveau poste : sans destination
+      //    `user_XXXX` dans le PBX, l'opérateur répond « the number can't be
+      //    completed as dialled ». Écriture ciblée + relecture obligatoire.
+      let did: any = { success: false, error: "not_attempted" };
+      try {
+        const r = await assignDidToExtension(NS_DEFAULT_DOMAIN, "", ns_extension);
+        did = r;
+      } catch (e) {
+        did = { success: false, error: String((e as Error)?.message ?? e) };
+      }
+
       await logAudit(admin, req, {
         admin_id: profile.id, action: "USER_CREATE",
         resource_type: "user", resource_id: created.user.id,

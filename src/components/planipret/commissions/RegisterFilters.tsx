@@ -27,7 +27,7 @@ export default function RegisterFilters({
   lang, years, year, onYear,
   granularity, onGranularity,
   periodIndex, onPeriodIndex,
-  agents, agent, onAgent,
+  agents, agent, onAgent, agentsWithData = [],
   showAgent,
   lenders = [], lender = "", onLender,
 }: {
@@ -40,7 +40,9 @@ export default function RegisterFilters({
   periodIndex: number;
   onPeriodIndex: (i: number) => void;
   agents: string[];
+  agentsWithData?: string[];
   agent: string;
+
   onAgent: (a: string) => void;
   showAgent: boolean;
   lenders?: string[];
@@ -121,10 +123,20 @@ export default function RegisterFilters({
       {showAgent && (
         <div className="inline-flex items-center gap-1.5">
           <Users className="w-3.5 h-3.5" style={{ color: "var(--pp-text-muted)" }} />
-          <select value={agent} onChange={(e) => onAgent(e.target.value)} style={{ ...selStyle, maxWidth: 240 }}>
-            <option value="">{isFr ? "Tous les courtiers" : "All brokers"}</option>
-            {agents.map((a) => <option key={a} value={a}>{a}</option>)}
+          <select value={agent} onChange={(e) => onAgent(e.target.value)} style={{ ...selStyle, maxWidth: 280 }}>
+            <option value="">
+              {isFr ? `Tous les courtiers (${agents.length})` : `All brokers (${agents.length})`}
+            </option>
+            {agents.map((a) => {
+              const hasData = agentsWithData.length === 0 || agentsWithData.includes(a);
+              return (
+                <option key={a} value={a}>
+                  {hasData ? a : `${a} — ${isFr ? "aucune donnée" : "no data"}`}
+                </option>
+              );
+            })}
           </select>
+
         </div>
       )}
     </div>

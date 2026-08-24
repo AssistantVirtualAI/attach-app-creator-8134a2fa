@@ -544,6 +544,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             periodIndex={periodIndex}
             onPeriodIndex={setPeriodIndex}
             agents={data?.availableAgents ?? []}
+            agentsWithData={data?.agentsWithData ?? []}
+
             agent={agent}
             onAgent={setAgent}
             showAgent={isAdminView}
@@ -913,23 +915,24 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                 }}
               >
                 <div style={{ fontWeight: 800, color: "var(--pp-text-primary)", marginBottom: 4 }}>
-                  {isFr ? "Couverture du registre importé" : "Imported register coverage"}
+                  {isFr ? "Couverture des données courtiers" : "Broker data coverage"}
                 </div>
                 <div>
                   {isFr
-                    ? `${(data.availableAgents ?? []).length} courtier(s) présent(s) dans le registre · ${fmtNum(data.totalRows ?? 0)} ligne(s) sur la période.`
-                    : `${(data.availableAgents ?? []).length} broker(s) found in the register · ${fmtNum(data.totalRows ?? 0)} row(s) in period.`}
+                    ? `${(data.availableAgents ?? []).length} courtier(s) dans le filtre · ${(data.agentsWithData ?? []).length} avec des données · ${fmtNum(data.totalRows ?? 0)} ligne(s) sur la période.`
+                    : `${(data.availableAgents ?? []).length} broker(s) in the filter · ${(data.agentsWithData ?? []).length} with data · ${fmtNum(data.totalRows ?? 0)} row(s) in period.`}
                 </div>
-                {(data.availableAgents ?? []).length > 0 && (
+                {(data.agentsWithData ?? []).length > 0 && (
                   <div style={{ marginTop: 4, opacity: 0.9 }}>
-                    {(data.availableAgents ?? []).join(" · ")}
+                    {(data.agentsWithData ?? []).join(" · ")}
                   </div>
                 )}
                 <div style={{ marginTop: 6, fontSize: 11.5, opacity: 0.85 }}>
                   {isFr
-                    ? "Le nombre de courtiers reflète uniquement le fichier importé. Pour voir toute l'entreprise, importez un registre global (toutes les lignes) plutôt qu'un tableau de bord individuel."
-                    : "Broker count reflects the imported file only. To see the whole firm, import a company-wide register instead of an individual dashboard export."}
+                    ? "Les autres courtiers apparaissent dans le filtre mais sans données : leur compte Maestro n'est pas connecté (ou l'API ne renvoie aucun dépôt) et le registre importé ne couvre pas encore leurs lignes. Voir le panneau de diagnostic ci-dessus."
+                    : "Other brokers appear in the filter without data: their Maestro account is not connected (or the API returns no deposits) and the imported register does not cover their rows yet. See the diagnostics panel above."}
                 </div>
+
               </div>
               {(data.unlinkedBrokers ?? []).length > 0 && (
                 <div className="mb-3 rounded-xl px-3 py-2.5"

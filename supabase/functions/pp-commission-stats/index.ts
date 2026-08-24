@@ -233,7 +233,56 @@ Deno.serve(async (req) => {
       .sort((a, b) => b.volume - a.volume)
       .map((x, i) => ({ rank: i + 1, ...x }));
 
-    const availableAgents = uniq(scopedAll.map((r) => r.agent_name)).sort((a, b) => a.localeCompare(b));
+    const agentsWithData = uniq(scopedAll.map((r) => r.agent_name));
+
+    // Firm-wide broker directory: in the admin global view the filter must list
+    // every broker of the firm, not just those already present in the imported
+    // register. Brokers without any row are flagged so the UI can explain why.
+    let directoryBrokers: {
+      name: string;
+      userId: string | null;
+      maestroBrokerId: string | null;
+      connected: boolean;
+      hasData: boolean;
+    }[] = [];
+    if (isAdmin && scope === "all") {
+      const { data: profs } = await admin
+        .from("planipret_profiles")
+        .select("user_id, full_name, first_name, last_name, maestro_broker_id, maestro_connected")
+        .limit(2000);
+      const dataKeys = new Set(agentsWithData.map((n) => agentKey(n)).filter(Boolean) as string[]);
+      directoryBrokers = (profs ?? [])
+        .map((p: any) => {
+          const name = String(
+            p.full_name ?? [p.first_name, p.last_name].filter(Boolean).join(" ") ?? "",
+          ).trim();
+          if (!name) return null;
+          const k = agentKey(name);
+          return {
+            name,
+            userId: p.user_id ?? null,
+            maestroBrokerId: p.maestro_broker_id ?? null,
+            connected: Boolean(p.maestro_connected),
+            hasData: Boolean(k && dataKeys.has(k)),
+          };
+        })
+        .filter(Boolean) as typeof directoryBrokers;
+      // de-dup by normalized name
+      const seenDir = new Set<string>();
+      directoryBrokers = directoryBrokers.filter((b) => {
+        const k = agentKey(b.name) ?? b.name.toLowerCase();
+        if (seenDir.has(k)) return false;
+        seenDir.add(k);
+        return true;
+      });
+      directoryBrokers.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    const availableAgents = uniq([
+      ...agentsWithData,
+      ...directoryBrokers.map((b) => b.name),
+    ]).sort((a, b) => a.localeCompare(b));
+
 
     // Per-broker × per-year matrix (multi-year evolution, independent of the selected window)
     const yearsWithData = Array.from(
@@ -727,6 +776,9 @@ Deno.serve(async (req) => {
       rowCount: mine.length,
       availableYears,
       availableAgents,
+      agentsWithData,
+      directoryBrokers,
+
       brokers,
       brokerYearly,
       brokerYears: yearsWithData,

@@ -166,3 +166,33 @@ export async function verifyDidRouting(domain: string, rawNumber: string, extens
   }
   return { matches, phone_number: pn, expected: ext || null, live, diagnostic };
 }
+
+/** Liste les postes qui existent RÉELLEMENT dans le PBX pour un domaine. */
+export async function listLiveExtensions(domain: string): Promise<Set<string>> {
+  const r = await nsCall(`/domains/${encodeURIComponent(domain)}/users?limit=1000`);
+  const rows: any[] = Array.isArray(r.data) ? r.data : ((r.data as any)?.data ?? []);
+  const set = new Set<string>();
+  for (const u of rows) {
+    const ext = String(u?.user ?? u?.["user"] ?? u?.extension ?? "").trim();
+    if (/^[0-9]{2,10}$/.test(ext)) set.add(ext);
+  }
+  return set;
+}
+
+/** Libère un DID : plus aucune destination, numéro réutilisable. */
+export async function releaseDid(domain: string, rawNumber: string) {
+  const pn = pbxNumberId(rawNumber);
+  const payload = {
+    "dial-rule-application": "to-user-residential",
+    "dial-rule-parameter": "",
+    "dial-rule-translation-destination-user": "[*]",
+    "dial-rule-translation-destination-host": domain,
+    "dial-rule-translation-source-name": "[*]",
+    "dial-rule-description": "AVAILABLE - libere automatiquement (poste inexistant)",
+    enabled: "no",
+  };
+  const write = await nsCall(pnPath(domain, pn), { method: "PUT", body: JSON.stringify(payload) });
+  const live = await readDidRouting(domain, pn);
+  const released = !live.destination_user;
+  return { released, phone_number: pn, write_status: write.status, live };
+}

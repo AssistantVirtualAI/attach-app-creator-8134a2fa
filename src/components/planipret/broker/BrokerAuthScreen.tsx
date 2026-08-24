@@ -367,6 +367,11 @@ export default function BrokerAuthScreen({
             >
               {title ?? (lang === "fr" ? "Connexion courtier" : "Broker sign-in")}
             </h1>
+            {/* Mobile/tablet showcase — same content as the desktop brand panel. */}
+            <div className="lg:hidden mt-5 mb-1">
+              <PortalShowcase variant={variant} lang={lang} />
+            </div>
+
             <p style={{ fontSize: 13.5, color: "var(--pp-text-secondary)", marginTop: 6 }}>
               {subtitle ??
                 (lang === "fr"

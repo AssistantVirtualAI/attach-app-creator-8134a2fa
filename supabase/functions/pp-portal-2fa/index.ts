@@ -232,7 +232,9 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const verified = !!verifiedRow;
 
-    const phone = normalizeE164(profile?.phone);
+    const otpEmail = String((profile as any)?.login_email ?? (profile as any)?.email ?? user.email ?? "")
+      .trim().toLowerCase();
+
 
     const markVerified = async (via: string) => {
       await admin

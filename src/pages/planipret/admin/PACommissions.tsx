@@ -62,7 +62,6 @@ export default function PACommissions() {
           : "Vue globale sur tous les courtiers — volume, dossiers, prêteurs et commissions"}
       />
 
-      <MaestroCommissionsLive lang={lang === "en" ? "en" : "fr"} scope="admin" />
       <RegisterCommissions lang={lang === "en" ? "en" : "fr"} scope="admin" />
     </PAPage>
   );

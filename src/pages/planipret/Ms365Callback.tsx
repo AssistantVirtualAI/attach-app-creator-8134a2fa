@@ -6,6 +6,14 @@ import { clearRememberedMs365RedirectUri, getRememberedMs365CodeVerifierAsync, g
 import { clearMs365Pending } from "@/lib/ms365Pending";
 import { clearMs365CallbackUrl, recoverMs365CallbackParams } from "@/lib/ms365CallbackStore";
 import { clearMicrosoftSignInIntentAsync, getMicrosoftSignInIntentAsync, getMicrosoftSignInNextAsync } from "@/lib/ms365AuthLogin";
+import { resolvePortalRedirect } from "@/lib/planipret/portalAccess";
+import { logPortalLogin } from "@/lib/planipret/portalAudit";
+
+function portalOf(path: string): "admin" | "broker" | "unknown" {
+  if (path.startsWith("/planipret/admin")) return "admin";
+  if (path.startsWith("/planipret/broker")) return "broker";
+  return "unknown";
+}
 
 async function getSessionWithRetry() {
   for (let i = 0; i < 8; i += 1) {
@@ -71,11 +79,22 @@ export default function Ms365Callback() {
     // auth screen instead of this generic card.
     try {
       const next = await getMicrosoftSignInNextAsync("/mplanipret/home");
+      logPortalLogin({ portal: portalOf(next), outcome: "failure", reason: message, path: next });
       if (next.startsWith("/planipret/")) {
         const base = next.startsWith("/planipret/admin") ? "/planipret/admin" : "/planipret/broker";
         await clearMicrosoftSignInIntentAsync();
         navigate(`${base}?ms_error=${encodeURIComponent(message)}`, { replace: true });
         return;
+      }
+      // Portal flow but no usable destination: show the friendly error page,
+      // which itself falls back to the right portal when a session exists.
+      if (!next || next === "/mplanipret/home") {
+        const fallback = await resolvePortalRedirect("");
+        if (fallback) {
+          await clearMicrosoftSignInIntentAsync();
+          navigate(fallback, { replace: true });
+          return;
+        }
       }
     } catch {}
     setStatus("error");
@@ -182,8 +201,16 @@ export default function Ms365Callback() {
         const hydrated = verify.data?.session ?? await getSessionWithRetry();
         if (!hydrated?.access_token) { await failWithGuard("Session Microsoft non finalisée — reconnectez-vous"); return; }
         clearRememberedMs365RedirectUri();
-        const next = await getMicrosoftSignInNextAsync("/mplanipret/home");
+        let next = await getMicrosoftSignInNextAsync("/mplanipret/home");
+        // Claim-based mapping: when the destination is a portal root (or the
+        // intent was lost), send the user to the portal matching their role.
+        if (next === "/planipret" || next === "/planipret/" || next === "/planipret/admin" || next === "/planipret/broker") {
+          next = await resolvePortalRedirect(next);
+        }
         await clearMicrosoftSignInIntentAsync();
+        if (next.startsWith("/planipret/")) {
+          logPortalLogin({ portal: portalOf(next), outcome: "success", email: hydrated.user?.email ?? null, path: next });
+        }
         try { void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin()); } catch {}
         setStatus("ok");
         navigate(next, { replace: true });

@@ -10655,6 +10655,51 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_portal_login_audit: {
+        Row: {
+          email: string | null
+          id: string
+          ip: string | null
+          metadata: Json
+          occurred_at: string
+          outcome: string
+          path: string | null
+          portal: string
+          provider: string | null
+          reason: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          email?: string | null
+          id?: string
+          ip?: string | null
+          metadata?: Json
+          occurred_at?: string
+          outcome?: string
+          path?: string | null
+          portal?: string
+          provider?: string | null
+          reason?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          email?: string | null
+          id?: string
+          ip?: string | null
+          metadata?: Json
+          occurred_at?: string
+          outcome?: string
+          path?: string | null
+          portal?: string
+          provider?: string | null
+          reason?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       planipret_profiles: {
         Row: {
           auth_method: string | null

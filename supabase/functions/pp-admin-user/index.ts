@@ -428,6 +428,9 @@ Deno.serve(async (req) => {
         mobile_device_id: mobile.device_id,
         mobile_device_created: mobile.created,
         mobile_device_error: mobile.error ?? null,
+        did_assigned: did.assigned ?? false,
+        did_e164: (did as any).e164 ?? null,
+        did_diagnostic: did.diagnostic ?? null,
       });
     }
 

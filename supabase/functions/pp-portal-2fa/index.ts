@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
     const { data: isMember } = await admin.rpc("is_planipret_member", { _user_id: user.id });
     const { data: profile } = await admin
       .from("planipret_profiles")
-      .select("id, phone, extension, ns_extension, ns_domain, organization_id, full_name")
+      .select("id, phone, email, login_email, extension, ns_extension, ns_domain, organization_id, full_name")
       .eq("user_id", user.id)
       .maybeSingle();
 

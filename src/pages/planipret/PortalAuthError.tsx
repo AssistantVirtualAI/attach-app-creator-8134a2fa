@@ -60,18 +60,21 @@ export default function PortalAuthError() {
         </p>
 
         <button
-          className="pp-btn-primary w-full mb-3 inline-flex items-center justify-center gap-2"
+          className="w-full mb-3 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold"
+          style={{ background: "var(--pp-accent, #0023e6)", color: "#fff" }}
           onClick={() => { void startMicrosoftSignIn("/planipret/admin/overview", { prompt: "select_account" }); }}
         >
           <RefreshCw className="w-4 h-4" /> Réessayer avec Microsoft
         </button>
 
         <div className="flex gap-2">
-          <button className="pp-btn-secondary flex-1 inline-flex items-center justify-center gap-1 text-sm"
+          <button className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-sm border"
+            style={{ borderColor: "var(--pp-border, #e2e8f0)", color: "var(--pp-text, inherit)" }}
             onClick={() => navigate("/planipret/admin", { replace: true })}>
             Portail admin <ArrowRight className="w-3.5 h-3.5" />
           </button>
-          <button className="pp-btn-secondary flex-1 inline-flex items-center justify-center gap-1 text-sm"
+          <button className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg px-3 py-2 text-sm border"
+            style={{ borderColor: "var(--pp-border, #e2e8f0)", color: "var(--pp-text, inherit)" }}
             onClick={() => navigate("/planipret/broker", { replace: true })}>
             Portail courtier <ArrowRight className="w-3.5 h-3.5" />
           </button>

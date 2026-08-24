@@ -56,6 +56,8 @@ const MMaestroSync = lazyWithRetry(() => import("./pages/planipret/mobile/MMaest
 const MDeepLinkDebug = lazyWithRetry(() => import("./pages/planipret/mobile/MDeepLinkDebug"));
 const PlanipretAudit = lazyWithRetry(() => import("./pages/planipret/PlanipretAudit"));
 const Ms365Callback = lazyWithRetry(() => import("./pages/planipret/Ms365Callback"));
+const PortalAuthError = lazyWithRetry(() => import("./pages/planipret/PortalAuthError"));
+import PlanipretPortalGuard from "./components/planipret/PlanipretPortalGuard";
 const MaestroCallback = lazyWithRetry(() => import("./pages/auth/MaestroCallback"));
 const Ms365Diagnostics = lazyWithRetry(() => import("./pages/planipret/Ms365Diagnostics"));
 const MStyleDiagnosticsWeb = lazyWithRetry(() => import("./pages/MStyleDiagnosticsWeb"));
@@ -629,6 +631,7 @@ const App = () => (
                 <Route path="/auth/microsoft/callback" element={<Ms365Callback />} />
                 <Route path="/auth/callback" element={<Ms365Callback />} />
                 <Route path="/auth/maestro/callback" element={<MaestroCallback />} />
+                <Route path="/planipret/auth-error" element={<Suspense fallback={<AdminPageSkeleton />}><PortalAuthError /></Suspense>} />
                 <Route path="/mplanipret/ms365-diagnostics" element={<Ms365Diagnostics />} />
                 <Route path="/planipret/ms365-diagnostics" element={<Ms365Diagnostics />} />
                 <Route path="/mplanipret/style-diagnostics" element={<MStyleDiagnosticsWeb />} />
@@ -649,9 +652,11 @@ const App = () => (
                   element={
                     <AppSeparationGuard app="planipret">
                       <PlanipretOrgOnly>
-                        <Suspense fallback={<AdminPageSkeleton />}>
-                          <PlanipretAdminLayout />
-                        </Suspense>
+                        <PlanipretPortalGuard portal="admin">
+                          <Suspense fallback={<AdminPageSkeleton />}>
+                            <PlanipretAdminLayout />
+                          </Suspense>
+                        </PlanipretPortalGuard>
                       </PlanipretOrgOnly>
                     </AppSeparationGuard>
                   }
@@ -699,9 +704,11 @@ const App = () => (
                   path="/planipret/broker"
                   element={
                     <AppSeparationGuard app="planipret">
-                      <Suspense fallback={<AdminPageSkeleton />}>
-                        <PlanipretBrokerLayout />
-                      </Suspense>
+                      <PlanipretPortalGuard portal="broker">
+                        <Suspense fallback={<AdminPageSkeleton />}>
+                          <PlanipretBrokerLayout />
+                        </Suspense>
+                      </PlanipretPortalGuard>
                     </AppSeparationGuard>
                   }
                 >

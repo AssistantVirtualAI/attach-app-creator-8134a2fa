@@ -658,6 +658,8 @@ const App = () => (
                   <Route path="phone-numbers" element={<Suspense fallback={<AdminPageSkeleton />}><PAPhoneNumbers /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
+                  <Route path="commission-registry" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionRegistry /></Suspense>} />
+                  <Route path="maestro-scope" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroScope /></Suspense>} />
                   <Route path="tasks" element={<Suspense fallback={<AdminPageSkeleton />}><PATasks /></Suspense>} />
 
                   <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />

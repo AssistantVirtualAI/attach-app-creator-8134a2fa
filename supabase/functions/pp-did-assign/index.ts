@@ -205,6 +205,95 @@ Deno.serve(async (req) => {
       }, result.verified ? 200 : 502);
     }
 
+    /* -------- release_orphans : rendre disponibles les DID sans courtier -------- */
+    if (action === "release_orphans" || action === "release") {
+      const dryRun = body?.dry_run !== false;
+      const limit = Math.min(Number(body?.limit ?? 400), 500);
+
+      const liveExts = await listLiveExtensions(domain);
+
+      // Postes rattachés à un vrai courtier (profil + compte utilisateur).
+      const { data: profs } = await db
+        .from("planipret_profiles")
+        .select("extension, user_id")
+        .not("extension", "is", null);
+      const brokerExts = new Set(
+        (profs ?? [])
+          .filter((p: any) => !!p.user_id && (liveExts.size === 0 || liveExts.has(String(p.extension))))
+          .map((p: any) => String(p.extension)),
+      );
+
+      const single = String(body?.e164 ?? body?.phone_number ?? "").trim();
+      let query = db
+        .from("planipret_did_assignments")
+        .select("phone_number_e164, phone_number_digits, extension, status, display_name")
+        .eq("domain", domain)
+        .order("phone_number_digits")
+        .limit(limit);
+      if (single) query = query.eq("phone_number_digits", pbxNumberId(single));
+      const { data: rows } = await query;
+
+      const orphans = (rows ?? []).filter((r: any) => {
+        const ext = String(r.extension ?? "").trim();
+        if (!ext) return r.status !== "available";
+        return !brokerExts.has(ext);
+      });
+
+      const results: any[] = [];
+      for (const r of orphans as any[]) {
+        const pn = pbxNumberId(r.phone_number_digits || r.phone_number_e164);
+        if (dryRun) {
+          results.push({ e164: e164Of(pn), previous_extension: r.extension ?? null, released: null });
+          continue;
+        }
+        const rel = await releaseDid(domain, pn);
+        if (rel.released) {
+          await db.from("planipret_did_assignments")
+            .update({
+              status: "available",
+              extension: null,
+              display_name: null,
+              callerid_name: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("domain", domain)
+            .eq("phone_number_digits", pn);
+        }
+        await db.from("planipret_did_routing_snapshots").insert({
+          domain,
+          phone_number: pn,
+          destination_user: rel.live.destination_user,
+          dial_rule_application: rel.live.dial_rule_application,
+          dial_rule_parameter: rel.live.dial_rule_parameter,
+          description: rel.live.description,
+          enabled: rel.live.enabled,
+          source: isService ? "cron_release" : "admin_release",
+        });
+        results.push({
+          e164: e164Of(pn),
+          previous_extension: r.extension ?? null,
+          released: rel.released,
+          write_status: rel.write_status,
+        });
+      }
+
+      const freed = results.filter((r) => r.released).length;
+      return json({
+        success: true,
+        action: "release_orphans",
+        domain,
+        dry_run: dryRun,
+        live_extensions: liveExts.size,
+        broker_extensions: brokerExts.size,
+        candidates: orphans.length,
+        released: freed,
+        summary: dryRun
+          ? `${orphans.length} numéro(s) ne pointent vers aucun courtier réel (simulation, rien de modifié).`
+          : `${freed}/${orphans.length} numéro(s) libérés et remis en « disponible » pour réassignation.`,
+        results,
+      });
+    }
+
     return json({ success: false, error: `unknown action ${action}` }, 400);
   } catch (e) {
     return json({ success: false, error: String((e as Error)?.message ?? e) }, 500);

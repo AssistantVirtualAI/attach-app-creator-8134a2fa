@@ -1,4 +1,5 @@
 import { Users, Landmark } from "lucide-react";
+import { causeLabel, coverageFor, type CoverageMap } from "@/lib/planipret/brokerCoverage";
 
 export type Granularity = "week" | "month" | "quarter" | "year" | "ytd";
 
@@ -27,7 +28,7 @@ export default function RegisterFilters({
   lang, years, year, onYear,
   granularity, onGranularity,
   periodIndex, onPeriodIndex,
-  agents, agent, onAgent, agentsWithData = [],
+  agents, agent, onAgent, agentsWithData = [], coverage,
   showAgent,
   lenders = [], lender = "", onLender,
 }: {
@@ -41,6 +42,7 @@ export default function RegisterFilters({
   onPeriodIndex: (i: number) => void;
   agents: string[];
   agentsWithData?: string[];
+  coverage?: CoverageMap;
   agent: string;
 
   onAgent: (a: string) => void;
@@ -129,9 +131,15 @@ export default function RegisterFilters({
             </option>
             {agents.map((a) => {
               const hasData = agentsWithData.length === 0 || agentsWithData.includes(a);
+              const cause = coverage ? coverageFor(coverage, a).cause : null;
+              const why = !hasData
+                ? cause && cause !== "ok"
+                  ? causeLabel(cause, isFr)
+                  : (isFr ? "aucune donnée" : "no data")
+                : null;
               return (
-                <option key={a} value={a}>
-                  {hasData ? a : `${a} — ${isFr ? "aucune donnée" : "no data"}`}
+                <option key={a} value={a} title={why ?? undefined}>
+                  {why ? `${a} — ${why}` : a}
                 </option>
               );
             })}

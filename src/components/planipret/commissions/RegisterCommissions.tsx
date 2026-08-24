@@ -26,6 +26,8 @@ import CommissionsHero from "./ui/CommissionsHero";
 import CommissionsTabs, { type TabKey } from "./ui/CommissionsTabs";
 import CommissionsSkeleton from "./ui/CommissionsSkeleton";
 import MaestroSyncButton from "./ui/MaestroSyncButton";
+import CommissionSyncNowButton from "./ui/CommissionSyncNowButton";
+import { loadBrokerCoverage, causeLabel, coverageFor, type CoverageMap, type CoverageCause } from "@/lib/planipret/brokerCoverage";
 import MaestroStatusBadge from "./ui/MaestroStatusBadge";
 import { statsCacheKey, readStatsCache, readAnyStatsCache, writeStatsCache } from "@/lib/planipret/commissionsCache";
 import {
@@ -210,6 +212,24 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
   // Bumped after a Maestro sync to refetch the stats.
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Per-broker "why is there no data" explanation (admin view only).
+  const [coverage, setCoverage] = useState<CoverageMap>({});
+  const [coverageMeta, setCoverageMeta] = useState<{ adminScopeConfigured: boolean; counts: Record<CoverageCause, number> } | null>(null);
+
+  useEffect(() => {
+    if (!isAdminView) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await loadBrokerCoverage((data?.agentsWithData ?? []) as string[]);
+        if (cancelled) return;
+        setCoverage(res.map);
+        setCoverageMeta({ adminScopeConfigured: res.adminScopeConfigured, counts: res.counts });
+      } catch { /* diagnostics are best-effort */ }
+    })();
+    return () => { cancelled = true; };
+  }, [isAdminView, data?.agentsWithData, refreshKey]);
 
   // Broker drill-down
   const [drillAgent, setDrillAgent] = useState<string | null>(null);
@@ -545,6 +565,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             onPeriodIndex={setPeriodIndex}
             agents={data?.availableAgents ?? []}
             agentsWithData={data?.agentsWithData ?? []}
+            coverage={coverage}
 
             agent={agent}
             onAgent={setAgent}
@@ -594,6 +615,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
               <FileDown className="w-3.5 h-3.5" />{isFr ? "Rapport détaillé" : "Detailed report"}
             </button>}
             <MaestroSyncButton lang={lang} scope={isAdminView ? "admin" : "broker"} onDone={() => setRefreshKey((k) => k + 1)} />
+            {isAdminView && <CommissionSyncNowButton lang={lang} onDone={() => setRefreshKey((k) => k + 1)} />}
             <button onClick={resetFilters} className="pp-toolbar-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
               style={{ fontSize: 12, fontWeight: 700, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
               <RotateCcw className="w-3.5 h-3.5" />{isFr ? "Réinitialiser" : "Reset"}
@@ -927,11 +949,44 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                     {(data.agentsWithData ?? []).join(" · ")}
                   </div>
                 )}
-                <div style={{ marginTop: 6, fontSize: 11.5, opacity: 0.85 }}>
-                  {isFr
-                    ? "Les autres courtiers apparaissent dans le filtre mais sans données : leur compte Maestro n'est pas connecté (ou l'API ne renvoie aucun dépôt) et le registre importé ne couvre pas encore leurs lignes. Voir le panneau de diagnostic ci-dessus."
-                    : "Other brokers appear in the filter without data: their Maestro account is not connected (or the API returns no deposits) and the imported register does not cover their rows yet. See the diagnostics panel above."}
-                </div>
+                {(() => {
+                  const missing = (data.availableAgents ?? []).filter((a: string) => !(data.agentsWithData ?? []).includes(a));
+                  if (missing.length === 0) return null;
+                  const groups = new Map<CoverageCause, string[]>();
+                  for (const a of missing) {
+                    const c = coverageFor(coverage, a).cause;
+                    const k = c === "ok" ? "not_in_register" : c;
+                    groups.set(k, [...(groups.get(k) ?? []), a]);
+                  }
+                  return (
+                    <div style={{ marginTop: 8, fontSize: 11.5 }}>
+                      <div style={{ fontWeight: 800, color: "var(--pp-text-primary)", marginBottom: 3 }}>
+                        {isFr ? `Pourquoi ${missing.length} courtier(s) n'ont aucune donnée` : `Why ${missing.length} broker(s) have no data`}
+                      </div>
+                      {[...groups.entries()].map(([cause, list]) => (
+                        <div key={cause} style={{ marginBottom: 4 }}>
+                          <span style={{ fontWeight: 700, color: "var(--pp-text-primary)" }}>
+                            {causeLabel(cause, isFr)} ({list.length})
+                          </span>
+                          <span style={{ opacity: .8 }}> — {list.slice(0, 12).join(" · ")}{list.length > 12 ? " …" : ""}</span>
+                        </div>
+                      ))}
+                      {coverageMeta && !coverageMeta.adminScopeConfigured && (
+                        <div style={{ marginTop: 6, opacity: .9 }}>
+                          {isFr
+                            ? "La portée Maestro à l'échelle de la firme n'est pas configurée : voir Admin → Portée Maestro (firme)."
+                            : "Firm-wide Maestro scope is not configured: see Admin → Maestro firm scope."}
+                        </div>
+                      )}
+                      <div style={{ marginTop: 6, opacity: .85 }}>
+                        {isFr
+                          ? "Pour couvrir les courtiers hors Maestro, importez le registre global : Admin → Registre des commissions."
+                          : "To cover brokers outside Maestro, import the global register: Admin → Commission register."}
+                      </div>
+                    </div>
+                  );
+                })()}
+
 
               </div>
               {(data.unlinkedBrokers ?? []).length > 0 && (

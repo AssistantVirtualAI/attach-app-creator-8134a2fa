@@ -271,7 +271,7 @@ export default function PlanipretAdminLayout() {
     return () => { cancelled = true; };
   }, [navigate]);
 
-  const logout = async () => { await supabase.auth.signOut(); navigate("/login", { replace: true }); };
+  const logout = async () => { await supabase.auth.signOut(); setAnon(true); setLoading(false); navigate("/planipret/admin", { replace: true }); };
 
   const startWebCall = async () => {
     const destination = dialNumber.trim();

@@ -3,7 +3,7 @@ import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 
-type Period = "month" | "quarter" | "year" | "ytd";
+type Period = "month" | "quarter" | "year" | "ytd" | "all";
 
 type Summary = {
   total_commission: number;

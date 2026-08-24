@@ -275,8 +275,9 @@ Deno.serve(async (req) => {
         ok: true,
         required: !verified,
         verified,
-        has_phone: !!phone,
-        phone_masked: phone ? maskPhone(phone) : null,
+        channel: "email",
+        has_email: !!otpEmail,
+        email_masked: otpEmail ? maskEmail(otpEmail) : null,
         backup_codes_remaining: backupLeft ?? 0,
         cooldown_seconds: cooldownLeft,
         sends_remaining: Math.max(0, MAX_SENDS_PER_HOUR - count),
@@ -285,17 +286,12 @@ Deno.serve(async (req) => {
 
     if (action === "start") {
       if (verified) return json({ ok: true, required: false, verified: true });
-      if (!phone) {
+      if (!otpEmail) {
         return json({
           ok: false,
-          error: "Aucun numéro de mobile enregistré pour ce compte — utilisez un code de secours ou contactez un administrateur.",
-          code: "no_phone",
+          error: "Aucune adresse courriel enregistrée pour ce compte — utilisez un code de secours ou contactez un administrateur.",
+          code: "no_email",
         }, 400);
-      }
-      const extension = String(profile?.extension ?? profile?.ns_extension ?? "").trim();
-      const domain = String(profile?.ns_domain ?? Deno.env.get("NS_API_DOMAIN") ?? "").trim();
-      if (!extension || !domain) {
-        return json({ ok: false, error: "Configuration téléphonie manquante pour ce compte.", code: "no_extension" }, 400);
       }
 
       const { count, cooldownLeft } = await sendsWindow();
@@ -318,10 +314,6 @@ Deno.serve(async (req) => {
       }
 
       const code = String(Math.floor(100000 + Math.random() * 900000));
-      const from = await resolveFromNumber(admin, extension, domain);
-      if (!from) {
-        return json({ ok: false, error: "Aucun numéro SMS (DID) disponible pour envoyer le code.", code: "no_did" }, 400);
-      }
 
       // Only the newest code is ever valid: kill every pending challenge first.
       await admin
@@ -330,37 +322,31 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id)
         .is("consumed_at", null);
 
-      // Persist before sending so the code works the instant the texto lands.
+      // Persist before sending so the code works the instant the courriel lands.
       await admin.from("planipret_portal_2fa_challenges").insert({
         user_id: user.id,
         session_id: sessionId,
-        phone_e164: phone,
+        email: otpEmail,
         code_hash: await sha256(code),
-        sent_via: "netsapiens",
+        sent_via: "email",
         expires_at: new Date(Date.now() + CODE_TTL_MS).toISOString(),
       });
 
-      const sent = await sendSms(
-        from,
-        phone,
-        `Planiprêt — code ${code} (valide 5 min). Ignorez les codes précédents.`,
-        extension,
-        domain,
-      );
+      const sent = await sendOtpEmail(otpEmail, code, String(profile?.full_name ?? "").split(" ")[0] ?? "");
       if (!sent.ok) {
-        console.error("[pp-portal-2fa] sms failed", sent);
-        return json({ ok: false, error: "Échec de l'envoi du code par texto. Réessayez ou utilisez un code de secours.", code: "sms_failed" }, 502);
+        console.error("[pp-portal-2fa] email failed", sent);
+        return json({ ok: false, error: "Échec de l'envoi du code par courriel. Réessayez ou utilisez un code de secours.", code: "email_failed" }, 502);
       }
-
 
       return json({
         ok: true,
         sent: true,
-        phone_masked: maskPhone(phone),
+        email_masked: maskEmail(otpEmail),
         cooldown_seconds: Math.ceil(RESEND_COOLDOWN_MS / 1000),
         sends_remaining: Math.max(0, MAX_SENDS_PER_HOUR - (count + 1)),
       });
     }
+
 
     if (action === "verify") {
       if (verified) return json({ ok: true, verified: true });

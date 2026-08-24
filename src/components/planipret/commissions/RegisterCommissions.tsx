@@ -544,6 +544,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             periodIndex={periodIndex}
             onPeriodIndex={setPeriodIndex}
             agents={data?.availableAgents ?? []}
+            agentsWithData={data?.agentsWithData ?? []}
+
             agent={agent}
             onAgent={setAgent}
             showAgent={isAdminView}

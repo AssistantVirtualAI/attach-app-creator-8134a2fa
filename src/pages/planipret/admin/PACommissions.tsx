@@ -3,7 +3,6 @@ import { TrendingUp, Lock } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
-import MaestroCommissionsLive from "@/components/planipret/commissions/MaestroCommissionsLive";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function PACommissions() {

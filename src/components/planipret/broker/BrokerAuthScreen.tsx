@@ -181,13 +181,15 @@ export default function BrokerAuthScreen({
                 color: "var(--pp-text-primary)",
               }}
             >
-              {lang === "fr" ? "Connexion courtier" : "Broker sign-in"}
+              {title ?? (lang === "fr" ? "Connexion courtier" : "Broker sign-in")}
             </h1>
             <p style={{ fontSize: 13.5, color: "var(--pp-text-secondary)", marginTop: 6 }}>
-              {lang === "fr"
-                ? "Accédez à vos appels, clients et statistiques Planiprêt."
-                : "Access your Planiprêt calls, clients and statistics."}
+              {subtitle ??
+                (lang === "fr"
+                  ? "Accédez à vos appels, clients et statistiques Planiprêt."
+                  : "Access your Planiprêt calls, clients and statistics.")}
             </p>
+
 
             <div
               className="mt-7 rounded-2xl"

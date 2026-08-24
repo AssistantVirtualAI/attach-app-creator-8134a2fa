@@ -39,6 +39,12 @@ const json = (body: unknown, status = 200, cid?: string) =>
 
 const SUMMARY_MAX_PAGES = 10; // 10 × 200 = 2000 rows max per summary
 
+const num = (v: unknown) => {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 

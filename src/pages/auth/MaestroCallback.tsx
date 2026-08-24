@@ -32,6 +32,7 @@ export default function MaestroCallback() {
     if (error) {
       setStatus("error");
       setMessage(errorDesc || error);
+      setDetails({ error, state: state ?? "—" });
       return;
     }
     if (!code) {
@@ -45,8 +46,6 @@ export default function MaestroCallback() {
       return;
     }
     inflightCodes.add(code);
-
-    setDetails({ code: code.slice(0, 12) + "…", state: state ?? "—" });
 
     (async () => {
       try {
@@ -87,7 +86,15 @@ export default function MaestroCallback() {
         try { localStorage.setItem("pp_maestro_just_connected", String(Date.now())); } catch { /* ignore */ }
         setStatus("ok");
         setMessage("Compte Maestro connecté avec succès. Redirection…");
-        window.setTimeout(() => { if (!navigatedAway) { navigatedAway = true; navigate("/planipret/broker", { replace: true }); } }, 1200);
+        let returnTo = "/planipret/broker";
+        try {
+          const saved = localStorage.getItem("pp_maestro_return_to");
+          if (saved && saved.startsWith("/") && !saved.startsWith("//") && !saved.includes("/auth/maestro/callback")) {
+            returnTo = saved;
+          }
+          localStorage.removeItem("pp_maestro_return_to");
+        } catch { /* ignore */ }
+        window.setTimeout(() => { if (!navigatedAway) { navigatedAway = true; navigate(returnTo, { replace: true }); } }, 400);
       } catch (e: any) {
         setStatus("error");
         setMessage(e?.message ?? "Erreur inconnue");
@@ -119,14 +126,11 @@ export default function MaestroCallback() {
             Ouvrir l'application Planiprêt
           </a>
         )}
-        {!deepLink && Object.keys(details).length > 0 && (
+        {status === "error" && Object.keys(details).length > 0 && (
           <pre style={{ marginTop: 16, padding: 12, background: "#0b1220", border: "1px solid #1f2a44", borderRadius: 8, fontSize: 11, overflow: "auto" }}>
             {JSON.stringify(details, null, 2)}
           </pre>
         )}
-        <div style={{ marginTop: 20, fontSize: 11, opacity: 0.5 }}>
-          Callback: <code>{window.location.origin}/auth/maestro/callback</code>
-        </div>
       </div>
     </div>
   );

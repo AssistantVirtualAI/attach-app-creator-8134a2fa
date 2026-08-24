@@ -147,6 +147,15 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
         </button>
       </div>
 
+      {notConnected && (
+        <div className="rounded-lg border p-3 text-xs mb-3"
+          style={{ borderColor: "var(--pp-bg-border, rgba(120,120,150,0.25))" }}>
+          {fr
+            ? "Votre compte Maestro n'est pas connecté. Connectez-le dans Réglages › Connexions pour afficher les commissions en direct."
+            : "Your Maestro account is not connected. Connect it in Settings › Connections to load live commissions."}
+        </div>
+      )}
+
       {error && (
         <div className="flex items-start gap-2 rounded-lg border p-3 text-xs mb-3"
           style={{ borderColor: "rgba(239,68,68,0.4)", color: "#ef4444" }}>
@@ -154,6 +163,8 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
           <span>{error}</span>
         </div>
       )}
+
+
 
       {summary && (
         <>

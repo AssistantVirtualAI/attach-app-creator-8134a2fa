@@ -213,100 +213,34 @@ export default function BrokerAuthScreen({
                 {t("auth.signInMs")}
               </button>
 
-              <div className="flex items-center gap-3 my-4" style={{ color: "var(--pp-text-faint)", fontSize: 11 }}>
-                <div className="flex-1 h-px" style={{ background: "var(--pp-bg-border)" }} />
-                <span className="uppercase tracking-[0.14em]">{t("auth.or")}</span>
-                <div className="flex-1 h-px" style={{ background: "var(--pp-bg-border)" }} />
-              </div>
-
-              <form onSubmit={submit} className="space-y-4">
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: "var(--pp-text-muted)",
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                      marginBottom: 6,
-                    }}
-                  >
-                    {t("auth.email")}
-                  </label>
-                  <input
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    type="email"
-                    autoComplete="email"
-                    placeholder={t("auth.emailPh")}
-                    className="w-full rounded-xl px-4 py-3 outline-none focus:ring-2"
-                    style={inputStyle}
-                  />
+              {loading && (
+                <div className="flex items-center justify-center gap-2 mt-4" style={{ color: "var(--pp-text-muted)", fontSize: 12.5 }}>
+                  <Loader2 className="w-4 h-4 animate-spin" /> {t("auth.signingIn")}
                 </div>
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: "var(--pp-text-muted)",
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                      marginBottom: 6,
-                    }}
-                  >
-                    {t("auth.password")}
-                  </label>
-                  <input
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder={t("auth.passwordPh")}
-                    className="w-full rounded-xl px-4 py-3 outline-none focus:ring-2"
-                    style={inputStyle}
-                  />
-                </div>
+              )}
 
-                {formError && (
-                  <div
-                    style={{
-                      background: "rgba(220,38,38,0.12)",
-                      border: "1px solid rgba(220,38,38,0.4)",
-                      color: "#F87171",
-                      borderRadius: 12,
-                      padding: "10px 12px",
-                      fontSize: 12.5,
-                    }}
-                  >
-                    {formError}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full rounded-xl py-3 font-bold text-white disabled:opacity-60 flex items-center justify-center gap-2 transition-transform hover:-translate-y-[1px]"
+              {formError && (
+                <div
+                  className="mt-4"
                   style={{
-                    background: "linear-gradient(135deg, #1A4A8A, #2E9BDC)",
-                    boxShadow: "0 10px 28px -8px rgba(46,155,220,0.55)",
-                    fontSize: 14,
+                    background: "rgba(220,38,38,0.12)",
+                    border: "1px solid rgba(220,38,38,0.4)",
+                    color: "#F87171",
+                    borderRadius: 12,
+                    padding: "10px 12px",
+                    fontSize: 12.5,
                   }}
                 >
-                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {loading ? t("auth.signingIn") : t("auth.signIn")}
-                </button>
+                  {formError}
+                </div>
+              )}
 
-                <button
-                  type="button"
-                  onClick={forgot}
-                  className="w-full text-center py-1 text-[12.5px] font-semibold hover:underline"
-                  style={{ color: "var(--pp-brand-accent)" }}
-                >
-                  {t("auth.forgot")}
-                </button>
-              </form>
+              <p className="mt-4 text-center" style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>
+                {lang === "fr"
+                  ? "La connexion se fait uniquement avec votre compte Microsoft 365 @planipret."
+                  : "Sign-in is only available with your Microsoft 365 @planipret account."}
+              </p>
+
             </div>
 
             <p style={{ fontSize: 11.5, color: "var(--pp-text-muted)", textAlign: "center", marginTop: 18 }}>

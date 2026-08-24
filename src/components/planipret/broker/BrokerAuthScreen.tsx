@@ -7,6 +7,117 @@ import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
 import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
 import { startMicrosoftSignIn } from "@/lib/ms365AuthLogin";
 import { Ms365PendingBanner } from "@/components/planipret/mobile/Ms365PendingBanner";
+import portalAnalyticsImg from "@/assets/pp-portal-analytics.jpg";
+import portalCallsImg from "@/assets/pp-portal-calls.jpg";
+import portalUsersImg from "@/assets/pp-portal-users.jpg";
+import portalCommissionsImg from "@/assets/pp-portal-commissions.jpg";
+
+type Slide = { img: string; fr: { title: string; text: string }; en: { title: string; text: string } };
+
+/** Showcase slides describing what each portal gives access to. */
+const SLIDES: Record<"admin" | "broker", Slide[]> = {
+  admin: [
+    {
+      img: portalAnalyticsImg,
+      fr: { title: "Vue d'ensemble de la firme", text: "KPI en temps réel : volume d'appels, textos, temps de réponse et performance par courtier." },
+      en: { title: "Firm-wide overview", text: "Live KPIs: call volume, texts, response time and per-broker performance." },
+    },
+    {
+      img: portalCallsImg,
+      fr: { title: "Appels, textos et enregistrements", text: "Historique complet, écoute et téléchargement des enregistrements, boîtes vocales et journaux CDR." },
+      en: { title: "Calls, texts and recordings", text: "Full history, recording playback and download, voicemail and CDR logs." },
+    },
+    {
+      img: portalCommissionsImg,
+      fr: { title: "Commissions de tous les courtiers", text: "Dépôts, volume par prêteur, tendances annuelles et rapports PDF exportables." },
+      en: { title: "Commissions across brokers", text: "Deposits, volume by lender, yearly trends and exportable PDF reports." },
+    },
+    {
+      img: portalUsersImg,
+      fr: { title: "Utilisateurs, postes et sécurité", text: "Création de postes et DID automatiques, rôles, journaux d'accès et conformité." },
+      en: { title: "Users, extensions and security", text: "Extension and DID provisioning, roles, access logs and compliance." },
+    },
+  ],
+  broker: [
+    {
+      img: portalCallsImg,
+      fr: { title: "Vos appels et messages", text: "Appels manqués, textos et messagerie vocale de votre poste, au même endroit." },
+      en: { title: "Your calls and messages", text: "Missed calls, texts and voicemail from your extension, in one place." },
+    },
+    {
+      img: portalAnalyticsImg,
+      fr: { title: "Vos statistiques", text: "Volume d'appels, heures de pointe et suivi de vos clients en temps réel." },
+      en: { title: "Your statistics", text: "Call volume, peak hours and real-time client follow-up." },
+    },
+    {
+      img: portalCommissionsImg,
+      fr: { title: "Vos commissions", text: "Dépôts, volume par prêteur et évolution de vos revenus, avec analyse IA." },
+      en: { title: "Your commissions", text: "Deposits, volume by lender and revenue trends, with AI insights." },
+    },
+    {
+      img: portalUsersImg,
+      fr: { title: "Tâches et clients Maestro", text: "Tâches synchronisées avec Maestro, fiches clients et suivis du pipeline." },
+      en: { title: "Maestro tasks and clients", text: "Tasks synced with Maestro, client records and pipeline follow-ups." },
+    },
+  ],
+};
+
+/** Auto-rotating showcase of what the portal gives access to. */
+function PortalShowcase({ variant, lang }: { variant: "admin" | "broker"; lang: string }) {
+  const slides = SLIDES[variant];
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setIndex((i) => (i + 1) % slides.length), 5200);
+    return () => window.clearInterval(id);
+  }, [slides.length]);
+  const fr = lang !== "en";
+
+  return (
+    <div className="w-full">
+      <div
+        className="relative w-full overflow-hidden rounded-2xl"
+        style={{ aspectRatio: "4 / 3", border: "1px solid var(--pp-bg-border-2)", background: "var(--pp-bg-surface)" }}
+      >
+        {slides.map((s, i) => (
+          <img
+            key={s.fr.title}
+            src={s.img}
+            alt={fr ? s.fr.title : s.en.title}
+            loading={i === 0 ? "eager" : "lazy"}
+            width={1024}
+            height={768}
+            className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+            style={{ opacity: i === index ? 1 : 0 }}
+          />
+        ))}
+        <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, transparent 35%, rgba(3,7,18,0.92))" }} />
+        <div className="absolute bottom-0 left-0 right-0 p-5">
+          <p style={{ fontFamily: "Urbanist,sans-serif", fontWeight: 800, fontSize: 18, color: "#fff" }}>
+            {fr ? slides[index].fr.title : slides[index].en.title}
+          </p>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.78)", marginTop: 4, lineHeight: 1.45 }}>
+            {fr ? slides[index].fr.text : slides[index].en.text}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center justify-center gap-2 mt-4">
+        {slides.map((s, i) => (
+          <button
+            key={s.en.title}
+            onClick={() => setIndex(i)}
+            aria-label={fr ? s.fr.title : s.en.title}
+            className="rounded-full transition-all"
+            style={{
+              width: i === index ? 22 : 8,
+              height: 8,
+              background: i === index ? "var(--pp-brand-accent)" : "var(--pp-bg-border-2)",
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Turns a raw Microsoft/OAuth failure into a message a broker can act on.
@@ -58,6 +169,7 @@ export default function BrokerAuthScreen({
   title,
   subtitle,
   initialError,
+  variant = "broker",
 }: {
   onLoggedIn?: () => Promise<void> | void;
   msRedirect?: string;
@@ -65,6 +177,8 @@ export default function BrokerAuthScreen({
   subtitle?: string;
   /** Message shown immediately (e.g. blocked non-@planipret account). */
   initialError?: string | null;
+  /** Which portal the screen introduces — drives the showcase content. */
+  variant?: "admin" | "broker";
 }) {
   const { t, lang, toggle: toggleLang } = useMplanipretLang();
   const { theme, toggle: toggleTheme } = useMplanipretTheme();
@@ -109,23 +223,18 @@ export default function BrokerAuthScreen({
 
 
 
-  const highlights = [
-    {
-      icon: PhoneCall,
-      fr: "Appels, textos et messagerie vocale centralisés",
-      en: "Calls, texts and voicemail in one place",
-    },
-    {
-      icon: BarChart3,
-      fr: "Statistiques et commissions en temps réel",
-      en: "Real-time stats and commissions",
-    },
-    {
-      icon: Mail,
-      fr: "Microsoft 365 : courriels, Teams et calendrier",
-      en: "Microsoft 365: email, Teams and calendar",
-    },
-  ];
+  const highlights =
+    variant === "admin"
+      ? [
+          { icon: BarChart3, fr: "Statistiques, rapports et commissions de tous les courtiers", en: "Stats, reports and commissions for every broker" },
+          { icon: PhoneCall, fr: "Appels, textos, enregistrements et postes téléphoniques", en: "Calls, texts, recordings and phone extensions" },
+          { icon: ShieldCheck, fr: "Utilisateurs, rôles, journaux d'accès et conformité", en: "Users, roles, access logs and compliance" },
+        ]
+      : [
+          { icon: PhoneCall, fr: "Appels, textos et messagerie vocale centralisés", en: "Calls, texts and voicemail in one place" },
+          { icon: BarChart3, fr: "Statistiques et commissions en temps réel", en: "Real-time stats and commissions" },
+          { icon: Mail, fr: "Microsoft 365 : courriels, Teams et calendrier", en: "Microsoft 365: email, Teams and calendar" },
+        ];
 
   const inputStyle = {
     background: "var(--pp-bg-surface)",
@@ -168,29 +277,35 @@ export default function BrokerAuthScreen({
               color: "var(--pp-brand-accent)",
             }}
           >
-            {lang === "fr" ? "Portail courtier" : "Broker portal"}
+            {variant === "admin"
+              ? lang === "fr" ? "Portail administrateur" : "Admin portal"
+              : lang === "fr" ? "Portail courtier" : "Broker portal"}
           </p>
           <h2
             style={{
               fontFamily: "Urbanist,sans-serif",
               fontWeight: 800,
-              fontSize: 38,
+              fontSize: 32,
               lineHeight: 1.1,
               letterSpacing: "-0.02em",
               color: "var(--pp-text-primary)",
-              marginTop: 12,
+              marginTop: 10,
+              marginBottom: 18,
             }}
           >
-            {lang === "fr" ? "Toute votre activité, au même endroit." : "All your activity, in one place."}
+            {variant === "admin"
+              ? lang === "fr" ? "Pilotez toute la firme, en un seul portail." : "Run the whole firm from one portal."
+              : lang === "fr" ? "Toute votre activité, au même endroit." : "All your activity, in one place."}
           </h2>
-          <div className="mt-8 space-y-4">
+          <PortalShowcase variant={variant} lang={lang} />
+          <div className="mt-7 grid grid-cols-1 gap-3">
             {highlights.map(({ icon: Icon, fr, en }) => (
               <div key={en} className="flex items-center gap-3">
                 <span
                   className="flex items-center justify-center rounded-xl shrink-0"
                   style={{
-                    width: 38,
-                    height: 38,
+                    width: 34,
+                    height: 34,
                     background: "var(--pp-bg-elevated)",
                     border: "1px solid var(--pp-bg-border-2)",
                     color: "var(--pp-brand-accent)",
@@ -198,7 +313,7 @@ export default function BrokerAuthScreen({
                 >
                   <Icon className="w-4 h-4" />
                 </span>
-                <span style={{ fontSize: 14, color: "var(--pp-text-secondary)" }}>{lang === "fr" ? fr : en}</span>
+                <span style={{ fontSize: 13.5, color: "var(--pp-text-secondary)" }}>{lang === "fr" ? fr : en}</span>
               </div>
             ))}
           </div>

@@ -23,6 +23,7 @@ import {
   pbxNumberId,
   verifyDidRouting,
   listLiveExtensions,
+  listLiveDids,
   releaseDid,
 } from "../_shared/pp-did-routing.ts";
 
@@ -38,7 +39,24 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
-    const isService = !!SERVICE_KEY && authHeader === `Bearer ${SERVICE_KEY}`;
+    const db = createClient(SUPABASE_URL, SERVICE_KEY);
+    let isService = !!SERVICE_KEY && authHeader === `Bearer ${SERVICE_KEY}`;
+
+    // Jeton d'opération temporaire (maintenance) stocké en base et expirable.
+    const opsToken = req.headers.get("x-ops-token") ?? "";
+    if (!isService && opsToken) {
+      const { data: cfg } = await db
+        .from("planipret_integration_config")
+        .select("config_data, is_enabled")
+        .eq("integration_key", "did_release_ops")
+        .maybeSingle();
+      const stored = String((cfg as any)?.config_data?.token ?? "");
+      const exp = Date.parse(String((cfg as any)?.config_data?.expires_at ?? ""));
+      if ((cfg as any)?.is_enabled && stored && stored === opsToken && Number.isFinite(exp) && exp > Date.now()) {
+        isService = true;
+      }
+    }
+
     if (!isService) {
       const auth = await requirePlanipretAdmin(req);
       if ("error" in auth) return auth.error;
@@ -47,7 +65,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action ?? "verify");
     const domain = String(body?.domain ?? NS_DEFAULT_DOMAIN);
-    const db = createClient(SUPABASE_URL, SERVICE_KEY);
+
 
     /* ---------------- verify (re-synchronisation lecture seule) ---------------- */
     if (action === "verify") {
@@ -233,20 +251,40 @@ Deno.serve(async (req) => {
       if (single) query = query.eq("phone_number_digits", pbxNumberId(single));
       const { data: rows } = await query;
 
-      const orphans = (rows ?? []).filter((r: any) => {
-        const ext = String(r.extension ?? "").trim();
-        if (!ext) return r.status !== "available";
-        return !brokerExts.has(ext);
-      });
+      // Source de vérité : le routage RÉEL du PBX (le miroir DB peut être périmé).
+      const liveDids = await listLiveDids(domain);
+
+      // Orphelin = destination vide, ou poste qui n'appartient à aucun courtier
+      // réel / n'existe plus dans le PBX.
+      const orphans = (rows ?? [])
+        .map((r: any) => {
+          const pn = pbxNumberId(r.phone_number_digits || r.phone_number_e164);
+          const liveExt = (liveDids.get(pn) ?? "").split("@")[0].trim();
+          return { ...r, pn, liveExt, known: liveDids.has(pn) };
+        })
+        .filter((r: any) => {
+          if (!r.known) return false;                 // numéro absent du PBX : on ne touche pas
+          if (!r.liveExt) return r.status !== "available" || !!r.extension; // déjà libre : rien à faire
+          return !brokerExts.has(r.liveExt);          // routé vers un poste sans courtier réel
+        });
 
       const results: any[] = [];
       for (const r of orphans as any[]) {
-        const pn = pbxNumberId(r.phone_number_digits || r.phone_number_e164);
+        const pn = r.pn as string;
         if (dryRun) {
-          results.push({ e164: e164Of(pn), previous_extension: r.extension ?? null, released: null });
+          results.push({
+            e164: e164Of(pn),
+            previous_extension: r.liveExt || r.extension || null,
+            reason: r.liveExt ? "poste sans courtier actif" : "routage vide",
+            released: null,
+          });
           continue;
         }
-        const rel = await releaseDid(domain, pn);
+        const rel = r.liveExt
+          ? await releaseDid(domain, pn)
+          : { released: true, phone_number: pn, write_status: 0, live: { destination_user: null, dial_rule_application: null, dial_rule_parameter: null, description: null, enabled: null } as any };
+
+
         if (rel.released) {
           await db.from("planipret_did_assignments")
             .update({

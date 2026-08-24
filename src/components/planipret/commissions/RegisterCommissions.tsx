@@ -636,6 +636,28 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
         />
       </div>
 
+      {data?.liveMerge && (
+        <div className="pp-hide-export mb-2 rounded-xl" style={{ padding: "8px 10px", border: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-elevated)" }}>
+          <span style={{ fontSize: 11.5, color: "var(--pp-text-secondary)" }}>
+            {isFr
+              ? `Source unique : registre (${fmtNum(data.liveMerge.registerRows)} lignes) + Maestro en direct (${fmtNum(data.liveMerge.rows)} nouvelles lignes)`
+              : `Single source: register (${fmtNum(data.liveMerge.registerRows)} rows) + live Maestro (${fmtNum(data.liveMerge.rows)} new rows)`}
+            {isAdminView && data.liveMerge.coverage?.total ? (
+              <> · {isFr
+                ? `${data.liveMerge.coverage.connected} courtier(s) connecté(s) sur ${data.liveMerge.coverage.total}`
+                : `${data.liveMerge.coverage.connected} of ${data.liveMerge.coverage.total} brokers connected`}</>
+            ) : null}
+          </span>
+          {isAdminView && (data.liveMerge.coverage?.connected ?? 0) < (data.liveMerge.coverage?.total ?? 0) && (
+            <div style={{ fontSize: 11, color: "var(--pp-text-muted)", marginTop: 2 }}>
+              {isFr
+                ? "L'API de commissions Maestro ne renvoie que les dépôts du courtier propriétaire du jeton : les courtiers non connectés sont couverts par le registre importé."
+                : "The Maestro commissions API only returns the token owner's deposits: brokers who are not connected are covered by the imported register."}
+            </div>
+          )}
+        </div>
+      )}
+
       {error && !data && (
         <div className="pp-card" style={{ padding: 12, fontSize: 12.5, color: "var(--pp-danger,#ef4444)" }}>{error}</div>
       )}

@@ -187,6 +187,14 @@ export default function MaestroConnectCard() {
           await Browser.open({ url, presentationStyle: "fullscreen" });
         }
       } else {
+        // Mémorise la page d'origine (ex. /mplanipret/...) pour y revenir
+        // après le callback au lieu d'atterrir sur le portail broker.
+        try {
+          localStorage.setItem(
+            "pp_maestro_return_to",
+            window.location.pathname + window.location.search,
+          );
+        } catch { /* ignore */ }
         window.location.href = url;
       }
       toast.info(L.opening);

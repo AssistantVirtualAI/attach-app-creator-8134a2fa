@@ -116,7 +116,9 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
     { k: "month", fr: "Mois", en: "Month" },
     { k: "quarter", fr: "Trimestre", en: "Quarter" },
     { k: "year", fr: "Année", en: "Year" },
+    { k: "all", fr: "Tout", en: "All time" },
   ];
+
 
   return (
     <section className="mb-6">

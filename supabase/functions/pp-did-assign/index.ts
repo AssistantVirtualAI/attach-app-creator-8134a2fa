@@ -23,6 +23,7 @@ import {
   pbxNumberId,
   verifyDidRouting,
   listLiveExtensions,
+  listLiveDids,
   releaseDid,
 } from "../_shared/pp-did-routing.ts";
 

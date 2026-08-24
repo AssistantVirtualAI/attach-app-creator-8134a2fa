@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { TrendingUp, Lock } from "lucide-react";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import MaestroReconnectButton from "@/components/planipret/commissions/MaestroReconnectButton";
+import MaestroSyncDiagnostics from "@/components/planipret/commissions/MaestroSyncDiagnostics";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import { supabase } from "@/integrations/supabase/client";
 

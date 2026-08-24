@@ -565,7 +565,7 @@ const App = () => (
                 <Route path="/m" element={<MobileEmbed />} />
                 
                 {/* Universal login - redirects based on user type */}
-                <Route path="/login" element={<UniversalLogin />} />
+                <Route path="/login" element={<PlanipretLoginBounce><UniversalLogin /></PlanipretLoginBounce>} />
                 <Route path="/portal" element={<Navigate to="/login" replace />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 

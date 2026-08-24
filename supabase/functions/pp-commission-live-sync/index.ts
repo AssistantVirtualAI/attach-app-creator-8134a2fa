@@ -43,8 +43,8 @@ Deno.serve(async (req) => {
 
   // --- authorization: cron secret, or a signed-in Planiprêt admin -----------
   let trigger = "cron";
-  const cronSecret = Deno.env.get("CRON_SECRET");
-  const provided = req.headers.get("x-cron-secret");
+  const cronSecret = Deno.env.get("PP_CRON_TOKEN") ?? Deno.env.get("PP_CRON_SECRET") ?? "";
+  const provided = req.headers.get("x-pp-cron-secret") ?? req.headers.get("x-cron-secret");
   if (!(cronSecret && provided && provided === cronSecret)) {
     const authz = req.headers.get("Authorization") ?? "";
     const jwt = authz.replace(/^Bearer\s+/i, "");

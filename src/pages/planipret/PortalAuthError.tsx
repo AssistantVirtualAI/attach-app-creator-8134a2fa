@@ -46,7 +46,7 @@ export default function PortalAuthError() {
     <div className="planipret-scope planipret-admin-scope min-h-screen flex items-center justify-center p-6"
       style={{ fontFamily: "'Epilogue', sans-serif" }}>
       <div className="pp-card w-full max-w-md text-center" style={{ padding: 28 }}>
-        <img src={(planipretLogo as any).src ?? (planipretLogo as any).default} alt="Planiprêt" className="h-8 mx-auto mb-5 object-contain" />
+        <img src={planipretLogo.url} alt="Planiprêt" className="h-8 mx-auto mb-5 object-contain" />
         <ShieldAlert className="w-9 h-9 mx-auto mb-3" style={{ color: "#ef4444" }} />
         <h1 className="pp-heading" style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
           Connexion impossible
@@ -60,18 +60,18 @@ export default function PortalAuthError() {
         </p>
 
         <button
-          className="pp-btn w-full mb-3 inline-flex items-center justify-center gap-2"
+          className="pp-btn-primary w-full mb-3 inline-flex items-center justify-center gap-2"
           onClick={() => { void startMicrosoftSignIn("/planipret/admin/overview", { prompt: "select_account" }); }}
         >
           <RefreshCw className="w-4 h-4" /> Réessayer avec Microsoft
         </button>
 
         <div className="flex gap-2">
-          <button className="pp-btn-ghost flex-1 inline-flex items-center justify-center gap-1 text-sm"
+          <button className="pp-btn-secondary flex-1 inline-flex items-center justify-center gap-1 text-sm"
             onClick={() => navigate("/planipret/admin", { replace: true })}>
             Portail admin <ArrowRight className="w-3.5 h-3.5" />
           </button>
-          <button className="pp-btn-ghost flex-1 inline-flex items-center justify-center gap-1 text-sm"
+          <button className="pp-btn-secondary flex-1 inline-flex items-center justify-center gap-1 text-sm"
             onClick={() => navigate("/planipret/broker", { replace: true })}>
             Portail courtier <ArrowRight className="w-3.5 h-3.5" />
           </button>

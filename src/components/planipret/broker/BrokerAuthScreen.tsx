@@ -28,14 +28,17 @@ export default function BrokerAuthScreen({
 
   const signInWithMicrosoft = async () => {
     setLoading(true);
+    setFormError(null);
     try {
-      await startMicrosoftSignIn(msRedirect, { loginHint: email.trim() || undefined, prompt: "login" });
+      await startMicrosoftSignIn(msRedirect, { prompt: "login" });
     } catch (error: any) {
+      setFormError(error?.message || t("auth.msUnavailable"));
       toast.error(error?.message || t("auth.msUnavailable"));
     } finally {
       setLoading(false);
     }
   };
+
 
   const highlights = [
     {

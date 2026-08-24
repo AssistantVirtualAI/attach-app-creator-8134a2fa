@@ -260,7 +260,9 @@ export default function PlanipretAdminLayout() {
         });
       }
       if (cancelled) return;
-      if (!session?.user) { navigate("/login", { replace: true }); return; }
+      if (!session?.user) { setAnon(true); setLoading(false); return; }
+      setAnon(false);
+
       await loadProfile(session.user);
     })();
 

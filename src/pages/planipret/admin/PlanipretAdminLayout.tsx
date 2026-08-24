@@ -293,15 +293,9 @@ export default function PlanipretAdminLayout() {
 
   if (anon) {
     return (
-      <div data-pp-theme={theme} className="planipret-scope planipret-admin-scope">
+      <div className="planipret-scope planipret-admin-scope planipret-broker-scope" data-pp-theme={theme}>
         <BrokerAuthScreen
           msRedirect={location.pathname.startsWith("/planipret/admin") ? location.pathname : "/planipret/admin/overview"}
-          title={lang === "en" ? "Admin sign-in" : "Connexion administrateur"}
-          subtitle={
-            lang === "en"
-              ? "Sign in with your Microsoft 365 @planipret account."
-              : "Connectez-vous avec votre compte Microsoft 365 @planipret."
-          }
         />
       </div>
     );

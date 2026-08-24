@@ -61,6 +61,15 @@ async function callGateway(action: string, payload: Record<string, unknown> = {}
 
 type AgentAgg = { users_id: number | null; name: string; total: number; count: number; loan_volume: number; average: number };
 
+type ByAgentMeta = {
+  truncated?: boolean;
+  scanned?: number;
+  sources?: { queried: number; failed: number; failures: { broker: string; status: number; message: string }[] };
+  scope?: { mode?: string };
+};
+
+const PER_PAGE = 25;
+
 /** Live Maestro commission reports for the desktop portal (admin = all brokers, broker = own scope). */
 export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "en"; scope: "admin" | "broker" }) {
   const fr = lang === "fr";
@@ -70,6 +79,9 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
   const [summary, setSummary] = useState<Summary | null>(null);
   const [rows, setRows] = useState<DepositRow[]>([]);
   const [byAgent, setByAgent] = useState<AgentAgg[]>([]);
+  const [byAgentMeta, setByAgentMeta] = useState<ByAgentMeta | null>(null);
+  const [byAgentPage, setByAgentPage] = useState(1);
+  const [byAgentError, setByAgentError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notConnected, setNotConnected] = useState(false);
@@ -89,11 +101,15 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
       setSummary(s?.summary ?? null);
       setRows(Array.isArray(d?.rows) ? d.rows : Array.isArray(d?.data) ? d.data : []);
       setByAgent(Array.isArray(a?.agents) ? a.agents : []);
+      setByAgentMeta(a ? { truncated: a.truncated, scanned: a.scanned, sources: a.sources, scope: a.scope } : null);
+      setByAgentPage(1);
+      setByAgentError(null);
     } catch (e) {
       const msg = (e as Error).message || "";
       if (/maestro_not_connected/i.test(msg)) setNotConnected(true);
       else setError(msg);
-      setSummary(null); setRows([]); setByAgent([]);
+      setByAgentError(msg || null);
+      setSummary(null); setRows([]); setByAgent([]); setByAgentMeta(null);
     } finally {
       setLoading(false);
     }
@@ -110,6 +126,37 @@ export default function MaestroCommissionsLive({ lang, scope }: { lang: "fr" | "
   const chart = useMemo(
     () => (summary?.by_date ?? []).map((b) => ({ date: b.date.slice(5), amount: b.amount })),
     [summary],
+  );
+
+  const agentName = useMemo(
+    () => agents.find((a) => String(a.users_id) === agentId)?.name ?? null,
+    [agents, agentId],
+  );
+
+  const filterLabel = useMemo(() => {
+    const r = rangeFor(period);
+    const periodTxt = period === "all"
+      ? (fr ? "toutes les périodes" : "all time")
+      : `${r.date_from} → ${r.date_to}`;
+    const who = agentId
+      ? (fr ? `courtier : ${agentName ?? agentId}` : `broker: ${agentName ?? agentId}`)
+      : scope === "admin" ? (fr ? "tous les courtiers" : "all brokers") : (fr ? "mon portefeuille" : "my book");
+    return fr
+      ? `Filtre appliqué — période : ${periodTxt} · ${who} · type : base`
+      : `Applied filter — period: ${periodTxt} · ${who} · type: base`;
+  }, [period, agentId, agentName, scope, fr]);
+
+  const byAgentTotals = useMemo(() => ({
+    brokers: byAgent.length,
+    count: byAgent.reduce((s, a) => s + a.count, 0),
+    total: byAgent.reduce((s, a) => s + a.total, 0),
+    loan_volume: byAgent.reduce((s, a) => s + a.loan_volume, 0),
+  }), [byAgent]);
+
+  const byAgentPages = Math.max(1, Math.ceil(byAgent.length / PER_PAGE));
+  const pagedAgents = useMemo(
+    () => byAgent.slice((byAgentPage - 1) * PER_PAGE, byAgentPage * PER_PAGE),
+    [byAgent, byAgentPage],
   );
 
   const periods: { k: Period; fr: string; en: string }[] = [

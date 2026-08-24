@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, ShieldCheck, LogOut, LifeBuoy } from "lucide-react";
+import { Loader2, ShieldCheck, LogOut, LifeBuoy, MailQuestion } from "lucide-react";
 
 type Status = "checking" | "required" | "ok" | "error";
 

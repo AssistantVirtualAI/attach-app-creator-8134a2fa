@@ -72,57 +72,47 @@ async function regenerateBackupCodes(admin: any, userId: string): Promise<string
 
 
 
-/** Cached per isolate — the NS lookup was adding seconds to every send. */
-const fromNumberCache = new Map<string, { value: string; at: number }>();
-const FROM_CACHE_TTL_MS = 60 * 60 * 1000;
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 
-/** Best-effort lookup of an SMS-capable DID for this broker. */
-async function resolveFromNumberUncached(admin: any, extension: string, domain: string): Promise<string | null> {
-  try {
-    const res = await nsFetch(
-      `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}/smsnumbers`,
-      { method: "GET" },
-    );
-    if (res.ok) {
-      const raw = await res.json();
-      const list = Array.isArray(raw) ? raw : (raw?.smsnumbers ?? raw?.data ?? []);
-      for (const n of list) {
-        const e164 = normalizeE164(
-          typeof n === "string" ? n : (n?.["from-number"] ?? n?.number ?? n?.phone_number_e164 ?? n?.did),
-        );
-        if (e164) return e164;
-      }
-    }
-  } catch (_e) { /* fall through */ }
-
-  const { data } = await admin
-    .from("planipret_did_assignments")
-    .select("phone_number_e164, phone_number_digits")
-    .eq("extension", extension)
-    .limit(1)
-    .maybeSingle();
-  return normalizeE164(data?.phone_number_e164 ?? data?.phone_number_digits ?? null);
+function maskEmail(addr: string) {
+  const [local, domain] = addr.split("@");
+  if (!domain) return addr;
+  const head = local.slice(0, 2);
+  return `${head}${"•".repeat(Math.max(2, local.length - 2))}@${domain}`;
 }
 
-async function resolveFromNumber(admin: any, extension: string, domain: string): Promise<string | null> {
-  const key = `${domain}/${extension}`;
-  const hit = fromNumberCache.get(key);
-  if (hit && Date.now() - hit.at < FROM_CACHE_TTL_MS) return hit.value;
-  const value = await resolveFromNumberUncached(admin, extension, domain);
-  if (value) fromNumberCache.set(key, { value, at: Date.now() });
-  return value;
+function otpHtml(code: string, name: string) {
+  return `<!DOCTYPE html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1c1c1e">
+    <div style="max-width:520px;margin:0 auto;padding:24px">
+      <p>Bonjour ${name || ""},</p>
+      <p>Voici votre code de vérification pour accéder au portail Planiprêt :</p>
+      <div style="font-size:32px;letter-spacing:10px;font-weight:800;text-align:center;padding:18px;background:#f4f5f7;border-radius:10px">${code}</div>
+      <p style="font-size:13px;color:#6b7280">Ce code expire dans 5 minutes. Si vous n'avez pas demandé ce code, ignorez ce courriel.</p>
+    </div></body></html>`;
 }
 
-
-async function sendSms(from: string, to: string, message: string, extension: string, domain: string) {
-  const path = `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(extension)}/messagesessions/${newMessageSessionId()}/messages`;
-  const res = await nsFetch(path, {
-    method: "POST",
-    body: JSON.stringify({ type: "sms", destination: to, message, "from-number": from }),
-  });
-  const text = await res.text().catch(() => "");
-  return { ok: res.ok, status: res.status, body: text.slice(0, 300) };
+/** Sends the OTP by email (Resend), with a sender-domain fallback. */
+async function sendOtpEmail(to: string, code: string, name: string) {
+  if (!RESEND_API_KEY) return { ok: false, status: 500, body: "resend_not_configured" };
+  const payload = {
+    to: [to],
+    subject: `Planiprêt — code de vérification ${code}`,
+    html: otpHtml(code, name),
+  };
+  const send = (from: string) =>
+    fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from, ...payload }),
+    });
+  let r = await send("Planiprêt <noreply@ava-telecom.ca>");
+  if (!r.ok && (r.status === 403 || r.status === 422)) {
+    r = await send("Planiprêt <noreply@assistantvirtualai.com>");
+  }
+  const text = await r.text().catch(() => "");
+  return { ok: r.ok, status: r.status, body: text.slice(0, 300) };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

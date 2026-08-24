@@ -201,19 +201,29 @@ export default function Ms365Callback() {
         const hydrated = verify.data?.session ?? await getSessionWithRetry();
         if (!hydrated?.access_token) { await failWithGuard("Session Microsoft non finalisée — reconnectez-vous"); return; }
         clearRememberedMs365RedirectUri();
-        let next = await getMicrosoftSignInNextAsync("/mplanipret/home");
+        // Priorité au `state` OAuth : il survit à la perte du stockage local
+        // (cold start natif, autre onglet) et évite de retomber sur l'auth.
+        const stateNext = decodeNextFromState(state);
+        let next = stateNext ?? (await getMicrosoftSignInNextAsync("/mplanipret/home"));
         // Claim-based mapping: when the destination is a portal root (or the
         // intent was lost), send the user to the portal matching their role.
-        if (next === "/planipret" || next === "/planipret/" || next === "/planipret/admin" || next === "/planipret/broker") {
-          next = await resolvePortalRedirect(next);
+        const isPortalRoot = ["/planipret", "/planipret/", "/planipret/admin", "/planipret/broker"].includes(next);
+        if (isPortalRoot || next === "/mplanipret/home" || next === "/post-login") {
+          const resolved = await resolvePortalRedirect("");
+          if (resolved) next = resolved;
+          else if (isPortalRoot) next = await resolvePortalRedirect(next);
         }
         await clearMicrosoftSignInIntentAsync();
         if (next.startsWith("/planipret/")) {
           logPortalLogin({ portal: portalOf(next), outcome: "success", email: hydrated.user?.email ?? null, path: next });
+          // Signale au garde de portail qu'une session vient d'être établie :
+          // il attend l'hydratation au lieu d'afficher l'écran d'auth.
+          try { sessionStorage.setItem("pp_portal_just_signed_in", String(Date.now())); } catch {}
         }
         try { void import("@/lib/native/requestPermissionsAfterLogin").then(m => m.requestPermissionsAfterLogin()); } catch {}
         setStatus("ok");
         navigate(next, { replace: true });
+
         return;
       }
       const session = await getSessionWithRetry();

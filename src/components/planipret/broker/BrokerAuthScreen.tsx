@@ -321,7 +321,9 @@ export default function BrokerAuthScreen({
 
         <div className="relative z-10 flex items-center gap-2" style={{ color: "var(--pp-text-muted)", fontSize: 12 }}>
           <ShieldCheck className="w-4 h-4" />
-          {lang === "fr" ? "Connexion chiffrée · Données isolées par courtier" : "Encrypted sign-in · Per-broker data isolation"}
+          {variant === "admin"
+            ? lang === "fr" ? "Connexion chiffrée · Journal d'accès et conformité" : "Encrypted sign-in · Access log and compliance"
+            : lang === "fr" ? "Connexion chiffrée · Données isolées par courtier" : "Encrypted sign-in · Per-broker data isolation"}
         </div>
       </div>
 
@@ -438,9 +440,13 @@ export default function BrokerAuthScreen({
             </div>
 
             <p style={{ fontSize: 11.5, color: "var(--pp-text-muted)", textAlign: "center", marginTop: 18 }}>
-              {lang === "fr"
-                ? "Accès réservé aux courtiers Planiprêt · Propulsé par AVA Statistic"
-                : "Reserved for Planiprêt brokers · Powered by AVA Statistic"}
+              {variant === "admin"
+                ? lang === "fr"
+                  ? "Accès réservé aux administrateurs Planiprêt · Propulsé par AVA Statistic"
+                  : "Reserved for Planiprêt administrators · Powered by AVA Statistic"
+                : lang === "fr"
+                  ? "Accès réservé aux courtiers Planiprêt · Propulsé par AVA Statistic"
+                  : "Reserved for Planiprêt brokers · Powered by AVA Statistic"}
             </p>
           </div>
         </div>

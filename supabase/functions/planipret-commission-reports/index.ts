@@ -25,6 +25,7 @@ import {
   institutionLabel,
   type CommissionDepositRow,
 } from "../_shared/commission-reports.ts";
+import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
 
 const json = (body: unknown, status = 200, cid?: string) =>
   new Response(JSON.stringify(body), {
@@ -105,7 +106,9 @@ Deno.serve(async (req) => {
     }
 
     // ---- Maestro token + identity ---------------------------------------
-    const token = await getUserMaestroAccessToken(admin, user.id);
+    const ownToken = await getUserMaestroAccessToken(admin, user.id);
+    const firmToken = role === "admin" ? await getMaestroAdminAccessToken() : { token: null, source: "none" as const };
+    const token = firmToken.token ?? ownToken;
     if (!token) {
       return json({
         error: "maestro_not_connected",
@@ -204,6 +207,13 @@ Deno.serve(async (req) => {
     let coverage = { connected: 1, total: 1 };
 
     async function collectSources(): Promise<Src[]> {
+      // A true firm credential is queried once without users_id: Maestro then
+      // returns every broker visible to the firm. Do not fan out the same token
+      // over local profiles, which created empty/duplicate requests.
+      if (firmToken.token) {
+        coverage = { connected: 1, total: 1 };
+        return [{ token: firmToken.token, label: "Planiprêt", user_id: null }];
+      }
       const list: Src[] = [{ token, label: String(profile.full_name ?? profile.email ?? "moi"), user_id: user.id }];
       if (role !== "admin" || filters.users_id) return list;
       const [{ data: peers }, { count: totalBrokers }] = await Promise.all([

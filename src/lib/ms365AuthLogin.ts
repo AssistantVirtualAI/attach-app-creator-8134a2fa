@@ -51,6 +51,34 @@ export async function isMs365LoginConfigured(): Promise<boolean> {
   return Boolean(cfg?.configured && cfg?.client_id);
 }
 
+/** Encode/décode le chemin de retour dans le paramètre `state` OAuth. */
+function encodeNext(nextPath: string): string {
+  try {
+    return btoa(nextPath).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Extrait le chemin de retour d'un `state` OAuth (`login:<b64next>:<nonce>`).
+ * Le state est la seule source fiable quand le stockage local est perdu
+ * (cold start natif, nouvel onglet, navigation privée) — sans lui, on retombe
+ * sur la page d'auth et l'utilisateur boucle.
+ */
+export function decodeNextFromState(state?: string | null): string | null {
+  if (!state) return null;
+  const parts = String(state).split(":");
+  if (parts[0] !== "login" || !parts[1]) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const path = atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
+    return path.startsWith("/") && !path.startsWith("//") ? path : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function startMicrosoftSignIn(
   nextPath = "/post-login",
   opts?: { loginHint?: string; prompt?: "select_account" | "consent" | "login" | "none" },
@@ -59,21 +87,23 @@ export async function startMicrosoftSignIn(
   if (!cfg?.configured || !cfg?.client_id) {
     throw new Error("Microsoft SSO n'est pas configuré.");
   }
+  const safeNext = nextPath.startsWith("/") && !nextPath.startsWith("//") ? nextPath : "/post-login";
   try {
     localStorage.setItem(INTENT_KEY, "login");
-    localStorage.setItem(NEXT_KEY, nextPath);
+    localStorage.setItem(NEXT_KEY, safeNext);
   } catch {}
   await nativeSet(INTENT_KEY, "login");
-  await nativeSet(NEXT_KEY, nextPath);
+  await nativeSet(NEXT_KEY, safeNext);
   markMs365Pending();
   await openMs365Authorize({
     clientId: cfg.client_id,
     tenant: cfg.tenant_id || "common",
-    state: "login",
+    state: `login:${encodeNext(safeNext)}`,
     prompt: opts?.prompt,
     loginHint: opts?.loginHint,
   });
 }
+
 
 export function getMicrosoftSignInIntent(): string | null {
   try { return localStorage.getItem(INTENT_KEY); } catch { return null; }

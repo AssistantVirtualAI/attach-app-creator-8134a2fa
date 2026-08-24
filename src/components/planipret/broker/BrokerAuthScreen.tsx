@@ -1,5 +1,4 @@
-import { FormEvent, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Globe, Moon, Sun, ShieldCheck, PhoneCall, BarChart3, Mail, Loader2 } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
@@ -7,62 +6,25 @@ import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import avaLogoAsset from "@/assets/ava-statistics-logo.png.asset.json";
 import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
 import { startMicrosoftSignIn } from "@/lib/ms365AuthLogin";
-import { clearMs365Pending } from "@/lib/ms365Pending";
 import { Ms365PendingBanner } from "@/components/planipret/mobile/Ms365PendingBanner";
 
-/** Desktop-first auth screen for the Planiprêt broker portal. */
+/** Desktop-first auth screen for the Planiprêt portals — Microsoft 365 only. */
 export default function BrokerAuthScreen({
   onLoggedIn,
   msRedirect = "/planipret/broker/overview",
+  title,
+  subtitle,
 }: {
-  onLoggedIn: () => Promise<void> | void;
+  onLoggedIn?: () => Promise<void> | void;
   msRedirect?: string;
+  title?: string;
+  subtitle?: string;
 }) {
   const { t, lang, toggle: toggleLang } = useMplanipretLang();
   const { theme, toggle: toggleTheme } = useMplanipretTheme();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const submit = async (e?: FormEvent) => {
-    e?.preventDefault();
-    setFormError(null);
-    if (!email || !password) {
-      setFormError(t("auth.missing"));
-      return;
-    }
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
-      });
-      if (error) {
-        setFormError(error.message || t("auth.failed"));
-        return;
-      }
-      clearMs365Pending();
-      toast.success(t("auth.success"));
-      await onLoggedIn();
-    } catch (err: any) {
-      setFormError(err?.message || "Network error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const forgot = async () => {
-    if (!email) {
-      toast.error(t("auth.email"));
-      return;
-    }
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) toast.error(error.message);
-    else toast.success(lang === "fr" ? "Courriel envoyé" : "Email sent");
-  };
 
   const signInWithMicrosoft = async () => {
     setLoading(true);

@@ -1,6 +1,6 @@
 // Commission engine — implements the authoritative broker analytics logic.
-// VOLUME: base rows, loan_amt > 0, in window; unique key number|institution|mortgage_type|loan_amt,
-//         first row in source order wins, sum loan_amt.
+// VOLUME: base rows, loan_amt > 0, in window; unique key broker|number|mortgage_type.
+//         A repeated contract/product is counted once; first source row wins.
 // DEALS:  base rows in window, one row per contract number (first source-order row wins).
 // COMMISSION: sum of `amount` for every row in window, all commission types, no dedup.
 
@@ -66,13 +66,15 @@ function matches(r: RegisterRow, c: Criteria): boolean {
   return true;
 }
 
-/** Unique volume tranches retained for a window (attribution = first base row of the key). */
+const normalizedKeyPart = (value: string | null | undefined) => (value ?? "").trim().toLocaleLowerCase("fr-CA");
+
+/** Unique contract/product rows retained for a window (first base row wins). */
 export function volumeTranches(rows: RegisterRow[], w: Window): RegisterRow[] {
   const seen = new Set<string>();
   const out: RegisterRow[] = [];
   for (const r of sortSource(rows)) {
     if (!isBase(r) || n(r.loan_amt) <= 0 || !inWindow(r, w)) continue;
-    const key = `${r.number ?? ""}|${r.institution ?? ""}|${r.mortgage_type ?? ""}|${n(r.loan_amt).toFixed(2)}`;
+    const key = [r.broker_user_id ?? "", normalizedKeyPart(r.number), normalizedKeyPart(r.mortgage_type)].join("|");
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(r);

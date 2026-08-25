@@ -43,7 +43,13 @@ export interface FetchDepositsOpts {
   perPage?: number;
   maxPages?: number;
   timeoutMs?: number;
+  /** Maestro defaults to "base" when omitted — always be explicit. */
+  commissionType?: CommissionTypeId;
 }
+
+/** The four commission buckets that make up a broker's gross commission. */
+export const COMMISSION_TYPE_IDS = ["base", "bonus", "bonus2", "perform"] as const;
+export type CommissionTypeId = typeof COMMISSION_TYPE_IDS[number];
 
 export interface FetchDepositsResult {
   ok: boolean;
@@ -79,7 +85,7 @@ async function fetchJson(url: string, token: string, timeoutMs: number): Promise
  * Walks `page` until `meta.last_page` is reached (bounded by `maxPages`).
  */
 export async function fetchCommissionDeposits(opts: FetchDepositsOpts): Promise<FetchDepositsResult> {
-  const { token, usersId, dateFrom, dateTo, perPage = 100, maxPages = 60, timeoutMs = 20_000 } = opts;
+  const { token, usersId, dateFrom, dateTo, perPage = 100, maxPages = 60, timeoutMs = 20_000, commissionType = "base" } = opts;
   if (!token) return { ok: false, status: 401, rows: [], error: "no_token" };
   if (!usersId || !/^\d+$/.test(usersId)) return { ok: false, status: 400, rows: [], error: "invalid_users_id" };
 
@@ -93,6 +99,7 @@ export async function fetchCommissionDeposits(opts: FetchDepositsOpts): Promise<
       page: String(page),
       order_by: "date_trans",
       sort: "desc",
+      commission_type: commissionType,
     });
     if (dateFrom) qs.set("date_from", dateFrom);
     if (dateTo) qs.set("date_to", dateTo);
@@ -109,6 +116,34 @@ export async function fetchCommissionDeposits(opts: FetchDepositsOpts): Promise<
     page++;
   }
   return { ok: true, status: 200, rows: out, meta, pages: page };
+}
+
+/**
+ * Gross commission = base + bonus + bonus2 + perform.
+ * Maestro only ever returns ONE bucket per call (default "base"), so a broker's
+ * real gross commission requires walking every bucket. Each returned row keeps
+ * its bucket in `commission_type`.
+ */
+export async function fetchAllCommissionDeposits(
+  opts: Omit<FetchDepositsOpts, "commissionType">,
+): Promise<FetchDepositsResult & { byType: Record<string, number> }> {
+  const rows: CommissionDeposit[] = [];
+  const byType: Record<string, number> = {};
+  let anyOk = false;
+  let lastError: { status: number; error?: string; meta?: any } | null = null;
+
+  for (const type of COMMISSION_TYPE_IDS) {
+    const r = await fetchCommissionDeposits({ ...opts, commissionType: type });
+    if (!r.ok) { lastError = { status: r.status, error: r.error, meta: r.meta }; continue; }
+    anyOk = true;
+    byType[type] = r.rows.length;
+    for (const row of r.rows) rows.push({ ...row, commission_type: row.commission_type ?? type });
+  }
+
+  if (!anyOk) {
+    return { ok: false, status: lastError?.status ?? 599, rows: [], error: lastError?.error ?? "no_data", meta: lastError?.meta, byType };
+  }
+  return { ok: true, status: 200, rows, byType };
 }
 
 /** List of agents available for commission reports (admin discovery). */

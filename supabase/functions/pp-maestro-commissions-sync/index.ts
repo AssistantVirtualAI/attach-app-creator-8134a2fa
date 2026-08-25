@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { getMaestroOAuthEnv, getUserMaestroAccessToken, fetchMaestroUserProfile } from "../_shared/maestro-oauth.ts";
-import { fetchCommissionDeposits, type CommissionDeposit } from "../_shared/maestro-commissions-api.ts";
+import { fetchAllCommissionDeposits, type CommissionDeposit } from "../_shared/maestro-commissions-api.ts";
 
 /**
  * Single entry point that feeds the commission register from Maestro's
@@ -154,10 +154,15 @@ function mapDeposit(d: CommissionDeposit, i: number, prof: BrokerProfile, maestr
   const valid = date && !Number.isNaN(date.getTime());
   const brokerName = displayName(prof);
   const dealId = String(d.number ?? d.agent_name_id ?? `${i}`);
+  // Gross commission = base + bonus + bonus2 + perform. Each bucket is its own
+  // register row (keyed by type), but only the BASE row carries the loan volume
+  // so the volume is never counted 2-4x.
+  const ctype = String(d.commission_type ?? "base").trim().toLowerCase() || "base";
+  const isBase = ctype === "base";
   return {
-    row_key: `maestro:${maestroId}:${dealId}`,
+    row_key: `maestro:${maestroId}:${dealId}:${ctype}`,
     number: String(d.number ?? ""),
-    loan_amt: num(d.loan_amt),
+    loan_amt: isBase ? num(d.loan_amt) : 0,
     institution: String(d.institution ?? "").trim() || null,
     amount: num(d.amount),
     mortgage_type: String(d.mortgage_type ?? "").trim() || null,
@@ -165,7 +170,7 @@ function mapDeposit(d: CommissionDeposit, i: number, prof: BrokerProfile, maestr
     agent_name: String(d.agent_name ?? brokerName).trim() || brokerName,
     target_name: String(d.target_name ?? brokerName).trim() || brokerName,
     date_trans: valid ? date!.toISOString().slice(0, 10) : null,
-    commission_type: String(d.commission_type ?? "Commission").trim() || "Commission",
+    commission_type: ctype,
     fiscal_year: valid ? date!.getUTCFullYear() : fallbackYear,
     ym_key: valid ? date!.toISOString().slice(0, 7) : null,
     broker_user_id: (prof.user_id ?? prof.id ?? null) as string | null,
@@ -292,7 +297,7 @@ Deno.serve(async (req) => {
       }
 
       // 3. Fetch the official commission deposit rows for this broker.
-      const r = await fetchCommissionDeposits({
+      const r = await fetchAllCommissionDeposits({
         token: oauthToken,
         usersId: maestroId,
         dateFrom,
@@ -342,6 +347,21 @@ Deno.serve(async (req) => {
       }
       totalWritten += written;
 
+      // 3b. Drop legacy/stale Maestro rows for this broker (e.g. rows imported
+      // before commission_type was part of the key) so nothing is double counted.
+      if (!failed && rows.length) {
+        const keep = new Set(rows.map((r) => r.row_key));
+        const { data: existing } = await admin
+          .from("planipret_commission_register")
+          .select("row_key")
+          .eq("maestro_broker_id", maestroId)
+          .eq("sheet_name", "maestro");
+        const stale = (existing ?? []).map((x: any) => String(x.row_key)).filter((k: string) => !keep.has(k));
+        for (let i = 0; i < stale.length; i += 200) {
+          await admin.from("planipret_commission_register").delete().in("row_key", stale.slice(i, i + 200));
+        }
+      }
+
       // 4. Post-import reconciliation: Maestro totals vs what is stored in DB.
       const recon = await reconcileBroker(admin, runId, prof, name, maestroId, rows);
       reconciliation.push(...recon);
@@ -349,6 +369,7 @@ Deno.serve(async (req) => {
 
       report.push({
         broker: name, profile_id: prof.id, users_id: maestroId, written,
+        rows_by_type: (r as any).byType ?? null,
         reconciliation: recon.map((r) => ({
           year: r.fiscal_year, source_rows: r.source_rows, db_rows: r.db_rows,
           amount_diff: r.amount_diff, status: r.status,

@@ -76,7 +76,12 @@ Deno.serve(async (req) => {
     .select("user_id, full_name, email, maestro_broker_id, maestro_connected")
     .limit(1000);
 
-  const list = (profiles ?? []).filter((p: any) => p.user_id);
+  const onlyBrokers = Array.isArray(body?.broker_ids)
+    ? new Set((body.broker_ids as unknown[]).map((v) => String(v)))
+    : null;
+  const list = (profiles ?? [])
+    .filter((p: any) => p.user_id)
+    .filter((p: any) => !onlyBrokers || onlyBrokers.has(String(p.user_id)));
 
   // A firm credential can expose Maestro's complete agents directory. Resolve
   // missing local IDs before fan-out so brokers do not remain permanently

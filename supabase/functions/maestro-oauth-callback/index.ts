@@ -87,6 +87,42 @@ async function queueCommissionSync(userId: string) {
   else await job;
 }
 
+async function queueTasksSync(userId: string) {
+  const baseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!baseUrl || !serviceKey) return;
+
+  const job = fetch(`${baseUrl}/functions/v1/planipret-task-api`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      apikey: serviceKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ action: "list", user_id: userId, source: "maestro_oauth_callback", limit: 200 }),
+  }).then(async (response) => {
+    const result = await response.json().catch(() => ({}));
+    console.info("[maestro-oauth-callback] automatic task sync", JSON.stringify({
+      user_id: userId,
+      status: response.status,
+      success: result?.success ?? false,
+      tasks: Array.isArray(result?.tasks) ? result.tasks.length : (result?.total ?? null),
+      error: result?.error ?? null,
+    }));
+  }).catch((error) => {
+    console.error("[maestro-oauth-callback] automatic task sync failed", JSON.stringify({
+      user_id: userId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  });
+
+  const runtime = (globalThis as typeof globalThis & {
+    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+  }).EdgeRuntime;
+  if (runtime?.waitUntil) runtime.waitUntil(job);
+  else await job;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -276,6 +312,7 @@ Deno.serve(async (req) => {
       // broker's official Commission Reports data. Run it in the background so
       // a long report history never blocks the OAuth redirect back to the app.
       await queueCommissionSync(userId);
+      await queueTasksSync(userId);
     } else {
       await saveIntegrationState(admin, "maestro_oauth", {
         ...exch.data,

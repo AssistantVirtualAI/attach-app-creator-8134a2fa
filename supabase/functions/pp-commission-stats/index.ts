@@ -17,6 +17,7 @@ import {
   weekWindow,
   isoWeeksInYear,
   resolveWindow,
+  isInsurance,
   type Granularity,
   yoy,
 } from "../_shared/commission-engine.ts";
@@ -52,12 +53,12 @@ function breakdown(
     const cyVolume = periodVolume(rows, w, c);
     const cyDeals = periodDeals(rows, w, c);
     const cyCommission = rows
-      .filter((r) => r.date_trans && r.date_trans >= w.start && r.date_trans <= w.end && (r[field] ?? "") === k)
+      .filter((r) => r.date_trans && r.date_trans >= w.start && r.date_trans <= w.end && !isInsurance(r) && (r[field] ?? "") === k)
       .reduce((s, r) => s + Number(r.amount ?? 0), 0);
     const pyVolume = periodVolume(rows, wPy, c);
     const pyDeals = periodDeals(rows, wPy, c);
     const pyCommission = rows
-      .filter((r) => r.date_trans && r.date_trans >= wPy.start && r.date_trans <= wPy.end && (r[field] ?? "") === k)
+      .filter((r) => r.date_trans && r.date_trans >= wPy.start && r.date_trans <= wPy.end && !isInsurance(r) && (r[field] ?? "") === k)
       .reduce((s, r) => s + Number(r.amount ?? 0), 0);
     return {
       key: k,
@@ -364,7 +365,7 @@ Deno.serve(async (req) => {
 
     // Commission by type (all commission types, no dedup)
     const commissionTypes = uniq(
-      mine.filter((r) => r.date_trans && r.date_trans >= cyYtd.start && r.date_trans <= cyYtd.end).map((r) => r.commission_type),
+      mine.filter((r) => r.date_trans && r.date_trans >= cyYtd.start && r.date_trans <= cyYtd.end && !isInsurance(r)).map((r) => r.commission_type),
     ).map((t) => ({
       type: t,
       amount: mine
@@ -373,6 +374,7 @@ Deno.serve(async (req) => {
             r.date_trans &&
             r.date_trans >= cyYtd.start &&
             r.date_trans <= cyYtd.end &&
+            !isInsurance(r) &&
             (r.commission_type ?? "") === t,
         )
         .reduce((s, r) => s + Number(r.amount ?? 0), 0),

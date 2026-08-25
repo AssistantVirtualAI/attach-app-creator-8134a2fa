@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
     const { data: allRowsRaw, error } = await admin
       .from("planipret_commission_register")
       .select(
-        "number,loan_amt,institution,amount,mortgage_type,term,agent_name,target_name,date_trans,commission_type,source_row,broker_user_id,first_name,last_name,maestro_broker_id,agent_key,cabinet,fiscal_year,sheet_name",
+        "number,loan_amt,institution,amount,mortgage_type,term,agent_name,target_name,date_trans,commission_type,is_adjustment,source_row,broker_user_id,first_name,last_name,maestro_broker_id,agent_key,cabinet,fiscal_year,sheet_name",
       )
       .in("fiscal_year", years)
       .order("source_row", { ascending: true })
@@ -532,7 +532,7 @@ Deno.serve(async (req) => {
     };
 
     const calcNotes = [
-      "Volume : lignes « base » avec loan_amt > 0 dans la fenêtre exacte ; clé unique = courtier + numéro de contrat + type de produit.",
+      "Volume : lignes « base » avec loan_amt > 0 dans la fenêtre exacte, hors lignes d'ajustement (is_adjustment = 1) et hors commissions d'assurance ; dossiers = numéros de contrat uniques.",
       "Dossiers : lignes « base » dans la fenêtre, un contrat compté une seule fois, attribué au prêteur / type / terme / courtier de sa première ligne base de la période.",
       "Commissions : somme de tous les montants de la fenêtre, tous types confondus (base, bonus, bonus2, perform, ajustements), sans dédoublonnage.",
       "Doublons : pour un même contrat et un même type de produit, seule la première ligne base est comptée dans le volume, même si le prêteur ou le montant diffère.",

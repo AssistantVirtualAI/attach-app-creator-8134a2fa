@@ -1,8 +1,10 @@
 // Commission engine — implements the authoritative broker analytics logic.
-// VOLUME: base rows, loan_amt > 0, in window; unique key broker|number|mortgage_type.
-//         A repeated contract/product is counted once; first source row wins.
-// DEALS:  base rows in window, one row per contract number (first source-order row wins).
-// COMMISSION: sum of `amount` for every row in window, all commission types, no dedup.
+// Reference: Maestro "Broker Analytics Dashboard".
+// EXCLUDED EVERYWHERE: insurance payouts (institution containing "assurance").
+// VOLUME: base rows, loan_amt > 0, in window, excluding adjustment rows (is_adjustment = 1).
+// DEALS:  distinct contract number over those same base rows.
+// COMMISSION: sum of `amount` for every row in window, all commission types,
+//             adjustments included, no dedup.
 
 export interface RegisterRow {
   number: string | null;
@@ -16,12 +18,24 @@ export interface RegisterRow {
   commission_type: string | null;
   source_row: number;
   broker_user_id?: string | null;
+  is_adjustment?: unknown;
 }
 
 export interface Window { start: string; end: string } // inclusive yyyy-mm-dd
 
 const n = (v: unknown) => (typeof v === "number" ? v : Number(v ?? 0)) || 0;
 const isBase = (r: RegisterRow) => (r.commission_type ?? "").trim().toLowerCase() === "base";
+
+/** Maestro flags reversals/corrections with `is_adjustment = 1`; they never count as volume or deals. */
+export const isAdjustment = (r: RegisterRow) => {
+  const v = r.is_adjustment;
+  if (v === null || v === undefined || v === "") return false;
+  const s = String(v).trim().toLowerCase();
+  return s === "1" || s === "true" || s === "y" || s === "yes" || s === "oui";
+};
+
+/** Insurance payouts (Lepelco, Desjardins Assurances, ...) are outside broker analytics. */
+export const isInsurance = (r: RegisterRow) => /assurance/i.test(r.institution ?? "");
 
 /**
  * A row is only usable for KPIs when Maestro gave it a transaction date.
@@ -68,27 +82,19 @@ function matches(r: RegisterRow, c: Criteria): boolean {
 
 const normalizedKeyPart = (value: string | null | undefined) => (value ?? "").trim().toLocaleLowerCase("fr-CA");
 
-/** Unique contract/product rows retained for a window (first base row wins). */
+/** Base funding rows counted in volume (no adjustments, no insurance). */
 export function volumeTranches(rows: RegisterRow[], w: Window): RegisterRow[] {
-  const seen = new Set<string>();
-  const out: RegisterRow[] = [];
-  for (const r of sortSource(rows)) {
-    if (!isBase(r) || n(r.loan_amt) <= 0 || !inWindow(r, w)) continue;
-    const key = [r.broker_user_id ?? "", normalizedKeyPart(r.number), normalizedKeyPart(r.mortgage_type)].join("|");
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(r);
-  }
-  return out;
+  return sortSource(rows).filter(
+    (r) => isBase(r) && !isAdjustment(r) && !isInsurance(r) && n(r.loan_amt) > 0 && inWindow(r, w),
+  );
 }
 
-/** Unique contracts retained for a window (attribution = first base row of the contract). */
+/** Unique contracts retained for a window (attribution = first funding row of the contract). */
 export function dealContracts(rows: RegisterRow[], w: Window): RegisterRow[] {
   const seen = new Set<string>();
   const out: RegisterRow[] = [];
-  for (const r of sortSource(rows)) {
-    if (!isBase(r) || !inWindow(r, w)) continue;
-    const key = r.number ?? "";
+  for (const r of volumeTranches(rows, w)) {
+    const key = normalizedKeyPart(r.number);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(r);
@@ -105,7 +111,9 @@ export function periodDeals(rows: RegisterRow[], w: Window, c: Criteria = {}): n
 }
 
 export function periodCommission(rows: RegisterRow[], w: Window, c: Criteria = {}): number {
-  return rows.filter((r) => inWindow(r, w) && matches(r, c)).reduce((s, r) => s + n(r.amount), 0);
+  return rows
+    .filter((r) => inWindow(r, w) && !isInsurance(r) && matches(r, c))
+    .reduce((s, r) => s + n(r.amount), 0);
 }
 
 export interface Metrics {

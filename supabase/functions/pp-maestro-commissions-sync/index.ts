@@ -60,6 +60,8 @@ async function reconcileBroker(
 ): Promise<ReconRow[]> {
   const byYear = new Map<number, { rows: number; amount: number; loan: number; keys: Set<string> }>();
   for (const r of rows) {
+    // Undated Maestro rows are never part of the totals.
+    if (!r.date_trans) continue;
     const y = Number(r.fiscal_year);
     const agg = byYear.get(y) ?? { rows: 0, amount: 0, loan: 0, keys: new Set<string>() };
     agg.rows += 1;
@@ -182,7 +184,7 @@ function mapDeposit(d: CommissionDeposit, i: number, prof: BrokerProfile, maestr
     sheet_name: "maestro",
     source_row: i + 1,
     raw: d,
-    map_status: "ok",
+    map_status: valid ? "ok" : "missing_date",
   };
 }
 

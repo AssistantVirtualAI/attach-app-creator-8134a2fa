@@ -136,6 +136,9 @@ Deno.serve(async (req) => {
       targets = (rows ?? []) as BrokerProfile[];
     }
 
+    const runId = crypto.randomUUID();
+    const reconciliation: ReconRow[] = [];
+    let reconMismatches = 0;
     const report: Array<Record<string, unknown>> = [];
     const unlinked: string[] = [];
     let totalWritten = 0;

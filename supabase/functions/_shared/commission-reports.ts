@@ -210,12 +210,25 @@ export interface CommissionSummary {
   /** Dossiers uniques (contrats distincts sur les lignes "base"). */
   deal_count: number;
   adjustments: number;
+  /** Lignes Maestro sans `date_trans` — exclues de tous les totaux ci-dessus. */
+  undated: { count: number; amount: number; loan_amt: number };
   top_institutions: { institution: string; amount: number; count: number }[];
   by_date: { date: string; amount: number; count: number }[];
   truncated: boolean;
 }
 
-export function summarize(rows: CommissionDepositRow[], truncated = false): CommissionSummary {
+const hasDate = (r: CommissionDepositRow) =>
+  /^\d{4}-\d{2}-\d{2}/.test(String((r as any).date_trans ?? "").trim());
+
+export function summarize(allRows: CommissionDepositRow[], truncated = false): CommissionSummary {
+  // Undated rows are excluded from every metric and reported separately.
+  const rows = allRows.filter(hasDate);
+  const undatedRows = allRows.filter((r) => !hasDate(r));
+  const undated = {
+    count: undatedRows.length,
+    amount: Math.round(undatedRows.reduce((s, r) => s + num(r.amount), 0) * 100) / 100,
+    loan_amt: Math.round(undatedRows.reduce((s, r) => s + num(r.loan_amt), 0) * 100) / 100,
+  };
   let total = 0, volume = 0, adjustments = 0;
   const deals = new Set<string>();
   const inst = new Map<string, { amount: number; count: number }>();
@@ -241,6 +254,7 @@ export function summarize(rows: CommissionDepositRow[], truncated = false): Comm
     total_loan_volume: Math.round(volume * 100) / 100,
     deal_count: deals.size,
     adjustments,
+    undated,
     top_institutions: [...inst.entries()]
       .map(([institution, v]) => ({ institution, amount: Math.round(v.amount * 100) / 100, count: v.count }))
       .sort((a, b) => b.amount - a.amount)

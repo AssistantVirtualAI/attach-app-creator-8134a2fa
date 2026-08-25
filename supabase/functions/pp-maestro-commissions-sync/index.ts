@@ -79,15 +79,17 @@ async function reconcileBroker(
 
     const { data: stored, error } = await admin
       .from("planipret_commission_register")
-      .select("row_key, amount, loan_amt")
+      .select("row_key, amount, loan_amt, date_trans")
       .eq("maestro_broker_id", maestroId)
       .eq("fiscal_year", year)
       .eq("sheet_name", "maestro");
 
-    const dbRows = error ? 0 : (stored ?? []).length;
-    const dbAmount = error ? 0 : (stored ?? []).reduce((s: number, x: any) => s + (Number(x.amount) || 0), 0);
-    const dbLoan = error ? 0 : (stored ?? []).reduce((s: number, x: any) => s + (Number(x.loan_amt) || 0), 0);
-    const missing = error ? [] : [...src.keys].filter((k) => !(stored ?? []).some((x: any) => x.row_key === k));
+    // Only dated rows count: undated Maestro rows are stored for audit but excluded.
+    const storedDated = error ? [] : (stored ?? []).filter((x: any) => !!x.date_trans);
+    const dbRows = storedDated.length;
+    const dbAmount = storedDated.reduce((s: number, x: any) => s + (Number(x.amount) || 0), 0);
+    const dbLoan = storedDated.reduce((s: number, x: any) => s + (Number(x.loan_amt) || 0), 0);
+    const missing = error ? [] : [...src.keys].filter((k) => !storedDated.some((x: any) => x.row_key === k));
 
     const rowsDiff = dbRows - expectedRows;
     const amountDiff = round2(dbAmount - src.amount);

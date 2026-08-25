@@ -532,10 +532,10 @@ Deno.serve(async (req) => {
     };
 
     const calcNotes = [
-      "Volume : lignes « base » avec loan_amt > 0 dans la fenêtre exacte ; clé unique = numéro + institution + type de prêt + montant du prêt (la tranche de prêt fait partie de la clé).",
+      "Volume : lignes « base » avec loan_amt > 0 dans la fenêtre exacte ; clé unique = courtier + numéro de contrat + type de produit.",
       "Dossiers : lignes « base » dans la fenêtre, un contrat compté une seule fois, attribué au prêteur / type / terme / courtier de sa première ligne base de la période.",
       "Commissions : somme de tous les montants de la fenêtre, tous types confondus (base, bonus, bonus2, perform, ajustements), sans dédoublonnage.",
-      "Tranches de prêt : des montants distincts sous le même contrat / prêteur / type sont conservés ; les lignes base strictement identiques ne sont comptées qu'une fois.",
+      "Doublons : pour un même contrat et un même type de produit, seule la première ligne base est comptée dans le volume, même si le prêteur ou le montant diffère.",
       "Réinitialisation : l'unicité est recalculée intégralement dans chaque fenêtre (mois, trimestre, cumul annuel, saison, filtre) — jamais par addition de résultats mensuels.",
       "BPS = Commissions / Volume × 10 000 · Dossier moyen = Volume / Dossiers · Commission par dossier = Commissions / Dossiers.",
     ];

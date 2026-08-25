@@ -9,6 +9,7 @@ import {
   periodCommission,
   volumeTranches,
   dealContracts,
+  excludedRows,
   monthWindow,
   ytdWindow,
   quarterWindow,
@@ -780,6 +781,70 @@ Deno.serve(async (req) => {
         })),
     };
 
+    // ---- Audit: unique volume / unique deals + why rows are excluded --------
+    const auditVolume = volumeTranches(mine, cyYtd);
+    const auditDeals = dealContracts(mine, cyYtd);
+    const auditDealRows = new Set(auditDeals.map((r) => r.source_row));
+    const excluded = excludedRows(mine, cyYtd);
+    const reasonLabel: Record<string, string> = {
+      duplicate_amount: "Répétition exacte (contrat + prêteur + type + montant déjà compté)",
+      reversal_cancelled: "Annulée par une réversion négative du même montant",
+      reversal_row: "Ligne de réversion négative (annule un financement)",
+      adjustment: "Ligne d'ajustement Maestro (is_adjustment = 1)",
+      insurance: "Commission d'assurance (exclue partout)",
+      non_base: "Type de commission ≠ « base » (bonus, bonus2, perform) — commission conservée",
+      no_loan_amount: "Aucun montant de prêt utilisable",
+    };
+    const reasonAgg = new Map<string, { reason: string; label: string; rows: number; loanAmt: number; commission: number }>();
+    for (const e of excluded) {
+      const cur = reasonAgg.get(e.reason) ?? {
+        reason: e.reason, label: reasonLabel[e.reason] ?? e.reason, rows: 0, loanAmt: 0, commission: 0,
+      };
+      cur.rows += 1;
+      cur.loanAmt += Number(e.row.loan_amt ?? 0);
+      cur.commission += Number(e.row.amount ?? 0);
+      reasonAgg.set(e.reason, cur);
+    }
+
+    const audit = {
+      window: cyYtd,
+      periodLabel: resolved.label,
+      scannedRows: mine.filter(inWin).length,
+      uniqueVolumeRows: auditVolume.length,
+      uniqueDealRows: auditDeals.length,
+      volume: auditVolume.reduce((s2, r) => s2 + Number(r.loan_amt ?? 0), 0),
+      commission: periodCommission(mine, cyYtd),
+      excludedRows: excluded.length,
+      byReason: Array.from(reasonAgg.values()).sort((a, b) => b.rows - a.rows),
+      included: auditVolume.slice(0, 1000).map((r) => ({
+        sourceRow: r.source_row,
+        date: r.date_trans,
+        number: r.number,
+        institution: r.institution,
+        mortgageType: r.mortgage_type,
+        term: r.term,
+        broker: r.agent_name,
+        loanAmt: Number(r.loan_amt ?? 0),
+        amount: Number(r.amount ?? 0),
+        uniqueVolume: 1 as const,
+        uniqueDeal: auditDealRows.has(r.source_row) ? (1 as const) : (0 as const),
+      })),
+      excluded: excluded.slice(0, 1000).map((e) => ({
+        sourceRow: e.row.source_row,
+        date: e.row.date_trans,
+        number: e.row.number,
+        institution: e.row.institution,
+        mortgageType: e.row.mortgage_type,
+        broker: e.row.agent_name,
+        commissionType: e.row.commission_type,
+        loanAmt: Number(e.row.loan_amt ?? 0),
+        amount: Number(e.row.amount ?? 0),
+        reason: e.reason,
+        reasonLabel: reasonLabel[e.reason] ?? e.reason,
+      })),
+      truncated: { included: auditVolume.length > 1000, excluded: excluded.length > 1000 },
+    };
+
     // ---- Deal lines for the selected window (broker "Dossiers" table) ----
     const deals = mine
       .filter(inWin)
@@ -816,6 +881,7 @@ Deno.serve(async (req) => {
       brokerName: myName,
       rowCount: mine.length,
       undated,
+      audit,
       availableYears,
       availableAgents,
       agentsWithData,

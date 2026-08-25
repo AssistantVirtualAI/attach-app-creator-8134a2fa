@@ -62,8 +62,15 @@ export function inWindow(r: RegisterRow, w: Window): boolean {
 }
 
 export function sortSource<T extends { source_row: number }>(rows: T[]): T[] {
-  return [...rows].sort((a, b) => a.source_row - b.source_row);
+  const cached = sortedCache.get(rows as unknown as object[]);
+  if (cached) return cached as unknown as T[];
+  const sorted = [...rows].sort((a, b) => a.source_row - b.source_row);
+  sortedCache.set(rows as unknown as object[], sorted as unknown as object[]);
+  return sorted;
 }
+
+/** Sorted-array memo: the same input array is re-sorted many times per request. */
+const sortedCache = new WeakMap<object[], object[]>();
 
 export interface Criteria {
   institution?: string;
@@ -91,6 +98,111 @@ const volumeKey = (r: RegisterRow) =>
     Math.abs(n(r.loan_amt)).toFixed(2),
   ].join("|");
 
+/** Per-row classification memo (regex + string work done once per row, not per period). */
+interface RowFlags { base: boolean; adjustment: boolean; insurance: boolean; loan: number; vKey: string; dKey: string }
+const flagCache = new WeakMap<RegisterRow, RowFlags>();
+function flags(r: RegisterRow): RowFlags {
+  let f = flagCache.get(r);
+  if (!f) {
+    f = {
+      base: isBase(r),
+      adjustment: isAdjustment(r),
+      insurance: isInsurance(r),
+      loan: n(r.loan_amt),
+      vKey: volumeKey(r),
+      dKey: normalizedKeyPart(r.number),
+    };
+    flagCache.set(r, f);
+  }
+  return f;
+}
+
+export type ExclusionReason =
+  | "duplicate_amount"
+  | "reversal_cancelled"
+  | "reversal_row"
+  | "adjustment"
+  | "insurance"
+  | "non_base"
+  | "no_loan_amount";
+
+export interface ExcludedRow { row: RegisterRow; reason: ExclusionReason }
+
+interface WindowComputation {
+  windowRows: RegisterRow[];
+  volume: RegisterRow[];
+  deals: RegisterRow[];
+  excluded: ExcludedRow[];
+}
+
+/**
+ * Single pass per (rows, window): volume tranches, deal contracts, window rows and
+ * exclusion reasons are computed together and memoized, so switching the selected
+ * month / YTD period only recomputes the windows that actually changed.
+ */
+const computeCache = new WeakMap<RegisterRow[], Map<string, WindowComputation>>();
+
+function computeWindow(rows: RegisterRow[], w: Window): WindowComputation {
+  let byWindow = computeCache.get(rows);
+  if (!byWindow) { byWindow = new Map(); computeCache.set(rows, byWindow); }
+  const key = `${w.start}..${w.end}`;
+  const hit = byWindow.get(key);
+  if (hit) return hit;
+
+  const sorted = sortSource(rows);
+  const windowRows: RegisterRow[] = [];
+  const candidates: RegisterRow[] = [];
+  const excluded: ExcludedRow[] = [];
+
+  for (const r of sorted) {
+    if (!inWindow(r, w)) continue;
+    windowRows.push(r);
+    const f = flags(r);
+    if (f.insurance) { excluded.push({ row: r, reason: "insurance" }); continue; }
+    if (!f.base) { if (f.loan !== 0) excluded.push({ row: r, reason: "non_base" }); continue; }
+    if (f.adjustment) { excluded.push({ row: r, reason: "adjustment" }); continue; }
+    if (f.loan === 0) { candidates.push(r); continue; } // zero-amount base row: deal only
+    candidates.push(r);
+  }
+
+  const reversals = new Map<string, number>();
+  for (const r of candidates) {
+    const f = flags(r);
+    if (f.loan < 0) reversals.set(f.vKey, (reversals.get(f.vKey) ?? 0) + 1);
+  }
+
+  const seen = new Set<string>();
+  const volume: RegisterRow[] = [];
+  const zeroLoanBase: RegisterRow[] = [];
+  for (const r of candidates) {
+    const f = flags(r);
+    if (f.loan === 0) { zeroLoanBase.push(r); continue; }
+    if (f.loan < 0) { excluded.push({ row: r, reason: "reversal_row" }); continue; }
+    if (seen.has(f.vKey)) { excluded.push({ row: r, reason: "duplicate_amount" }); continue; }
+    seen.add(f.vKey);
+    const pending = reversals.get(f.vKey) ?? 0;
+    if (pending > 0) {
+      reversals.set(f.vKey, pending - 1);
+      excluded.push({ row: r, reason: "reversal_cancelled" });
+      continue;
+    }
+    volume.push(r);
+  }
+
+  const seenDeal = new Set<string>();
+  const deals: RegisterRow[] = [];
+  for (const r of [...volume, ...zeroLoanBase]) {
+    const k = flags(r).dKey;
+    if (seenDeal.has(k)) continue;
+    seenDeal.add(k);
+    deals.push(r);
+  }
+
+  const out: WindowComputation = { windowRows, volume, deals, excluded };
+  byWindow.set(key, out);
+  return out;
+}
+
 /**
  * VOLUME rows = base rows, in window, no adjustments, no insurance, positive loan amounts.
  * Uniqueness = contract + lender + mortgage type + loan amount:
@@ -98,28 +210,12 @@ const volumeKey = (r: RegisterRow) =>
  *   - a negative reversal cancels its matching positive row.
  */
 export function volumeTranches(rows: RegisterRow[], w: Window): RegisterRow[] {
-  const sorted = sortSource(rows).filter(
-    (r) => isBase(r) && !isAdjustment(r) && !isInsurance(r) && inWindow(r, w) && n(r.loan_amt) !== 0,
-  );
+  return computeWindow(rows, w).volume;
+}
 
-  const reversals = new Map<string, number>();
-  for (const r of sorted) if (n(r.loan_amt) < 0) reversals.set(volumeKey(r), (reversals.get(volumeKey(r)) ?? 0) + 1);
-
-  const seen = new Set<string>();
-  const out: RegisterRow[] = [];
-  for (const r of sorted) {
-    if (n(r.loan_amt) <= 0) continue;
-    const key = volumeKey(r);
-    if (seen.has(key)) continue; // exact repeated amount
-    seen.add(key);
-    const pending = reversals.get(key) ?? 0;
-    if (pending > 0) {
-      reversals.set(key, pending - 1); // negative reversal cancels this funding
-      continue;
-    }
-    out.push(r);
-  }
-  return out;
+/** Rows of the window that never reach the volume, with the rule that excluded them. */
+export function excludedRows(rows: RegisterRow[], w: Window): ExcludedRow[] {
+  return computeWindow(rows, w).excluded;
 }
 
 /** Dashboard grouping key for volume breakdowns: contract + lender + mortgage type. */
@@ -138,8 +234,9 @@ export function helperFlags(
   rows: RegisterRow[],
   w: Window,
 ): Array<{ row: RegisterRow; unique_volume: 0 | 1; unique_deal: 0 | 1 }> {
-  const volume = new Set(volumeTranches(rows, w));
-  const deals = new Set(dealContracts(rows, w));
+  const c = computeWindow(rows, w);
+  const volume = new Set(c.volume);
+  const deals = new Set(c.deals);
   return sortSource(rows).map((row) => ({
     row,
     unique_volume: volume.has(row) ? 1 : 0,
@@ -154,35 +251,30 @@ export function helperFlags(
  * as a contract, per the workbook definition (deals key = contract number only).
  */
 export function dealContracts(rows: RegisterRow[], w: Window): RegisterRow[] {
-  const seen = new Set<string>();
-  const out: RegisterRow[] = [];
-  const push = (r: RegisterRow) => {
-    const key = normalizedKeyPart(r.number);
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push(r);
-  };
-  for (const r of volumeTranches(rows, w)) push(r);
-  for (const r of sortSource(rows)) {
-    if (!isBase(r) || isAdjustment(r) || isInsurance(r) || !inWindow(r, w)) continue;
-    if (n(r.loan_amt) !== 0) continue; // funded rows already handled above
-    push(r);
-  }
-  return out;
+  return computeWindow(rows, w).deals;
+}
+
+/** Rows of the window (dated, inside the period) — memoized alongside the KPIs. */
+export function windowRows(rows: RegisterRow[], w: Window): RegisterRow[] {
+  return computeWindow(rows, w).windowRows;
 }
 
 export function periodVolume(rows: RegisterRow[], w: Window, c: Criteria = {}): number {
-  return volumeTranches(rows, w).filter((r) => matches(r, c)).reduce((s, r) => s + n(r.loan_amt), 0);
+  let sum = 0;
+  for (const r of volumeTranches(rows, w)) if (matches(r, c)) sum += flags(r).loan;
+  return sum;
 }
 
 export function periodDeals(rows: RegisterRow[], w: Window, c: Criteria = {}): number {
-  return dealContracts(rows, w).filter((r) => matches(r, c)).length;
+  let count = 0;
+  for (const r of dealContracts(rows, w)) if (matches(r, c)) count += 1;
+  return count;
 }
 
 export function periodCommission(rows: RegisterRow[], w: Window, c: Criteria = {}): number {
-  return rows
-    .filter((r) => inWindow(r, w) && !isInsurance(r) && matches(r, c))
-    .reduce((s, r) => s + n(r.amount), 0);
+  let sum = 0;
+  for (const r of windowRows(rows, w)) if (!flags(r).insurance && matches(r, c)) sum += n(r.amount);
+  return sum;
 }
 
 export interface Metrics {

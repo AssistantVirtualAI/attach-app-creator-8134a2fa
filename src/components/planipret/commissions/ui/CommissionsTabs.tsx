@@ -1,16 +1,17 @@
 import { useRef } from "react";
 import {
   LayoutGrid, Users, TrendingUp, Landmark, PieChart, CalendarRange,
-  Table2, Star, FileText, AlertTriangle, Database,
+  Table2, Star, FileText, AlertTriangle, Database, ShieldCheck,
 } from "lucide-react";
 
 export type TabKey =
   | "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters"
-  | "periods" | "club" | "gaps" | "data" | "deals";
+  | "periods" | "club" | "gaps" | "data" | "deals" | "audit";
 
 const ICONS: Record<TabKey, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   overview: LayoutGrid, brokers: Users, trend: TrendingUp, lenders: Landmark, mix: PieChart,
   quarters: CalendarRange, periods: Table2, club: Star, deals: FileText, gaps: AlertTriangle, data: Database,
+  audit: ShieldCheck,
 };
 
 /** Segmented pill tabs with icons, counters and horizontal scroll on mobile. */

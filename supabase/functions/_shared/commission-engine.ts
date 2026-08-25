@@ -82,11 +82,27 @@ function matches(r: RegisterRow, c: Criteria): boolean {
 
 const normalizedKeyPart = (value: string | null | undefined) => (value ?? "").trim().toLocaleLowerCase("fr-CA");
 
-/** Base funding rows counted in volume (no adjustments, no insurance). */
+/**
+ * Base funding rows counted in volume (no adjustments, no insurance, positive amounts only).
+ * Uniqueness key = contract number + lender + mortgage type + loan amount, so exact
+ * repeated rows (duplicate pushes / reversal pairs) are counted once.
+ */
 export function volumeTranches(rows: RegisterRow[], w: Window): RegisterRow[] {
-  return sortSource(rows).filter(
-    (r) => isBase(r) && !isAdjustment(r) && !isInsurance(r) && n(r.loan_amt) > 0 && inWindow(r, w),
-  );
+  const seen = new Set<string>();
+  const out: RegisterRow[] = [];
+  for (const r of sortSource(rows)) {
+    if (!isBase(r) || isAdjustment(r) || isInsurance(r) || n(r.loan_amt) <= 0 || !inWindow(r, w)) continue;
+    const key = [
+      normalizedKeyPart(r.number),
+      normalizedKeyPart(r.institution),
+      normalizedKeyPart(r.mortgage_type),
+      n(r.loan_amt).toFixed(2),
+    ].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
 }
 
 /** Unique contracts retained for a window (attribution = first funding row of the contract). */

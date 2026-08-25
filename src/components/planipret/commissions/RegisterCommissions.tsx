@@ -24,6 +24,7 @@ import { Chart3D } from "@/components/planipret/broker/overview/ov3dChart";
 import ChartFrame, { PanelFrame } from "./ui/ChartFrame";
 import CommissionsHero from "./ui/CommissionsHero";
 import CommissionsTabs, { type TabKey } from "./ui/CommissionsTabs";
+import CommissionAuditPanel from "./CommissionAuditPanel";
 import CommissionsSkeleton from "./ui/CommissionsSkeleton";
 import MaestroSyncButton from "./ui/MaestroSyncButton";
 import CommissionSyncNowButton from "./ui/CommissionSyncNowButton";
@@ -37,7 +38,7 @@ import {
 } from "./ui/chartTheme";
 
 type Lang = "fr" | "en";
-type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "deals";
+type Tab = "overview" | "brokers" | "trend" | "lenders" | "mix" | "quarters" | "periods" | "club" | "deals" | "audit";
 
 
 const PALETTE = CHART_COLORS;
@@ -486,6 +487,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
     ...(isAdminView ? [{ key: "periods" as TabKey, label: isFr ? "Stats par période" : "Stats by period" }] : []),
     { key: "club", label: "Club Excellence", tone: "gold" },
     { key: "deals", label: isFr ? "Dossiers" : "Deals", count: filteredDeals.length },
+    { key: "audit", label: isFr ? "Audit" : "Audit", count: data?.audit?.excludedRows ?? null },
   ];
 
   const tabLabel = tabs.find((t) => t.key === (tab as TabKey))?.label ?? String(tab);
@@ -1256,6 +1258,10 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
           {tab === "deals" && (
             <RegisterDealsTable deals={filteredDeals as any} lang={lang} />
+          )}
+
+          {tab === "audit" && (
+            <CommissionAuditPanel audit={data?.audit} lang={lang} />
           )}
 
         </div>

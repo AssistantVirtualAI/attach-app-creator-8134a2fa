@@ -260,17 +260,21 @@ export function windowRows(rows: RegisterRow[], w: Window): RegisterRow[] {
 }
 
 export function periodVolume(rows: RegisterRow[], w: Window, c: Criteria = {}): number {
-  return volumeTranches(rows, w).filter((r) => matches(r, c)).reduce((s, r) => s + n(r.loan_amt), 0);
+  let sum = 0;
+  for (const r of volumeTranches(rows, w)) if (matches(r, c)) sum += flags(r).loan;
+  return sum;
 }
 
 export function periodDeals(rows: RegisterRow[], w: Window, c: Criteria = {}): number {
-  return dealContracts(rows, w).filter((r) => matches(r, c)).length;
+  let count = 0;
+  for (const r of dealContracts(rows, w)) if (matches(r, c)) count += 1;
+  return count;
 }
 
 export function periodCommission(rows: RegisterRow[], w: Window, c: Criteria = {}): number {
-  return rows
-    .filter((r) => inWindow(r, w) && !isInsurance(r) && matches(r, c))
-    .reduce((s, r) => s + n(r.amount), 0);
+  let sum = 0;
+  for (const r of windowRows(rows, w)) if (!flags(r).insurance && matches(r, c)) sum += n(r.amount);
+  return sum;
 }
 
 export interface Metrics {

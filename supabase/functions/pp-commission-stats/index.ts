@@ -739,6 +739,45 @@ Deno.serve(async (req) => {
       clean: duplicateRows === 0 && missingDate === 0 && missingAmount === 0,
     };
 
+    // ---- Undated Maestro rows: excluded from every KPI, listed for admins ----
+    const undatedRows = mine.filter((r) => !r.date_trans);
+    const undatedByBroker = new Map<string, any>();
+    for (const r of undatedRows) {
+      const key = String(r.agent_name ?? (r as any).target_name ?? "—");
+      const cur = undatedByBroker.get(key) ?? { broker: key, count: 0, amount: 0, loanAmt: 0, years: new Set<number>() };
+      cur.count += 1;
+      cur.amount += Number(r.amount ?? 0);
+      cur.loanAmt += Number(r.loan_amt ?? 0);
+      const fy = (r as any).fiscal_year;
+      if (fy) cur.years.add(Number(fy));
+      undatedByBroker.set(key, cur);
+    }
+    const undatedAmount = undatedRows.reduce((s2, r) => s2 + Number(r.amount ?? 0), 0);
+    const countedCommission = periodCommission(mine, cyYtd);
+    const undated = {
+      count: undatedRows.length,
+      amount: undatedAmount,
+      loanAmt: undatedRows.reduce((s2, r) => s2 + Number(r.loan_amt ?? 0), 0),
+      // Share the excluded rows would represent if they were counted.
+      impactPct: countedCommission ? undatedAmount / countedCommission : 0,
+      byBroker: Array.from(undatedByBroker.values())
+        .map((b: any) => ({ ...b, years: Array.from(b.years).sort() }))
+        .sort((a: any, b: any) => b.amount - a.amount),
+      rows: undatedRows
+        .sort((a, b) => Number(b.amount ?? 0) - Number(a.amount ?? 0))
+        .slice(0, 500)
+        .map((r) => ({
+          broker: r.agent_name,
+          number: r.number,
+          institution: r.institution,
+          commissionType: r.commission_type,
+          fiscalYear: (r as any).fiscal_year ?? null,
+          amount: Number(r.amount ?? 0),
+          loanAmt: Number(r.loan_amt ?? 0),
+          sheet: (r as any).sheet_name ?? null,
+        })),
+    };
+
     // ---- Deal lines for the selected window (broker "Dossiers" table) ----
     const deals = mine
       .filter(inWin)
@@ -774,6 +813,7 @@ Deno.serve(async (req) => {
       isAdmin,
       brokerName: myName,
       rowCount: mine.length,
+      undated,
       availableYears,
       availableAgents,
       agentsWithData,

@@ -23,7 +23,25 @@ export interface Window { start: string; end: string } // inclusive yyyy-mm-dd
 const n = (v: unknown) => (typeof v === "number" ? v : Number(v ?? 0)) || 0;
 const isBase = (r: RegisterRow) => (r.commission_type ?? "").trim().toLowerCase() === "base";
 
+/**
+ * A row is only usable for KPIs when Maestro gave it a transaction date.
+ * Undated rows (adjustments pushed without `date_trans`) are excluded from
+ * volume, deals, commissions and YoY everywhere.
+ */
+export function hasTransactionDate(r: { date_trans?: string | null }): boolean {
+  const d = (r.date_trans ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}/.test(d);
+}
+
+/** Splits rows into the dated ones (used in calculations) and the undated ones. */
+export function splitUndated<T extends { date_trans?: string | null }>(rows: T[]): { dated: T[]; undated: T[] } {
+  const dated: T[] = []; const undated: T[] = [];
+  for (const r of rows) (hasTransactionDate(r) ? dated : undated).push(r);
+  return { dated, undated };
+}
+
 export function inWindow(r: RegisterRow, w: Window): boolean {
+  if (!hasTransactionDate(r)) return false;
   const d = r.date_trans;
   if (!d) return false;
   return d >= w.start && d <= w.end;

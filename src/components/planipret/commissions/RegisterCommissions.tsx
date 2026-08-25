@@ -27,6 +27,8 @@ import CommissionsTabs, { type TabKey } from "./ui/CommissionsTabs";
 import CommissionsSkeleton from "./ui/CommissionsSkeleton";
 import MaestroSyncButton from "./ui/MaestroSyncButton";
 import CommissionSyncNowButton from "./ui/CommissionSyncNowButton";
+import CommissionRecalcButton from "./ui/CommissionRecalcButton";
+import UndatedTransactionsPanel from "./UndatedTransactionsPanel";
 import { loadBrokerCoverage, causeLabel, coverageFor, type CoverageMap, type CoverageCause } from "@/lib/planipret/brokerCoverage";
 import MaestroStatusBadge from "./ui/MaestroStatusBadge";
 import { statsCacheKey, readStatsCache, readAnyStatsCache, writeStatsCache } from "@/lib/planipret/commissionsCache";
@@ -616,6 +618,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
             </button>}
             <MaestroSyncButton lang={lang} scope={isAdminView ? "admin" : "broker"} onDone={() => setRefreshKey((k) => k + 1)} />
             {isAdminView && <CommissionSyncNowButton lang={lang} onDone={() => setRefreshKey((k) => k + 1)} />}
+            <CommissionRecalcButton lang={lang} scope={isAdminView ? "admin" : "broker"} onDone={() => setRefreshKey((k) => k + 1)} />
             <button onClick={resetFilters} className="pp-toolbar-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
               style={{ fontSize: 12, fontWeight: 700, background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-secondary)" }}>
               <RotateCcw className="w-3.5 h-3.5" />{isFr ? "Réinitialiser" : "Reset"}
@@ -645,6 +648,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
           </button>
         </div>
       )}
+
+      <UndatedTransactionsPanel lang={lang} data={data?.undated} />
 
       <CommissionsTabs tabs={tabs} value={tab as TabKey} onChange={(k) => setTab(k as Tab)} />
 

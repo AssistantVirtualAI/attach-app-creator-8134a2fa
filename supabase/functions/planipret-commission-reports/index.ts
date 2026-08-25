@@ -240,21 +240,37 @@ Deno.serve(async (req) => {
     async function fetchAllDeposits(src: Src, single: boolean) {
       const out: CommissionDepositRow[] = [];
       let page = 1, lastPage = 1, truncated = false, total = 0;
-      while (page <= SUMMARY_MAX_PAGES) {
-        const qs = buildDepositQuery({ ...filters, page, per_page: 200 });
-        const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, src.token, cid);
-        if (!r.ok) {
-          if (single) return { rows: out, truncated, total, fatal: r };
-          failures.push({ broker: src.label, status: r.status, message: String(r.data?.message ?? `HTTP ${r.status}`) });
-          break;
+      // Maestro ne renvoie qu'un seul bucket par appel ("base" par défaut).
+      // La commission brute = base + bonus + bonus2 + perform, donc on parcourt
+      // les quatre buckets quand aucun type précis n'est demandé. Le volume de
+      // prêt n'est conservé que sur la ligne "base" pour ne pas le compter 4x.
+      const types = filters.commission_type ? [filters.commission_type] : ["base", "bonus", "bonus2", "perform"];
+      for (const ctype of types) {
+        page = 1;
+        while (page <= SUMMARY_MAX_PAGES) {
+          const qs = buildDepositQuery({ ...filters, commission_type: ctype, page, per_page: 200 });
+          const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, src.token, cid);
+          if (!r.ok) {
+            if (single && ctype === "base") return { rows: out, truncated, total, fatal: r };
+            if (ctype === "base") failures.push({ broker: src.label, status: r.status, message: String(r.data?.message ?? `HTTP ${r.status}`) });
+            break;
+          }
+          const rows: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
+          for (const row of rows) {
+            out.push({
+              ...row,
+              commission_type: (row as any).commission_type ?? ctype,
+              loan_amt: ctype === "base" ? (row as any).loan_amt : 0,
+              agent_name: (row as any).agent_name ?? src.label,
+            } as CommissionDepositRow);
+          }
+          const meta = r.data?.meta ?? {};
+          lastPage = Number(meta.last_page ?? 1);
+          total += Number(meta.total ?? rows.length);
+          if (page >= lastPage || rows.length === 0) break;
+          page += 1;
         }
-        const rows: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
-        for (const row of rows) out.push({ ...row, agent_name: (row as any).agent_name ?? src.label } as CommissionDepositRow);
-        const meta = r.data?.meta ?? {};
-        lastPage = Number(meta.last_page ?? 1);
-        total += Number(meta.total ?? rows.length);
-        if (page >= lastPage || rows.length === 0) break;
-        page += 1;
+        if (page >= SUMMARY_MAX_PAGES && lastPage > SUMMARY_MAX_PAGES) truncated = true;
       }
       if (page >= SUMMARY_MAX_PAGES && lastPage > SUMMARY_MAX_PAGES) truncated = true;
       return { rows: out, truncated, total, fatal: null as any };

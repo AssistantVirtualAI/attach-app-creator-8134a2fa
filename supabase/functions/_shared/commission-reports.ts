@@ -207,6 +207,8 @@ export interface CommissionSummary {
   deposit_count: number;
   average_commission: number;
   total_loan_volume: number;
+  /** Dossiers uniques (contrats distincts sur les lignes "base"). */
+  deal_count: number;
   adjustments: number;
   top_institutions: { institution: string; amount: number; count: number }[];
   by_date: { date: string; amount: number; count: number }[];
@@ -215,12 +217,15 @@ export interface CommissionSummary {
 
 export function summarize(rows: CommissionDepositRow[], truncated = false): CommissionSummary {
   let total = 0, volume = 0, adjustments = 0;
+  const deals = new Set<string>();
   const inst = new Map<string, { amount: number; count: number }>();
   const byDate = new Map<string, { amount: number; count: number }>();
   for (const r of rows) {
     const amt = num(r.amount);
     total += amt;
     volume += num(r.loan_amt);
+    const ctype = String((r as any).commission_type ?? "base").trim().toLowerCase() || "base";
+    if (ctype === "base" && (r as any).number) deals.add(String((r as any).number));
     if (Number(r.is_adjustment) === 1) adjustments += 1;
     const key = String(r.institution ?? "—").trim() || "—";
     const i = inst.get(key) ?? { amount: 0, count: 0 };
@@ -234,6 +239,7 @@ export function summarize(rows: CommissionDepositRow[], truncated = false): Comm
     deposit_count: rows.length,
     average_commission: rows.length ? Math.round((total / rows.length) * 100) / 100 : 0,
     total_loan_volume: Math.round(volume * 100) / 100,
+    deal_count: deals.size,
     adjustments,
     top_institutions: [...inst.entries()]
       .map(([institution, v]) => ({ institution, amount: Math.round(v.amount * 100) / 100, count: v.count }))

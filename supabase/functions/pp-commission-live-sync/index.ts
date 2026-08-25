@@ -119,23 +119,40 @@ Deno.serve(async (req) => {
   let upserted = 0;
   const diagRows: any[] = [];
 
+  // La commission brute = base + bonus + bonus2 + perform. Maestro ne renvoie
+  // qu'un bucket par appel, donc on parcourt les quatre; le volume de prêt
+  // n'est conservé que sur la ligne "base" pour éviter de le compter 4 fois.
+  const COMMISSION_BUCKETS = ["base", "bonus", "bonus2", "perform"] as const;
+
   const fetchPages = async (token: string, usersId: string | null) => {
     const rows: CommissionDepositRow[] = [];
-    let page = 1;
-    while (page <= MAX_PAGES) {
-      const qs = buildDepositQuery({
-        date_from: from, date_to: to, page, per_page: PER_PAGE,
-        ...(usersId ? { users_id: usersId } : {}),
-      } as any);
-      const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
-      if (!r.ok) {
-        return { rows, error: { status: r.status, message: String(r.data?.message ?? r.data?.error ?? `HTTP ${r.status}`) } };
+    let firstError: null | { status: number; message: string } = null;
+    for (const ctype of COMMISSION_BUCKETS) {
+      let page = 1;
+      while (page <= MAX_PAGES) {
+        const qs = buildDepositQuery({
+          date_from: from, date_to: to, page, per_page: PER_PAGE, commission_type: ctype,
+          ...(usersId ? { users_id: usersId } : {}),
+        } as any);
+        const r = await commissionGet(`/api/main/commissions/reports/deposits?${qs}`, token, cid);
+        if (!r.ok) {
+          const err = { status: r.status, message: String(r.data?.message ?? r.data?.error ?? `HTTP ${r.status}`) };
+          if (ctype === "base") return { rows, error: err };
+          firstError = firstError ?? err;
+          break;
+        }
+        const batch: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
+        for (const row of batch) {
+          rows.push({
+            ...row,
+            commission_type: (row as any).commission_type ?? ctype,
+            loan_amt: ctype === "base" ? (row as any).loan_amt : 0,
+          } as CommissionDepositRow);
+        }
+        const lastPage = Number(r.data?.meta?.last_page ?? 1);
+        if (page >= lastPage || batch.length === 0) break;
+        page += 1;
       }
-      const batch: CommissionDepositRow[] = Array.isArray(r.data?.data) ? r.data.data : [];
-      rows.push(...batch);
-      const lastPage = Number(r.data?.meta?.last_page ?? 1);
-      if (page >= lastPage || batch.length === 0) break;
-      page += 1;
     }
     return { rows, error: null as null | { status: number; message: string } };
   };

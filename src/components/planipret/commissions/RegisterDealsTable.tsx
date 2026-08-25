@@ -25,6 +25,22 @@ type SortKey = "date" | "number" | "institution" | "loanAmt" | "amount";
 
 const PAGE = 25;
 
+/** Workbook helper columns W/X: 1 when the row is counted in the period. */
+function Flag({ on }: { on: boolean }) {
+  return (
+    <span
+      className="px-1.5 py-0.5 rounded-md"
+      style={{
+        fontSize: 11, fontWeight: 800,
+        background: on ? "rgba(22,163,74,.16)" : "rgba(148,163,184,.14)",
+        color: on ? "#22c55e" : "var(--pp-text-muted)",
+      }}
+    >
+      {on ? "1" : "0"}
+    </span>
+  );
+}
+
 /** Searchable, sortable, paginated deal table with CSV export. */
 export default function RegisterDealsTable({ deals, lang }: { deals: DealLine[]; lang: Lang }) {
   const isFr = lang === "fr";
@@ -138,6 +154,8 @@ export default function RegisterDealsTable({ deals, lang }: { deals: DealLine[];
               {th("Type")}
               {th(isFr ? "Montant prêt" : "Loan", "loanAmt", "right")}
               {th("Commission", "amount", "right")}
+              {th(isFr ? "Vol. unique (W)" : "Unique vol. (W)", undefined, "right")}
+              {th(isFr ? "Doss. unique (X)" : "Unique deal (X)", undefined, "right")}
             </tr>
           </thead>
           <tbody>
@@ -171,11 +189,13 @@ export default function RegisterDealsTable({ deals, lang }: { deals: DealLine[];
                 <td style={{ padding: "9px 10px", fontSize: 12, textAlign: "right", fontWeight: 800, color: "var(--pp-text-primary)" }}>
                   {fmtMoney(d.amount)}
                 </td>
+                <td style={{ padding: "9px 10px", fontSize: 11.5, textAlign: "right" }}><Flag on={d.countedInVolume} /></td>
+                <td style={{ padding: "9px 10px", fontSize: 11.5, textAlign: "right" }}><Flag on={d.countedInDeals} /></td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ padding: 18, textAlign: "center", fontSize: 12.5, color: "var(--pp-text-muted)" }}>
+                <td colSpan={10} style={{ padding: 18, textAlign: "center", fontSize: 12.5, color: "var(--pp-text-muted)" }}>
                   {isFr ? "Aucun dossier pour cette recherche." : "No deal matches this search."}
                 </td>
               </tr>

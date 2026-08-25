@@ -122,15 +122,30 @@ export function volumeTranches(rows: RegisterRow[], w: Window): RegisterRow[] {
   return out;
 }
 
-/** Unique contracts retained for a window (attribution = first funding row of the contract). */
+/** Dashboard grouping key for volume breakdowns: contract + lender + mortgage type. */
+export const dashboardVolumeKey = (r: RegisterRow) =>
+  [normalizedKeyPart(r.number), normalizedKeyPart(r.institution), normalizedKeyPart(r.mortgage_type)].join("|");
+
+/**
+ * DEALS = count of base rows flagged unique_deal = 1, keyed on the contract number only.
+ * Base rows in window (no adjustments, no insurance); rows cancelled by a negative
+ * reversal or exact repeats never create a deal. Zero-amount base rows still count
+ * as a contract, per the workbook definition (deals key = contract number only).
+ */
 export function dealContracts(rows: RegisterRow[], w: Window): RegisterRow[] {
   const seen = new Set<string>();
   const out: RegisterRow[] = [];
-  for (const r of volumeTranches(rows, w)) {
+  const push = (r: RegisterRow) => {
     const key = normalizedKeyPart(r.number);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return;
     seen.add(key);
     out.push(r);
+  };
+  for (const r of volumeTranches(rows, w)) push(r);
+  for (const r of sortSource(rows)) {
+    if (!isBase(r) || isAdjustment(r) || isInsurance(r) || !inWindow(r, w)) continue;
+    if (n(r.loan_amt) !== 0) continue; // funded rows already handled above
+    push(r);
   }
   return out;
 }

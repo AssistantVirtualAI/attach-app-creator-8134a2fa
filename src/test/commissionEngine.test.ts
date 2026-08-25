@@ -4,6 +4,11 @@ import {
   periodDeals,
   periodCommission,
   volumeTranches,
+  metrics,
+  helperFlags,
+  yoy,
+  yearWindow,
+  resolveWindow,
   type RegisterRow,
 } from "../../supabase/functions/_shared/commission-engine";
 
@@ -79,5 +84,36 @@ describe("commission volume rules", () => {
     expect(periodVolume(rows, window)).toBe(300_000);
     expect(periodDeals(rows, window)).toBe(1);
     expect(periodCommission(rows, window)).toBe(1_500);
+  });
+});
+
+describe("workbook spec conformance", () => {
+  it("uses a calendar fiscal year (Jan 1 - Dec 31) with CY/PY twins", () => {
+    expect(yearWindow(2026)).toEqual({ start: "2026-01-01", end: "2026-12-31" });
+    const r = resolveWindow("ytd", 2026, 7);
+    expect(r.window).toEqual({ start: "2026-01-01", end: "2026-07-31" });
+    expect(r.priorWindow).toEqual({ start: "2025-01-01", end: "2025-07-31" });
+  });
+
+  it("applies the YoY rule IF(PY=0, IF(CY=0,'—','New'), (CY-PY)/PY)", () => {
+    expect(yoy(0, 0)).toBe("—");
+    expect(yoy(10, 0)).toBe("New");
+    expect(yoy(150, 100)).toBeCloseTo(0.5);
+  });
+
+  it("computes BPS as commission / volume x 10000 and flags W/X columns", () => {
+    const rows = [
+      row({ source_row: 1, loan_amt: 500_000, amount: 5_000 }),
+      row({ source_row: 2, commission_type: "bonus", loan_amt: 0, amount: 1_000 }),
+    ];
+    const m = metrics(rows, window);
+    expect(m.volume).toBe(500_000);
+    expect(m.deals).toBe(1);
+    expect(m.commission).toBe(6_000);
+    expect(m.bps).toBeCloseTo(120);
+    const flags = helperFlags(rows, window);
+    expect(flags[0].unique_volume).toBe(1);
+    expect(flags[0].unique_deal).toBe(1);
+    expect(flags[1].unique_volume).toBe(0);
   });
 });

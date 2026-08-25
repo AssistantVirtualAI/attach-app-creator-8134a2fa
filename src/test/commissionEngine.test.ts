@@ -67,4 +67,17 @@ describe("commission volume rules", () => {
 
     expect(periodVolume(rows, window)).toBe(700_000);
   });
+
+  it("counts exact repeated amounts once and cancels negative reversals", () => {
+    const rows = [
+      row({ source_row: 1, loan_amt: 300_000, amount: 1_000 }),
+      row({ source_row: 2, loan_amt: 300_000, amount: 0 }), // exact repeat -> ignored
+      row({ source_row: 3, number: "PLPR-9", loan_amt: 250_000, amount: 500 }),
+      row({ source_row: 4, number: "PLPR-9", loan_amt: -250_000, amount: 0 }), // reversal
+    ];
+
+    expect(periodVolume(rows, window)).toBe(300_000);
+    expect(periodDeals(rows, window)).toBe(1);
+    expect(periodCommission(rows, window)).toBe(1_500);
+  });
 });

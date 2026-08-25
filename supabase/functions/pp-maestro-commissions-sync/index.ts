@@ -306,10 +306,24 @@ Deno.serve(async (req) => {
       }
       anySuccess = true;
 
-      const rows = r.rows
+      const mapped = r.rows
         .map((d, i) => mapDeposit(d, i, prof, maestroId!, fallbackYear))
         .filter((row) => yearSet.has(row.fiscal_year));
+      // Maestro can return the same deal number twice (adjustments): keep one
+      // row per row_key, otherwise the upsert fails on duplicate conflicts.
+      const dedup = new Map<string, typeof mapped[number]>();
+      for (const row of mapped) {
+        const prev = dedup.get(row.row_key);
+        if (!prev) { dedup.set(row.row_key, row); continue; }
+        dedup.set(row.row_key, {
+          ...row,
+          amount: (Number(prev.amount) || 0) + (Number(row.amount) || 0),
+          loan_amt: Number(prev.loan_amt) || Number(row.loan_amt) || 0,
+        });
+      }
+      const rows = [...dedup.values()];
       totalCandidates += rows.length;
+
 
       if (dryRun) {
         report.push({ broker: name, profile_id: prof.id, users_id: maestroId, candidates: rows.length, written: 0 });

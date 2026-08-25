@@ -205,10 +205,14 @@ Deno.serve(async (req) => {
     const dateTo = `${maxYear}-12-31 23:59:59`;
 
     const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader) return j({ success: false, error: "unauthorized", code: "unauthorized" }, 401);
     const token = authHeader.replace(/^Bearer\s+/i, "");
-    // Scheduled runs authenticate with the service role key (admin privileges).
-    const isService = token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    // Scheduled runs authenticate with the service role key or the shared cron secret.
+    const CRON_SECRET = Deno.env.get("PP_CRON_TOKEN") ?? Deno.env.get("PP_CRON_SECRET") ?? "";
+    const cronHeader = req.headers.get("x-pp-cron-secret") ?? req.headers.get("x-cron-secret") ?? "";
+    const isService = (!!token && token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"))
+      || (!!CRON_SECRET && cronHeader === CRON_SECRET);
+    if (!authHeader && !isService) return j({ success: false, error: "unauthorized", code: "unauthorized" }, 401);
+
     const { data: u } = isService ? { data: null as any } : await admin.auth.getUser(token);
     const callerId = isService ? null : (u?.user?.id ?? null);
     if (!isService && !callerId) return j({ success: false, error: "unauthorized", code: "unauthorized" }, 401);

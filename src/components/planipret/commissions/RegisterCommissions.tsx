@@ -53,7 +53,7 @@ const fmtPct = (v: number | string) =>
 const MONTHS_FR = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
 const MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function Delta({ value }: { value: number | string }) {
+function Delta({ value, comparisonLabel }: { value: number | string; comparisonLabel?: string }) {
   if (typeof value !== "number") {
     return <span style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>{value}</span>;
   }
@@ -61,7 +61,7 @@ function Delta({ value }: { value: number | string }) {
   return (
     <span className="inline-flex items-center gap-0.5" style={{ fontSize: 11.5, fontWeight: 700, color: up ? "#16a34a" : "#ef4444" }}>
       {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-      {(value * 100).toFixed(1)} %
+      {(value * 100).toFixed(1)} %{comparisonLabel ? ` ${comparisonLabel}` : ""}
     </span>
   );
 }
@@ -112,7 +112,7 @@ function Kpi({ label, value, delta, accent, onClick, info, spark }: {
       </div>
       <div style={{ fontSize: 23, fontWeight: 900, letterSpacing: -0.4, marginTop: 4, color: "var(--pp-text-primary)" }}>{value}</div>
       <div className="flex items-end justify-between gap-2 mt-1">
-        <div>{delta !== undefined && <Delta value={delta} />}</div>
+        <div>{delta !== undefined && <Delta value={delta} comparisonLabel="vs même période l’an dernier" />}</div>
         {spark && spark.length > 1 && <div style={{ opacity: .95 }}><Sparkline points={spark} color={accent} /></div>}
       </div>
     </div>

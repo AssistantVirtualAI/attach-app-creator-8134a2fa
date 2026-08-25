@@ -5,7 +5,7 @@ const fmtMoney = (v: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(v || 0);
 const fmtNum = (v: number) => new Intl.NumberFormat("fr-CA", { maximumFractionDigits: 0 }).format(v || 0);
 
-function HeroStat({ label, value, delta, info }: { label: string; value: string; delta?: number | null; info?: string }) {
+function HeroStat({ label, value, delta, deltaLabel, info }: { label: string; value: string; delta?: number | null; deltaLabel: string; info?: string }) {
   const up = (delta ?? 0) >= 0;
   return (
     <div style={{ minWidth: 130 }}>
@@ -19,7 +19,7 @@ function HeroStat({ label, value, delta, info }: { label: string; value: string;
         <div className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded-md"
           style={{ fontSize: 11, fontWeight: 800, color: up ? "#16a34a" : "#ef4444", background: up ? "rgba(22,163,74,.12)" : "rgba(239,68,68,.12)" }}>
           {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-          {(delta * 100).toFixed(1)} %
+          {(delta * 100).toFixed(1)} % {deltaLabel}
         </div>
       )}
     </div>
@@ -43,6 +43,7 @@ export default function CommissionsHero({
   right?: React.ReactNode;
 }) {
   const isFr = lang === "fr";
+  const deltaLabel = isFr ? "vs même période l’an dernier" : "vs same period last year";
   return (
     <div
       className="ov3d-card"
@@ -78,16 +79,16 @@ export default function CommissionsHero({
 
         <div className="flex flex-wrap gap-x-8 gap-y-3 mt-4">
           <HeroStat
-            label={isFr ? "Volume" : "Volume"} value={fmtMoney(volume)} delta={volumeDelta}
+            label={isFr ? "Volume" : "Volume"} value={fmtMoney(volume)} delta={volumeDelta} deltaLabel={deltaLabel}
             info={isFr ? "Somme des montants de prêt des dossiers comptés dans le volume, sur la période sélectionnée. L'écart compare la même fenêtre de l'année précédente."
               : "Sum of loan amounts counted in volume for the selected period. The delta compares the same window last year."}
           />
           <HeroStat
-            label={isFr ? "Dossiers" : "Deals"} value={fmtNum(deals)} delta={dealsDelta}
+            label={isFr ? "Dossiers" : "Deals"} value={fmtNum(deals)} delta={dealsDelta} deltaLabel={deltaLabel}
             info={isFr ? "Nombre de dossiers comptés (hors lignes d'ajustement et bonis)." : "Number of counted deals (excluding adjustment and bonus lines)."}
           />
           <HeroStat
-            label="Commission" value={fmtMoney(commission)} delta={commissionDelta}
+            label="Commission" value={fmtMoney(commission)} delta={commissionDelta} deltaLabel={deltaLabel}
             info={isFr ? "Total des commissions inscrites au registre pour la période, toutes catégories confondues."
               : "Total commissions recorded in the register for the period, all categories included."}
           />

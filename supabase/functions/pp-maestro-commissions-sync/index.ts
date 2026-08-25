@@ -212,7 +212,20 @@ Deno.serve(async (req) => {
         written += chunk.length;
       }
       totalWritten += written;
-      report.push({ broker: name, profile_id: prof.id, users_id: maestroId, written, ...(failed ? { error: failed } : {}) });
+
+      // 4. Post-import reconciliation: Maestro totals vs what is stored in DB.
+      const recon = await reconcileBroker(admin, runId, prof, name, maestroId, rows);
+      reconciliation.push(...recon);
+      if (recon.some((r) => r.status !== "ok")) reconMismatches += recon.filter((r) => r.status !== "ok").length;
+
+      report.push({
+        broker: name, profile_id: prof.id, users_id: maestroId, written,
+        reconciliation: recon.map((r) => ({
+          year: r.fiscal_year, source_rows: r.source_rows, db_rows: r.db_rows,
+          amount_diff: r.amount_diff, status: r.status,
+        })),
+        ...(failed ? { error: failed } : {}),
+      });
     }
 
     if (!anySuccess) {
@@ -235,8 +248,16 @@ Deno.serve(async (req) => {
       written: totalWritten,
       unlinked,
       report,
+      run_id: runId,
+      reconciliation: {
+        checked: reconciliation.length,
+        mismatches: reconMismatches,
+        status: reconMismatches ? "mismatch" : "ok",
+        rows: reconciliation,
+      },
       synced_at: new Date().toISOString(),
     });
+
   } catch (e: any) {
     console.error("pp-maestro-commissions-sync error", e);
     return j({ success: false, error: e?.message ?? "server_error" }, 500);

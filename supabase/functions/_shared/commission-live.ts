@@ -18,6 +18,7 @@ export type LiveRegisterRow = {
   target_name: string | null;
   date_trans: string | null;
   commission_type: string | null;
+  is_adjustment: unknown;
   source_row: number;
   broker_user_id: string | null;
   maestro_broker_id: string | null;
@@ -110,6 +111,7 @@ export async function fetchLiveRegisterRows(
       target_name: d.target_name ?? null,
       date_trans: c.date_trans ?? null,
       commission_type: d.commission_type ?? "base",
+      is_adjustment: d.is_adjustment ?? null,
       source_row: seq--,
       broker_user_id: c.broker_user_id ?? null,
       maestro_broker_id: c.maestro_broker_id ?? null,

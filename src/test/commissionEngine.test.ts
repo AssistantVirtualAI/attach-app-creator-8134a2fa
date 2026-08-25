@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { periodVolume, volumeTranches, type RegisterRow } from "../../supabase/functions/_shared/commission-engine";
+import {
+  periodVolume,
+  periodDeals,
+  periodCommission,
+  volumeTranches,
+  type RegisterRow,
+} from "../../supabase/functions/_shared/commission-engine";
 
 const window = { start: "2026-01-01", end: "2026-12-31" };
 
@@ -18,29 +24,42 @@ const row = (overrides: Partial<RegisterRow>): RegisterRow => ({
   ...overrides,
 });
 
-describe("commission volume deduplication", () => {
-  it("counts a contract and product only once even when lender or amount differs", () => {
+describe("commission volume rules", () => {
+  it("counts every funding row, including two products on the same contract", () => {
     const rows = [
-      row({ source_row: 1, loan_amt: 300_000 }),
-      row({ source_row: 2, institution: "Prêteur B", loan_amt: 325_000 }),
-    ];
-
-    expect(volumeTranches(rows, window)).toHaveLength(1);
-    expect(periodVolume(rows, window)).toBe(300_000);
-  });
-
-  it("normalizes contract and product casing while preserving distinct products", () => {
-    const rows = [
-      row({ source_row: 1 }),
-      row({ source_row: 2, number: " plpr-1 ", mortgage_type: " renouvellement " }),
-      row({ source_row: 3, mortgage_type: "Achat", loan_amt: 425_000 }),
+      row({ source_row: 1, loan_amt: 200_000 }),
+      row({ source_row: 2, mortgage_type: "Marge Hypothécaire", loan_amt: 100_000 }),
     ];
 
     expect(volumeTranches(rows, window)).toHaveLength(2);
-    expect(periodVolume(rows, window)).toBe(725_000);
+    expect(periodVolume(rows, window)).toBe(300_000);
+    expect(periodDeals(rows, window)).toBe(1); // one unique contract number
   });
 
-  it("does not merge matching contracts belonging to different brokers", () => {
+  it("excludes adjustment rows from volume and deals but keeps them in commissions", () => {
+    const rows = [
+      row({ source_row: 1, loan_amt: 200_000, amount: 1_000 }),
+      row({ source_row: 2, number: "PLPR-2", loan_amt: 150_000, amount: 800, is_adjustment: "1" }),
+    ];
+
+    expect(periodVolume(rows, window)).toBe(200_000);
+    expect(periodDeals(rows, window)).toBe(1);
+    expect(periodCommission(rows, window)).toBe(1_800);
+  });
+
+  it("excludes insurance payouts everywhere", () => {
+    const rows = [
+      row({ source_row: 1, loan_amt: 200_000, amount: 1_000 }),
+      row({ source_row: 2, number: "PLPR-3", loan_amt: 0, amount: 158.86, institution: "Lepelco Assurances Inc" }),
+      row({ source_row: 3, number: "PLPR-4", loan_amt: 0, amount: 102.53, institution: "Desjardins Assurances" }),
+    ];
+
+    expect(periodVolume(rows, window)).toBe(200_000);
+    expect(periodDeals(rows, window)).toBe(1);
+    expect(periodCommission(rows, window)).toBe(1_000);
+  });
+
+  it("keeps identical contract numbers from different brokers distinct", () => {
     const rows = [
       row({ source_row: 1, broker_user_id: "broker-1" }),
       row({ source_row: 2, broker_user_id: "broker-2", loan_amt: 400_000 }),

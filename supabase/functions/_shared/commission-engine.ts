@@ -82,24 +82,41 @@ function matches(r: RegisterRow, c: Criteria): boolean {
 
 const normalizedKeyPart = (value: string | null | undefined) => (value ?? "").trim().toLocaleLowerCase("fr-CA");
 
+/** Volume uniqueness key: contract + lender + mortgage type + loan amount (absolute). */
+const volumeKey = (r: RegisterRow) =>
+  [
+    normalizedKeyPart(r.number),
+    normalizedKeyPart(r.institution),
+    normalizedKeyPart(r.mortgage_type),
+    Math.abs(n(r.loan_amt)).toFixed(2),
+  ].join("|");
+
 /**
- * Base funding rows counted in volume (no adjustments, no insurance, positive amounts only).
- * Uniqueness key = contract number + lender + mortgage type + loan amount, so exact
- * repeated rows (duplicate pushes / reversal pairs) are counted once.
+ * VOLUME rows = base rows, in window, no adjustments, no insurance, positive loan amounts.
+ * Uniqueness = contract + lender + mortgage type + loan amount:
+ *   - exact repeated amounts count once,
+ *   - a negative reversal cancels its matching positive row.
  */
 export function volumeTranches(rows: RegisterRow[], w: Window): RegisterRow[] {
+  const sorted = sortSource(rows).filter(
+    (r) => isBase(r) && !isAdjustment(r) && !isInsurance(r) && inWindow(r, w) && n(r.loan_amt) !== 0,
+  );
+
+  const reversals = new Map<string, number>();
+  for (const r of sorted) if (n(r.loan_amt) < 0) reversals.set(volumeKey(r), (reversals.get(volumeKey(r)) ?? 0) + 1);
+
   const seen = new Set<string>();
   const out: RegisterRow[] = [];
-  for (const r of sortSource(rows)) {
-    if (!isBase(r) || isAdjustment(r) || isInsurance(r) || n(r.loan_amt) <= 0 || !inWindow(r, w)) continue;
-    const key = [
-      normalizedKeyPart(r.number),
-      normalizedKeyPart(r.institution),
-      normalizedKeyPart(r.mortgage_type),
-      n(r.loan_amt).toFixed(2),
-    ].join("|");
-    if (seen.has(key)) continue;
+  for (const r of sorted) {
+    if (n(r.loan_amt) <= 0) continue;
+    const key = volumeKey(r);
+    if (seen.has(key)) continue; // exact repeated amount
     seen.add(key);
+    const pending = reversals.get(key) ?? 0;
+    if (pending > 0) {
+      reversals.set(key, pending - 1); // negative reversal cancels this funding
+      continue;
+    }
     out.push(r);
   }
   return out;

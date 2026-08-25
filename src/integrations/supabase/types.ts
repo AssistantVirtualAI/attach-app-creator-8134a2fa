@@ -8846,6 +8846,75 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_commission_reconciliation: {
+        Row: {
+          amount_diff: number
+          broker_name: string | null
+          broker_user_id: string | null
+          created_at: string
+          db_amount: number
+          db_loan: number
+          db_rows: number
+          details: Json
+          fiscal_year: number
+          id: string
+          loan_diff: number
+          maestro_broker_id: string | null
+          profile_id: string | null
+          rows_diff: number
+          run_id: string
+          source_amount: number
+          source_loan: number
+          source_rows: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount_diff?: number
+          broker_name?: string | null
+          broker_user_id?: string | null
+          created_at?: string
+          db_amount?: number
+          db_loan?: number
+          db_rows?: number
+          details?: Json
+          fiscal_year: number
+          id?: string
+          loan_diff?: number
+          maestro_broker_id?: string | null
+          profile_id?: string | null
+          rows_diff?: number
+          run_id: string
+          source_amount?: number
+          source_loan?: number
+          source_rows?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_diff?: number
+          broker_name?: string | null
+          broker_user_id?: string | null
+          created_at?: string
+          db_amount?: number
+          db_loan?: number
+          db_rows?: number
+          details?: Json
+          fiscal_year?: number
+          id?: string
+          loan_diff?: number
+          maestro_broker_id?: string | null
+          profile_id?: string | null
+          rows_diff?: number
+          run_id?: string
+          source_amount?: number
+          source_loan?: number
+          source_rows?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       planipret_commission_register: {
         Row: {
           agent_company: string | null

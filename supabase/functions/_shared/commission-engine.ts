@@ -126,6 +126,27 @@ export function volumeTranches(rows: RegisterRow[], w: Window): RegisterRow[] {
 export const dashboardVolumeKey = (r: RegisterRow) =>
   [normalizedKeyPart(r.number), normalizedKeyPart(r.institution), normalizedKeyPart(r.mortgage_type)].join("|");
 
+/** Dashboard deals key: contract number only. */
+export const dashboardDealKey = (r: RegisterRow) => normalizedKeyPart(r.number);
+
+/**
+ * Workbook helper columns W/X for the selected period:
+ *   unique_volume = 1 on rows retained by the volume uniqueness rule,
+ *   unique_deal   = 1 on the first base row of each contract number.
+ */
+export function helperFlags(
+  rows: RegisterRow[],
+  w: Window,
+): Array<{ row: RegisterRow; unique_volume: 0 | 1; unique_deal: 0 | 1 }> {
+  const volume = new Set(volumeTranches(rows, w));
+  const deals = new Set(dealContracts(rows, w));
+  return sortSource(rows).map((row) => ({
+    row,
+    unique_volume: volume.has(row) ? 1 : 0,
+    unique_deal: deals.has(row) ? 1 : 0,
+  }));
+}
+
 /**
  * DEALS = count of base rows flagged unique_deal = 1, keyed on the contract number only.
  * Base rows in window (no adjustments, no insurance); rows cancelled by a negative

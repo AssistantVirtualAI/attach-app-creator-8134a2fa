@@ -20,6 +20,7 @@ type DiagRow = {
 
 type RunRow = {
   started_at: string;
+  error?: string | null;
   finished_at: string | null;
   brokers_total: number;
   brokers_connected: number;
@@ -55,6 +56,7 @@ export default function MaestroSyncDiagnostics({ lang, canSync }: { lang: "fr" |
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [filter, setFilter] = useState<"all" | "connected" | "problem">("problem");
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,12 +73,12 @@ export default function MaestroSyncDiagnostics({ lang, canSync }: { lang: "fr" |
 
   useEffect(() => { void load(); }, [load]);
 
-  const runSync = async () => {
-    setSyncing(true);
+  const runSync = async (brokerIds?: string[]) => {
+    if (brokerIds?.length) setRetrying(brokerIds[0]); else setSyncing(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke("pp-commission-live-sync", {
-        body: {},
+        body: brokerIds?.length ? { broker_ids: brokerIds } : {},
         headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
       });
       if (error) throw error;
@@ -91,6 +93,7 @@ export default function MaestroSyncDiagnostics({ lang, canSync }: { lang: "fr" |
       toast.error(isFr ? "Échec de la synchronisation" : "Sync failed", { description: e?.message });
     } finally {
       setSyncing(false);
+      setRetrying(null);
     }
   };
 
@@ -118,7 +121,7 @@ export default function MaestroSyncDiagnostics({ lang, canSync }: { lang: "fr" |
         </span>
         <div className="ml-auto flex items-center gap-1.5">
           {canSync && (
-            <button onClick={runSync} disabled={syncing} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg"
+            <button onClick={() => void runSync()} disabled={syncing} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg"
               style={{ fontSize: 11.5, fontWeight: 700, background: "var(--pp-bg-card)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)", opacity: syncing ? .6 : 1 }}>
               {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
               {isFr ? "Synchroniser maintenant" : "Sync now"}
@@ -131,6 +134,39 @@ export default function MaestroSyncDiagnostics({ lang, canSync }: { lang: "fr" |
           </button>
         </div>
       </div>
+
+      {!loading && (run?.error || rows.some((r) => r.status === "error")) && (
+        <div className="flex flex-wrap items-start gap-2" style={{ borderTop: "1px solid var(--pp-bg-border)", padding: "8px 10px", background: "rgba(239,68,68,.08)" }}>
+          <XCircle className="w-4 h-4 mt-[1px]" style={{ color: "#ef4444" }} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#ef4444" }}>
+              {isFr ? "Erreurs d'import Maestro" : "Maestro import errors"}
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--pp-text-secondary)", wordBreak: "break-word" }}>
+              {run?.error
+                ? run.error
+                : isFr
+                  ? `${rows.filter((r) => r.status === "error").length} courtier(s) en erreur lors de la dernière synchronisation.`
+                  : `${rows.filter((r) => r.status === "error").length} broker(s) failed during the last sync.`}
+            </div>
+            <ul style={{ marginTop: 4, fontSize: 11, color: "var(--pp-text-muted)" }}>
+              {rows.filter((r) => r.status === "error").slice(0, 5).map((r) => (
+                <li key={r.broker_user_id}>
+                  • {r.broker_label ?? r.broker_email ?? r.broker_user_id} — {explain(r, isFr)}
+                  {r.http_status ? ` (HTTP ${r.http_status})` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+          {canSync && (
+            <button onClick={() => void runSync()} disabled={syncing} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg"
+              style={{ fontSize: 11.5, fontWeight: 700, background: "var(--pp-bg-card)", border: "1px solid #ef4444", color: "#ef4444", opacity: syncing ? .6 : 1 }}>
+              {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              {isFr ? "Réessayer la synchronisation" : "Retry sync"}
+            </button>
+          )}
+        </div>
+      )}
 
       {open && (
         <div style={{ borderTop: "1px solid var(--pp-bg-border)", padding: "8px 10px" }}>
@@ -155,6 +191,7 @@ export default function MaestroSyncDiagnostics({ lang, canSync }: { lang: "fr" |
                   <th style={{ padding: "4px 6px" }}>{isFr ? "État" : "State"}</th>
                   <th style={{ padding: "4px 6px" }}>{isFr ? "Lignes" : "Rows"}</th>
                   <th style={{ padding: "4px 6px" }}>{isFr ? "Raison exacte" : "Exact reason"}</th>
+                  {canSync && <th style={{ padding: "4px 6px" }} />}
                 </tr>
               </thead>
               <tbody>
@@ -175,10 +212,20 @@ export default function MaestroSyncDiagnostics({ lang, canSync }: { lang: "fr" |
                     <td style={{ padding: "4px 6px", color: "var(--pp-text-muted)" }}>
                       {explain(d, isFr)}{d.http_status ? ` (HTTP ${d.http_status})` : ""}
                     </td>
+                    {canSync && (
+                      <td style={{ padding: "4px 6px" }}>
+                        <button onClick={() => void runSync([d.broker_user_id])} disabled={!!retrying || syncing}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md"
+                          style={{ fontSize: 11, fontWeight: 700, background: "var(--pp-bg-card)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)", opacity: retrying || syncing ? .6 : 1 }}>
+                          {retrying === d.broker_user_id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          {isFr ? "Réessayer" : "Retry"}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {!loading && shown.length === 0 && (
-                  <tr><td colSpan={4} style={{ padding: 10, color: "var(--pp-text-muted)" }}>
+                  <tr><td colSpan={canSync ? 5 : 4} style={{ padding: 10, color: "var(--pp-text-muted)" }}>
                     {isFr ? "Aucune donnée de diagnostic — lancez une synchronisation." : "No diagnostic data — run a sync."}
                   </td></tr>
                 )}

@@ -181,7 +181,38 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
             ))}
           </div>
         )}
+
+        {/* Screen pop banner: most recent Maestro dossier, or the contact
+            record as a fallback when Maestro exposes no dossier. */}
+        {(resolving || target.kind !== "none") && (
+          <button
+            type="button"
+            onClick={openTarget}
+            disabled={resolving || target.kind === "none"}
+            aria-label={resolving ? "Recherche du dossier Maestro" : target.label}
+            className="mt-1 mx-6 flex items-center gap-2 px-3.5 py-2.5 rounded-2xl text-left active:scale-[0.98] transition disabled:opacity-70"
+            style={{ background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.35)" }}
+          >
+            {resolving
+              ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" style={{ color: "#9BCFEC" }} />
+              : <FolderOpen className="w-4 h-4 shrink-0" style={{ color: "#9BCFEC" }} />}
+            <span className="min-w-0">
+              <span className="block text-[12px] font-semibold text-white truncate">
+                {resolving ? "Recherche du dossier Maestro…" : target.label}
+              </span>
+              {!resolving && (
+                <span className="block text-[11px] text-slate-400 truncate">
+                  {target.kind === "deal"
+                    ? [target.deal?.label, target.deal?.stage].filter(Boolean).join(" · ") || "Dossier Maestro"
+                    : "Aucun dossier trouvé dans Maestro"}
+                </span>
+              )}
+            </span>
+            {!resolving && <ChevronRight className="w-4 h-4 ml-auto shrink-0 text-slate-500" />}
+          </button>
+        )}
       </div>
+
 
       <div className="relative w-44 h-44 flex items-center justify-center">
         <span className="absolute inset-0 rounded-full border-2 border-blue-400/40 animate-ping" />

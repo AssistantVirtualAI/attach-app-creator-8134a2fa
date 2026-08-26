@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState } from "react";
-import { Phone, PhoneOff, X, Bot } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Phone, PhoneOff, X, Bot, FolderOpen, Loader2, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { startSelectedRingtone } from "@/lib/planipret/audio/ringtonePresets";
+import {
+  NO_TARGET,
+  openDossierTarget,
+  resolveDossierTarget,
+  type DossierTarget,
+} from "@/lib/planipret/maestroDossier";
 
 export type InboundCall = { call_id?: string; from_number?: string; caller_name?: string } | null;
 
@@ -16,13 +22,21 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [contact, setContact] = useState<{ id?: string; full_name?: string; company?: string; avatar_url?: string; tags?: string[] } | null>(null);
+  const [target, setTarget] = useState<DossierTarget>(NO_TARGET);
+  const [resolving, setResolving] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
+  // Kept in a ref so "Répondre" can screen-pop with the freshest target even if
+  // the Maestro lookup landed after the last render.
+  const targetRef = useRef<DossierTarget>(NO_TARGET);
+  targetRef.current = target;
 
   useEffect(() => {
     setContact(null);
+    setTarget(NO_TARGET);
     if (!call?.from_number) return;
     const digits = call.from_number.replace(/\D/g, "").slice(-10);
     if (!digits) return;
+    let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from("planipret_contacts")
@@ -30,9 +44,31 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
         .ilike("phone", `%${digits}%`)
         .limit(1)
         .maybeSingle();
+      if (cancelled) return;
       if (data) setContact(data as any);
+
+      // Maestro resolution: latest dossier, else the contact record.
+      setResolving(true);
+      const resolved = await resolveDossierTarget(call.from_number, {
+        callId: call.call_id ?? null,
+        localContactId: (data as any)?.id ?? null,
+      });
+      if (cancelled) return;
+      setTarget(resolved);
+      setResolving(false);
     })();
-  }, [call?.from_number]);
+    return () => { cancelled = true; };
+  }, [call?.from_number, call?.call_id]);
+
+  const openTarget = useCallback(() => {
+    const t = targetRef.current;
+    if (t.kind === "none") {
+      toast("Aucun dossier ni fiche contact trouvé pour ce numéro");
+      return false;
+    }
+    return openDossierTarget(t, navigate);
+  }, [navigate]);
+
 
   useEffect(() => {
     if (!call) return;

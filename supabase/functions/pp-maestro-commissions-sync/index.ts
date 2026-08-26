@@ -163,8 +163,13 @@ function mapDeposit(d: CommissionDeposit, i: number, prof: BrokerProfile, maestr
   // so the volume is never counted 2-4x.
   const ctype = String(d.commission_type ?? "base").trim().toLowerCase() || "base";
   const isBase = ctype === "base";
+  // A deal can carry SEVERAL deposit rows of the same type (tranches, several
+  // bonus payments, adjustments on different dates). The key must therefore
+  // include the transaction date and the amount, otherwise those rows collapse
+  // into one and both the volume and the deal count are understated.
+  const amountKey = num(d.amount).toFixed(2);
   return {
-    row_key: `maestro:${maestroId}:${dealId}:${ctype}`,
+    row_key: `maestro:${maestroId}:${dealId}:${ctype}:${dateRaw ?? "nodate"}:${amountKey}:${num(d.loan_amt).toFixed(2)}`,
     number: String(d.number ?? ""),
     loan_amt: isBase ? num(d.loan_amt) : 0,
     institution: String(d.institution ?? "").trim() || null,

@@ -182,7 +182,7 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
   const [year, setYear] = useState(saved?.year ?? now.getFullYear());
   const [month, setMonth] = useState(12);
   const [granularity, setGranularity] = useState<Granularity>((saved?.granularity as Granularity) ?? "ytd");
-  const [periodIndex, setPeriodIndex] = useState(saved?.periodIndex ?? 12);
+  const [periodIndex, setPeriodIndex] = useState(saved?.periodIndex ?? now.getMonth() + 1);
   const [agent, setAgent] = useState(isAdminView ? (saved?.agent ?? "") : "");
   const [brokersYear, setBrokersYear] = useState<number | "all">("all");
   const [lender, setLender] = useState(saved?.lender ?? "");
@@ -317,7 +317,8 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
   const onGranularity = (g: Granularity) => {
     setGranularity(g);
-    setPeriodIndex(g === "week" ? 1 : g === "quarter" ? Math.ceil(((new Date()).getMonth() + 1) / 3) : g === "month" ? (new Date()).getMonth() + 1 : 12);
+    const currentMonth = new Date().getMonth() + 1;
+    setPeriodIndex(g === "week" ? 1 : g === "quarter" ? Math.ceil(currentMonth / 3) : g === "month" || g === "ytd" ? currentMonth : 12);
   };
 
   const years: number[] = useMemo(() => {

@@ -10,18 +10,31 @@ import { fetchAllCommissionDeposits, type CommissionDeposit } from "../_shared/m
  * The dashboards always read `planipret_commission_register`; this function is
  * the only writer for the Maestro source.
  *
+ * INCREMENTAL BY DEFAULT: re-pulling 2022→today for every broker means
+ * hundreds of thousands of deposit rows on each run. Unless a full rebuild is
+ * explicitly requested, each broker is fetched only from their own watermark
+ * (the most recent `date_trans` already stored) minus a lookback window that
+ * catches late-posted deposits and adjustments.
+ *
  * POST {
  *   mode?: "self" | "all" | "brokers",   // "all"/"brokers" require a Planiprêt admin
  *   broker_ids?: string[],               // profile ids or user ids, for mode "brokers"
  *   years?: number[],                    // defaults to 2022..current year
+ *   full?: boolean,                      // force a complete re-import (ignores watermarks)
+ *   incremental?: boolean,               // defaults to true unless `full` is set
+ *   lookback_days?: number,              // re-checked window before the watermark (default 45)
  *   dry_run?: boolean
  * }
  */
 
 const START_YEAR = 2022;
 
+/** Days re-fetched before each broker's watermark, to catch backdated deposits. */
+const DEFAULT_LOOKBACK_DAYS = 45;
+
 /** Tolerance (in dollars) below which an amount gap is considered a rounding artefact. */
 const AMOUNT_TOLERANCE = 0.05;
+
 
 type ReconRow = {
   run_id: string;

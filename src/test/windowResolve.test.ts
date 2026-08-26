@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveWindow } from "../dev-server/supabase/functions/_shared/commission-engine";
+import { resolveWindow } from "../../supabase/functions/_shared/commission-engine";
 describe("windows", () => {
   it("ytd caps to current month and aligns PY", () => {
     const now = new Date(); const y = now.getUTCFullYear(); const m = now.getUTCMonth()+1;

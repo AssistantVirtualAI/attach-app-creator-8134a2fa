@@ -174,9 +174,20 @@ export default function MMore() {
 
   const logout = async () => {
     if (!confirm(t("more.logoutConfirm"))) return;
-    await supabase.auth.signOut();
+    // Purge la session locale même si l'appel réseau échoue, sinon l'utilisateur
+    // reste « connecté » et ne peut plus se rebrancher (cas Tania).
+    try { await supabase.auth.signOut({ scope: "local" } as any); } catch { /* ignore */ }
+    try { await supabase.auth.signOut(); } catch { /* ignore */ }
+    try {
+      localStorage.removeItem("pp_maestro_just_connected");
+      localStorage.removeItem("pp_maestro_return_to");
+      localStorage.removeItem("pp_maestro_callback_url");
+      sessionStorage.removeItem("pp_portal_just_signed_in");
+    } catch { /* ignore */ }
     toast.success(t("more.logoutSuccess"));
-    navigate("/login", { replace: true });
+    // Retour à l'écran de connexion de l'app mobile (et non /login du portail),
+    // avec rechargement complet pour repartir d'un état propre.
+    window.location.replace("/mplanipret");
   };
 
   return (

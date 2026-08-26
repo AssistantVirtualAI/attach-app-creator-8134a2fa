@@ -62,17 +62,28 @@ export default function RegisterFilters({
     { key: "year", label: isFr ? "Année" : "Year" },
   ];
 
+  // Never offer future periods for the year in progress: the prior-year comparison
+  // always covers the exact same date interval (Jan -> selected month).
+  const now = new Date();
+  const isCurrentYear = year === now.getFullYear();
+  const maxMonth = isCurrentYear ? now.getMonth() + 1 : 12;
+
   const periodOptions = (): { value: number; label: string }[] => {
     if (granularity === "week") {
-      return Array.from({ length: isoWeeksInYear(year) }, (_, i) => ({
+      const maxWeek = isCurrentYear
+        ? Math.min(isoWeeksInYear(year), Math.ceil(((now.getTime() - Date.UTC(year, 0, 1)) / 86400000 + 1) / 7))
+        : isoWeeksInYear(year);
+      return Array.from({ length: maxWeek }, (_, i) => ({
         value: i + 1,
         label: isFr ? `Semaine ${i + 1}` : `Week ${i + 1}`,
       }));
     }
-    if (granularity === "month") return MONTHS.map((m, i) => ({ value: i + 1, label: m }));
-    if (granularity === "quarter") return [1, 2, 3, 4].map((q) => ({ value: q, label: `Q${q}` }));
+    if (granularity === "month") return MONTHS.slice(0, maxMonth).map((m, i) => ({ value: i + 1, label: m }));
+    if (granularity === "quarter") {
+      return [1, 2, 3, 4].filter((q) => q <= Math.ceil(maxMonth / 3)).map((q) => ({ value: q, label: `Q${q}` }));
+    }
     if (granularity === "ytd") {
-      return MONTHS.map((m, i) => ({ value: i + 1, label: isFr ? `Jusqu'à ${m}` : `Through ${m}` }));
+      return MONTHS.slice(0, maxMonth).map((m, i) => ({ value: i + 1, label: isFr ? `Jusqu'à ${m}` : `Through ${m}` }));
     }
     return [];
   };

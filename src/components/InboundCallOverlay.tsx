@@ -29,36 +29,43 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
   // the Maestro lookup landed after the last render.
   const targetRef = useRef<DossierTarget>(NO_TARGET);
   targetRef.current = target;
+  // The in-flight lookup, so answering before it resolves still screen-pops.
+  const pendingLookupRef = useRef<Promise<DossierTarget> | null>(null);
 
   useEffect(() => {
     setContact(null);
     setTarget(NO_TARGET);
+    pendingLookupRef.current = null;
     if (!call?.from_number) return;
     const digits = call.from_number.replace(/\D/g, "").slice(-10);
     if (!digits) return;
     let cancelled = false;
-    (async () => {
+    const lookup = (async (): Promise<DossierTarget> => {
       const { data } = await supabase
         .from("planipret_contacts")
         .select("id, full_name, company, avatar_url, tags")
         .ilike("phone", `%${digits}%`)
         .limit(1)
         .maybeSingle();
-      if (cancelled) return;
-      if (data) setContact(data as any);
+      if (!cancelled && data) setContact(data as any);
 
       // Maestro resolution: latest dossier, else the contact record.
-      setResolving(true);
+      if (!cancelled) setResolving(true);
       const resolved = await resolveDossierTarget(call.from_number, {
         callId: call.call_id ?? null,
         localContactId: (data as any)?.id ?? null,
       });
-      if (cancelled) return;
-      setTarget(resolved);
-      setResolving(false);
+      if (!cancelled) {
+        setTarget(resolved);
+        setResolving(false);
+      }
+      return resolved;
     })();
+    pendingLookupRef.current = lookup;
+    void lookup.catch(() => { /* fallback handled inside resolveDossierTarget */ });
     return () => { cancelled = true; };
   }, [call?.from_number, call?.call_id]);
+
 
   const openTarget = useCallback(() => {
     const t = targetRef.current;

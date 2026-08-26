@@ -362,6 +362,10 @@ Deno.serve(async (req) => {
       }
 
       // 3. Fetch the official commission deposit rows for this broker.
+      // Incremental runs start at the broker's own watermark, so only the new
+      // (and recently adjusted) deposits travel over the wire.
+      const since = await resolveSince(maestroId);
+      const dateFrom = since ? `${since} 00:00:00` : fullDateFrom;
       const r = await fetchAllCommissionDeposits({
         token: oauthToken,
         usersId: maestroId,
@@ -370,6 +374,7 @@ Deno.serve(async (req) => {
         perPage: 100,
         maxPages: 80,
       });
+
       if (!r.ok) {
         report.push({ broker: name, profile_id: prof.id, code: "api_error", status: r.status, error: r.error, written: 0 });
         continue;

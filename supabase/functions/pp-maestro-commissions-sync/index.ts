@@ -414,20 +414,23 @@ Deno.serve(async (req) => {
       // 3b. Drop legacy/stale Maestro rows for this broker (e.g. rows imported
       // before commission_type was part of the key) so nothing is double counted.
       // IMPORTANT: only prune within the scope we actually re-fetched in full —
-      // the commission buckets that returned OK and the fiscal years we asked
-      // for. A partial fetch (failed bucket or paginated truncation) must never
+      // the commission buckets that returned OK, the fiscal years we asked for,
+      // and (on an incremental run) the date window starting at the watermark.
+      // A partial fetch (failed bucket or paginated truncation) must never
       // delete rows it simply did not see.
       const fullFetch = !r.truncated && (r.failedTypes ?? []).length === 0;
       const prunableTypes = (r.okTypes ?? []).filter(Boolean);
       if (!failed && rows.length && fullFetch && prunableTypes.length) {
         const keep = new Set(rows.map((r) => r.row_key));
-        const { data: existing } = await admin
+        let existingQuery = admin
           .from("planipret_commission_register")
           .select("row_key, commission_type, fiscal_year")
           .eq("maestro_broker_id", maestroId)
           .eq("sheet_name", "maestro")
           .in("commission_type", prunableTypes)
           .in("fiscal_year", [...yearSet]);
+        if (since) existingQuery = existingQuery.gte("date_trans", since);
+        const { data: existing } = await existingQuery;
         const stale = (existing ?? [])
           .filter((x: any) => !keep.has(String(x.row_key)))
           .map((x: any) => String(x.row_key));
@@ -438,13 +441,16 @@ Deno.serve(async (req) => {
 
 
       // 4. Post-import reconciliation: Maestro totals vs what is stored in DB.
-      const recon = await reconcileBroker(admin, runId, prof, name, maestroId, rows);
+      const recon = await reconcileBroker(admin, runId, prof, name, maestroId, rows, since);
       reconciliation.push(...recon);
       if (recon.some((r) => r.status !== "ok")) reconMismatches += recon.filter((r) => r.status !== "ok").length;
 
       report.push({
         broker: name, profile_id: prof.id, users_id: maestroId, written,
+        mode: since ? "incremental" : "full",
+        since,
         rows_by_type: (r as any).byType ?? null,
+
         reconciliation: recon.map((r) => ({
           year: r.fiscal_year, source_rows: r.source_rows, db_rows: r.db_rows,
           amount_diff: r.amount_diff, status: r.status,

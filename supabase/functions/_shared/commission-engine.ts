@@ -404,8 +404,24 @@ export function resolveWindow(
       const q = Math.min(4, Math.max(1, index));
       return { window: quarterWindow(year, q), priorWindow: quarterWindow(year - 1, q), label: `Q${q}` };
     }
-    case "year":
-      return { window: yearWindow(year), priorWindow: yearWindow(year - 1), label: String(year) };
+    case "year": {
+      // "Same period last year": for the year in progress, the prior-year twin stops
+      // at the same calendar day, otherwise the comparison mixes a partial year with
+      // a full one (that is what produced the wrong negative deltas).
+      const today = new Date();
+      const cy = today.getUTCFullYear();
+      const priorEnd = year === cy
+        ? dstr(year - 1, today.getUTCMonth() + 1, monthEndDay(year - 1, today.getUTCMonth() + 1))
+        : dstr(year - 1, 12, 31);
+      return {
+        window: year === cy
+          ? { start: dstr(year, 1, 1), end: dstr(year, today.getUTCMonth() + 1, monthEndDay(year, today.getUTCMonth() + 1)) }
+          : yearWindow(year),
+        priorWindow: { start: dstr(year - 1, 1, 1), end: priorEnd },
+        label: String(year),
+      };
+    }
+
     default: {
       const m = Math.min(12, Math.max(1, index || 12));
       return { window: ytdWindow(year, m), priorWindow: ytdWindow(year - 1, m), label: `YTD ${m}` };

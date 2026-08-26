@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link2, Loader2, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+import { Link2, Loader2, RefreshCw, CheckCircle2, AlertCircle, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -48,8 +48,26 @@ export default function MaestroReconnectButton({ lang }: { lang: "fr" | "en" }) 
     }
   };
 
+  const disconnect = async () => {
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { error } = await supabase.functions.invoke("maestro-oauth-disconnect", {
+        body: {},
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+      });
+      if (error) throw error;
+      setConnected(false);
+      toast.success(isFr ? "Déconnecté de Maestro" : "Disconnected from Maestro");
+    } catch (e: any) {
+      toast.error(isFr ? "Déconnexion impossible" : "Cannot disconnect", { description: e?.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="inline-flex items-center gap-2">
+    <div className="inline-flex items-center gap-2 flex-wrap">
       {connected !== null && (
         <span className="inline-flex items-center gap-1" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
           {connected
@@ -77,6 +95,17 @@ export default function MaestroReconnectButton({ lang }: { lang: "fr" | "en" }) 
       >
         {isFr ? "Actualiser l'état" : "Refresh state"}
       </button>
+      {connected && (
+        <button
+          onClick={() => void disconnect()}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+          style={{ fontSize: 11.5, fontWeight: 700, background: "transparent", border: "1px solid var(--pp-bg-border)", color: "#dc2626", opacity: busy ? .6 : 1 }}
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          {isFr ? "Déconnecter Maestro" : "Log out of Maestro"}
+        </button>
+      )}
     </div>
   );
 }

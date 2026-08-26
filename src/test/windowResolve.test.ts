@@ -62,4 +62,68 @@ describe("windows", () => {
     expect(resolved.priorWindow).toEqual({ start: pyStart, end: pyEnd });
     expect(yoy(metrics(rows, resolved.window).volume, metrics(rows, resolved.priorWindow).volume)).toBeCloseTo(0.25);
   });
+
+  it("BNC YTD: dossiers and commission percentages use the same Jan→current-month window", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-26T16:23:00Z"));
+    const rows = [
+      // PY in-window: 3 dossiers, commission = volume/100
+      bnc("2025-02-10", 3_000_000, "BNC-P1"),
+      bnc("2025-05-10", 2_000_000, "BNC-P2"),
+      bnc("2025-08-10", 1_960_673.7, "BNC-P3"),
+      // PY out-of-window (Nov) must be excluded
+      bnc("2025-11-10", 17_279_272.3, "BNC-P4"),
+      // CY in-window: 4 dossiers
+      bnc("2026-01-10", 2_000_000, "BNC-C1"),
+      bnc("2026-03-10", 2_000_000, "BNC-C2"),
+      bnc("2026-06-10", 2_000_000, "BNC-C3"),
+      bnc("2026-08-10", 2_582_985, "BNC-C4"),
+    ];
+    const { window, priorWindow } = resolveWindow("ytd", 2026, 12);
+    const cy = metrics(rows, window, { institution: "BNC" });
+    const py = metrics(rows, priorWindow, { institution: "BNC" });
+
+    expect(py.deals).toBe(3);
+    expect(cy.deals).toBe(4);
+    expect(yoy(cy.deals, py.deals)).toBeCloseTo((4 - 3) / 3, 8);
+
+    expect(py.commission).toBeCloseTo(6_960_673.7 / 100, 4);
+    expect(cy.commission).toBeCloseTo(8_582_985 / 100, 4);
+    expect(yoy(cy.commission, py.commission)).toBeCloseTo(
+      (8_582_985 - 6_960_673.7) / 6_960_673.7,
+      8,
+    );
+  });
+
+  it.each([
+    ["month", 3, "2026-03-10", "2025-03-10", "2026-04-10", "2025-04-10"],
+    ["quarter", 2, "2026-05-10", "2025-05-10", "2026-07-10", "2025-07-10"],
+  ] as const)(
+    "BNC %s: dossiers and commission percentages come from the exact prior-year twin",
+    (granularity, index, cyIn, pyIn, cyOut, pyOut) => {
+      const rows = [
+        bnc(cyIn, 2_000_000, `${index}11`),
+        bnc(cyIn, 1_000_000, `${index}12`),
+        bnc(cyIn, 1_000_000, `${index}13`),
+        bnc(pyIn, 2_000_000, `${index}14`),
+        bnc(pyIn, 1_200_000, `${index}15`),
+        // outside the window on both sides — must not affect the percentages
+        bnc(cyOut, 9_000_000, `${index}16`),
+        bnc(pyOut, 9_000_000, `${index}17`),
+      ];
+      const { window, priorWindow } = resolveWindow(granularity, 2026, index);
+      const cy = metrics(rows, window, { institution: "BNC" });
+      const py = metrics(rows, priorWindow, { institution: "BNC" });
+
+      expect(cy.deals).toBe(3);
+      expect(py.deals).toBe(2);
+      expect(yoy(cy.deals, py.deals)).toBeCloseTo(0.5, 8);
+
+      expect(cy.commission).toBeCloseTo(40_000, 4);
+      expect(py.commission).toBeCloseTo(32_000, 4);
+      expect(yoy(cy.commission, py.commission)).toBeCloseTo(0.25, 8);
+      expect(cy.commissionPerDeal).toBeCloseTo(40_000 / 3, 6);
+      expect(py.commissionPerDeal).toBeCloseTo(16_000, 6);
+    },
+  );
 });

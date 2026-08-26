@@ -58,6 +58,8 @@ export interface FetchDepositsResult {
   error?: string;
   meta?: any;
   pages?: number;
+  /** true when pagination stopped at maxPages before reaching last_page */
+  truncated?: boolean;
 }
 
 async function fetchJson(url: string, token: string, timeoutMs: number): Promise<{ ok: boolean; status: number; data: any }> {
@@ -91,6 +93,7 @@ export async function fetchCommissionDeposits(opts: FetchDepositsOpts): Promise<
 
   const out: CommissionDeposit[] = [];
   let meta: any = null;
+  let truncatedPages = false;
   let page = 1;
   while (page <= maxPages) {
     const qs = new URLSearchParams({
@@ -113,9 +116,10 @@ export async function fetchCommissionDeposits(opts: FetchDepositsOpts): Promise<
     meta = r.data?.meta ?? null;
     const lastPage = Number(meta?.last_page ?? 1);
     if (rows.length === 0 || page >= lastPage) break;
+    if (page >= maxPages) { truncatedPages = true; break; }
     page++;
   }
-  return { ok: true, status: 200, rows: out, meta, pages: page };
+  return { ok: true, status: 200, rows: out, meta, pages: page, truncated: truncatedPages };
 }
 
 /**
@@ -126,24 +130,29 @@ export async function fetchCommissionDeposits(opts: FetchDepositsOpts): Promise<
  */
 export async function fetchAllCommissionDeposits(
   opts: Omit<FetchDepositsOpts, "commissionType">,
-): Promise<FetchDepositsResult & { byType: Record<string, number> }> {
+): Promise<FetchDepositsResult & { byType: Record<string, number>; okTypes: string[]; failedTypes: string[]; truncated: boolean }> {
   const rows: CommissionDeposit[] = [];
   const byType: Record<string, number> = {};
   let anyOk = false;
+  const okTypes: string[] = [];
+  const failedTypes: string[] = [];
+  let truncated = false;
   let lastError: { status: number; error?: string; meta?: any } | null = null;
 
   for (const type of COMMISSION_TYPE_IDS) {
     const r = await fetchCommissionDeposits({ ...opts, commissionType: type });
-    if (!r.ok) { lastError = { status: r.status, error: r.error, meta: r.meta }; continue; }
+    if (!r.ok) { lastError = { status: r.status, error: r.error, meta: r.meta }; failedTypes.push(type); continue; }
     anyOk = true;
+    okTypes.push(type);
+    if (r.truncated) truncated = true;
     byType[type] = r.rows.length;
     for (const row of r.rows) rows.push({ ...row, commission_type: row.commission_type ?? type });
   }
 
   if (!anyOk) {
-    return { ok: false, status: lastError?.status ?? 599, rows: [], error: lastError?.error ?? "no_data", meta: lastError?.meta, byType };
+    return { ok: false, status: lastError?.status ?? 599, rows: [], error: lastError?.error ?? "no_data", meta: lastError?.meta, byType, okTypes: [], failedTypes: [...COMMISSION_TYPE_IDS], truncated: false };
   }
-  return { ok: true, status: 200, rows, byType };
+  return { ok: true, status: 200, rows, byType, okTypes, failedTypes, truncated };
 }
 
 /** List of agents available for commission reports (admin discovery). */

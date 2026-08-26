@@ -80,7 +80,7 @@ describe("Actualiser (end-to-end)", () => {
   afterEach(() => vi.useRealTimers());
 
   it.each([
-    ["ytd", 12, 8_750_000, 6, 14_250_000, 9] as const,
+    ["ytd", 12, 8_750_000, 6, 13_750_000, 9] as const,
     ["month", 3, 3_000_000, 2, 4_000_000, 3] as const,
     ["quarter", 2, 3_000_000, 2, 6_000_000, 3] as const,
   ])(

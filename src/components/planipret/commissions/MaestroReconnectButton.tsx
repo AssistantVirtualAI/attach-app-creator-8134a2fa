@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link2, Loader2, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
+import { Link2, Loader2, RefreshCw, CheckCircle2, AlertCircle, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 

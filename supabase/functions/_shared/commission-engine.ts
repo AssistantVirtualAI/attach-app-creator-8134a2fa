@@ -424,6 +424,19 @@ export function resolveWindow(
 
     default: {
       const m = Math.min(12, Math.max(1, index || 12));
+      // Same period last year: when the YTD window runs into the current month of the
+      // current year, cut both windows at today's day so the comparison is apples-to-apples.
+      const today = new Date();
+      const isCurrent = year === today.getUTCFullYear() && m >= today.getUTCMonth() + 1;
+      if (isCurrent) {
+        const mm = today.getUTCMonth() + 1;
+        const dd = today.getUTCDate();
+        return {
+          window: { start: dstr(year, 1, 1), end: dstr(year, mm, Math.min(dd, monthEndDay(year, mm))) },
+          priorWindow: { start: dstr(year - 1, 1, 1), end: dstr(year - 1, mm, Math.min(dd, monthEndDay(year - 1, mm))) },
+          label: `YTD ${mm}`,
+        };
+      }
       return { window: ytdWindow(year, m), priorWindow: ytdWindow(year - 1, m), label: `YTD ${m}` };
     }
   }

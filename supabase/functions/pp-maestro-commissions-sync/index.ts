@@ -237,8 +237,42 @@ Deno.serve(async (req) => {
     const fallbackYear = Number(body?.fiscal_year) || nowYear;
     const minYear = Math.min(...years);
     const maxYear = Math.max(...years);
-    const dateFrom = `${minYear}-01-01 00:00:00`;
+    const fullDateFrom = `${minYear}-01-01 00:00:00`;
     const dateTo = `${maxYear}-12-31 23:59:59`;
+
+    // Incremental unless a full rebuild is explicitly requested. This is what
+    // keeps a routine run from re-downloading the entire 2022→today history
+    // (300k+ deposit rows across all brokers) on every single sync.
+    const forceFull = Boolean(body?.full) || body?.incremental === false;
+    const incremental = !forceFull;
+    const lookbackDays = Math.max(0, Number(body?.lookback_days ?? DEFAULT_LOOKBACK_DAYS) || 0);
+
+    /**
+     * Per-broker watermark: the most recent deposit date already stored, minus
+     * the lookback window. Returns null when the broker has no history yet, in
+     * which case the run falls back to the full range (first-time backfill).
+     */
+    const resolveSince = async (maestroId: string): Promise<string | null> => {
+      if (!incremental) return null;
+      const { data, error } = await admin
+        .from("planipret_commission_register")
+        .select("date_trans")
+        .eq("maestro_broker_id", maestroId)
+        .eq("sheet_name", "maestro")
+        .not("date_trans", "is", null)
+        .order("date_trans", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const watermark = error ? null : (data as any)?.date_trans ?? null;
+      if (!watermark) return null;
+      const d = new Date(`${String(watermark).slice(0, 10)}T00:00:00Z`);
+      if (Number.isNaN(d.getTime())) return null;
+      d.setUTCDate(d.getUTCDate() - lookbackDays);
+      const since = d.toISOString().slice(0, 10);
+      // Never reach further back than the requested year range.
+      return since < `${minYear}-01-01` ? `${minYear}-01-01` : since;
+    };
+
 
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace(/^Bearer\s+/i, "");

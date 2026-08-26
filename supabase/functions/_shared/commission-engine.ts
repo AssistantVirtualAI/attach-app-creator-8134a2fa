@@ -189,14 +189,19 @@ function computeWindow(rows: RegisterRow[], w: Window): WindowComputation {
     volume.push(r);
   }
 
+  const firstBase = firstBaseRowByContract(rows);
   const seenDeal = new Set<string>();
   const deals: RegisterRow[] = [];
   for (const r of [...volume, ...zeroLoanBase]) {
     const k = flags(r).dKey;
     if (seenDeal.has(k)) continue;
+    // Calendar-year rule: a contract is a deal once, in the period holding its very
+    // first base row. Later tranches of an earlier contract never create a new deal.
+    if (firstBase.get(k) !== r) continue;
     seenDeal.add(k);
     deals.push(r);
   }
+
 
   const out: WindowComputation = { windowRows, volume, deals, excluded };
   byWindow.set(key, out);

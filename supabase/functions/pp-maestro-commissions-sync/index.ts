@@ -10,18 +10,31 @@ import { fetchAllCommissionDeposits, type CommissionDeposit } from "../_shared/m
  * The dashboards always read `planipret_commission_register`; this function is
  * the only writer for the Maestro source.
  *
+ * INCREMENTAL BY DEFAULT: re-pulling 2022→today for every broker means
+ * hundreds of thousands of deposit rows on each run. Unless a full rebuild is
+ * explicitly requested, each broker is fetched only from their own watermark
+ * (the most recent `date_trans` already stored) minus a lookback window that
+ * catches late-posted deposits and adjustments.
+ *
  * POST {
  *   mode?: "self" | "all" | "brokers",   // "all"/"brokers" require a Planiprêt admin
  *   broker_ids?: string[],               // profile ids or user ids, for mode "brokers"
  *   years?: number[],                    // defaults to 2022..current year
+ *   full?: boolean,                      // force a complete re-import (ignores watermarks)
+ *   incremental?: boolean,               // defaults to true unless `full` is set
+ *   lookback_days?: number,              // re-checked window before the watermark (default 45)
  *   dry_run?: boolean
  * }
  */
 
 const START_YEAR = 2022;
 
+/** Days re-fetched before each broker's watermark, to catch backdated deposits. */
+const DEFAULT_LOOKBACK_DAYS = 45;
+
 /** Tolerance (in dollars) below which an amount gap is considered a rounding artefact. */
 const AMOUNT_TOLERANCE = 0.05;
+
 
 type ReconRow = {
   run_id: string;
@@ -49,6 +62,10 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * Compares, per fiscal year, what Maestro returned with what is actually stored
  * in `planipret_commission_register`, and persists the result so admins can
  * audit every import.
+ *
+ * `sinceDate` scopes the comparison to the window that was actually re-fetched:
+ * on an incremental run the older stored rows were never requested from Maestro
+ * and must not be reported as extras.
  */
 async function reconcileBroker(
   admin: any,
@@ -57,7 +74,9 @@ async function reconcileBroker(
   name: string,
   maestroId: string,
   rows: Array<Record<string, any>>,
+  sinceDate: string | null = null,
 ): Promise<ReconRow[]> {
+
   const byYear = new Map<number, { rows: number; amount: number; loan: number; keys: Set<string> }>();
   for (const r of rows) {
     // Undated Maestro rows are never part of the totals.
@@ -77,15 +96,18 @@ async function reconcileBroker(
     // so the expected stored count is the number of DISTINCT keys.
     const expectedRows = src.keys.size;
 
-    const { data: stored, error } = await admin
+    let storedQuery = admin
       .from("planipret_commission_register")
       .select("row_key, amount, loan_amt, date_trans")
       .eq("maestro_broker_id", maestroId)
       .eq("fiscal_year", year)
       .eq("sheet_name", "maestro");
+    if (sinceDate) storedQuery = storedQuery.gte("date_trans", sinceDate);
+    const { data: stored, error } = await storedQuery;
 
     // Only dated rows count: undated Maestro rows are stored for audit but excluded.
     const storedDated = error ? [] : (stored ?? []).filter((x: any) => !!x.date_trans);
+
     const dbRows = storedDated.length;
     const dbAmount = storedDated.reduce((s: number, x: any) => s + (Number(x.amount) || 0), 0);
     const dbLoan = storedDated.reduce((s: number, x: any) => s + (Number(x.loan_amt) || 0), 0);
@@ -215,8 +237,42 @@ Deno.serve(async (req) => {
     const fallbackYear = Number(body?.fiscal_year) || nowYear;
     const minYear = Math.min(...years);
     const maxYear = Math.max(...years);
-    const dateFrom = `${minYear}-01-01 00:00:00`;
+    const fullDateFrom = `${minYear}-01-01 00:00:00`;
     const dateTo = `${maxYear}-12-31 23:59:59`;
+
+    // Incremental unless a full rebuild is explicitly requested. This is what
+    // keeps a routine run from re-downloading the entire 2022→today history
+    // (300k+ deposit rows across all brokers) on every single sync.
+    const forceFull = Boolean(body?.full) || body?.incremental === false;
+    const incremental = !forceFull;
+    const lookbackDays = Math.max(0, Number(body?.lookback_days ?? DEFAULT_LOOKBACK_DAYS) || 0);
+
+    /**
+     * Per-broker watermark: the most recent deposit date already stored, minus
+     * the lookback window. Returns null when the broker has no history yet, in
+     * which case the run falls back to the full range (first-time backfill).
+     */
+    const resolveSince = async (maestroId: string): Promise<string | null> => {
+      if (!incremental) return null;
+      const { data, error } = await admin
+        .from("planipret_commission_register")
+        .select("date_trans")
+        .eq("maestro_broker_id", maestroId)
+        .eq("sheet_name", "maestro")
+        .not("date_trans", "is", null)
+        .order("date_trans", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const watermark = error ? null : (data as any)?.date_trans ?? null;
+      if (!watermark) return null;
+      const d = new Date(`${String(watermark).slice(0, 10)}T00:00:00Z`);
+      if (Number.isNaN(d.getTime())) return null;
+      d.setUTCDate(d.getUTCDate() - lookbackDays);
+      const since = d.toISOString().slice(0, 10);
+      // Never reach further back than the requested year range.
+      return since < `${minYear}-01-01` ? `${minYear}-01-01` : since;
+    };
+
 
     const authHeader = req.headers.get("Authorization") ?? "";
     const token = authHeader.replace(/^Bearer\s+/i, "");
@@ -306,6 +362,10 @@ Deno.serve(async (req) => {
       }
 
       // 3. Fetch the official commission deposit rows for this broker.
+      // Incremental runs start at the broker's own watermark, so only the new
+      // (and recently adjusted) deposits travel over the wire.
+      const since = await resolveSince(maestroId);
+      const dateFrom = since ? `${since} 00:00:00` : fullDateFrom;
       const r = await fetchAllCommissionDeposits({
         token: oauthToken,
         usersId: maestroId,
@@ -314,6 +374,7 @@ Deno.serve(async (req) => {
         perPage: 100,
         maxPages: 80,
       });
+
       if (!r.ok) {
         report.push({ broker: name, profile_id: prof.id, code: "api_error", status: r.status, error: r.error, written: 0 });
         continue;
@@ -353,20 +414,23 @@ Deno.serve(async (req) => {
       // 3b. Drop legacy/stale Maestro rows for this broker (e.g. rows imported
       // before commission_type was part of the key) so nothing is double counted.
       // IMPORTANT: only prune within the scope we actually re-fetched in full —
-      // the commission buckets that returned OK and the fiscal years we asked
-      // for. A partial fetch (failed bucket or paginated truncation) must never
+      // the commission buckets that returned OK, the fiscal years we asked for,
+      // and (on an incremental run) the date window starting at the watermark.
+      // A partial fetch (failed bucket or paginated truncation) must never
       // delete rows it simply did not see.
       const fullFetch = !r.truncated && (r.failedTypes ?? []).length === 0;
       const prunableTypes = (r.okTypes ?? []).filter(Boolean);
       if (!failed && rows.length && fullFetch && prunableTypes.length) {
         const keep = new Set(rows.map((r) => r.row_key));
-        const { data: existing } = await admin
+        let existingQuery = admin
           .from("planipret_commission_register")
           .select("row_key, commission_type, fiscal_year")
           .eq("maestro_broker_id", maestroId)
           .eq("sheet_name", "maestro")
           .in("commission_type", prunableTypes)
           .in("fiscal_year", [...yearSet]);
+        if (since) existingQuery = existingQuery.gte("date_trans", since);
+        const { data: existing } = await existingQuery;
         const stale = (existing ?? [])
           .filter((x: any) => !keep.has(String(x.row_key)))
           .map((x: any) => String(x.row_key));
@@ -377,13 +441,16 @@ Deno.serve(async (req) => {
 
 
       // 4. Post-import reconciliation: Maestro totals vs what is stored in DB.
-      const recon = await reconcileBroker(admin, runId, prof, name, maestroId, rows);
+      const recon = await reconcileBroker(admin, runId, prof, name, maestroId, rows, since);
       reconciliation.push(...recon);
       if (recon.some((r) => r.status !== "ok")) reconMismatches += recon.filter((r) => r.status !== "ok").length;
 
       report.push({
         broker: name, profile_id: prof.id, users_id: maestroId, written,
+        mode: since ? "incremental" : "full",
+        since,
         rows_by_type: (r as any).byType ?? null,
+
         reconciliation: recon.map((r) => ({
           year: r.fiscal_year, source_rows: r.source_rows, db_rows: r.db_rows,
           amount_diff: r.amount_diff, status: r.status,

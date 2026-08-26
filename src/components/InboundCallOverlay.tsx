@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState } from "react";
-import { Phone, PhoneOff, X, Bot } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Phone, PhoneOff, X, Bot, FolderOpen, Loader2, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { startSelectedRingtone } from "@/lib/planipret/audio/ringtonePresets";
+import {
+  NO_TARGET,
+  openDossierTarget,
+  resolveDossierTarget,
+  type DossierTarget,
+} from "@/lib/planipret/maestroDossier";
 
 export type InboundCall = { call_id?: string; from_number?: string; caller_name?: string } | null;
 
@@ -16,23 +22,60 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [contact, setContact] = useState<{ id?: string; full_name?: string; company?: string; avatar_url?: string; tags?: string[] } | null>(null);
+  const [target, setTarget] = useState<DossierTarget>(NO_TARGET);
+  const [resolving, setResolving] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
+  // Kept in a ref so "Répondre" can screen-pop with the freshest target even if
+  // the Maestro lookup landed after the last render.
+  const targetRef = useRef<DossierTarget>(NO_TARGET);
+  targetRef.current = target;
+  // The in-flight lookup, so answering before it resolves still screen-pops.
+  const pendingLookupRef = useRef<Promise<DossierTarget> | null>(null);
 
   useEffect(() => {
     setContact(null);
+    setTarget(NO_TARGET);
+    pendingLookupRef.current = null;
     if (!call?.from_number) return;
     const digits = call.from_number.replace(/\D/g, "").slice(-10);
     if (!digits) return;
-    (async () => {
+    let cancelled = false;
+    const lookup = (async (): Promise<DossierTarget> => {
       const { data } = await supabase
         .from("planipret_contacts")
         .select("id, full_name, company, avatar_url, tags")
         .ilike("phone", `%${digits}%`)
         .limit(1)
         .maybeSingle();
-      if (data) setContact(data as any);
+      if (!cancelled && data) setContact(data as any);
+
+      // Maestro resolution: latest dossier, else the contact record.
+      if (!cancelled) setResolving(true);
+      const resolved = await resolveDossierTarget(call.from_number, {
+        callId: call.call_id ?? null,
+        localContactId: (data as any)?.id ?? null,
+      });
+      if (!cancelled) {
+        setTarget(resolved);
+        setResolving(false);
+      }
+      return resolved;
     })();
-  }, [call?.from_number]);
+    pendingLookupRef.current = lookup;
+    void lookup.catch(() => { /* fallback handled inside resolveDossierTarget */ });
+    return () => { cancelled = true; };
+  }, [call?.from_number, call?.call_id]);
+
+
+  const openTarget = useCallback(() => {
+    const t = targetRef.current;
+    if (t.kind === "none") {
+      toast("Aucun dossier ni fiche contact trouvé pour ce numéro");
+      return false;
+    }
+    return openDossierTarget(t, navigate);
+  }, [navigate]);
+
 
   useEffect(() => {
     if (!call) return;
@@ -51,6 +94,20 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
 
   const handleClose = () => { stopRef.current?.(); onClose(); };
 
+  /**
+   * Screen pop: right after the broker answers, open the caller's most recent
+   * dossier (or their contact record when Maestro has no dossier). Waits for a
+   * still-running lookup so a fast tap does not lose the target.
+   */
+  const screenPop = useCallback(async () => {
+    let t = targetRef.current;
+    if (t.kind === "none" && pendingLookupRef.current) {
+      t = (await pendingLookupRef.current.catch(() => NO_TARGET)) ?? NO_TARGET;
+    }
+    if (t.kind === "none") return;
+    openDossierTarget(t, navigate);
+  }, [navigate]);
+
   const act = async (action: "answer" | "reject") => {
     if (busy) return;
     setBusy(true);
@@ -59,6 +116,7 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
         stopRef.current?.();
         await onAnswer();
         onClose();
+        void screenPop();
         return;
       }
       if (action === "reject" && onReject) {
@@ -69,13 +127,17 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
       }
       await supabase.functions.invoke("pp-ns-calls", { body: { action, call_id: call?.call_id } });
       handleClose();
-      if (action === "answer") navigate(`/mplanipret/calls?call=${call?.call_id ?? ""}`);
+      if (action === "answer") {
+        navigate(`/mplanipret/calls?call=${call?.call_id ?? ""}`);
+        void screenPop();
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Action impossible");
     } finally {
       setBusy(false);
     }
   };
+
 
   const sendToVoicemail = async () => {
     if (busy) return;
@@ -119,7 +181,38 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
             ))}
           </div>
         )}
+
+        {/* Screen pop banner: most recent Maestro dossier, or the contact
+            record as a fallback when Maestro exposes no dossier. */}
+        {(resolving || target.kind !== "none") && (
+          <button
+            type="button"
+            onClick={openTarget}
+            disabled={resolving || target.kind === "none"}
+            aria-label={resolving ? "Recherche du dossier Maestro" : target.label}
+            className="mt-1 mx-6 flex items-center gap-2 px-3.5 py-2.5 rounded-2xl text-left active:scale-[0.98] transition disabled:opacity-70"
+            style={{ background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.35)" }}
+          >
+            {resolving
+              ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" style={{ color: "#9BCFEC" }} />
+              : <FolderOpen className="w-4 h-4 shrink-0" style={{ color: "#9BCFEC" }} />}
+            <span className="min-w-0">
+              <span className="block text-[12px] font-semibold text-white truncate">
+                {resolving ? "Recherche du dossier Maestro…" : target.label}
+              </span>
+              {!resolving && (
+                <span className="block text-[11px] text-slate-400 truncate">
+                  {target.kind === "deal"
+                    ? [target.deal?.label, target.deal?.stage].filter(Boolean).join(" · ") || "Dossier Maestro"
+                    : "Aucun dossier trouvé dans Maestro"}
+                </span>
+              )}
+            </span>
+            {!resolving && <ChevronRight className="w-4 h-4 ml-auto shrink-0 text-slate-500" />}
+          </button>
+        )}
       </div>
+
 
       <div className="relative w-44 h-44 flex items-center justify-center">
         <span className="absolute inset-0 rounded-full border-2 border-blue-400/40 animate-ping" />

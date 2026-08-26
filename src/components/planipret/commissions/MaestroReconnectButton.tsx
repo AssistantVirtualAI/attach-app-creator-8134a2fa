@@ -48,8 +48,26 @@ export default function MaestroReconnectButton({ lang }: { lang: "fr" | "en" }) 
     }
   };
 
+  const disconnect = async () => {
+    setBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { error } = await supabase.functions.invoke("maestro-oauth-disconnect", {
+        body: {},
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+      });
+      if (error) throw error;
+      setConnected(false);
+      toast.success(isFr ? "Déconnecté de Maestro" : "Disconnected from Maestro");
+    } catch (e: any) {
+      toast.error(isFr ? "Déconnexion impossible" : "Cannot disconnect", { description: e?.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="inline-flex items-center gap-2">
+    <div className="inline-flex items-center gap-2 flex-wrap">
       {connected !== null && (
         <span className="inline-flex items-center gap-1" style={{ fontSize: 11.5, color: "var(--pp-text-muted)" }}>
           {connected

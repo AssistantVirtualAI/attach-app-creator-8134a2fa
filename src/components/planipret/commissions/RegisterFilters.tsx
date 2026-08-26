@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Users, Landmark } from "lucide-react";
 import { causeLabel, coverageFor, type CoverageMap } from "@/lib/planipret/brokerCoverage";
 
@@ -89,6 +90,11 @@ export default function RegisterFilters({
   };
 
   const options = periodOptions();
+  const maxOption = options.length ? options[options.length - 1].value : 0;
+
+  useEffect(() => {
+    if (maxOption && periodIndex > maxOption) onPeriodIndex(maxOption);
+  }, [maxOption, periodIndex, onPeriodIndex]);
 
   return (
     <div className="flex flex-wrap items-center gap-2">

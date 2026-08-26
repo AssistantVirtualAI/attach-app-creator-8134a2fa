@@ -100,7 +100,8 @@ Deno.serve(async (req) => {
     const r = await maestroFetch(cfg, {
       method: "GET", path: `${base}/messages?limit=1&machine=1`, token: tok,
     });
-    return { ok: r.ok || r.status === 404, details: { status: r.status } };
+    // The messages route is POST-only on Maestro: 405 proves it is reachable.
+    return { ok: r.ok || r.status === 404 || r.status === 405, details: { status: r.status } };
   });
 
   await run("7. Webhook signature", async () => {

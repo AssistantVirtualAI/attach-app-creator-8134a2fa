@@ -62,6 +62,10 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * Compares, per fiscal year, what Maestro returned with what is actually stored
  * in `planipret_commission_register`, and persists the result so admins can
  * audit every import.
+ *
+ * `sinceDate` scopes the comparison to the window that was actually re-fetched:
+ * on an incremental run the older stored rows were never requested from Maestro
+ * and must not be reported as extras.
  */
 async function reconcileBroker(
   admin: any,
@@ -70,7 +74,9 @@ async function reconcileBroker(
   name: string,
   maestroId: string,
   rows: Array<Record<string, any>>,
+  sinceDate: string | null = null,
 ): Promise<ReconRow[]> {
+
   const byYear = new Map<number, { rows: number; amount: number; loan: number; keys: Set<string> }>();
   for (const r of rows) {
     // Undated Maestro rows are never part of the totals.

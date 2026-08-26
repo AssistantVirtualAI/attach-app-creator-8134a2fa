@@ -142,6 +142,32 @@ interface WindowComputation {
  */
 const computeCache = new WeakMap<RegisterRow[], Map<string, WindowComputation>>();
 
+/**
+ * First dated base row of each contract, all periods combined. Used so a contract
+ * counts as a deal exactly once, in the calendar period of its first base row.
+ */
+const firstBaseCache = new WeakMap<RegisterRow[], Map<string, RegisterRow>>();
+function firstBaseRowByContract(rows: RegisterRow[]): Map<string, RegisterRow> {
+  const hit = firstBaseCache.get(rows);
+  if (hit) return hit;
+  const map = new Map<string, RegisterRow>();
+  for (const r of sortSource(rows)) {
+    if (!hasTransactionDate(r)) continue;
+    const d = (r.date_trans ?? "").slice(0, 10);
+    const f = flags(r);
+    if (!f.base || f.adjustment || f.insurance) continue;
+    if (f.loan < 0) continue;
+    const k = f.dKey;
+    const prev = map.get(k);
+    if (!prev) { map.set(k, r); continue; }
+    const pd = (prev.date_trans ?? "").slice(0, 10);
+    if (d < pd) map.set(k, r);
+  }
+  firstBaseCache.set(rows, map);
+  return map;
+}
+
+
 function computeWindow(rows: RegisterRow[], w: Window): WindowComputation {
   let byWindow = computeCache.get(rows);
   if (!byWindow) { byWindow = new Map(); computeCache.set(rows, byWindow); }
@@ -189,14 +215,19 @@ function computeWindow(rows: RegisterRow[], w: Window): WindowComputation {
     volume.push(r);
   }
 
+  const firstBase = firstBaseRowByContract(rows);
   const seenDeal = new Set<string>();
   const deals: RegisterRow[] = [];
   for (const r of [...volume, ...zeroLoanBase]) {
     const k = flags(r).dKey;
     if (seenDeal.has(k)) continue;
+    // Calendar-year rule: a contract is a deal once, in the period holding its very
+    // first base row. Later tranches of an earlier contract never create a new deal.
+    if (firstBase.get(k) !== r) continue;
     seenDeal.add(k);
     deals.push(r);
   }
+
 
   const out: WindowComputation = { windowRows, volume, deals, excluded };
   byWindow.set(key, out);

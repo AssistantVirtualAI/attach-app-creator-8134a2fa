@@ -135,7 +135,7 @@ export default function MaestroConnectCard() {
   }, [load, pollStatus]);
 
 
-  const startAuth = async () => {
+  const startAuth = async (force = false) => {
     if (authInFlight.current) return;
     authInFlight.current = true;
     setBusy(true);
@@ -148,7 +148,7 @@ export default function MaestroConnectCard() {
         : `${window.location.origin}/auth/maestro/callback`;
 
       const { data: res, error } = await supabase.functions.invoke("maestro-oauth-start", {
-        body: { platform, redirect_uri: redirectUri, origin: window.location.origin },
+        body: { platform, redirect_uri: redirectUri, origin: window.location.origin, force },
       });
       if (error) throw error;
       const url = (res as any)?.authorize_url;
@@ -302,7 +302,7 @@ export default function MaestroConnectCard() {
         <div className="flex gap-2 mt-3">
           {status !== "connected" ? (
             <button
-              onClick={startAuth}
+              onClick={() => startAuth(false)}
               disabled={busy || data.configured === false}
               className="flex items-center justify-center gap-1 flex-1 rounded-md"
               style={{
@@ -316,7 +316,12 @@ export default function MaestroConnectCard() {
           ) : (
             <>
               <button
-                onClick={startAuth}
+                onClick={async () => {
+                  // Reconnexion reelle : on revoque d'abord le lien courant,
+                  // sinon Maestro renvoie silencieusement l'ancien compte.
+                  try { await supabase.functions.invoke("maestro-oauth-disconnect", { body: {} }); } catch { /* ignore */ }
+                  await startAuth(true);
+                }}
                 disabled={busy}
                 className="flex items-center justify-center gap-1 flex-1 rounded-md"
                 style={{ background: "var(--pp-bg-border-2)", color: "var(--pp-text-primary)", fontSize: 12, fontWeight: 600, padding: "8px 10px" }}

@@ -1,5 +1,11 @@
 // GET /functions/v1/maestro-client-lookup?phone={e164}&call_id={uuid?}
-// Looks up a Maestro client by phone, caches result on planipret_phone_calls.
+// Looks up a Maestro client by phone, resolves their most recent dossier when
+// Maestro exposes one, and caches the result on planipret_phone_calls.
+//
+// The response is designed so the caller never faces an empty screen:
+//   - found + latest_deal -> open the dossier
+//   - found, no dossier   -> open_action "contact" with contact_url
+//   - not found / error   -> found:false, the UI keeps the local contact card
 import {
   adminClient,
   corsHeaders,
@@ -10,6 +16,8 @@ import {
   maestroFetch,
   normalizePhone,
 } from "../_shared/maestro.ts";
+import { clientUrl, fetchClientDeals } from "../_shared/maestro-deals.ts";
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

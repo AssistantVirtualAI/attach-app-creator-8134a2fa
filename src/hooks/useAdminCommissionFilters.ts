@@ -12,10 +12,13 @@ export type AdminCommissionFilters = {
 const key = (scope: string) => `pp-commission-filters:${scope}:v2`;
 
 export function defaultAdminCommissionFilters(): AdminCommissionFilters {
+  const now = new Date();
   return {
-    year: new Date().getFullYear(),
+    year: now.getFullYear(),
     granularity: "ytd",
-    periodIndex: 12,
+    // Year in progress: YTD stops at the current month so the prior-year
+    // comparison covers the same period (never a full year vs a partial one).
+    periodIndex: now.getMonth() + 1,
     agent: "",
     lender: "",
     tab: "overview",

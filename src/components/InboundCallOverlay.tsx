@@ -87,6 +87,20 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
 
   const handleClose = () => { stopRef.current?.(); onClose(); };
 
+  /**
+   * Screen pop: right after the broker answers, open the caller's most recent
+   * dossier (or their contact record when Maestro has no dossier). Waits for a
+   * still-running lookup so a fast tap does not lose the target.
+   */
+  const screenPop = useCallback(async () => {
+    let t = targetRef.current;
+    if (t.kind === "none" && pendingLookupRef.current) {
+      t = (await pendingLookupRef.current.catch(() => NO_TARGET)) ?? NO_TARGET;
+    }
+    if (t.kind === "none") return;
+    openDossierTarget(t, navigate);
+  }, [navigate]);
+
   const act = async (action: "answer" | "reject") => {
     if (busy) return;
     setBusy(true);
@@ -95,6 +109,7 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
         stopRef.current?.();
         await onAnswer();
         onClose();
+        void screenPop();
         return;
       }
       if (action === "reject" && onReject) {
@@ -105,13 +120,17 @@ export default function InboundCallOverlay({ call, onClose, onAnswer, onReject }
       }
       await supabase.functions.invoke("pp-ns-calls", { body: { action, call_id: call?.call_id } });
       handleClose();
-      if (action === "answer") navigate(`/mplanipret/calls?call=${call?.call_id ?? ""}`);
+      if (action === "answer") {
+        navigate(`/mplanipret/calls?call=${call?.call_id ?? ""}`);
+        void screenPop();
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Action impossible");
     } finally {
       setBusy(false);
     }
   };
+
 
   const sendToVoicemail = async () => {
     if (busy) return;

@@ -163,8 +163,13 @@ function mapDeposit(d: CommissionDeposit, i: number, prof: BrokerProfile, maestr
   // so the volume is never counted 2-4x.
   const ctype = String(d.commission_type ?? "base").trim().toLowerCase() || "base";
   const isBase = ctype === "base";
+  // A deal can carry SEVERAL deposit rows of the same type (tranches, several
+  // bonus payments, adjustments on different dates). The key must therefore
+  // include the transaction date and the amount, otherwise those rows collapse
+  // into one and both the volume and the deal count are understated.
+  const amountKey = num(d.amount).toFixed(2);
   return {
-    row_key: `maestro:${maestroId}:${dealId}:${ctype}`,
+    row_key: `maestro:${maestroId}:${dealId}:${ctype}:${dateRaw ?? "nodate"}:${amountKey}:${num(d.loan_amt).toFixed(2)}`,
     number: String(d.number ?? ""),
     loan_amt: isBase ? num(d.loan_amt) : 0,
     institution: String(d.institution ?? "").trim() || null,
@@ -318,17 +323,11 @@ Deno.serve(async (req) => {
       const mapped = r.rows
         .map((d, i) => mapDeposit(d, i, prof, maestroId!, fallbackYear))
         .filter((row) => yearSet.has(row.fiscal_year));
-      // Maestro can return the same deal number twice (adjustments): keep one
-      // row per row_key, otherwise the upsert fails on duplicate conflicts.
+      // The key now includes date + amount, so a collision is an EXACT repeat of
+      // the same deposit line: keep it once (workbook rule), never sum it.
       const dedup = new Map<string, typeof mapped[number]>();
       for (const row of mapped) {
-        const prev = dedup.get(row.row_key);
-        if (!prev) { dedup.set(row.row_key, row); continue; }
-        dedup.set(row.row_key, {
-          ...row,
-          amount: (Number(prev.amount) || 0) + (Number(row.amount) || 0),
-          loan_amt: Number(prev.loan_amt) || Number(row.loan_amt) || 0,
-        });
+        if (!dedup.has(row.row_key)) dedup.set(row.row_key, row);
       }
       const rows = [...dedup.values()];
       totalCandidates += rows.length;

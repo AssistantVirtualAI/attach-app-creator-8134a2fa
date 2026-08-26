@@ -11,7 +11,9 @@ let opener: ((resolve: Resolver) => void) | null = null;
 
 export async function ensureAiConsent(): Promise<boolean> {
   if (hasAiConsent()) return true;
-  if (!opener) return false;
+  // Web portals do not mount the consent host (the disclosure is an App Store
+  // requirement for the native app): never block the action there.
+  if (!opener) return true;
   return new Promise<boolean>((resolve) => opener!(resolve));
 }
 

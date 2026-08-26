@@ -388,7 +388,11 @@ export function resolveWindow(
     }
 
     default: {
-      const m = Math.min(12, Math.max(1, index || 12));
+      // For the year in progress, YTD never runs past the current month: comparing
+      // Jan→Dec of a partial year with a full prior year produced wrong PY figures.
+      const today = new Date();
+      const cap = year === today.getUTCFullYear() ? today.getUTCMonth() + 1 : 12;
+      const m = Math.min(cap, Math.max(1, index || cap));
       // Same period last year, month-end aligned: 2026-01-01→2026-08-31 vs 2025-01-01→2025-08-31.
       return { window: ytdWindow(year, m), priorWindow: ytdWindow(year - 1, m), label: `YTD ${m}` };
     }

@@ -58,6 +58,21 @@ Deno.serve(async (req) => {
         .eq("id", callId);
     }
 
+    // Best-effort dossier resolution. When Maestro exposes no dossier for this
+    // client we still return an actionable target (the contact record) so the
+    // caller can offer "Ouvrir la fiche contact" instead of an empty screen.
+    const { deals, source } = clientId
+      ? await fetchClientDeals(cfg, {
+        token: auth.token,
+        brokerId: auth.brokerId ? String(auth.brokerId) : null,
+        clientId: String(clientId),
+        inline: client,
+      })
+      : { deals: [], source: "none" };
+
+    const latestDeal = deals[0] ?? null;
+    const contactUrl = clientId ? clientUrl(String(clientId)) : null;
+
     return json({
       found: true,
       client_id: clientId,
@@ -65,8 +80,16 @@ Deno.serve(async (req) => {
       company: client?.company ?? null,
       mortgage_stage: client?.mortgage_stage ?? null,
       tags: client?.tags ?? [],
+      contact_url: contactUrl,
+      latest_deal: latestDeal,
+      deals_count: deals.length,
+      deals_source: source,
+      // What the UI should do when the broker taps the banner.
+      open_action: latestDeal ? "deal" : contactUrl ? "contact" : "none",
+      open_url: latestDeal?.url ?? contactUrl,
       raw: client,
     });
+
   } catch (e: any) {
     console.error("maestro-client-lookup error", e);
     return json({ found: false, error: e?.message ?? "server_error" }, 500);

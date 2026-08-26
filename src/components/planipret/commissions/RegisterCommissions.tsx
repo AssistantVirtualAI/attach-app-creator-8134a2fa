@@ -1178,6 +1178,42 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
                 </Section>
               </div>
 
+              <Section title={isFr ? "Mix produits (année en cours)" : "Product mix (CY YTD)"}>
+                <Table
+                  head={[isFr ? "Produit" : "Product", "", "Volume", isFr ? "Doss." : "Deals", "% Volume", "BPS"]}
+                  rows={[
+                    ...data.products.map((p: any) => [p.key, "", fmtMoney(p.cyVolume), fmtNum(p.cyDeals), fmtPct(p.sharePct), fmtBps(p.cyBps)]),
+                    [
+                      isFr ? "TOTAL" : "TOTAL", "",
+                      fmtMoney(data.products.reduce((s: number, p: any) => s + p.cyVolume, 0)),
+                      fmtNum(data.products.reduce((s: number, p: any) => s + p.cyDeals, 0)),
+                      fmtPct(1),
+                      fmtBps((() => {
+                        const v = data.products.reduce((s: number, p: any) => s + p.cyVolume, 0);
+                        const c = data.products.reduce((s: number, p: any) => s + p.cyCommission, 0);
+                        return v ? (c / v) * 10000 : 0;
+                      })()),
+                    ],
+                  ]}
+                />
+              </Section>
+
+              <Section title={isFr ? "Mix termes (année en cours)" : "Term mix (CY YTD)"}>
+                <Table
+                  head={[isFr ? "Terme" : "Term", "", "Volume", isFr ? "Doss." : "Deals", "% Volume"]}
+                  rows={[
+                    ...data.terms.map((t: any) => [t.key, "", fmtMoney(t.cyVolume), fmtNum(t.cyDeals), fmtPct(t.sharePct)]),
+                    [
+                      isFr ? "TOTAL" : "TOTAL", "",
+                      fmtMoney(data.terms.reduce((s: number, t: any) => s + t.cyVolume, 0)),
+                      fmtNum(data.terms.reduce((s: number, t: any) => s + t.cyDeals, 0)),
+                      fmtPct(1),
+                    ],
+                  ]}
+                />
+              </Section>
+
+
               <Section title={isFr ? "Matrice type × terme (volume)" : "Type × term matrix (volume)"}>
                 <Table
                   head={[isFr ? "Type" : "Type", "", ...data.termKeys, "Total"]}

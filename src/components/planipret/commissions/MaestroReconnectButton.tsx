@@ -95,6 +95,17 @@ export default function MaestroReconnectButton({ lang }: { lang: "fr" | "en" }) 
       >
         {isFr ? "Actualiser l'état" : "Refresh state"}
       </button>
+      {connected && (
+        <button
+          onClick={() => void disconnect()}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+          style={{ fontSize: 11.5, fontWeight: 700, background: "transparent", border: "1px solid var(--pp-bg-border)", color: "#dc2626", opacity: busy ? .6 : 1 }}
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          {isFr ? "Déconnecter Maestro" : "Log out of Maestro"}
+        </button>
+      )}
     </div>
   );
 }

@@ -96,15 +96,18 @@ async function reconcileBroker(
     // so the expected stored count is the number of DISTINCT keys.
     const expectedRows = src.keys.size;
 
-    const { data: stored, error } = await admin
+    let storedQuery = admin
       .from("planipret_commission_register")
       .select("row_key, amount, loan_amt, date_trans")
       .eq("maestro_broker_id", maestroId)
       .eq("fiscal_year", year)
       .eq("sheet_name", "maestro");
+    if (sinceDate) storedQuery = storedQuery.gte("date_trans", sinceDate);
+    const { data: stored, error } = await storedQuery;
 
     // Only dated rows count: undated Maestro rows are stored for audit but excluded.
     const storedDated = error ? [] : (stored ?? []).filter((x: any) => !!x.date_trans);
+
     const dbRows = storedDated.length;
     const dbAmount = storedDated.reduce((s: number, x: any) => s + (Number(x.amount) || 0), 0);
     const dbLoan = storedDated.reduce((s: number, x: any) => s + (Number(x.loan_amt) || 0), 0);

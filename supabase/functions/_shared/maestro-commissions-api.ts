@@ -58,6 +58,8 @@ export interface FetchDepositsResult {
   error?: string;
   meta?: any;
   pages?: number;
+  /** true when pagination stopped at maxPages before reaching last_page */
+  truncated?: boolean;
 }
 
 async function fetchJson(url: string, token: string, timeoutMs: number): Promise<{ ok: boolean; status: number; data: any }> {

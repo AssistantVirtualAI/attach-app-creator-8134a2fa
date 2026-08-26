@@ -152,15 +152,15 @@ function firstBaseRowByContract(rows: RegisterRow[]): Map<string, RegisterRow> {
   if (hit) return hit;
   const map = new Map<string, RegisterRow>();
   for (const r of sortSource(rows)) {
-    const d = day(r.date_trans);
-    if (!d) continue;
+    if (!hasTransactionDate(r)) continue;
+    const d = (r.date_trans ?? "").slice(0, 10);
     const f = flags(r);
     if (!f.base || f.adjustment || f.insurance) continue;
     if (f.loan < 0) continue;
     const k = f.dKey;
     const prev = map.get(k);
     if (!prev) { map.set(k, r); continue; }
-    const pd = day(prev.date_trans) ?? "";
+    const pd = (prev.date_trans ?? "").slice(0, 10);
     if (d < pd) map.set(k, r);
   }
   firstBaseCache.set(rows, map);

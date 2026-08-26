@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
   const auth = await getBrokerAuth(admin, callerId);
   const tok = auth.token || cfg.key;
   const brokerId = auth.brokerId;
-  const base = brokerId ? `/telecom/api/v1/users/${brokerId}` : null;
+  const base = brokerId ? `/users/${brokerId}` : null;
 
   await run("1. API connection", async () => {
     if (!base) return { ok: false, details: { error: "broker_id_unresolved" } };

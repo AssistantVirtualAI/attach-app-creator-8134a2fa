@@ -191,12 +191,8 @@ function computeWindow(rows: RegisterRow[], w: Window): WindowComputation {
     candidates.push(r);
   }
 
-  const reversals = new Map<string, number>();
-  for (const r of candidates) {
-    const f = flags(r);
-    if (f.loan < 0) reversals.set(f.vKey, (reversals.get(f.vKey) ?? 0) + 1);
-  }
-
+  // Negative base rows are commission clawbacks: they never remove the funded
+  // volume of their positive twin, they simply do not add volume themselves.
   const seen = new Set<string>();
   const volume: RegisterRow[] = [];
   const zeroLoanBase: RegisterRow[] = [];
@@ -206,27 +202,20 @@ function computeWindow(rows: RegisterRow[], w: Window): WindowComputation {
     if (f.loan < 0) { excluded.push({ row: r, reason: "reversal_row" }); continue; }
     if (seen.has(f.vKey)) { excluded.push({ row: r, reason: "duplicate_amount" }); continue; }
     seen.add(f.vKey);
-    const pending = reversals.get(f.vKey) ?? 0;
-    if (pending > 0) {
-      reversals.set(f.vKey, pending - 1);
-      excluded.push({ row: r, reason: "reversal_cancelled" });
-      continue;
-    }
     volume.push(r);
   }
 
-  const firstBase = firstBaseRowByContract(rows);
+  // Deals = distinct contract numbers among the retained base rows of the period
+  // (calendar-year rule: a contract counts once per period, never twice).
   const seenDeal = new Set<string>();
   const deals: RegisterRow[] = [];
   for (const r of [...volume, ...zeroLoanBase]) {
     const k = flags(r).dKey;
     if (seenDeal.has(k)) continue;
-    // Calendar-year rule: a contract is a deal once, in the period holding its very
-    // first base row. Later tranches of an earlier contract never create a new deal.
-    if (firstBase.get(k) !== r) continue;
     seenDeal.add(k);
     deals.push(r);
   }
+
 
 
   const out: WindowComputation = { windowRows, volume, deals, excluded };

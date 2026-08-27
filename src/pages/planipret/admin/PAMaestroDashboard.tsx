@@ -271,7 +271,6 @@ export default function PAMaestroDashboard() {
         .limit(3000);
 
       if (callFilter.trim()) logQ = logQ.eq("call_id", callFilter.trim());
-      if (dealFilter.trim()) logQ = logQ.ilike("payload::text", `%${dealFilter.trim()}%`);
 
       // Maestro sync log
       const syncQ = supabase
@@ -293,9 +292,6 @@ export default function PAMaestroDashboard() {
         .select("id, function_name, status, error, started_at, finished_at, summary")
         .order("started_at", { ascending: false })
         .limit(30);
-
-      // Call stats (7 days)
-      const callQ = supabase.rpc("pp_call_sync_stats" as any).eq ? null : null;
 
       const [logRes, syncRes, diagRes, edgeRes] = await Promise.all([
         logQ,

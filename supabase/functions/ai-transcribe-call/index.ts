@@ -355,8 +355,8 @@ Deno.serve(async (req) => {
 
     console.log("ai-transcribe-call audio resolution", { call_record_id, audioSource, bytes: audioBytes?.length || 0, fetchErrors });
 
-    const lovableKey = Deno.env.get("OPENAI_API_KEY") || null;
-    // NOTE: We do NOT abort here if lovableKey is absent — Whisper (OPENAI_API_KEY) is
+    const sttKey = Deno.env.get("OPENAI_API_KEY") || null;
+    // NOTE: We do NOT abort here if sttKey is absent — Whisper (OPENAI_API_KEY) is
     // the primary provider and does not need ANTHROPIC_API_KEY. Lovable Gateway is only
     // used as a fallback after Whisper fails. We only abort if BOTH keys are absent.
     if (!audioBytes || audioBytes.length === 0) {
@@ -410,32 +410,32 @@ Deno.serve(async (req) => {
       return json({ transcript_text: fallbackTranscript, stub: true, reason: "audio-too-large", size: audioBytes.length });
     }
 
-    // STT: Lovable Gateway gpt-4o-mini-transcribe ONLY (no audio fallback).
+    // STT: OpenAI Whisper (primary audio). Claude runs after for TEXT cleanup.
     // Claude 3.5 Sonnet runs after for TEXT cleanup / speaker labels.
     const audioFormat = audioMime.split("/")[1] || "wav";
     const sttPrompt = "Transcription d'un appel téléphonique en français canadien. Préserver les noms propres, montants et numéros. Inclure les hésitations.";
 
     type ProviderResult = { text?: string; provider: string; model: string; error?: string; status?: number };
 
-    const tryGatewayTranscribe = async (model: string): Promise<ProviderResult> => {
-      if (!lovableKey) return { error: "no-lovable-key", provider: "lovable-ai", model };
+    const trySecondaryTranscribe = async (model: string): Promise<ProviderResult> => {
+      if (!sttKey) return { error: "no-openai-key", provider: "openai", model };
       const ext = ({ mpeg: "mp3", mp3: "mp3", wav: "wav", webm: "webm", ogg: "ogg", mp4: "m4a" } as Record<string, string>)[audioFormat] || "wav";
       const fd = new FormData();
       fd.append("model", model);
       fd.append("file", new Blob([audioBytes!], { type: audioMime }), `recording.${ext}`);
       fd.append("prompt", sttPrompt);
-      const r = await aiFetch("https://ai.lovable/v1/audio/transcriptions", {
+      const r = await aiFetch("https://ai.internal/v1/audio/transcriptions", {
         method: "POST",
-        headers: { "Lovable-API-Key": lovableKey, "X-Lovable-AIG-SDK": "edge-function" },
+        
         body: fd,
       });
       if (!r.ok) {
         const errTxt = await r.text();
         console.error(`gateway STT ${model} error`, r.status, errTxt.slice(0, 300));
-        return { error: errTxt.slice(0, 400), status: r.status, provider: "lovable-ai", model };
+        return { error: errTxt.slice(0, 400), status: r.status, provider: "openai", model };
       }
       const d = await r.json();
-      return { text: String(d?.text || "").trim(), provider: "lovable-ai", model };
+      return { text: String(d?.text || "").trim(), provider: "openai", model };
     };
 
     // Claude post-processing: TEXT cleanup only (Anthropic Messages API has no audio input).
@@ -495,7 +495,7 @@ Deno.serve(async (req) => {
 
     // Guard: abort early only if BOTH providers are unavailable.
     const openaiKeyPresent = !!Deno.env.get("OPENAI_API_KEY");
-    if (!openaiKeyPresent && !lovableKey) {
+    if (!openaiKeyPresent && !sttKey) {
       await writeTranscript(fallbackTranscript, "stub-no-key");
       await audit("missing-key", { error_code: "no-ai-keys", message: "Neither OPENAI_API_KEY nor ANTHROPIC_API_KEY is configured", provider: "none" });
       return json({ transcript_text: fallbackTranscript, stub: true, reason: "missing-ai-key", fetchErrors });
@@ -513,7 +513,7 @@ Deno.serve(async (req) => {
         status: sttResult.status, error: (sttResult.error || "empty").slice(0, 200),
       });
       // FALLBACK ONLY: Lovable Gateway gpt-4o-mini-transcribe (Gemini-backed).
-      sttResult = await tryGatewayTranscribe("openai/gpt-4o-mini-transcribe");
+      sttResult = await trySecondaryTranscribe("openai/gpt-4o-mini-transcribe");
       if (sttResult.text) console.log("[ai-transcribe-call] STT OK via Gemini fallback");
     }
     const final: ProviderResult | null = sttResult.text ? sttResult : null;

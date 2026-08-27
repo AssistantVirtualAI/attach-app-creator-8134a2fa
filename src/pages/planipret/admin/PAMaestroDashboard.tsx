@@ -572,8 +572,8 @@ export default function PAMaestroDashboard() {
               <span className="text-xs text-muted-foreground">{t.smsPushed}</span>
               <Send className="w-4 h-4" style={{ color: ACCENT }} />
             </div>
-            <div className="text-2xl font-bold">{apiStats.total}</div>
-            <div className="text-xs text-muted-foreground">{t.apiCalls}</div>
+            <div className="text-2xl font-bold">{smsCount}</div>
+            <div className="text-xs text-muted-foreground">{smsCount > 0 ? `${smsOkCount} OK` : t.noData}</div>
           </CardContent>
         </Card>
         <Card>

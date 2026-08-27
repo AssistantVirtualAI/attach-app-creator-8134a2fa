@@ -51,11 +51,9 @@ async function bumpStrikes(admin: any, call: any, reason: string): Promise<numbe
     })
     .eq("id", call.id);
   // Release the dedupe claim so the CDR publisher can recreate the record.
-  await admin
-    .from("planipret_maestro_call_dedupe")
-    .delete()
-    .eq("local_call_id", call.id)
-    .catch?.(() => {});
+  try {
+    await admin.from("planipret_maestro_call_dedupe").delete().eq("local_call_id", call.id);
+  } catch (_e) { /* dedupe row may not exist */ }
   return strikes;
 }
 

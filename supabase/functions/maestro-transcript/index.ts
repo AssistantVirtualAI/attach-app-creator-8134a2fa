@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
     const admin = adminClient();
     const { data: call } = await admin
       .from("planipret_phone_calls")
-      .select("id, user_id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, extension, maestro_call_id, recording_url, transcript, transcript_segments, transcript_language")
+      .select("id, user_id, ns_call_id, ns_callid, ns_orig_callid, ns_term_callid, extension, maestro_call_id, recording_url, transcript, transcript_segments, transcript_language, metadata")
       .eq("id", call_id)
       .maybeSingle();
     if (!call) return json({ success: false, error: "call_not_found" }, 404);
@@ -116,8 +116,20 @@ Deno.serve(async (req) => {
     // 0. Poll Maestro (it generates the transcription server-side after {status:"ended"}).
     let result: { text: string; segments: any[] } | null = null;
     let source: any = null;
-    if (call.maestro_call_id) {
+    // Backoff: Maestro génère la transcription de façon asynchrone. On espace
+    // les sondages (1, 2, 5, 10, 20, 40 min…) et on arrête après MAX_POLLS
+    // pour éliminer les milliers de `transcript_not_ready`.
+    const MAX_POLLS = 8;
+    const tMeta = ((call as any).metadata ?? {}) as Record<string, unknown>;
+    const polls = Number(tMeta.transcript_poll_attempts ?? 0);
+    const lastPollAt = tMeta.transcript_last_poll_at ? Date.parse(String(tMeta.transcript_last_poll_at)) : 0;
+    const nextDelayMs = Math.min(60_000 * 2 ** Math.max(0, polls - 1), 40 * 60_000);
+    const dueForPoll = !lastPollAt || Date.now() - lastPollAt >= nextDelayMs;
+    const correlation_id = `call_${call_id}`;
+
+    if (call.maestro_call_id && (force || (polls < MAX_POLLS && dueForPoll))) {
       try {
+
         const cfg = await getMaestroConfig(admin);
         const tAuth = await telecomAuth(admin, call.user_id ?? "", false);
         if (cfg.url && cfg.key && tAuth.brokerId) {
@@ -135,8 +147,15 @@ Deno.serve(async (req) => {
             call_id, user_id: call.user_id, step: "transcript_poll",
             status: result ? "success" : "skipped",
             error_message: result ? undefined : "transcript_not_ready",
-            payload: { maestro_call_id: call.maestro_call_id, status: r.status },
+            correlation_id, entity_type: "transcript", entity_id: String(call.maestro_call_id),
+            http_status: r.status,
+            payload: { maestro_call_id: call.maestro_call_id, status: r.status, attempt: polls + 1, max: MAX_POLLS },
           }).catch(() => {});
+          if (!result) {
+            await admin.from("planipret_phone_calls").update({
+              metadata: { ...tMeta, transcript_poll_attempts: polls + 1, transcript_last_poll_at: new Date().toISOString() },
+            }).eq("id", call_id).then(() => {}, () => {});
+          }
         }
       } catch (e) {
         console.warn("[maestro-transcript] maestro poll failed", e);

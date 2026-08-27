@@ -1,0 +1,266 @@
+/**
+ * Claude compatibility layer.
+ *
+ * Replaces the Lovable AI Gateway everywhere in the edge functions.
+ * `aiFetch()` accepts the exact same call shape the gateway used
+ * (OpenAI `/v1/chat/completions` JSON, or `/v1/audio/transcriptions`
+ * multipart) and returns an OpenAI-shaped `Response`, so call sites keep
+ * their existing parsing code.
+ *
+ *  - chat/completions  -> Anthropic Messages API (with prompt caching)
+ *  - audio/transcriptions -> OpenAI Whisper (Claude has no STT endpoint)
+ */
+
+import { withPromptCache, ANTHROPIC_VERSION } from "./anthropic.ts";
+
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const OPENAI_STT_URL = "https://api.openai.com/v1/audio/transcriptions";
+
+export const CLAUDE_DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
+export const CLAUDE_FAST_MODEL = "claude-haiku-4-5-20251001";
+
+/** Maps any legacy gateway model id to a Claude model. */
+export function toClaudeModel(model?: string): string {
+  const m = (model ?? "").toLowerCase();
+  if (m.startsWith("claude")) return model as string;
+  if (/nano|lite|mini|flash|haiku/.test(m)) return CLAUDE_FAST_MODEL;
+  return CLAUDE_DEFAULT_MODEL;
+}
+
+function flattenContent(content: any): any {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return String(content ?? "");
+  const out: any[] = [];
+  for (const part of content) {
+    if (typeof part === "string") out.push({ type: "text", text: part });
+    else if (part?.type === "text") out.push({ type: "text", text: part.text ?? "" });
+    else if (part?.type === "image_url") {
+      const url: string = part.image_url?.url ?? "";
+      const m = /^data:([^;]+);base64,(.*)$/.exec(url);
+      if (m) out.push({ type: "image", source: { type: "base64", media_type: m[1], data: m[2] } });
+      else out.push({ type: "image", source: { type: "url", url } });
+    } else if (part?.type === "image") out.push(part);
+  }
+  return out.length ? out : "";
+}
+
+function toAnthropicBody(body: any) {
+  const systemParts: string[] = [];
+  const messages: any[] = [];
+
+  for (const msg of body.messages ?? []) {
+    if (msg.role === "system" || msg.role === "developer") {
+      systemParts.push(typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content));
+      continue;
+    }
+    if (msg.role === "tool") {
+      messages.push({
+        role: "user",
+        content: [{
+          type: "tool_result",
+          tool_use_id: msg.tool_call_id,
+          content: typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
+        }],
+      });
+      continue;
+    }
+    if (msg.role === "assistant" && Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
+      const content: any[] = [];
+      if (msg.content) content.push({ type: "text", text: String(msg.content) });
+      for (const tc of msg.tool_calls) {
+        let input: any = {};
+        try { input = JSON.parse(tc.function?.arguments || "{}"); } catch { input = {}; }
+        content.push({ type: "tool_use", id: tc.id, name: tc.function?.name, input });
+      }
+      messages.push({ role: "assistant", content });
+      continue;
+    }
+    const content = flattenContent(msg.content);
+    if (content === "" || (Array.isArray(content) && !content.length)) continue;
+    messages.push({ role: msg.role === "assistant" ? "assistant" : "user", content });
+  }
+
+  if (!messages.length) messages.push({ role: "user", content: "." });
+
+  const wantsJson = body.response_format?.type === "json_object" ||
+    body.response_format?.type === "json_schema";
+  if (wantsJson) systemParts.push("Répond UNIQUEMENT avec du JSON valide, sans texte autour, sans balises markdown.");
+
+  const out: Record<string, any> = {
+    model: toClaudeModel(body.model),
+    max_tokens: body.max_tokens ?? body.max_completion_tokens ?? 2048,
+    messages,
+  };
+  if (systemParts.length) out.system = systemParts.join("\n\n");
+  if (typeof body.temperature === "number") out.temperature = body.temperature;
+
+  if (Array.isArray(body.tools) && body.tools.length) {
+    out.tools = body.tools.map((t: any) => {
+      if (t?.type === "function" && t.function) {
+        return {
+          name: t.function.name,
+          description: t.function.description ?? "",
+          input_schema: t.function.parameters ?? { type: "object", properties: {} },
+        };
+      }
+      return t;
+    });
+    const tc = body.tool_choice;
+    if (tc === "required") out.tool_choice = { type: "any" };
+    else if (tc === "auto") out.tool_choice = { type: "auto" };
+    else if (tc?.type === "function") out.tool_choice = { type: "tool", name: tc.function?.name };
+  }
+
+  return withPromptCache(out, out.model);
+}
+
+function toOpenAiResponse(data: any) {
+  const blocks: any[] = Array.isArray(data?.content) ? data.content : [];
+  const text = blocks.filter((b) => b?.type === "text").map((b) => b.text ?? "").join("");
+  const toolUses = blocks.filter((b) => b?.type === "tool_use");
+  const message: any = { role: "assistant", content: text || null };
+  if (toolUses.length) {
+    message.tool_calls = toolUses.map((b: any) => ({
+      id: b.id,
+      type: "function",
+      function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) },
+    }));
+  }
+  return {
+    id: data?.id ?? "claude",
+    object: "chat.completion",
+    created: Math.floor(Date.now() / 1000),
+    model: data?.model ?? CLAUDE_DEFAULT_MODEL,
+    choices: [{
+      index: 0,
+      message,
+      finish_reason: toolUses.length ? "tool_calls" : "stop",
+    }],
+    usage: {
+      prompt_tokens: data?.usage?.input_tokens ?? 0,
+      completion_tokens: data?.usage?.output_tokens ?? 0,
+      total_tokens: (data?.usage?.input_tokens ?? 0) + (data?.usage?.output_tokens ?? 0),
+    },
+  };
+}
+
+function json(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/** Anthropic SSE -> OpenAI chat.completion.chunk SSE. */
+function streamToOpenAi(upstream: ReadableStream<Uint8Array>, model: string): Response {
+  const dec = new TextDecoder();
+  const enc = new TextEncoder();
+  let buf = "";
+  const out = new ReadableStream({
+    async start(controller) {
+      const reader = upstream.getReader();
+      const send = (obj: unknown) => controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`));
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const payload = line.slice(5).trim();
+            if (!payload) continue;
+            let evt: any;
+            try { evt = JSON.parse(payload); } catch { continue; }
+            if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+              send({
+                id: "claude", object: "chat.completion.chunk", model,
+                choices: [{ index: 0, delta: { content: evt.delta.text }, finish_reason: null }],
+              });
+            } else if (evt.type === "message_stop") {
+              send({
+                id: "claude", object: "chat.completion.chunk", model,
+                choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[claude-compat] stream error", e);
+      } finally {
+        controller.enqueue(enc.encode("data: [DONE]\n\n"));
+        controller.close();
+      }
+    },
+  });
+  return new Response(out, {
+    headers: { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" },
+  });
+}
+
+async function chatCompletions(init: RequestInit): Promise<Response> {
+  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!key) return json({ error: { message: "missing ANTHROPIC_API_KEY" } }, 500);
+
+  let body: any;
+  try { body = JSON.parse(String(init.body ?? "{}")); } catch { return json({ error: { message: "bad request body" } }, 400); }
+
+  const stream = body.stream === true;
+  const anthropicBody = toAnthropicBody(body);
+  if (stream) anthropicBody.stream = true;
+
+  const res = await fetch(ANTHROPIC_URL, {
+    method: "POST",
+    headers: {
+      "x-api-key": key,
+      "anthropic-version": ANTHROPIC_VERSION,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(anthropicBody),
+    signal: (init as any).signal,
+  });
+
+  if (!res.ok) {
+    const raw = await res.text();
+    console.error("[claude-compat] anthropic", res.status, raw.slice(0, 400));
+    return new Response(raw, { status: res.status, headers: { "content-type": "application/json" } });
+  }
+
+  if (stream && res.body) return streamToOpenAi(res.body, anthropicBody.model);
+
+  const data = await res.json();
+  return json(toOpenAiResponse(data));
+}
+
+async function transcriptions(init: RequestInit): Promise<Response> {
+  const key = Deno.env.get("OPENAI_API_KEY");
+  if (!key) return json({ error: { message: "missing OPENAI_API_KEY" } }, 500);
+
+  const src = init.body as FormData;
+  const form = new FormData();
+  for (const [k, v] of (src as any).entries()) {
+    if (k === "model") continue;
+    form.append(k, v as any);
+  }
+  form.append("model", "whisper-1");
+
+  const res = await fetch(OPENAI_STT_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+  });
+  const raw = await res.text();
+  return new Response(raw, { status: res.status, headers: { "content-type": "application/json" } });
+}
+
+/**
+ * Drop-in replacement for `fetch()` against the old AI gateway URLs.
+ * Routes chat to Claude and speech-to-text to OpenAI Whisper.
+ */
+export async function aiFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  if (url.includes("/audio/transcriptions")) return transcriptions(init);
+  return chatCompletions(init);
+}
+
+export default aiFetch;

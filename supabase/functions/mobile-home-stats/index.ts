@@ -172,7 +172,7 @@ async function generateAI(args: { lang: "fr" | "en"; period: Period; stats: any;
       ? "Tu es AVA, assistante des utilisateurs de téléphonie Lemtel. Génère un résumé quotidien concis (1-2 phrases) en français naturel à partir des statistiques fournies. Pas d'emojis."
       : "You are AVA, assistant for Lemtel phone users. Generate a concise 1-2 sentence natural-language summary in English from the provided stats. No emojis.";
     const user = JSON.stringify({ name, period: periodLabel, stats });
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await aiFetch("https://ai.lovable/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({

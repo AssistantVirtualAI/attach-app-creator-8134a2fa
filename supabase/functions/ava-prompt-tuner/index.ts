@@ -18,7 +18,7 @@ ${s.comment ? "Commentaire: " + s.comment + "\n" : ""}${
     }${s.final_content && s.final_content !== s.original_draft ? "Version envoyée:\n" + s.final_content.slice(0, 500) : ""}`
   ).join("\n---\n");
 
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
     body: JSON.stringify({

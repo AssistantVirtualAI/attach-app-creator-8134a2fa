@@ -64,7 +64,7 @@ serve(async (req) => {
       .join('\n\n');
 
     // Use Lovable AI to extract topics
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await aiFetch('https://ai.lovable/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,

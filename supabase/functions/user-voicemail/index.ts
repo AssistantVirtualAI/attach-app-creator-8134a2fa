@@ -94,7 +94,7 @@ async function summarizeText(text: string): Promise<{ summary: string; tags: str
 
   // 2) Fallback: Lovable AI Gateway.
   if (!LOVABLE_KEY) return { summary: "", tags: [] };
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

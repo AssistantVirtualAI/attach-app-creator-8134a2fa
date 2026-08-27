@@ -307,7 +307,7 @@ ${String(transcript).slice(0, 18000)}`;
 
     } else if (lovableKey) {
       modelUsed = "google/gemini-2.5-pro";
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiRes = await aiFetch("https://ai.lovable/v1/chat/completions", {
         method: "POST",
         headers: { "Lovable-API-Key": lovableKey, "Content-Type": "application/json" },
         body: JSON.stringify({

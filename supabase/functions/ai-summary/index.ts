@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
 
     const prompt = `You are AVA, an analyst for a call center. Summarize this period in 2-3 short sentences (max 60 words). Mention answer rate, peak hour, busiest extension, and one actionable insight. Be concrete and use the numbers. Period: ${periodLabel || range}. Stats: ${JSON.stringify(stats)}`;
 
-    const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
       body: JSON.stringify({

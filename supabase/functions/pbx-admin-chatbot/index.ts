@@ -88,7 +88,7 @@ Only propose sync actions. For destructive or unsupported requests, proposal mus
 Context: ${JSON.stringify(context).slice(0, 18000)}
 User: ${parsed.data.message}`;
 
-    const ai = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const ai = await aiFetch("https://ai.lovable/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({

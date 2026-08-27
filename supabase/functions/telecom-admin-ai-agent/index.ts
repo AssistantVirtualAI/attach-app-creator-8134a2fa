@@ -32,7 +32,7 @@ If unsure or unsafe, return table="info" explaining what details are missing.`;
 async function llmPropose(prompt: string): Promise<any> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
 Rules: NEVER include organization_id (added server-side). For destructive deletes set "action": null and ask for explicit confirmation in "answer". If unclear, set "action": null and ask a clarifying question. For pure questions, set "action": null and put the answer in "answer". DATA:\n\n${sysContext}`
         : `You are AVA, a helpful telecom assistant for AVA Statistic. The user is NOT an admin — never claim to have made changes. Answer concisely in the user's language using the data below.\n\n${sysContext}`;
 
-      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify({

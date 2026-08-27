@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
     ? "You rewrite voicemail greetings to be more professional, warm and concise. Preserve essential info. Output the rewritten greeting ONLY — no quotes, no preamble."
     : "Tu réécris des messages de boîte vocale pour qu'ils soient plus professionnels, chaleureux et concis. Conserve les informations essentielles. Réponds UNIQUEMENT avec le nouveau message — pas de guillemets, pas de préambule.";
 
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${key}`,

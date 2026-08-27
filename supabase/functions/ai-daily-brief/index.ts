@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
 
     if (apiKey) {
       try {
-        const ai = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const ai = await aiFetch("https://ai.lovable/v1/chat/completions", {
           method: "POST",
           headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({

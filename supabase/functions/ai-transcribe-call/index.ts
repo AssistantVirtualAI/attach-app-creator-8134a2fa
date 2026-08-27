@@ -423,7 +423,7 @@ Deno.serve(async (req) => {
       fd.append("model", model);
       fd.append("file", new Blob([audioBytes!], { type: audioMime }), `recording.${ext}`);
       fd.append("prompt", sttPrompt);
-      const r = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+      const r = await aiFetch("https://ai.lovable/v1/audio/transcriptions", {
         method: "POST",
         headers: { "Lovable-API-Key": lovableKey, "X-Lovable-AIG-SDK": "edge-function" },
         body: fd,

@@ -432,7 +432,7 @@ Format your response as JSON with this structure:
   "summary": "brief summary of key changes made"
 }`;
 
-      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const response = await aiFetch('https://ai.lovable/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${LOVABLE_API_KEY}`,
@@ -515,7 +515,7 @@ ${platformConfig.promptBestPractices.map((p: string) => `- ${p}`).join('\n')}
 
 Garde la même intention et personnalité mais optimise pour la conversation vocale IA. Réponds en français.`;
 
-      const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      const response = await aiFetch('https://ai.lovable/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${LOVABLE_API_KEY}`,

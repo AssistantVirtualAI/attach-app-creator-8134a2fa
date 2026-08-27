@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
       sampleSummaries: insights?.slice(0, 15).map((i: any) => i.summary).filter(Boolean) ?? [],
     };
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await aiFetch("https://ai.lovable/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({

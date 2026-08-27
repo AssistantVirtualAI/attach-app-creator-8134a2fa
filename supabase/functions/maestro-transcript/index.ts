@@ -36,7 +36,7 @@ async function transcribeViaLovable(audioUrl: string, auth?: string): Promise<{ 
     form.append("file", blob, "call.wav");
     form.append("model", "openai/gpt-4o-mini-transcribe");
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+    const res = await aiFetch("https://ai.lovable/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
           const form = new FormData();
           form.append("file", blob, "call.wav");
           form.append("model", "openai/gpt-4o-mini-transcribe");
-          const stt = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+          const stt = await aiFetch("https://ai.lovable/v1/audio/transcriptions", {
             method: "POST",
             headers: { Authorization: `Bearer ${apiKey}` },
             body: form,

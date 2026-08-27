@@ -472,7 +472,7 @@ Deno.serve(async (req) => {
 
     // up to 4 tool-call rounds
     for (let round = 0; round < 5; round++) {
-      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_KEY}` },
         body: JSON.stringify({

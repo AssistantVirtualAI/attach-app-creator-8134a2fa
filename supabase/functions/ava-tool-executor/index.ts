@@ -256,7 +256,7 @@ async function callClaude(system: string, userText: string): Promise<string | nu
   // fallback Lovable AI
   const lk = Deno.env.get("LOVABLE_API_KEY");
   if (!lk) return null;
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Lovable-API-Key": lk },
     body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages: [{ role: "system", content: system }, { role: "user", content: userText }] }),
@@ -1103,7 +1103,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     const key = Deno.env.get("LOVABLE_API_KEY");
     if (!key) return { success: true, summary: bodyText.slice(0, 400), message: "Résumé indisponible (LOVABLE_API_KEY manquant)" };
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await aiFetch("https://ai.lovable/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
       body: JSON.stringify({

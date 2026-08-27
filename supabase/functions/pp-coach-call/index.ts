@@ -229,7 +229,7 @@ Direction: ${row.direction ?? "?"} · Durée: ${row.duration_seconds ?? "?"}s`;
     async function callLovable(): Promise<{ ok: boolean; content?: string; status?: number; error?: string }> {
       if (!LOVABLE_API_KEY) return { ok: false, error: "no_lovable_key" };
       const AI_MODEL = Deno.env.get("PP_COACH_MODEL") ?? "google/gemini-2.5-pro";
-      const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Lovable-API-Key": LOVABLE_API_KEY },
         body: JSON.stringify({

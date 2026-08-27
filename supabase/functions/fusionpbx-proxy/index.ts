@@ -3155,7 +3155,7 @@ Deno.serve(async (req) => {
         for (let i = 0; i < bytes.length; i += 0x8000) b64 += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)));
         b64 = btoa(b64);
 
-        const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const aiRes = await aiFetch("https://ai.lovable/v1/chat/completions", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
           body: JSON.stringify({
@@ -3204,7 +3204,7 @@ Deno.serve(async (req) => {
       if (!transcript?.content) return json({ error: "no transcript available; transcribe first" }, 400);
 
       await admin.from("pbx_call_recordings").update({ summary_status: "pending" }).eq("id", recordingId);
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiRes = await aiFetch("https://ai.lovable/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
         body: JSON.stringify({

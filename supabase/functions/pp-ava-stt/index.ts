@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     form.append("file", blob, `audio.${ext}`);
     form.append("model", "openai/gpt-4o-mini-transcribe");
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+    const res = await aiFetch("https://ai.lovable/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}` },
       body: form,

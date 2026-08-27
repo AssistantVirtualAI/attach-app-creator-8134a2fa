@@ -336,7 +336,7 @@ Réponds UNIQUEMENT en JSON valide avec cette structure:
 
     timings.aiStart = Date.now() - t0;
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const aiResponse = await aiFetch('https://ai.lovable/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,

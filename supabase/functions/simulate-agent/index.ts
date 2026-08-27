@@ -36,7 +36,7 @@ serve(async (req) => {
 
     console.log("Simulating agent with system prompt:", systemPrompt?.substring(0, 100));
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await aiFetch("https://ai.lovable/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,

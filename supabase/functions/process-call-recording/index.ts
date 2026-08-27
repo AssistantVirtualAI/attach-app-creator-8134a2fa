@@ -260,7 +260,7 @@ Deno.serve(async (req) => {
       }
 
       const destination = call.destination ?? call.destination_number ?? "unknown";
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiRes = await aiFetch("https://ai.lovable/v1/chat/completions", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${LOVABLE_API_KEY}`,

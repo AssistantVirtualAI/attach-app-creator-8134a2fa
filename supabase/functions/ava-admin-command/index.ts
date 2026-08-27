@@ -2,7 +2,7 @@
 // Hardened: zod-validated body, structured logging, latency tracking,
 // strict super_admin/lemtel_admin gate, audit log on every tool exec.
 import { streamText, tool, stepCountIs, convertToModelMessages, type UIMessage } from "npm:ai";
-import { createOpenAICompatible } from "npm:@ai-sdk/openai-compatible";
+import { createClaudeProvider } from "../_shared/ai-gateway.ts";
 import { z } from "npm:zod";
 import { corsHeaders, jsonResponse, requireUser, getServiceClient } from "../_shared/auth.ts";
 
@@ -64,11 +64,7 @@ Deno.serve(async (req) => {
     }
     const messages = parsed.data.messages as UIMessage[];
 
-    const gateway = createOpenAICompatible({
-      name: "lovable",
-      baseURL: "https://ai.gateway.lovable.dev/v1",
-      headers: { "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-    });
+    const gateway = createClaudeProvider();
 
     const audit = async (action: string, payload: any, result: any, ok = true) => {
       await admin.from("telecom_admin_ai_actions").insert({

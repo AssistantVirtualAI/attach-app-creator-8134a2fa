@@ -356,6 +356,17 @@ export default function PAMaestroDashboard() {
 
   const filteredLogs = useMemo(() => {
     let r = logs;
+    if (dealFilter.trim()) {
+      const q = dealFilter.trim().toLowerCase();
+      r = r.filter((l) => {
+        try {
+          return JSON.stringify(l.payload ?? "").toLowerCase().includes(q)
+            || (l.call_id ?? "").toLowerCase().includes(q);
+        } catch {
+          return false;
+        }
+      });
+    }
     if (stepFilter !== "all") r = r.filter((l) => l.step === stepFilter);
     if (httpFilter !== "all") {
       r = r.filter((l) => {
@@ -366,7 +377,7 @@ export default function PAMaestroDashboard() {
       });
     }
     return r;
-  }, [logs, stepFilter, httpFilter]);
+  }, [logs, stepFilter, httpFilter, dealFilter]);
 
   const errorBreakdown = useMemo(() => {
     const counts: Record<string, number> = { maestro_404: 0, maestro_put_404: 0, maestro_500: 0, other: 0 };

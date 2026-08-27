@@ -590,7 +590,10 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
       context && Object.keys(context).length ? `[Données]\n${JSON.stringify(context).slice(0, 4000)}` : "",
       history.length ? `[Historique]\n${history.map(h => `${h.role}: ${h.content}`).join("\n")}` : "",
       userMessage ? `[Demande]\n${userMessage}` : (mode === "recommend" ? (lang === "fr" ? "[Demande]\nDonne-moi 3 recommandations actionnables pour les prochaines heures." : "[Request]\nGive me 3 actionable recommendations for the next few hours.") : ""),
-    ].filter(Boolean).join("\n\n");
+    ].filter(Boolean).join("\n\n").trim() ||
+      // Claude rejects empty text blocks: always send a usable request.
+      (lang === "fr" ? "[Demande]\nRésume ma situation actuelle et propose 3 actions." : "[Request]\nSummarize my current situation and suggest 3 actions.");
+
 
     let result: any = { reply: "", suggestions: [] };
     try {

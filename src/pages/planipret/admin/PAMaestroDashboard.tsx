@@ -462,6 +462,15 @@ export default function PAMaestroDashboard() {
     return { ok, total, avgMs, rate: total > 0 ? Math.round((ok / total) * 100) : 0 };
   }, [syncLogs]);
 
+  const { smsCount, smsOkCount } = useMemo(() => {
+    const smsLogs = syncLogs.filter((s) => {
+      const act = (s.action ?? "").toLowerCase();
+      const ep = (s.maestro_endpoint ?? "").toLowerCase();
+      return act.includes("sms") || act.includes("message") || ep.includes("sms") || ep.includes("message");
+    });
+    return { smsCount: smsLogs.length, smsOkCount: smsLogs.filter((s) => s.success).length };
+  }, [syncLogs]);
+
   // ── Actions ──────────────────────────────────────────────
 
   const handleProcessQueue = async () => {

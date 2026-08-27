@@ -72,10 +72,16 @@ function simulateEnsure(state: MaestroState, callId: string): { ok: boolean; mae
   }
   if (state.fail404Next > 0) {
     state.fail404Next--;
+    // Stale ID — invalidate so CDR can recreate
+    state.localToMaestro.delete(callId);
     return { ok: false, maestroCallId: null, reason: "maestro_404" };
   }
   const call = state.calls.get(mId);
-  if (!call) return { ok: false, maestroCallId: null, reason: "maestro_404" };
+  if (!call) {
+    // Stale ID not found — invalidate so CDR can recreate
+    state.localToMaestro.delete(callId);
+    return { ok: false, maestroCallId: null, reason: "maestro_404" };
+  }
   return { ok: true, maestroCallId: mId };
 }
 

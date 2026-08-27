@@ -188,7 +188,7 @@ Deno.test("chain succeeds after CDR retries when maestro_call_id becomes availab
 Deno.test("chain stops and remains retryable when maestro_call_id never appears", async () => {
   const state = makeState();
   state.failCdrNext = 999; // CDR never succeeds
-  const result = await runChain(state, "call-002", { maxRetries: 4 });
+  const result = await runChain(state, "call-002", 4);
   assertEquals(result.success, false);
   assertEquals(result.retries, 3, "exhausted all retries");
   assertEquals(state.localToMaestro.has("call-002"), false, "no maestro_call_id was ever stored");

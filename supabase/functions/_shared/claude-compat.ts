@@ -284,11 +284,16 @@ async function transcriptions(init: RequestInit): Promise<Response> {
 
   const src = init.body as FormData;
   const form = new FormData();
+  let requested = "";
   for (const [k, v] of (src as any).entries()) {
-    if (k === "model") continue;
+    if (k === "model") { requested = String(v); continue; }
     form.append(k, v as any);
   }
-  form.append("model", "whisper-1");
+  // Whisper by default; honour an explicit OpenAI transcribe model when asked.
+  const model = /gpt-4o(-mini)?-transcribe/.test(requested)
+    ? requested.replace(/^openai\//, "")
+    : "whisper-1";
+  form.append("model", model);
 
   const res = await fetch(OPENAI_STT_URL, {
     method: "POST",

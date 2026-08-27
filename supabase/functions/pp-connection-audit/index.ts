@@ -46,28 +46,16 @@ Deno.serve(async (req) => {
   const { data: profiles, error } = await q;
   if (error) return json({ error: error.message }, 500);
 
-  // Enregistrements SIP connus (device provisionné mais jamais enregistré).
-  const { data: devices } = await admin
-    .from("pbx_softphone_users")
-    .select("user_id, extension, last_registered_at")
-    .limit(1000);
-  const lastReg = new Map<string, string | null>();
-  for (const d of devices ?? []) {
-    if (d.user_id) lastReg.set(String(d.user_id), (d as any).last_registered_at ?? null);
-  }
-
   const rows = (profiles ?? []).map((p: any) => {
     const maestroOk = !!p.maestro_refresh_token && !!p.maestro_broker_id && p.maestro_connected !== false;
     const maestroStale = maestroOk && expired(p.maestro_token_expires_at) && !p.maestro_refresh_token;
     const msOk = !!p.ms365_refresh_token;
-    const reg = lastReg.get(String(p.id)) ?? null;
-    const sipOk = !!reg && Date.now() - Date.parse(reg) < 7 * 24 * 3600_000;
     const issues: string[] = [];
     if (!maestroOk) issues.push("maestro_disconnected");
     if (maestroStale) issues.push("maestro_token_expired");
     if (!p.maestro_telecom_user_id) issues.push("maestro_telecom_user_id_missing");
     if (!msOk) issues.push("microsoft_disconnected");
-    if (p.extension && !sipOk) issues.push("sip_not_registered");
+
     return {
       user_id: p.id,
       name: p.full_name,
@@ -75,7 +63,6 @@ Deno.serve(async (req) => {
       extension: p.extension,
       maestro_broker_id: p.maestro_broker_id,
       maestro_last_sync_at: p.maestro_last_sync_at,
-      last_sip_registration: reg,
       issues,
     };
   });
@@ -87,33 +74,26 @@ Deno.serve(async (req) => {
     for (const r of needsAction) {
       const needsMaestro = r.issues.some((i) => i.startsWith("maestro"));
       const needsMs = r.issues.includes("microsoft_disconnected");
-      const needsSip = r.issues.includes("sip_not_registered");
       const actions = [
         needsMaestro ? "reconnecter Maestro" : null,
         needsMs ? "se reconnecter à Microsoft 365" : null,
-        needsSip ? "rouvrir l'application pour réenregistrer le poste SIP" : null,
       ].filter(Boolean).join(", ");
-      const { error: nerr } = await admin.from("planipret_ava_notifications").insert({
-        user_id: r.user_id,
-        type: "connection_required",
-        title: "Reconnexion requise",
-        body: `Votre compte doit être reconnecté : ${actions}.`,
-        metadata: { issues: r.issues, extension: r.extension, source: "pp-connection-audit" },
-      });
-      if (!nerr) notified++;
 
       // Push mobile best-effort (réveille l'app → réenregistrement SIP auto).
       try {
-        await fetch(`${SUPABASE_URL}/functions/v1/pp-send-push`, {
+        const pr = await fetch(`${SUPABASE_URL}/functions/v1/pp-push-notify`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
           body: JSON.stringify({
             user_id: r.user_id,
             title: "Reconnexion requise",
             body: `Action requise : ${actions}.`,
+            category: "connection_required",
+            deep_link: needsMaestro ? "/mplanipret/settings" : "/mplanipret",
             data: { kind: "reconnect", issues: r.issues },
           }),
         });
+        if (pr.ok) notified++;
       } catch { /* best-effort */ }
     }
   }
@@ -128,7 +108,6 @@ Deno.serve(async (req) => {
       maestro_token_expired: rows.filter((r) => r.issues.includes("maestro_token_expired")).length,
       telecom_id_missing: rows.filter((r) => r.issues.includes("maestro_telecom_user_id_missing")).length,
       microsoft_disconnected: rows.filter((r) => r.issues.includes("microsoft_disconnected")).length,
-      sip_not_registered: rows.filter((r) => r.issues.includes("sip_not_registered")).length,
     },
     results: needsAction,
   });

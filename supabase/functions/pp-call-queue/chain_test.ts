@@ -72,10 +72,16 @@ function simulateEnsure(state: MaestroState, callId: string): { ok: boolean; mae
   }
   if (state.fail404Next > 0) {
     state.fail404Next--;
+    // Stale ID — invalidate so CDR can recreate
+    state.localToMaestro.delete(callId);
     return { ok: false, maestroCallId: null, reason: "maestro_404" };
   }
   const call = state.calls.get(mId);
-  if (!call) return { ok: false, maestroCallId: null, reason: "maestro_404" };
+  if (!call) {
+    // Stale ID not found — invalidate so CDR can recreate
+    state.localToMaestro.delete(callId);
+    return { ok: false, maestroCallId: null, reason: "maestro_404" };
+  }
   return { ok: true, maestroCallId: mId };
 }
 
@@ -188,7 +194,7 @@ Deno.test("chain succeeds after CDR retries when maestro_call_id becomes availab
 Deno.test("chain stops and remains retryable when maestro_call_id never appears", async () => {
   const state = makeState();
   state.failCdrNext = 999; // CDR never succeeds
-  const result = await runChain(state, "call-002", maxRetries: 4);
+  const result = await runChain(state, "call-002", 4);
   assertEquals(result.success, false);
   assertEquals(result.retries, 3, "exhausted all retries");
   assertEquals(state.localToMaestro.has("call-002"), false, "no maestro_call_id was ever stored");
@@ -203,7 +209,7 @@ Deno.test("chain handles stale maestro_call_id 404 and recreates via CDR", async
   state.localToMaestro.set("call-003", "stale-maestro-id");
   state.fail404Next = 1;
 
-  const result = await runChain(state, "call-003", maxRetries: 5);
+  const result = await runChain(state, "call-003", 5);
   // First attempt: ensure 404s → CDR recreate → second attempt succeeds
   assertEquals(result.success, true);
   assert(result.retries >= 1, "should have retried at least once after 404");
@@ -215,7 +221,7 @@ Deno.test("chain is idempotent: second run is a no-op after success", async () =
   assertEquals(r1.success, true);
 
   // Second run: CDR is already synced
-  const r2 = await runChain(state, "call-004", maxRetries: 1);
+  const r2 = await runChain(state, "call-004", 1);
   assertEquals(r2.success, true);
   assertEquals(r2.retries, 0, "no retry needed — already synced");
 });
@@ -234,7 +240,7 @@ Deno.test("chain respects strict ordering: no recording before maestro_call_id",
   assertEquals(tr.ok, false, "transcription must fail when maestro_call_id is missing");
 
   // Now run the full chain — it should retry until CDR succeeds
-  const result = await runChain(state, "call-005", maxRetries: 6);
+  const result = await runChain(state, "call-005", 6);
   assertEquals(result.success, true);
   assertEquals(result.retries, 3);
 });
@@ -250,7 +256,7 @@ Deno.test("queue processor marks job dead after max_attempts", async () => {
 
   for (let i = 0; i < maxAttempts + 1; i++) {
     attempts++;
-    const result = await runChain(state, "call-006", maxRetries: 1);
+    const result = await runChain(state, "call-006", 1);
     if (result.success) {
       finalStatus = "done";
       break;
@@ -287,7 +293,7 @@ Deno.test("probe resumes queue after successful probe on recovery", async () => 
   state.failCdrNext = 0; // now CDR will succeed
 
   // Probe: run one job
-  const probeResult = await runChain(state, "call-007", maxRetries: 1);
+  const probeResult = await runChain(state, "call-007", 1);
   if (probeResult.success) {
     paused = false;
   }

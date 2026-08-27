@@ -26,6 +26,7 @@ const registry: Record<string, Factory> = {
   "/planipret/admin/mobile-devices": () => import("@/pages/planipret/admin/PAMobileDevices"),
   "/planipret/admin/sip-diagnostic": () => import("@/pages/planipret/admin/PASipDiagnostic"),
   "/planipret/admin/diagnostics": () => import("@/pages/planipret/admin/PADiagnostics"),
+  "/planipret/admin/maestro-dashboard": () => import("@/pages/planipret/admin/PAMaestroDashboard"),
 
   // Planipret mobile screens
   "/mplanipret": () => import("@/pages/planipret/mobile/MHome"),

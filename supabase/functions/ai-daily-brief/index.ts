@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       unread_voicemails: voicemails.length,
     };
 
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     let briefing_text = fallbackBrief(profile.full_name, today, summary);
 
     if (apiKey) {

@@ -31,8 +31,8 @@ For holiday_schedules: name, start_date (YYYY-MM-DD), end_date, greeting_text, r
 If unsure or unsafe, return table="info" explaining what details are missing.`;
 
 async function llmPropose(prompt: string): Promise<any> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
   const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     // Chat mode (default when messages array present without explicit mode)
     const messages = body?.messages;
     if (!mode && Array.isArray(messages) && messages.length) {
-      const apiKey = Deno.env.get("LOVABLE_API_KEY");
+      const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
       if (!apiKey) return json({ error: "ai_not_configured" }, 500);
 
       // Determine if the user is allowed to auto-execute (super_admin or org_admin)

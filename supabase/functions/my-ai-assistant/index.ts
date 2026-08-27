@@ -14,7 +14,7 @@ const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
 const ELEVEN_KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
-const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
+const LOVABLE_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;

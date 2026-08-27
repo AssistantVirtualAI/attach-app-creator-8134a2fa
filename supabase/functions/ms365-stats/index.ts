@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
     let insights: string[] = [];
     if (wantInsights) {
       try {
-        const key = Deno.env.get("LOVABLE_API_KEY");
+        const key = Deno.env.get("ANTHROPIC_API_KEY");
         if (key) {
           const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
             method: "POST",

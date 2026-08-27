@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
     const { data: u } = await sb.auth.getUser();
     if (!u?.user) return json({ error: "unauthorized" }, 401);
 
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) return json({ answer: "AVA is not configured yet (missing AI key)." });
 
     const body = await req.json().catch(() => ({}));

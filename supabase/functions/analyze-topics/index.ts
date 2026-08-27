@@ -20,9 +20,9 @@ serve(async (req) => {
     console.log('Analyzing topics for org:', organization_id);
 
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!ANTHROPIC_API_KEY) {
+      throw new Error('ANTHROPIC_API_KEY is not configured');
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -68,7 +68,7 @@ serve(async (req) => {
     const response = await aiFetch('https://ai.lovable/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${ANTHROPIC_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

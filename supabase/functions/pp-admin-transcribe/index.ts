@@ -10,7 +10,7 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 
 const json = (b: unknown, s = 200) =>
   new Response(JSON.stringify(b), {
@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
   try {
     const auth = req.headers.get("Authorization");
     if (!auth?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
-    if (!LOVABLE_API_KEY) return json({ error: "LOVABLE_API_KEY missing" }, 500);
+    if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY missing" }, 500);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const token = auth.replace(/^Bearer\s+/i, "");
@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
 
     const sttRes = await aiFetch("https://ai.lovable/v1/audio/transcriptions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}` },
+      headers: { Authorization: `Bearer ${ANTHROPIC_API_KEY}` },
       body: form,
     });
     if (!sttRes.ok) {

@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
     }
 
     const apiKey = (await getSecret(admin, "anthropic", "api_key")) ?? Deno.env.get("ANTHROPIC_API_KEY");
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    const lovableKey = Deno.env.get("ANTHROPIC_API_KEY");
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
 
 
@@ -335,7 +335,7 @@ ${String(transcript).slice(0, 18000)}`;
         return new Response(JSON.stringify({ success: false, error: "OpenAI error", details: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     } else {
-      return new Response(JSON.stringify({ success: false, error: "Aucune clé IA configurée (ANTHROPIC_API_KEY, LOVABLE_API_KEY ou OPENAI_API_KEY)" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: false, error: "Aucune clé IA configurée (ANTHROPIC_API_KEY, ANTHROPIC_API_KEY ou OPENAI_API_KEY)" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
 

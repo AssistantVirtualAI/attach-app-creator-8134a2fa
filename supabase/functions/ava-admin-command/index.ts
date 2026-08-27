@@ -52,8 +52,8 @@ Deno.serve(async (req) => {
     const callerExt: string | null = spu?.extension ?? null;
 
 
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!apiKey) { log(rid, "error", "missing_api_key"); return jsonResponse(500, { error: "Missing LOVABLE_API_KEY" }); }
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!apiKey) { log(rid, "error", "missing_api_key"); return jsonResponse(500, { error: "Missing ANTHROPIC_API_KEY" }); }
 
     let rawBody: unknown;
     try { rawBody = await req.json(); } catch { return jsonResponse(400, { error: "Invalid JSON" }); }

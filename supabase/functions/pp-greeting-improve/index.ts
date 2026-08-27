@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
   };
   if (text.trim().length < 5) return jsonResponse({ success: false, error: "text_too_short" }, 400);
 
-  const key = Deno.env.get("LOVABLE_API_KEY");
+  const key = Deno.env.get("ANTHROPIC_API_KEY");
   if (!key) return jsonResponse({ success: false, error: "lovable_ai_not_configured" }, 500);
 
   const sys = language === "en"

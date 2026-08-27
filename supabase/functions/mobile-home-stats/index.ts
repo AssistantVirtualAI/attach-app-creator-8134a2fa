@@ -162,7 +162,7 @@ async function generateAI(args: { lang: "fr" | "en"; period: Period; stats: any;
     : `This period: ${stats.calls.received} answered, ${stats.calls.missed} missed, ${stats.calls.outbound} outbound. ${stats.voicemails.new} new voicemail(s), ${stats.sms.unread} unread SMS.`;
   const insights = buildInsights(stats, prior, lang);
 
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) return { summary: fallbackSummary, insights };
 
   try {

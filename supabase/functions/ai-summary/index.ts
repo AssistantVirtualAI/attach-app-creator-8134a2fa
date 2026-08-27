@@ -11,8 +11,8 @@ const json = (b: unknown, s = 200) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   try {
-    const key = Deno.env.get("LOVABLE_API_KEY");
-    if (!key) return json({ error: "LOVABLE_API_KEY missing" }, 500);
+    const key = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!key) return json({ error: "ANTHROPIC_API_KEY missing" }, 500);
     const body = await req.json().catch(() => ({}));
     const { range = "today", stats = {}, periodLabel } = body || {};
 

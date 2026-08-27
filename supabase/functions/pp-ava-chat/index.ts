@@ -544,7 +544,7 @@ Appels manqués récents: ${JSON.stringify(missed ?? [])}
 SMS non lus: ${smsUnread ?? 0}`;
     }
 
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY");
+    const lovableKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!lovableKey) return json({ reply: L("(Lovable AI non configuré)", "(Lovable AI not configured)"), suggestions: [] });
 
     const gateway = createLovableAiGatewayProvider(lovableKey);

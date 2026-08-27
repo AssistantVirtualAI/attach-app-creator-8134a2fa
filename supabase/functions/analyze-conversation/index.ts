@@ -246,8 +246,8 @@ serve(async (req) => {
     const optimizedTranscript = optimizeTranscript(transcriptText, 4000);
 
     // Call Lovable AI for analysis
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!ANTHROPIC_API_KEY) {
       return new Response(JSON.stringify({ 
         error: 'AI service not configured',
         analysis: { ...getDefaultAnalysis(), transcriptStats }
@@ -340,7 +340,7 @@ Réponds UNIQUEMENT en JSON valide avec cette structure:
     const aiResponse = await aiFetch('https://ai.lovable/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${ANTHROPIC_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

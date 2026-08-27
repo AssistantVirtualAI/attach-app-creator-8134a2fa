@@ -255,7 +255,7 @@ async function callClaude(system: string, userText: string): Promise<string | nu
   if (res) return res;
 
   // fallback Lovable AI
-  const lk = Deno.env.get("LOVABLE_API_KEY");
+  const lk = Deno.env.get("ANTHROPIC_API_KEY");
   if (!lk) return null;
   const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
     method: "POST",
@@ -1101,8 +1101,8 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
     }
     if (!bodyText) return { success: false, error: "no_content_to_summarize" };
 
-    const key = Deno.env.get("LOVABLE_API_KEY");
-    if (!key) return { success: true, summary: bodyText.slice(0, 400), message: "Résumé indisponible (LOVABLE_API_KEY manquant)" };
+    const key = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!key) return { success: true, summary: bodyText.slice(0, 400), message: "Résumé indisponible (ANTHROPIC_API_KEY manquant)" };
 
     const aiRes = await aiFetch("https://ai.lovable/v1/chat/completions", {
       method: "POST",
@@ -1351,7 +1351,7 @@ const TOOLS: Record<string, (ctx: Ctx, params: any) => Promise<ToolResult>> = {
         { name: "Maestro", status: prof?.maestro_connected ? "connected" : "not_connected", message: "" },
         { name: "Microsoft 365", status: prof?.ms365_access_token ? "connected" : "not_connected", message: "" },
         { name: "ElevenLabs", status: Deno.env.get("ELEVENLABS_API_KEY") ? "connected" : "not_connected", message: "" },
-        { name: "Anthropic / Lovable AI", status: Deno.env.get("LOVABLE_API_KEY") ? "connected" : "not_connected", message: "" },
+        { name: "Anthropic / Lovable AI", status: Deno.env.get("ANTHROPIC_API_KEY") ? "connected" : "not_connected", message: "" },
       ],
     };
   },

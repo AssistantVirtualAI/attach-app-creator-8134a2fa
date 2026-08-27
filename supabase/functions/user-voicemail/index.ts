@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
   });
 
 const ELEVEN_KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
-const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY") ?? "";
+const LOVABLE_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 
 /**
  * Static (cacheable) prompts — keep byte-identical across calls so Anthropic

@@ -10,8 +10,8 @@ const j = (b: unknown, s = 200) =>
 const SYSTEM = `Tu es un analyste. À partir des retours (up/down/modified/skipped) d'un courtier hypothécaire sur des actions IA proposées par AVA, distille en FRANÇAIS 4 à 8 règles courtes que la prochaine génération de brouillons doit respecter pour ce courtier précis. Format : liste à puces "- règle". Aucune intro. Pas plus de 800 caractères.`;
 
 async function distill(samples: any[]): Promise<string> {
-  const key = Deno.env.get("LOVABLE_API_KEY");
-  if (!key) throw new Error("LOVABLE_API_KEY missing");
+  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!key) throw new Error("ANTHROPIC_API_KEY missing");
   const userMsg = samples.map((s, i) =>
     `#${i + 1} [${s.rating}${s.action_type ? " · " + s.action_type : ""}]
 ${s.comment ? "Commentaire: " + s.comment + "\n" : ""}${

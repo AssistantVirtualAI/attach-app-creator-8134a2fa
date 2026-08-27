@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
       recent_sync_jobs: jobs.data ?? [],
     };
 
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     const fallback = () => {
       const msg = parsed.data.message.toLowerCase();
       const action = msg.includes("sync") || msg.includes("refresh")

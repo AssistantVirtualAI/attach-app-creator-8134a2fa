@@ -74,7 +74,7 @@ async function callClaude(system: string, userText: string): Promise<string | nu
   if (res) return res;
 
   // Fallback Lovable AI gateway
-  const lk = Deno.env.get("LOVABLE_API_KEY");
+  const lk = Deno.env.get("ANTHROPIC_API_KEY");
   if (!lk) return null;
   const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
     method: "POST",

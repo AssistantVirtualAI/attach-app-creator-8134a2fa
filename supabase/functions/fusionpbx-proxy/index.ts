@@ -3128,8 +3128,8 @@ Deno.serve(async (req) => {
     // Transcription & summary via Lovable AI Gateway
     // ============================================================
     if (action === "transcribe-recording" || action === "summarize-recording") {
-      const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-      if (!lovableKey) return json({ error: "LOVABLE_API_KEY not configured" }, 400);
+      const lovableKey = Deno.env.get("ANTHROPIC_API_KEY");
+      if (!lovableKey) return json({ error: "ANTHROPIC_API_KEY not configured" }, 400);
       const recordingId = (params as any).recording_id || (body as any).recording_id;
       if (!recordingId) return json({ error: "recording_id required" }, 400);
 

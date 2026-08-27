@@ -8619,6 +8619,66 @@ export type Database = {
           },
         ]
       }
+      planipret_call_job_queue: {
+        Row: {
+          attempts: number
+          call_id: string | null
+          created_at: string
+          deal_id: string | null
+          error_message: string | null
+          http_status: number | null
+          id: string
+          idempotency_key: string
+          locked_by: string | null
+          locked_until: string | null
+          max_attempts: number
+          next_run_at: string
+          payload: Json
+          result: Json | null
+          status: string
+          step: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          call_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          idempotency_key: string
+          locked_by?: string | null
+          locked_until?: string | null
+          max_attempts?: number
+          next_run_at?: string
+          payload?: Json
+          result?: Json | null
+          status?: string
+          step?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          call_id?: string | null
+          created_at?: string
+          deal_id?: string | null
+          error_message?: string | null
+          http_status?: number | null
+          id?: string
+          idempotency_key?: string
+          locked_by?: string | null
+          locked_until?: string | null
+          max_attempts?: number
+          next_run_at?: string
+          payload?: Json
+          result?: Json | null
+          status?: string
+          step?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       planipret_call_sessions: {
         Row: {
           answered_at: string | null
@@ -9771,6 +9831,39 @@ export type Database = {
           provider?: string
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      planipret_job_state: {
+        Row: {
+          job_name: string
+          last_run_at: string | null
+          locked_by: string | null
+          locked_until: string | null
+          paused_at: string | null
+          paused_reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          job_name: string
+          last_run_at?: string | null
+          locked_by?: string | null
+          locked_until?: string | null
+          paused_at?: string | null
+          paused_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          job_name?: string
+          last_run_at?: string | null
+          locked_by?: string | null
+          locked_until?: string | null
+          paused_at?: string | null
+          paused_reason?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }

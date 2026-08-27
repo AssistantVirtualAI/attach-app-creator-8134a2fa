@@ -529,10 +529,10 @@ Deno.serve(async (req) => {
 
       const startDay = new Date(); startDay.setHours(0, 0, 0, 0);
       const [{ data: hot }, { data: missed }, { count: smsUnread }] = await Promise.all([
-        admin.from("planipret_phone_calls").select("id, caller_number, started_at, lead_score")
+        admin.from("planipret_phone_calls").select("id, from_number, started_at, lead_score")
           .eq("user_id", profile.id).gte("lead_score", 7)
           .order("started_at", { ascending: false }).limit(3),
-        admin.from("planipret_phone_calls").select("id, caller_number, started_at")
+        admin.from("planipret_phone_calls").select("id, from_number, started_at")
           .eq("user_id", profile.id).eq("status", "missed")
           .order("started_at", { ascending: false }).limit(3),
         admin.from("planipret_phone_messages").select("id", { count: "exact", head: true })

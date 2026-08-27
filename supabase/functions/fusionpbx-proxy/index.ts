@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // FusionPBX v7 REST proxy for the AVA Statistic / Lemtel app.
 // All client calls authenticate via Supabase JWT; the FusionPBX credentials
 // (URL, username, API key, domain UUID) live only in Vault.
@@ -3127,8 +3128,8 @@ Deno.serve(async (req) => {
     // Transcription & summary via Lovable AI Gateway
     // ============================================================
     if (action === "transcribe-recording" || action === "summarize-recording") {
-      const lovableKey = Deno.env.get("LOVABLE_API_KEY");
-      if (!lovableKey) return json({ error: "LOVABLE_API_KEY not configured" }, 400);
+      const lovableKey = Deno.env.get("ANTHROPIC_API_KEY");
+      if (!lovableKey) return json({ error: "ANTHROPIC_API_KEY not configured" }, 400);
       const recordingId = (params as any).recording_id || (body as any).recording_id;
       if (!recordingId) return json({ error: "recording_id required" }, 400);
 
@@ -3155,7 +3156,7 @@ Deno.serve(async (req) => {
         for (let i = 0; i < bytes.length; i += 0x8000) b64 += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)));
         b64 = btoa(b64);
 
-        const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const aiRes = await aiFetch("https://ai.lovable/v1/chat/completions", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
           body: JSON.stringify({
@@ -3204,7 +3205,7 @@ Deno.serve(async (req) => {
       if (!transcript?.content) return json({ error: "no transcript available; transcribe first" }, 400);
 
       await admin.from("pbx_call_recordings").update({ summary_status: "pending" }).eq("id", recordingId);
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiRes = await aiFetch("https://ai.lovable/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
         body: JSON.stringify({

@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
@@ -43,12 +44,12 @@ Deno.serve(async (req) => {
       unread_voicemails: voicemails.length,
     };
 
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     let briefing_text = fallbackBrief(profile.full_name, today, summary);
 
     if (apiKey) {
       try {
-        const ai = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const ai = await aiFetch("https://ai.lovable/v1/chat/completions", {
           method: "POST",
           headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({

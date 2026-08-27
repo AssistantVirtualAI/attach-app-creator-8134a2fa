@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAnthropic } from "../_shared/anthropic.ts";
 
@@ -354,9 +355,9 @@ Deno.serve(async (req) => {
 
     console.log("ai-transcribe-call audio resolution", { call_record_id, audioSource, bytes: audioBytes?.length || 0, fetchErrors });
 
-    const lovableKey = Deno.env.get("LOVABLE_API_KEY") || null;
+    const lovableKey = Deno.env.get("OPENAI_API_KEY") || null;
     // NOTE: We do NOT abort here if lovableKey is absent — Whisper (OPENAI_API_KEY) is
-    // the primary provider and does not need LOVABLE_API_KEY. Lovable Gateway is only
+    // the primary provider and does not need ANTHROPIC_API_KEY. Lovable Gateway is only
     // used as a fallback after Whisper fails. We only abort if BOTH keys are absent.
     if (!audioBytes || audioBytes.length === 0) {
       // Surface specific PBX errors so the UI can show actionable messages.
@@ -423,7 +424,7 @@ Deno.serve(async (req) => {
       fd.append("model", model);
       fd.append("file", new Blob([audioBytes!], { type: audioMime }), `recording.${ext}`);
       fd.append("prompt", sttPrompt);
-      const r = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+      const r = await aiFetch("https://ai.lovable/v1/audio/transcriptions", {
         method: "POST",
         headers: { "Lovable-API-Key": lovableKey, "X-Lovable-AIG-SDK": "edge-function" },
         body: fd,
@@ -496,7 +497,7 @@ Deno.serve(async (req) => {
     const openaiKeyPresent = !!Deno.env.get("OPENAI_API_KEY");
     if (!openaiKeyPresent && !lovableKey) {
       await writeTranscript(fallbackTranscript, "stub-no-key");
-      await audit("missing-key", { error_code: "no-ai-keys", message: "Neither OPENAI_API_KEY nor LOVABLE_API_KEY is configured", provider: "none" });
+      await audit("missing-key", { error_code: "no-ai-keys", message: "Neither OPENAI_API_KEY nor ANTHROPIC_API_KEY is configured", provider: "none" });
       return json({ transcript_text: fallbackTranscript, stub: true, reason: "missing-ai-key", fetchErrors });
     }
     // Mark as processing so the UI badge can show "en cours" via polling/Realtime.

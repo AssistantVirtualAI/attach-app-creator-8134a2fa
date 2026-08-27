@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // POST /functions/v1/maestro-transcript
 // Body: { call_id: uuid, force?: boolean }
 // Pipeline: NS-API transcript → Lovable AI Gateway transcription fallback → store + push to Maestro → trigger AI analysis.
@@ -21,7 +22,7 @@ import {
 const MIN_AUDIO_BYTES = 2048;
 
 async function transcribeViaLovable(audioUrl: string, auth?: string): Promise<{ text: string; segments: any[] } | null> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey || !audioUrl) return null;
 
   try {
@@ -36,7 +37,7 @@ async function transcribeViaLovable(audioUrl: string, auth?: string): Promise<{ 
     form.append("file", blob, "call.wav");
     form.append("model", "openai/gpt-4o-mini-transcribe");
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+    const res = await aiFetch("https://ai.lovable/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
@@ -164,7 +165,7 @@ Deno.serve(async (req) => {
       });
       const ct = proxyRes.headers.get("content-type") ?? "";
       if (proxyRes.ok && (ct.startsWith("audio") || ct.includes("octet-stream"))) {
-        const apiKey = Deno.env.get("LOVABLE_API_KEY");
+        const apiKey = Deno.env.get("OPENAI_API_KEY");
         if (apiKey) {
           const blob = await proxyRes.blob();
           // Empty-recording guard: header-only audio is always rejected (HTTP 400).
@@ -174,7 +175,7 @@ Deno.serve(async (req) => {
           const form = new FormData();
           form.append("file", blob, "call.wav");
           form.append("model", "openai/gpt-4o-mini-transcribe");
-          const stt = await fetch("https://ai.gateway.lovable.dev/v1/audio/transcriptions", {
+          const stt = await aiFetch("https://ai.lovable/v1/audio/transcriptions", {
             method: "POST",
             headers: { Authorization: `Bearer ${apiKey}` },
             body: form,

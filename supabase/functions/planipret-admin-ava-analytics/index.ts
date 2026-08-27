@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // planipret-admin-ava-analytics — Admin AVA + Microsoft 365 analytics.
 // Returns real cross-broker AVA activity and, when broker tokens exist, Microsoft Graph email/meeting stats.
 import { createClient } from "npm:@supabase/supabase-js@2";

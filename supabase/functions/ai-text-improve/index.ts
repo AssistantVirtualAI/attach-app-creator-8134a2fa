@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // ai-text-improve — Améliore ou corrige un texte (SMS ou courriel) avec Claude
 // Input  : { text: string, mode: "sms" | "email", action: "fix" | "improve" | "formal" | "shorter" }
 // Output : { success: true, result: string } | { success: false, error: string }

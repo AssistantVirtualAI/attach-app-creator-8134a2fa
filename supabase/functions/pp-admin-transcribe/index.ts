@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // pp-admin-transcribe — Transcribe a planipret_phone_calls row via Lovable AI.
 // Resolves a fresh recording URL, fetches the audio, and stores the transcript.
 import { createClient } from "npm:@supabase/supabase-js@2";

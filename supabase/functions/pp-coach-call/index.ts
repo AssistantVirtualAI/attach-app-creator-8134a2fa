@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // pp-coach-call — Coaching + résumé + transcription corrigée via Lovable AI Gateway
 // Une seule analyse par appel. Verrou pour éviter les analyses simultanées.
 // Broadcast Realtime pour synchroniser admin portal / mobile / widget.

@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // ai-summary: short natural-language AVA briefing from dashboard stats.
 // POST { range: 'today'|'7d'|'30d'|'custom', stats: {...}, periodLabel?: string }
 const cors = {

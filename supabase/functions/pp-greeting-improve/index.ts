@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // AVA Planiprêt — improve a voicemail greeting text via Lovable AI.
 import { authBroker, corsHeaders, jsonResponse } from "../_shared/ns-broker.ts";
 

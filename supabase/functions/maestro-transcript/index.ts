@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // POST /functions/v1/maestro-transcript
 // Body: { call_id: uuid, force?: boolean }
 // Pipeline: NS-API transcript → Lovable AI Gateway transcription fallback → store + push to Maestro → trigger AI analysis.

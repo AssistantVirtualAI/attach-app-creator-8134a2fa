@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // ms365-stats — Microsoft 365 usage stats (emails + meetings) with AI insights.
 // Auth: user JWT. Body: { days?: 7|30|90, insights?: boolean }
 import { createClient } from "npm:@supabase/supabase-js@2";

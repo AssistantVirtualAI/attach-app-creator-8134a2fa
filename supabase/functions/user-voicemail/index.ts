@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // @ts-nocheck
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { callAnthropic } from "../_shared/anthropic.ts";

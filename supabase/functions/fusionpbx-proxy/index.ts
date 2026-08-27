@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // FusionPBX v7 REST proxy for the AVA Statistic / Lemtel app.
 // All client calls authenticate via Supabase JWT; the FusionPBX credentials
 // (URL, username, API key, domain UUID) live only in Vault.

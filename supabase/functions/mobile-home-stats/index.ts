@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // mobile-home-stats: aggregated Home dashboard stats + AI summary/insights.
 // Scopes strictly to the signed-in softphone user's extension + organization.
 // Returns counts for period (today | week | month) plus AI summary + insights.

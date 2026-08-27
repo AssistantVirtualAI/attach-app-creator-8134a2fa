@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // pp-moh-improve — corrige/réécrit un texte d'annonce de musique d'attente
 // avec Claude (via Lovable AI Gateway). Admin Planiprêt uniquement.
 import { corsHeaders, json, requirePlanipretAdmin } from "../_shared/pp-admin.ts";

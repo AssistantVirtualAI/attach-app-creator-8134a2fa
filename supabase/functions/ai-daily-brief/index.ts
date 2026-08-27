@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 

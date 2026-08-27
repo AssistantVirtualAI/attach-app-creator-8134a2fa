@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // process-call-recording: single idempotent pipeline that transcribes + analyzes + coaches a call recording.
 // Short-circuits when results already exist so we never bill or run twice for the same recording.
 // Writes an audit trail of every run to public.call_intelligence_audit.

@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // AVA — Distille les préférences apprises par courtier à partir du feedback des 14 derniers jours
 // Trigger : cron quotidien (x-ava-service). Aussi appelable manuellement par un courtier pour son propre profil.
 import { createClient } from "npm:@supabase/supabase-js@2";

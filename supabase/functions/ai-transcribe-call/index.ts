@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAnthropic } from "../_shared/anthropic.ts";
 

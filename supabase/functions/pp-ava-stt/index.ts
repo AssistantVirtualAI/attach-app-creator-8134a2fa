@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // pp-ava-stt — Speech to text for AVA voice input.
 // Accepts { audio: base64, mime: string } and returns { text }.
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";

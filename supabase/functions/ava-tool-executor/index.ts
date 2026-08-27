@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // AVA Planiprêt — secure server-side tool router for the ElevenLabs agent.
 // Every tool the agent triggers passes through here. Logs each call into
 // planipret_ava_conversations.

@@ -1,3 +1,4 @@
+import { aiFetch } from "../_shared/claude-compat.ts";
 // @ts-nocheck
 // Personal end-user AI assistant. Tools: stats, recent calls, voicemails,
 // recordings, AI insights, voicemail greeting generation (ElevenLabs TTS),

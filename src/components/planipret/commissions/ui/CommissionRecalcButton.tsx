@@ -28,7 +28,9 @@ export default function CommissionRecalcButton({
         : undefined;
 
       const { data, error } = await supabase.functions.invoke("pp-maestro-commissions-sync", {
-        body: { mode: scope === "admin" ? "all" : "self" },
+        // "Recalculer" = reconstruction complète : on force un import intégral
+        // (non incrémental) pour re-clé et corriger aussi les lignes anciennes.
+        body: { mode: scope === "admin" ? "all" : "self", full: true },
         headers,
       });
       if (error) throw error;

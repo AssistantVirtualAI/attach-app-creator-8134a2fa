@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, RefreshCw, PhoneOff, PhoneForwarded, RotateCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import DidReclaimPanel from "@/components/planipret/admin/DidReclaimPanel";
+import DidDuplicateAlert from "@/components/planipret/admin/DidDuplicateAlert";
 
 
 type Did = {
@@ -122,6 +123,8 @@ export default function PAPhoneNumbers() {
           Rafraîchir
         </Button>
       </div>
+
+      <DidDuplicateAlert numbers={numbers} />
 
       <DidReclaimPanel />
 

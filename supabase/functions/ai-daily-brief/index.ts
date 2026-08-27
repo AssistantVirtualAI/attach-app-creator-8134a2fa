@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
 
     const [ms365, callsRes, vmRes] = await Promise.all([
       ms365Promise,
-      admin.from("planipret_phone_calls").select("direction, caller_number, callee_number, started_at").eq("user_id", userId).gte("started_at", today.toISOString()).order("started_at", { ascending: false }),
+      admin.from("planipret_phone_calls").select("direction, from_number, to_number, started_at").eq("user_id", userId).gte("started_at", today.toISOString()).order("started_at", { ascending: false }),
       admin.from("planipret_voicemails").select("from_number, duration_seconds, created_at").eq("user_id", userId).eq("is_read", false).eq("folder", "inbox"),
     ]);
 

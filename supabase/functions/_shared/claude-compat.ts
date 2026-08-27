@@ -75,7 +75,7 @@ function toAnthropicBody(body: any) {
     }
     if (msg.role === "assistant" && Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
       const content: any[] = [];
-      if (msg.content) content.push({ type: "text", text: String(msg.content) });
+      if (msg.content && String(msg.content).trim()) content.push({ type: "text", text: String(msg.content) });
       for (const tc of msg.tool_calls) {
         let input: any = {};
         try { input = JSON.parse(tc.function?.arguments || "{}"); } catch { input = {}; }

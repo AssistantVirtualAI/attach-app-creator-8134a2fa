@@ -28,13 +28,21 @@ export function toClaudeModel(model?: string): string {
 }
 
 function flattenContent(content: any): any {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return String(content ?? "");
+  // Anthropic rejects empty text blocks, so every empty/whitespace-only part
+  // is dropped instead of being forwarded as `{ type: "text", text: "" }`.
+  if (typeof content === "string") return content.trim() ? content : "";
+  if (!Array.isArray(content)) {
+    const s = String(content ?? "");
+    return s.trim() ? s : "";
+  }
   const out: any[] = [];
   for (const part of content) {
-    if (typeof part === "string") out.push({ type: "text", text: part });
-    else if (part?.type === "text") out.push({ type: "text", text: part.text ?? "" });
-    else if (part?.type === "image_url") {
+    if (typeof part === "string") {
+      if (part.trim()) out.push({ type: "text", text: part });
+    } else if (part?.type === "text") {
+      const t = String(part.text ?? "");
+      if (t.trim()) out.push({ type: "text", text: t });
+    } else if (part?.type === "image_url") {
       const url: string = part.image_url?.url ?? "";
       const m = /^data:([^;]+);base64,(.*)$/.exec(url);
       if (m) out.push({ type: "image", source: { type: "base64", media_type: m[1], data: m[2] } });
@@ -43,6 +51,7 @@ function flattenContent(content: any): any {
   }
   return out.length ? out : "";
 }
+
 
 function toAnthropicBody(body: any) {
   const systemParts: string[] = [];
@@ -66,7 +75,7 @@ function toAnthropicBody(body: any) {
     }
     if (msg.role === "assistant" && Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
       const content: any[] = [];
-      if (msg.content) content.push({ type: "text", text: String(msg.content) });
+      if (msg.content && String(msg.content).trim()) content.push({ type: "text", text: String(msg.content) });
       for (const tc of msg.tool_calls) {
         let input: any = {};
         try { input = JSON.parse(tc.function?.arguments || "{}"); } catch { input = {}; }

@@ -355,7 +355,7 @@ Deno.serve(async (req) => {
 
     console.log("ai-transcribe-call audio resolution", { call_record_id, audioSource, bytes: audioBytes?.length || 0, fetchErrors });
 
-    const lovableKey = Deno.env.get("ANTHROPIC_API_KEY") || null;
+    const lovableKey = Deno.env.get("OPENAI_API_KEY") || null;
     // NOTE: We do NOT abort here if lovableKey is absent — Whisper (OPENAI_API_KEY) is
     // the primary provider and does not need ANTHROPIC_API_KEY. Lovable Gateway is only
     // used as a fallback after Whisper fails. We only abort if BOTH keys are absent.

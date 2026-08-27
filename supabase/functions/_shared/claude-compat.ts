@@ -199,32 +199,76 @@ function streamToOpenAi(upstream: ReadableStream<Uint8Array>, model: string): Re
   });
 }
 
-async function chatCompletions(init: RequestInit): Promise<Response> {
-  const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) return json({ error: { message: "missing ANTHROPIC_API_KEY" } }, 500);
+const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 
+/** Maps any model id to an OpenAI failover model. */
+function toOpenAiModel(model?: string): string {
+  const m = (model ?? "").toLowerCase();
+  if (/nano|lite|mini|flash|haiku/.test(m)) return "gpt-4o-mini";
+  return "gpt-4o";
+}
+
+/** Secondary provider: OpenAI, same OpenAI-shaped request/response. */
+async function openAiFailover(body: any): Promise<Response> {
+  const key = Deno.env.get("OPENAI_API_KEY");
+  if (!key) return json({ error: { message: "claude failed and OPENAI_API_KEY is missing" } }, 502);
+  const payload = { ...body, model: toOpenAiModel(body.model) };
+  const res = await fetch(OPENAI_CHAT_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const raw = await res.text();
+    console.error("[claude-compat] openai failover", res.status, raw.slice(0, 400));
+    return new Response(raw, { status: res.status, headers: { "content-type": "application/json" } });
+  }
+  console.warn("[claude-compat] served by OpenAI failover");
+  return new Response(res.body, {
+    status: 200,
+    headers: {
+      "content-type": res.headers.get("content-type") ??
+        (body.stream === true ? "text/event-stream" : "application/json"),
+    },
+  });
+}
+
+async function chatCompletions(init: RequestInit): Promise<Response> {
   let body: any;
   try { body = JSON.parse(String(init.body ?? "{}")); } catch { return json({ error: { message: "bad request body" } }, 400); }
+
+  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!key) return openAiFailover(body);
 
   const stream = body.stream === true;
   const anthropicBody = toAnthropicBody(body);
   if (stream) anthropicBody.stream = true;
 
-  const res = await fetch(ANTHROPIC_URL, {
-    method: "POST",
-    headers: {
-      "x-api-key": key,
-      "anthropic-version": ANTHROPIC_VERSION,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(anthropicBody),
-    signal: (init as any).signal,
-  });
+  let res: Response;
+  try {
+    res = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": ANTHROPIC_VERSION,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(anthropicBody),
+      signal: (init as any).signal,
+    });
+  } catch (e) {
+    console.error("[claude-compat] anthropic network error", e);
+    return openAiFailover(body);
+  }
 
   if (!res.ok) {
     const raw = await res.text();
     console.error("[claude-compat] anthropic", res.status, raw.slice(0, 400));
-    return new Response(raw, { status: res.status, headers: { "content-type": "application/json" } });
+    // 400 = bad request (same on OpenAI) → surface. Otherwise fail over.
+    if (res.status === 400) {
+      return new Response(raw, { status: 400, headers: { "content-type": "application/json" } });
+    }
+    return openAiFailover(body);
   }
 
   if (stream && res.body) return streamToOpenAi(res.body, anthropicBody.model);
@@ -233,17 +277,23 @@ async function chatCompletions(init: RequestInit): Promise<Response> {
   return json(toOpenAiResponse(data));
 }
 
+
 async function transcriptions(init: RequestInit): Promise<Response> {
   const key = Deno.env.get("OPENAI_API_KEY");
   if (!key) return json({ error: { message: "missing OPENAI_API_KEY" } }, 500);
 
   const src = init.body as FormData;
   const form = new FormData();
+  let requested = "";
   for (const [k, v] of (src as any).entries()) {
-    if (k === "model") continue;
+    if (k === "model") { requested = String(v); continue; }
     form.append(k, v as any);
   }
-  form.append("model", "whisper-1");
+  // Whisper by default; honour an explicit OpenAI transcribe model when asked.
+  const model = /gpt-4o(-mini)?-transcribe/.test(requested)
+    ? requested.replace(/^openai\//, "")
+    : "whisper-1";
+  form.append("model", model);
 
   const res = await fetch(OPENAI_STT_URL, {
     method: "POST",

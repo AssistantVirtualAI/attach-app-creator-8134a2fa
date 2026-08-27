@@ -22,7 +22,7 @@ import {
 const MIN_AUDIO_BYTES = 2048;
 
 async function transcribeViaLovable(audioUrl: string, auth?: string): Promise<{ text: string; segments: any[] } | null> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey || !audioUrl) return null;
 
   try {
@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
       });
       const ct = proxyRes.headers.get("content-type") ?? "";
       if (proxyRes.ok && (ct.startsWith("audio") || ct.includes("octet-stream"))) {
-        const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+        const apiKey = Deno.env.get("OPENAI_API_KEY");
         if (apiKey) {
           const blob = await proxyRes.blob();
           // Empty-recording guard: header-only audio is always rejected (HTTP 400).

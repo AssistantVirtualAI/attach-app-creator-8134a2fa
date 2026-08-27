@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   try {
     const { audio, mime = "audio/webm" } = await req.json();
     if (!audio || typeof audio !== "string") return j({ error: "audio_required" }, 400);
-    const key = Deno.env.get("ANTHROPIC_API_KEY");
+    const key = Deno.env.get("OPENAI_API_KEY");
     if (!key) return j({ error: "gateway_key_missing" }, 500);
 
     // Decode base64 to bytes

@@ -10,7 +10,7 @@ import { useCallCenterRole } from '@/hooks/useCallCenterRole';
  * required for the REST API user driving Lemtel (gateways, call center, tiers…).
  * Hidden from agents/supervisors/viewers.
  */
-export function FusionPbxPermissionsHelp({ area }: { area?: 'gateways' | 'queues' | 'all' }) {
+export function FusionPbxPermissionsHelp({ area }: { area?: 'gateways' | 'queues' | 'healthcheck' | 'all' }) {
   const { isSuperAdmin, isLemtelAdmin, isOrgAdmin, isAdmin, loading } = useCallCenterRole();
   const canSee = isSuperAdmin || isLemtelAdmin || isOrgAdmin || isAdmin;
   const [open, setOpen] = useState(false);
@@ -21,12 +21,19 @@ export function FusionPbxPermissionsHelp({ area }: { area?: 'gateways' | 'queues
     'Call Center': ['call_center_queue_view', 'call_center_queue_all', 'call_center_queue_add', 'call_center_queue_edit', 'call_center_queue_delete'],
     'Queue Tiers (agents)': ['call_center_tier_view', 'call_center_tier_all', 'call_center_tier_add', 'call_center_tier_edit', 'call_center_tier_delete'],
     'FS commands (fallback)': ['command_add', 'command_edit'],
+    'Healthcheck / CDR / Enregistrements': [
+      'extension_view', 'extension_all',
+      'xml_cdr_view', 'xml_cdr_all', 'xml_cdr_details',
+      'recording_view', 'recording_play', 'recording_download',
+ધ    ],
   };
 
   const showGroups = area === 'gateways'
     ? { Gateways: groups.Gateways, 'FS commands (fallback)': groups['FS commands (fallback)'] }
     : area === 'queues'
     ? { 'Call Center': groups['Call Center'], 'Queue Tiers (agents)': groups['Queue Tiers (agents)'], 'FS commands (fallback)': groups['FS commands (fallback)'] }
+    : area === 'healthcheck'
+    ? { 'Healthcheck / CDR / Enregistrements': groups['Healthcheck / CDR / Enregistrements'] }
     : groups;
 
   return (

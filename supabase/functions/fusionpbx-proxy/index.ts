@@ -1613,11 +1613,26 @@ Deno.serve(async (req) => {
         const r = await fetchCdrsWithFallback(extra);
         if (!r.ok) {
           if (i === 0) {
-            await admin.from("pbx_sync_jobs").insert({
-              organization_id, job_type: action, status: "failed",
-              started_at: new Date().toISOString(), completed_at: new Date().toISOString(),
-              error: `No working CDR endpoint. Attempts: ${JSON.stringify(r.attempts).slice(0, 1500)}`, stats: {},
-            });
+            const denied = (r as any).denied === true;
+            // Throttle the failed-job rows: pollers hit this every 20-30s.
+            if (Date.now() - LAST_CDR_FAIL_JOB > CDR_FAIL_JOB_THROTTLE_MS) {
+              LAST_CDR_FAIL_JOB = Date.now();
+              await admin.from("pbx_sync_jobs").insert({
+                organization_id, job_type: action, status: "failed",
+                started_at: new Date().toISOString(), completed_at: new Date().toISOString(),
+                error: `No working CDR endpoint. Attempts: ${JSON.stringify(r.attempts).slice(0, 1500)}`, stats: {},
+              });
+            }
+            if (denied) {
+              // Upstream permission problem, not a proxy crash: report it as a
+              // failed dependency with an actionable message instead of a 502 storm.
+              return json({
+                error: "FUSIONPBX_CDR_FORBIDDEN",
+                message: "FusionPBX refuse l'accès aux CDR (403). Activez les permissions xml_cdr_view / xml_cdr_all pour l'utilisateur API dans Group Manager.",
+                attempts: r.attempts,
+                cdrs: [], records: [], data: [],
+              }, 424);
+            }
             return json({ error: "NO_CDR_ENDPOINT", attempts: r.attempts }, 502);
           }
           allErrors.push(`page ${i}: fetch_failed`);

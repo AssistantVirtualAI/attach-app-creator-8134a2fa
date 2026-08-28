@@ -544,8 +544,11 @@ Appels manqués récents: ${JSON.stringify(missed ?? [])}
 SMS non lus: ${smsUnread ?? 0}`;
     }
 
+    // Claude primaire, OpenAI en relève (géré par createClaudeProvider).
     const lovableKey = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!lovableKey) return json({ reply: L("(Lovable AI non configuré)", "(Lovable AI not configured)"), suggestions: [] });
+    if (!lovableKey && !Deno.env.get("OPENAI_API_KEY")) {
+      return json({ reply: L("(Aucun fournisseur IA configuré)", "(No AI provider configured)"), suggestions: [] });
+    }
 
     const gateway = createLovableAiGatewayProvider(lovableKey);
 

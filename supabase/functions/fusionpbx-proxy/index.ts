@@ -43,6 +43,16 @@ const ACTIVE_CALLS_TTL_MS = 5_000;
 const SYSTEM_HEALTH_CACHE = new Map<string, LiveCacheEntry>();
 const SYSTEM_HEALTH_TTL_MS = 10_000;
 
+// Circuit breaker for CDR endpoints denied by FusionPBX (403 on every URL).
+// This is a permission problem on the PBX side (`xml_cdr_view` / API access for
+// the REST user), not a transient error: retrying every poll only produced a
+// storm of 502s and one failed sync job per tick. Remember the denial for a few
+// minutes and short-circuit instead.
+const CDR_DENIED: { until: number; attempts: unknown[] } = { until: 0, attempts: [] };
+const CDR_DENIED_TTL_MS = 5 * 60_000;
+let LAST_CDR_FAIL_JOB = 0;
+const CDR_FAIL_JOB_THROTTLE_MS = 5 * 60_000;
+
 function fusionBaseOrigin(baseUrl: string) {
   try { return new URL(baseUrl).origin.replace(/\/+$/, ""); }
   catch { return String(baseUrl || "").replace(/\/+$/, ""); }
@@ -1424,6 +1434,10 @@ Deno.serve(async (req) => {
     ];
 
     async function fetchCdrsWithFallback(extraQp: Record<string, string> = {}) {
+      // Short-circuit while FusionPBX is denying CDR access (403 everywhere).
+      if (CDR_DENIED.until > Date.now()) {
+        return { ok: false, endpoint: null, records: [] as any[], attempts: CDR_DENIED.attempts as any[], denied: true };
+      }
       // Try cached endpoint first
       const { data: integ } = await admin.from("pbx_integrations")
         .select("id, config").eq("organization_id", organization_id).maybeSingle();
@@ -1491,7 +1505,14 @@ Deno.serve(async (req) => {
           attempts.push({ endpoint: ep, status: 0, error: e?.message || String(e) });
         }
       }
-      return { ok: false, endpoint: null, records: [] as any[], attempts };
+      // Every endpoint denied → PBX permission problem, open the breaker.
+      const allForbidden = attempts.length > 0 && attempts.some((a) => a.status === 403) &&
+        attempts.every((a) => a.status === 403 || a.status === 404 || a.status === 401);
+      if (allForbidden) {
+        CDR_DENIED.until = Date.now() + CDR_DENIED_TTL_MS;
+        CDR_DENIED.attempts = attempts;
+      }
+      return { ok: false, endpoint: null, records: [] as any[], attempts, denied: allForbidden };
     }
 
     // ---- CDR endpoint diagnostic ----
@@ -1592,11 +1613,26 @@ Deno.serve(async (req) => {
         const r = await fetchCdrsWithFallback(extra);
         if (!r.ok) {
           if (i === 0) {
-            await admin.from("pbx_sync_jobs").insert({
-              organization_id, job_type: action, status: "failed",
-              started_at: new Date().toISOString(), completed_at: new Date().toISOString(),
-              error: `No working CDR endpoint. Attempts: ${JSON.stringify(r.attempts).slice(0, 1500)}`, stats: {},
-            });
+            const denied = (r as any).denied === true;
+            // Throttle the failed-job rows: pollers hit this every 20-30s.
+            if (Date.now() - LAST_CDR_FAIL_JOB > CDR_FAIL_JOB_THROTTLE_MS) {
+              LAST_CDR_FAIL_JOB = Date.now();
+              await admin.from("pbx_sync_jobs").insert({
+                organization_id, job_type: action, status: "failed",
+                started_at: new Date().toISOString(), completed_at: new Date().toISOString(),
+                error: `No working CDR endpoint. Attempts: ${JSON.stringify(r.attempts).slice(0, 1500)}`, stats: {},
+              });
+            }
+            if (denied) {
+              // Upstream permission problem, not a proxy crash: report it as a
+              // failed dependency with an actionable message instead of a 502 storm.
+              return json({
+                error: "FUSIONPBX_CDR_FORBIDDEN",
+                message: "FusionPBX refuse l'accès aux CDR (403). Activez les permissions xml_cdr_view / xml_cdr_all pour l'utilisateur API dans Group Manager.",
+                attempts: r.attempts,
+                cdrs: [], records: [], data: [],
+              }, 424);
+            }
             return json({ error: "NO_CDR_ENDPOINT", attempts: r.attempts }, 502);
           }
           allErrors.push(`page ${i}: fetch_failed`);

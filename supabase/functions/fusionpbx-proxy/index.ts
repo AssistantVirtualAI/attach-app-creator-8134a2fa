@@ -1434,6 +1434,10 @@ Deno.serve(async (req) => {
     ];
 
     async function fetchCdrsWithFallback(extraQp: Record<string, string> = {}) {
+      // Short-circuit while FusionPBX is denying CDR access (403 everywhere).
+      if (CDR_DENIED.until > Date.now()) {
+        return { ok: false, endpoint: null, records: [] as any[], attempts: CDR_DENIED.attempts as any[], denied: true };
+      }
       // Try cached endpoint first
       const { data: integ } = await admin.from("pbx_integrations")
         .select("id, config").eq("organization_id", organization_id).maybeSingle();

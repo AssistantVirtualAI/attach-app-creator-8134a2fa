@@ -7993,6 +7993,42 @@ export type Database = {
           },
         ]
       }
+      planipret_ai_provider_usage: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          endpoint: string
+          error: string | null
+          failover: boolean
+          id: string
+          model: string | null
+          provider: string
+          status_code: number | null
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          endpoint: string
+          error?: string | null
+          failover?: boolean
+          id?: string
+          model?: string | null
+          provider: string
+          status_code?: number | null
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          endpoint?: string
+          error?: string | null
+          failover?: boolean
+          id?: string
+          model?: string | null
+          provider?: string
+          status_code?: number | null
+        }
+        Relationships: []
+      }
       planipret_audit_log: {
         Row: {
           action: string
@@ -10316,6 +10352,45 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_pbx_action_queue: {
+        Row: {
+          action: string
+          attempts: number
+          created_at: string
+          id: string
+          last_error: string | null
+          next_attempt_at: string
+          payload: Json
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       planipret_phone_calls: {
         Row: {
           ai_action_items: Json | null
@@ -11243,6 +11318,42 @@ export type Database = {
           voicemail_greeting_updated_at?: string | null
           voicemail_greeting_voice_id?: string | null
           widget_enabled?: boolean
+        }
+        Relationships: []
+      }
+      planipret_proxy_health: {
+        Row: {
+          action: string | null
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          function_name: string
+          id: string
+          message: string | null
+          outcome: string
+          status_code: number | null
+        }
+        Insert: {
+          action?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          function_name?: string
+          id?: string
+          message?: string | null
+          outcome: string
+          status_code?: number | null
+        }
+        Update: {
+          action?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          function_name?: string
+          id?: string
+          message?: string | null
+          outcome?: string
+          status_code?: number | null
         }
         Relationships: []
       }

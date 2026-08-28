@@ -3405,13 +3405,13 @@ Deno.serve(async (req) => {
       errorCode = typeof peek?.error === "string" ? peek.error : null;
     } catch { /* non-JSON */ }
     const timeout = /timeout|timed out/i.test(errorCode ?? "");
-    await recordProxyHealth({
+    void recordProxyHealth({
       action, status_code: status,
       outcome: timeout ? "timeout" : status === 502 ? "bad_gateway" : "error",
       duration_ms: Date.now() - t0, error_code: errorCode,
     });
   } else {
-    await recordProxyHealth({ action, status_code: status, outcome: "ok", duration_ms: Date.now() - t0 });
+    void recordProxyHealth({ action, status_code: status, outcome: "ok", duration_ms: Date.now() - t0 });
   }
   return res;
 });

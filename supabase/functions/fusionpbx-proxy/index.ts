@@ -141,7 +141,7 @@ async function getFusionSessionCookie(baseUrl: string): Promise<string> {
   return cookie;
 }
 
-Deno.serve(async (req) => {
+const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   // Per-request correlation id. Echoed in every error response + every log line

@@ -827,10 +827,19 @@ function ContactDetailSheet({
     contact.phone_number || contact.work_phone || contact.workPhone || contact.telephone ||
     contact.home_phone || contact.homePhone || undefined;
   const extension: string | undefined = contact.extension || contact.ext;
+  // Maestro profile fallback: many clients only carry their numbers/email on the
+  // /clients|/brokers profile payload, which is what keeps Appeler/SMS/Email greyed out.
+  const mp: any = mProfile || {};
+  const profilePhone: string | undefined =
+    mp.cell_phone || mp.cellPhone || mp.mobile || mp.mobile_phone ||
+    mp.phone || mp.phone_number || mp.work_phone || mp.home_phone || undefined;
+  const profileEmail: string | undefined = mp.email || mp.email_address || mp.mail || undefined;
+  const bestPhone: string | undefined = rawPhone || (profilePhone ? String(profilePhone) : undefined);
   // Best number for SMS: real phone preferred; extension fallback (for internal chat).
-  const smsTarget: string | undefined = rawPhone || extension;
-  const phone: string | undefined = rawPhone || extension;
-  const email: string | undefined = contact.email || contact.mail || contact.email_address;
+  const smsTarget: string | undefined = bestPhone || extension;
+  const phone: string | undefined = bestPhone || extension;
+  const email: string | undefined =
+    contact.email || contact.mail || contact.email_address || profileEmail;
   const maestroId: string | undefined = contact.maestro_client_id || contact.external_id || contact.id;
 
   // Lazy-load the Maestro profile (/users/{id}/clients|brokers/{id}/profile)

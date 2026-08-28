@@ -316,18 +316,22 @@ async function chatCompletions(init: RequestInit): Promise<Response> {
     });
   } catch (e) {
     console.error("[claude-compat] anthropic network error", e);
+    logAiUsage({ provider: "claude", model: anthropicBody.model, duration_ms: Date.now() - t0, error: String(e) });
     return openAiFailover(body);
   }
 
   if (!res.ok) {
     const raw = await res.text();
     console.error("[claude-compat] anthropic", res.status, raw.slice(0, 400));
+    logAiUsage({ provider: "claude", model: anthropicBody.model, status_code: res.status, duration_ms: Date.now() - t0, error: raw.slice(0, 300) });
     // 400 = bad request (same on OpenAI) → surface. Otherwise fail over.
     if (res.status === 400) {
       return new Response(raw, { status: 400, headers: { "content-type": "application/json" } });
     }
     return openAiFailover(body);
   }
+
+  logAiUsage({ provider: "claude", model: anthropicBody.model, status_code: 200, duration_ms: Date.now() - t0 });
 
   if (stream && res.body) return streamToOpenAi(res.body, anthropicBody.model);
 

@@ -43,6 +43,16 @@ const ACTIVE_CALLS_TTL_MS = 5_000;
 const SYSTEM_HEALTH_CACHE = new Map<string, LiveCacheEntry>();
 const SYSTEM_HEALTH_TTL_MS = 10_000;
 
+// Circuit breaker for CDR endpoints denied by FusionPBX (403 on every URL).
+// This is a permission problem on the PBX side (`xml_cdr_view` / API access for
+// the REST user), not a transient error: retrying every poll only produced a
+// storm of 502s and one failed sync job per tick. Remember the denial for a few
+// minutes and short-circuit instead.
+const CDR_DENIED: { until: number; attempts: unknown[] } = { until: 0, attempts: [] };
+const CDR_DENIED_TTL_MS = 5 * 60_000;
+let LAST_CDR_FAIL_JOB = 0;
+const CDR_FAIL_JOB_THROTTLE_MS = 5 * 60_000;
+
 function fusionBaseOrigin(baseUrl: string) {
   try { return new URL(baseUrl).origin.replace(/\/+$/, ""); }
   catch { return String(baseUrl || "").replace(/\/+$/, ""); }

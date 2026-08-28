@@ -143,8 +143,9 @@ serve(async (req) => {
           .map((m: any) => ({ role: m.role, content: String(m.content ?? '').slice(0, 4000) }))
       : [];
 
-    if (!ANTHROPIC_API_KEY) {
-      throw new Error("ANTHROPIC_API_KEY is not configured");
+    // Claude primary, OpenAI failover inside aiFetch.
+    if (!ANTHROPIC_API_KEY && !Deno.env.get("OPENAI_API_KEY")) {
+      throw new Error("No AI provider configured (ANTHROPIC_API_KEY or OPENAI_API_KEY)");
     }
 
     const systemPrompt = language === "fr" ? SYSTEM_PROMPT_FR : SYSTEM_PROMPT_EN;
@@ -157,7 +158,7 @@ serve(async (req) => {
     const response = await aiFetch("https://ai.lovable/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${ANTHROPIC_API_KEY}`,
+        Authorization: `Bearer ${ANTHROPIC_API_KEY ?? ""}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

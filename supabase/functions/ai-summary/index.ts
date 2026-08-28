@@ -11,8 +11,12 @@ const json = (b: unknown, s = 200) =>
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   try {
+    // Claude primary, OpenAI failover (handled inside aiFetch): only fail when
+    // neither provider is configured.
     const key = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!key) return json({ error: "ANTHROPIC_API_KEY missing" }, 500);
+    if (!key && !Deno.env.get("OPENAI_API_KEY")) {
+      return json({ error: "No AI provider configured (ANTHROPIC_API_KEY or OPENAI_API_KEY)" }, 500);
+    }
     const body = await req.json().catch(() => ({}));
     const { range = "today", stats = {}, periodLabel } = body || {};
 
@@ -20,7 +24,7 @@ Deno.serve(async (req) => {
 
     const r = await aiFetch("https://ai.lovable/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Lovable-API-Key": key },
+      headers: { "Content-Type": "application/json", "Lovable-API-Key": key ?? "" },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [

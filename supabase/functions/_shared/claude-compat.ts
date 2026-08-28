@@ -210,6 +210,45 @@ function streamToOpenAi(upstream: ReadableStream<Uint8Array>, model: string): Re
 
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 
+/** Best-effort telemetry: which provider actually served each AI request. */
+function logAiUsage(row: {
+  provider: "claude" | "openai";
+  model?: string;
+  status_code?: number;
+  failover?: boolean;
+  duration_ms?: number;
+  error?: string;
+}) {
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return;
+    const endpoint = Deno.env.get("SB_EXECUTION_ID") ? "edge" : "edge";
+    void fetch(`${url}/rest/v1/planipret_ai_provider_usage`, {
+      method: "POST",
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        "content-type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        endpoint: AI_ENDPOINT_NAME || endpoint,
+        provider: row.provider,
+        model: row.model ?? null,
+        status_code: row.status_code ?? null,
+        failover: row.failover ?? false,
+        duration_ms: row.duration_ms ?? null,
+        error: row.error ? String(row.error).slice(0, 500) : null,
+      }),
+    }).catch(() => {});
+  } catch { /* telemetry must never break the call */ }
+}
+
+/** Name reported in AI usage telemetry. Set once per function. */
+let AI_ENDPOINT_NAME = Deno.env.get("SB_FUNCTION_NAME") ?? "unknown";
+export function setAiEndpointName(name: string) { AI_ENDPOINT_NAME = name; }
+
 /** Maps any model id to an OpenAI failover model. */
 function toOpenAiModel(model?: string): string {
   const m = (model ?? "").toLowerCase();

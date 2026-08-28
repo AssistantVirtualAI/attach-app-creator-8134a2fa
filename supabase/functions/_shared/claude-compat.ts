@@ -292,12 +292,16 @@ async function chatCompletions(init: RequestInit): Promise<Response> {
   try { body = JSON.parse(String(init.body ?? "{}")); } catch { return json({ error: { message: "bad request body" } }, 400); }
 
   const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) return openAiFailover(body);
+  if (!key) {
+    logAiUsage({ provider: "claude", model: body.model, failover: true, error: "ANTHROPIC_API_KEY missing" });
+    return openAiFailover(body);
+  }
 
   const stream = body.stream === true;
   const anthropicBody = toAnthropicBody(body);
   if (stream) anthropicBody.stream = true;
 
+  const t0 = Date.now();
   let res: Response;
   try {
     res = await fetch(ANTHROPIC_URL, {

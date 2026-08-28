@@ -1216,6 +1216,30 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
     return () => { alive = false; };
   }, []);
 
+  const [queued, setQueued] = useState(false);
+  const [pbxDown, setPbxDown] = useState(false);
+
+  // Queue the SMS server-side so it is retried automatically once the PBX is back.
+  const queueForRetry = async () => {
+    const number = toE164(recipient);
+    const msg = body.trim();
+    if (!number || !msg) { toast.error("Numéro et message requis"); return; }
+    try {
+      await callEdge<any>("pp-pbx-action-queue", {
+        action: "enqueue",
+        type: "sms",
+        payload: { to: number, message: msg, from: smsFrom || undefined },
+      });
+      setQueued(true);
+      toast.success("SMS mis en file d'attente", {
+        description: "Il sera envoyé automatiquement dès que la téléphonie sera rétablie.",
+      });
+      window.setTimeout(() => onClose(), 1400);
+    } catch (e: any) {
+      toast.error("Impossible de mettre en file", { description: e?.message || "Erreur inconnue" });
+    }
+  };
+
   const doSend = async (retry = false): Promise<void> => {
     const number = toE164(recipient);
     const msg = body.trim();
@@ -1233,6 +1257,16 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
       // Retry once on transient NS 502
       if (!retry && status === 502) {
         setTimeout(() => { void doSend(true); }, 400);
+        return;
+      }
+      // PBX unreachable → clear state + server-side retry queue
+      const rawDetail = String(
+        (e?.body && typeof e.body === "object" && (e.body.error || e.body.body)) || e?.message || "",
+      );
+      if (status === 502 || status === 503 || status === 504 || status === 424 || rawDetail.includes("FUSIONPBX")) {
+        setPbxDown(true);
+        setStatus("error");
+        setErrorMsg("Téléphonie indisponible");
         return;
       }
       const detail =

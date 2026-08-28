@@ -3354,4 +3354,64 @@ const handler = async (req: Request): Promise<Response> => {
     }
     return json({ error: "INTERNAL", correlation_id: correlationId, message: e?.message || String(e) }, 500, { "X-Request-Id": correlationId });
   }
+};
+
+/**
+ * Records every proxy call (action, status, duration) into
+ * `planipret_proxy_health` so the Maestro dashboard can chart 502/timeout
+ * rates. Telemetry failures never affect the response.
+ */
+async function recordProxyHealth(row: Record<string, unknown>) {
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return;
+    await fetch(`${url}/rest/v1/planipret_proxy_health`, {
+      method: "POST",
+      headers: { apikey: key, Authorization: `Bearer ${key}`, "content-type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify(row),
+    });
+  } catch { /* ignore */ }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return handler(req);
+  const t0 = Date.now();
+  let action = "unknown";
+  let cloned = req;
+  try {
+    const copy = req.clone();
+    cloned = req;
+    const parsed = await copy.json().catch(() => null);
+    if (parsed && typeof parsed.action === "string") action = parsed.action;
+  } catch { /* non-JSON body */ }
+
+  let res: Response;
+  try {
+    res = await handler(cloned);
+  } catch (e: any) {
+    await recordProxyHealth({
+      action, status_code: 500, outcome: "crash",
+      duration_ms: Date.now() - t0, error_code: "UNCAUGHT", message: String(e?.message || e).slice(0, 500),
+    });
+    throw e;
+  }
+
+  const status = res.status;
+  if (status >= 400) {
+    let errorCode: string | null = null;
+    try {
+      const peek = await res.clone().json();
+      errorCode = typeof peek?.error === "string" ? peek.error : null;
+    } catch { /* non-JSON */ }
+    const timeout = /timeout|timed out/i.test(errorCode ?? "");
+    await recordProxyHealth({
+      action, status_code: status,
+      outcome: timeout ? "timeout" : status === 502 ? "bad_gateway" : "error",
+      duration_ms: Date.now() - t0, error_code: errorCode,
+    });
+  } else {
+    await recordProxyHealth({ action, status_code: status, outcome: "ok", duration_ms: Date.now() - t0 });
+  }
+  return res;
 });

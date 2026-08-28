@@ -1246,6 +1246,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
     if (!number || !msg) { toast.error("Numéro et message requis"); return; }
     setStatus("sending");
     setErrorMsg(null);
+    setPbxDown(false);
     try {
       const res = await callEdge<any>("pp-ns-sms", { action: "send", to: number, message: msg, from: smsFrom || undefined });
       if (res?.ok === false || res?.error) throw { name: "EdgeError", message: res?.body || res?.error || "SMS failed", status: res?.status ?? 200, body: res, fn: "pp-ns-sms" };
@@ -1284,7 +1285,7 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
   const sent = status === "sent";
   const errored = status === "error";
   const noNumber = preflight === "no-number";
-  const disabled = sending || sent || preflight === "loading" || noNumber || !recipient.trim() || !body.trim();
+  const disabled = sending || sent || queued || preflight === "loading" || noNumber || !recipient.trim() || !body.trim();
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -1339,7 +1340,37 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
             </div>
           </div>
         )}
-        {errored && (
+        {queued && (
+          <div className="mb-3 p-3 rounded-lg flex items-start gap-2"
+            style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.35)" }}>
+            <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#3b82f6" }} />
+            <div className="text-xs" style={{ color: "var(--pp-text-primary)" }}>
+              <div className="font-semibold">SMS en file d'attente</div>
+              <div style={{ color: "var(--pp-text-muted)" }}>Envoi automatique dès le rétablissement de la téléphonie.</div>
+            </div>
+          </div>
+        )}
+        {pbxDown && !queued && (
+          <div className="mb-3 p-3 rounded-lg flex items-start gap-2"
+            style={{ background: "rgba(251,191,36,0.10)", border: "1px solid rgba(251,191,36,0.35)" }}>
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#f59e0b" }} />
+            <div className="text-xs flex-1" style={{ color: "var(--pp-text-primary)" }}>
+              <div className="font-semibold">Téléphonie temporairement indisponible</div>
+              <div style={{ color: "var(--pp-text-muted)" }}>
+                Le service SMS ne répond pas. Vous pouvez réessayer ou mettre le message en file d'attente : il partira
+                automatiquement dès le rétablissement.
+              </div>
+              <button
+                onClick={() => void queueForRetry()}
+                className="mt-2 px-3 py-1.5 rounded-full text-xs font-semibold"
+                style={{ background: "var(--pp-brand-accent)", color: "#fff" }}
+              >
+                Mettre en file d'attente
+              </button>
+            </div>
+          </div>
+        )}
+        {errored && !pbxDown && (
           <div className="mb-3 p-3 rounded-lg flex items-start gap-2"
             style={{ background: "rgba(239,68,68,0.10)", border: "1px solid rgba(239,68,68,0.35)" }}>
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#ef4444" }} />
@@ -1383,8 +1414,8 @@ function SmsComposerSheet({ to, contactName, onClose }: { to: string; contactNam
           className="w-full py-2.5 rounded-lg text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
           style={{ background: sent ? "#22c55e" : "var(--pp-brand-accent)" }}
         >
-          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : sent ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-          {sending ? "Envoi…" : sent ? "Envoyé" : errored ? "Réessayer" : "Envoyer"}
+          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : sent || queued ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+          {sending ? "Envoi…" : sent ? "Envoyé" : queued ? "En file d'attente" : errored ? "Réessayer" : "Envoyer"}
         </button>
       </div>
     </div>

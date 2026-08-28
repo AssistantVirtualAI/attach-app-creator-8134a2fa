@@ -210,6 +210,45 @@ function streamToOpenAi(upstream: ReadableStream<Uint8Array>, model: string): Re
 
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 
+/** Best-effort telemetry: which provider actually served each AI request. */
+function logAiUsage(row: {
+  provider: "claude" | "openai";
+  model?: string;
+  status_code?: number;
+  failover?: boolean;
+  duration_ms?: number;
+  error?: string;
+}) {
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return;
+    const endpoint = Deno.env.get("SB_EXECUTION_ID") ? "edge" : "edge";
+    void fetch(`${url}/rest/v1/planipret_ai_provider_usage`, {
+      method: "POST",
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        "content-type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        endpoint: AI_ENDPOINT_NAME || endpoint,
+        provider: row.provider,
+        model: row.model ?? null,
+        status_code: row.status_code ?? null,
+        failover: row.failover ?? false,
+        duration_ms: row.duration_ms ?? null,
+        error: row.error ? String(row.error).slice(0, 500) : null,
+      }),
+    }).catch(() => {});
+  } catch { /* telemetry must never break the call */ }
+}
+
+/** Name reported in AI usage telemetry. Set once per function. */
+let AI_ENDPOINT_NAME = Deno.env.get("SB_FUNCTION_NAME") ?? "unknown";
+export function setAiEndpointName(name: string) { AI_ENDPOINT_NAME = name; }
+
 /** Maps any model id to an OpenAI failover model. */
 function toOpenAiModel(model?: string): string {
   const m = (model ?? "").toLowerCase();
@@ -220,8 +259,12 @@ function toOpenAiModel(model?: string): string {
 /** Secondary provider: OpenAI, same OpenAI-shaped request/response. */
 async function openAiFailover(body: any): Promise<Response> {
   const key = Deno.env.get("OPENAI_API_KEY");
-  if (!key) return json({ error: { message: "claude failed and OPENAI_API_KEY is missing" } }, 502);
+  if (!key) {
+    logAiUsage({ provider: "openai", failover: true, status_code: 502, error: "OPENAI_API_KEY missing" });
+    return json({ error: { message: "claude failed and OPENAI_API_KEY is missing" } }, 502);
+  }
   const payload = { ...body, model: toOpenAiModel(body.model) };
+  const t0 = Date.now();
   const res = await fetch(OPENAI_CHAT_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
@@ -230,9 +273,11 @@ async function openAiFailover(body: any): Promise<Response> {
   if (!res.ok) {
     const raw = await res.text();
     console.error("[claude-compat] openai failover", res.status, raw.slice(0, 400));
+    logAiUsage({ provider: "openai", model: payload.model, failover: true, status_code: res.status, duration_ms: Date.now() - t0, error: raw.slice(0, 300) });
     return new Response(raw, { status: res.status, headers: { "content-type": "application/json" } });
   }
   console.warn("[claude-compat] served by OpenAI failover");
+  logAiUsage({ provider: "openai", model: payload.model, failover: true, status_code: 200, duration_ms: Date.now() - t0 });
   return new Response(res.body, {
     status: 200,
     headers: {
@@ -247,12 +292,16 @@ async function chatCompletions(init: RequestInit): Promise<Response> {
   try { body = JSON.parse(String(init.body ?? "{}")); } catch { return json({ error: { message: "bad request body" } }, 400); }
 
   const key = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!key) return openAiFailover(body);
+  if (!key) {
+    logAiUsage({ provider: "claude", model: body.model, failover: true, error: "ANTHROPIC_API_KEY missing" });
+    return openAiFailover(body);
+  }
 
   const stream = body.stream === true;
   const anthropicBody = toAnthropicBody(body);
   if (stream) anthropicBody.stream = true;
 
+  const t0 = Date.now();
   let res: Response;
   try {
     res = await fetch(ANTHROPIC_URL, {
@@ -267,18 +316,22 @@ async function chatCompletions(init: RequestInit): Promise<Response> {
     });
   } catch (e) {
     console.error("[claude-compat] anthropic network error", e);
+    logAiUsage({ provider: "claude", model: anthropicBody.model, duration_ms: Date.now() - t0, error: String(e) });
     return openAiFailover(body);
   }
 
   if (!res.ok) {
     const raw = await res.text();
     console.error("[claude-compat] anthropic", res.status, raw.slice(0, 400));
+    logAiUsage({ provider: "claude", model: anthropicBody.model, status_code: res.status, duration_ms: Date.now() - t0, error: raw.slice(0, 300) });
     // 400 = bad request (same on OpenAI) → surface. Otherwise fail over.
     if (res.status === 400) {
       return new Response(raw, { status: 400, headers: { "content-type": "application/json" } });
     }
     return openAiFailover(body);
   }
+
+  logAiUsage({ provider: "claude", model: anthropicBody.model, status_code: 200, duration_ms: Date.now() - t0 });
 
   if (stream && res.body) return streamToOpenAi(res.body, anthropicBody.model);
 

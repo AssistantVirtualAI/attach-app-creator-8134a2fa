@@ -51,6 +51,17 @@ const DICT = {
     step: "Étape",
     count: "Nombre",
     perEndpoint: "Taux de succès par endpoint",
+    proxyHealth: "Santé du proxy PBX (502 / timeouts)",
+    proxyOk: "OK",
+    proxy502: "502",
+    proxyTimeout: "Timeouts",
+    proxyOther: "Autres erreurs",
+    proxyRate: "Taux d'échec proxy",
+    aiFailover: "IA — Claude vs failover OpenAI",
+    aiByEndpoint: "Usage IA par endpoint",
+    claude: "Claude",
+    openai: "OpenAI (failover)",
+    failoverRate: "Taux de failover",
     commissionSync: "Synchronisation des commissions",
     broker: "Courtier",
     connected: "Connecté",
@@ -113,6 +124,17 @@ const DICT = {
     step: "Step",
     count: "Count",
     perEndpoint: "Success rate per endpoint",
+    proxyHealth: "PBX proxy health (502 / timeouts)",
+    proxyOk: "OK",
+    proxy502: "502",
+    proxyTimeout: "Timeouts",
+    proxyOther: "Other errors",
+    proxyRate: "Proxy failure rate",
+    aiFailover: "AI — Claude vs OpenAI failover",
+    aiByEndpoint: "AI usage per endpoint",
+    claude: "Claude",
+    openai: "OpenAI (failover)",
+    failoverRate: "Failover rate",
     commissionSync: "Commission sync",
     broker: "Broker",
     connected: "Connected",
@@ -196,6 +218,27 @@ interface EdgeRunRow {
   summary: unknown;
 }
 
+interface ProxyHealthRow {
+  id: string;
+  action: string | null;
+  status_code: number | null;
+  outcome: string | null;
+  duration_ms: number | null;
+  error_code: string | null;
+  created_at: string;
+}
+
+interface AiUsageRow {
+  id: string;
+  endpoint: string | null;
+  provider: string;
+  model: string | null;
+  status_code: number | null;
+  failover: boolean | null;
+  duration_ms: number | null;
+  created_at: string;
+}
+
 interface QueueState {
   state: string;
   queue: { pending: number; done: number; dead: number };
@@ -244,6 +287,8 @@ export default function PAMaestroDashboard() {
   const [syncLogs, setSyncLogs] = useState<SyncLogRow[]>([]);
   const [commissionDiag, setCommissionDiag] = useState<CommissionDiagRow[]>([]);
   const [edgeRuns, setEdgeRuns] = useState<EdgeRunRow[]>([]);
+  const [proxyHealth, setProxyHealth] = useState<ProxyHealthRow[]>([]);
+  const [aiUsage, setAiUsage] = useState<AiUsageRow[]>([]);
   const [callStats, setCallStats] = useState({ synced: 0, total: 0, hasMaestroId: 0 });
   const [queueState, setQueueState] = useState<QueueState | null>(null);
   const [loading, setLoading] = useState(false);
@@ -293,12 +338,30 @@ export default function PAMaestroDashboard() {
         .order("started_at", { ascending: false })
         .limit(30);
 
-      const [logRes, syncRes, diagRes, edgeRes] = await Promise.all([
+      const proxyQ = supabase
+        .from("planipret_proxy_health")
+        .select("id, action, status_code, outcome, duration_ms, error_code, created_at")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(3000);
+
+      const aiQ = supabase
+        .from("planipret_ai_provider_usage")
+        .select("id, endpoint, provider, model, status_code, failover, duration_ms, created_at")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(3000);
+
+      const [logRes, syncRes, diagRes, edgeRes, proxyRes, aiRes] = await Promise.all([
         logQ,
         syncQ,
         diagQ,
         edgeQ,
+        proxyQ,
+        aiQ,
       ]);
+      setProxyHealth((proxyRes.data as ProxyHealthRow[]) ?? []);
+      setAiUsage((aiRes.data as AiUsageRow[]) ?? []);
 
       if (logRes.error) throw logRes.error;
       if (syncRes.error) throw syncRes.error;
@@ -447,6 +510,79 @@ export default function PAMaestroDashboard() {
       .sort((a, b) => b.total - a.total)
       .slice(0, 10);
   }, [syncLogs]);
+
+  // Proxy health over time (bucketed like the sync timeline)
+  const proxyTimeline = useMemo(() => {
+    const buckets = Math.min(hours, 24);
+    const bucketSize = (hours * 3600_000) / buckets;
+    const now = Date.now();
+    const data: Array<{ time: string; ok: number; bad_gateway: number; timeout: number; other: number }> = [];
+    for (let i = buckets - 1; i >= 0; i--) {
+      const start = now - i * bucketSize;
+      const end = start + bucketSize;
+      const rows = proxyHealth.filter((r) => {
+        const ts = new Date(r.created_at).getTime();
+        return ts >= start && ts < end;
+      });
+      data.push({
+        time: new Date(start).toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" }),
+        ok: rows.filter((r) => r.outcome === "ok").length,
+        bad_gateway: rows.filter((r) => r.outcome === "bad_gateway" || r.status_code === 502).length,
+        timeout: rows.filter((r) => r.outcome === "timeout").length,
+        other: rows.filter((r) => r.outcome !== "ok" && r.outcome !== "timeout" && r.outcome !== "bad_gateway" && r.status_code !== 502).length,
+      });
+    }
+    return data;
+  }, [proxyHealth, hours, lang]);
+
+  const proxyStats = useMemo(() => {
+    const total = proxyHealth.length;
+    const failed = proxyHealth.filter((r) => (r.status_code ?? 0) >= 400).length;
+    return { total, failed, rate: total > 0 ? Math.round((failed / total) * 100) : 0 };
+  }, [proxyHealth]);
+
+  // AI provider usage over time
+  const aiTimeline = useMemo(() => {
+    const buckets = Math.min(hours, 24);
+    const bucketSize = (hours * 3600_000) / buckets;
+    const now = Date.now();
+    const data: Array<{ time: string; claude: number; openai: number }> = [];
+    for (let i = buckets - 1; i >= 0; i--) {
+      const start = now - i * bucketSize;
+      const end = start + bucketSize;
+      const rows = aiUsage.filter((r) => {
+        const ts = new Date(r.created_at).getTime();
+        return ts >= start && ts < end;
+      });
+      data.push({
+        time: new Date(start).toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit" }),
+        claude: rows.filter((r) => r.provider === "claude").length,
+        openai: rows.filter((r) => r.provider === "openai").length,
+      });
+    }
+    return data;
+  }, [aiUsage, hours, lang]);
+
+  const aiByEndpoint = useMemo(() => {
+    const map = new Map<string, { claude: number; openai: number }>();
+    for (const r of aiUsage) {
+      const key = r.endpoint || "unknown";
+      const m = map.get(key) ?? { claude: 0, openai: 0 };
+      if (r.provider === "openai") m.openai++;
+      else m.claude++;
+      map.set(key, m);
+    }
+    return Array.from(map.entries())
+      .map(([endpoint, m]) => ({ endpoint, ...m, total: m.claude + m.openai }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
+  }, [aiUsage]);
+
+  const failoverRate = useMemo(() => {
+    const total = aiUsage.length;
+    if (!total) return 0;
+    return Math.round((aiUsage.filter((r) => r.provider === "openai").length / total) * 100);
+  }, [aiUsage]);
 
   const recentErrors = useMemo(
     () => filteredLogs.filter((l) => l.status === "error" || l.status === "skipped").slice(0, 25),
@@ -740,6 +876,93 @@ export default function PAMaestroDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Proxy health + AI failover */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Server className="w-4 h-4" style={{ color: WARNING }} />
+              {t.proxyHealth}
+              <Badge variant={proxyStats.rate > 10 ? "destructive" : "secondary"} className="ml-1 text-xs">
+                {t.proxyRate}: {proxyStats.rate}%
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {proxyHealth.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-10 text-center">{t.noData}</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={proxyTimeline}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis dataKey="time" fontSize={11} />
+                  <YAxis fontSize={11} allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Area type="monotone" dataKey="ok" name={t.proxyOk} stackId="1" stroke={SUCCESS} fill={SUCCESS} fillOpacity={0.25} />
+                  <Area type="monotone" dataKey="bad_gateway" name={t.proxy502} stackId="1" stroke={DANGER} fill={DANGER} fillOpacity={0.35} />
+                  <Area type="monotone" dataKey="timeout" name={t.proxyTimeout} stackId="1" stroke={WARNING} fill={WARNING} fillOpacity={0.35} />
+                  <Area type="monotone" dataKey="other" name={t.proxyOther} stackId="1" stroke={PURPLE} fill={PURPLE} fillOpacity={0.25} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Zap className="w-4 h-4" style={{ color: PURPLE }} />
+              {t.aiFailover}
+              <Badge variant={failoverRate > 25 ? "destructive" : "secondary"} className="ml-1 text-xs">
+                {t.failoverRate}: {failoverRate}%
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {aiUsage.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-10 text-center">{t.noData}</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={aiTimeline}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis dataKey="time" fontSize={11} />
+                  <YAxis fontSize={11} allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Area type="monotone" dataKey="claude" name={t.claude} stackId="1" stroke={ACCENT} fill={ACCENT} fillOpacity={0.3} />
+                  <Area type="monotone" dataKey="openai" name={t.openai} stackId="1" stroke={WARNING} fill={WARNING} fillOpacity={0.35} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* AI usage per endpoint */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">{t.aiByEndpoint}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {aiByEndpoint.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-10 text-center">{t.noData}</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(200, aiByEndpoint.length * 38)}>
+              <BarChart data={aiByEndpoint} layout="vertical" margin={{ left: 90 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                <XAxis type="number" fontSize={11} allowDecimals={false} />
+                <YAxis type="category" dataKey="endpoint" fontSize={11} width={140} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="claude" name={t.claude} stackId="a" fill={ACCENT} radius={[0, 0, 0, 0]} />
+                <Bar dataKey="openai" name={t.openai} stackId="a" fill={WARNING} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Circuit breaker + queue controls */}
       <Card>

@@ -942,8 +942,8 @@ function ContactDetailSheet({
         <div className="flex items-start justify-between mb-3">
           <div className="min-w-0 flex-1">
             <div className="text-lg font-bold truncate" style={{ color: "var(--pp-text-primary)" }}>{name}</div>
-            {rawPhone && (
-              <ContactField label="Tél" value={rawPhone} onCall={() => onCall(rawPhone)} />
+            {bestPhone && (
+              <ContactField label="Tél" value={bestPhone} onCall={() => onCall(bestPhone)} />
             )}
             {extension && (
               <ContactField label="Ext" value={extension} onCall={() => onCall(extension)} />
@@ -980,7 +980,7 @@ function ContactDetailSheet({
         {mProfile && (
           <div className="mb-3 p-3 rounded-xl" style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border-2)" }}>
             <div className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: "var(--pp-text-muted)" }}>
-              {maestroKind === "broker" ? (t("contacts.brokerProfile") || "Profil courtier") : (t("contacts.clientProfile") || "Profil client")}
+              {maestroKind === "broker" ? "Profil courtier" : "Profil client"}
             </div>
             <div className="grid grid-cols-2 gap-2">
               {Object.entries(mProfile)

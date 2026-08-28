@@ -1505,7 +1505,14 @@ Deno.serve(async (req) => {
           attempts.push({ endpoint: ep, status: 0, error: e?.message || String(e) });
         }
       }
-      return { ok: false, endpoint: null, records: [] as any[], attempts };
+      // Every endpoint denied → PBX permission problem, open the breaker.
+      const allForbidden = attempts.length > 0 && attempts.some((a) => a.status === 403) &&
+        attempts.every((a) => a.status === 403 || a.status === 404 || a.status === 401);
+      if (allForbidden) {
+        CDR_DENIED.until = Date.now() + CDR_DENIED_TTL_MS;
+        CDR_DENIED.attempts = attempts;
+      }
+      return { ok: false, endpoint: null, records: [] as any[], attempts, denied: allForbidden };
     }
 
     // ---- CDR endpoint diagnostic ----

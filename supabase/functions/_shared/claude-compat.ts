@@ -259,8 +259,12 @@ function toOpenAiModel(model?: string): string {
 /** Secondary provider: OpenAI, same OpenAI-shaped request/response. */
 async function openAiFailover(body: any): Promise<Response> {
   const key = Deno.env.get("OPENAI_API_KEY");
-  if (!key) return json({ error: { message: "claude failed and OPENAI_API_KEY is missing" } }, 502);
+  if (!key) {
+    logAiUsage({ provider: "openai", failover: true, status_code: 502, error: "OPENAI_API_KEY missing" });
+    return json({ error: { message: "claude failed and OPENAI_API_KEY is missing" } }, 502);
+  }
   const payload = { ...body, model: toOpenAiModel(body.model) };
+  const t0 = Date.now();
   const res = await fetch(OPENAI_CHAT_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
@@ -269,9 +273,11 @@ async function openAiFailover(body: any): Promise<Response> {
   if (!res.ok) {
     const raw = await res.text();
     console.error("[claude-compat] openai failover", res.status, raw.slice(0, 400));
+    logAiUsage({ provider: "openai", model: payload.model, failover: true, status_code: res.status, duration_ms: Date.now() - t0, error: raw.slice(0, 300) });
     return new Response(raw, { status: res.status, headers: { "content-type": "application/json" } });
   }
   console.warn("[claude-compat] served by OpenAI failover");
+  logAiUsage({ provider: "openai", model: payload.model, failover: true, status_code: 200, duration_ms: Date.now() - t0 });
   return new Response(res.body, {
     status: 200,
     headers: {

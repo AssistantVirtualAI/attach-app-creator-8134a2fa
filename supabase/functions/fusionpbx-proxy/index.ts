@@ -337,7 +337,9 @@ const handler = async (req: Request): Promise<Response> => {
     const apiLatency = Date.now() - t2;
     if (apiStatus === 401 || apiStatus === 403) {
       addCheck("api", false, { http_status: apiStatus, latency_ms: apiLatency });
-      return fail("FUSIONPBX_AUTH_FAILED", "Authentification refusée par FusionPBX — vérifiez FUSIONPBX_API_KEY.", 503, { http_status: apiStatus });
+      return fail("FUSIONPBX_AUTH_FAILED", apiStatus === 403
+        ? "FusionPBX a refusé l'accès (403) — la clé API est valide mais l'utilisateur n'a pas les permissions requises (ex. extension_view / xml_cdr_view)."
+        : "Authentification refusée par FusionPBX (401) — vérifiez FUSIONPBX_API_KEY.", 503, { http_status: apiStatus });
     }
     if (apiStatus === 404) {
       addCheck("api", false, { http_status: 404, latency_ms: apiLatency });

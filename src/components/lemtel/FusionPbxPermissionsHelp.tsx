@@ -25,7 +25,7 @@ export function FusionPbxPermissionsHelp({ area }: { area?: 'gateways' | 'queues
       'extension_view', 'extension_all',
       'xml_cdr_view', 'xml_cdr_all', 'xml_cdr_details',
       'recording_view', 'recording_play', 'recording_download',
-ધ    ],
+],
   };
 
   const showGroups = area === 'gateways'

@@ -3369,7 +3369,7 @@ async function recordProxyHealth(row: Record<string, unknown>) {
     await fetch(`${url}/rest/v1/planipret_proxy_health`, {
       method: "POST",
       headers: { apikey: key, Authorization: `Bearer ${key}`, "content-type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify(row),
+      body: JSON.stringify({ function_name: "fusionpbx-proxy", ...row }),
     });
   } catch { /* ignore */ }
 }

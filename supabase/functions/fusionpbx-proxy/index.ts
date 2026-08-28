@@ -251,6 +251,141 @@ const handler = async (req: Request): Promise<Response> => {
   organization_id = body.organization_id || LEMTEL_ORG;
   const params = body.params || {};
 
+  // ─── Healthcheck ────────────────────────────────────────────────────────
+  // Self-contained upstream connectivity probe. Never throws: every failure
+  // mode returns an explicit machine-readable `reason` + human `message`.
+  // Body: { action: "healthcheck", deep?: boolean }  (deep also tests the web
+  // UI PHP session login used for recording downloads).
+  if (action === "healthcheck") {
+    const startedAll = Date.now();
+    const checks: Array<Record<string, unknown>> = [];
+    const addCheck = (name: string, ok: boolean, extra: Record<string, unknown> = {}) =>
+      checks.push({ name, ok, ...extra });
+
+    // 1) Configuration
+    const secretNames = ["FUSIONPBX_API_URL", "FUSIONPBX_USERNAME", "FUSIONPBX_API_KEY", "FUSIONPBX_DOMAIN_UUID"];
+    const missing = secretNames.filter((n) => !Deno.env.get(n));
+    addCheck("config", missing.length === 0, { missing });
+    if (missing.length > 0) {
+      return json({
+        ok: false,
+        status: "down",
+        reason: "MISSING_SECRET",
+        message: `Configuration incomplète : ${missing.join(", ")} manquant(s) dans le coffre.`,
+        checks,
+        correlation_id: correlationId,
+        checked_at: new Date().toISOString(),
+      }, 503, { "X-Request-Id": correlationId });
+    }
+
+    const apiBase = (Deno.env.get("FUSIONPBX_API_URL") || "").replace(/\/+$/, "").replace(/\/app\/api(\/\d+)?$/, "");
+    const apiKey = Deno.env.get("FUSIONPBX_API_KEY")!;
+    const domainUuid = Deno.env.get("FUSIONPBX_DOMAIN_UUID")!;
+
+    const fail = (reason: string, message: string, status = 503, extra: Record<string, unknown> = {}) =>
+      json({
+        ok: false, status: "down", reason, message, checks,
+        total_ms: Date.now() - startedAll, correlation_id: correlationId,
+        checked_at: new Date().toISOString(), ...extra,
+      }, status, { "X-Request-Id": correlationId });
+
+    // 2) TCP/TLS + HTTP reachability of the FusionPBX host
+    const t1 = Date.now();
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(`${apiBase}/login.php`, { redirect: "manual", signal: ctrl.signal });
+      clearTimeout(timer);
+      await res.body?.cancel();
+      addCheck("reachable", true, { http_status: res.status, latency_ms: Date.now() - t1, url: apiBase });
+    } catch (e: any) {
+      const aborted = e?.name === "AbortError";
+      addCheck("reachable", false, { latency_ms: Date.now() - t1, url: apiBase, error: String(e?.message ?? e) });
+      return fail(
+        aborted ? "FUSIONPBX_TIMEOUT" : "FUSIONPBX_UNREACHABLE",
+        aborted
+          ? `Le serveur FusionPBX (${apiBase}) n'a pas répondu en 8 s.`
+          : `Impossible de joindre FusionPBX (${apiBase}) : ${String(e?.message ?? e)}`,
+      );
+    }
+
+    // 3) REST API auth + a real read against the configured domain
+    const t2 = Date.now();
+    let apiStatus = 0;
+    let apiRaw = "";
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 10_000);
+      const res = await fetch(`${apiBase}/app/api/7/extensions?domain_uuid=${domainUuid}&limit=1`, {
+        headers: { Authorization: `Basic ${apiKey}`, Accept: "application/json" },
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      apiStatus = res.status;
+      apiRaw = (await res.text()).slice(0, 300);
+    } catch (e: any) {
+      const aborted = e?.name === "AbortError";
+      addCheck("api", false, { latency_ms: Date.now() - t2, error: String(e?.message ?? e) });
+      return fail(
+        aborted ? "FUSIONPBX_TIMEOUT" : "FUSIONPBX_UNREACHABLE",
+        aborted
+          ? "L'API FusionPBX n'a pas répondu en 10 s."
+          : `Erreur réseau sur l'API FusionPBX : ${String(e?.message ?? e)}`,
+      );
+    }
+
+    const apiLatency = Date.now() - t2;
+    if (apiStatus === 401 || apiStatus === 403) {
+      addCheck("api", false, { http_status: apiStatus, latency_ms: apiLatency });
+      return fail("FUSIONPBX_AUTH_FAILED", "Authentification refusée par FusionPBX — vérifiez FUSIONPBX_API_KEY.", 503, { http_status: apiStatus });
+    }
+    if (apiStatus === 404) {
+      addCheck("api", false, { http_status: 404, latency_ms: apiLatency });
+      return fail("ENDPOINT_NOT_FOUND", "L'API FusionPBX ne connaît pas /app/api/7/extensions — vérifiez FUSIONPBX_API_URL ou la version de l'API.", 503);
+    }
+    if (apiStatus >= 500) {
+      addCheck("api", false, { http_status: apiStatus, latency_ms: apiLatency, raw: apiRaw });
+      return fail("FUSIONPBX_UPSTREAM_ERROR", `FusionPBX a répondu ${apiStatus} — le serveur PBX est en erreur.`, 503, { http_status: apiStatus });
+    }
+
+    let parsed: any = null;
+    try { parsed = apiRaw ? JSON.parse(apiRaw) : {}; } catch { /* not JSON */ }
+    if (parsed === null) {
+      addCheck("api", false, { http_status: apiStatus, latency_ms: apiLatency, raw: apiRaw });
+      return fail("INVALID_RESPONSE", "FusionPBX a répondu autre chose que du JSON (page de login ou proxy intermédiaire ?).", 503);
+    }
+    addCheck("api", true, { http_status: apiStatus, latency_ms: apiLatency });
+
+    // 4) Domain resolution sanity
+    addCheck("domain", !!domainUuid, { domain_uuid: domainUuid });
+
+    // 5) Optional deep check: web UI session (used for recording downloads)
+    if (body.deep === true) {
+      const t3 = Date.now();
+      try {
+        const cookie = await getFusionSessionCookie(apiBase);
+        addCheck("web_session", !!cookie, { latency_ms: Date.now() - t3 });
+        if (!cookie) {
+          return fail("FUSIONPBX_SESSION_FAILED", "Connexion à l'interface web FusionPBX impossible — les téléchargements d'enregistrements échoueront.");
+        }
+      } catch (e: any) {
+        addCheck("web_session", false, { latency_ms: Date.now() - t3, error: String(e?.message ?? e) });
+        return fail("FUSIONPBX_SESSION_FAILED", `Session web FusionPBX indisponible : ${String(e?.message ?? e)}`);
+      }
+    }
+
+    return json({
+      ok: true,
+      status: "healthy",
+      reason: null,
+      message: "FusionPBX est joignable et authentifié.",
+      checks,
+      total_ms: Date.now() - startedAll,
+      correlation_id: correlationId,
+      checked_at: new Date().toISOString(),
+    }, 200, { "X-Request-Id": correlationId });
+  }
+
   // Secrets
   const required = (n: string) => {
     const v = Deno.env.get(n);

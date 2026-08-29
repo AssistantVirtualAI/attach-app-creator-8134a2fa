@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import TaskAssignmentDiagnostic from "@/components/planipret/mobile/TaskAssignmentDiagnostic";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 import { hasAiConsent, revokeAiConsent } from "@/components/planipret/mobile/AiConsentGate";

@@ -59,3 +59,15 @@ Ces scripts enchaînent : `check:imports` → `vite build` → `precheck:build` 
 - [ ] iOS : Archive → App Store Connect, métadonnées + captures FR/EN
 - [ ] Android : `./gradlew bundleRelease` → piste interne → production
 - [ ] URLs légales en ligne : `/privacy`, `/terms`, `/support`
+
+## Vérification automatisée signature / entitlements
+
+- `npm run verify:signing` — entitlements iOS, bundle id, DEVELOPMENT_TEAM,
+  provisioning, ExportOptions, applicationId + signingConfig release Android,
+  versionCode/versionName, absence de mot de passe keystore en clair.
+- `PP_POST_CAP_SYNC=1 npm run preflight` (ou `npm run preflight:postsync`) —
+  **après `npx cap sync`** : l'absence des projets natifs, de `Info.plist`,
+  d'`AndroidManifest.xml` ou de la config de signature devient bloquante.
+- CI : `.github/workflows/mobile-preflight-submission.yml` exécute
+  `npm install` puis `npm run preflight:ios` et `npm run preflight:android`
+  sur chaque PR/push, et les contrôles stricts post-`cap sync` sur release.

@@ -46,7 +46,12 @@
     "ota:bundle": "PP_SKIP_AUTOSYNC=1 npm run build && node scripts/build-ota-bundle.mjs",
     "preflight": "node scripts/preflight-submission.mjs",
     "preflight:ios": "node scripts/preflight-submission.mjs --ios",
-    "preflight:android": "node scripts/preflight-submission.mjs --android"
+    "preflight:android": "node scripts/preflight-submission.mjs --android",
+    "verify:signing": "node scripts/verify-signing.mjs",
+    "verify:signing:ios": "node scripts/verify-signing.mjs --ios",
+    "verify:signing:android": "node scripts/verify-signing.mjs --android",
+    "verify:signing:postsync": "node scripts/verify-signing.mjs --post-sync",
+    "preflight:postsync": "PP_POST_CAP_SYNC=1 node scripts/preflight-submission.mjs"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^6.1.0",
@@ -66,7 +71,7 @@
     "@capacitor/push-notifications": "^6.0.2",
     "@capacitor/splash-screen": "^6.0.2",
     "@capacitor/status-bar": "^6.0.1",
-    "@capgo/capacitor-updater": "^6.3.0",
+    "@capgo/capacitor-updater": "^6.50.2",
     "@elevenlabs/client": "^0.12.0",
     "@radix-ui/react-alert-dialog": "^1.1.4",
     "@radix-ui/react-dialog": "^1.1.4",

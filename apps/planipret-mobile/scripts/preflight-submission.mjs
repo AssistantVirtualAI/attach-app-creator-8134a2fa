@@ -15,6 +15,8 @@
  *   5. inventaire des endpoints edge appelés par l'app
  *   6. permissions natives (Info.plist / AndroidManifest.xml si générés,
  *      sinon les gabarits native-config/)
+ *   6bis. entitlements / provisioning / signature (verify-signing.mjs,
+ *      strict avec PP_POST_CAP_SYNC=1 après `npx cap sync`)
  *   7. garde SIP (aucun endpoint WSS portail dans le bundle)
  */
 import { execSync } from "node:child_process";
@@ -125,6 +127,12 @@ if (wantAndroid) {
     run("node scripts/verify-android.mjs");
   });
 }
+
+// ---- 6bis. Entitlements / provisioning / signature ---------------------
+const signingFlags = [wantIos && "--ios", wantAndroid && "--android", process.env.PP_POST_CAP_SYNC === "1" && "--post-sync"]
+  .filter(Boolean)
+  .join(" ");
+step("Entitlements / provisioning / signature", () => run(`node scripts/verify-signing.mjs ${signingFlags}`));
 
 // ---- 7. Garde SIP -------------------------------------------------------
 step("Garde SIP (bundle)", () => run("node scripts/verify-sip-bundle.mjs"));

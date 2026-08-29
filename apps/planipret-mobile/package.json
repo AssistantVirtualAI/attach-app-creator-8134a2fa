@@ -46,7 +46,12 @@
     "ota:bundle": "PP_SKIP_AUTOSYNC=1 npm run build && node scripts/build-ota-bundle.mjs",
     "preflight": "node scripts/preflight-submission.mjs",
     "preflight:ios": "node scripts/preflight-submission.mjs --ios",
-    "preflight:android": "node scripts/preflight-submission.mjs --android"
+    "preflight:android": "node scripts/preflight-submission.mjs --android",
+    "verify:signing": "node scripts/verify-signing.mjs",
+    "verify:signing:ios": "node scripts/verify-signing.mjs --ios",
+    "verify:signing:android": "node scripts/verify-signing.mjs --android",
+    "verify:signing:postsync": "node scripts/verify-signing.mjs --post-sync",
+    "preflight:postsync": "PP_POST_CAP_SYNC=1 node scripts/preflight-submission.mjs"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^6.1.0",

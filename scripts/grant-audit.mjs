@@ -64,9 +64,12 @@ for (const mig of all) {
       const re = grantOn(table);
       while ((g = re.exec(later.sql))) {
         const tail = later.sql.slice(g.index, g.index + 400);
-        const to = /\bto\s+([^;]+);/i.exec(tail);
+        const to = /\bto\s+([^;\n]+)/i.exec(tail);
         if (to) to[1].split(",").forEach((r) => roles.add(r.trim().toLowerCase()));
         else roles.add("(rôle non détecté)");
+      }
+      if (/grant\s+[\s\S]{0,80}on\s+all\s+tables\s+in\s+schema\s+public/i.test(later.sql) || /execute\s+format\([^)]*grant/i.test(later.sql)) {
+        roles.add("(GRANT global/boucle)");
       }
       if (roles.size) fixes.push({ rel: later.rel, roles: [...roles] });
     }

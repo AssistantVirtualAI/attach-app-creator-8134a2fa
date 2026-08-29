@@ -107,7 +107,7 @@ describe("MTasks (mobile)", () => {
     render(<MTasks />);
     const tabs = await screen.findAllByRole("tab");
     expect(tabs.length).toBe(4);
-    fireEvent.click(screen.getByText(/En retard/));
+    fireEvent.click(tabs[1]);
     expect(setFilter).toHaveBeenCalledWith("overdue");
   });
 

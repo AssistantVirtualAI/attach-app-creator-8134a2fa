@@ -56,7 +56,8 @@ check(notif.includes("mobile-register-push"), "Push token registration must post
 
 // ---- 4. Local native project (optional) ----
 const androidDir = path.join(appDir, "android");
-if (fs.existsSync(androidDir)) {
+const androidGenerated = fs.existsSync(path.join(androidDir, "app/src/main"));
+if (androidGenerated) {
   const manifestPath = path.join(androidDir, "app/src/main/AndroidManifest.xml");
   if (fs.existsSync(manifestPath)) {
     const manifest = read(manifestPath);
@@ -95,7 +96,11 @@ if (fs.existsSync(androidDir)) {
     }
   }
 } else {
-  notes.push("android/ not present — run `npm run cap:add:android` before a device build.");
+  notes.push("Native Android project not generated (android/app/src absent) — run `npm run cap:add:android` then `npm run android:build-sync` before a device build.");
+  const gs = path.join(androidDir, "app/google-services.json");
+  if (!fs.existsSync(gs)) {
+    notes.push("android/app/google-services.json is absent — FCM wake-up will not work until it is added.");
+  }
 }
 
 if (notes.length) {

@@ -43,7 +43,10 @@
     "ios:oneclick": "bash scripts/ios-oneclick.sh",
     "ios:oneclick:rebuild": "bash scripts/ios-oneclick.sh --rebuild-pjsip",
     "verify:aor:mobile": "node scripts/verify-aor-mobile.mjs",
-    "ota:bundle": "PP_SKIP_AUTOSYNC=1 npm run build && node scripts/build-ota-bundle.mjs"
+    "ota:bundle": "PP_SKIP_AUTOSYNC=1 npm run build && node scripts/build-ota-bundle.mjs",
+    "preflight": "node scripts/preflight-submission.mjs",
+    "preflight:ios": "node scripts/preflight-submission.mjs --ios",
+    "preflight:android": "node scripts/preflight-submission.mjs --android"
   },
   "dependencies": {
     "@capacitor-community/bluetooth-le": "^6.1.0",

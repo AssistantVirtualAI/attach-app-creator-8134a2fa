@@ -9,6 +9,7 @@ import {
   Building2, Receipt, X, Bot, AlertTriangle,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
+import MCommissionCharts from "@/components/planipret/mobile/MCommissionCharts";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
@@ -284,6 +285,8 @@ export default function MCommissions() {
               {fr ? "Résultats partiels : affinez la période pour un total exact." : "Partial results: narrow the period for an exact total."}
             </p>
           )}
+
+          <MCommissionCharts filters={filters} lang={lang} />
 
           {chartData.length > 0 && (
             <Card title={fr ? "Par date" : "By date"}>

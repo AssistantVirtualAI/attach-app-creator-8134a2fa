@@ -109,6 +109,10 @@ Deno.serve(async (req) => {
               message: (job.payload as any)?.message,
               from: (job.payload as any)?.from ?? undefined,
               on_behalf_of: job.user_id,
+              // pp-ns-sms (requirePlanipretBroker) resolves the acting broker
+              // from these fields when called with the service-role key.
+              _user_id: job.user_id,
+              user_id: job.user_id,
             }),
           });
           if (!res.ok) throw new Error(`pp-ns-sms ${res.status}: ${(await res.text()).slice(0, 200)}`);

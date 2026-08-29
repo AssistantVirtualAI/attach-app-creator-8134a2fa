@@ -44,9 +44,12 @@ vi.mock("recharts", async () => {
   const React = await import("react");
   const Stub = ({ children }: any) => React.createElement("div", { "data-testid": "chart" }, children);
   return {
-    ResponsiveContainer: Stub, BarChart: Stub, Bar: () => null,
+    ResponsiveContainer: Stub, BarChart: Stub, ComposedChart: Stub, AreaChart: Stub,
+    LineChart: Stub, PieChart: Stub, Pie: Stub, Cell: () => null,
+    Bar: () => null, Line: () => null, Area: () => null, Legend: () => null,
     XAxis: () => null, YAxis: () => null, Tooltip: () => null, CartesianGrid: () => null,
   };
+
 });
 
 import MCommissions from "../MCommissions";

@@ -571,6 +571,14 @@ export default function MHome() {
         )}
       </section>
 
+      {/* ===== COMMISSIONS (KPI + tendance 6 mois + prêteurs) ===== */}
+      <CommissionHomeCard profile={profile} lang={lang} />
+
+      {/* ===== TÂCHES MAESTRO (aperçu) ===== */}
+      <TasksHomeCard profile={profile} lang={lang} />
+
+
+
       {/* ===== MICROSOFT CALENDAR (month grid + agenda) ===== */}
       <MsCalendarSection
         profile={profile}

@@ -127,6 +127,7 @@ liveChecks();
 
 if (warnings.length > 5) {
   console.warn(`⚠️  ${warnings.length} legacy/skipped checks (showing first 5)`);
+  console.warn("   → détail complet : node scripts/grant-audit.mjs (rapport reports/grant-audit.md)");
   warnings.length = 5;
 }
 for (const w of warnings) console.warn(`⚠️  ${w}`);

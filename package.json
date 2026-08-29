@@ -4,6 +4,7 @@
   "version": "4.0.0",
   "type": "module",
   "scripts": {
+    "report:grants": "node scripts/grant-audit.mjs --quiet",
     "dev": "vite",
     "build": "vite build",
     "postbuild": "node scripts/verify-sip-bundle.mjs && node scripts/security-gate.mjs",

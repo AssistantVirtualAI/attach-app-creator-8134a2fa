@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell,
+  BarChart, Bar, ComposedChart, Line, AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
@@ -132,7 +132,7 @@ export default function MCommissionCharts({
     for (const row of cy) {
       const k = String(row.date_trans ?? "").slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(k)) continue;
-      const r = touch(k.slice(5) ? k : k);
+      const r = touch(k);
       r.cyVolume += numOf(row.loan_amt);
       r.cyCommission += numOf(row.amount);
       r.deals += 1;
@@ -254,7 +254,7 @@ export default function MCommissionCharts({
       </ChartCard>
 
       <ChartCard title={fr ? "Dossiers vs commission par dossier" : "Deals vs commission per deal"} height={200}>
-        <BarChart data={months} margin={{ top: 4, right: 4, left: -14, bottom: 0 }}>
+        <ComposedChart data={months} margin={{ top: 4, right: 4, left: -14, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(155,127,232,0.15)" vertical={false} />
           <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
           <YAxis yAxisId="l" tick={axisTick} axisLine={false} tickLine={false} width={28} />
@@ -263,7 +263,7 @@ export default function MCommissionCharts({
           <Legend wrapperStyle={{ fontSize: 10 }} />
           <Bar yAxisId="l" name={fr ? "Dossiers" : "Deals"} dataKey="deals" fill={COLORS[4]} radius={[4, 4, 0, 0]} />
           <Line yAxisId="r" name={fr ? "Comm./dossier" : "Comm./deal"} type="monotone" dataKey="commPerDeal" stroke={COLORS[3]} strokeWidth={2} dot={{ r: 2 }} />
-        </BarChart>
+        </ComposedChart>
       </ChartCard>
 
       {byType.length > 1 && (

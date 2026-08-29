@@ -93,6 +93,12 @@ function respond(fn: string, opts: any) {
   return Promise.resolve({ data: {}, error: null });
 }
 
+
+/** Compare un montant sans dépendre des espaces insécables de fr-CA. */
+const norm = (s: string) => s.replace(/[\s\u00A0\u202F]/g, "");
+const money = (expected: string) =>
+  screen.getByText((_, el) => !!el && el.children.length === 0 && norm(el.textContent ?? "") === norm(expected));
+
 beforeEach(() => {
   invokeMock.mockReset();
   invokeMock.mockImplementation(respond);
@@ -102,10 +108,10 @@ beforeEach(() => {
 describe("MCommissions (mobile)", () => {
   it("charge le résumé et affiche les KPIs", async () => {
     render(<MCommissions />);
-    await waitFor(() => expect(screen.getByText("$156,282")).toBeInTheDocument());
+    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
     expect(screen.getByText("Dépôts")).toBeInTheDocument();
     expect(screen.getByText("75")).toBeInTheDocument();
-    expect(screen.getByText("$19,277,881")).toBeInTheDocument();
+    expect(money("19 277 881 $")).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledWith(
       "planipret-commission-reports",
       expect.objectContaining({ body: expect.objectContaining({ action: "summary" }) }),
@@ -133,7 +139,7 @@ describe("MCommissions (mobile)", () => {
 
   it("recharge avec une nouvelle fenêtre quand la période change", async () => {
     render(<MCommissions />);
-    await waitFor(() => expect(screen.getByText("$156,282")).toBeInTheDocument());
+    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
     const firstFrom = invokeMock.mock.calls.find((c) => c[1]?.body?.action === "summary")?.[1].body.filters.date_from;
 
     fireEvent.click(screen.getByText("Année en cours"));
@@ -148,7 +154,7 @@ describe("MCommissions (mobile)", () => {
 
   it("pagine les dépôts avec « Charger plus »", async () => {
     render(<MCommissions />);
-    await waitFor(() => expect(screen.getByText("$156,282")).toBeInTheDocument());
+    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
     const more = await screen.findByText(/charger plus/i);
     fireEvent.click(more);
     await waitFor(() =>
@@ -160,7 +166,7 @@ describe("MCommissions (mobile)", () => {
 
   it("ouvre le détail d'un dépôt", async () => {
     render(<MCommissions />);
-    await waitFor(() => expect(screen.getByText("$156,282")).toBeInTheDocument());
+    await waitFor(() => expect(money("156 282 $")).toBeInTheDocument());
     const rows = screen.getAllByText("Desjardins");
     fireEvent.click(rows[0].closest("button")!);
     await waitFor(() => expect(screen.getAllByLabelText("Fermer").length).toBeGreaterThan(0));

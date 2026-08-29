@@ -57,7 +57,7 @@ export default function TasksHomeCard({ profile, lang }: { profile: any; lang?: 
                     ? <AlertCircle className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--pp-danger, #D2445E)" }} />
                     : <Clock className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--pp-text-muted)" }} />}
                   <span className="text-[12.5px] truncate flex-1" style={{ color: "var(--pp-text-primary)" }}>
-                    {task.title || (fr ? "Tâche" : "Task")}
+                    {task.notes || task.description || (fr ? "Tâche" : "Task")}
                   </span>
                   <span className="text-[10.5px] shrink-0" style={{ color: "var(--pp-text-muted)" }}>
                     {formatTaskDue(task.due_at, fr ? "fr" : "en")}

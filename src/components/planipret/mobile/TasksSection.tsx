@@ -284,7 +284,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                           <SyncChip task={task} lang={lang} />
                         </div>
                       }
-                      actions={<>
+                      actions={<span className="contents" style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
                         <IconBtn label={L("Vérifier dans Maestro", "Verify in Maestro")} onClick={() => void checkTask(task.id)}>
                           {verif[task.id] === "loading"
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

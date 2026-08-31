@@ -88,7 +88,7 @@ export default function CommissionHomeCard({ profile, lang }: { profile: any; la
     })().catch(() => { if (!cancelled) setFailed(true); });
 
     return () => { cancelled = true; };
-  }, [allowed, fr]);
+  }, [allowed, fr, profile?.maestro_broker_id]);
 
   const delta = useMemo(() => {
     if (!state || !state.prevTotal) return null;

@@ -293,16 +293,8 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                         <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
                         <IconBtn label={L("Historique", "History")} onClick={() => void openHistory(task)}><History className="w-3.5 h-3.5" /></IconBtn>
                         {!readOnly && <IconBtn label={L("Reporter", "Snooze")} onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /></IconBtn>}
-                        {!readOnly && <IconBtn label={L("Modifier", "Edit")} onClick={() => setComposer({ initial: {
-                          task_id: task.id, notes: task.notes, description: task.description ?? "",
-                          target: task.xid ?? "", target_type: task.type ?? "user",
-                          target_name: task.target_name ?? "",
-                          users_id: task.assignee_ids?.[0] ?? "",
-                          status: task.status ?? undefined,
-                          due_at: toTorontoLocalInput(task.due_at),
-                        } })}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
                         {!readOnly && <IconBtn label={L("Supprimer", "Delete")} danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>}
-                      </>}
+                      </span>}
                     />
                   </li>
 

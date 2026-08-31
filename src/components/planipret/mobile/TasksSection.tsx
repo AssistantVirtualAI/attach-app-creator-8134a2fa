@@ -274,7 +274,6 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                     role={readOnly ? undefined : "button"}
                     aria-label={readOnly ? undefined : L("Modifier la tâche", "Edit task")}
                   >
-                    <div onClick={(e) => e.stopPropagation()} className="contents" style={{ display: "contents" }}>
                     <MaestroTaskRow
                       task={task}
                       lang={lang}

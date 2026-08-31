@@ -156,9 +156,8 @@ export class NativeSipService {
     armAorWatchdog(() => this.registered);
 
     const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
-      // `transport: "tls"` aligns the NS Device object on TLS 5061 — ONE
-      // transport per AOR. Without it the PBX still advertises WSS for `<ext>M`
-      // and never forks inbound calls to the native TLS contact.
+      // Align the NS Device object with the native PJSIP TCP contact — ONE
+      // transport per AOR. `<ext>W` remains the separate WSS browser AOR.
       body: { client_type: "mobile", transport: "tcp" },
     });
 
@@ -174,13 +173,11 @@ export class NativeSipService {
       this.setState("failed");
       return false;
     }
-    // Diagnostic : le resolver DOIT renvoyer `tls`. S'il renvoie `wss`, le
-    // device `<ext>M` reste en WSS 9002 côté PBX et les INVITE n'arrivent
-    // jamais sur PJSIP. On force alors un realignement TLS explicite.
+    // Diagnostic: the resolver must return a native transport, never WSS.
     const resolvedTransport = String(creds.sip_transport ?? "").toLowerCase();
     if (resolvedTransport && resolvedTransport !== "tcp" && resolvedTransport !== "tls") {
       console.warn(
-        `[SIP] ns-resolve-sip-credentials a renvoyé sip_transport="${resolvedTransport}" alors que TLS était demandé — realignement TLS forcé`,
+        `[SIP] ns-resolve-sip-credentials a renvoyé sip_transport="${resolvedTransport}" alors que TCP était demandé — réalignement natif forcé`,
       );
       void this.forceDeviceTlsTransport({ sipPort: 5060, contact: creds.sip_native_uri ?? creds.sip_tcp_uri ?? "" }, true);
     }
@@ -207,7 +204,7 @@ export class NativeSipService {
     try {
       await this.bindListeners(pjsip);
 
-      this.registerTracker = trackRegisterAttempt("TLS");
+      this.registerTracker = trackRegisterAttempt("TCP");
 
       await pjsip.initialize({
         domain: String(creds.sip_domain ?? ""),

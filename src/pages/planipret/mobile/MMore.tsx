@@ -247,6 +247,7 @@ export default function MMore() {
           <Row icon={<Wallet className="w-4 h-4" />} label="Commissions" onClick={() => navigate("/mplanipret/commissions")} chevron />
         )}
         <Row icon={<UsersIcon className="w-4 h-4" />} label={t("more.clientTracking")} onClick={() => navigate("/mplanipret/clients-360")} chevron />
+        <Row icon={<UsersIcon className="w-4 h-4" />} label={t("more.brokerClients") === "more.brokerClients" ? "Clients par courtier" : t("more.brokerClients")} onClick={() => navigate("/mplanipret/brokers-360")} chevron />
 
       </Section>
 

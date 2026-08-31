@@ -40,7 +40,7 @@ export default function PABrokerPerformance() {
       const { data: me } = await supabase.auth.getUser();
       const { data: rows } = await supabase
         .from("planipret_profiles")
-        .select("user_id, full_name, first_name, last_name, maestro_broker_id")
+        .select("user_id, full_name, email, maestro_broker_id")
         .not("maestro_broker_id", "is", null)
         .order("full_name", { ascending: true });
       if (!alive) return;
@@ -52,7 +52,7 @@ export default function PABrokerPerformance() {
         seen.add(id);
         opts.push({
           id, userId: r.user_id ?? null,
-          name: r.full_name || [r.first_name, r.last_name].filter(Boolean).join(" ") || `#${id}`,
+          name: r.full_name || r.email || `#${id}`,
         });
       }
       setBrokers(opts);

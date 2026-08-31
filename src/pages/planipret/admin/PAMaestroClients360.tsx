@@ -28,7 +28,7 @@ export default function PAMaestroClients360() {
       if (alive) setUserId(data.user?.id ?? null);
       const { data: rows } = await supabase
         .from("planipret_profiles")
-        .select("user_id, full_name, first_name, last_name, maestro_broker_id")
+        .select("user_id, full_name, email, maestro_broker_id")
         .not("maestro_broker_id", "is", null)
         .order("full_name", { ascending: true });
       if (!alive) return;
@@ -41,7 +41,7 @@ export default function PAMaestroClients360() {
         opts.push({
           id,
           userId: r.user_id ?? null,
-          name: r.full_name || [r.first_name, r.last_name].filter(Boolean).join(" ") || `#${id}`,
+          name: r.full_name || r.email || `#${id}`,
         });
       }
       setBrokers(opts);

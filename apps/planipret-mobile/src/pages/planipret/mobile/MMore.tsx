@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
-import { Capacitor } from "@capacitor/core";
 import TaskAssignmentDiagnostic from "@/components/planipret/mobile/TaskAssignmentDiagnostic";
 import { ensureAiConsent } from "@/components/planipret/mobile/AiConsentHost";
 import { hasAiConsent, revokeAiConsent } from "@/components/planipret/mobile/AiConsentGate";
+import { Capacitor } from "@capacitor/core";
 import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   User, Lock, Phone, Info, Mail, Bell, Moon, HelpCircle, MessageCircle,
-  LogOut, Trash2, ChevronRight, Bot, Sparkles, X, Download, Shield, BellOff, Settings as SettingsIcon, BarChart3, Voicemail, Edit3, Languages, Search, Wallet, CheckSquare,
+  LogOut, Trash2, ChevronRight, Bot, Sparkles, X, Download, Shield, BellOff, Settings as SettingsIcon, BarChart3, Voicemail, Edit3, Languages,
 } from "lucide-react";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
@@ -26,9 +26,8 @@ import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { openMs365Authorize } from "@/lib/ms365OAuth";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
 import { ppSipProvider, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
-import { Radio } from "lucide-react";
+import { Radio, Wallet, Users as UsersIcon } from "lucide-react";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
-import { retryWithBackoff } from "@/lib/net/resilient";
 
 const initials = (name?: string) =>
   (name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?";
@@ -55,22 +54,13 @@ export default function MMore() {
 
   const loadMs365Detection = async () => {
     setMs365Detection((d) => ({ ...d, loading: true }));
-    try {
-      // Retried: a single cellular timeout used to render Microsoft 365 as
-      // "not configured" even though the account is linked.
-      const { data }: any = await retryWithBackoff(
-        () => supabase.functions.invoke("ms365-status", { body: {} }),
-        { attempts: 3, timeoutMs: 10000, label: "ms365_status" },
-      );
-      const pc = (data as any)?.detection ?? {};
-      setMs365Detection({
-        tenant_id: pc.tenant_id ?? null,
-        client_id: pc.client_id ?? null,
-        loading: false,
-      });
-    } catch {
-      setMs365Detection((d) => ({ ...d, loading: false }));
-    }
+    const { data } = await supabase.functions.invoke("ms365-status", { body: {} });
+    const pc = (data as any)?.detection ?? {};
+    setMs365Detection({
+      tenant_id: pc.tenant_id ?? null,
+      client_id: pc.client_id ?? null,
+      loading: false,
+    });
   };
   useEffect(() => { loadMs365Detection(); }, []);
 
@@ -125,7 +115,7 @@ export default function MMore() {
 
   const reconnectNs = async () => {
     setReconnecting(true);
-    const { data, error, status } = await safeEdgeFunction("ns-resolve-sip-credentials", { body: { client_type: "mobile" } });
+    const { data, error, status } = await safeEdgeFunction("ns-resolve-sip-credentials", { body: { client_type: Capacitor.isNativePlatform() ? "mobile" : "web" } });
     if (error || (data as any)?.success === false || (data as any)?.ok === false || (data as any)?.error) {
       setReconnecting(false);
       toast.error(status === 403 ? t("more.phoneUnauthorized") : ((data as any)?.error ?? error ?? t("more.connectionFailed")));
@@ -149,18 +139,8 @@ export default function MMore() {
   };
 
   const connectMs365 = async () => {
-    let data: any = null;
-    try {
-      const res: any = await retryWithBackoff(
-        () => supabase.functions.invoke("ms365-status", { body: {} }),
-        { attempts: 3, timeoutMs: 10000, label: "ms365_status" },
-      );
-      if (res.error) throw res.error;
-      data = res.data;
-    } catch (error: any) {
-      toast.error(t("screens.more.msInaccessible"), { description: error?.message });
-      return;
-    }
+    const { data, error } = await supabase.functions.invoke("ms365-status", { body: {} });
+    if (error) { toast.error(t("screens.more.msInaccessible"), { description: error.message }); return; }
     const cfg = ((data as any)?.detection ?? {}) as any;
     if (!cfg.client_id) {
       toast.error(t("screens.more.msNotConfigured"));
@@ -194,9 +174,20 @@ export default function MMore() {
 
   const logout = async () => {
     if (!confirm(t("more.logoutConfirm"))) return;
-    await supabase.auth.signOut();
+    // Purge la session locale même si l'appel réseau échoue, sinon l'utilisateur
+    // reste « connecté » et ne peut plus se rebrancher (cas Tania).
+    try { await supabase.auth.signOut({ scope: "local" } as any); } catch { /* ignore */ }
+    try { await supabase.auth.signOut(); } catch { /* ignore */ }
+    try {
+      localStorage.removeItem("pp_maestro_just_connected");
+      localStorage.removeItem("pp_maestro_return_to");
+      localStorage.removeItem("pp_maestro_callback_url");
+      sessionStorage.removeItem("pp_portal_just_signed_in");
+    } catch { /* ignore */ }
     toast.success(t("more.logoutSuccess"));
-    navigate("/login", { replace: true });
+    // Retour à l'écran de connexion de l'app mobile (et non /login du portail),
+    // avec rechargement complet pour repartir d'un état propre.
+    window.location.replace("/mplanipret");
   };
 
   return (
@@ -253,17 +244,10 @@ export default function MMore() {
         <Row icon={<BarChart3 className="w-4 h-4" />} label={t("more.pipelineFiles")} onClick={() => navigate("/mplanipret/pipeline")} chevron />
         <Row icon={<BarChart3 className="w-4 h-4" />} label={t("more.performance")} onClick={() => navigate("/mplanipret/stats")} chevron />
         {(profile?.role === "broker" || profile?.role === "admin") && (
-          <>
-            <Row icon={<Wallet className="w-4 h-4" />}
-              label={lang === "en" ? "My commissions" : "Mes commissions"}
-              sub={lang === "en" ? "Deposits, lenders and charts" : "Dépôts, prêteurs et graphiques"}
-              onClick={() => navigate("/mplanipret/commissions")} chevron />
-            <Row icon={<CheckSquare className="w-4 h-4" />}
-              label={lang === "en" ? "My tasks" : "Mes tâches"}
-              sub={lang === "en" ? "Maestro tasks assigned to you" : "Tâches Maestro qui vous sont assignées"}
-              onClick={() => navigate("/mplanipret/tasks")} chevron />
-          </>
+          <Row icon={<Wallet className="w-4 h-4" />} label="Commissions" onClick={() => navigate("/mplanipret/commissions")} chevron />
         )}
+        <Row icon={<UsersIcon className="w-4 h-4" />} label={t("more.clientTracking")} onClick={() => navigate("/mplanipret/clients-360")} chevron />
+
       </Section>
 
       <Section title={t("more.sections.account")}>
@@ -325,9 +309,6 @@ export default function MMore() {
       </Section>
 
       <Section title={t("more.sections.integrations")}>
-        <Row icon={<Search className="w-4 h-4" style={{ color: "#2E9BDC" }} />} label="Recherche AVA (répertoire unifié)"
-          sub="Cellulaire, entreprise, Maestro, Outlook — journal d'accès"
-          onClick={() => navigate("/mplanipret/directory")} chevron />
         <Row icon={<Info className="w-4 h-4" style={{ color: "#5EC2FF" }} />} label={t("screens.more.connectionsDiagnostic")}
           sub={t("screens.more.integrationsSub")}
           onClick={() => navigate("/mplanipret/connections")} chevron />

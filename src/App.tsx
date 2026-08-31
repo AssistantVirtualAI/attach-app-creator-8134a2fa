@@ -42,6 +42,7 @@ const MStats = lazyWithRetry(() => import("./pages/planipret/mobile/MStats"));
 const MCommissions = lazyWithRetry(() => import("./pages/planipret/mobile/MCommissions"));
 
 const MTasks = lazyWithRetry(() => import("./pages/planipret/mobile/MTasks"));
+const MClients360 = lazyWithRetry(() => import("./pages/planipret/mobile/MClients360"));
 
 const MAvaChat = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaChat"));
 const MChangePassword = lazyWithRetry(() => import("./pages/planipret/mobile/MChangePassword"));
@@ -74,6 +75,7 @@ const PAMaestroScope = lazyWithRetry(() => import("./pages/planipret/admin/PAMae
 const PATasks = lazyWithRetry(() => import("./pages/planipret/admin/PATasks"));
 const PAMaestroTasks = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroTasks"));
 const PABroker360 = lazyWithRetry(() => import("./pages/planipret/admin/PABroker360"));
+const PAMaestroClients360 = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroClients360"));
 const PAMobileApp = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileApp"));
 const PACalls = lazyWithRetry(() => import("./pages/planipret/admin/PACalls"));
 const PAMessages = lazyWithRetry(() => import("./pages/planipret/admin/PAMessages"));
@@ -617,6 +619,7 @@ const App = () => (
                   <Route path="commissions" element={<Suspense fallback={<MobilePageSkeleton />}><MCommissions /></Suspense>} />
 
                   <Route path="tasks" element={<Suspense fallback={<MobilePageSkeleton />}><MTasks /></Suspense>} />
+                  <Route path="clients-360" element={<Suspense fallback={<MobilePageSkeleton />}><MClients360 /></Suspense>} />
                   <Route path="ava" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaChat /></Suspense>} />
 
                   <Route path="change-password" element={<Suspense fallback={<MobilePageSkeleton />}><MChangePassword /></Suspense>} />
@@ -701,6 +704,7 @@ const App = () => (
                   <Route path="tasks" element={<Suspense fallback={<AdminPageSkeleton />}><PATasks /></Suspense>} />
                   <Route path="maestro-tasks" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroTasks /></Suspense>} />
                   <Route path="broker-360" element={<Suspense fallback={<AdminPageSkeleton />}><PABroker360 /></Suspense>} />
+                  <Route path="maestro-clients" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroClients360 /></Suspense>} />
 
                   <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />
                 </Route>

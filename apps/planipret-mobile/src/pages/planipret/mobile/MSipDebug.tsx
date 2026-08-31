@@ -6,6 +6,7 @@ import { ppSipProvider, type PpSipEvent, type PpSipSnapshot } from "@/lib/planip
 import { exportSipStability, getSipStabilityReport, resetSipStability } from "@/lib/planipret/sip/sipStabilityMonitor";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { isPjsipEnabled, nativeOwnsAor, setPjsipEnabled } from "@/lib/planipret/sip/aorArbitration";
+import { nativeSip } from "@/lib/planipret/sip/nativeSipService";
 import { runPjsipRegisterProbe, PJSIP_PROBE_PORT, PJSIP_PROBE_SERVER, type PjsipProbeResult } from "@/lib/native/PpPjsipProbe";
 import CallValidationCard from "@/components/planipret/mobile/CallValidationCard";
 

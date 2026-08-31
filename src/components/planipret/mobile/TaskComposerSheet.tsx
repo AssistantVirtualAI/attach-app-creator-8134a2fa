@@ -34,7 +34,7 @@ interface Props {
   lang: "fr" | "en";
   defaultTarget?: string | null;
   busy?: boolean;
-  initial?: Partial<TaskComposerValue> & { task_id?: string };
+  initial?: Partial<TaskComposerValue> & { task_id?: string; target_name?: string };
   /** Per-field validation errors returned by the gateway (HTTP 422). */
   fieldErrors?: Record<string, string> | null;
   onClose: () => void;
@@ -163,7 +163,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     setTab("quick");
     setPicked(null);
     setClientQuery("");
-    setClientName("");
+    setClientName(initial?.target_name ?? "");
     setSelectedTarget(null);
     requestAnimationFrame(() => {
       if (panelRef.current) panelRef.current.scrollTop = 0;
@@ -185,6 +185,20 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     void getPpContacts("maestro_brokers", { force: true, limit: 500 }).then((v) => { if (alive) setPeople(v || []); }).catch(() => {});
     return () => { alive = false; };
   }, [open, step]);
+
+  // Editing an existing task: resolve the client name from the Maestro
+  // `task_targets` metadata so the sheet shows the name, never the raw xid.
+  useEffect(() => {
+    if (!open || clientName || !target) return;
+    const id = String(target);
+    const match = targets.find(
+      (t) => t.user?.id === id || t.client_id === id || t.contracts.some((c) => String(c.id) === id),
+    );
+    if (match) {
+      setClientName(match.name);
+      setSelectedTarget(match);
+    }
+  }, [open, target, targets, clientName]);
 
   useEffect(() => {
     if (!open) return;

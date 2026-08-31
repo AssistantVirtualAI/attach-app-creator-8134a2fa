@@ -11779,6 +11779,42 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_task_reminders: {
+        Row: {
+          created_at: string
+          due_at: string | null
+          email: string | null
+          id: string
+          kind: string
+          sent_at: string
+          task_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          due_at?: string | null
+          email?: string | null
+          id?: string
+          kind: string
+          sent_at?: string
+          task_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          due_at?: string | null
+          email?: string | null
+          id?: string
+          kind?: string
+          sent_at?: string
+          task_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_tasks_projection: {
         Row: {
           created_at: string

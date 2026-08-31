@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { useOutletContext, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Users, X, Phone, MessageSquare, Mail, RefreshCw } from "lucide-react";
 import { PAPage, PAPageHeader, PATableWrap } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import Pagination from "@/components/planipret/admin/Pagination";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
-import type { BrokerCtx } from "./PlanipretBrokerLayout";
 
 type Client = Record<string, any>;
 
@@ -30,8 +29,12 @@ function Section({ title, rows }: { title: string; rows: [string, any][] }) {
   );
 }
 
-export default function PBMaestroClients() {
-  const { } = useOutletContext<BrokerCtx>();
+export default function PBMaestroClients({ telecomUserId = null, embedded = false }: {
+  /** Admin only: read another broker's Maestro clients (their telecom user id). */
+  telecomUserId?: string | null;
+  /** Hide the page header when rendered inside an admin tab. */
+  embedded?: boolean;
+} = {}) {
   const { lang } = useMplanipretLang();
   const en = lang === "en";
   const [params, setParams] = useSearchParams();
@@ -76,6 +79,7 @@ export default function PBMaestroClients() {
             limit: pageSize,
             offset: (page - 1) * pageSize,
             refresh: reloadKey > 0,
+            ...(telecomUserId ? { user_id: telecomUserId } : {}),
           },
         },
       });
@@ -92,7 +96,7 @@ export default function PBMaestroClients() {
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [page, pageSize, search, reloadKey, en]);
+  }, [page, pageSize, search, reloadKey, en, telecomUserId]);
 
   const openDetail = async (c: Client) => {
     setDetail(c);
@@ -100,7 +104,10 @@ export default function PBMaestroClients() {
     if (!cid) return;
     setDetailLoading(true);
     const { data } = await supabase.functions.invoke("maestro-actions", {
-      body: { action: "client_profile", payload: { client_id: String(cid) } },
+      body: {
+        action: "client_profile",
+        payload: { client_id: String(cid), ...(telecomUserId ? { user_id: telecomUserId } : {}) },
+      },
     });
     const res = data as any;
     if (res?.success && res.profile) setDetail((d) => ({ ...(d ?? {}), ...res.profile }));
@@ -109,11 +116,14 @@ export default function PBMaestroClients() {
 
   return (
     <PAPage>
-      <PAPageHeader
-        icon={<Users className="w-4 h-4" />}
-        title={en ? "Maestro clients" : "Clients Maestro"}
-        subtitle={`${total} ${en ? "clients" : "clients"}`}
-      />
+      {!embedded && (
+        <PAPageHeader
+          icon={<Users className="w-4 h-4" />}
+          title={en ? "Maestro clients" : "Clients Maestro"}
+          subtitle={`${total} ${en ? "clients" : "clients"}`}
+        />
+      )}
+
 
       <div className="pp-card flex flex-wrap gap-2 items-center" style={{ padding: 12 }}>
         <form

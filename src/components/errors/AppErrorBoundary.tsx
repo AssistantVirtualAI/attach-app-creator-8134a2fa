@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, RefreshCw, ArrowLeft } from 'lucide-react';
+import { hardReload } from '@/lib/version';
 
 interface Props {
   children: ReactNode;
@@ -81,6 +82,11 @@ function isEmptyNativeArtifact(raw: unknown): boolean {
   return keys.size === 0 || hasOnlyGeneratedErrorFields;
 }
 
+function isChunkLoadError(error: Error | null): boolean {
+  const message = String(error?.message ?? '');
+  return /Importing a module script failed|Failed to fetch dynamically imported module|ChunkLoadError|error loading dynamically imported module/i.test(message);
+}
+
 export class AppErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
@@ -106,7 +112,7 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   private handleReload = () => {
-    window.location.reload();
+    void hardReload('error-boundary-reload');
   };
 
   private handleGoBack = () => {
@@ -114,6 +120,10 @@ export class AppErrorBoundary extends Component<Props, State> {
   };
 
   private handleReset = () => {
+    if (isChunkLoadError(this.state.error)) {
+      void hardReload('error-boundary-chunk-retry');
+      return;
+    }
     this.setState((state) => ({ hasError: false, error: null, errorInfo: null, retryKey: state.retryKey + 1 }));
   };
 

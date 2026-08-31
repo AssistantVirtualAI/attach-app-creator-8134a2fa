@@ -1,4 +1,5 @@
 import { lazy, type ComponentType } from "react";
+import { hardReload } from "@/lib/version";
 
 /**
  * Wraps React.lazy with a one-time hard reload when a dynamic import fails
@@ -30,8 +31,9 @@ export function lazyWithRetry<T extends ComponentType<any>>(
         try { alreadyTried = sessionStorage.getItem(storageKey) === "1"; } catch {}
         if (!alreadyTried) {
           try { sessionStorage.setItem(storageKey, "1"); } catch {}
-          // Force a full reload to fetch the fresh index.html + new chunk hashes.
-          window.location.reload();
+          // Purge stale service workers/caches before fetching the fresh HTML
+          // and chunk hashes. A plain reload can request the same deleted asset.
+          void hardReload("lazy-chunk-load-failed");
           // Return a never-resolving promise to keep Suspense pending until reload.
           return new Promise<never>(() => {});
         }

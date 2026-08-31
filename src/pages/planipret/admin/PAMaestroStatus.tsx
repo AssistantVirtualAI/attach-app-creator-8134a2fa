@@ -207,6 +207,7 @@ export default function PAMaestroStatus() {
           platform: "web",
           origin: "https://avastatistic.ca",
           redirect_uri: REDIRECT_URI,
+          force: true,
         },
       });
       if (fnErr) throw fnErr;

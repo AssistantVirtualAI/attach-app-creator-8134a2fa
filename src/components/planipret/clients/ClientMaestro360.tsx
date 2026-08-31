@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, ChevronDown, ChevronRight, FolderKanban, Search, Wallet } from "lucide-react";
 import MaestroTaskRow from "@/components/planipret/mobile/MaestroTaskRow";
 import { formatTaskDue, type NormalizedTask } from "@/lib/planipret/tasks";
@@ -6,6 +6,7 @@ import {
   buildClientBundles, fetchClientDeals, fetchClientDeposits,
   type ClientBundle, type ClientDeal, type ClientDeposit,
 } from "@/lib/planipret/clientMaestro";
+import { supabase } from "@/integrations/supabase/client";
 
 const cad = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n || 0);
@@ -34,15 +35,32 @@ export default function ClientMaestro360({
   const [alertsOnly, setAlertsOnly] = useState(false);
 
   const idsKey = userIds.filter(Boolean).sort().join(",");
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const [d, dep] = await Promise.all([fetchClientDeals(idsKey ? idsKey.split(",") : []), fetchClientDeposits()]);
-      if (!alive) return;
-      setDeals(d); setDeposits(dep);
-    })();
-    return () => { alive = false; };
+
+  const load = useCallback(async () => {
+    const [d, dep] = await Promise.all([
+      fetchClientDeals(idsKey ? idsKey.split(",") : []),
+      fetchClientDeposits(),
+    ]);
+    setDeals(d); setDeposits(dep);
   }, [idsKey]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  // Temps réel : les dossiers et dépôts se rafraîchissent dès que Maestro
+  // pousse une modification (même logique que les tâches).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const bump = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void load(); }, 600);
+    };
+    const ch = supabase
+      .channel(`pp-clients-360-rt-${idsKey || "self"}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_pipeline" }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_commission_register" }, bump)
+      .subscribe();
+    return () => { if (timer) clearTimeout(timer); void supabase.removeChannel(ch); };
+  }, [load, idsKey]);
 
   const bundles = useMemo(() => buildClientBundles(tasks, deals, deposits), [tasks, deals, deposits]);
 

@@ -16,6 +16,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const APP_BASE = (Deno.env.get("PLANIPRET_APP_BASE_URL") ?? "https://avastatistic.ca").replace(/\/$/, "");
 const TASKS_URL = `${APP_BASE}/mplanipret/tasks`;
+const CLIENTS_URL = `${APP_BASE}/mplanipret/clients-360`;
 
 /** Tasks due within this window trigger the "due soon" reminder. */
 const DUE_SOON_HOURS = 24;
@@ -35,21 +36,28 @@ function fmtDue(due: string | null): string {
   } catch { return due; }
 }
 
-function buildHtml(opts: { firstName: string; kind: "overdue" | "due_soon"; title: string; due: string | null; notes: string }) {
+function buildHtml(opts: {
+  firstName: string;
+  kind: "overdue" | "due_soon";
+  client: string;
+  tasks: { title: string; due: string | null; notes: string; overdue: boolean }[];
+}) {
   const overdue = opts.kind === "overdue";
   const accent = overdue ? "#DC2626" : "#1A4A8A";
-  const badge = overdue ? "Tâche en retard" : "Échéance dans moins de 24 h";
+  const badge = overdue ? "Tâches en retard" : "Échéances dans moins de 24 h";
+  const items = opts.tasks.map((t) => `
+  <div style="padding:12px;border:1px solid #E2E8F0;border-radius:10px;background:#F8FAFC;margin-bottom:8px">
+    <p style="margin:0 0 6px;font-weight:700">${t.title}${t.overdue ? ' <span style="color:#DC2626;font-size:11px">(en retard)</span>' : ""}</p>
+    <p style="margin:0;font-size:13px;color:#475569">Échéance&nbsp;: <strong>${fmtDue(t.due)}</strong></p>
+    ${t.notes ? `<p style="margin:8px 0 0;font-size:13px;color:#475569">${t.notes}</p>` : ""}
+  </div>`).join("");
   return `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:auto;padding:24px;color:#1A2540;background:#ffffff">
 <p style="display:inline-block;margin:0 0 12px;padding:6px 12px;border-radius:999px;background:${accent}1A;color:${accent};font-weight:700;font-size:12px">${badge}</p>
 <h2 style="color:${accent};margin:0 0 8px">Bonjour ${opts.firstName || ""},</h2>
-<p style="margin:0 0 16px">Rappel concernant une tâche Maestro&nbsp;:</p>
-<div style="padding:14px;border:1px solid #E2E8F0;border-radius:10px;background:#F8FAFC">
-  <p style="margin:0 0 6px;font-weight:700">${opts.title}</p>
-  <p style="margin:0;font-size:13px;color:#475569">Échéance&nbsp;: <strong>${fmtDue(opts.due)}</strong></p>
-  ${opts.notes ? `<p style="margin:8px 0 0;font-size:13px;color:#475569">${opts.notes}</p>` : ""}
-</div>
-<p style="margin:22px 0"><a href="${TASKS_URL}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700">Ouvrir mes tâches dans l'app</a></p>
-<p style="font-size:12px;color:#6B7280">Lien direct&nbsp;: <a href="${TASKS_URL}" style="color:${accent}">${TASKS_URL}</a></p>
+<p style="margin:0 0 16px">Client&nbsp;: <strong>${opts.client}</strong> — ${opts.tasks.length} tâche(s) à traiter&nbsp;:</p>
+${items}
+<p style="margin:22px 0"><a href="${CLIENTS_URL}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700">Ouvrir le suivi par client</a></p>
+<p style="font-size:12px;color:#6B7280">Lien direct&nbsp;: <a href="${CLIENTS_URL}" style="color:${accent}">${CLIENTS_URL}</a> · <a href="${TASKS_URL}" style="color:${accent}">toutes mes tâches</a></p>
 <p style="font-size:12px;color:#6B7280;margin-top:28px">— L'équipe Planiprêt</p>
 </body></html>`;
 }
@@ -127,7 +135,15 @@ Deno.serve(async (req) => {
   const already = new Set((sentRows ?? []).map((r: any) => `${r.user_id}|${r.task_id}|${r.kind}`));
 
   let sent = 0, skipped = 0;
-  const failures: { task_id: string; error: string }[] = [];
+  const failures: { client: string; error: string }[] = [];
+
+  const clientOf = (payload: any): string =>
+    String(payload?.target_name || payload?.client_name || payload?.contact_name
+      || payload?.customer_name || "Client Maestro").trim() || "Client Maestro";
+
+  // One digest per broker AND per Maestro client.
+  type Item = { task_id: string; due: string; kind: "overdue" | "due_soon"; title: string; notes: string };
+  const groups = new Map<string, { user_id: string; client: string; items: Item[] }>();
 
   for (const row of candidates as any[]) {
     const due = row.due_at as string;
@@ -135,30 +151,46 @@ Deno.serve(async (req) => {
     const key = `${row.user_id}|${row.task_id}|${kind}`;
     if (already.has(key)) { skipped += 1; continue; }
 
-    const prof = byId.get(String(row.user_id));
-    const to = String(prof?.email || prof?.ms365_email || "").trim();
-    if (!to) { skipped += 1; continue; }
-
     const payload = row.payload ?? {};
-    const title = String(payload.title || payload.subject || payload.notes || "Tâche Maestro").slice(0, 120);
-    const notes = String(payload.notes ?? "").slice(0, 300);
+    const client = clientOf(payload);
+    const gk = `${row.user_id}|${client.toLowerCase()}`;
+    const g = groups.get(gk) ?? { user_id: String(row.user_id), client, items: [] };
+    g.items.push({
+      task_id: String(row.task_id),
+      due, kind,
+      title: String(payload.title || payload.subject || payload.notes || "Tâche Maestro").slice(0, 120),
+      notes: String(payload.notes ?? "").slice(0, 300),
+    });
+    groups.set(gk, g);
+  }
+
+  for (const g of groups.values()) {
+    const prof = byId.get(g.user_id);
+    const to = String(prof?.email || prof?.ms365_email || "").trim();
+    if (!to) { skipped += g.items.length; continue; }
+
+    const anyOverdue = g.items.some((i) => i.kind === "overdue");
+    const kind: "overdue" | "due_soon" = anyOverdue ? "overdue" : "due_soon";
     const firstName = String(prof?.first_name || String(prof?.full_name ?? "").split(" ")[0] || "");
-    const subject = kind === "overdue"
-      ? `⏰ Tâche en retard — ${title}`
-      : `📌 Échéance demain — ${title}`;
+    const subject = anyOverdue
+      ? `⏰ ${g.client} — ${g.items.length} tâche(s) en retard`
+      : `📌 ${g.client} — échéance dans moins de 24 h`;
 
-    if (dryRun) { sent += 1; already.add(key); continue; }
+    if (dryRun) { sent += 1; for (const i of g.items) already.add(`${g.user_id}|${i.task_id}|${i.kind}`); continue; }
 
-    const res = await sendEmail(to, subject, buildHtml({ firstName, kind, title, due, notes }));
-    if (!res.ok) { failures.push({ task_id: row.task_id, error: res.error ?? "send_failed" }); continue; }
+    const res = await sendEmail(to, subject, buildHtml({
+      firstName, kind, client: g.client,
+      tasks: g.items.map((i) => ({ title: i.title, due: i.due, notes: i.notes, overdue: i.kind === "overdue" })),
+    }));
+    if (!res.ok) { failures.push({ client: g.client, error: res.error ?? "send_failed" }); continue; }
 
     await admin.from("planipret_task_reminders").upsert(
-      { user_id: row.user_id, task_id: String(row.task_id), kind, due_at: due, email: to },
+      g.items.map((i) => ({ user_id: g.user_id, task_id: i.task_id, kind: i.kind, due_at: i.due, email: to })),
       { onConflict: "user_id,task_id,kind" },
     );
-    already.add(key);
+    for (const i of g.items) already.add(`${g.user_id}|${i.task_id}|${i.kind}`);
     sent += 1;
   }
 
-  return json({ success: true, scanned: candidates.length, sent, skipped, failures, dry_run: dryRun });
+  return json({ success: true, scanned: candidates.length, clients: sent, sent, skipped, failures, dry_run: dryRun });
 });

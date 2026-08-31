@@ -409,8 +409,12 @@ export async function handleTaskRequest(
       } catch { /* keep null */ }
     }
 
-    const upstream = telecomId && token
-      ? await deps.listFetch(telecomId, { status, from, to })
+    // The official Task List endpoint scopes `users_id` with the Maestro CRM
+    // broker id. `maestro_telecom_user_id` is only a legacy fallback for
+    // accounts that have no broker id yet (the two values often differ).
+    const listOwnerId = maestroId ?? telecomId;
+    const upstream = listOwnerId && token
+      ? await deps.listFetch(listOwnerId, { status, from, to })
       : { ok: false as const, tasks: [] as any[], endpoint: null, status: 0 };
 
     let all: any[];

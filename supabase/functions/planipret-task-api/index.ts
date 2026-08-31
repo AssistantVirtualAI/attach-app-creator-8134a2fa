@@ -64,6 +64,28 @@ function makeApiFetch(token: string | null) {
  */
 let noUpstreamListUntil = 0; // negative cache: upstream exposes no GET (404/405)
 
+/** Maestro may return a plain array or a Laravel-style paginated envelope. */
+function extractTaskRows(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+  const candidates = [
+    payload.tasks,
+    payload.items,
+    payload.results,
+    payload.data,
+    payload.data?.tasks,
+    payload.data?.items,
+    payload.data?.results,
+    payload.data?.data,
+    payload.response?.data,
+    payload.response?.tasks,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+}
+
 function makeListFetch(token: string | null) {
   return async (
     maestroId: string,
@@ -110,8 +132,7 @@ function makeListFetch(token: string | null) {
         }
         allMissing = false;
         const j = await res.json().catch(() => null);
-        const raw = Array.isArray(j) ? j : (j?.data ?? j?.tasks ?? j?.items ?? []);
-        const tasks = (Array.isArray(raw) ? raw : []).map(normalizeTask).filter((t: any) => t.id);
+        const tasks = extractTaskRows(j).map(normalizeTask).filter((t: any) => t.id);
         const out = { ok: true, tasks, endpoint: url.split("?")[0], status: res.status };
         if (tasks.length) return out;
         // 200 but empty: remember it and keep probing the other shapes.

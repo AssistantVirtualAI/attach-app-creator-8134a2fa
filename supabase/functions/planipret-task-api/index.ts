@@ -83,6 +83,23 @@ function extractTaskRows(payload: any): any[] {
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) return candidate;
   }
+  // Some Maestro deployments wrap paginator data more than once
+  // (`data.data`, `data.tasks.data`, `response.data.items`, ...). Walk only
+  // conventional envelope keys so unrelated metadata arrays cannot be tasks.
+  const envelopeKeys = ["data", "tasks", "items", "results", "response", "payload"];
+  const seen = new Set<any>();
+  const walk = (value: any, depth: number): any[] => {
+    if (Array.isArray(value)) return value;
+    if (!value || typeof value !== "object" || depth > 5 || seen.has(value)) return [];
+    seen.add(value);
+    for (const key of envelopeKeys) {
+      const found = walk(value[key], depth + 1);
+      if (found.length) return found;
+    }
+    return [];
+  };
+  const nested = walk(payload, 0);
+  if (nested.length) return nested;
   return [];
 }
 

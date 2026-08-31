@@ -446,6 +446,7 @@ export async function handleTaskRequest(
         success: true,
         source: src,
         maestro_user_id: maestroId,
+        scoped_broker_id: overrideBroker,
         telecom_user_id: telecomId,
         endpoint: upstream.endpoint,
         filter,

@@ -272,6 +272,31 @@ export default function PABrokerPerformance() {
               </LineChart>
             </ResponsiveContainer>
           </Panel>
+
+          <Panel title={L("Appels", "Calls")} style={surface}>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-3">
+              <Kpi label={L("Appels (12 mois)", "Calls (12 months)")} value={String(callStats.total)} style={surface} />
+              <Kpi
+                label={L("Durée moyenne", "Average duration")}
+                value={callStats.avgSecs ? `${Math.floor(callStats.avgSecs / 60)}m ${Math.round(callStats.avgSecs % 60)}s` : "—"}
+                style={surface}
+              />
+              <Kpi label={L("Manqués", "Missed")} value={String(callStats.missed)} tone={callStats.missed ? "#B91C1C" : undefined} style={surface} />
+              <Kpi label={L("Tâches liées", "Linked tasks")} value={String(callStats.linkedTasks)} style={surface} />
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={callStats.monthlyCalls}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="calls" name={L("Appels", "Calls")} fill="var(--pp-brand-accent)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="avgMin" name={L("Durée moy. (min)", "Avg duration (min)")} fill="#F59E0B" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Panel>
+
         </div>
       )}
     </PAPage>

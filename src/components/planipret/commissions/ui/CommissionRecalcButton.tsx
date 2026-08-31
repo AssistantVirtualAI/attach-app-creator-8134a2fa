@@ -30,15 +30,13 @@ export default function CommissionRecalcButton({
       const { data, error } = await supabase.functions.invoke("pp-maestro-commissions-sync", {
         // "Recalculer" = reconstruction complète : on force un import intégral
         // (non incrémental) pour re-clé et corriger aussi les lignes anciennes.
-        body: { mode: scope === "admin" ? "all" : "self", full: true },
+        // Portée volontairement limitée au compte courant, même pour un admin :
+        // chaque courtier connecte son propre Maestro et importe ses données.
+        body: { mode: "self", full: true },
         headers,
       });
       if (error) throw error;
       if ((data as any)?.success === false) throw new Error((data as any)?.error ?? "sync_failed");
-
-      if (scope === "admin") {
-        await supabase.functions.invoke("pp-commission-live-sync", { body: {}, headers }).catch(() => null);
-      }
 
       const written = (data as any)?.written ?? 0;
       toast.success(isFr ? "Totaux recalculés" : "Totals recalculated", {

@@ -194,9 +194,14 @@ function NativeEngineCard() {
   const repair = async () => {
     setRepairing(true);
     try {
-      const ok = await nativeSip.repairRegistration();
+      const ok = await Promise.race([
+        nativeSip.repairRegistration(),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 35_000)),
+      ]);
       refresh();
-      ok ? toast.success("Moteur natif enregistré") : toast.error("Réparation échouée — voir le journal");
+      ok
+        ? toast.success("Moteur natif enregistré")
+        : toast.error("Le SIP ne s’est pas enregistré. Vérifiez le réseau puis réessayez.");
     } catch (e: any) {
       toast.error(e?.message ?? "Réparation échouée");
     } finally {

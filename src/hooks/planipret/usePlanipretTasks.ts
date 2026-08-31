@@ -39,7 +39,16 @@ export interface UsePlanipretTasks {
   remove: (taskId: string) => Promise<any>;
 }
 
-export function usePlanipretTasks(userId: string | null | undefined): UsePlanipretTasks {
+export interface UsePlanipretTasksOptions {
+  /** Admin only: scope the list to another broker's Maestro id (read-only). */
+  brokerId?: string | null;
+}
+
+export function usePlanipretTasks(
+  userId: string | null | undefined,
+  options: UsePlanipretTasksOptions = {},
+): UsePlanipretTasks {
+  const brokerId = options.brokerId ?? null;
   const [tasks, setTasks] = useState<NormalizedTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,16 +83,16 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
 
   // Paint the per-user cache immediately.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || brokerId) return;
     const cached = loadTaskCache(userId);
     if (cached.length) { setTasks(cached); setLoading(false); }
-  }, [userId]);
+  }, [userId, brokerId]);
 
   const refresh = useCallback(async () => {
     if (!userId) return;
     const gen = ++generation.current;
     setRefreshing(true);
-    const res = await listTasks({ status: "pending", filter, page: 1, limit: PAGE_SIZE });
+    const res = await listTasks({ status: "pending", filter, page: 1, limit: PAGE_SIZE, broker_id: brokerId });
     if (gen !== generation.current) return; // stale identity/response
     setRefreshing(false);
     setLoading(false);
@@ -97,21 +106,21 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
     if (res.success && res.source !== "unavailable") {
       const merged = mergePending(res.tasks);
       setTasks(merged);
-      saveTaskCache(userId, merged);
+      if (!brokerId) saveTaskCache(userId, merged);
     } else if (res.source === "unavailable") {
       // Planiprêt exposes no upstream GET: never wipe what we already know.
       const fallback = mergePending(loadTaskCache(userId));
       setTasks(fallback);
       if (!fallback.length) clearTaskCache(userId);
     }
-  }, [userId, filter, mergePending]);
+  }, [userId, filter, brokerId, mergePending]);
 
   const loadMore = useCallback(async () => {
     if (!userId || !hasMore || loadingMore) return;
     const gen = generation.current;
     setLoadingMore(true);
     const next = page + 1;
-    const res = await listTasks({ status: "pending", filter, page: next, limit: PAGE_SIZE });
+    const res = await listTasks({ status: "pending", filter, page: next, limit: PAGE_SIZE, broker_id: brokerId });
     setLoadingMore(false);
     if (gen !== generation.current) return;
     if (!res.success) return;
@@ -123,7 +132,7 @@ export function usePlanipretTasks(userId: string | null | undefined): UsePlanipr
       const seen = new Set(cur.map((t) => t.id));
       return [...cur, ...res.tasks.filter((t) => !seen.has(t.id))];
     });
-  }, [userId, filter, page, hasMore, loadingMore]);
+  }, [userId, filter, brokerId, page, hasMore, loadingMore]);
 
   const setFilter = useCallback((f: TaskFilterValue) => {
     setFilterState(f);

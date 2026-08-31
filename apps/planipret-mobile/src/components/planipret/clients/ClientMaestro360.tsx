@@ -186,8 +186,14 @@ export default function ClientMaestro360({
                                 <span style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>
                                   {c.started_at ? new Date(c.started_at).toLocaleString(en ? "en-CA" : "fr-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Toronto" }) : "—"}
                                 </span>
+                                <span>{c.status || (out ? L("sortant", "outbound") : L("entrant", "inbound"))}</span>
                                 <span>{missed ? L("manqué", "missed") : `${Math.floor(secs / 60)}m ${secs % 60}s`}</span>
                                 <span>{out ? (c.to_number ?? "—") : (c.from_number ?? "—")}</span>
+                                {c.recording_url && (
+                                  <a href={c.recording_url} target="_blank" rel="noreferrer" className="underline" style={{ color: "var(--pp-brand-accent)" }}>
+                                    {L("enregistrement", "recording")}
+                                  </a>
+                                )}
                               </span>
                               {c.ai_summary && <span className="block break-words">{c.ai_summary}</span>}
                             </li>

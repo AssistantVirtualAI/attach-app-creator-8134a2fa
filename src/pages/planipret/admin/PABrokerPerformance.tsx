@@ -140,9 +140,47 @@ export default function PABrokerPerformance() {
     return spans.reduce((s, v) => s + v, 0) / spans.length;
   }, [tasks]);
 
+  /** Appels par mois (12 mois) + durée moyenne et tâches liées par client. */
+  const callStats = useMemo(() => {
+    const map = new Map<string, { month: string; calls: number; avgMin: number; _secs: number; _answered: number }>();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(); d.setMonth(d.getMonth() - i, 1);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      map.set(k, { month: k.slice(2), calls: 0, avgMin: 0, _secs: 0, _answered: 0 });
+    }
+    let secs = 0, answered = 0, missed = 0;
+    const clients = new Set<string>();
+    for (const c of calls) {
+      const d = new Date(c.started_at);
+      if (!Number.isFinite(d.getTime())) continue;
+      const row = map.get(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      const s = Number(c.duration_seconds ?? 0);
+      const isMissed = c.direction === "missed" || c.status === "missed" || c.status === "no-answer";
+      if (isMissed) missed += 1; else { secs += s; answered += 1; }
+      if (row) { row.calls += 1; if (!isMissed) { row._secs += s; row._answered += 1; } }
+      for (const n of [c.from_name, c.to_name]) {
+        const k = String(n ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+        if (k) clients.add(k);
+      }
+    }
+    const monthlyCalls = [...map.values()].map((r) => ({
+      ...r, avgMin: r._answered ? Math.round((r._secs / r._answered / 60) * 10) / 10 : 0,
+    }));
+    const linkedTasks = tasks.filter((t) => {
+      const p = (t.payload ?? {}) as any;
+      const k = String(p.target_name || p.client_name || p.contact_name || "").trim().toLowerCase().replace(/\s+/g, " ");
+      return k ? clients.has(k) : false;
+    }).length;
+    return {
+      monthlyCalls, total: calls.length, missed, linkedTasks,
+      avgSecs: answered ? secs / answered : 0,
+    };
+  }, [calls, tasks]);
+
   const openTasks = tasks.filter((t) => !DONE.has(String(t.status ?? "").toLowerCase())).length;
   const overdue = tasks.filter((t) => !DONE.has(String(t.status ?? "").toLowerCase()) && t.due_at && new Date(t.due_at) < new Date()).length;
   const commissionTotal = yearly.reduce((s, y) => s + y.total, 0);
+
 
   const surface = { background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" };
 

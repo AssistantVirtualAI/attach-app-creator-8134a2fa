@@ -149,9 +149,17 @@ export class NativeSipService {
       this.extension = aorExtension(snapshot.username);
       claimAorForNative(snapshot.username, "manual_repair_existing_account");
       await this.bindListeners(pjsip);
-      await withNativeTimeout(pjsip.register(), "sip_reregister");
+      await withNativeTimeout(pjsip.register(), "sip_reregister").catch((error) => {
+        console.error("[SIP] réenregistrement natif échoué:", error);
+      });
       const registered = await this.waitForRegistration(25_000);
       if (registered) return true;
+
+      // Ne pas lancer ensuite une initialisation complète : sur un compte natif
+      // déjà présent, cela doublait l'attente et laissait le bouton tourner
+      // jusqu'à 80 secondes. Le prochain essai repartira du snapshot réel.
+      this.setState("failed");
+      return false;
     }
 
     return withNativeTimeout(this.initialize(), "sip_initialize", 55_000);

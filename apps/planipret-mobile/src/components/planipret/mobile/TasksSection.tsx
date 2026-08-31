@@ -271,6 +271,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                         {!readOnly && <IconBtn label={L("Modifier", "Edit")} onClick={() => setComposer({ initial: {
                           task_id: task.id, notes: task.notes, description: task.description ?? "",
                           target: task.xid ?? "", target_type: task.type ?? "user",
+                          target_name: task.target_name ?? "",
                           users_id: task.assignee_ids?.[0] ?? "",
                           status: task.status ?? undefined,
                           due_at: toTorontoLocalInput(task.due_at),

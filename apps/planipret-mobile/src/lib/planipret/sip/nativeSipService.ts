@@ -143,7 +143,10 @@ export class NativeSipService {
     }
 
     // An account can survive a WebView reload while the JS singleton loses its
-    // state. Refresh that existing account instead of rebuilding/deleting it.
+    // state. Try one quick REGISTER first. If it does not recover, rebuild the
+    // native account with freshly resolved credentials: keeping a stale native
+    // account was the reason the repair button could finish without ever
+    // registering after a Microsoft logout/login or credential rotation.
     if (snapshot?.available && snapshot.username) {
       this.username = snapshot.username;
       this.extension = aorExtension(snapshot.username);
@@ -152,14 +155,18 @@ export class NativeSipService {
       await withNativeTimeout(pjsip.register(), "sip_reregister").catch((error) => {
         console.error("[SIP] réenregistrement natif échoué:", error);
       });
-      const registered = await this.waitForRegistration(25_000);
+      const registered = await this.waitForRegistration(18_000);
       if (registered) return true;
 
-      // Ne pas lancer ensuite une initialisation complète : sur un compte natif
-      // déjà présent, cela doublait l'attente et laissait le bouton tourner
-      // jusqu'à 80 secondes. Le prochain essai repartira du snapshot réel.
-      this.setState("failed");
-      return false;
+      try { await withNativeTimeout(pjsip.unregister(), "sip_unregister_stale", 5_000); } catch { /* best effort */ }
+      this.registered = false;
+      this.retryCount = 0;
+      this.setState("unregistered");
+      return withNativeTimeout(this.doInitializeInner(), "sip_reinitialize", 50_000).catch((error) => {
+        console.error("[SIP] reconstruction du compte natif échouée:", error);
+        this.setState("failed");
+        return false;
+      });
     }
 
     return withNativeTimeout(this.initialize(), "sip_initialize", 55_000);

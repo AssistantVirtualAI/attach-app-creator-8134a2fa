@@ -196,7 +196,7 @@ function NativeEngineCard() {
     try {
       const ok = await Promise.race([
         nativeSip.repairRegistration(),
-        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 35_000)),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 55_000)),
       ]);
       refresh();
       ok

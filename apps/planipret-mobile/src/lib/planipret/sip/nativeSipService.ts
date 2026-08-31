@@ -21,7 +21,7 @@ import { trackRegisterAttempt, logRegisterMetricsSummary, type RegisterTracker }
  * Les identifiants sont résolus par courtier via l'Edge Function
  * `ns-resolve-sip-credentials` (client_type: "mobile") — aucune valeur en dur.
  *
- * Transport : TCP 5060 (défaut mobile, TLS 5061 optionnel). Aucune pile SIP native n'implémente SIP
+ * Transport : TLS 5061 pour le moteur mobile natif. Aucune pile SIP native n'implémente SIP
  * over WebSocket (RFC 7118) ; WSS 9002 reste réservé à JsSIP dans la WebView.
  *
  * Invariant d'AOR : une seule pile REGISTER sur `<ext>M`. Dès que le moteur
@@ -205,9 +205,9 @@ export class NativeSipService {
     armAorWatchdog(() => this.registered);
 
     const { data, error } = await withNativeTimeout(supabase.functions.invoke("ns-resolve-sip-credentials", {
-      // Align the NS Device object with the native PJSIP TCP contact — ONE
+      // Align the NS Device object with the native PJSIP TLS contact — ONE
       // transport per AOR. `<ext>W` remains the separate WSS browser AOR.
-      body: { client_type: "mobile", transport: "tcp" },
+      body: { client_type: "mobile", transport: "tls" },
     }), "sip_credentials");
 
     const creds = (data ?? {}) as Record<string, string>;
@@ -226,9 +226,9 @@ export class NativeSipService {
     const resolvedTransport = String(creds.sip_transport ?? "").toLowerCase();
     if (resolvedTransport && resolvedTransport !== "tcp" && resolvedTransport !== "tls") {
       console.warn(
-        `[SIP] ns-resolve-sip-credentials a renvoyé sip_transport="${resolvedTransport}" alors que TCP était demandé — réalignement natif forcé`,
+        `[SIP] ns-resolve-sip-credentials a renvoyé sip_transport="${resolvedTransport}" alors que TLS était demandé — réalignement natif forcé`,
       );
-      void this.forceDeviceTlsTransport({ sipPort: 5060, contact: creds.sip_native_uri ?? creds.sip_tcp_uri ?? "" }, true);
+      void this.forceDeviceTlsTransport({ sipPort: 5061, contact: creds.sip_native_uri ?? creds.sip_tls_uri ?? "" }, true);
     }
 
 
@@ -245,15 +245,15 @@ export class NativeSipService {
     if (rawProxy && !rawProxy.includes(proxy)) {
       console.warn("[SIP] core-server", rawProxy, "rejeté (portail/non-core) → épinglé", proxy);
     }
-    const transport = "TCP" as const;
-    const port = 5060;
+    const transport = "TLS" as const;
+    const port = 5061;
 
     console.log("[SIP] Init moteur natif:", username, transport, proxy, port);
 
     try {
       await this.bindListeners(pjsip);
 
-      this.registerTracker = trackRegisterAttempt("TCP");
+    this.registerTracker = trackRegisterAttempt("TLS");
 
       await withNativeTimeout(pjsip.initialize({
         domain: String(creds.sip_domain ?? ""),
@@ -349,7 +349,7 @@ export class NativeSipService {
   private tlsProvisionInFlight = false;
 
   private async forceDeviceTlsTransport(payload?: any, urgent = false): Promise<void> {
-    const port = Number(payload?.sipPort ?? 5060);
+    const port = Number(payload?.sipPort ?? 5061);
     const contact = String(payload?.contact ?? "").trim();
     const registrationServer = String(payload?.registrationServer ?? payload?.server ?? "").trim();
     // Garde : un contact vide produit `sip:@` côté NetSapiens, ce qui casse le
@@ -363,7 +363,7 @@ export class NativeSipService {
     // Idempotence : chaque reprovisioning provoque un cycle Expires:0 côté
     // NetSapiens, fenêtre pendant laquelle les appels partent en messagerie.
     // On ne réécrit que si le contact/port TLS a réellement changé.
-    const signature = `tcp:${port}:${contact}`;
+    const signature = `tls:${port}:${contact}`;
     if (this.lastTlsProvisionSignature === signature && this.lastTlsProvisionOk) {
       if (!urgent) return;
       // Même en urgence, on ne réécrit pas plus d'une fois par minute.

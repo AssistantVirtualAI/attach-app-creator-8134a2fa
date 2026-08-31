@@ -40,27 +40,34 @@ function buildHtml(opts: {
   firstName: string;
   kind: "overdue" | "due_soon";
   client: string;
+  clientUrl: string;
+  lastCall: { at: string | null; days: number | null };
   tasks: { title: string; due: string | null; notes: string; overdue: boolean }[];
 }) {
   const overdue = opts.kind === "overdue";
   const accent = overdue ? "#DC2626" : "#1A4A8A";
-  const badge = overdue ? "Tâches en retard" : "Échéances dans moins de 24 h";
+  const badge = overdue ? "Appels et tâches en retard" : "Appels et échéances dans moins de 24 h";
   const items = opts.tasks.map((t) => `
   <div style="padding:12px;border:1px solid #E2E8F0;border-radius:10px;background:#F8FAFC;margin-bottom:8px">
     <p style="margin:0 0 6px;font-weight:700">${t.title}${t.overdue ? ' <span style="color:#DC2626;font-size:11px">(en retard)</span>' : ""}</p>
     <p style="margin:0;font-size:13px;color:#475569">Échéance&nbsp;: <strong>${fmtDue(t.due)}</strong></p>
     ${t.notes ? `<p style="margin:8px 0 0;font-size:13px;color:#475569">${t.notes}</p>` : ""}
   </div>`).join("");
+  const callLine = opts.lastCall.at
+    ? `Dernier appel&nbsp;: <strong>${fmtDue(opts.lastCall.at)}</strong>${opts.lastCall.days !== null ? ` (il y a ${opts.lastCall.days} jour(s))` : ""}`
+    : "Aucun appel enregistré avec ce client.";
   return `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:auto;padding:24px;color:#1A2540;background:#ffffff">
 <p style="display:inline-block;margin:0 0 12px;padding:6px 12px;border-radius:999px;background:${accent}1A;color:${accent};font-weight:700;font-size:12px">${badge}</p>
 <h2 style="color:${accent};margin:0 0 8px">Bonjour ${opts.firstName || ""},</h2>
-<p style="margin:0 0 16px">Client&nbsp;: <strong>${opts.client}</strong> — ${opts.tasks.length} tâche(s) à traiter&nbsp;:</p>
+<p style="margin:0 0 8px">Client&nbsp;: <strong>${opts.client}</strong> — ${opts.tasks.length} tâche(s) à traiter&nbsp;:</p>
+<p style="margin:0 0 16px;font-size:13px;color:#475569">${callLine}</p>
 ${items}
-<p style="margin:22px 0"><a href="${CLIENTS_URL}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700">Ouvrir le suivi par client</a></p>
-<p style="font-size:12px;color:#6B7280">Lien direct&nbsp;: <a href="${CLIENTS_URL}" style="color:${accent}">${CLIENTS_URL}</a> · <a href="${TASKS_URL}" style="color:${accent}">toutes mes tâches</a></p>
+<p style="margin:22px 0"><a href="${opts.clientUrl}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700">Ouvrir le suivi de ce client</a></p>
+<p style="font-size:12px;color:#6B7280">Lien direct&nbsp;: <a href="${opts.clientUrl}" style="color:${accent}">${opts.clientUrl}</a> · <a href="${CLIENTS_URL}" style="color:${accent}">tous mes clients</a> · <a href="${TASKS_URL}" style="color:${accent}">toutes mes tâches</a></p>
 <p style="font-size:12px;color:#6B7280;margin-top:28px">— L'équipe Planiprêt</p>
 </body></html>`;
 }
+
 
 async function sendEmail(to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch("https://api.resend.com/emails", {

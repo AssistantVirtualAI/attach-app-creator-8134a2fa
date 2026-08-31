@@ -32,7 +32,9 @@ export default function PABrokerPerformance() {
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<any[]>([]);
   const [commissions, setCommissions] = useState<any[]>([]);
+  const [calls, setCalls] = useState<any[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
+
 
   useEffect(() => {
     let alive = true;

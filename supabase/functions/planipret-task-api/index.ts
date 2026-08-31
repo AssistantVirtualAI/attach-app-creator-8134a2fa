@@ -150,6 +150,13 @@ function makeListFetch(token: string | null) {
         allMissing = false;
         const j = await res.json().catch(() => null);
         const tasks = extractTaskRows(j).map(normalizeTask).filter((t: any) => t.id);
+        console.info("[planipret-task-api] list probe", {
+          endpoint: url.split("?")[0],
+          maestroId,
+          status: res.status,
+          topLevelKeys: j && typeof j === "object" && !Array.isArray(j) ? Object.keys(j).slice(0, 20) : [],
+          extracted: tasks.length,
+        });
         const out = { ok: true, tasks, endpoint: url.split("?")[0], status: res.status };
         if (tasks.length) return out;
         // 200 but empty: remember it and keep probing the other shapes.

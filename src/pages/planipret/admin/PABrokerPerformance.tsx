@@ -32,7 +32,9 @@ export default function PABrokerPerformance() {
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<any[]>([]);
   const [commissions, setCommissions] = useState<any[]>([]);
+  const [calls, setCalls] = useState<any[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
+
 
   useEffect(() => {
     let alive = true;
@@ -69,7 +71,7 @@ export default function PABrokerPerformance() {
     void (async () => {
       const since = new Date();
       since.setMonth(since.getMonth() - 11, 1);
-      const [t, c] = await Promise.all([
+      const [t, c, ca] = await Promise.all([
         broker.userId
           ? supabase.from("planipret_tasks_projection")
               .select("task_id, status, due_at, payload, created_at, updated_at, deleted_at")
@@ -79,11 +81,20 @@ export default function PABrokerPerformance() {
         supabase.from("planipret_commission_live_cache")
           .select("fiscal_year, row_data, date_trans")
           .eq("maestro_broker_id", broker.id).limit(2000),
+        broker.userId
+          ? supabase.from("planipret_phone_calls")
+              .select("id, direction, status, started_at, duration_seconds, from_name, to_name, from_number, to_number")
+              .eq("user_id", broker.userId)
+              .gte("started_at", since.toISOString())
+              .order("started_at", { ascending: false }).limit(2000)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
       if (!alive) return;
       setTasks(((t as any).data ?? []) as any[]);
       setCommissions(((c as any).data ?? []) as any[]);
+      setCalls(((ca as any).data ?? []) as any[]);
       setLoading(false);
+
     })();
     return () => { alive = false; };
   }, [broker, reloadKey]);
@@ -129,9 +140,47 @@ export default function PABrokerPerformance() {
     return spans.reduce((s, v) => s + v, 0) / spans.length;
   }, [tasks]);
 
+  /** Appels par mois (12 mois) + durée moyenne et tâches liées par client. */
+  const callStats = useMemo(() => {
+    const map = new Map<string, { month: string; calls: number; avgMin: number; _secs: number; _answered: number }>();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(); d.setMonth(d.getMonth() - i, 1);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      map.set(k, { month: k.slice(2), calls: 0, avgMin: 0, _secs: 0, _answered: 0 });
+    }
+    let secs = 0, answered = 0, missed = 0;
+    const clients = new Set<string>();
+    for (const c of calls) {
+      const d = new Date(c.started_at);
+      if (!Number.isFinite(d.getTime())) continue;
+      const row = map.get(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      const s = Number(c.duration_seconds ?? 0);
+      const isMissed = c.direction === "missed" || c.status === "missed" || c.status === "no-answer";
+      if (isMissed) missed += 1; else { secs += s; answered += 1; }
+      if (row) { row.calls += 1; if (!isMissed) { row._secs += s; row._answered += 1; } }
+      for (const n of [c.from_name, c.to_name]) {
+        const k = String(n ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+        if (k) clients.add(k);
+      }
+    }
+    const monthlyCalls = [...map.values()].map((r) => ({
+      ...r, avgMin: r._answered ? Math.round((r._secs / r._answered / 60) * 10) / 10 : 0,
+    }));
+    const linkedTasks = tasks.filter((t) => {
+      const p = (t.payload ?? {}) as any;
+      const k = String(p.target_name || p.client_name || p.contact_name || "").trim().toLowerCase().replace(/\s+/g, " ");
+      return k ? clients.has(k) : false;
+    }).length;
+    return {
+      monthlyCalls, total: calls.length, missed, linkedTasks,
+      avgSecs: answered ? secs / answered : 0,
+    };
+  }, [calls, tasks]);
+
   const openTasks = tasks.filter((t) => !DONE.has(String(t.status ?? "").toLowerCase())).length;
   const overdue = tasks.filter((t) => !DONE.has(String(t.status ?? "").toLowerCase()) && t.due_at && new Date(t.due_at) < new Date()).length;
   const commissionTotal = yearly.reduce((s, y) => s + y.total, 0);
+
 
   const surface = { background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" };
 
@@ -223,6 +272,31 @@ export default function PABrokerPerformance() {
               </LineChart>
             </ResponsiveContainer>
           </Panel>
+
+          <Panel title={L("Appels", "Calls")} style={surface}>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-3">
+              <Kpi label={L("Appels (12 mois)", "Calls (12 months)")} value={String(callStats.total)} style={surface} />
+              <Kpi
+                label={L("Durée moyenne", "Average duration")}
+                value={callStats.avgSecs ? `${Math.floor(callStats.avgSecs / 60)}m ${Math.round(callStats.avgSecs % 60)}s` : "—"}
+                style={surface}
+              />
+              <Kpi label={L("Manqués", "Missed")} value={String(callStats.missed)} tone={callStats.missed ? "#B91C1C" : undefined} style={surface} />
+              <Kpi label={L("Tâches liées", "Linked tasks")} value={String(callStats.linkedTasks)} style={surface} />
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={callStats.monthlyCalls}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="calls" name={L("Appels", "Calls")} fill="var(--pp-brand-accent)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="avgMin" name={L("Durée moy. (min)", "Avg duration (min)")} fill="#F59E0B" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </Panel>
+
         </div>
       )}
     </PAPage>

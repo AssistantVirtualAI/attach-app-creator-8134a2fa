@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { AlertCircle, CheckSquare, ChevronRight, Clock, Plus, RefreshCw, Repeat, Sparkles, Trash2, Pencil, CalendarClock, ExternalLink, ShieldCheck, Loader2, History } from "lucide-react";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
 import { describeTaskDiagnostics, describeTaskSync, formatTaskDue, toTorontoLocalInput, verifyTask, maestroTaskUrl, type NormalizedTask, type TaskFilterValue, type TaskVerifyResult, taskHistory, type TaskHistoryEvent } from "@/lib/planipret/tasks";
+import MaestroTaskRow from "./MaestroTaskRow";
 import TaskComposerSheet, { type TaskComposerValue } from "./TaskComposerSheet";
 import { toast } from "sonner";
 
@@ -248,29 +249,16 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
               <ul className="space-y-1">
                 {s.items.map((task) => (
                   <li key={task.id} className="rounded-lg px-2 py-2" style={{ background: "#F7F9FC" }}>
-                    <div className="flex items-start gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: "var(--pp-text-primary)" }}>
-                          {task.notes || L("Tâche", "Task")}
-                          {task.is_recurring && <Repeat className="w-3 h-3" aria-label={L("Récurrente", "Recurring")} />}
-                          {task.created_by_ava && (
-                            <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold inline-flex items-center gap-0.5"
-                              style={{ background: "rgba(108,92,231,0.10)", color: "var(--pp-agent)" }}>
-                              <Sparkles className="w-2.5 h-2.5" /> AVA
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[11px] flex items-center gap-1" style={{ color: "var(--pp-text-muted)" }}>
-                          <Clock className="w-3 h-3" /> {formatTaskDue(task.due_at, lang)}
-                          {task.target_name ? ` · ${task.target_name}` : task.xid ? ` · #${task.xid}` : ""}
-                          {task.status ? ` · ${task.status}` : ""}
-                        </p>
+                    <MaestroTaskRow
+                      task={task}
+                      lang={lang}
+                      extra={
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <TaskStatusChip lang={lang} source={source} state={verif[task.id]} />
                           <SyncChip task={task} lang={lang} />
                         </div>
-                      </div>
-                      <div className="flex items-center gap-0.5">
+                      }
+                      actions={<>
                         <IconBtn label={L("Vérifier dans Maestro", "Verify in Maestro")} onClick={() => void checkTask(task.id)}>
                           {verif[task.id] === "loading"
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -287,8 +275,8 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                           due_at: toTorontoLocalInput(task.due_at),
                         } })}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
                         {!readOnly && <IconBtn label={L("Supprimer", "Delete")} danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>}
-                      </div>
-                    </div>
+                      </>}
+                    />
                   </li>
                 ))}
               </ul>

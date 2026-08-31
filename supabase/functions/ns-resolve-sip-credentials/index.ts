@@ -426,7 +426,6 @@ Deno.serve(async (req) => {
       `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}`,
       {
         "caller-id-number": assignedCallerId,
-        "caller-id-number-emergency": assignedCallerId,
       },
     );
     callerIdRepair = { ok: repaired.ok, status: repaired.status };

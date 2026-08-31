@@ -172,18 +172,25 @@ function Table({ head, rows }: { head: string[]; rows: (string | number | JSX.El
   );
 }
 
-export default function RegisterCommissions({ lang, scope = "broker" }: { lang: Lang; scope?: "broker" | "admin" }) {
+export default function RegisterCommissions({ lang, scope = "broker", forcedAgent = null }: {
+  lang: Lang;
+  scope?: "broker" | "admin";
+  /** Admin per-broker view: lock the agent filter on this broker name. */
+  forcedAgent?: string | null;
+}) {
   const isFr = lang === "fr";
   const isAdminView = scope === "admin";
   const MONTHS = isFr ? MONTHS_FR : MONTHS_EN;
   const now = new Date();
-  const scopeKey = isAdminView ? "admin" : "broker";
-  const saved = readAdminCommissionFilters(scopeKey);
+  const scopeKey: "admin" | "broker" = isAdminView ? "admin" : "broker";
+  const filtersScope = forcedAgent ? `${scopeKey}:${forcedAgent}` : scopeKey;
+  const saved = readAdminCommissionFilters(filtersScope);
   const [year, setYear] = useState(saved?.year ?? now.getFullYear());
   const [month, setMonth] = useState(12);
   const [granularity, setGranularity] = useState<Granularity>((saved?.granularity as Granularity) ?? "ytd");
   const [periodIndex, setPeriodIndex] = useState(saved?.periodIndex ?? now.getMonth() + 1);
-  const [agent, setAgent] = useState(isAdminView ? (saved?.agent ?? "") : "");
+  const [agent, setAgent] = useState(forcedAgent ?? (isAdminView ? (saved?.agent ?? "") : ""));
+  useEffect(() => { if (forcedAgent) setAgent(forcedAgent); }, [forcedAgent]);
   const [brokersYear, setBrokersYear] = useState<number | "all">("all");
   const [lender, setLender] = useState(saved?.lender ?? "");
   const [tab, setTab] = useState<Tab>((saved?.tab as Tab) ?? "overview");
@@ -201,14 +208,14 @@ export default function RegisterCommissions({ lang, scope = "broker" }: { lang: 
 
 
   // Persist the admin filters in the browser so the same view reopens later.
-  const { clear: clearSavedFilters } = useAdminCommissionFilters(true, { year, granularity, periodIndex, agent, lender, tab }, scopeKey);
+  const { clear: clearSavedFilters } = useAdminCommissionFilters(true, { year, granularity, periodIndex, agent, lender, tab }, filtersScope);
   const resetFilters = () => {
     const d = defaultAdminCommissionFilters();
     clearSavedFilters();
     setYear(d.year);
     setGranularity(d.granularity as Granularity);
     setPeriodIndex(d.periodIndex);
-    setAgent("");
+    setAgent(forcedAgent ?? "");
     setLender("");
     setTab("overview");
   };

@@ -29,7 +29,9 @@ export default function MaestroSyncButton({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke("pp-maestro-commissions-sync", {
-        body: { mode: scope === "admin" ? "all" : "self" },
+        // Toujours "self" : un admin n'importe jamais les données des autres
+        // courtiers (chaque courtier connecte son propre compte Maestro).
+        body: { mode: "self" },
         headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
       });
       if (error) throw error;

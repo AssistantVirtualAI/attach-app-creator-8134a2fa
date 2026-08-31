@@ -257,7 +257,14 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
               </p>
               <ul className="space-y-1">
                 {s.items.map((task) => (
-                  <li key={task.id} className="rounded-lg px-2 py-2" style={{ background: "#F7F9FC" }}>
+                  <li
+                    key={task.id}
+                    className="rounded-lg px-2 py-2"
+                    style={{ background: "#F7F9FC", cursor: readOnly ? undefined : "pointer" }}
+                    onClick={readOnly ? undefined : () => openEdit(task)}
+                    role={readOnly ? undefined : "button"}
+                    aria-label={readOnly ? undefined : L("Modifier la tâche", "Edit task")}
+                  >
                     <MaestroTaskRow
                       task={task}
                       lang={lang}

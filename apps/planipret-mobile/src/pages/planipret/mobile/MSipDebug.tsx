@@ -159,6 +159,78 @@ export default function MSipDebug() {
   );
 }
 
+/**
+ * État réel du moteur natif PJSIP.
+ *
+ * Sur iOS, PJSIP possède `<ext>M` et la pile JsSIP n'est jamais configurée :
+ * la carte d'état plus haut affiche donc `IDLE` avec Ext/Domaine vides même
+ * quand tout va bien. Cette carte montre l'état vrai et permet de relancer
+ * l'initialisation (utile après une réinstallation de l'app).
+ */
+function NativeEngineCard() {
+  const [state, setState] = useState(() => ({
+    available: nativeSip.isAvailable(),
+    registered: nativeSip.isRegistered(),
+    username: nativeSip.getUsername(),
+    extension: nativeSip.getExtension(),
+    engineState: nativeSip.getState(),
+  }));
+  const [repairing, setRepairing] = useState(false);
+
+  const refresh = () => setState({
+    available: nativeSip.isAvailable(),
+    registered: nativeSip.isRegistered(),
+    username: nativeSip.getUsername(),
+    extension: nativeSip.getExtension(),
+    engineState: nativeSip.getState(),
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => { void nativeSip.refreshState().finally(refresh); }, 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  const repair = async () => {
+    setRepairing(true);
+    try {
+      const ok = await nativeSip.initialize();
+      refresh();
+      ok ? toast.success("Moteur natif enregistré") : toast.error("Réparation échouée — voir le journal");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Réparation échouée");
+    } finally {
+      setRepairing(false);
+    }
+  };
+
+  const color = state.registered ? "#10B981" : state.available ? "#F59E0B" : "#EF4444";
+
+  return (
+    <section className="pp-card p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Radio className="w-4 h-4" style={{ color }} />
+        <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>Moteur natif PJSIP</span>
+        <span className="ml-auto px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ background: color, color: "#fff" }}>
+          {state.registered ? "REGISTERED" : state.engineState.toUpperCase()}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
+        <div><span className="opacity-60">AOR</span> {state.username ?? "—"}</div>
+        <div><span className="opacity-60">Poste</span> {state.extension ?? "—"}</div>
+        <div className="col-span-2"><span className="opacity-60">Plugin</span> {state.available ? "disponible" : "absent"}</div>
+      </div>
+      <button
+        onClick={repair}
+        disabled={repairing}
+        className="w-full py-2 rounded-lg text-[12px] font-semibold disabled:opacity-60"
+        style={{ background: "var(--pp-brand-accent)", color: "#fff" }}
+      >
+        {repairing ? "Réparation…" : "Réparer / réenregistrer le SIP"}
+      </button>
+    </section>
+  );
+}
+
 function StabilityCard() {
   const { t } = useMplanipretLang();
   const [report, setReport] = useState(() => getSipStabilityReport());

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, ChevronDown, ChevronRight, FolderKanban, Search, Wallet } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronDown, ChevronRight, FolderKanban, Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, Search, Wallet } from "lucide-react";
 import MaestroTaskRow from "@/components/planipret/mobile/MaestroTaskRow";
 import { formatTaskDue, type NormalizedTask } from "@/lib/planipret/tasks";
 import {
-  buildClientBundles, fetchClientDeals, fetchClientDeposits,
-  type ClientBundle, type ClientDeal, type ClientDeposit,
+  buildClientBundles, fetchClientCalls, fetchClientDeals, fetchClientDeposits,
+  type ClientBundle, type ClientCall, type ClientDeal, type ClientDeposit,
 } from "@/lib/planipret/clientMaestro";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -30,6 +30,7 @@ export default function ClientMaestro360({
 
   const [deals, setDeals] = useState<ClientDeal[]>([]);
   const [deposits, setDeposits] = useState<ClientDeposit[]>([]);
+  const [calls, setCalls] = useState<ClientCall[]>([]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [alertsOnly, setAlertsOnly] = useState(false);
@@ -37,11 +38,13 @@ export default function ClientMaestro360({
   const idsKey = userIds.filter(Boolean).sort().join(",");
 
   const load = useCallback(async () => {
-    const [d, dep] = await Promise.all([
-      fetchClientDeals(idsKey ? idsKey.split(",") : []),
+    const ids = idsKey ? idsKey.split(",") : [];
+    const [d, dep, cl] = await Promise.all([
+      fetchClientDeals(ids),
       fetchClientDeposits(),
+      fetchClientCalls(ids),
     ]);
-    setDeals(d); setDeposits(dep);
+    setDeals(d); setDeposits(dep); setCalls(cl);
   }, [idsKey]);
 
   useEffect(() => { void load(); }, [load]);
@@ -58,11 +61,12 @@ export default function ClientMaestro360({
       .channel(`pp-clients-360-rt-${idsKey || "self"}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_pipeline" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_commission_register" }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_calls" }, bump)
       .subscribe();
     return () => { if (timer) clearTimeout(timer); void supabase.removeChannel(ch); };
   }, [load, idsKey]);
 
-  const bundles = useMemo(() => buildClientBundles(tasks, deals, deposits), [tasks, deals, deposits]);
+  const bundles = useMemo(() => buildClientBundles(tasks, deals, deposits, calls), [tasks, deals, deposits, calls]);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -120,6 +124,7 @@ export default function ClientMaestro360({
                   {b.today > 0 && <Badge tone="warn" icon={<CalendarClock className="w-3 h-3" />} text={L("aujourd'hui", "today")} />}
                   {b.upcoming > 0 && <Badge tone="info" text={`${b.upcoming} ${L("à venir", "upcoming")}`} />}
                   {b.deals.length > 0 && <Badge tone="muted" icon={<FolderKanban className="w-3 h-3" />} text={`${b.deals.length}`} />}
+                  {b.calls.length > 0 && <Badge tone="info" icon={<Phone className="w-3 h-3" />} text={`${b.calls.length}`} />}
                   {b.depositTotal > 0 && <Badge tone="ok" icon={<Wallet className="w-3 h-3" />} text={cad(b.depositTotal)} />}
                 </span>
               </button>
@@ -149,6 +154,32 @@ export default function ClientMaestro360({
                             <span>{d.updated_at ? new Date(d.updated_at).toLocaleDateString(en ? "en-CA" : "fr-CA") : "—"}</span>
                           </li>
                         ))}
+                      </ul>
+                    )}
+                  </Section>
+
+                  <Section title={L("Appels et historique", "Calls & history")}>
+                    {b.calls.length === 0 ? <Empty text={L("Aucun appel.", "No call.")} /> : (
+                      <ul className="space-y-1">
+                        {b.calls.slice(0, 20).map((c) => {
+                          const missed = c.direction === "missed" || c.status === "missed" || c.status === "no-answer";
+                          const out = c.direction === "outbound";
+                          const Icon = missed ? PhoneMissed : out ? PhoneOutgoing : PhoneIncoming;
+                          const secs = Number(c.duration_seconds ?? 0);
+                          return (
+                            <li key={c.id} className="text-[11.5px]" style={{ color: "var(--pp-text-muted)" }}>
+                              <span className="flex flex-wrap items-center gap-x-2">
+                                <Icon className="w-3 h-3" style={{ color: missed ? "#B91C1C" : out ? "var(--pp-brand-accent)" : "#047857" }} />
+                                <span style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>
+                                  {c.started_at ? new Date(c.started_at).toLocaleString(en ? "en-CA" : "fr-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Toronto" }) : "—"}
+                                </span>
+                                <span>{missed ? L("manqué", "missed") : `${Math.floor(secs / 60)}m ${secs % 60}s`}</span>
+                                <span>{out ? (c.to_number ?? "—") : (c.from_number ?? "—")}</span>
+                              </span>
+                              {c.ai_summary && <span className="block break-words">{c.ai_summary}</span>}
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </Section>

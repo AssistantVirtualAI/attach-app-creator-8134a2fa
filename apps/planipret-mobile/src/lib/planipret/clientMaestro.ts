@@ -26,6 +26,20 @@ export interface ClientDeal {
   updated_at: string | null;
 }
 
+export interface ClientCall {
+  id: string;
+  direction: string | null;
+  status: string | null;
+  started_at: string | null;
+  duration_seconds: number | null;
+  from_number: string | null;
+  to_number: string | null;
+  from_name: string | null;
+  to_name: string | null;
+  ai_summary: string | null;
+  recording_url: string | null;
+}
+
 export interface ClientBundle {
   key: string;
   name: string;
@@ -37,7 +51,14 @@ export interface ClientBundle {
   deals: ClientDeal[];
   deposits: ClientDeposit[];
   depositTotal: number;
+  calls: ClientCall[];
 }
+
+/** Derniers 10 chiffres d'un numéro, pour comparer des formats différents. */
+export const digits10 = (v: string | null | undefined) => {
+  const d = String(v ?? "").replace(/\D/g, "");
+  return d.length >= 10 ? d.slice(-10) : "";
+};
 
 export const clientKey = (name: string | null | undefined) =>
   String(name ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -56,6 +77,7 @@ export function buildClientBundles(
   tasks: NormalizedTask[],
   deals: ClientDeal[] = [],
   deposits: ClientDeposit[] = [],
+  calls: ClientCall[] = [],
 ): ClientBundle[] {
   const { start, end } = dayBounds();
   const map = new Map<string, ClientBundle>();
@@ -66,7 +88,7 @@ export function buildClientBundles(
     const key = clientKey(label);
     let b = map.get(key);
     if (!b) {
-      b = { key, name: label, tasks: [], overdue: 0, today: 0, upcoming: 0, nextDue: null, deals: [], deposits: [], depositTotal: 0 };
+      b = { key, name: label, tasks: [], overdue: 0, today: 0, upcoming: 0, nextDue: null, deals: [], deposits: [], depositTotal: 0, calls: [] };
       map.set(key, b);
     }
     return b;
@@ -96,6 +118,27 @@ export function buildClientBundles(
     if (!b) continue;
     b.deposits.push(dep);
     b.depositTotal += Number(dep.amount ?? 0);
+  }
+
+  // Appels : rattachés par nom d'appelant, sinon par numéro d'un dossier.
+  const byPhone = new Map<string, ClientBundle>();
+  for (const b of map.values()) {
+    for (const d of b.deals) {
+      const k = digits10(d.contact_number);
+      if (k && !byPhone.has(k)) byPhone.set(k, b);
+    }
+  }
+  for (const c of calls) {
+    const named = [c.from_name, c.to_name].map((n) => clientKey(n)).find((k) => k && map.has(k));
+    let b = named ? map.get(named)! : undefined;
+    if (!b) {
+      const k = [c.from_number, c.to_number].map(digits10).find((x) => x && byPhone.has(x));
+      if (k) b = byPhone.get(k);
+    }
+    if (b) b.calls.push(c);
+  }
+  for (const b of map.values()) {
+    b.calls.sort((x, y) => new Date(y.started_at ?? 0).getTime() - new Date(x.started_at ?? 0).getTime());
   }
 
   return [...map.values()].sort((a, b) => {
@@ -134,4 +177,17 @@ export async function fetchClientDeals(userIds: string[]): Promise<ClientDeal[]>
     .order("updated_at", { ascending: false })
     .limit(300);
   return ((data ?? []) as ClientDeal[]);
+}
+
+/** Historique d'appels local pour un ou plusieurs propriétaires. */
+export async function fetchClientCalls(userIds: string[], limit = 500): Promise<ClientCall[]> {
+  const ids = userIds.filter(Boolean);
+  if (!ids.length) return [];
+  const { data } = await supabase
+    .from("planipret_phone_calls")
+    .select("id, direction, status, started_at, duration_seconds, from_number, to_number, from_name, to_name, ai_summary, recording_url")
+    .in("user_id", ids)
+    .order("started_at", { ascending: false })
+    .limit(limit);
+  return ((data ?? []) as ClientCall[]);
 }

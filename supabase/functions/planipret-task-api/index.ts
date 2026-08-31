@@ -115,10 +115,11 @@ function makeListFetch(token: string | null) {
     qs.set("limit", "200");
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
 
-    // Measured on production (broker 393): `?users_id=` is the only route that
-    // actually returns the broker's tasks. `?xid=&type=user` answers 200 with an
-    // empty page, so it must never short-circuit the probe.
+    // Measured on production (broker 393): the Task List API scopes reads with
+    // singular `user_id`. `users_id` is used by task writes but returns an empty
+    // page on GET, as does `xid=&type=user`; empty 200s must not short-circuit.
     const candidates = [
+      `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}user_id=${maestroId}`,
       `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}users_id=${maestroId}`,
       `${TELECOM_BASE}/users/${maestroId}/tasks${suffix}`,
       `${API_BASE}/telecom/api/v1/users/${maestroId}/tasks${suffix}`,

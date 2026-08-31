@@ -412,7 +412,7 @@ export async function handleTaskRequest(
       } catch { /* keep null */ }
     }
 
-    // The official Task List endpoint scopes `users_id` with the Maestro CRM
+    // The official Task List endpoint scopes `user_id` with the Maestro CRM
     // broker id. `maestro_telecom_user_id` is only a legacy fallback for
     // accounts that have no broker id yet (the two values often differ).
     const listOwnerId = maestroId ?? telecomId;

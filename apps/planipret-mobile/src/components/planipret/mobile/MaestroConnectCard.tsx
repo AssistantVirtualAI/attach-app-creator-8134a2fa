@@ -166,7 +166,7 @@ export default function MaestroConnectCard() {
           let callbackUrl: string | null = null;
           try {
             callbackUrl = typeof startNativeOAuthSession === "function" && canUseNativeAuthSession()
-              ? await startNativeOAuthSession(url, redirectUri)
+              ? await startNativeOAuthSession(url, redirectUri, mustForceLogin)
               : null;
           } catch (e: any) {
             logDeepLink({ kind: "error", source: "MaestroConnect", detail: `native auth session failed: ${e?.message ?? e}` });

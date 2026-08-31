@@ -192,13 +192,23 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!open || clientName || !target) return;
     const id = String(target);
     const match = targets.find(
-      (t) => t.user?.id === id || t.client_id === id || t.contracts.some((c) => String(c.id) === id),
+      (t) => String(t.user?.id ?? "") === id || String(t.client_id ?? "") === id || t.contracts.some((c) => String(c.id) === id),
     );
     if (match) {
       setClientName(match.name);
       setSelectedTarget(match);
+      return;
     }
-  }, [open, target, targets, clientName]);
+    // Fallback: resolve against the cached Maestro contacts so the sheet
+    // always shows the client name instead of the raw xid.
+    const contact = (clients as any[]).find(
+      (c) => String(c?.id ?? "") === id
+        || String(c?.client_id ?? "") === id
+        || (Array.isArray(c?.contracts) && c.contracts.some((ct: any) => String(ct?.id ?? "") === id)),
+    );
+    const name = contact?.name ?? [contact?.first_name, contact?.last_name].filter(Boolean).join(" ").trim();
+    if (name) setClientName(name);
+  }, [open, target, targets, clients, clientName]);
 
   useEffect(() => {
     if (!open) return;

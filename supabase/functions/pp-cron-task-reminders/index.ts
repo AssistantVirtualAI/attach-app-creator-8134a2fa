@@ -171,7 +171,30 @@ Deno.serve(async (req) => {
     groups.set(gk, g);
   }
 
-  for (const g of groups.values()) {
+  // Dernier appel connu par client (pour signaler les rappels en retard).
+  const lastCallByClient = new Map<string, string>();
+  {
+    const uids = [...new Set([...groups.values()].map((g) => g.user_id))];
+    if (uids.length) {
+      const { data: callRows } = await admin
+        .from("planipret_phone_calls")
+        .select("user_id, from_name, to_name, started_at")
+        .in("user_id", uids)
+        .not("started_at", "is", null)
+        .order("started_at", { ascending: false })
+        .limit(2000);
+      for (const c of (callRows ?? []) as any[]) {
+        for (const n of [c.from_name, c.to_name]) {
+          const k = String(n ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+          if (!k) continue;
+          const gk = `${c.user_id}|${k}`;
+          if (!lastCallByClient.has(gk)) lastCallByClient.set(gk, c.started_at);
+        }
+      }
+    }
+  }
+
+  for (const [gk, g] of groups.entries()) {
     const prof = byId.get(g.user_id);
     const to = String(prof?.email || prof?.ms365_email || "").trim();
     if (!to) { skipped += g.items.length; continue; }
@@ -180,15 +203,20 @@ Deno.serve(async (req) => {
     const kind: "overdue" | "due_soon" = anyOverdue ? "overdue" : "due_soon";
     const firstName = String(prof?.first_name || String(prof?.full_name ?? "").split(" ")[0] || "");
     const subject = anyOverdue
-      ? `⏰ ${g.client} — ${g.items.length} tâche(s) en retard`
-      : `📌 ${g.client} — échéance dans moins de 24 h`;
+      ? `⏰ ${g.client} — ${g.items.length} tâche(s) et appels en retard`
+      : `📌 ${g.client} — appel/échéance dans moins de 24 h`;
 
     if (dryRun) { sent += 1; for (const i of g.items) already.add(`${g.user_id}|${i.task_id}|${i.kind}`); continue; }
 
+    const at = lastCallByClient.get(gk) ?? null;
+    const days = at ? Math.max(0, Math.round((now - new Date(at).getTime()) / 86400000)) : null;
+    const clientUrl = `${CLIENTS_URL}/${encodeURIComponent(g.client.toLowerCase())}`;
+
     const res = await sendEmail(to, subject, buildHtml({
-      firstName, kind, client: g.client,
+      firstName, kind, client: g.client, clientUrl, lastCall: { at, days },
       tasks: g.items.map((i) => ({ title: i.title, due: i.due, notes: i.notes, overdue: i.kind === "overdue" })),
     }));
+
     if (!res.ok) { failures.push({ client: g.client, error: res.error ?? "send_failed" }); continue; }
 
     await admin.from("planipret_task_reminders").upsert(

@@ -76,12 +76,14 @@ function makeListFetch(token: string | null) {
     qs.set("limit", "200");
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
 
+    // Measured on production (broker 393): `?users_id=` is the only route that
+    // actually returns the broker's tasks. `?xid=&type=user` answers 200 with an
+    // empty page, so it must never short-circuit the probe.
     const candidates = [
+      `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}users_id=${maestroId}`,
       `${TELECOM_BASE}/users/${maestroId}/tasks${suffix}`,
       `${API_BASE}/telecom/api/v1/users/${maestroId}/tasks${suffix}`,
       `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}xid=${maestroId}&type=user`,
-      `${API_BASE}/api/main/tasks${suffix}${suffix ? "&" : "?"}users_id=${maestroId}`,
-      `${API_BASE}/api/main/tasks/list${suffix}${suffix ? "&" : "?"}users_id=${maestroId}`,
       `${API_BASE}/api/main/users/${maestroId}/tasks${suffix}`,
     ];
 
@@ -92,6 +94,7 @@ function makeListFetch(token: string | null) {
 
     let lastStatus = 0;
     let allMissing = true;
+    let emptyOk: UpstreamList | null = null;
     for (const url of candidates) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -105,10 +108,14 @@ function makeListFetch(token: string | null) {
           if (res.status !== 404 && res.status !== 405 && res.status !== 501) allMissing = false;
           continue;
         }
+        allMissing = false;
         const j = await res.json().catch(() => null);
         const raw = Array.isArray(j) ? j : (j?.data ?? j?.tasks ?? j?.items ?? []);
         const tasks = (Array.isArray(raw) ? raw : []).map(normalizeTask).filter((t: any) => t.id);
-        return { ok: true, tasks, endpoint: url.split("?")[0], status: res.status };
+        const out = { ok: true, tasks, endpoint: url.split("?")[0], status: res.status };
+        if (tasks.length) return out;
+        // 200 but empty: remember it and keep probing the other shapes.
+        emptyOk = emptyOk ?? out;
       } catch {
         lastStatus = 599;
         allMissing = false;
@@ -116,10 +123,12 @@ function makeListFetch(token: string | null) {
         clearTimeout(timer);
       }
     }
+    if (emptyOk) return emptyOk;
     // Every documented/known read route answered 404/405 → stop hammering
     // Planiprêt for 10 minutes and serve the local mirror instead.
     if (allMissing) noUpstreamListUntil = Date.now() + 10 * 60 * 1000;
     return { ok: false, tasks: [], endpoint: null, status: lastStatus };
+
   };
 }
 

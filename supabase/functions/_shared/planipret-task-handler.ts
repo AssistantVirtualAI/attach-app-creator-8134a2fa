@@ -387,7 +387,10 @@ export async function handleTaskRequest(
     const filter = normalizeFilter(body?.filter);
     const page = Math.max(Number(body?.page ?? 1) || 1, 1);
     const limit = Math.min(Math.max(Number(body?.limit ?? 20) || 20, 1), 200);
-    const status = body?.status ? String(body.status) : "pending";
+    // Do not impose Maestro's English `pending` slug. Production accounts use
+    // localized/custom statuses, and that upstream filter can incorrectly
+    // return an empty list. Open/overdue/today filtering is applied below.
+    const status = body?.status ? String(body.status) : null;
     const from = body?.from ? String(body.from) : null;
     const to = body?.to ? String(body.to) : null;
 
@@ -409,7 +412,7 @@ export async function handleTaskRequest(
       } catch { /* keep null */ }
     }
 
-    // The official Task List endpoint scopes `users_id` with the Maestro CRM
+    // The official Task List endpoint scopes `user_id` with the Maestro CRM
     // broker id. `maestro_telecom_user_id` is only a legacy fallback for
     // accounts that have no broker id yet (the two values often differ).
     const listOwnerId = maestroId ?? telecomId;

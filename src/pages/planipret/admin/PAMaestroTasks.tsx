@@ -37,7 +37,7 @@ export default function PAMaestroTasks() {
       setUserId(uid);
       const { data: rows } = await supabase
         .from("planipret_profiles")
-        .select("full_name, first_name, last_name, maestro_broker_id")
+        .select("full_name, email, maestro_broker_id")
         .not("maestro_broker_id", "is", null)
         .order("full_name", { ascending: true });
       if (!alive) return;
@@ -47,7 +47,7 @@ export default function PAMaestroTasks() {
         const id = String(r.maestro_broker_id ?? "").trim();
         if (!id || seen.has(id)) continue;
         seen.add(id);
-        opts.push({ id, name: r.full_name || [r.first_name, r.last_name].filter(Boolean).join(" ") || `#${id}` });
+        opts.push({ id, name: r.full_name || r.email || `#${id}` });
       }
       setBrokers(opts);
     })();

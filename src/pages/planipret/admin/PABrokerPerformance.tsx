@@ -71,7 +71,7 @@ export default function PABrokerPerformance() {
     void (async () => {
       const since = new Date();
       since.setMonth(since.getMonth() - 11, 1);
-      const [t, c] = await Promise.all([
+      const [t, c, ca] = await Promise.all([
         broker.userId
           ? supabase.from("planipret_tasks_projection")
               .select("task_id, status, due_at, payload, created_at, updated_at, deleted_at")
@@ -81,11 +81,20 @@ export default function PABrokerPerformance() {
         supabase.from("planipret_commission_live_cache")
           .select("fiscal_year, row_data, date_trans")
           .eq("maestro_broker_id", broker.id).limit(2000),
+        broker.userId
+          ? supabase.from("planipret_phone_calls")
+              .select("id, direction, status, started_at, duration_seconds, from_name, to_name, from_number, to_number")
+              .eq("user_id", broker.userId)
+              .gte("started_at", since.toISOString())
+              .order("started_at", { ascending: false }).limit(2000)
+          : Promise.resolve({ data: [] as any[] }),
       ]);
       if (!alive) return;
       setTasks(((t as any).data ?? []) as any[]);
       setCommissions(((c as any).data ?? []) as any[]);
+      setCalls(((ca as any).data ?? []) as any[]);
       setLoading(false);
+
     })();
     return () => { alive = false; };
   }, [broker, reloadKey]);

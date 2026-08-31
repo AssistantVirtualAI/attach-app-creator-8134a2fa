@@ -121,7 +121,13 @@ export default function MCommissions() {
 
   const [institutions, setInstitutions] = useState<{ id: number; label: string }[]>([]);
   const [agents, setAgents] = useState<{ users_id: number; name: string }[]>([]);
-  const [agentId, setAgentId] = useState<string>("");
+  // Les admins voient par défaut LEURS propres commissions (et non celles du
+  // cabinet) — ils peuvent basculer sur « Tous les courtiers » dans le filtre.
+  const [agentId, setAgentId] = useState<string>(() => {
+    const q = sp.get("users_id");
+    if (q && /^\d+$/.test(q)) return q;
+    return profile?.maestro_broker_id ? String(profile.maestro_broker_id) : "";
+  });
   const [detail, setDetail] = useState<DepositRow | null>(null);
 
   const [summary, setSummary] = useState<Summary | null>(null);

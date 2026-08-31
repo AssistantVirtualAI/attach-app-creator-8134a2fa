@@ -130,6 +130,15 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
     else toast.error(r?.message ?? L("Suppression impossible", "Delete failed"));
   };
 
+  const openEdit = (task: NormalizedTask) => setComposer({ initial: {
+    task_id: task.id, notes: task.notes, description: task.description ?? "",
+    target: task.xid ?? "", target_type: task.type ?? "user",
+    target_name: task.target_name ?? "",
+    users_id: task.assignee_ids?.[0] ?? "",
+    status: task.status ?? undefined,
+    due_at: toTorontoLocalInput(task.due_at),
+  } });
+
   const snooze = async (task: NormalizedTask) => {
     const base = task.due_at ? new Date(task.due_at) : new Date();
     const next = new Date(base.getTime() + 24 * 3600 * 1000);

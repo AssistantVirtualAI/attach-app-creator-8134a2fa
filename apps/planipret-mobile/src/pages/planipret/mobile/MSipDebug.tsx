@@ -194,7 +194,7 @@ function NativeEngineCard() {
   const repair = async () => {
     setRepairing(true);
     try {
-      const ok = await nativeSip.initialize();
+      const ok = await nativeSip.repairRegistration();
       refresh();
       ok ? toast.success("Moteur natif enregistré") : toast.error("Réparation échouée — voir le journal");
     } catch (e: any) {

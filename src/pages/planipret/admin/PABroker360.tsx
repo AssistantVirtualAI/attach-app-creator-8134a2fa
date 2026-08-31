@@ -13,8 +13,6 @@ type BrokerRow = {
   id: string;
   user_id: string | null;
   full_name: string | null;
-  first_name: string | null;
-  last_name: string | null;
   email: string | null;
   extension: string | null;
   maestro_broker_id: string | null;
@@ -24,7 +22,7 @@ type BrokerRow = {
 type TabKey = "contacts" | "deals" | "commissions" | "tasks";
 
 const brokerName = (b: BrokerRow) =>
-  b.full_name || [b.first_name, b.last_name].filter(Boolean).join(" ") || b.email || `#${b.id.slice(0, 8)}`;
+  b.full_name || b.email || `#${b.id.slice(0, 8)}`;
 
 const fmtMoney = (v: number | null | undefined) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(v || 0);
@@ -123,7 +121,7 @@ export default function PABroker360() {
     void (async () => {
       const { data } = await supabase
         .from("planipret_profiles")
-        .select("id, user_id, full_name, first_name, last_name, email, extension, maestro_broker_id, maestro_telecom_user_id")
+        .select("id, user_id, full_name, email, extension, maestro_broker_id, maestro_telecom_user_id")
         .order("full_name", { ascending: true })
         .limit(500);
       if (cancelled) return;

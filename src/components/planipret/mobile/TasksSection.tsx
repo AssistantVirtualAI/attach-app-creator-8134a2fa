@@ -44,7 +44,7 @@ function Shimmer({ className = "" }: { className?: string }) {
 
 export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, brokerId, readOnly }: Props) {
   const L = (fr: string, en: string) => (lang === "en" ? en : fr);
-  const { buckets, counts, openCount, filter, setFilter, hasMore, loadMore, loadingMore, total, loading, refreshing, source, error, message, refresh, create, update, remove } = usePlanipretTasks(userId, { brokerId });
+  const { buckets, counts, openCount, filter, setFilter, hasMore, loadMore, loadingMore, total, loading, refreshing, lastSyncAt, source, error, message, refresh, create, update, remove } = usePlanipretTasks(userId, { brokerId });
   const [composer, setComposer] = useState<null | { initial?: any }>(null);
   const [busy, setBusy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string> | null>(null);
@@ -261,6 +261,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                     <MaestroTaskRow
                       task={task}
                       lang={lang}
+                      syncedAt={(task as any)?.raw?.updated_at ?? (task as any)?.raw?.modified_at ?? lastSyncAt}
                       extra={
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <TaskStatusChip lang={lang} source={source} state={verif[task.id]} />

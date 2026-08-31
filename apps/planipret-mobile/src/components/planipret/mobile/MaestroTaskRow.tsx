@@ -4,12 +4,14 @@ import { maestroTaskView, formatMaestroCreated } from "@/lib/planipret/taskMaest
 
 /** Renders a task with the same columns as the Maestro Tasks page. */
 export default function MaestroTaskRow({
-  task, lang, actions, extra,
+  task, lang, actions, extra, syncedAt,
 }: {
   task: NormalizedTask;
   lang: "fr" | "en";
   actions?: React.ReactNode;
   extra?: React.ReactNode;
+  /** ISO date of the last Maestro synchronisation for this task. */
+  syncedAt?: string | null;
 }) {
   const L = (fr: string, en: string) => (lang === "en" ? en : fr);
   const v = maestroTaskView(task, lang);
@@ -52,6 +54,14 @@ export default function MaestroTaskRow({
           <p className="text-[10.5px]" style={{ color: "var(--pp-text-muted)" }}>{formatMaestroCreated(v.createdAt, lang)}</p>
         )}
         <Cell label={L("Remarques", "Remarks")} value={v.remarks || dash} />
+        <p className="text-[10px]" style={{ color: "var(--pp-text-muted)" }} data-testid={`task-synced-${task.id}`}>
+          {L("Dernière synchro", "Last sync")}{" "}
+          {syncedAt
+            ? new Date(syncedAt).toLocaleString(lang === "en" ? "en-CA" : "fr-CA", {
+                day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Toronto",
+              })
+            : dash}
+        </p>
         {extra}
       </div>
 

@@ -391,12 +391,23 @@ export async function handleTaskRequest(
     const from = body?.from ? String(body.from) : null;
     const to = body?.to ? String(body.to) : null;
 
+    // Admins may inspect another broker's tasks (portal broker toggle).
+    // Brokers are always locked to their own Maestro id.
+    const isAdminRole = role === "admin" || role === "planipret_admin" || role === "super_admin";
+    const requestedBroker = String(body?.broker_id ?? "").trim();
+    const overrideBroker = isAdminRole && /^\d+$/.test(requestedBroker) ? requestedBroker : null;
+
     let maestroId: string | null = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
     let telecomId: string | null = null;
-    try {
-      telecomId = await deps.resolveTelecomUserId(maestroId);
-      maestroId = maestroId ?? telecomId;
-    } catch { /* keep null */ }
+    if (overrideBroker) {
+      maestroId = overrideBroker;
+      telecomId = overrideBroker;
+    } else {
+      try {
+        telecomId = await deps.resolveTelecomUserId(maestroId);
+        maestroId = maestroId ?? telecomId;
+      } catch { /* keep null */ }
+    }
 
     const upstream = telecomId && token
       ? await deps.listFetch(telecomId, { status, from, to })
@@ -409,9 +420,15 @@ export async function handleTaskRequest(
       // Align the calendar/list on the real assignment source: keep tasks
       // assigned to this broker AND tasks whose assignment Maestro returned
       // empty but which target him (otherwise they vanish from the calendar).
-      all = filterByAssignee(all, [maestroId, telecomId, profile?.maestro_telecom_user_id]);
+      all = filterByAssignee(all, overrideBroker
+        ? [maestroId, telecomId]
+        : [maestroId, telecomId, profile?.maestro_telecom_user_id]);
       src = "api";
-      await syncProjection(admin, userId, all, { full: !from && !to });
+      // Never write another broker's tasks into the caller's local projection.
+      if (!overrideBroker) await syncProjection(admin, userId, all, { full: !from && !to });
+    } else if (overrideBroker) {
+      all = [];
+      src = "unavailable";
     } else {
       all = await loadProjection(admin, userId);
       src = all.length ? "projection" : "unavailable";

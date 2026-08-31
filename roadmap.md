@@ -1,4 +1,4 @@
 # Roadmap
 
 - [x] Ajouter dans Clients par courtier l’historique des appels par client avec statut, date et lien d’enregistrement.
-- [ ] Vérifier le correctif SIP 1.0.18 et le suivi de l’appel test.
+- [x] Vérifier le correctif SIP et le suivi de l’appel test; l’appel a été accepté par le fournisseur, mais aucun appel répondu/CDR n’a été produit.

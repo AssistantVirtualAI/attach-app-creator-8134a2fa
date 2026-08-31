@@ -35,6 +35,18 @@ import { trackRegisterAttempt, logRegisterMetricsSummary, type RegisterTracker }
 
 export type SipRegistrationState = "registered" | "unregistered" | "failed" | "unavailable";
 
+const NATIVE_BRIDGE_TIMEOUT_MS = 20_000;
+
+function withNativeTimeout<T>(operation: Promise<T>, label: string, timeoutMs = NATIVE_BRIDGE_TIMEOUT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label}_timeout`)), timeoutMs);
+    operation.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
 interface PjsipPlugin {
   isEngineLinked(): Promise<{ linked: boolean }>;
   initialize(opts: Record<string, unknown>): Promise<{ ok: boolean; username: string }>;
@@ -116,6 +128,35 @@ export class NativeSipService {
     return this.initializing;
   }
 
+  /** Recovery entry point used by SIP Debug. Every native bridge call is
+   * bounded so a stalled Capacitor promise can never leave the button spinning. */
+  async repairRegistration(): Promise<boolean> {
+    const pjsip = getPjsip();
+    if (!pjsip) return false;
+
+    const snapshot = await withNativeTimeout(pjsip.getState(), "sip_state").catch(() => null);
+    if (snapshot?.registered) {
+      this.username = snapshot.username || this.username;
+      this.extension = this.extension ?? aorExtension(this.username ?? "");
+      this.setState("registered");
+      return true;
+    }
+
+    // An account can survive a WebView reload while the JS singleton loses its
+    // state. Refresh that existing account instead of rebuilding/deleting it.
+    if (snapshot?.available && snapshot.username) {
+      this.username = snapshot.username;
+      this.extension = aorExtension(snapshot.username);
+      claimAorForNative(snapshot.username, "manual_repair_existing_account");
+      await this.bindListeners(pjsip);
+      await withNativeTimeout(pjsip.register(), "sip_reregister");
+      const registered = await this.waitForRegistration(25_000);
+      if (registered) return true;
+    }
+
+    return withNativeTimeout(this.initialize(), "sip_initialize", 55_000);
+  }
+
   private async doInitialize(): Promise<boolean> {
     try {
       return await this.doInitializeInner();
@@ -143,7 +184,7 @@ export class NativeSipService {
       return false;
     }
     // Le moteur doit être RÉELLEMENT lié avant toute revendication.
-    const linked = await this.probeEngineLinked(pjsip);
+    const linked = await withNativeTimeout(this.probeEngineLinked(pjsip), "sip_engine_probe");
     if (!linked) {
       releaseAorFromNative("engine_not_linked");
       void import("./nativePpSipService").then((m) => m.declarePlanipretNativeEngineOwnsAor(false)).catch(() => undefined);
@@ -155,11 +196,11 @@ export class NativeSipService {
     claimAorForNative(null, "native_init_start");
     armAorWatchdog(() => this.registered);
 
-    const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
+    const { data, error } = await withNativeTimeout(supabase.functions.invoke("ns-resolve-sip-credentials", {
       // Align the NS Device object with the native PJSIP TCP contact — ONE
       // transport per AOR. `<ext>W` remains the separate WSS browser AOR.
       body: { client_type: "mobile", transport: "tcp" },
-    });
+    }), "sip_credentials");
 
     const creds = (data ?? {}) as Record<string, string>;
     const password = creds.sip_password;
@@ -206,7 +247,7 @@ export class NativeSipService {
 
       this.registerTracker = trackRegisterAttempt("TCP");
 
-      await pjsip.initialize({
+      await withNativeTimeout(pjsip.initialize({
         domain: String(creds.sip_domain ?? ""),
         username,
         password,
@@ -214,7 +255,7 @@ export class NativeSipService {
         transport,
         port,
         displayName: String(creds.display_name ?? "Planiprêt"),
-      });
+      }), "sip_native_initialize");
 
       // Le moteur natif possède l'AOR : JsSIP doit cesser de REGISTER et
       // retirer son Contact WebView s'il en avait déjà un.
@@ -370,6 +411,8 @@ export class NativeSipService {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        const index = this.registrationWaiters.indexOf(finish);
+        if (index >= 0) this.registrationWaiters.splice(index, 1);
         resolve(ok);
       };
       const timer = setTimeout(() => finish(false), timeoutMs);
@@ -576,6 +619,8 @@ export class NativeSipService {
       const snapshot = await pjsip.getState();
       this.registered = !!snapshot?.registered;
       this.lastState = this.registered ? "registered" : "unregistered";
+      this.username = snapshot?.username || this.username;
+      this.extension = this.extension ?? aorExtension(this.username ?? "");
       this.currentCallId = snapshot?.callId || null;
       return snapshot;
     } catch {

@@ -95,7 +95,7 @@ export function usePlanipretTasks(
     if (!userId) return;
     const gen = ++generation.current;
     setRefreshing(true);
-    const res = await listTasks({ status: "pending", filter, page: 1, limit: PAGE_SIZE, broker_id: brokerId });
+    const res = await listTasks({ filter, page: 1, limit: PAGE_SIZE, broker_id: brokerId });
     if (gen !== generation.current) return; // stale identity/response
     setRefreshing(false);
     setLoading(false);
@@ -124,7 +124,7 @@ export function usePlanipretTasks(
     const gen = generation.current;
     setLoadingMore(true);
     const next = page + 1;
-    const res = await listTasks({ status: "pending", filter, page: next, limit: PAGE_SIZE, broker_id: brokerId });
+    const res = await listTasks({ filter, page: next, limit: PAGE_SIZE, broker_id: brokerId });
     setLoadingMore(false);
     if (gen !== generation.current) return;
     if (!res.success) return;

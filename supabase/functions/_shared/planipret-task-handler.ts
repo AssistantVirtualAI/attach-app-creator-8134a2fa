@@ -387,7 +387,10 @@ export async function handleTaskRequest(
     const filter = normalizeFilter(body?.filter);
     const page = Math.max(Number(body?.page ?? 1) || 1, 1);
     const limit = Math.min(Math.max(Number(body?.limit ?? 20) || 20, 1), 200);
-    const status = body?.status ? String(body.status) : "pending";
+    // Do not impose Maestro's English `pending` slug. Production accounts use
+    // localized/custom statuses, and that upstream filter can incorrectly
+    // return an empty list. Open/overdue/today filtering is applied below.
+    const status = body?.status ? String(body.status) : null;
     const from = body?.from ? String(body.from) : null;
     const to = body?.to ? String(body.to) : null;
 

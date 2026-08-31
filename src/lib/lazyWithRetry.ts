@@ -1,4 +1,5 @@
 import { lazy, type ComponentType } from "react";
+import { hardReload } from "./version";
 
 /**
  * Wraps React.lazy with a one-time hard reload when a dynamic import fails
@@ -23,15 +24,19 @@ export function lazyWithRetry<T extends ComponentType<any>>(
         /Importing a module script failed/i.test(msg) ||
         /Failed to fetch dynamically imported module/i.test(msg) ||
         /ChunkLoadError/i.test(msg) ||
-        /error loading dynamically imported module/i.test(msg);
+        /error loading dynamically imported module/i.test(msg) ||
+        /loading chunk/i.test(msg) ||
+        /timeout/i.test(msg) ||
+        /failed to fetch/i.test(msg);
 
       if (isChunkError && typeof window !== "undefined") {
         let alreadyTried = false;
         try { alreadyTried = sessionStorage.getItem(storageKey) === "1"; } catch {}
         if (!alreadyTried) {
           try { sessionStorage.setItem(storageKey, "1"); } catch {}
-          // Force a full reload to fetch the fresh index.html + new chunk hashes.
-          window.location.reload();
+          // Force a full robust reload to fetch the fresh index.html + new chunk hashes.
+          // This clears service workers and caches which window.location.reload() does not.
+          hardReload("chunk-error");
           // Return a never-resolving promise to keep Suspense pending until reload.
           return new Promise<never>(() => {});
         }

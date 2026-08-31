@@ -104,6 +104,18 @@ describe("planipret task handler — create", () => {
   });
 });
 
+describe("planipret task handler — list scope", () => {
+  it("queries tasks with the Maestro broker id, not the legacy telecom id", async () => {
+    const listFetch = vi.fn(async () => ({ ok: true as const, tasks: [], endpoint: "/api/main/tasks", status: 200 }));
+    const { deps } = makeDeps({
+      listFetch,
+      resolveTelecomUserId: async () => "93135",
+    });
+    await handleTaskRequest({ action: "list", filter: "all" }, deps);
+    expect(listFetch).toHaveBeenCalledWith("387460525", expect.any(Object));
+  });
+});
+
 describe("planipret task handler — idempotency", () => {
   it("double tap / retry creates the task only once", async () => {
     const { deps, apiFetch } = makeDeps();

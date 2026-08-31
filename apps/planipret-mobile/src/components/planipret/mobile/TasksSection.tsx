@@ -130,6 +130,15 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
     else toast.error(r?.message ?? L("Suppression impossible", "Delete failed"));
   };
 
+  const openEdit = (task: NormalizedTask) => setComposer({ initial: {
+    task_id: task.id, notes: task.notes, description: task.description ?? "",
+    target: task.xid ?? "", target_type: task.type ?? "user",
+    target_name: task.target_name ?? "",
+    users_id: task.assignee_ids?.[0] ?? "",
+    status: task.status ?? undefined,
+    due_at: toTorontoLocalInput(task.due_at),
+  } });
+
   const snooze = async (task: NormalizedTask) => {
     const base = task.due_at ? new Date(task.due_at) : new Date();
     const next = new Date(base.getTime() + 24 * 3600 * 1000);
@@ -248,7 +257,14 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
               </p>
               <ul className="space-y-1">
                 {s.items.map((task) => (
-                  <li key={task.id} className="rounded-lg px-2 py-2" style={{ background: "#F7F9FC" }}>
+                  <li
+                    key={task.id}
+                    className="rounded-lg px-2 py-2"
+                    style={{ background: "#F7F9FC", cursor: readOnly ? undefined : "pointer" }}
+                    onClick={readOnly ? undefined : () => openEdit(task)}
+                    role={readOnly ? undefined : "button"}
+                    aria-label={readOnly ? undefined : L("Modifier la tâche", "Edit task")}
+                  >
                     <MaestroTaskRow
                       task={task}
                       lang={lang}
@@ -259,7 +275,7 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                           <SyncChip task={task} lang={lang} />
                         </div>
                       }
-                      actions={<>
+                      actions={<span style={{ display: "contents" }} onClick={(e) => e.stopPropagation()}>
                         <IconBtn label={L("Vérifier dans Maestro", "Verify in Maestro")} onClick={() => void checkTask(task.id)}>
                           {verif[task.id] === "loading"
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -268,16 +284,8 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
                         <IconBtn label={L("Ouvrir dans Maestro", "Open in Maestro")} onClick={() => openInMaestro(task.id)}><ExternalLink className="w-3.5 h-3.5" /></IconBtn>
                         <IconBtn label={L("Historique", "History")} onClick={() => void openHistory(task)}><History className="w-3.5 h-3.5" /></IconBtn>
                         {!readOnly && <IconBtn label={L("Reporter", "Snooze")} onClick={() => void snooze(task)}><CalendarClock className="w-3.5 h-3.5" /></IconBtn>}
-                        {!readOnly && <IconBtn label={L("Modifier", "Edit")} onClick={() => setComposer({ initial: {
-                          task_id: task.id, notes: task.notes, description: task.description ?? "",
-                          target: task.xid ?? "", target_type: task.type ?? "user",
-                          target_name: task.target_name ?? "",
-                          users_id: task.assignee_ids?.[0] ?? "",
-                          status: task.status ?? undefined,
-                          due_at: toTorontoLocalInput(task.due_at),
-                        } })}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
                         {!readOnly && <IconBtn label={L("Supprimer", "Delete")} danger onClick={() => setConfirmDelete(task)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>}
-                      </>}
+                      </span>}
                     />
                   </li>
                 ))}

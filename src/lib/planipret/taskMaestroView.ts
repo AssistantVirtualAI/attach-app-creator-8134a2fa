@@ -44,7 +44,10 @@ export function maestroTaskView(task: NormalizedTask, lang: "fr" | "en"): Maestr
 
   return {
     statusLabel: pick(raw, ["state_label", "workflow_status", "etat"]) || (closed ? (en ? "Completed" : "Complété") : en ? "Pending" : "En attente"),
-    clientName: task.target_name || pick(raw, ["client_name", "contact_name", "customer_name", "user_name"]) || task.notes || (en ? "Task" : "Tâche"),
+    clientName: task.target_name
+      || pick(raw, ["client_name", "contact_name", "customer_name", "user_name"])
+      || [pick(raw, ["client_first_name"]), pick(raw, ["client_last_name"])].filter(Boolean).join(" ").trim()
+      || task.notes || (en ? "Task" : "Tâche"),
     filogix: pick(raw, ["filogix", "filogix_id", "filogix_deal_id", "filogix_number"]),
     category: pick(raw, ["category", "categorie", "category_name", "task_category", "type_label"]),
     brokerName: pick(raw, ["broker_name", "courtier", "courtier_traitant", "agent_name", "assigned_to_name", "owner_name"]),

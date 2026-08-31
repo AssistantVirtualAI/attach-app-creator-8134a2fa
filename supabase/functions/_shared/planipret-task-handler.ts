@@ -939,5 +939,27 @@ export async function handleTaskRequest(
     return { status: 200, body: out.body };
   }
 
+  // ── HISTORY (audit trail of one task) ─────────────────────────────────────
+  if (action === "history") {
+    const taskId = String(body?.task_id ?? "").trim();
+    if (!taskId) {
+      return { status: 200, body: { success: false, error: "missing_task_id", correlation_id } };
+    }
+    const isAdminRole = role === "admin" || role === "planipret_admin" || role === "super_admin";
+    let q = admin.from("planipret_audit_log")
+      .select("id, action, created_at, user_id, metadata")
+      .eq("resource_type", "planipret_task")
+      .eq("resource_id", taskId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (!isAdminRole) q = q.eq("user_id", userId);
+    const { data, error } = await q;
+    if (error) {
+      return { status: 200, body: { success: false, error: "history_unavailable", message: error.message, correlation_id } };
+    }
+    return { status: 200, body: { success: true, task_id: taskId, events: data ?? [], correlation_id } };
+  }
+
+
   return { status: 200, body: { success: false, error: "unknown_action", action, correlation_id } };
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Users, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
@@ -17,6 +18,7 @@ export default function PAMaestroClients360() {
   const en = lang === "en";
   const L = (fr: string, e: string) => (en ? e : fr);
 
+  const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
   const [brokers, setBrokers] = useState<BrokerOption[]>([]);
   const [broker, setBroker] = useState("");
@@ -93,6 +95,7 @@ export default function PAMaestroClients360() {
         lang={en ? "en" : "fr"}
         lastSyncAt={lastSyncAt}
         loading={loading}
+        onOpenClient={(k) => navigate(`/planipret/admin/maestro-clients/${encodeURIComponent(k)}${broker ? `?broker=${broker}` : ""}`)}
       />
     </PAPage>
   );

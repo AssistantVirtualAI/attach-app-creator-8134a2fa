@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
-import ClientMaestro360 from "@/components/planipret/clients/ClientMaestro360";
+import ClientMaestroDetail from "@/components/planipret/clients/ClientMaestroDetail";
 
-/** Suivi Maestro par client : tâches, dossiers, commissions et alertes. */
-export default function MClients360() {
+/** Fiche d'un client : appels, tâches, dossiers et commissions. */
+export default function MClientDetail() {
   const navigate = useNavigate();
+  const { clientKey = "" } = useParams();
   const [userId, setUserId] = useState<string | null>(null);
   const lang = (localStorage.getItem("pp_lang") === "en" ? "en" : "fr") as "fr" | "en";
 
@@ -32,17 +33,17 @@ export default function MClients360() {
           <ChevronLeft className="w-4 h-4" />
         </button>
         <h1 className="text-base font-semibold pp-heading">
-          {lang === "en" ? "Client tracking" : "Suivi par client"}
+          {lang === "en" ? "Client file" : "Fiche client"}
         </h1>
       </div>
 
-      <ClientMaestro360
+      <ClientMaestroDetail
+        clientKey={clientKey}
         tasks={tasks}
         userIds={userId ? [userId] : []}
         lang={lang}
         lastSyncAt={lastSyncAt}
         loading={loading}
-        onOpenClient={(k) => navigate(`/mplanipret/clients-360/${encodeURIComponent(k)}`)}
       />
     </div>
   );

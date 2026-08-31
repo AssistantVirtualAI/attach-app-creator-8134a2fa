@@ -16,7 +16,7 @@ const cad = (n: number) =>
  * dépôts de commission. Même format de ligne que la page Tâches Maestro.
  */
 export default function ClientMaestro360({
-  tasks, userIds, lang, lastSyncAt, loading,
+  tasks, userIds, lang, lastSyncAt, loading, onOpenClient,
 }: {
   tasks: NormalizedTask[];
   /** Propriétaires des dossiers locaux à inclure. */
@@ -24,6 +24,8 @@ export default function ClientMaestro360({
   lang: "fr" | "en";
   lastSyncAt?: string | null;
   loading?: boolean;
+  /** Ouvre l'écran dédié d'un client (fiche complète). */
+  onOpenClient?: (clientKey: string) => void;
 }) {
   const en = lang === "en";
   const L = (fr: string, e: string) => (en ? e : fr);
@@ -128,6 +130,17 @@ export default function ClientMaestro360({
                   {b.depositTotal > 0 && <Badge tone="ok" icon={<Wallet className="w-3 h-3" />} text={cad(b.depositTotal)} />}
                 </span>
               </button>
+              {onOpenClient && (
+                <div className="px-3 pb-2 -mt-1">
+                  <button
+                    onClick={() => onOpenClient(b.key)}
+                    className="text-[11px] font-semibold inline-flex items-center gap-1"
+                    style={{ color: "var(--pp-brand-accent)" }}
+                  >
+                    {L("Ouvrir la fiche client", "Open client file")} <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
 
               {open === b.key && (
                 <div className="px-3 pb-3 space-y-3">

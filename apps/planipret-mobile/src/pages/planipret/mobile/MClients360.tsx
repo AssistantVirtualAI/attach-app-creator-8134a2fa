@@ -42,6 +42,7 @@ export default function MClients360() {
         lang={lang}
         lastSyncAt={lastSyncAt}
         loading={loading}
+        onOpenClient={(k) => navigate(`/mplanipret/clients-360/${encodeURIComponent(k)}`)}
       />
     </div>
   );

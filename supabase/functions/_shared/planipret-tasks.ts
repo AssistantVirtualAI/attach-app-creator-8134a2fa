@@ -412,7 +412,8 @@ export function normalizeTask(input: any): NormalizedTask {
     status: raw?.status != null ? String(raw.status) : (raw?.status_option_id != null ? String(raw.status_option_id) : null),
     type: typeRaw === "user" || typeRaw === "contract" ? (typeRaw as TaskType) : null,
     xid: raw?.xid != null ? String(raw.xid) : null,
-    target_name: raw?.client_name ?? raw?.contact_name ?? raw?.user_name ?? raw?.target_name ?? null,
+    target_name: raw?.client_name ?? raw?.contact_name ?? raw?.user_name ?? raw?.target_name
+      ?? ([raw?.client_first_name, raw?.client_last_name].filter(Boolean).join(" ").trim() || null),
     is_recurring: truthy(raw?.is_recurring),
     recurring_pattern: raw?.recurring_pattern ? String(raw.recurring_pattern) : null,
     created_by_ava: truthy(raw?.created_by_ava) || String(raw?.source ?? "").toLowerCase().includes("ava"),

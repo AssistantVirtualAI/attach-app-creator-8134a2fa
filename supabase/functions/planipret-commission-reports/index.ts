@@ -144,6 +144,10 @@ Deno.serve(async (req) => {
         }, 409, cid);
       }
       filters.users_id = resolvedUsersId;
+    } else if (role === "admin" && !filters.users_id && resolvedUsersId) {
+      // Un admin ne rapatrie jamais la firme entière par défaut : sans courtier
+      // explicitement choisi, la portée reste son propre identifiant Maestro.
+      filters.users_id = resolvedUsersId;
     }
 
     // ---- Institutions ----------------------------------------------------

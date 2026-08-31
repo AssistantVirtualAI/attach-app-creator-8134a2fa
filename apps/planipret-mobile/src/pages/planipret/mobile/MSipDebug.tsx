@@ -117,6 +117,10 @@ export default function MSipDebug() {
       </section>
 
 
+      {/* État réel du moteur natif (les champs WSS ci-dessus restent vides
+          quand PJSIP possède l'AOR : ce n'est pas une panne). */}
+      <NativeEngineCard />
+
       {/* 24h stability soak */}
       {/* Interrupteur PJSIP (sans rebuild) */}
       <PjsipToggleCard />

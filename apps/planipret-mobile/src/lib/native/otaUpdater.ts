@@ -37,9 +37,10 @@ function currentWebVersion(): string | null {
 async function loadUpdater() {
   try {
     // Import dynamique : absent en preview web, présent sur iOS/Android.
-    const mod = await import(
-      /* @vite-ignore */ "@capgo/capacitor-updater"
-    );
+    const specifier = "@capgo/capacitor-updater";
+    const mod = await (new Function("s", "return import(/* @vite-ignore */ s)")(
+      specifier,
+    ) as Promise<any>);
     return (mod as any).CapacitorUpdater ?? null;
   } catch {
     return null;

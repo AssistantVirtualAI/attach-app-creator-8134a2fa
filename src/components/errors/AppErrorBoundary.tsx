@@ -63,11 +63,24 @@ export class AppErrorBoundary extends Component<Props, State> {
     const error = normaliseError(raw);
     console.error('[ErrorBoundary] Caught error:', error, errorInfo);
     
-    // Auto-trigger hard reload if a chunk error bubbled up (failsafe for lazyWithRetry)
+    // Auto-trigger hard reload ONLY for genuine chunk/module load failures
+    // (failsafe for lazyWithRetry), and at most once per session so a
+    // deterministic error can never trap the user in a reload loop.
     const msg = error.message.toLowerCase();
-    if (/chunk|loading|fetch|module|importing/i.test(msg)) {
-      console.warn('[ErrorBoundary] Detected chunk failure, triggering robust reload...');
-      hardReload('boundary-chunk-error');
+    const isChunkFailure =
+      /loading chunk|chunkloaderror|failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|unable to preload css/i.test(msg);
+    if (isChunkFailure) {
+      let alreadyTried = false;
+      try {
+        alreadyTried = sessionStorage.getItem('ava_boundary_chunk_reload') === '1';
+        if (!alreadyTried) sessionStorage.setItem('ava_boundary_chunk_reload', '1');
+      } catch { /* storage unavailable — fall through and reload once */ }
+      if (!alreadyTried) {
+        console.warn('[ErrorBoundary] Detected chunk failure, triggering robust reload...');
+        hardReload('boundary-chunk-error');
+      } else {
+        console.error('[ErrorBoundary] Chunk failure persists after reload — showing fallback UI.');
+      }
     }
 
     this.setState({ errorInfo });

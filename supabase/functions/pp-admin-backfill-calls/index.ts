@@ -44,9 +44,9 @@ async function processOne(row: any, downstreamAuth: string, forceAi: boolean) {
   }
 }
 
-Deno.const MAX_TRANSCRIPT_ATTEMPTS = 6;
+const MAX_TRANSCRIPT_ATTEMPTS = 6;
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);

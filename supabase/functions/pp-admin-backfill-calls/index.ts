@@ -44,7 +44,9 @@ async function processOne(row: any, downstreamAuth: string, forceAi: boolean) {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.const MAX_TRANSCRIPT_ATTEMPTS = 6;
+
+serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
@@ -83,7 +85,6 @@ Deno.serve(async (req) => {
     // (Le pipeline pp-admin-transcribe marque transcript_pending si l'audio
     // n'est pas encore disponible côté PBX — inutile de re-tenter en boucle
     // dans la même invocation, on filtre les tentatives récentes < 10 min.)
-    const tenMinAgo = new Date(Date.now() - 10 * 60_000).toISOString();
     const { data: rows, error } = await admin
       .from("planipret_phone_calls")
       .select("id, transcript, analyzed_at, ai_summary, ai_coaching, coaching_score, analysis_in_progress, analysis_locked_at, transcript_last_attempt_at, transcript_attempts, ns_call_id, ns_callid, ns_cdr_id, ns_orig_callid, duration_seconds, has_recording")

@@ -101,12 +101,10 @@ export default function MMore() {
     })();
   }, [profile?.id]);
 
-  const { sipConnected, reregister } = useMplanipretSoftphone();
+  const { snap: sipSnap, sipConnected, reregister } = useMplanipretSoftphone();
   const nsConnected = !!(profile?.ns_extension ?? profile?.extension) && sipConnected;
   const isMs365Connected = ms365Connected(profile);
 
-  const [sipSnap, setSipSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
-  useEffect(() => ppSipProvider.subscribe(setSipSnap), []);
   const sipStatusColor: Record<string, string> = {
     idle: "#94A3B8", connecting: "#F59E0B", connected: "#3B82F6",
     registered: "#10B981", disconnected: "#94A3B8", error: "#EF4444",

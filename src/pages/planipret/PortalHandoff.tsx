@@ -32,7 +32,18 @@ export default function PortalHandoff() {
       // dans l'historique du navigateur.
       try { window.history.replaceState({}, "", window.location.pathname); } catch { /* ignore */ }
 
+      const hasSession = async () => {
+        const { data } = await supabase.auth.getSession();
+        return !!data.session?.user;
+      };
+
       if (!tokenHash || !email) {
+        // Déjà connecté dans ce navigateur : on entre directement.
+        if (await hasSession()) {
+          try { sessionStorage.setItem("pp_portal_just_signed_in", String(Date.now())); } catch { /* ignore */ }
+          navigate(to.startsWith("/planipret/") ? to : "/planipret/broker/overview", { replace: true });
+          return;
+        }
         setError("Lien incomplet ou expiré. Relancez l'ouverture depuis l'application mobile.");
         return;
       }
@@ -43,10 +54,11 @@ export default function PortalHandoff() {
         email,
       } as never);
 
-      if (otpError) {
+      if (otpError && !(await hasSession())) {
         setError("Lien expiré ou déjà utilisé. Relancez l'ouverture depuis l'application mobile.");
         return;
       }
+
 
       try { sessionStorage.setItem("pp_portal_just_signed_in", String(Date.now())); } catch { /* ignore */ }
       navigate(to.startsWith("/planipret/") ? to : "/planipret/broker/overview", { replace: true });

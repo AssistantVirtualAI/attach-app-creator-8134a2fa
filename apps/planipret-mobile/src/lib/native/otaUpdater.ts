@@ -36,11 +36,11 @@ function currentWebVersion(): string | null {
 
 async function loadUpdater() {
   try {
-    // Import dynamique : absent en preview web, présent sur iOS/Android.
-    const specifier = "@capgo/capacitor-updater";
-    const mod = await (new Function("s", "return import(/* @vite-ignore */ s)")(
-      specifier,
-    ) as Promise<any>);
+    // Import dynamique LITTÉRAL : Vite le bundle au build natif ; il est
+    // absent en preview web (catch). Ne JAMAIS passer par new Function() ou
+    // une variable : le bundler ne pourrait plus résoudre le paquet et le
+    // plugin ne chargerait jamais sur iOS/Android.
+    const mod = await import("@capgo/capacitor-updater");
     return (mod as any).CapacitorUpdater ?? null;
   } catch {
     return null;

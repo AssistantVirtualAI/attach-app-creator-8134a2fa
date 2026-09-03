@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
       success: true,
       ...result,
       ms365_connected: result.ms365 !== "failed" && !!(profile as Profile).ms365_refresh_token,
-      maestro_connected: result.maestro === "ok",
+      maestro_connected: result.maestro === "ok" || result.maestro === "fresh",
     });
   } catch (e) {
     console.error("[pp-connections-keepalive]", e);

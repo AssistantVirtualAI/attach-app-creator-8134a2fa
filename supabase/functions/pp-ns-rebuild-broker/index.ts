@@ -67,7 +67,9 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization") ?? "";
   const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-  let isAdmin = bearer === SERVICE_ROLE;
+  const OPS_KEY = Deno.env.get("PP_OPS_KEY") ?? Deno.env.get("PP_CRON_TOKEN") ?? "";
+  let isAdmin = bearer === SERVICE_ROLE
+    || (!!OPS_KEY && req.headers.get("x-pp-ops-key") === OPS_KEY);
   if (!isAdmin) {
     const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
     const { data: userData } = await userClient.auth.getUser();

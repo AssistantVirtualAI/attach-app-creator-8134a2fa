@@ -199,6 +199,20 @@ Deno.serve(async (req) => {
   }
   steps.dids_reassigned = didResults;
 
+  // 5b. Afficheur sortant = premier DID du courtier (le user NS recréé repart à vide)
+  const primaryDid = String((dids ?? [])[0]?.phone_number_digits ?? "").replace(/^1/, "");
+  if (primaryDid.length === 10) {
+    const r = await nsFetch(userUrl, {
+      method: "PUT",
+      body: JSON.stringify({
+        "caller-id-number": primaryDid,
+        "caller-id-name": String(broker.full_name ?? ext),
+        "caller-id-number-emergency": primaryDid,
+      }),
+    }).catch(() => null);
+    steps.caller_id = { number: primaryDid, ok: !!r?.ok, status: r?.status ?? 0 };
+  }
+
   // 6. Secrets + profil Supabase
   const mobileSecretName = broker.ns_sip_password_ref_mobile || `pp_sip_${broker.id}_mobile`;
   const widgetSecretName = `pp_sip_${broker.id}_widget`;

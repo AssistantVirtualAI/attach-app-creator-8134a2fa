@@ -97,6 +97,7 @@ export default defineConfig({
     __APP_ID__: JSON.stringify('planipret'),
     'import.meta.env.VITE_BUILD_ID': JSON.stringify(buildId),
     'import.meta.env.VITE_BUILD_TIME': JSON.stringify(buildTime),
-    'import.meta.env.VITE_CAPACITOR_VERSION': JSON.stringify(capacitorVersion),
+    'import.meta.env.VITE_APP_VERSION": JSON.stringify(JSON.parse(fs.readFileSync(path.resolve(__dirname, "package.json"), "utf8")).version),
+    "import.meta.env.VITE_CAPACITOR_VERSION': JSON.stringify(capacitorVersion),
   },
 });

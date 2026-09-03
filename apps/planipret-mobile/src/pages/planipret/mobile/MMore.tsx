@@ -8,8 +8,9 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
   User, Lock, Phone, Info, Mail, Bell, Moon, HelpCircle, MessageCircle,
-  LogOut, Trash2, ChevronRight, Bot, Sparkles, X, Download, Shield, BellOff, Settings as SettingsIcon, BarChart3, Voicemail, Edit3, Languages,
+  LogOut, Trash2, ChevronRight, Bot, Sparkles, X, Download, Shield, BellOff, Settings as SettingsIcon, BarChart3, Voicemail, Edit3, Languages, ExternalLink,
 } from "lucide-react";
+import { openBrokerPortal } from "@/lib/planipret/openBrokerPortal";
 import type { PlanipretMobileContext } from "../PlanipretMobile";
 import { usePlanipretPush } from "@/hooks/usePlanipretPush";
 
@@ -44,6 +45,7 @@ export default function MMore() {
   const [dndOpen, setDndOpen] = useState(false);
   const [taskDiagOpen, setTaskDiagOpen] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
+  const [openingPortal, setOpeningPortal] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState<boolean>(() => localStorage.getItem("planipret_notif") === "1");
   const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem("planipret_dark") === "1");
   const [agentOn, setAgentOn] = useState<boolean>(() => localStorage.getItem("planipret_agent_on") !== "0");
@@ -252,6 +254,17 @@ export default function MMore() {
       </Section>
 
       <Section title={t("more.sections.account")}>
+        <Row icon={<ExternalLink className="w-4 h-4" />} label="Ouvrir mon portail AVA Statistic"
+          sub="Connexion automatique avec votre compte"
+          onClick={async () => {
+            if (openingPortal) return;
+            setOpeningPortal(true);
+            const res = await openBrokerPortal();
+            setOpeningPortal(false);
+            if (res.ok === false) toast.error(res.error);
+          }}
+          right={openingPortal ? <span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>…</span> : undefined}
+          chevron />
         <Row icon={<User className="w-4 h-4" />} label={t("more.myProfile")} onClick={() => setEditOpen(true)} chevron />
         <Row icon={<Lock className="w-4 h-4" />} label={t("more.changePassword")} onClick={() => navigate("/mplanipret/change-password")} chevron />
         <Row icon={<Download className="w-4 h-4" />} label={t("more.myData")} sub={t("more.myDataSub")}

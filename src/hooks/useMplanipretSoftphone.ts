@@ -1028,7 +1028,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         : pbxRegistration === "other" ? "connected" : null)
       : null;
     const base: PpSipSnapshot = promoted
-      ? ({ ...snap, status: promoted, lastError: promoted === "registered" ? null : snap.lastError } as PpSipSnapshot)
+      ? ({ ...snap, status: promoted, errorCause: promoted === "registered" ? undefined : snap.errorCause } as PpSipSnapshot)
       : snap;
 
     if (!restCall?.id || hasLiveSipSession) {

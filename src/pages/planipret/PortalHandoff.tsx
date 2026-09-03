@@ -11,11 +11,17 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, ShieldAlert } from "lucide-react";
 
+// Le jeton est à usage unique : on empêche toute double consommation
+// (StrictMode, remontage, rechargement de version).
+let handoffRan = false;
+
 export default function PortalHandoff() {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (handoffRan) return;
+    handoffRan = true;
     (async () => {
       const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
       const tokenHash = params.get("th") ?? "";

@@ -263,6 +263,9 @@ export default function MMore() {
         <Row icon={<Sparkles className="w-4 h-4" />} label={t("screens.more.discussWithAva")} sub={t("screens.more.avaAssistantSub")} onClick={() => navigate("/mplanipret/ava")} chevron />
         <Row icon={<Bell className="w-4 h-4" />} label={t("screens.more.avaNotifTitle")} sub={t("screens.more.avaNotifSub")} onClick={() => navigate("/mplanipret/notifications")} chevron />
         <Row icon={<BarChart3 className="w-4 h-4" />} label={t("more.pipelineFiles")} onClick={() => navigate("/mplanipret/pipeline")} chevron />
+        <Row icon={<ListChecks className="w-4 h-4" />} label={t("nav.tasks") === "nav.tasks" ? "Tâches" : t("nav.tasks")}
+          sub={lang === "fr" ? "Vos tâches Maestro" : "Your Maestro tasks"}
+          onClick={() => navigate("/mplanipret/tasks")} chevron />
         <Row icon={<BarChart3 className="w-4 h-4" />} label={t("more.performance")} onClick={() => navigate("/mplanipret/stats")} chevron />
         {(profile?.role === "broker" || profile?.role === "admin") && (
           <Row icon={<Wallet className="w-4 h-4" />} label="Commissions" onClick={() => navigate("/mplanipret/commissions")} chevron />

@@ -14,8 +14,10 @@ import { resolveBrokerAccess } from "@/lib/planipret/brokerAccess";
 import BrokerOmniSearch from "@/components/planipret/broker/BrokerOmniSearch";
 import PortalDomainGate from "@/components/planipret/PortalDomainGate";
 import HighReadabilityToggle from "@/components/planipret/broker/HighReadabilityToggle";
+import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
+import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 
-export type BrokerCtx = { userId: string; authUserId: string; profile: any };
+export type BrokerCtx = { userId: string; authUserId: string; profile: any; softphone?: ReturnType<typeof useMplanipretSoftphone> };
 
 const NAV = [
   { to: "/planipret/broker/overview",   Icon: LayoutDashboard, fr: "Vue d'ensemble", en: "Overview" },

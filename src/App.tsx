@@ -60,6 +60,7 @@ const MDeepLinkDebug = lazyWithRetry(() => import("./pages/planipret/mobile/MDee
 const PlanipretAudit = lazyWithRetry(() => import("./pages/planipret/PlanipretAudit"));
 const Ms365Callback = lazyWithRetry(() => import("./pages/planipret/Ms365Callback"));
 const PortalAuthError = lazyWithRetry(() => import("./pages/planipret/PortalAuthError"));
+const PortalHandoff = lazyWithRetry(() => import("./pages/planipret/PortalHandoff"));
 import PlanipretPortalGuard from "./components/planipret/PlanipretPortalGuard";
 const MaestroCallback = lazyWithRetry(() => import("./pages/auth/MaestroCallback"));
 const Ms365Diagnostics = lazyWithRetry(() => import("./pages/planipret/Ms365Diagnostics"));
@@ -644,6 +645,7 @@ const App = () => (
                 <Route path="/auth/callback" element={<Ms365Callback />} />
                 <Route path="/auth/maestro/callback" element={<MaestroCallback />} />
                 <Route path="/planipret/auth-error" element={<Suspense fallback={<AdminPageSkeleton />}><PortalAuthError /></Suspense>} />
+                <Route path="/planipret/portal-handoff" element={<Suspense fallback={<AdminPageSkeleton />}><PortalHandoff /></Suspense>} />
                 <Route path="/mplanipret/ms365-diagnostics" element={<Ms365Diagnostics />} />
                 <Route path="/planipret/ms365-diagnostics" element={<Ms365Diagnostics />} />
                 <Route path="/mplanipret/style-diagnostics" element={<MStyleDiagnosticsWeb />} />

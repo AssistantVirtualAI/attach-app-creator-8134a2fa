@@ -14,8 +14,10 @@ import { resolveBrokerAccess } from "@/lib/planipret/brokerAccess";
 import BrokerOmniSearch from "@/components/planipret/broker/BrokerOmniSearch";
 import PortalDomainGate from "@/components/planipret/PortalDomainGate";
 import HighReadabilityToggle from "@/components/planipret/broker/HighReadabilityToggle";
+import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
+import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
 
-export type BrokerCtx = { userId: string; authUserId: string; profile: any };
+export type BrokerCtx = { userId: string; authUserId: string; profile: any; softphone?: ReturnType<typeof useMplanipretSoftphone> };
 
 const NAV = [
   { to: "/planipret/broker/overview",   Icon: LayoutDashboard, fr: "Vue d'ensemble", en: "Overview" },
@@ -46,6 +48,11 @@ export default function PlanipretBrokerLayout() {
   const [authUserId, setAuthUserId] = useState<string>("");
   const [profile, setProfile] = useState<any>(null);
   const [denyReason, setDenyReason] = useState<string>("");
+
+  // Softphone web (device `<ext>W`, WSS) : sans lui aucun appel entrant ne
+  // sonne dans le portail courtier — NetSapiens n'a aucun contact enregistré
+  // et bascule directement en messagerie. Activé dès que la session est prête.
+  const softphone = useMplanipretSoftphone(state === "ready", { primary: true, clientType: "web" });
 
   // The broker portal uses document scrolling. Clear any scroll lock left by
   // another route/modal so wheel and touch scrolling work on every page.
@@ -253,9 +260,12 @@ export default function PlanipretBrokerLayout() {
         </header>
 
         <main className="pa-main flex-1 min-w-0 p-4 md:p-7" style={{ overflowX: "clip", overflowY: "visible" }}>
-          <Outlet context={{ userId, authUserId, profile } satisfies BrokerCtx} />
+          <Outlet context={{ userId, authUserId, profile, softphone } satisfies BrokerCtx} />
         </main>
       </div>
+
+      {/* Écran d'appel actif : entrant (sonnerie WebRTC) et sortant. */}
+      <PpActiveCallScreen softphone={softphone} />
     </div>
     </PortalDomainGate>
   );

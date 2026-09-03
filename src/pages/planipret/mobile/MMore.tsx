@@ -261,7 +261,7 @@ export default function MMore() {
             setOpeningPortal(true);
             const res = await openBrokerPortal();
             setOpeningPortal(false);
-            if (!res.ok) toast.error(res.error);
+            if (res.ok === false) toast.error(res.error);
           }}
           right={openingPortal ? <span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>…</span> : undefined}
           chevron />

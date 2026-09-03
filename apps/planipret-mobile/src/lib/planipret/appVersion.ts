@@ -7,6 +7,7 @@
  * Si un paquet OTA plus récent est actif, sa version est ajoutée.
  */
 import { Capacitor } from "@capacitor/core";
+import { getAppliedOtaVersion } from "@/lib/native/otaUpdater";
 
 export type AppVersionInfo = { label: string; native: string; build: string; ota?: string };
 
@@ -14,8 +15,11 @@ export async function getAppVersionInfo(): Promise<AppVersionInfo> {
   if (!Capacitor.isNativePlatform()) {
     return { label: "Web", native: "web", build: "—" };
   }
-  let native = "—";
-  let build = "—";
+  // Ces valeurs compilées garantissent un affichage utile même si un ancien
+  // bridge Capacitor ne répond pas à App.getInfo(). Le bridge natif reste la
+  // source prioritaire dès qu'il est disponible.
+  let native = import.meta.env.VITE_APP_VERSION || "—";
+  let build = import.meta.env.VITE_NATIVE_BUILD || "—";
   try {
     const { App } = await import("@capacitor/app");
     const info = await App.getInfo();
@@ -23,12 +27,12 @@ export async function getAppVersionInfo(): Promise<AppVersionInfo> {
     build = info.build || "—";
   } catch { /* ignore */ }
 
-  let ota: string | undefined;
+  let ota: string | undefined = getAppliedOtaVersion() ?? undefined;
   try {
     const mod: any = await import("@capgo/capacitor-updater");
-    const updater = mod?.CapacitorUpdater ?? mod?.n;
+    const updater = mod?.CapacitorUpdater;
     const current = await updater?.current?.();
-    const v = current?.bundle?.version;
+    const v = current?.bundle?.version ?? current?.bundle?.id;
     if (v && v !== "builtin" && v !== native) ota = v;
   } catch { /* ignore */ }
 

@@ -53,14 +53,13 @@ Deno.serve(async (req) => {
     // Le courtier est DÉJÀ authentifié dans l'app mobile : on estampille la
     // session comme « pont mobile vérifié » pour que le garde du portail
     // l'accepte sans repasser par Microsoft.
-    try {
-      await admin.auth.admin.updateUserById(user.id, {
+    const { error: stampError } = await admin.auth.admin.updateUserById(user.id, {
         user_metadata: {
           ...(user.user_metadata ?? {}),
           portal_handoff_at: new Date().toISOString(),
         },
       });
-    } catch { /* non bloquant */ }
+    if (stampError) return json({ ok: false, error: "handoff_stamp_failed" }, 500);
 
     const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
       type: "magiclink",

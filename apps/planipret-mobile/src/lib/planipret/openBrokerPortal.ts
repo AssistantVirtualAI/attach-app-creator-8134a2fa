@@ -18,8 +18,16 @@ const ERRORS: Record<string, string> = {
 
 export async function openBrokerPortal(path?: string): Promise<OpenPortalResult> {
   try {
+    let { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      const refreshed = await supabase.auth.refreshSession();
+      session = refreshed.data.session;
+    }
+    if (!session?.access_token) return { ok: false, error: ERRORS.not_authenticated };
+
     const { data, error } = await supabase.functions.invoke("pp-portal-handoff", {
       body: path ? { path } : {},
+      headers: { Authorization: `Bearer ${session.access_token}` },
     });
     const out = data as { ok?: boolean; url?: string; portal?: "admin" | "broker"; error?: string } | null;
     if (error || !out?.ok || !out.url) {

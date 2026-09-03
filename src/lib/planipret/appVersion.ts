@@ -14,8 +14,8 @@ export async function getAppVersionInfo(): Promise<AppVersionInfo> {
   if (!Capacitor.isNativePlatform()) {
     return { label: "Web", native: "web", build: "—" };
   }
-  let native = "—";
-  let build = "—";
+  let native = import.meta.env.VITE_APP_VERSION || "—";
+  let build = import.meta.env.VITE_NATIVE_BUILD || "—";
   try {
     const { App } = await import("@capacitor/app");
     const info = await App.getInfo();
@@ -28,7 +28,7 @@ export async function getAppVersionInfo(): Promise<AppVersionInfo> {
   try {
     const spec = "@capgo/capacitor-updater";
     const mod: any = await import(/* @vite-ignore */ spec);
-    const updater = mod?.CapacitorUpdater ?? mod?.n;
+    const updater = mod?.CapacitorUpdater;
     const current = await updater?.current?.();
     const v = current?.bundle?.version;
     if (v && v !== "builtin" && v !== native) ota = v;

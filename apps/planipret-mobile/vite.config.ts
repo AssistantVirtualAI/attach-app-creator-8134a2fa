@@ -76,10 +76,6 @@ export default defineConfig({
     },
   },
   base: './',
-  define: {
-    'import.meta.env.VITE_APP_VERSION': JSON.stringify(String(mobilePackage.version ?? 'unknown')),
-    'import.meta.env.VITE_NATIVE_BUILD': JSON.stringify(String(mobilePackage.androidVersionCode ?? 'unknown')),
-  },
   // The mobile app has its own package.json, so postcss-load-config never
   // reaches the repo root. Wire Tailwind/Autoprefixer explicitly, otherwise
   // the built CSS ships without any utility class (blank/broken screens).
@@ -97,7 +93,8 @@ export default defineConfig({
     __APP_ID__: JSON.stringify('planipret'),
     'import.meta.env.VITE_BUILD_ID': JSON.stringify(buildId),
     'import.meta.env.VITE_BUILD_TIME': JSON.stringify(buildTime),
-    'import.meta.env.VITE_APP_VERSION": JSON.stringify(JSON.parse(fs.readFileSync(path.resolve(__dirname, "package.json"), "utf8")).version),
-    "import.meta.env.VITE_CAPACITOR_VERSION': JSON.stringify(capacitorVersion),
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(String(mobilePackage.version ?? 'unknown')),
+    'import.meta.env.VITE_NATIVE_BUILD': JSON.stringify(String(mobilePackage.androidVersionCode ?? 'unknown')),
+    'import.meta.env.VITE_CAPACITOR_VERSION': JSON.stringify(capacitorVersion),
   },
 });

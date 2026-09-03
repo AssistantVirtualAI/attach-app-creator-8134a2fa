@@ -14,6 +14,7 @@ export type OpenPortalResult = { ok: true; portal: "admin" | "broker" } | { ok: 
 const ERRORS: Record<string, string> = {
   not_authenticated: "Session expirée. Reconnectez-vous à l'application.",
   no_planipret_profile: "Aucun profil Planiprêt associé à ce compte.",
+  handoff_stamp_failed: "Connexion directe temporairement indisponible. Réessayez.",
 };
 
 export async function openBrokerPortal(path?: string): Promise<OpenPortalResult> {

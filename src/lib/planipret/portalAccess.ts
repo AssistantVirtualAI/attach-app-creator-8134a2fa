@@ -46,7 +46,14 @@ export async function resolvePortalAccess(): Promise<PortalAccess> {
 
   const email = user.email ?? "";
 
+  // Pont mobile : le courtier vient d'ouvrir le portail depuis l'app mobile
+  // où il est déjà authentifié. `pp-portal-handoff` estampille la session ;
+  // elle reste valide 12 h sans nouvelle connexion Microsoft.
   let microsoft = isMicrosoftUser(user);
+  if (!microsoft) {
+    const stamp = Date.parse(String((user.user_metadata ?? {}).portal_handoff_at ?? ""));
+    if (Number.isFinite(stamp) && Date.now() - stamp < 12 * 60 * 60 * 1000) microsoft = true;
+  }
   if (!microsoft) {
     // Repli : le profil Planiprêt garde la trace de la connexion Microsoft
     // (sessions émises par `pp-ms-auth-callback` avant l'estampille).

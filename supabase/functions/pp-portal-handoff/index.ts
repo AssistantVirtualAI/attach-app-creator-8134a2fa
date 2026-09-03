@@ -50,6 +50,18 @@ Deno.serve(async (req) => {
     let target = typeof body?.path === "string" ? body.path : home;
     if (!/^\/planipret\/(admin|broker)\//.test(target)) target = home;
 
+    // Le courtier est DÉJÀ authentifié dans l'app mobile : on estampille la
+    // session comme « pont mobile vérifié » pour que le garde du portail
+    // l'accepte sans repasser par Microsoft.
+    try {
+      await admin.auth.admin.updateUserById(user.id, {
+        user_metadata: {
+          ...(user.user_metadata ?? {}),
+          portal_handoff_at: new Date().toISOString(),
+        },
+      });
+    } catch { /* non bloquant */ }
+
     const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
       type: "magiclink",
       email: user.email,

@@ -49,6 +49,11 @@ export default function PlanipretBrokerLayout() {
   const [profile, setProfile] = useState<any>(null);
   const [denyReason, setDenyReason] = useState<string>("");
 
+  // Softphone web (device `<ext>W`, WSS) : sans lui aucun appel entrant ne
+  // sonne dans le portail courtier — NetSapiens n'a aucun contact enregistré
+  // et bascule directement en messagerie. Activé dès que la session est prête.
+  const softphone = useMplanipretSoftphone(state === "ready", { primary: true, clientType: "web" });
+
   // The broker portal uses document scrolling. Clear any scroll lock left by
   // another route/modal so wheel and touch scrolling work on every page.
   useEffect(() => {

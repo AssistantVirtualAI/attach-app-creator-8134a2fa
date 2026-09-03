@@ -573,7 +573,7 @@ SMS non lus: ${smsUnread ?? 0}`;
  Pour reprogrammer/modifier un rendez-vous: payload.action='update_calendar_event' avec event_id + champs à changer (start/end/subject/location/attendees). Utilise d'abord list_calendar_events pour retrouver l'event_id.
  Pour annuler/supprimer: payload.action='delete_calendar_event' avec event_id.
  Quand l'utilisateur demande ses prochains rendez-vous ou une notification, appelle list_calendar_events et résume avec heure, sujet, participants et lien Teams si disponible.
- APPELS: dès que l'utilisateur demande d'appeler quelqu'un ou un numéro, tu DOIS renvoyer une suggestion kind='call' avec payload.number au format E.164 (+1XXXXXXXXXX). Si le numéro vient d'un contact du [Contexte], utilise-le. Si aucun numéro n'est trouvé, demande le numéro. Ne réponds jamais « je ne peux pas lancer d'appel ».
+ APPELS: dès que l'utilisateur demande d'appeler quelqu'un ou un numéro, tu DOIS renvoyer une suggestion kind='call' avec payload.number. Pour un numéro externe: format E.164 (+1XXXXXXXXXX). Pour un appel interne (poste/extension de 2 à 6 chiffres, ex. 1136): mets le poste TEL QUEL, sans + ni indicatif ("1136", jamais "+11136"). Si le numéro vient d'un contact du [Contexte], utilise-le. Si aucun numéro n'est trouvé, demande le numéro. Ne réponds jamais « je ne peux pas lancer d'appel ».
  Les actions qui envoient/modifient (send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message, sms, call) exigent une confirmation: propose TOUJOURS la suggestion correspondante (l'application affiche un bouton de confirmation) et ne prétends pas l'avoir exécutée avant confirmation.
  IMPORTANT — Après avoir exécuté send_sms, si la réponse contient fallback:'open_sms_composer' ou success:false, dis clairement au courtier que le SMS n'est PAS parti et que le composeur SMS a été ouvert pour renvoi manuel. Idem pour make_call: si fallback:'open_dialer', dis que le softphone n'est pas enregistré et que le clavier est ouvert avec le numéro pré-composé. Ne dis JAMAIS « SMS envoyé » ou « appel lancé » quand la réponse indique success:false ou fallback.
 Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. Mets openCoach=true si une action de coaching multi-étapes serait utile.`;
@@ -644,7 +644,7 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
       try {
         const r2 = await generateText({
           model: gateway("google/gemini-3-flash-preview"),
-          system: `${system}\n\nFORMAT DE SORTIE OBLIGATOIRE: réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, de la forme {"reply":"...","suggestions":[{"id":"...","label":"...","kind":"call","payload":{"number":"+1..."}}],"openCoach":false,"openVoice":false}.`,
+          system: `${system}\n\nFORMAT DE SORTIE OBLIGATOIRE: réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, de la forme {"reply":"...","suggestions":[{"id":"...","label":"...","kind":"call","payload":{"number":"+1... ou poste interne ex 1136"}}],"openCoach":false,"openVoice":false}.`,
           prompt,
         });
         result = coerceOutput(r2.text) ?? { reply: r2.text ?? "Désolé, je n'ai pas pu répondre.", suggestions: [] };

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { ppSipProvider, type PpSipEvent, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
 import { exportSipStability, getSipStabilityReport, resetSipStability } from "@/lib/planipret/sip/sipStabilityMonitor";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { checkSipBackendRegistration, getLastSipBackendCheck, type SipBackendCheck } from "@/lib/planipret/sip/sipBackendCheck";
 
 const STAGES = ["idle", "connecting", "connected", "registered"] as const;
 
@@ -34,6 +35,7 @@ export default function MSipDebug() {
   const { t, lang } = useMplanipretLang();
   const [snap, setSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
   const [events, setEvents] = useState<PpSipEvent[]>(() => ppSipProvider.getEvents());
+  const [pbx, setPbx] = useState<SipBackendCheck | null>(() => getLastSipBackendCheck());
 
   useEffect(() => {
     const us = ppSipProvider.subscribe(setSnap);
@@ -41,10 +43,28 @@ export default function MSipDebug() {
     return () => { us(); ue(); };
   }, []);
 
+  // Live PBX-side truth: the local stack can be idle while the extension is
+  // really registered (native engine / other client). Poll the server.
+  useEffect(() => {
+    let alive = true;
+    const run = async (force = false) => {
+      const res = await checkSipBackendRegistration({ force });
+      if (alive && res) setPbx(res);
+    };
+    run(true);
+    const id = setInterval(() => run(false), 30_000);
+    const onVis = () => { if (document.visibilityState === "visible") run(true); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
+
   const cfg = ppSipProvider.getConfig();
-  const rawIdx = STAGES.indexOf(snap.status as any);
+  const pbxRegistered = Boolean(pbx?.registration?.mobile_registered || (pbx?.registration?.count ?? 0) > 0);
+  const status = pbxRegistered && snap.status !== "registered" ? "registered" : snap.status;
+  const rawIdx = STAGES.indexOf(status as any);
   const currentIdx = rawIdx >= 0 ? rawIdx : 0;
-  const isError = snap.status === "error";
+  const isError = status === "error";
+
 
   const copy = async () => {
     const payload = [
@@ -85,16 +105,16 @@ export default function MSipDebug() {
       {/* Status card */}
       <section className="pp-card p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <Radio className="w-4 h-4" style={{ color: STATUS_COLOR[snap.status] }} />
+          <Radio className="w-4 h-4" style={{ color: STATUS_COLOR[status] }} />
           <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>{t("screens.sipDebug.stateTitle")}</span>
-          <span className="ml-auto px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ background: STATUS_COLOR[snap.status], color: "#fff" }}>
-            {snap.status.toUpperCase()}
+          <span className="ml-auto px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ background: STATUS_COLOR[status], color: "#fff" }}>
+            {status.toUpperCase()}
           </span>
         </div>
 
         <div className="flex items-center gap-1">
           {STAGES.map((s, i) => (
-            <StageDot key={s} label={s} active={!isError && currentIdx === i && s !== "registered"} done={!isError && ((snap.status === "registered" && currentIdx >= i) || currentIdx > i)} error={isError && i === Math.min(currentIdx, STAGES.length - 1)} />
+            <StageDot key={s} label={s} active={!isError && currentIdx === i && s !== "registered"} done={!isError && ((status === "registered" && currentIdx >= i) || currentIdx > i)} error={isError && i === Math.min(currentIdx, STAGES.length - 1)} />
           ))}
         </div>
 
@@ -106,7 +126,7 @@ export default function MSipDebug() {
         )}
 
         <div className="grid grid-cols-2 gap-2 text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
-          <div><span className="opacity-60">{t("screens.sipDebug.extShort")}</span> {cfg?.sipUsername ?? "—"}</div>
+          <div><span className="opacity-60">{t("screens.sipDebug.extShort")}</span> {cfg?.sipUsername ?? pbx?.extension ?? "—"}</div>
           <div><span className="opacity-60">{t("screens.sipDebug.domainShort")}</span> {cfg?.sipDomain ?? "—"}</div>
           <div className="col-span-2 truncate"><span className="opacity-60">{t("screens.sipDebug.wssShort")}</span> {cfg?.wssUrl ?? "—"}</div>
           <div className="col-span-2"><span className="opacity-60">{t("screens.sipDebug.lastRegistration")}</span> {snap.lastRegistrationAt ? new Date(snap.lastRegistrationAt).toLocaleTimeString(lang === "fr" ? "fr-CA" : "en-CA") : "—"}</div>

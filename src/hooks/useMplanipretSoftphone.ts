@@ -1056,7 +1056,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       startedAt: restCall.startedAt ?? base.startedAt ?? Date.now(),
       onHold: state === "held",
     };
-  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration, hasLiveSipSession, pushRing]);
+  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration, pbxRegistration, hasLiveSipSession, pushRing]);
 
 
   const restControl = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {
@@ -1394,7 +1394,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     else postInboundCall({ providerCallId: attachment.id, number });
   }, []);
 
-  const sipConnected = snap.status === "registered" || snap.status === "connected";
+  const sipConnected = effectiveSnap.status === "registered" || effectiveSnap.status === "connected";
 
   return useMemo(() => ({
     snap: effectiveSnap,
@@ -1402,6 +1402,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     net,
     quality,
     nativeStatus,
+    pbxRegistration,
     sipConnected,
     placeCall,
     answeredElsewhere,
@@ -1422,7 +1423,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     setAudioEl: (_el: HTMLAudioElement | null) => {},
 
     forceHandover: () => handoverController.forceHandover(),
-  }), [effectiveSnap, loading, net, quality, nativeStatus, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl, hasLiveSipSession]);
+  }), [effectiveSnap, loading, net, quality, nativeStatus, pbxRegistration, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl, hasLiveSipSession]);
 
 
 }

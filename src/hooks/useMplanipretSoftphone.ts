@@ -263,6 +263,17 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   // Permet d'afficher immédiatement l'écran "ça sonne" avec Répondre/Raccrocher.
   const [pushRing, setPushRing] = useState<{ callId: string; from: string } | null>(null);
   const [nativeStatus, setNativeStatus] = useState<PpNativeSipStatus | null>(null);
+  /**
+   * Server-side truth about the PBX registration state. The local SIP stack can
+   * report `idle` (WebView contact released, native stack owning the AOR, or a
+   * page freshly loaded) while the extension is perfectly registered on
+   * NetSapiens and able to place/receive calls. Without this the UI showed
+   * "SIP not registered / IDLE" for brokers who were actually online.
+   *  - "own"   → this client's own AOR (`<ext>M` / `<ext>W`) is registered
+   *  - "other" → another device of the same extension is registered
+   */
+  const [pbxRegistration, setPbxRegistration] = useState<"own" | "other" | "none">("none");
+
   /** Latest answer() implementation, callable from native listeners registered once. */
   const answerRef = useRef<null | (() => Promise<boolean>)>(null);
   /** One answer transaction at a time across CallKit, notification and in-app UI. */

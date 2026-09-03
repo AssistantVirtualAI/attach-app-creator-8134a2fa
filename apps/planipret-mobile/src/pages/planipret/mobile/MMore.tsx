@@ -47,6 +47,8 @@ export default function MMore() {
   const [taskDiagOpen, setTaskDiagOpen] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [openingPortal, setOpeningPortal] = useState(false);
+  const [appVersion, setAppVersion] = useState("…");
+  useEffect(() => { getAppVersionInfo().then((v) => setAppVersion(v.label)).catch(() => setAppVersion("—")); }, []);
   const [notifEnabled, setNotifEnabled] = useState<boolean>(() => localStorage.getItem("planipret_notif") === "1");
   const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem("planipret_dark") === "1");
   const [agentOn, setAgentOn] = useState<boolean>(() => localStorage.getItem("planipret_agent_on") !== "0");

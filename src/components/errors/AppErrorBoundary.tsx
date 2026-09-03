@@ -61,28 +61,9 @@ export class AppErrorBoundary extends Component<Props, State> {
       return;
     }
     const error = normaliseError(raw);
+    // Pas de rechargement automatique : on affiche l'erreur réelle (message + pile)
+    // pour que l'utilisateur puisse la lire / la transmettre au support.
     console.error('[ErrorBoundary] Caught error:', error, errorInfo);
-    
-    // Auto-trigger hard reload ONLY for genuine chunk/module load failures
-    // (failsafe for lazyWithRetry), and at most once per session so a
-    // deterministic error can never trap the user in a reload loop.
-    const msg = error.message.toLowerCase();
-    const isChunkFailure =
-      /loading chunk|chunkloaderror|failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|unable to preload css/i.test(msg);
-    if (isChunkFailure) {
-      let alreadyTried = false;
-      try {
-        alreadyTried = sessionStorage.getItem('ava_boundary_chunk_reload') === '1';
-        if (!alreadyTried) sessionStorage.setItem('ava_boundary_chunk_reload', '1');
-      } catch { /* storage unavailable — fall through and reload once */ }
-      if (!alreadyTried) {
-        console.warn('[ErrorBoundary] Detected chunk failure, triggering robust reload...');
-        hardReload('boundary-chunk-error');
-      } else {
-        console.error('[ErrorBoundary] Chunk failure persists after reload — showing fallback UI.');
-      }
-    }
-
     this.setState({ errorInfo });
   }
 
@@ -98,28 +79,69 @@ export class AppErrorBoundary extends Component<Props, State> {
     this.setState((state) => ({ hasError: false, error: null, errorInfo: null, retryKey: state.retryKey + 1 }));
   };
 
+  private buildReport = () => {
+    const e = this.state.error;
+    return [
+      `Message: ${e?.message ?? 'inconnu'}`,
+      `URL: ${typeof window !== 'undefined' ? window.location.href : ''}`,
+      `Date: ${new Date().toISOString()}`,
+      '',
+      'Stack:',
+      e?.stack ?? '(aucune pile)',
+      '',
+      'Component stack:',
+      this.state.errorInfo?.componentStack ?? '(aucune)',
+    ].join('\n');
+  };
+
+  private handleCopy = () => {
+    try { void navigator.clipboard?.writeText(this.buildReport()); } catch { /* noop */ }
+  };
+
   public render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
       return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
-          <div className="max-w-md w-full text-center space-y-6">
-            <div className="w-16 h-16 mx-auto bg-destructive/10 rounded-full flex items-center justify-center">
-              <AlertTriangle className="w-8 h-8 text-destructive" />
+          <div className="max-w-2xl w-full space-y-6">
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 mx-auto bg-destructive/10 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-8 h-8 text-destructive" />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-2xl font-bold text-foreground">Une erreur est survenue</h1>
+                <p className="text-muted-foreground">
+                  Voici le message exact et la pile d'appels. Copiez-les et transmettez-les au support si le problème persiste.
+                </p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <h1 className="text-2xl font-bold text-foreground">Something went wrong</h1>
-              <p className="text-muted-foreground">A runtime error occurred. If this persists, please try the robust reload below.</p>
-            </div>
+
             {this.state.error && (
-              <div className="text-left bg-muted/50 rounded-lg p-4 overflow-auto max-h-60">
-                <p className="text-sm font-mono text-destructive break-all">{this.state.error.toString()}</p>
+              <div className="text-left bg-muted/50 rounded-lg p-4 space-y-3 overflow-auto max-h-[45vh]">
+                <p className="text-sm font-mono text-destructive break-all">
+                  {this.state.error.name}: {this.state.error.message || '(message vide)'}
+                </p>
+                {this.state.error.stack && (
+                  <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
+                    {this.state.error.stack}
+                  </pre>
+                )}
+                {this.state.errorInfo?.componentStack && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-foreground">Composants :</p>
+                    <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
+                      {this.state.errorInfo.componentStack}
+                    </pre>
+                  </div>
+                )}
               </div>
             )}
+
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button variant="outline" onClick={this.handleGoBack} className="gap-2"><ArrowLeft className="w-4 h-4" /> Back</Button>
-              <Button onClick={this.handleReset} className="gap-2"><RefreshCw className="w-4 h-4" /> Retry</Button>
-              <Button variant="ghost" onClick={this.handleReload} className="gap-2">Update & Reload</Button>
+              <Button variant="outline" onClick={this.handleGoBack} className="gap-2"><ArrowLeft className="w-4 h-4" /> Retour</Button>
+              <Button onClick={this.handleReset} className="gap-2"><RefreshCw className="w-4 h-4" /> Réessayer</Button>
+              <Button variant="secondary" onClick={this.handleCopy} className="gap-2"><Copy className="w-4 h-4" /> Copier le détail</Button>
+              <Button variant="ghost" onClick={this.handleReload} className="gap-2">Mettre à jour &amp; recharger</Button>
             </div>
           </div>
         </div>

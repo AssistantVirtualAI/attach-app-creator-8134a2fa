@@ -260,9 +260,12 @@ export default function PlanipretBrokerLayout() {
         </header>
 
         <main className="pa-main flex-1 min-w-0 p-4 md:p-7" style={{ overflowX: "clip", overflowY: "visible" }}>
-          <Outlet context={{ userId, authUserId, profile } satisfies BrokerCtx} />
+          <Outlet context={{ userId, authUserId, profile, softphone } satisfies BrokerCtx} />
         </main>
       </div>
+
+      {/* Écran d'appel actif : entrant (sonnerie WebRTC) et sortant. */}
+      <PpActiveCallScreen softphone={softphone} />
     </div>
     </PortalDomainGate>
   );

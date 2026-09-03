@@ -573,7 +573,8 @@ SMS non lus: ${smsUnread ?? 0}`;
  Pour reprogrammer/modifier un rendez-vous: payload.action='update_calendar_event' avec event_id + champs à changer (start/end/subject/location/attendees). Utilise d'abord list_calendar_events pour retrouver l'event_id.
  Pour annuler/supprimer: payload.action='delete_calendar_event' avec event_id.
  Quand l'utilisateur demande ses prochains rendez-vous ou une notification, appelle list_calendar_events et résume avec heure, sujet, participants et lien Teams si disponible.
- Les actions qui envoient/modifient (send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message, sms, call) exigent une confirmation utilisateur écrite: propose une suggestion claire et demande à l'utilisateur de répondre « Oui » ou « Confirmé » pour exécuter. Ne demande jamais de cliquer sur un bouton et ne prétends pas l'avoir exécutée avant confirmation.
+ APPELS: dès que l'utilisateur demande d'appeler quelqu'un ou un numéro, tu DOIS renvoyer une suggestion kind='call' avec payload.number au format E.164 (+1XXXXXXXXXX). Si le numéro vient d'un contact du [Contexte], utilise-le. Si aucun numéro n'est trouvé, demande le numéro. Ne réponds jamais « je ne peux pas lancer d'appel ».
+ Les actions qui envoient/modifient (send_email, create_calendar_event, update_calendar_event, delete_calendar_event, send_teams_message, reply_teams_message, sms, call) exigent une confirmation: propose TOUJOURS la suggestion correspondante (l'application affiche un bouton de confirmation) et ne prétends pas l'avoir exécutée avant confirmation.
  IMPORTANT — Après avoir exécuté send_sms, si la réponse contient fallback:'open_sms_composer' ou success:false, dis clairement au courtier que le SMS n'est PAS parti et que le composeur SMS a été ouvert pour renvoi manuel. Idem pour make_call: si fallback:'open_dialer', dis que le softphone n'est pas enregistré et que le clavier est ouvert avec le numéro pré-composé. Ne dis JAMAIS « SMS envoyé » ou « appel lancé » quand la réponse indique success:false ou fallback.
 Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. Mets openCoach=true si une action de coaching multi-étapes serait utile.`;
 
@@ -598,7 +599,32 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
       (lang === "fr" ? "[Demande]\nRésume ma situation actuelle et propose 3 actions." : "[Request]\nSummarize my current situation and suggest 3 actions.");
 
 
-    let result: any = { reply: "", suggestions: [] };
+    // Tolerant coercion: some providers return the structured output as a JSON
+    // string (or fenced JSON) instead of an object. Without this, parsing fails
+    // and every reply loses its suggestions (e.g. the "call" action).
+    const coerceOutput = (raw: any): any | null => {
+      let v = raw;
+      if (typeof v === "string") {
+        const s = v.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+        try { v = JSON.parse(s); } catch {
+          const m = s.match(/\{[\s\S]*\}/);
+          if (!m) return null;
+          try { v = JSON.parse(m[0]); } catch { return null; }
+        }
+      }
+      if (!v || typeof v !== "object") return null;
+      const parsed = OutputSchema.safeParse(v);
+      if (parsed.success) return parsed.data;
+      // Keep the reply and only drop invalid suggestions.
+      const reply = typeof (v as any).reply === "string" ? (v as any).reply : null;
+      if (!reply) return null;
+      const sugg = Array.isArray((v as any).suggestions)
+        ? (v as any).suggestions.filter((s: any) => SuggestionSchema.safeParse(s).success)
+        : [];
+      return { reply, suggestions: sugg, openCoach: !!(v as any).openCoach, openVoice: !!(v as any).openVoice };
+    };
+
+    let result: any = null;
     try {
       const r = await generateText({
         model: gateway("google/gemini-3-flash-preview"),
@@ -607,17 +633,21 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
         experimental_output: Output.object({ schema: OutputSchema }),
       });
       const out = (r as any).experimental_output ?? (r as any).output;
-      result = OutputSchema.parse(out);
+      result = coerceOutput(out) ?? coerceOutput((r as any).text);
+      if (!result) console.error("pp-ava-chat structured output unusable", JSON.stringify(out).slice(0, 500));
     } catch (e) {
-      console.error("pp-ava-chat parse fail", e);
-      // Fallback: plain text
+      console.error("pp-ava-chat structured call fail", e);
+    }
+
+    if (!result) {
+      // Fallback: ask for raw JSON so suggestions (call/sms/...) survive.
       try {
         const r2 = await generateText({
           model: gateway("google/gemini-3-flash-preview"),
-          system,
+          system: `${system}\n\nFORMAT DE SORTIE OBLIGATOIRE: réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, de la forme {"reply":"...","suggestions":[{"id":"...","label":"...","kind":"call","payload":{"number":"+1..."}}],"openCoach":false,"openVoice":false}.`,
           prompt,
         });
-        result = { reply: r2.text ?? "Désolé, je n'ai pas pu répondre.", suggestions: [] };
+        result = coerceOutput(r2.text) ?? { reply: r2.text ?? "Désolé, je n'ai pas pu répondre.", suggestions: [] };
       } catch (e2) {
         return json({ reply: L("Désolé, je rencontre un problème. Réessayez.", "Sorry, something went wrong. Please try again."), suggestions: [], error: String(e2) }, 200);
       }

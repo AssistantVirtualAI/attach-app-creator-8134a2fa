@@ -27,7 +27,6 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import Ms365StatusBadge from "@/components/planipret/Ms365StatusBadge";
 import { openMs365Authorize } from "@/lib/ms365OAuth";
 import { useMplanipretSoftphone } from "@/hooks/useMplanipretSoftphone";
-import { ppSipProvider, type PpSipSnapshot } from "@/lib/planipret/sip/ppSipProvider";
 import { Radio, Wallet, Users as UsersIcon } from "lucide-react";
 import { ms365Connected } from "@/lib/planipret/ms365Connected";
 
@@ -101,12 +100,10 @@ export default function MMore() {
     })();
   }, [profile?.id]);
 
-  const { sipConnected, reregister } = useMplanipretSoftphone();
+  const { snap: sipSnap, sipConnected, reregister } = useMplanipretSoftphone();
   const nsConnected = !!(profile?.ns_extension ?? profile?.extension) && sipConnected;
   const isMs365Connected = ms365Connected(profile);
 
-  const [sipSnap, setSipSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
-  useEffect(() => ppSipProvider.subscribe(setSipSnap), []);
   const sipStatusColor: Record<string, string> = {
     idle: "#94A3B8", connecting: "#F59E0B", connected: "#3B82F6",
     registered: "#10B981", disconnected: "#94A3B8", error: "#EF4444",

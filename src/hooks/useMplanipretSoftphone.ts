@@ -263,6 +263,17 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   // Permet d'afficher immédiatement l'écran "ça sonne" avec Répondre/Raccrocher.
   const [pushRing, setPushRing] = useState<{ callId: string; from: string } | null>(null);
   const [nativeStatus, setNativeStatus] = useState<PpNativeSipStatus | null>(null);
+  /**
+   * Server-side truth about the PBX registration state. The local SIP stack can
+   * report `idle` (WebView contact released, native stack owning the AOR, or a
+   * page freshly loaded) while the extension is perfectly registered on
+   * NetSapiens and able to place/receive calls. Without this the UI showed
+   * "SIP not registered / IDLE" for brokers who were actually online.
+   *  - "own"   → this client's own AOR (`<ext>M` / `<ext>W`) is registered
+   *  - "other" → another device of the same extension is registered
+   */
+  const [pbxRegistration, setPbxRegistration] = useState<"own" | "other" | "none">("none");
+
   /** Latest answer() implementation, callable from native listeners registered once. */
   const answerRef = useRef<null | (() => Promise<boolean>)>(null);
   /** One answer transaction at a time across CallKit, notification and in-app UI. */
@@ -975,6 +986,31 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     return (nativeStatus as any)?.ok !== false && (st === "registered" || st === "protected");
   }, [nativeStatus]);
 
+  // Live PBX truth: poll the read-only backend check so the status pill reflects
+  // the real NetSapiens registration instead of the local stack's idle state.
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const suffix = clientType === "mobile" ? "m" : "w";
+    const run = async () => {
+      const check = await checkSipBackendRegistration();
+      if (!alive || !check) return;
+      const aors = (check.registration?.registered_aors ?? []).map((a) => String(a).toLowerCase());
+      const own = aors.some((a) => a.endsWith(suffix)) ||
+        (clientType === "mobile" && !!check.registration?.mobile_registered);
+      setPbxRegistration(own ? "own" : aors.length > 0 ? "other" : "none");
+    };
+    void run();
+    const id = setInterval(run, 30_000);
+    const onVis = () => { if (document.visibilityState === "visible") void run(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      alive = false;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [enabled, clientType]);
+
   // A live WebRTC session ALWAYS wins over the REST/DB attachment: otherwise the
   // realtime "ringing" row hijacks the snapshot and answer() goes REST-only,
   // leaving the real SIP session unanswered (no audio, no in-call keypad).
@@ -985,9 +1021,16 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   useEffect(() => { if (hasLiveSipSession || snap.callState === "ended") setPushRing(null); }, [hasLiveSipSession, snap.callState]);
 
   const effectiveSnap = useMemo<PpSipSnapshot>(() => {
-    const base: PpSipSnapshot = (nativeOwnsRegistration && snap.status !== "registered" && snap.status !== "connected")
-      ? ({ ...snap, status: "registered", lastError: null } as PpSipSnapshot)
+    const localOnline = snap.status === "registered" || snap.status === "connected";
+    const promoted = !localOnline
+      ? (nativeOwnsRegistration || pbxRegistration === "own"
+        ? "registered"
+        : pbxRegistration === "other" ? "connected" : null)
+      : null;
+    const base: PpSipSnapshot = promoted
+      ? ({ ...snap, status: promoted, errorCause: promoted === "registered" ? undefined : snap.errorCause } as PpSipSnapshot)
       : snap;
+
     if (!restCall?.id || hasLiveSipSession) {
       // Écran "ça sonne" piloté par le push VoIP tant que l'INVITE n'est pas là.
       if (!hasLiveSipSession && pushRing) {
@@ -1013,7 +1056,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       startedAt: restCall.startedAt ?? base.startedAt ?? Date.now(),
       onHold: state === "held",
     };
-  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration, hasLiveSipSession, pushRing]);
+  }, [snap, restCall, normalizeRestState, nativeOwnsRegistration, pbxRegistration, hasLiveSipSession, pushRing]);
 
 
   const restControl = useCallback(async (action: string, extra: Record<string, unknown> = {}) => {
@@ -1351,7 +1394,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     else postInboundCall({ providerCallId: attachment.id, number });
   }, []);
 
-  const sipConnected = snap.status === "registered" || snap.status === "connected";
+  const sipConnected = effectiveSnap.status === "registered" || effectiveSnap.status === "connected";
 
   return useMemo(() => ({
     snap: effectiveSnap,
@@ -1359,6 +1402,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     net,
     quality,
     nativeStatus,
+    pbxRegistration,
     sipConnected,
     placeCall,
     answeredElsewhere,
@@ -1379,7 +1423,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     setAudioEl: (_el: HTMLAudioElement | null) => {},
 
     forceHandover: () => handoverController.forceHandover(),
-  }), [effectiveSnap, loading, net, quality, nativeStatus, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl, hasLiveSipSession]);
+  }), [effectiveSnap, loading, net, quality, nativeStatus, pbxRegistration, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl, hasLiveSipSession]);
 
 
 }

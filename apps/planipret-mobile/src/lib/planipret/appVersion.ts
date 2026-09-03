@@ -1,0 +1,37 @@
+/**
+ * Version affichée dans l'app mobile.
+ *
+ * Source de vérité : la build native (`@capacitor/app` → MARKETING_VERSION /
+ * CURRENT_PROJECT_VERSION). Après une soumission App Store / Play, la nouvelle
+ * version s'affiche automatiquement — plus rien n'est codé en dur.
+ * Si un paquet OTA plus récent est actif, sa version est ajoutée.
+ */
+import { Capacitor } from "@capacitor/core";
+
+export type AppVersionInfo = { label: string; native: string; build: string; ota?: string };
+
+export async function getAppVersionInfo(): Promise<AppVersionInfo> {
+  if (!Capacitor.isNativePlatform()) {
+    return { label: "Web", native: "web", build: "—" };
+  }
+  let native = "—";
+  let build = "—";
+  try {
+    const { App } = await import("@capacitor/app");
+    const info = await App.getInfo();
+    native = info.version || "—";
+    build = info.build || "—";
+  } catch { /* ignore */ }
+
+  let ota: string | undefined;
+  try {
+    const mod: any = await import("@capgo/capacitor-updater");
+    const updater = mod?.CapacitorUpdater ?? mod?.n;
+    const current = await updater?.current?.();
+    const v = current?.bundle?.version;
+    if (v && v !== "builtin" && v !== native) ota = v;
+  } catch { /* ignore */ }
+
+  const label = `v${native} (build ${build})${ota ? ` · OTA ${ota}` : ""}`;
+  return { label, native, build, ota };
+}

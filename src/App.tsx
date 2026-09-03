@@ -645,6 +645,7 @@ const App = () => (
                 <Route path="/auth/callback" element={<Ms365Callback />} />
                 <Route path="/auth/maestro/callback" element={<MaestroCallback />} />
                 <Route path="/planipret/auth-error" element={<Suspense fallback={<AdminPageSkeleton />}><PortalAuthError /></Suspense>} />
+                <Route path="/planipret/portal-handoff" element={<Suspense fallback={<AdminPageSkeleton />}><PortalHandoff /></Suspense>} />
                 <Route path="/mplanipret/ms365-diagnostics" element={<Ms365Diagnostics />} />
                 <Route path="/planipret/ms365-diagnostics" element={<Ms365Diagnostics />} />
                 <Route path="/mplanipret/style-diagnostics" element={<MStyleDiagnosticsWeb />} />

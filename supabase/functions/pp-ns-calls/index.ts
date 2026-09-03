@@ -63,9 +63,12 @@ Deno.serve(async (req) => {
       }
 
       let dest = raw.replace(/[^\d+]/g, "");
-      if (!dest.startsWith("+")) {
-        const digits = dest.replace(/\D/g, "");
-        dest = "+" + (digits.length === 10 ? "1" + digits : digits);
+      const bare = dest.replace(/\D/g, "");
+      // Appel interne : composer le poste directement (2 à 6 chiffres), jamais +1.
+      if (bare.length >= 2 && bare.length <= 6) {
+        dest = bare;
+      } else if (!dest.startsWith("+")) {
+        dest = "+" + (bare.length === 10 ? "1" + bare : bare);
       }
 
       const requestedClientType = String(payload.client_type ?? "mobile").toLowerCase();

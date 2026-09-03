@@ -252,6 +252,17 @@ export default function MMore() {
       </Section>
 
       <Section title={t("more.sections.account")}>
+        <Row icon={<ExternalLink className="w-4 h-4" />} label="Ouvrir mon portail AVA Statistic"
+          sub="Connexion automatique avec votre compte"
+          onClick={async () => {
+            if (openingPortal) return;
+            setOpeningPortal(true);
+            const res = await openBrokerPortal();
+            setOpeningPortal(false);
+            if (!res.ok) toast.error(res.error);
+          }}
+          right={openingPortal ? <span style={{ fontSize: 12, color: "var(--pp-text-muted)" }}>…</span> : undefined}
+          chevron />
         <Row icon={<User className="w-4 h-4" />} label={t("more.myProfile")} onClick={() => setEditOpen(true)} chevron />
         <Row icon={<Lock className="w-4 h-4" />} label={t("more.changePassword")} onClick={() => navigate("/mplanipret/change-password")} chevron />
         <Row icon={<Download className="w-4 h-4" />} label={t("more.myData")} sub={t("more.myDataSub")}

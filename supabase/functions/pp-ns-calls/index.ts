@@ -191,9 +191,11 @@ Deno.serve(async (req) => {
       const digits = raw.replace(/[^\d+]/g, "");
       if (!digits) return jsonResponse({ success: false, error: "number required" }, 200);
       let dest = digits;
-      if (!dest.startsWith("+")) {
-        const d = dest.replace(/\D/g, "");
-        dest = "+" + (d.length === 10 ? "1" + d : d);
+      const bare = digits.replace(/\D/g, "");
+      if (bare.length >= 2 && bare.length <= 6) {
+        dest = bare;
+      } else if (!dest.startsWith("+")) {
+        dest = "+" + (bare.length === 10 ? "1" + bare : bare);
       }
 
       let deviceName = `${ctx.extension}_mobile`;

@@ -34,6 +34,7 @@ export default function MSipDebug() {
   const { t, lang } = useMplanipretLang();
   const [snap, setSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
   const [events, setEvents] = useState<PpSipEvent[]>(() => ppSipProvider.getEvents());
+  const [pbx, setPbx] = useState<SipBackendCheck | null>(() => getLastSipBackendCheck());
 
   useEffect(() => {
     const us = ppSipProvider.subscribe(setSnap);
@@ -41,10 +42,28 @@ export default function MSipDebug() {
     return () => { us(); ue(); };
   }, []);
 
+  // Live PBX-side truth: the local stack can be idle while the extension is
+  // really registered (native engine / other client). Poll the server.
+  useEffect(() => {
+    let alive = true;
+    const run = async (force = false) => {
+      const res = await checkSipBackendRegistration({ force });
+      if (alive && res) setPbx(res);
+    };
+    run(true);
+    const id = setInterval(() => run(false), 30_000);
+    const onVis = () => { if (document.visibilityState === "visible") run(true); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+  }, []);
+
   const cfg = ppSipProvider.getConfig();
-  const rawIdx = STAGES.indexOf(snap.status as any);
+  const pbxRegistered = Boolean(pbx?.registration?.mobile_registered || (pbx?.registration?.count ?? 0) > 0);
+  const status = pbxRegistered && snap.status !== "registered" ? "registered" : snap.status;
+  const rawIdx = STAGES.indexOf(status as any);
   const currentIdx = rawIdx >= 0 ? rawIdx : 0;
-  const isError = snap.status === "error";
+  const isError = status === "error";
+
 
   const copy = async () => {
     const payload = [

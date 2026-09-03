@@ -986,6 +986,31 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     return (nativeStatus as any)?.ok !== false && (st === "registered" || st === "protected");
   }, [nativeStatus]);
 
+  // Live PBX truth: poll the read-only backend check so the status pill reflects
+  // the real NetSapiens registration instead of the local stack's idle state.
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const suffix = clientType === "mobile" ? "m" : "w";
+    const run = async () => {
+      const check = await checkSipBackendRegistration();
+      if (!alive || !check) return;
+      const aors = (check.registration?.registered_aors ?? []).map((a) => String(a).toLowerCase());
+      const own = aors.some((a) => a.endsWith(suffix)) ||
+        (clientType === "mobile" && !!check.registration?.mobile_registered);
+      setPbxRegistration(own ? "own" : aors.length > 0 ? "other" : "none");
+    };
+    void run();
+    const id = setInterval(run, 30_000);
+    const onVis = () => { if (document.visibilityState === "visible") void run(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      alive = false;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [enabled, clientType]);
+
   // A live WebRTC session ALWAYS wins over the REST/DB attachment: otherwise the
   // realtime "ringing" row hijacks the snapshot and answer() goes REST-only,
   // leaving the real SIP session unanswered (no audio, no in-call keypad).
@@ -996,9 +1021,16 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   useEffect(() => { if (hasLiveSipSession || snap.callState === "ended") setPushRing(null); }, [hasLiveSipSession, snap.callState]);
 
   const effectiveSnap = useMemo<PpSipSnapshot>(() => {
-    const base: PpSipSnapshot = (nativeOwnsRegistration && snap.status !== "registered" && snap.status !== "connected")
-      ? ({ ...snap, status: "registered", lastError: null } as PpSipSnapshot)
+    const localOnline = snap.status === "registered" || snap.status === "connected";
+    const promoted = !localOnline
+      ? (nativeOwnsRegistration || pbxRegistration === "own"
+        ? "registered"
+        : pbxRegistration === "other" ? "connected" : null)
+      : null;
+    const base: PpSipSnapshot = promoted
+      ? ({ ...snap, status: promoted, lastError: promoted === "registered" ? null : snap.lastError } as PpSipSnapshot)
       : snap;
+
     if (!restCall?.id || hasLiveSipSession) {
       // Écran "ça sonne" piloté par le push VoIP tant que l'INVITE n'est pas là.
       if (!hasLiveSipSession && pushRing) {

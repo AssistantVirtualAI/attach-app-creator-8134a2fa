@@ -23,9 +23,11 @@ export async function getAppVersionInfo(): Promise<AppVersionInfo> {
     build = info.build || "—";
   } catch { /* ignore */ }
 
+  // Le plugin OTA n'est présent que dans le paquet mobile natif.
   let ota: string | undefined;
   try {
-    const mod: any = await import("@capgo/capacitor-updater");
+    const spec = "@capgo/capacitor-updater";
+    const mod: any = await import(/* @vite-ignore */ spec);
     const updater = mod?.CapacitorUpdater ?? mod?.n;
     const current = await updater?.current?.();
     const v = current?.bundle?.version;

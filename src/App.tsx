@@ -60,6 +60,7 @@ const MDeepLinkDebug = lazyWithRetry(() => import("./pages/planipret/mobile/MDee
 const PlanipretAudit = lazyWithRetry(() => import("./pages/planipret/PlanipretAudit"));
 const Ms365Callback = lazyWithRetry(() => import("./pages/planipret/Ms365Callback"));
 const PortalAuthError = lazyWithRetry(() => import("./pages/planipret/PortalAuthError"));
+const PortalHandoff = lazyWithRetry(() => import("./pages/planipret/PortalHandoff"));
 import PlanipretPortalGuard from "./components/planipret/PlanipretPortalGuard";
 const MaestroCallback = lazyWithRetry(() => import("./pages/auth/MaestroCallback"));
 const Ms365Diagnostics = lazyWithRetry(() => import("./pages/planipret/Ms365Diagnostics"));

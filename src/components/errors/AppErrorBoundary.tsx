@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ArrowLeft, Copy } from 'lucide-react';
 import { hardReload } from '@/lib/version';
 
 interface Props {

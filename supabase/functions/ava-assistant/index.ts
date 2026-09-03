@@ -54,6 +54,9 @@ function normalizeBody(body: any): ChatMsg[] {
 
 const e164 = (n: string) => {
   const d = String(n).replace(/[^\d+]/g, "");
+  const bare = d.replace(/\D/g, "");
+  // Appel interne : composer le poste directement (2 à 6 chiffres).
+  if (bare.length >= 2 && bare.length <= 6) return bare;
   if (d.startsWith("+")) return d;
   if (d.length === 10) return "+1" + d;
   if (d.length === 11 && d.startsWith("1")) return "+" + d;

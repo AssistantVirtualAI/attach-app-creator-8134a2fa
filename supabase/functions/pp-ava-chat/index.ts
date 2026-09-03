@@ -598,7 +598,32 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
       (lang === "fr" ? "[Demande]\nRésume ma situation actuelle et propose 3 actions." : "[Request]\nSummarize my current situation and suggest 3 actions.");
 
 
-    let result: any = { reply: "", suggestions: [] };
+    // Tolerant coercion: some providers return the structured output as a JSON
+    // string (or fenced JSON) instead of an object. Without this, parsing fails
+    // and every reply loses its suggestions (e.g. the "call" action).
+    const coerceOutput = (raw: any): any | null => {
+      let v = raw;
+      if (typeof v === "string") {
+        const s = v.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+        try { v = JSON.parse(s); } catch {
+          const m = s.match(/\{[\s\S]*\}/);
+          if (!m) return null;
+          try { v = JSON.parse(m[0]); } catch { return null; }
+        }
+      }
+      if (!v || typeof v !== "object") return null;
+      const parsed = OutputSchema.safeParse(v);
+      if (parsed.success) return parsed.data;
+      // Keep the reply and only drop invalid suggestions.
+      const reply = typeof (v as any).reply === "string" ? (v as any).reply : null;
+      if (!reply) return null;
+      const sugg = Array.isArray((v as any).suggestions)
+        ? (v as any).suggestions.filter((s: any) => SuggestionSchema.safeParse(s).success)
+        : [];
+      return { reply, suggestions: sugg, openCoach: !!(v as any).openCoach, openVoice: !!(v as any).openVoice };
+    };
+
+    let result: any = null;
     try {
       const r = await generateText({
         model: gateway("google/gemini-3-flash-preview"),
@@ -607,17 +632,21 @@ Mets openVoice=true seulement si l'utilisateur demande explicitement de parler. 
         experimental_output: Output.object({ schema: OutputSchema }),
       });
       const out = (r as any).experimental_output ?? (r as any).output;
-      result = OutputSchema.parse(out);
+      result = coerceOutput(out) ?? coerceOutput((r as any).text);
+      if (!result) console.error("pp-ava-chat structured output unusable", JSON.stringify(out).slice(0, 500));
     } catch (e) {
-      console.error("pp-ava-chat parse fail", e);
-      // Fallback: plain text
+      console.error("pp-ava-chat structured call fail", e);
+    }
+
+    if (!result) {
+      // Fallback: ask for raw JSON so suggestions (call/sms/...) survive.
       try {
         const r2 = await generateText({
           model: gateway("google/gemini-3-flash-preview"),
-          system,
+          system: `${system}\n\nFORMAT DE SORTIE OBLIGATOIRE: réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, de la forme {"reply":"...","suggestions":[{"id":"...","label":"...","kind":"call","payload":{"number":"+1..."}}],"openCoach":false,"openVoice":false}.`,
           prompt,
         });
-        result = { reply: r2.text ?? "Désolé, je n'ai pas pu répondre.", suggestions: [] };
+        result = coerceOutput(r2.text) ?? { reply: r2.text ?? "Désolé, je n'ai pas pu répondre.", suggestions: [] };
       } catch (e2) {
         return json({ reply: L("Désolé, je rencontre un problème. Réessayez.", "Sorry, something went wrong. Please try again."), suggestions: [], error: String(e2) }, 200);
       }

@@ -601,7 +601,7 @@ export default function MContacts() {
                   || (c.extension ? `${t("contacts.extension") || "Ext."} ${c.extension}` : "Nom non disponible"))
               : isFav
               ? c.name
-              : (`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || c.display_name || c.phone || c.email);
+              : (`${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || c.display_name || c.name || c.phone || c.email);
             const sub = isDir
               ? (c.extension ? `${t("contacts.extension") || "Ext."} ${c.extension}` : (c.email || "—"))
               : isFav

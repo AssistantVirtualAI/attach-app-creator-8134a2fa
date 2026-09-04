@@ -685,8 +685,18 @@ export default function MContacts() {
                     <Mail className="w-3.5 h-3.5" />
                   </button>
                 )}
-                {/* Appel */}
-                <button onClick={(e) => { e.stopPropagation(); phone && openDialer(phone); }}
+                {/* Appel — lance directement l'appel (aucun numéro = message clair) */}
+                <button onClick={(e) => {
+                  e.stopPropagation();
+                  const dest = String(
+                    phone || c.cell_phone || c.work_phone || c.home_phone || c.mobile || c.extension || "",
+                  ).trim();
+                  if (!dest) {
+                    toast.error(tr("contacts.noNumber", "Aucun numéro pour ce contact"));
+                    return;
+                  }
+                  openDialer(dest, true);
+                }}
                   className="flex items-center justify-center active:scale-95 transition"
                   style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.3)", color: "var(--pp-brand-accent)" }}
                   aria-label={t("common.call")}>

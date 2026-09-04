@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
       user_id: msg.user_id,
       action: "message_push",
       endpoint: res.path,
-      request_body: { direction: msg.direction, contact },
+      request_body: { direction: msg.direction, contact: contactNumber },
       response_status: res.status,
       response_body: res.data,
       duration_ms: Date.now() - t0,
@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
       error_message: res.ok || res.status === 409
         ? undefined
         : `maestro_${res.status}: ${typeof res.data === "string" ? res.data.slice(0, 300) : JSON.stringify(res.data ?? {}).slice(0, 300)}`,
-      payload: { direction: msg.direction, contact, response: res.data ?? null },
+      payload: { direction: msg.direction, contact: contactNumber, response: res.data ?? null },
     }).catch(() => {});
 
 
@@ -141,6 +141,10 @@ Deno.serve(async (req) => {
       return json({ success: true, message_id: msg.id, status: res.status });
     }
 
+    // 404 = destinataire/endpoint inconnu côté Maestro : inutile de réessayer.
+    if (res.status === 404) {
+      return json({ success: false, status: 404, error: "maestro_recipient_not_found", contact: contactNumber }, 200);
+    }
     return json({ success: false, status: res.status, error: res.data?.error ?? "maestro_error" }, 200);
   } catch (e: any) {
     console.error("maestro-sync-message error", e);

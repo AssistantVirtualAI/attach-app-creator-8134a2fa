@@ -230,8 +230,12 @@ async function persistRecording(callDbId: string | null, bytes: Uint8Array, cont
         recording_storage_path: path,
         recording_cached_at: new Date().toISOString(),
         recording_bytes: bytes.byteLength,
+        // The audio is now stored: the UI/list filters read `has_recording`,
+        // so leaving it false hid every cached recording.
+        has_recording: true,
       })
       .eq("id", callDbId);
+
     return path;
   } catch (_) {
     return null;

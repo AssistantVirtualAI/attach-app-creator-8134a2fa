@@ -718,7 +718,7 @@ export default function MContacts() {
         <ContactDetailSheet
           contact={selected}
           onClose={() => setSelected(null)}
-          onCall={(p) => { setSelected(null); openDialer(p); }}
+          onCall={(p) => { setSelected(null); openDialer(p, true); }}
         />
       )}
 

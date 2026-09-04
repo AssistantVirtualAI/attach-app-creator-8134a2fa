@@ -73,6 +73,14 @@ Deno.serve(async (req) => {
       return json({ success: false, error: "invalid_numbers", from: fromUser, to: toUser }, 200);
     }
 
+    // Maestro exige `to_user_number`. En entrant, `contact` peut être nul quand
+    // le numéro externe n'est pas en E.164 : on retombe sur l'autre extrémité
+    // plutôt que d'envoyer un champ vide (HTTP 422).
+    const contactNumber = contact ?? (msg.direction === "inbound" ? fromUser : toUser);
+    if (!isE164(contactNumber)) {
+      return json({ success: false, error: "invalid_numbers", from: fromUser, to: toUser }, 200);
+    }
+
     const t0 = Date.now();
     const res = await maestroFetchScoped(cfg, {
       method: "POST",
@@ -81,7 +89,7 @@ Deno.serve(async (req) => {
       brokerId: auth.brokerId,
       idempotencyKey: msg.id,
       body: {
-        to_user_number: contact,
+        to_user_number: contactNumber,
         message: msg.body ?? "",
       },
 

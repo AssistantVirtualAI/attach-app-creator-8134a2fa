@@ -456,7 +456,9 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
             {!clientName && clientQuery.trim().length >= 2 && (
               <div className="mt-1 rounded-xl overflow-hidden max-h-52 overflow-y-auto" style={{ border: "1px solid var(--pp-bg-border)" }}>
                 {clientMatches.length === 0 && (
-                  <p className="px-3 py-3 text-xs" style={labelStyle}>{L("Aucun client trouvé", "No client found")}</p>
+                  <p className="px-3 py-3 text-xs" style={labelStyle}>
+                    {searching ? L("Recherche…", "Searching…") : L("Aucun client trouvé", "No client found")}
+                  </p>
                 )}
                 {clientMatches.map((c: any) => (
   <button type="button" key={c.client_id} onClick={() => pickTarget(c)}

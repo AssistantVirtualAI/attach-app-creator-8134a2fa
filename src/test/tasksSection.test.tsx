@@ -11,10 +11,14 @@ let broadcastHandler: (() => void) | null = null;
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    channel: () => ({
-      on: (_t: string, _f: any, cb: () => void) => { broadcastHandler = cb; return { subscribe: () => ({}) }; },
-      subscribe: () => ({}),
-    }),
+    channel: () => {
+      // Chainable stub: TasksSection subscribes to several realtime events.
+      const chan: any = {
+        on: (_t: string, _f: any, cb: () => void) => { broadcastHandler = cb; return chan; },
+        subscribe: () => chan,
+      };
+      return chan;
+    },
     removeChannel: () => {},
   },
 }));

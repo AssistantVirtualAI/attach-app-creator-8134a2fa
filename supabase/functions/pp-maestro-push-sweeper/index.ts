@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
 
   let q = admin
     .from("planipret_phone_calls")
-    .select("id, user_id, duration_seconds, maestro_call_id, transcript, ai_summary, ai_coaching, recording_storage_path, recording_url, ns_recording_url, maestro_media_synced_at")
+    .select("id, user_id, duration_seconds, maestro_call_id, transcript, ai_summary, ai_coaching, recording_storage_path, recording_url, ns_recording_url, maestro_media_synced_at, metadata")
     .not("maestro_call_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(limit * 3);

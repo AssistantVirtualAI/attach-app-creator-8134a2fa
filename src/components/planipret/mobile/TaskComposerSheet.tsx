@@ -189,6 +189,24 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     return () => { alive = false; };
   }, [open, step]);
 
+  // Server-side client search (Maestro Client List API): the cached page only
+  // holds the first 200 clients, so anything else must be searched remotely.
+  useEffect(() => {
+    if (!open || step !== "form" || clientName) return;
+    const term = clientQuery.trim();
+    if (term.length < 2) { setRemoteTargets([]); setSearching(false); return; }
+    let alive = true;
+    setSearching(true);
+    const timer = setTimeout(() => {
+      void listClientTargets(term)
+        .then((v) => { if (alive) setRemoteTargets(v || []); })
+        .catch(() => { if (alive) setRemoteTargets([]); })
+        .finally(() => { if (alive) setSearching(false); });
+    }, 350);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [open, step, clientQuery, clientName]);
+
+
   // Editing an existing task: resolve the client name from the Maestro
   // `task_targets` metadata so the sheet shows the name, never the raw xid.
   useEffect(() => {

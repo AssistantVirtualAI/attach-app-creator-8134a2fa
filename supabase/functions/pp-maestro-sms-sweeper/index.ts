@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
       const data = await res.json().catch(() => ({} as any));
       const ok = res.ok && data?.success !== false;
       // Un SMS avec des numéros invalides ne sera jamais accepté : on le ferme.
-      const terminal = !ok && (data?.error === "invalid_numbers" || data?.error === "message_not_found");
+      const terminal = !ok && (data?.error === "invalid_numbers" || data?.error === "message_not_found" || data?.error === "maestro_recipient_not_found");
       if (terminal) {
         await admin.from("planipret_phone_messages").update({ maestro_synced: true }).eq("id", msg.id);
       } else if (!ok) {

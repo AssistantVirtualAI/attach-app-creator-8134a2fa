@@ -124,6 +124,9 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   // Maestro rule: a task only lands on the Tasks page when its xid comes from
   // the Client List API `task_targets` metadata.
   const [targets, setTargets] = useState<ClientTaskTarget[]>([]);
+  // Remote (Maestro) search results for the client picker.
+  const [remoteTargets, setRemoteTargets] = useState<ClientTaskTarget[]>([]);
+  const [searching, setSearching] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<ClientTaskTarget | null>(null);
   const [people, setPeople] = useState<any[]>(() => peekPpContacts("maestro_brokers") ?? []);
   const [dueDate, setDueDate] = useState("");

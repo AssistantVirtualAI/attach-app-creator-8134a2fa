@@ -9,8 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-const openDialer = vi.fn();
-const toastError = vi.fn();
+const { openDialer, toastError } = vi.hoisted(() => ({ openDialer: vi.fn(), toastError: vi.fn() }));
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<any>("react-router-dom");

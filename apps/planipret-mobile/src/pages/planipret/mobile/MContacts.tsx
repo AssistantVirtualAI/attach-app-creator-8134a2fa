@@ -342,6 +342,21 @@ export default function MContacts() {
         }
       }
     }
+    // Recherche transversale : sur l'onglet Personnels (ou Favoris), un nom
+    // absent de la liste locale est aussi cherché dans le répertoire et les
+    // clients — un collègue comme « Sandra » reste ainsi joignable.
+    if (tokens.length && (tab === "personal" || tab === "favorites")) {
+      const seen = new Set(
+        out.map((c: any) => String(c.id ?? c.contact_id ?? c.extension ?? c.phone ?? c.email ?? "").toLowerCase()),
+      );
+      const extra = [...directory, ...clients].filter((c: any) => {
+        const key = String(c.id ?? c.contact_id ?? c.extension ?? c.phone ?? c.email ?? "").toLowerCase();
+        if (key && seen.has(key)) return false;
+        const hay = `${c.first_name ?? ""} ${c.last_name ?? ""} ${c.name ?? ""} ${c.display_name ?? ""} ${c.extension ?? ""} ${c.email ?? ""} ${c.phone ?? ""} ${c.company ?? ""}`;
+        return matchAllTokens(hay, tokens);
+      });
+      out = [...out, ...extra];
+    }
     return out;
   }, [tab, personal, favorites, directory, clients, q, filterDept, filterTeam, sortBy]);
 

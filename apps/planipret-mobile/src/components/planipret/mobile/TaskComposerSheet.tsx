@@ -124,6 +124,9 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   // Maestro rule: a task only lands on the Tasks page when its xid comes from
   // the Client List API `task_targets` metadata.
   const [targets, setTargets] = useState<ClientTaskTarget[]>([]);
+  // Remote (Maestro) search results for the client picker.
+  const [remoteTargets, setRemoteTargets] = useState<ClientTaskTarget[]>([]);
+  const [searching, setSearching] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<ClientTaskTarget | null>(null);
   const [people, setPeople] = useState<any[]>(() => peekPpContacts("maestro_brokers") ?? []);
   const [dueDate, setDueDate] = useState("");
@@ -185,6 +188,24 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     void getPpContacts("maestro_brokers", { force: true, limit: 500 }).then((v) => { if (alive) setPeople(v || []); }).catch(() => {});
     return () => { alive = false; };
   }, [open, step]);
+
+  // Server-side client search (Maestro Client List API): the cached page only
+  // holds the first 200 clients, so anything else must be searched remotely.
+  useEffect(() => {
+    if (!open || step !== "form" || clientName) return;
+    const term = clientQuery.trim();
+    if (term.length < 2) { setRemoteTargets([]); setSearching(false); return; }
+    let alive = true;
+    setSearching(true);
+    const timer = setTimeout(() => {
+      void listClientTargets(term)
+        .then((v) => { if (alive) setRemoteTargets(v || []); })
+        .catch(() => { if (alive) setRemoteTargets([]); })
+        .finally(() => { if (alive) setSearching(false); });
+    }, 350);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [open, step, clientQuery, clientName]);
+
 
   // Editing an existing task: resolve the client name from the Maestro
   // `task_targets` metadata so the sheet shows the name, never the raw xid.
@@ -293,9 +314,13 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
         user: c?.id ? { id: String(c.id), eligible_broker_ids: [] } : null,
         contracts: [],
       }));
-  const clientMatches = q.length >= 2
-    ? targetRows.filter((t) => `${t.name} ${t.email ?? ""}`.toLowerCase().includes(q)).slice(0, 25)
-    : [];
+  const clientMatches = (() => {
+    if (q.length < 2) return [] as ClientTaskTarget[];
+    const local = targetRows.filter((t) => `${t.name} ${t.email ?? ""}`.toLowerCase().includes(q));
+    const seen = new Set(local.map((t) => String(t.client_id)));
+    const remote = remoteTargets.filter((t) => !seen.has(String(t.client_id)));
+    return [...local, ...remote].slice(0, 25);
+  })();
   const pickTarget = (t: ClientTaskTarget) => {
     setSelectedTarget(t);
     setClientName(t.name);
@@ -431,7 +456,9 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
             {!clientName && clientQuery.trim().length >= 2 && (
               <div className="mt-1 rounded-xl overflow-hidden max-h-52 overflow-y-auto" style={{ border: "1px solid var(--pp-bg-border)" }}>
                 {clientMatches.length === 0 && (
-                  <p className="px-3 py-3 text-xs" style={labelStyle}>{L("Aucun client trouvé", "No client found")}</p>
+                  <p className="px-3 py-3 text-xs" style={labelStyle}>
+                    {searching ? L("Recherche…", "Searching…") : L("Aucun client trouvé", "No client found")}
+                  </p>
                 )}
                 {clientMatches.map((c: any) => (
   <button type="button" key={c.client_id} onClick={() => pickTarget(c)}

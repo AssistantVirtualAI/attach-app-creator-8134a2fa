@@ -74,9 +74,9 @@ beforeEach(() => {
 describe("TasksSection", () => {
   it("renders the overdue / today / upcoming buckets", async () => {
     render(<TasksSection userId="u1" lang="fr" />);
-    expect(await screen.findByText("Rappeler Jean")).toBeInTheDocument();
-    expect(screen.getByText("Signer le dossier")).toBeInTheDocument();
-    expect(screen.getByText("Suivi Sophie")).toBeInTheDocument();
+    expect((await screen.findAllByText("Rappeler Jean"))[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Signer le dossier")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Suivi Sophie")[0]).toBeInTheDocument();
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent?.replace(/\s+/g, " ").trim());
     expect(tabs).toEqual(["Toutes · 3", "En retard · 1", "Aujourd'hui · 1", "À venir · 1"]);
   });
@@ -109,12 +109,12 @@ describe("TasksSection", () => {
     const retry = await screen.findByText("Réessayer");
     listTasks.mockResolvedValue(listResult());
     fireEvent.click(retry);
-    expect(await screen.findByText("Rappeler Jean")).toBeInTheDocument();
+    expect((await screen.findAllByText("Rappeler Jean"))[0]).toBeInTheDocument();
   });
 
   it("opens the composer from the + button", async () => {
     render(<TasksSection userId="u1" lang="fr" />);
-    await screen.findByText("Rappeler Jean");
+    (await screen.findAllByText("Rappeler Jean"))[0];
     fireEvent.click(screen.getByLabelText("Nouvelle tâche"));
     fireEvent.click(screen.getByText("Nouvelle tâche personnalisée"));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -124,7 +124,7 @@ describe("TasksSection", () => {
   it("requires a confirmation before deleting and then calls the API", async () => {
     deleteTask.mockResolvedValue({ success: true });
     render(<TasksSection userId="u1" lang="fr" />);
-    await screen.findByText("Rappeler Jean");
+    (await screen.findAllByText("Rappeler Jean"))[0];
     fireEvent.click(screen.getAllByLabelText("Supprimer")[0]);
     expect(await screen.findByText("Supprimer la tâche ?")).toBeInTheDocument();
     expect(deleteTask).not.toHaveBeenCalled();
@@ -134,7 +134,7 @@ describe("TasksSection", () => {
 
   it("cancelling the delete dialog mutates nothing", async () => {
     render(<TasksSection userId="u1" lang="fr" />);
-    await screen.findByText("Rappeler Jean");
+    (await screen.findAllByText("Rappeler Jean"))[0];
     fireEvent.click(screen.getAllByLabelText("Supprimer")[0]);
     fireEvent.click(await screen.findByText("Annuler"));
     await waitFor(() => expect(screen.queryByText("Supprimer la tâche ?")).not.toBeInTheDocument());
@@ -144,7 +144,7 @@ describe("TasksSection", () => {
   it("snoozes a task through update", async () => {
     updateTask.mockResolvedValue({ success: true });
     render(<TasksSection userId="u1" lang="fr" />);
-    await screen.findByText("Rappeler Jean");
+    (await screen.findAllByText("Rappeler Jean"))[0];
     fireEvent.click(screen.getAllByLabelText("Reporter")[0]);
     await waitFor(() => expect(updateTask).toHaveBeenCalled());
     expect(updateTask.mock.calls[0][0]).toBe("a");
@@ -152,7 +152,7 @@ describe("TasksSection", () => {
 
   it("refreshes when AVA broadcasts a task mutation", async () => {
     render(<TasksSection userId="u1" lang="fr" />);
-    await screen.findByText("Rappeler Jean");
+    (await screen.findAllByText("Rappeler Jean"))[0];
     const before = listTasks.mock.calls.length;
     broadcastHandler?.();
     await waitFor(() => expect(listTasks.mock.calls.length).toBeGreaterThan(before));
@@ -160,7 +160,7 @@ describe("TasksSection", () => {
 
   it("filters through the chips", async () => {
     render(<TasksSection userId="u1" lang="fr" />);
-    await screen.findByText("Rappeler Jean");
+    (await screen.findAllByText("Rappeler Jean"))[0];
     fireEvent.click(screen.getAllByRole("tab")[1]);
     await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith(expect.objectContaining({ filter: "overdue" })));
   });

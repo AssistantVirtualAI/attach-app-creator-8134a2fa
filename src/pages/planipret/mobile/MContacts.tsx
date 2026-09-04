@@ -477,7 +477,7 @@ export default function MContacts() {
                     aria-label={t("contacts.sendEmail") || "Courriel"}>
                     <Mail className="w-3.5 h-3.5" />
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); phone && openDialer(phone); }}
+                  <button onClick={(e) => { e.stopPropagation(); const dest = String(phone || c.cell_phone || c.work_phone || c.home_phone || c.extension || "").trim(); if (!dest) { toast.error("Aucun numéro pour ce contact"); return; } openDialer(dest, true); }}
                     disabled={!phone}
                     className="flex items-center justify-center active:scale-95 transition"
                     style={{ width: 30, height: 30, borderRadius: "50%", background: "rgba(46,155,220,0.12)", border: "1px solid rgba(46,155,220,0.3)", color: "var(--pp-brand-accent)", opacity: phone ? 1 : 0.45 }}
@@ -501,7 +501,7 @@ export default function MContacts() {
         <ContactDetailSheet
           contact={selected}
           onClose={() => setSelected(null)}
-          onCall={(p) => { setSelected(null); openDialer(p); }}
+          onCall={(p) => { setSelected(null); openDialer(p, true); }}
         />
       )}
 

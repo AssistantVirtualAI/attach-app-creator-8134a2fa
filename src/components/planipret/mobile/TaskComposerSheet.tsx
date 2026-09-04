@@ -314,9 +314,13 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
         user: c?.id ? { id: String(c.id), eligible_broker_ids: [] } : null,
         contracts: [],
       }));
-  const clientMatches = q.length >= 2
-    ? targetRows.filter((t) => `${t.name} ${t.email ?? ""}`.toLowerCase().includes(q)).slice(0, 25)
-    : [];
+  const clientMatches = (() => {
+    if (q.length < 2) return [] as ClientTaskTarget[];
+    const local = targetRows.filter((t) => `${t.name} ${t.email ?? ""}`.toLowerCase().includes(q));
+    const seen = new Set(local.map((t) => String(t.client_id)));
+    const remote = remoteTargets.filter((t) => !seen.has(String(t.client_id)));
+    return [...local, ...remote].slice(0, 25);
+  })();
   const pickTarget = (t: ClientTaskTarget) => {
     setSelectedTarget(t);
     setClientName(t.name);

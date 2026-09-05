@@ -65,6 +65,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/maestro-tasks", key: "maestroTasks", Icon: CheckSquare },
       { to: "/planipret/admin/maestro-clients", key: "maestroClients", Icon: Users },
       { to: "/planipret/admin/broker-performance", key: "brokerPerformance", Icon: BarChart3 },
+      { to: "/planipret/admin/broker-stats", key: "brokerStats", Icon: Users },
     ],
   },
   {
@@ -113,6 +114,7 @@ const NAV_REGULAR: typeof NAV = [
       { to: "/planipret/admin/maestro-tasks", key: "maestroTasks", Icon: CheckSquare },
       { to: "/planipret/admin/maestro-clients", key: "maestroClients", Icon: Users },
       { to: "/planipret/admin/broker-performance", key: "brokerPerformance", Icon: BarChart3 },
+      { to: "/planipret/admin/broker-stats", key: "brokerStats", Icon: Users },
       { to: "/planipret/admin/hold-music", key: "holdMusic",   Icon: Music },
       { to: "/planipret/admin/access-log", key: "accessLog",  Icon: ShieldAlert },
 

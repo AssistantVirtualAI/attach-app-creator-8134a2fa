@@ -1456,6 +1456,7 @@ const App = () => (
                 <Route path="/admin/*" element={<Navigate to="/platform" replace />} />
 
                 {import.meta.env.DEV && <Route path="/_design" element={<DesignPreview />} />}
+                {import.meta.env.DEV && <Route path="/_tc" element={<DevTaskComposer />} />}
 
                 <Route path="*" element={<NotFound />} />
 

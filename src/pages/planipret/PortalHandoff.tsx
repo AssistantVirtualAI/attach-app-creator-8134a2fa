@@ -48,14 +48,27 @@ export default function PortalHandoff() {
         return;
       }
 
-      const { error: otpError } = await supabase.auth.verifyOtp({
-        type: "magiclink",
-        token_hash: tokenHash,
-        email,
-      } as never);
+      // Un `token_hash` issu de `generateLink` se vérifie SANS courriel :
+      // joindre `email` fait basculer GoTrue sur le flux « code à 6 chiffres »
+      // et le jeton est refusé (« Token has expired or is invalid »).
+      // On tente les deux types acceptés pour un lien magique.
+      let otpError: { message?: string } | null = null;
+      for (const type of ["magiclink", "email"] as const) {
+        const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash } as never);
+        if (!error) { otpError = null; break; }
+        otpError = error;
+      }
+      // Dernier recours : ancien flux avec courriel explicite.
+      if (otpError) {
+        const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash, email } as never);
+        if (!error) otpError = null;
+      }
 
       if (otpError && !(await hasSession())) {
-        setError("Lien expiré ou déjà utilisé. Relancez l'ouverture depuis l'application mobile.");
+        handoffRan = false;
+        setError(
+          `Connexion au portail impossible (${otpError.message ?? "lien invalide"}). Relancez l'ouverture depuis l'application mobile.`,
+        );
         return;
       }
 

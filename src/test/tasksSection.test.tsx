@@ -78,7 +78,7 @@ describe("TasksSection", () => {
     expect(screen.getAllByText("Signer le dossier")[0]).toBeInTheDocument();
     expect(screen.getAllByText("Suivi Sophie")[0]).toBeInTheDocument();
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent?.replace(/\s+/g, " ").trim());
-    expect(tabs).toEqual(["Toutes · 3", "En retard · 1", "Aujourd'hui · 1", "À venir · 1"]);
+    expect(tabs).toEqual(["Ouvertes · 3", "Toutes · 3", "En retard · 1", "Aujourd'hui · 1", "À venir · 1"]);
   });
 
   it("shows the empty state", async () => {
@@ -161,7 +161,7 @@ describe("TasksSection", () => {
   it("filters through the chips", async () => {
     render(<TasksSection userId="u1" lang="fr" />);
     (await screen.findAllByText("Rappeler Jean"))[0];
-    fireEvent.click(screen.getAllByRole("tab")[1]);
+    fireEvent.click(screen.getAllByRole("tab").find((t) => /En retard/.test(t.textContent ?? ""))!);
     await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith(expect.objectContaining({ filter: "overdue" })));
   });
 });
@@ -187,7 +187,7 @@ describe("TasksSection — see all + field errors", () => {
     fireEvent.click(screen.getByLabelText("Nouvelle tâche"));
     fireEvent.click(screen.getByText("Nouvelle tâche personnalisée"));
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "x" } });
-    fireEvent.click(screen.getByText("Enregistrer"));
+    fireEvent.click(screen.getByText(/^Enregistrer( la tâche)?$/));
     await waitFor(() => expect(screen.getByText("La note est obligatoire.")).toBeInTheDocument());
   });
 });

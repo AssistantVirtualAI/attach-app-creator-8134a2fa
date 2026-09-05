@@ -311,22 +311,37 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const labelCls = "text-[11px] font-semibold uppercase tracking-wider block mb-1.5 ml-1";
   const labelStyle = { color: "var(--pp-text-muted)", letterSpacing: "0.08em" } as const;
 
-  const q = clientQuery.trim().toLowerCase();
-  const targetRows: ClientTaskTarget[] = targets.length
-    ? targets
-    : clients.map((c: any) => ({
-        client_id: String(c?.id ?? ""),
-        name: contactName(c),
-        email: c?.email ?? null,
-        user: c?.id ? { id: String(c.id), eligible_broker_ids: [] } : null,
-        contracts: [],
-      }));
+  const q = clientQuery.trim();
+  const contactRows: ClientTaskTarget[] = clients.map((c: any) => ({
+    client_id: String(c?.id ?? ""),
+    name: contactName(c),
+    email: c?.email ?? null,
+    user: c?.id ? { id: String(c.id), eligible_broker_ids: [] } : null,
+    contracts: [],
+    // kept for search only (phone numbers are not part of the Maestro target shape)
+    ...(c?.phone || c?.mobile ? { __phone: String(c.phone ?? c.mobile) } : {}),
+  })) as any;
+  // Search both the Maestro `task_targets` and the cached contacts, with
+  // accent-insensitive, out-of-order token matching ("barbieri mark").
+  const targetRows: ClientTaskTarget[] = (() => {
+    const seen = new Set(targets.map((t) => String(t.client_id)));
+    return [...targets, ...contactRows.filter((c) => c.client_id && !seen.has(String(c.client_id)))];
+  })();
   const clientMatches = (() => {
-    if (q.length < 2) return [] as ClientTaskTarget[];
-    const local = targetRows.filter((t) => `${t.name} ${t.email ?? ""}`.toLowerCase().includes(q));
+    const tokens = tokenize(q);
+    if (!tokens.length) return [] as ClientTaskTarget[];
+    const hay = (t: any) =>
+      `${t.name} ${t.email ?? ""} ${t.__phone ?? ""} ${t.client_id} ${t.contracts?.map((c: any) => `${c.number ?? ""} ${c.id}`).join(" ") ?? ""}`;
+    const local = targetRows.filter((t) => matchAllTokens(hay(t), tokens));
+    // Exact prefix matches on the name come first.
+    const n0 = tokens[0];
+    local.sort((a, b) => {
+      const s = (t: ClientTaskTarget) => (normalizeText(t.name).startsWith(n0) ? 0 : 1);
+      return s(a) - s(b) || a.name.localeCompare(b.name);
+    });
     const seen = new Set(local.map((t) => String(t.client_id)));
     const remote = remoteTargets.filter((t) => !seen.has(String(t.client_id)));
-    return [...local, ...remote].slice(0, 25);
+    return [...local, ...remote].slice(0, 40);
   })();
   const pickTarget = (t: ClientTaskTarget) => {
     setSelectedTarget(t);

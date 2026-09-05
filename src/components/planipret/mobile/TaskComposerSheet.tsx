@@ -203,7 +203,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
         .then((v) => { if (alive) setRemoteTargets(v || []); })
         .catch(() => { if (alive) setRemoteTargets([]); })
         .finally(() => { if (alive) setSearching(false); });
-    }, 350);
+    }, 250);
     return () => { alive = false; clearTimeout(timer); };
   }, [open, step, clientQuery, clientName]);
 
@@ -512,7 +512,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                   onChange={(e) => setClientQuery(e.target.value)} placeholder={L("Rechercher un client…", "Search for a client…")} />
               </div>
             )}
-            {!clientName && clientQuery.trim().length >= 2 && (
+            {!clientName && clientQuery.trim().length >= 1 && (
               <div className="mt-1.5 rounded-xl overflow-hidden max-h-52 overflow-y-auto" style={{ border: "1px solid var(--pp-bg-border)", background: "var(--pp-bg-elevated)" }}>
                 {clientMatches.length === 0 && (
                   <p className="px-4 py-3 text-xs" style={{ color: "var(--pp-text-muted)" }}>

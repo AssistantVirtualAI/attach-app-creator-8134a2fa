@@ -149,6 +149,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/maestro-tasks": "maestroTasks",
   "/planipret/admin/maestro-clients": "maestroClients",
   "/planipret/admin/broker-performance": "brokerPerformance",
+  "/planipret/admin/broker-stats": "brokerStats",
   "/planipret/admin/telecom-mapping": "telecomMapping",
   "/planipret/admin/did-reconcile": "didReconcile",
   "/planipret/admin/phone-numbers": "phoneNumbers",

@@ -78,6 +78,7 @@ export function buildClientBundles(
   deals: ClientDeal[] = [],
   deposits: ClientDeposit[] = [],
   calls: ClientCall[] = [],
+  contacts: { name: string; phone?: string | null }[] = [],
 ): ClientBundle[] {
   const { start, end } = dayBounds();
   const map = new Map<string, ClientBundle>();
@@ -107,6 +108,8 @@ export function buildClientBundles(
       if (!b.nextDue || at < new Date(b.nextDue).getTime()) b.nextDue = t.due_at;
     }
   }
+
+  for (const c of contacts) ensure(c.name);
 
   for (const d of deals) {
     const b = ensure(d.contact_name);
@@ -190,4 +193,31 @@ export async function fetchClientCalls(userIds: string[], limit = 500): Promise<
     .order("started_at", { ascending: false })
     .limit(limit);
   return ((data ?? []) as ClientCall[]);
+}
+
+/** Contacts Maestro du courtier — base de la liste « clients ». */
+export async function fetchClientContacts(
+  userIds: string[],
+  opts: { search?: string; limit?: number } = {},
+): Promise<{ name: string; phone: string | null }[]> {
+  const ids = userIds.filter(Boolean);
+  if (!ids.length) return [];
+  const term = String(opts.search ?? "").trim();
+  let q = supabase
+    .from("planipret_contacts")
+    .select("full_name, first_name, last_name, phone, mobile, updated_at")
+    .in("user_id", ids)
+    .order("updated_at", { ascending: false })
+    .limit(opts.limit ?? (term ? 100 : 200));
+  if (term) {
+    const esc = term.replace(/[%,]/g, " ");
+    q = q.or(`full_name.ilike.%${esc}%,first_name.ilike.%${esc}%,last_name.ilike.%${esc}%,phone.ilike.%${esc}%,mobile.ilike.%${esc}%`);
+  }
+  const { data } = await q;
+  return ((data ?? []) as any[])
+    .map((c) => ({
+      name: String(c.full_name ?? [c.first_name, c.last_name].filter(Boolean).join(" ") ?? "").trim(),
+      phone: (c.phone ?? c.mobile ?? null) as string | null,
+    }))
+    .filter((c) => c.name);
 }

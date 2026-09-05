@@ -195,29 +195,61 @@ export async function fetchClientCalls(userIds: string[], limit = 500): Promise<
   return ((data ?? []) as ClientCall[]);
 }
 
+/** Clients Maestro en direct (API officielle) — utilisé en secours du cache local. */
+export async function fetchMaestroClientsLive(
+  search?: string,
+  limit = 200,
+): Promise<{ name: string; phone: string | null }[]> {
+  try {
+    const { data, error } = await supabase.functions.invoke("maestro-actions", {
+      body: { action: "list_clients", payload: { limit, search: search || undefined } },
+    });
+    if (error) return [];
+    const rows: any[] = Array.isArray((data as any)?.clients) ? (data as any).clients : [];
+    return rows
+      .map((c) => ({
+        name: String(
+          c.full_name ?? c.display_name ??
+          [c.first_name ?? c.firstname, c.last_name ?? c.lastname].filter(Boolean).join(" ") ??
+          c.name ?? "",
+        ).trim(),
+        phone: (c.phone ?? c.mobile ?? c.cell_phone ?? c.phone_number ?? null) as string | null,
+      }))
+      .filter((c) => c.name);
+  } catch {
+    return [];
+  }
+}
+
 /** Contacts Maestro du courtier — base de la liste « clients ». */
 export async function fetchClientContacts(
   userIds: string[],
   opts: { search?: string; limit?: number } = {},
 ): Promise<{ name: string; phone: string | null }[]> {
   const ids = userIds.filter(Boolean);
-  if (!ids.length) return [];
   const term = String(opts.search ?? "").trim();
-  let q = supabase
-    .from("planipret_contacts")
-    .select("full_name, first_name, last_name, phone, mobile, updated_at")
-    .in("user_id", ids)
-    .order("updated_at", { ascending: false })
-    .limit(opts.limit ?? (term ? 100 : 200));
-  if (term) {
-    const esc = term.replace(/[%,]/g, " ");
-    q = q.or(`full_name.ilike.%${esc}%,first_name.ilike.%${esc}%,last_name.ilike.%${esc}%,phone.ilike.%${esc}%,mobile.ilike.%${esc}%`);
+  let local: { name: string; phone: string | null }[] = [];
+  if (ids.length) {
+    let q = supabase
+      .from("planipret_contacts")
+      .select("full_name, first_name, last_name, phone, mobile, updated_at")
+      .in("user_id", ids)
+      .order("updated_at", { ascending: false })
+      .limit(opts.limit ?? (term ? 100 : 200));
+    if (term) {
+      const esc = term.replace(/[%,]/g, " ");
+      q = q.or(`full_name.ilike.%${esc}%,first_name.ilike.%${esc}%,last_name.ilike.%${esc}%,phone.ilike.%${esc}%,mobile.ilike.%${esc}%`);
+    }
+    const { data } = await q;
+    local = ((data ?? []) as any[])
+      .map((c) => ({
+        name: String(c.full_name ?? [c.first_name, c.last_name].filter(Boolean).join(" ") ?? "").trim(),
+        phone: (c.phone ?? c.mobile ?? null) as string | null,
+      }))
+      .filter((c) => c.name);
   }
-  const { data } = await q;
-  return ((data ?? []) as any[])
-    .map((c) => ({
-      name: String(c.full_name ?? [c.first_name, c.last_name].filter(Boolean).join(" ") ?? "").trim(),
-      phone: (c.phone ?? c.mobile ?? null) as string | null,
-    }))
-    .filter((c) => c.name);
+  if (local.length) return local;
+  // Secours : interroger Maestro en direct (cache local vide ou pas encore synchronisé).
+  return await fetchMaestroClientsLive(term, opts.limit ?? 200);
 }
+

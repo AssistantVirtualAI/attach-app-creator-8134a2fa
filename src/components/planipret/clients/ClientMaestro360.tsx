@@ -3,7 +3,7 @@ import { AlertTriangle, CalendarClock, ChevronDown, ChevronRight, FolderKanban, 
 import MaestroTaskRow from "@/components/planipret/mobile/MaestroTaskRow";
 import { formatTaskDue, type NormalizedTask } from "@/lib/planipret/tasks";
 import {
-  buildClientBundles, fetchClientCalls, fetchClientDeals, fetchClientDeposits,
+  buildClientBundles, fetchClientCalls, fetchClientContacts, fetchClientDeals, fetchClientDeposits,
   type ClientBundle, type ClientCall, type ClientDeal, type ClientDeposit,
 } from "@/lib/planipret/clientMaestro";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,21 +33,29 @@ export default function ClientMaestro360({
   const [deals, setDeals] = useState<ClientDeal[]>([]);
   const [deposits, setDeposits] = useState<ClientDeposit[]>([]);
   const [calls, setCalls] = useState<ClientCall[]>([]);
+  const [contacts, setContacts] = useState<{ name: string; phone: string | null }[]>([]);
   const [q, setQ] = useState("");
+  const [qDebounced, setQDebounced] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [alertsOnly, setAlertsOnly] = useState(false);
 
   const idsKey = userIds.filter(Boolean).sort().join(",");
 
+  useEffect(() => {
+    const t = setTimeout(() => setQDebounced(q.trim()), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
   const load = useCallback(async () => {
     const ids = idsKey ? idsKey.split(",") : [];
-    const [d, dep, cl] = await Promise.all([
+    const [d, dep, cl, ct] = await Promise.all([
       fetchClientDeals(ids),
       fetchClientDeposits(),
       fetchClientCalls(ids),
+      fetchClientContacts(ids, { search: qDebounced }),
     ]);
-    setDeals(d); setDeposits(dep); setCalls(cl);
-  }, [idsKey]);
+    setDeals(d); setDeposits(dep); setCalls(cl); setContacts(ct);
+  }, [idsKey, qDebounced]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -68,7 +76,7 @@ export default function ClientMaestro360({
     return () => { if (timer) clearTimeout(timer); void supabase.removeChannel(ch); };
   }, [load, idsKey]);
 
-  const bundles = useMemo(() => buildClientBundles(tasks, deals, deposits, calls), [tasks, deals, deposits, calls]);
+  const bundles = useMemo(() => buildClientBundles(tasks, deals, deposits, calls, contacts), [tasks, deals, deposits, calls, contacts]);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();

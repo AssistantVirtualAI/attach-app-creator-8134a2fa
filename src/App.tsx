@@ -337,7 +337,6 @@ const PlatformAIUsage = lazyWithRetry(() => import("./pages/platform/AIUsage"));
 const CustomerDashboard = lazyWithRetry(() => import("./pages/portals/CustomerDashboard"));
 const MyDashboardLanding = lazyWithRetry(() => import("./pages/portals/MyDashboardLanding"));
 const DesignPreview = lazyWithRetry(() => import("./pages/DesignPreview"));
-const DevTaskComposer = lazyWithRetry(() => import("./pages/DevTaskComposer"));
 
 
 // SWR-friendly defaults: keep data on screen while revalidating in background,
@@ -1457,7 +1456,6 @@ const App = () => (
                 <Route path="/admin/*" element={<Navigate to="/platform" replace />} />
 
                 {import.meta.env.DEV && <Route path="/_design" element={<DesignPreview />} />}
-                {import.meta.env.DEV && <Route path="/_tc" element={<DevTaskComposer />} />}
 
                 <Route path="*" element={<NotFound />} />
 

@@ -31,7 +31,33 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const CALL_COLUMNS =
-  "id, user_id, transcript, transcript_raw, transcript_segments, transcript_language, ai_summary, ai_summary_short, ai_coaching, ai_analysis_json, ai_topics, ai_action_items, ai_key_points, ai_client_insights, next_actions, lead_score, lead_temperature, lead_score_reason, coaching_score, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, pipeline_state, metadata, duration_seconds, started_at, answered_at, ended_at";
+  "id, user_id, from_number, to_number, direction, from_name, to_name, maestro_client_name, transcript, transcript_raw, transcript_segments, transcript_language, ai_summary, ai_summary_short, ai_coaching, ai_analysis_json, ai_topics, ai_action_items, ai_key_points, ai_client_insights, next_actions, lead_score, lead_temperature, lead_score_reason, coaching_score, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, pipeline_state, metadata, duration_seconds, started_at, answered_at, ended_at";
+
+/** Nettoie la transcription : remplace les URIs SIP par des noms lisibles. */
+function prettyTranscript(
+  raw: string,
+  opts: { brokerName?: string | null; brokerExt?: string | null; clientName?: string | null },
+): string {
+  const broker = (opts.brokerName || "Courtier").trim();
+  const client = (opts.clientName || "Client").trim();
+  const ext = String(opts.brokerExt ?? "").replace(/\D/g, "");
+  return String(raw)
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, '"')
+    .split(/\r?\n/)
+    .map((line) => {
+      const m = line.match(/^\s*sip:([^@\s]+)@[^\s:]+:\s*(.*)$/);
+      if (!m) return line.trim();
+      const user = m[1].replace(/\D/g, "");
+      const isBroker = ext ? user === ext || user === `1${ext}` || user.endsWith(ext) : false;
+      const text = m[2].trim();
+      if (!text) return "";
+      return `${isBroker ? broker : client}: ${text}`;
+    })
+    .filter((l) => l.length > 0)
+    .join("\n");
+}
+
 
 /** Maestro attend un format "YYYY-MM-DD HH:MM:SS". */
 function maestroDate(v: unknown): string | undefined {
@@ -282,8 +308,31 @@ Deno.serve(async (req) => {
           : asArray(call.ai_topics);
 
       const recordingLink = recordingLink0;
-      const coachingText = call.ai_coaching
-        ? (typeof call.ai_coaching === "string" ? call.ai_coaching : JSON.stringify(call.ai_coaching))
+      const { data: prof } = await admin
+        .from("planipret_profiles")
+        .select("full_name, first_name, last_name, extension")
+        .eq("user_id", call.user_id)
+        .maybeSingle();
+      const brokerName = (prof as any)?.full_name
+        || [ (prof as any)?.first_name, (prof as any)?.last_name ].filter(Boolean).join(" ")
+        || "Courtier";
+      const clientName = (call as any).maestro_client_name || ((call as any).direction === "outbound" ? (call as any).to_name : (call as any).from_name) || "Client";
+      const prettyText = transcript
+        ? prettyTranscript(String(transcript), {
+            brokerName,
+            brokerExt: (prof as any)?.extension ?? null,
+            clientName,
+          })
+        : null;
+      const coaching = call.ai_coaching;
+      const coachingText = coaching
+        ? (typeof coaching === "string"
+            ? coaching
+            : [
+                asArray((coaching as any).strengths).length ? `Forces: ${asArray((coaching as any).strengths).map(String).join(" • ")}` : null,
+                asArray((coaching as any).improvements).length ? `À améliorer: ${asArray((coaching as any).improvements).map(String).join(" • ")}` : null,
+                asArray((coaching as any).next_steps).length ? `Prochaines étapes: ${asArray((coaching as any).next_steps).map(String).join(" • ")}` : null,
+              ].filter(Boolean).join("\n") || JSON.stringify(coaching))
         : null;
       const res = await maestroFetch(cfg, {
         method: "PUT",
@@ -295,22 +344,23 @@ Deno.serve(async (req) => {
         body: {
           status: "ended",
           ai_summary: summary ?? undefined,
-          transcript: transcript ? String(transcript).slice(0, 20000) : undefined,
+          transcript: prettyText ? prettyText.slice(0, 20000) : undefined,
           duration_seconds: call.duration_seconds != null ? Number(call.duration_seconds) : undefined,
           answered_at: maestroDate(call.answered_at ?? call.started_at),
           ended_at: maestroDate(call.ended_at),
           call_recording_filename: recordingLink ?? undefined,
           notes: [
-            recordingLink ? `Enregistrement: ${recordingLink}` : null,
+            recordingLink ? `Enregistrement (cliquer pour écouter): ${recordingLink}` : null,
             summary ? `Résumé IA: ${summary}` : null,
             keyPoints.length ? `Points clés: ${keyPoints.map(String).join(" • ")}` : null,
             nextActions.length ? `Prochaines actions: ${nextActions.map(actionTitle).filter(Boolean).join(" • ")}` : null,
             coachingText ? `Coaching IA${call.coaching_score != null ? ` (${call.coaching_score}/100)` : ""}:\n${coachingText.slice(0, 4000)}` : null,
             call.lead_score != null ? `Score du lead: ${call.lead_score}${call.lead_temperature ? ` (${call.lead_temperature})` : ""}` : null,
-            transcript ? `Transcription:\n${String(transcript).slice(0, 8000)}` : null,
+            prettyText ? `Transcription:\n${prettyText.slice(0, 8000)}` : null,
           ].filter(Boolean).join("\n\n") || null,
         },
       });
+
       const failure = res.ok ? null : summarizeMaestroFailure(res.status, res.data);
       steps.ai = { ok: res.ok, status: res.status, reused: true, error: failure?.error ?? null, detail: failure?.detail ?? null, permanent: failure?.permanent ?? false };
       await setPipelineStep(admin, call_id, "ai", res.ok ? "done" : "error", {

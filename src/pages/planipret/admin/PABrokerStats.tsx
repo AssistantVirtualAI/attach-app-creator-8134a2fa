@@ -213,8 +213,30 @@ export default function PABrokerStats() {
                         </p>
                       )}
                     </td>
-                    <td className="px-3 py-2 font-semibold">{r.calls30}</td>
+                    <td className="px-3 py-2 font-semibold">
+                      {r.calls30}
+                      {r.aiCalls > 0 && <p className="text-[10px] font-normal" style={muted}>{r.aiCalls} IA</p>}
+                    </td>
+                    <td className="px-3 py-2">{r.talkSeconds > 0 ? fmtDuration(r.talkSeconds) : "—"}</td>
                     <td className="px-3 py-2 font-semibold">{r.texts30}</td>
+                    <td className="px-3 py-2">
+                      {r.calls30 + r.texts30 === 0 ? "—" : (
+                        <span
+                          className="inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium"
+                          style={r.callsSynced + r.textsSynced === r.calls30 + r.texts30
+                            ? { background: "#10B9811A", color: "#047857" }
+                            : { background: "#F59E0B1A", color: "#B45309" }}
+                        >
+                          {r.callsSynced + r.textsSynced}/{r.calls30 + r.texts30}
+                        </span>
+                      )}
+                      <p className="mt-0.5 text-[10px]" style={muted}>
+                        {L("Appels", "Calls")} {r.callsSynced}/{r.calls30} · {L("Textos", "Texts")} {r.textsSynced}/{r.texts30}
+                      </p>
+                    </td>
+                    <td className="px-3 py-2">
+                      {r.lastActivity ? new Date(r.lastActivity).toLocaleString(en ? "en-CA" : "fr-CA", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                    </td>
                     <td className="px-3 py-2">{r.openTasks}</td>
                     <td className="px-3 py-2" style={r.overdueTasks ? { color: "#B91C1C", fontWeight: 600 } : undefined}>
                       {r.overdueTasks || "—"}

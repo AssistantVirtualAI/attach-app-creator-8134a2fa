@@ -11,6 +11,7 @@ let broadcastHandler: (() => void) | null = null;
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
+    functions: { invoke: vi.fn().mockResolvedValue({ data: { team: [] }, error: null }) },
     channel: () => {
       // Chainable stub: TasksSection subscribes to several realtime events.
       const chan: any = {
@@ -93,23 +94,33 @@ describe("TasksSection", () => {
     expect(await screen.findByText(/Hors ligne/)).toBeInTheDocument();
   });
 
-  it("shows tasks_unavailable when the API exposes no list", async () => {
+  it("hides technical errors when the API exposes no list", async () => {
     listTasks.mockResolvedValue(listResult({
       source: "unavailable", tasks: [], error: "tasks_unavailable",
       message: "Liste des tâches indisponible pour le moment.",
       counts: { overdue: 0, today: 0, upcoming: 0, open: 0, all: 0 },
     }));
     render(<TasksSection userId="u1" lang="fr" />);
-    expect(await screen.findByText(/indisponible/)).toBeInTheDocument();
+    await waitFor(() => expect(listTasks).toHaveBeenCalled());
+    expect(screen.queryByText(/indisponible/)).not.toBeInTheDocument();
   });
 
-  it("shows an error state with a retry button", async () => {
+  it("hides transport errors and keeps the task area stable", async () => {
     listTasks.mockResolvedValue(listResult({ success: false, error: "network_error", message: "Réseau indisponible", source: "api", tasks: [] }));
     render(<TasksSection userId="u1" lang="fr" />);
-    const retry = await screen.findByText("Réessayer");
-    listTasks.mockResolvedValue(listResult());
-    fireEvent.click(retry);
+    await waitFor(() => expect(listTasks).toHaveBeenCalled());
+    expect(screen.queryByText("Réessayer")).not.toBeInTheDocument();
+    expect(screen.queryByText("Réseau indisponible")).not.toBeInTheDocument();
+  });
+
+  it("keeps visible tasks when a later refresh fails", async () => {
+    render(<TasksSection userId="u1" lang="fr" />);
     expect((await screen.findAllByText("Rappeler Jean"))[0]).toBeInTheDocument();
+    listTasks.mockResolvedValue(listResult({ success: false, error: "network_error", message: "Failed to send a request to the Edge Function", source: "unavailable", tasks: [] }));
+    broadcastHandler?.();
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(2));
+    expect(screen.getAllByText("Rappeler Jean")[0]).toBeInTheDocument();
+    expect(screen.queryByText(/Failed to send/)).not.toBeInTheDocument();
   });
 
   it("opens the composer from the + button", async () => {

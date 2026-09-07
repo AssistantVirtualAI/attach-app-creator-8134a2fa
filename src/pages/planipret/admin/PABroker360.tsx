@@ -136,6 +136,10 @@ export default function PABroker360() {
     [brokers, brokerParam],
   );
 
+  const brokerMaestroId = broker
+    ? String(broker.maestro_broker_id ?? broker.maestro_telecom_user_id ?? "").trim() || null
+    : null;
+
   const patch = (next: Record<string, string | null>) => {
     const p = new URLSearchParams(params);
     Object.entries(next).forEach(([k, v]) => { if (!v) p.delete(k); else p.set(k, v); });

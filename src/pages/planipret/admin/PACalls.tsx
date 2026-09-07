@@ -199,13 +199,14 @@ export default function PACalls() {
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-                  {Array.from({ length: 9 }).map((_, j) => (
+                  {Array.from({ length: 10 }).map((_, j) => (
                     <td key={j} className="p-3"><div className="h-3 w-3/4 animate-pulse rounded" style={{ background: "var(--pp-bg-elevated)" }} /></td>
                   ))}
                 </tr>
               ))
             ) : paged.length === 0 ? (
-              <tr><td colSpan={9}>
+              <tr><td colSpan={10}>
+
                 <TableEmptyState
                   icon="📞"
                   title={t("adminPortal.calls.emptyTitle")}

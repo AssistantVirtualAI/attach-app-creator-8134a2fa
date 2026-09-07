@@ -5,6 +5,7 @@ import { flushSync, createPortal } from "react-dom";
 import { useOutletContext, useSearchParams } from "react-router-dom";
 import { retryWithBackoff } from "@/lib/planipret/retryBackoff";
 import { supabase } from "@/integrations/supabase/client";
+import { ppEdgeInvoke } from "@/lib/planipret/ppEdge";
 import { toast } from "sonner";
 import {
   Plus, X, ArrowLeft, Phone, Send, Paperclip, MessageSquare, Zap,
@@ -711,7 +712,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       console.info("[pp-ns-sms] send →", { to: number, len: body.length, thread_id: currentThreadId ?? null });
       // Retry automatique avec backoff exponentiel (2s → 6s → 18s).
       const d: any = await retryWithBackoff(async () => {
-        const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", { body: payload });
+        const { data, error: err } = await ppEdgeInvoke("pp-ns-sms", payload);
         if (err) {
           console.error("[pp-ns-sms] invoke error", err);
           throw new Error(err.message || t("messages.sendFailed"));

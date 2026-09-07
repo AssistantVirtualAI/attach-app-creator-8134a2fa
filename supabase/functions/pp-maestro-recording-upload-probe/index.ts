@@ -3,6 +3,8 @@
 import { adminClient, corsHeaders, getMaestroConfig, json, telecomAuth } from "../_shared/maestro.ts";
 import { recordingPermalink } from "../_shared/recording-link.ts";
 
+let MAX_BODY = 300;
+
 async function raw(cfg: any, opts: { method: string; path: string; token: string; body?: BodyInit; headers?: Record<string, string> }) {
   const url = `${cfg.url}${opts.path}${opts.path.includes("?") ? "&" : "?"}machine=1`;
   try {
@@ -12,7 +14,7 @@ async function raw(cfg: any, opts: { method: string; path: string; token: string
       body: opts.body,
     });
     const text = await res.text();
-    return { path: opts.path, method: opts.method, status: res.status, ok: res.ok, body: text.slice(0, 300) };
+    return { path: opts.path, method: opts.method, status: res.status, ok: res.ok, body: text.slice(0, MAX_BODY) };
   } catch (e) {
     return { path: opts.path, method: opts.method, status: 0, ok: false, body: String((e as Error).message) };
   }
@@ -20,7 +22,8 @@ async function raw(cfg: any, opts: { method: string; path: string; token: string
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const { call_id, paths, play } = await req.json().catch(() => ({} as any));
+  const { call_id, paths, play, max_body } = await req.json().catch(() => ({} as any));
+  if (max_body) MAX_BODY = Math.min(Number(max_body), 20000);
   const admin = adminClient();
 
   if (play) {
@@ -79,7 +82,7 @@ Deno.serve(async (req) => {
     `/api/v1/users/${auth.brokerId}/call-recordings`,
   ]) {
     const p2 = p.replace("{b}", String(auth.brokerId)).replace("{c}", String(call.maestro_call_id));
-    for (const m of ["GET", "POST"]) results.push(await raw(cfg, { method: m, path: p2, token: auth.token }));
+    for (const m of (paths ? ["GET"] : ["GET", "POST"])) results.push(await raw(cfg, { method: m, path: p2, token: auth.token }));
   }
 
   // 3. Real upload attempts (multipart + base64 JSON) when we have audio.

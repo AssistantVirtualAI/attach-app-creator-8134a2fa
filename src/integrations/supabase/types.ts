@@ -9903,6 +9903,60 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_maestro_activity: {
+        Row: {
+          created_at: string
+          direction: string | null
+          duration_seconds: number
+          id: string
+          is_ai: boolean
+          kind: string
+          maestro_object_id: string | null
+          maestro_status: string
+          occurred_at: string
+          peer_number: string | null
+          source_id: string
+          source_table: string
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          direction?: string | null
+          duration_seconds?: number
+          id?: string
+          is_ai?: boolean
+          kind: string
+          maestro_object_id?: string | null
+          maestro_status?: string
+          occurred_at?: string
+          peer_number?: string | null
+          source_id: string
+          source_table: string
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          direction?: string | null
+          duration_seconds?: number
+          id?: string
+          is_ai?: boolean
+          kind?: string
+          maestro_object_id?: string | null
+          maestro_status?: string
+          occurred_at?: string
+          peer_number?: string | null
+          source_id?: string
+          source_table?: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_maestro_call_dedupe: {
         Row: {
           created_at: string

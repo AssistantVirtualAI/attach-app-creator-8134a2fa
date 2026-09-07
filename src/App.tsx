@@ -630,6 +630,7 @@ const App = () => (
                   <Route path="clients-360" element={<Suspense fallback={<MobilePageSkeleton />}><MClients360 /></Suspense>} />
                   <Route path="brokers-360" element={<Suspense fallback={<MobilePageSkeleton />}><MBroker360 /></Suspense>} />
                   <Route path="clients-360/:clientKey" element={<Suspense fallback={<MobilePageSkeleton />}><MClientDetail /></Suspense>} />
+                  <Route path="broker-activity" element={<Suspense fallback={<MobilePageSkeleton />}><MBrokerActivity /></Suspense>} />
                   <Route path="ava" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaChat /></Suspense>} />
 
                   <Route path="change-password" element={<Suspense fallback={<MobilePageSkeleton />}><MChangePassword /></Suspense>} />

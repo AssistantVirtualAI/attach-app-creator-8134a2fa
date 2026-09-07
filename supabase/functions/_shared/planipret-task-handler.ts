@@ -154,6 +154,25 @@ async function loadProjection(admin: any, userId: string) {
   return (data ?? []).map((r: any) => normalizeTask(r.payload));
 }
 
+/** Admin only: every broker's mirrored tasks (deduped by task id). */
+async function loadProjectionAll(admin: any) {
+  const { data } = await admin
+    .from("planipret_tasks_projection")
+    .select("task_id,payload")
+    .is("deleted_at", null)
+    .order("due_at", { ascending: true })
+    .limit(2000);
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const r of (data ?? []) as any[]) {
+    const id = String(r.task_id ?? "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(normalizeTask(r.payload));
+  }
+  return out;
+}
+
 /**
  * Full mirror of the upstream list into the projection. On an unfiltered sync
  * we also soft-delete rows the API no longer returns, so the projection stays
@@ -458,7 +477,37 @@ export async function handleTaskRequest(
     // Brokers are always locked to their own Maestro id.
     const isAdminRole = role === "admin" || role === "planipret_admin" || role === "super_admin";
     const requestedBroker = String(body?.broker_id ?? "").trim();
+    const allBrokers = isAdminRole && requestedBroker.toLowerCase() === "all";
     const overrideBroker = isAdminRole && /^\d+$/.test(requestedBroker) ? requestedBroker : null;
+
+    if (allBrokers) {
+      const all = await loadProjectionAll(admin);
+      const now = nowFn();
+      const counts = taskCounts(all, now);
+      const filtered = filterTasks(all, filter, now);
+      const pageOut = paginate(filtered, page, limit);
+      return {
+        status: 200,
+        body: {
+          success: true,
+          source: all.length ? "projection" : "unavailable",
+          maestro_user_id: null,
+          scoped_broker_id: "all",
+          telecom_user_id: null,
+          endpoint: null,
+          filter,
+          tasks: pageOut.items,
+          buckets: bucketTasks(pageOut.items, now),
+          counts,
+          overdue_count: counts.overdue,
+          page: pageOut.page,
+          limit,
+          total: pageOut.total,
+          has_more: pageOut.has_more,
+          correlation_id,
+        },
+      };
+    }
 
     let maestroId: string | null = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
     let telecomId: string | null = null;

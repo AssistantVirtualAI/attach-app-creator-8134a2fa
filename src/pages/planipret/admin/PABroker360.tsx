@@ -214,6 +214,16 @@ export default function PABroker360() {
             ))}
           </div>
 
+          {tab === "journey" && (
+            <BrokerJourney
+              key={broker.id}
+              brokerIds={[broker.id, broker.user_id].filter(Boolean) as string[]}
+              brokerName={brokerName(broker)}
+              maestroBrokerId={brokerMaestroId}
+              userId={broker.user_id ?? broker.id}
+              en={en}
+            />
+          )}
           {tab === "contacts" && (
             <PBMaestroClients embedded telecomUserId={broker.maestro_telecom_user_id ?? broker.maestro_broker_id ?? null} />
           )}

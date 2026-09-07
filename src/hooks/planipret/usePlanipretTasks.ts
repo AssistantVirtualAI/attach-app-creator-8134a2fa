@@ -7,7 +7,6 @@ import {
   listTasks,
   loadTaskCache,
   saveTaskCache,
-  taskCounts,
   updateTask as apiUpdate,
   type NormalizedTask,
   type TaskFilterValue,
@@ -104,14 +103,17 @@ export function usePlanipretTasks(
       setError(null);
       setMessage(null);
       setPage(res.page);
+      setCounts(res.counts);
+      setTotal(res.total);
       setHasMore(res.has_more);
       setLastSyncAt(new Date().toISOString());
       setTasks((current) => {
-        const known = new Map(current.map((task) => [String(task.id), task]));
-        for (const task of res.tasks) known.set(String(task.id), task);
-        const merged = mergePending([...known.values()]);
-        setCounts(taskCounts(merged));
-        setTotal(merged.length);
+        // A successful-but-incomplete response must not briefly erase known
+        // tasks while Maestro still reports that tasks exist.
+        const next = res.tasks.length === 0 && res.counts.all > 0 && current.length > 0
+          ? current
+          : res.tasks;
+        const merged = mergePending(next);
         if (!brokerId) saveTaskCache(userId, merged);
         return merged;
       });

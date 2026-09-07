@@ -93,23 +93,23 @@ describe("TasksSection", () => {
     expect(await screen.findByText(/Hors ligne/)).toBeInTheDocument();
   });
 
-  it("shows tasks_unavailable when the API exposes no list", async () => {
+  it("hides technical errors when the API exposes no list", async () => {
     listTasks.mockResolvedValue(listResult({
       source: "unavailable", tasks: [], error: "tasks_unavailable",
       message: "Liste des tâches indisponible pour le moment.",
       counts: { overdue: 0, today: 0, upcoming: 0, open: 0, all: 0 },
     }));
     render(<TasksSection userId="u1" lang="fr" />);
-    expect(await screen.findByText(/indisponible/)).toBeInTheDocument();
+    await waitFor(() => expect(listTasks).toHaveBeenCalled());
+    expect(screen.queryByText(/indisponible/)).not.toBeInTheDocument();
   });
 
-  it("shows an error state with a retry button", async () => {
+  it("hides transport errors and keeps the task area stable", async () => {
     listTasks.mockResolvedValue(listResult({ success: false, error: "network_error", message: "Réseau indisponible", source: "api", tasks: [] }));
     render(<TasksSection userId="u1" lang="fr" />);
-    const retry = await screen.findByText("Réessayer");
-    listTasks.mockResolvedValue(listResult());
-    fireEvent.click(retry);
-    expect((await screen.findAllByText("Rappeler Jean"))[0]).toBeInTheDocument();
+    await waitFor(() => expect(listTasks).toHaveBeenCalled());
+    expect(screen.queryByText("Réessayer")).not.toBeInTheDocument();
+    expect(screen.queryByText("Réseau indisponible")).not.toBeInTheDocument();
   });
 
   it("opens the composer from the + button", async () => {

@@ -318,7 +318,18 @@ function SmsList({ profile, openDialer, registerRefresh, initialTo }: any) {
       if (err) throw err;
       const list: NsThread[] = (data as any)?.threads ?? [];
       list.sort((a, b) => +new Date(threadTime(b)) - +new Date(threadTime(a)));
-      setThreads(list);
+      // Le PBX renvoie parfois plusieurs sessions pour le même correspondant
+      // (15149522685 / +15149522685 / sessions distinctes) : on garde la plus récente.
+      const seen = new Set<string>();
+      const deduped: NsThread[] = [];
+      for (const th of list) {
+        const digits = String(threadPeer(th) ?? "").replace(/\D/g, "");
+        const key = digits ? digits.slice(-10) : `id:${threadId(th) || Math.random()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(th);
+      }
+      setThreads(deduped);
     } catch (e: any) {
       console.error("[pp-ns-sms] threads", e);
       setError(e?.message ?? t("messages.sendFailed"));

@@ -48,12 +48,17 @@ function prettyTranscript(
     .map((line) => {
       const m = line.match(/^\s*sip:([^@\s]+)@[^\s:]+:\s*(.*)$/);
       if (!m) return line.trim();
-      const user = m[1].replace(/\D/g, "");
-      const isBroker = ext ? user === ext || user === `1${ext}` || user.endsWith(ext) : false;
+      const rawUser = m[1];
+      const user = rawUser.replace(/\D/g, "");
+      // Broker side = internal extension (2-6 digits, optional M/W device suffix).
+      const isBroker = ext
+        ? user === ext || user === `1${ext}` || user.endsWith(ext)
+        : /^\d{2,6}[MWmw]?$/.test(rawUser);
       const text = m[2].trim();
       if (!text) return "";
       return `${isBroker ? broker : client}: ${text}`;
     })
+
     .filter((l) => l.length > 0)
     .join("\n");
 }
@@ -308,11 +313,21 @@ Deno.serve(async (req) => {
           : asArray(call.ai_topics);
 
       const recordingLink = recordingLink0;
-      const { data: prof } = await admin
+      let { data: prof } = await admin
         .from("planipret_profiles")
         .select("full_name, first_name, last_name, extension")
         .eq("user_id", call.user_id)
         .maybeSingle();
+      if (!prof) {
+        // planipret_phone_calls.user_id référence parfois planipret_profiles.id.
+        const alt = await admin
+          .from("planipret_profiles")
+          .select("full_name, first_name, last_name, extension")
+          .eq("id", call.user_id)
+          .maybeSingle();
+        prof = alt.data as any;
+      }
+
       const brokerName = (prof as any)?.full_name
         || [ (prof as any)?.first_name, (prof as any)?.last_name ].filter(Boolean).join(" ")
         || "Courtier";

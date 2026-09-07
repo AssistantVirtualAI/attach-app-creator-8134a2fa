@@ -19,7 +19,7 @@ async function raw(cfg: any, opts: { method: string; path: string; token: string
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const { call_id } = await req.json().catch(() => ({} as any));
+  const { call_id, paths } = await req.json().catch(() => ({} as any));
   const admin = adminClient();
 
   const { data: call } = await admin
@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
   const results: unknown[] = [];
 
   // 2. Discovery: which routes even exist?
-  for (const p of [
+  for (const p of (paths as string[] | undefined) ?? [
     `${base}/recording`,
     `${base}/recordings`,
     `${base}/recording/upload`,
@@ -63,11 +63,12 @@ Deno.serve(async (req) => {
     `/api/v1/users/${auth.brokerId}/recordings`,
     `/api/v1/users/${auth.brokerId}/call-recordings`,
   ]) {
-    results.push(await raw(cfg, { method: "OPTIONS", path: p, token: auth.token }));
+    const p2 = p.replace("{b}", String(auth.brokerId)).replace("{c}", String(call.maestro_call_id));
+    for (const m of ["GET", "POST"]) results.push(await raw(cfg, { method: m, path: p2, token: auth.token }));
   }
 
   // 3. Real upload attempts (multipart + base64 JSON) when we have audio.
-  if (bytes) {
+  if (bytes && !paths) {
     const blob = new Blob([bytes], { type: "audio/wav" });
     const filename = `${call.maestro_call_id}.wav`;
     for (const [p, field] of [

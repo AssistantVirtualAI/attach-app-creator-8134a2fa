@@ -454,7 +454,19 @@ export async function handleTaskRequest(
         : [maestroId, telecomId, profile?.maestro_telecom_user_id]);
       src = "api";
       // Never write another broker's tasks into the caller's local projection.
-      if (!overrideBroker) await syncProjection(admin, userId, all, { full: !from && !to });
+      // When an admin inspects a broker, mirror them under THAT broker's own
+      // local user id so the admin task board reflects the real Maestro data.
+      if (!overrideBroker) {
+        await syncProjection(admin, userId, all, { full: !from && !to });
+      } else {
+        try {
+          const { data: owner } = await admin
+            .from("planipret_profiles").select("user_id")
+            .eq("maestro_broker_id", overrideBroker).not("user_id", "is", null).limit(1);
+          const ownerId = owner?.[0]?.user_id ? String(owner[0].user_id) : null;
+          if (ownerId) await syncProjection(admin, ownerId, all, { full: !from && !to });
+        } catch { /* mirroring is best effort */ }
+      }
     } else if (overrideBroker) {
       all = [];
       src = "unavailable";

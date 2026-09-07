@@ -92,7 +92,7 @@ export default function ClientMaestro360({
   }, [load, idsKey]);
 
 
-  const bundles = useMemo(() => buildClientBundles(tasks, deals, deposits, calls, contacts), [tasks, deals, deposits, calls, contacts]);
+  const bundles = useMemo(() => buildClientBundles(tasks, deals, deposits, calls, [], contacts), [tasks, deals, deposits, calls, contacts]);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();

@@ -371,28 +371,15 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!selectedTarget) return;
     setTarget(tt === "contract" ? (selectedTarget.contracts[0]?.id ?? "") : (selectedTarget.user?.id ?? selectedTarget.client_id));
   };
-  // Assignment: Maestro only accepts yourself or an authorized team assistant.
-  // Once the team is known we offer nothing else — listing the whole firm just
-  // produced a rejection from Maestro at submit time.
-  const teamIds = new Set(team.map((t) => String(t.id)));
+  // Assignment: Maestro only accepts yourself or an assistant of your own team.
+  // We never list the whole firm — other brokers would be rejected upstream and
+  // would receive tasks that are not theirs.
   const teamUsers = (() => {
     const byId = new Map((people as any[]).map((u) => [String(u?.id ?? u?.broker_id ?? u?.user_id ?? ""), u]));
     return team
+      .filter((t) => !t.self)
       .map((t) => ({ ...(byId.get(String(t.id)) ?? {}), id: String(t.id), name: t.name, email: t.email }))
       .sort((a, b) => contactName(a).localeCompare(contactName(b)));
-  })();
-  const assignableUsers = (() => {
-    if (teamUsers.length > 0) return [];
-    const seen = new Set<string>();
-    const out: any[] = [];
-    for (const u of people as any[]) {
-      const id = String(u?.id ?? u?.broker_id ?? u?.user_id ?? "");
-      if (!/^\d+$/.test(id) || seen.has(id) || teamIds.has(id)) continue;
-      seen.add(id);
-      out.push({ ...u, id });
-    }
-
-    return out.sort((a, b) => contactName(a).localeCompare(contactName(b)));
   })();
 
 
@@ -646,13 +633,6 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                     <optgroup label={L("Mon équipe (Maestro)", "My team (Maestro)")}>
                       {teamUsers.map((u: any) => (
                         <option key={`t-${String(u.id)}`} value={String(u.id)}>{contactName(u)}</option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {assignableUsers.length > 0 && (
-                    <optgroup label={L("Adjoints autorisés", "Authorized assistants")}>
-                      {assignableUsers.map((u: any) => (
-                        <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
                       ))}
                     </optgroup>
                   )}

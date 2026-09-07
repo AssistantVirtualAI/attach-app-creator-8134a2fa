@@ -851,7 +851,11 @@ export async function handleTaskRequest(
       // its internal user directory and can be different (for example 387… vs
       // 93135). Sending the CRM id is accepted but leaves `users: []`, so the
       // task never appears in the assignee's Maestro calendar.
-      const internalAssignee = await deps.resolveTaskAssigneeId?.().catch(() => null);
+      const internalAssignee = await withDeadline(
+        Promise.resolve(deps.resolveTaskAssigneeId?.()).catch(() => null),
+        5000,
+        null,
+      );
       if (internalAssignee || ownXid) createInput.users_id = internalAssignee ?? ownXid;
     }
     const built = buildCreatePayload(createInput);

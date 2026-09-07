@@ -96,6 +96,9 @@ Deno.serve(async (req) => {
   if (duplicates.length) {
     await admin.from("planipret_phone_messages").update({ maestro_synced: true }).in("id", duplicates);
   }
+  if (testSkipped.length) {
+    await admin.from("planipret_phone_messages").update({ maestro_synced: true }).in("id", testSkipped);
+  }
 
   const results: any[] = [];
   for (const msg of batch) {

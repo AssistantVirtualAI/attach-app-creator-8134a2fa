@@ -49,8 +49,10 @@ const str = (v: unknown) => {
 /** Client / titre lisibles depuis le payload Maestro d'une tâche projetée. */
 function readTask(row: any): ActivityTask {
   const p = (row?.payload ?? {}) as Record<string, any>;
+  const raw = (p?.raw ?? {}) as Record<string, any>;
   const client =
-    str(p.client_name) || str(p.contact_name) || str(p.full_name) ||
+    str(p.target_name) || str(p.client_name) || str(p.contact_name) || str(p.full_name) ||
+    str(raw.client_name) || str(raw.contact_name) ||
     str(p.client?.full_name) || str(p.contact?.full_name) ||
     [str(p.first_name), str(p.last_name)].filter(Boolean).join(" ");
   const title = str(p.notes) || str(p.description) || str(p.title) || str(p.type) || "—";

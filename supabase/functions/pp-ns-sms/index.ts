@@ -18,6 +18,7 @@ import {
   requirePlanipretBroker,
   nsFetch,
 } from "../_shared/planipret-ns.ts";
+import { blockTestSms, isTestSms, TEST_SMS_ALLOWED_USER_IDS } from "../_shared/pp-test-sms.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,

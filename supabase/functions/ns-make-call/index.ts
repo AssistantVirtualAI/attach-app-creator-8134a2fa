@@ -93,7 +93,11 @@ Deno.serve(async (req) => {
       trace(traceId, "missing.destination");
       return jsonResponse({ success: false, error: "destination requise", code: 400, trace_id: traceId }, 400);
     }
-    const destination = toE164(rawDest);
+    const resolved = await resolveInternal(admin, env.domain, toE164(rawDest))
+      .catch(() => ({ destination: toE164(rawDest), corrected: false }));
+    const destination = resolved.destination;
+    if (resolved.corrected) trace(traceId, "destination.corrected", { raw: rawDest, destination });
+
     const callerIdNumber = body?.caller_id_number ?? body?.["caller-id-number"] ?? ext;
     const callerIdName =
       body?.caller_id_name ?? body?.["caller-id-name"] ?? profile.full_name ?? "Courtier Planiprêt";

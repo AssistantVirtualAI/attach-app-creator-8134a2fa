@@ -283,6 +283,7 @@ export default function PACalls() {
               {detail.ai_summary && (
                 <div><p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t("adminPortal.calls.aiSummary")}</p><div className="p-3 rounded" style={{ fontSize: 11, background: "rgba(155,127,232,0.08)", border: `1px solid ${AGENT}33`, color: "var(--pp-text-primary)" }}>{detail.ai_summary}</div></div>
               )}
+              <MaestroSyncPanel call={detail} lang={lang} onDone={() => load(page, pageSize)} />
             </div>
           </div>
         </div>
@@ -290,6 +291,59 @@ export default function PACalls() {
     </div>
   );
 }
+
+/** Statut de synchronisation Maestro d'un appel. */
+function maestroState(c: any) {
+  if (!c?.maestro_call_id) return "none" as const;
+  return c?.metadata?.maestro_media_synced_at ? ("full" as const) : ("partial" as const);
+}
+
+function MaestroBadge({ call, lang }: { call: any; lang: string }) {
+  const s = maestroState(call);
+  const en = lang === "en";
+  const map = {
+    full: { c: SUCCESS, l: en ? "Synced" : "Synchronisé" },
+    partial: { c: "#E8A33D", l: en ? "Partial" : "Partiel" },
+    none: { c: "var(--pp-text-faint)", l: en ? "Not sent" : "Non envoyé" },
+  } as const;
+  const m = map[s];
+  return (
+    <span className="px-1.5 py-0.5 rounded" style={{ fontSize: 10, color: m.c, border: `1px solid ${m.c}55` }}>{m.l}</span>
+  );
+}
+
+function MaestroSyncPanel({ call, lang, onDone }: { call: any; lang: string; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const en = lang === "en";
+  const s = maestroState(call);
+  const retry = async () => {
+    setBusy(true);
+    const { data, error } = await supabase.functions.invoke("maestro-sync-call", { body: { call_id: call.id, force: true } });
+    setBusy(false);
+    if (error || (data as any)?.success === false) toast.error(en ? "Maestro sync failed" : "Échec de la synchro Maestro");
+    else { toast.success(en ? "Sent to Maestro" : "Renvoyé vers Maestro"); onDone(); }
+  };
+  return (
+    <div className="pt-2" style={{ borderTop: "1px solid var(--pp-bg-border-2)" }}>
+      <div className="flex items-center justify-between">
+        <span style={{ fontSize: 11, color: "var(--pp-text-muted)" }}>Maestro</span>
+        <MaestroBadge call={call} lang={lang} />
+      </div>
+      {s !== "none" && call?.metadata?.maestro_media_synced_at && (
+        <p style={{ fontSize: 10, color: "var(--pp-text-faint)", marginTop: 4 }}>
+          {new Date(call.metadata.maestro_media_synced_at).toLocaleString(en ? "en-CA" : "fr-CA")}
+        </p>
+      )}
+      <button onClick={retry} disabled={busy}
+        className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs"
+        style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)", opacity: busy ? 0.6 : 1 }}>
+        <RefreshCw className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`} />
+        {en ? "Resend to Maestro" : "Renvoyer vers Maestro"}
+      </button>
+    </div>
+  );
+}
+
 
 function Input({ label, type = "text", value, onChange, placeholder }: any) {
   return (

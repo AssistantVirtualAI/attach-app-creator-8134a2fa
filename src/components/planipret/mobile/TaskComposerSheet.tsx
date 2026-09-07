@@ -636,13 +636,6 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                       ))}
                     </optgroup>
                   )}
-                  {assignableUsers.length > 0 && (
-                    <optgroup label={L("Adjoints autorisés", "Authorized assistants")}>
-                      {assignableUsers.map((u: any) => (
-                        <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
-                      ))}
-                    </optgroup>
-                  )}
 
                 </select>
                 <ChevronDown className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--pp-text-muted)" }} />

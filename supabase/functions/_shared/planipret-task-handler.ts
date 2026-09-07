@@ -334,32 +334,54 @@ async function validateTaskTarget(
   if (type === "user" && ownIds.includes(xid)) {
     return { ok: true, type, xid, reason: "own_broker_id", matched: null };
   }
-  const targets = await loadClientTargets(deps, profile);
+  // First pass: default client page. Second pass: targeted search on the xid,
+  // because the Client List API is paginated and the client may not be on it.
+  let targets = await loadClientTargets(deps, profile);
+  let hasScope = targets.length > 0;
+  if (!targetAllowed(targets, type, xid, ownIds) && !targets.some((t) => t.client_id === xid)) {
+    const searched = await loadClientTargets(deps, profile, xid);
+    if (searched.length) {
+      hasScope = true;
+      const seen = new Set(targets.map((t) => t.client_id));
+      targets = [...targets, ...searched.filter((t) => !seen.has(t.client_id))];
+    }
+  }
   const available = {
     users: targets.map((t) => t.user?.id).filter(Boolean) as string[],
     contracts: targets.flatMap((t) => t.contracts.map((c) => c.id)),
   };
-  const targets_source: "clients_api" | "unavailable" = deps.clientTargetsFetch ? "clients_api" : "unavailable";
+  const targets_source: "clients_api" | "unavailable" = deps.clientTargetsFetch && hasScope ? "clients_api" : "unavailable";
   if (targetAllowed(targets, type, xid, ownIds)) {
     const hit = targets.find((t) => (type === "user" ? t.user?.id === xid : t.contracts.some((c) => c.id === xid)));
     return { ok: true, type, xid, reason: `task_targets.${type}`, available, targets_source, matched: hit ? { client_id: hit.client_id, name: hit.name } : null };
   }
+  // The Maestro client id itself is a valid `user` target.
+  const byClient = targets.find((t) => t.client_id === xid);
+  if (type === "user" && byClient) {
+    return { ok: true, type, xid, reason: "client_id_match", available, targets_source, matched: { client_id: byClient.client_id, name: byClient.name } };
+  }
   if (type === "contract" && await contractIsMapped(admin, userId, xid)) {
     return { ok: true, type, xid, reason: "locally_mapped_contract", available, targets_source, matched: null };
+  }
+  // No scope information available (API down, empty page, missing telecom id):
+  // do not block task creation — let Maestro itself accept or reject the xid.
+  if (targets_source === "unavailable") {
+    return { ok: true, type, xid, reason: "scope_unavailable_passthrough", available, targets_source, matched: null };
   }
   return type === "user"
     ? {
         ...base, available, targets_source,
         error: "xid_out_of_scope",
-        reason: targets_source === "unavailable" ? "clients_api_unavailable" : "no_matching_task_targets_user",
+        reason: "no_matching_task_targets_user",
         message: "Cette cible n'appartient pas à ton périmètre (task_targets.user).",
       }
     : {
         ...base, available, targets_source,
         error: "target_mapping_required",
-        reason: targets_source === "unavailable" ? "clients_api_unavailable" : "no_matching_task_targets_contract",
+        reason: "no_matching_task_targets_contract",
         message: "Ce contrat n'est pas une cible valide (task_targets.contracts) pour ton compte.",
       };
+
 }
 
 export async function handleTaskRequest(

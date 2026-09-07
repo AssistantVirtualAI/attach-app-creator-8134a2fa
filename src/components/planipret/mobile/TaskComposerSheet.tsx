@@ -187,8 +187,18 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     void getPpContacts("maestro").then((v) => { if (alive) setClients(v || []); }).catch(() => {});
     void listClientTargets().then((v) => { if (alive) setTargets(v || []); }).catch(() => {});
     void getPpContacts("maestro_brokers", { force: true, limit: 500 }).then((v) => { if (alive) setPeople(v || []); }).catch(() => {});
+    // Maestro teams: brokers eligible on this broker's clients.
+    void supabase.functions
+      .invoke("planipret-task-api", { body: { action: "team" } })
+      .then(({ data }: any) => {
+        if (!alive) return;
+        const m = Array.isArray(data?.members) ? data.members : [];
+        setTeam(m.filter((x: any) => /^\d+$/.test(String(x?.id ?? ""))));
+      })
+      .catch(() => {});
     return () => { alive = false; };
   }, [open, step]);
+
 
   // Server-side client search (Maestro Client List API): the cached page only
   // holds the first 200 clients, so anything else must be searched remotely.

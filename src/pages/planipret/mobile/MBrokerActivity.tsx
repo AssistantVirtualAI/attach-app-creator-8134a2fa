@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, RefreshCw } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronLeft, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import BrokerActivityDaily from "@/components/planipret/brokers/BrokerActivityDaily";
-import { fetchBrokerActivity, type BrokerActivity } from "@/lib/planipret/brokerActivity";
+import { fetchBrokerActivity, summarizeTasks, type BrokerActivity } from "@/lib/planipret/brokerActivity";
 
 interface BrokerOption { userId: string; name: string }
 

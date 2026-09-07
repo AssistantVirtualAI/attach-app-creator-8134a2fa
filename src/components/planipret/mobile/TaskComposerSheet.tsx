@@ -5,6 +5,8 @@ import { toApiDateTime, listClientTargets, type ClientTaskTarget } from "@/lib/p
 import { MILESTONES, QUICK_TASKS, catalogLabel, type TaskCatalogItem } from "@/lib/planipret/taskMilestones";
 import { getPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 import { matchAllTokens, normalizeText, tokenize } from "@/lib/textNormalize";
+import { supabase } from "@/integrations/supabase/client";
+
 
 export interface TaskComposerValue {
   target: string;
@@ -130,6 +132,9 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [searching, setSearching] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<ClientTaskTarget | null>(null);
   const [people, setPeople] = useState<any[]>(() => peekPpContacts("maestro_brokers") ?? []);
+  /** Maestro team members (eligible assignees) for the signed-in broker. */
+  const [team, setTeam] = useState<Array<{ id: string; name: string | null; email: string | null; self?: boolean }>>([]);
+
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
   const [err, setErr] = useState<string | null>(null);

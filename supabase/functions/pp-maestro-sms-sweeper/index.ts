@@ -4,6 +4,7 @@
 //
 // POST { limit?: number, max_age_hours?: number, user_id?: string, dry_run?: boolean }
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isTestSms, TEST_SMS_ALLOWED_USER_IDS } from "../_shared/pp-test-sms.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

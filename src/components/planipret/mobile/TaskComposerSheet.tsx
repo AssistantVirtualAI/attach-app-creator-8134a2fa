@@ -5,6 +5,8 @@ import { toApiDateTime, listClientTargets, type ClientTaskTarget } from "@/lib/p
 import { MILESTONES, QUICK_TASKS, catalogLabel, type TaskCatalogItem } from "@/lib/planipret/taskMilestones";
 import { getPpContacts, peekPpContacts } from "@/lib/ppContactsCache";
 import { matchAllTokens, normalizeText, tokenize } from "@/lib/textNormalize";
+import { supabase } from "@/integrations/supabase/client";
+
 
 export interface TaskComposerValue {
   target: string;
@@ -130,6 +132,9 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [searching, setSearching] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<ClientTaskTarget | null>(null);
   const [people, setPeople] = useState<any[]>(() => peekPpContacts("maestro_brokers") ?? []);
+  /** Maestro team members (eligible assignees) for the signed-in broker. */
+  const [team, setTeam] = useState<Array<{ id: string; name: string | null; email: string | null; self?: boolean }>>([]);
+
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -187,8 +192,18 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     void getPpContacts("maestro").then((v) => { if (alive) setClients(v || []); }).catch(() => {});
     void listClientTargets().then((v) => { if (alive) setTargets(v || []); }).catch(() => {});
     void getPpContacts("maestro_brokers", { force: true, limit: 500 }).then((v) => { if (alive) setPeople(v || []); }).catch(() => {});
+    // Maestro teams: brokers eligible on this broker's clients.
+    void supabase.functions
+      .invoke("planipret-task-api", { body: { action: "team" } })
+      .then(({ data }: any) => {
+        if (!alive) return;
+        const m = Array.isArray(data?.members) ? data.members : [];
+        setTeam(m.filter((x: any) => /^\d+$/.test(String(x?.id ?? ""))));
+      })
+      .catch(() => {});
     return () => { alive = false; };
   }, [open, step]);
+
 
   // Server-side client search (Maestro Client List API): the cached page only
   // holds the first 200 clients, so anything else must be searched remotely.
@@ -356,17 +371,25 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!selectedTarget) return;
     setTarget(tt === "contract" ? (selectedTarget.contracts[0]?.id ?? "") : (selectedTarget.user?.id ?? selectedTarget.client_id));
   };
-  // A task can be kept for yourself or handed to any broker / assistant of the
-  // firm: the full Maestro directory is offered, de-duplicated and sorted.
+  // Assignment: the broker's Maestro team comes first (fetched live from the
+  // Maestro Client List API), then the rest of the firm directory.
+  const teamIds = new Set(team.map((t) => String(t.id)));
+  const teamUsers = (() => {
+    const byId = new Map((people as any[]).map((u) => [String(u?.id ?? u?.broker_id ?? u?.user_id ?? ""), u]));
+    return team
+      .map((t) => ({ ...(byId.get(String(t.id)) ?? {}), id: String(t.id), name: t.name, email: t.email }))
+      .sort((a, b) => contactName(a).localeCompare(contactName(b)));
+  })();
   const assignableUsers = (() => {
     const seen = new Set<string>();
     const out: any[] = [];
     for (const u of people as any[]) {
       const id = String(u?.id ?? u?.broker_id ?? u?.user_id ?? "");
-      if (!/^\d+$/.test(id) || seen.has(id)) continue;
+      if (!/^\d+$/.test(id) || seen.has(id) || teamIds.has(id)) continue;
       seen.add(id);
       out.push({ ...u, id });
     }
+
     return out.sort((a, b) => contactName(a).localeCompare(contactName(b)));
   })();
 
@@ -616,9 +639,19 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                 <select className={`${field} appearance-none pr-9`} style={fieldStyle} value={assignee}
                   aria-label={L("Assigné à", "Assigned to")} onChange={(e) => setAssignee(e.target.value)}>
                   <option value="">{L("Moi (auto)", "Me (auto)")}</option>
-                  {assignableUsers.map((u: any) => (
-                    <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
-                  ))}
+                  {teamUsers.length > 0 && (
+                    <optgroup label={L("Mon équipe (Maestro)", "My team (Maestro)")}>
+                      {teamUsers.map((u: any) => (
+                        <option key={`t-${String(u.id)}`} value={String(u.id)}>{contactName(u)}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label={L("Tous les courtiers", "All brokers")}>
+                    {assignableUsers.map((u: any) => (
+                      <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
+                    ))}
+                  </optgroup>
+
                 </select>
                 <ChevronDown className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--pp-text-muted)" }} />
               </div>

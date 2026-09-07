@@ -503,7 +503,7 @@ export async function handleTaskRequest(
           page: pageOut.page,
           limit,
           total: pageOut.total,
-          has_more: pageOut.hasMore,
+          has_more: pageOut.has_more,
           correlation_id,
         },
       };

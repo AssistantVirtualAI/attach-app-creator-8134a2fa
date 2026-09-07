@@ -72,8 +72,34 @@ Deno.serve(async (req) => {
   const results: unknown[] = [];
 
   // S3 mode: set a plain filename, read back the presigned URL, try to PUT the bytes there.
-  if ((await Promise.resolve(true)) && (globalThis as any).__never) { /* noop */ }
-  if (bytes && (arguments as any) === undefined) { /* noop */ }
+  if (s3) {
+    const filename = `${call.maestro_call_id}.wav`;
+    const put = await raw(cfg, {
+      method: "PUT",
+      path: base,
+      token: auth.token,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ call_recording_filename: filename, saving_call_recording: 1 }),
+    });
+    results.push(put);
+    const list = await raw(cfg, { method: "GET", path: `/api/v1/users/${auth.brokerId}/calls?limit=40`, token: auth.token });
+    let signed: string | null = null;
+    try {
+      const arr = JSON.parse(String((list as any).body));
+      const row = (arr as any[]).find((c) => c.id === call.maestro_call_id);
+      signed = row?.call_recording_url ?? null;
+    } catch { /* body truncated */ }
+    results.push({ step: "signed", signed: signed ? signed.split("?")[0] : null, has: !!signed });
+    if (signed && bytes) {
+      const up = await fetch(signed, { method: "PUT", headers: { "Content-Type": "audio/wav" }, body: bytes });
+      const upText = (await up.text()).slice(0, 400);
+      results.push({ step: "s3_put", status: up.status, ok: up.ok, body: upText });
+      const check = await fetch(signed, { method: "GET", headers: { Range: "bytes=0-99" } });
+      results.push({ step: "s3_get", status: check.status, len: (await check.arrayBuffer()).byteLength });
+    }
+    return json({ call_id, maestro_call_id: call.maestro_call_id, broker: auth.brokerId, audio: bytes?.length ?? null, audioErr, results });
+  }
+
 
 
   // 2. Discovery: which routes even exist?

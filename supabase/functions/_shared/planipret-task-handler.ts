@@ -890,7 +890,11 @@ export async function handleTaskRequest(
     ].filter(Boolean);
 
     if (payload.type === "user" || payload.type === "contract") {
-      const check = await validateTaskTarget(deps, admin, profile, userId, payload.type, payload.xid, ownIds);
+      const check = await withDeadline(
+        validateTaskTarget(deps, admin, profile, userId, payload.type, payload.xid, ownIds),
+        8000,
+        { ok: true, type: payload.type as "user" | "contract", xid: String(payload.xid ?? ""), reason: "scope_check_timeout_passthrough" } as any,
+      );
       if (!check.ok) {
         await audit(admin, {
           action: "task_create_denied", user_id: userId, source, session_id: sessionId,

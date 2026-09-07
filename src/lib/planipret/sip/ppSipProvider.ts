@@ -847,13 +847,26 @@ class PpSipProvider {
 
   async call(number: string) {
     if (!this.cfg || !this.ua) throw new Error("softphone_not_registered");
-    this.update({ callState: "ringing-out", remoteIdentity: number, remoteNumber: number, direction: "out", errorCause: undefined });
+    // Le SIP URI n'accepte ni espaces ni ponctuation : « (438) 953-4902 »
+    // produit une URI invalide et l'INVITE n'est jamais émis (aucune sonnerie).
+    // Postes internes (2–6 chiffres) : composés bruts. Sinon : E.164.
+    const raw = String(number ?? "").trim();
+    const digits = raw.replace(/\D/g, "");
+    let dest: string;
+    if (/^\d{2,6}$/.test(digits) && !raw.startsWith("+")) dest = digits;
+    else if (raw.startsWith("+")) dest = `+${digits}`;
+    else if (digits.length === 10) dest = `+1${digits}`;
+    else if (digits.length === 11 && digits.startsWith("1")) dest = `+${digits}`;
+    else dest = digits || raw;
+    if (!dest) throw new Error("invalid_destination");
+    this.update({ callState: "ringing-out", remoteIdentity: dest, remoteNumber: dest, direction: "out", errorCause: undefined });
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         video: false,
       });
-      const target = `sip:${number}@${this.cfg.sipDomain}`;
+      const target = `sip:${dest}@${this.cfg.sipDomain}`;
+
       const session = this.ua.call(target, {
         mediaStream,
         mediaConstraints: { audio: true, video: false },

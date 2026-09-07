@@ -192,7 +192,7 @@ export default function PACalls() {
         <table className="w-full text-sm">
           <thead style={{ background: "var(--pp-bg-elevated)" }}>
             <tr style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--pp-text-faint)" }} className="text-left">
-              <th className="p-3">{t("adminPortal.calls.colBroker")}</th><th>{t("adminPortal.calls.colDir")}</th><th>{t("adminPortal.calls.colFrom")}</th><th>{t("adminPortal.calls.colTo")}</th><th>{t("adminPortal.calls.colDuration")}</th><th>{t("adminPortal.calls.colDate")}</th><th>{t("adminPortal.calls.colRec")}</th><th>{t("adminPortal.calls.colAi")}</th><th></th>
+              <th className="p-3">{t("adminPortal.calls.colBroker")}</th><th>{t("adminPortal.calls.colDir")}</th><th>{t("adminPortal.calls.colFrom")}</th><th>{t("adminPortal.calls.colTo")}</th><th>{t("adminPortal.calls.colDuration")}</th><th>{t("adminPortal.calls.colDate")}</th><th>{t("adminPortal.calls.colRec")}</th><th>{t("adminPortal.calls.colAi")}</th><th>Maestro</th><th></th>
             </tr>
           </thead>
           <tbody>

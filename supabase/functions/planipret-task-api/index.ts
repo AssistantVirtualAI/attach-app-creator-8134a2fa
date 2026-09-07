@@ -244,11 +244,22 @@ function makeClientTargetsFetch(token: string | null) {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           signal: ctrl.signal,
         });
-        if (!res.ok) continue;
-        const j = await res.json().catch(() => null);
+        const txt = await res.text().catch(() => "");
+        let j: any = null;
+        try { j = txt ? JSON.parse(txt) : null; } catch { /* non json */ }
         const raw = Array.isArray(j) ? j : (j?.clients ?? j?.data ?? j?.items ?? j?.results ?? []);
-        if (Array.isArray(raw)) return raw;
-      } catch { /* try next */ } finally { clearTimeout(timer); }
+        console.log("[planipret-task-api] clients probe", JSON.stringify({
+          url: url.split("?")[0],
+          status: res.status,
+          keys: j && !Array.isArray(j) ? Object.keys(j).slice(0, 8) : "array",
+          count: Array.isArray(raw) ? raw.length : -1,
+          sample: txt.slice(0, 300),
+        }));
+        if (!res.ok) continue;
+        if (Array.isArray(raw) && raw.length > 0) return raw;
+      } catch (e) {
+        console.log("[planipret-task-api] clients probe error", url.split("?")[0], String(e));
+      } finally { clearTimeout(timer); }
     }
     return [];
   };

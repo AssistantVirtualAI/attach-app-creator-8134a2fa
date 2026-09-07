@@ -22,7 +22,7 @@ async function raw(cfg: any, opts: { method: string; path: string; token: string
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const { call_id, paths, play, max_body, s3 } = await req.json().catch(() => ({} as any));
+  const { call_id, paths, play, max_body, s3, peek } = await req.json().catch(() => ({} as any));
   if (max_body) MAX_BODY = Math.min(Number(max_body), 20000);
   const admin = adminClient();
 

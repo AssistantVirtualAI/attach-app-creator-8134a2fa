@@ -45,6 +45,7 @@ const MTasks = lazyWithRetry(() => import("./pages/planipret/mobile/MTasks"));
 const MClients360 = lazyWithRetry(() => import("./pages/planipret/mobile/MClients360"));
 const MBroker360 = lazyWithRetry(() => import("./pages/planipret/mobile/MBroker360"));
 const MClientDetail = lazyWithRetry(() => import("./pages/planipret/mobile/MClientDetail"));
+const MBrokerActivity = lazyWithRetry(() => import("./pages/planipret/mobile/MBrokerActivity"));
 
 const MAvaChat = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaChat"));
 const MChangePassword = lazyWithRetry(() => import("./pages/planipret/mobile/MChangePassword"));

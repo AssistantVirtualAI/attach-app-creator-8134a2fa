@@ -83,6 +83,7 @@ const PAMaestroClients360 = lazyWithRetry(() => import("./pages/planipret/admin/
 const PAMaestroClientDetail = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroClientDetail"));
 const PABrokerPerformance = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerPerformance"));
 const PABrokerStats = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerStats"));
+const PABrokerDailyReport = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerDailyReport"));
 const PAMobileApp = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileApp"));
 const PACalls = lazyWithRetry(() => import("./pages/planipret/admin/PACalls"));
 const PAMessages = lazyWithRetry(() => import("./pages/planipret/admin/PAMessages"));

@@ -82,13 +82,16 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ call_recording_filename: filename, saving_call_recording: 1 }),
     });
     results.push(put);
-    const list = await raw(cfg, { method: "GET", path: `/api/v1/users/${auth.brokerId}/calls?limit=40`, token: auth.token });
     let signed: string | null = null;
     try {
-      const arr = JSON.parse(String((list as any).body));
+      const lr = await fetch(`${cfg.url}/api/v1/users/${auth.brokerId}/calls?limit=40&machine=1`, {
+        headers: { Authorization: `Bearer ${auth.token}`, Accept: "application/json" },
+      });
+      const arr = await lr.json();
       const row = (arr as any[]).find((c) => c.id === call.maestro_call_id);
       signed = row?.call_recording_url ?? null;
-    } catch { /* body truncated */ }
+    } catch (e) { results.push({ step: "list_err", error: String((e as Error).message) }); }
+
     results.push({ step: "signed", signed: signed ? signed.split("?")[0] : null, has: !!signed });
     if (signed && bytes) {
       const up = await fetch(signed, { method: "PUT", headers: { "Content-Type": "audio/wav" }, body: bytes });

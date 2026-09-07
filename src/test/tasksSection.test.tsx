@@ -11,6 +11,7 @@ let broadcastHandler: (() => void) | null = null;
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
+    functions: { invoke: vi.fn().mockResolvedValue({ data: { team: [] }, error: null }) },
     channel: () => {
       // Chainable stub: TasksSection subscribes to several realtime events.
       const chan: any = {
@@ -110,6 +111,16 @@ describe("TasksSection", () => {
     await waitFor(() => expect(listTasks).toHaveBeenCalled());
     expect(screen.queryByText("Réessayer")).not.toBeInTheDocument();
     expect(screen.queryByText("Réseau indisponible")).not.toBeInTheDocument();
+  });
+
+  it("keeps visible tasks when a later refresh fails", async () => {
+    render(<TasksSection userId="u1" lang="fr" />);
+    expect((await screen.findAllByText("Rappeler Jean"))[0]).toBeInTheDocument();
+    listTasks.mockResolvedValue(listResult({ success: false, error: "network_error", message: "Failed to send a request to the Edge Function", source: "unavailable", tasks: [] }));
+    broadcastHandler?.();
+    await waitFor(() => expect(listTasks).toHaveBeenCalledTimes(2));
+    expect(screen.getAllByText("Rappeler Jean")[0]).toBeInTheDocument();
+    expect(screen.queryByText(/Failed to send/)).not.toBeInTheDocument();
   });
 
   it("opens the composer from the + button", async () => {

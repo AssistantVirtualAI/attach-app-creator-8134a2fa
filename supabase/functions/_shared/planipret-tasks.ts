@@ -53,7 +53,7 @@ const NYLAS_ID_KEYS = [
   "event_id", "external_event_id", "nylasEventId",
 ];
 
-/** Derive the Nylas/calendar sync state of a task from the Maestro payload. */
+/** Derive whether the task itself has been created in Maestro. */
 export function computeTaskSync(raw: any, assigneeIds: string[] = []): { sync_status: TaskSyncStatus; sync_reason: TaskSyncReason } {
   if (!raw || typeof raw !== "object") return { sync_status: "unknown", sync_reason: "unknown" };
   const has = (k: string) => {
@@ -65,10 +65,7 @@ export function computeTaskSync(raw: any, assigneeIds: string[] = []): { sync_st
   if (state === "synced" || state === "success") return { sync_status: "synced", sync_reason: "nylas_event_linked" };
   if (state === "failed" || state === "error") return { sync_status: "not_synced", sync_reason: "sync_failed" };
   if (!String(raw.id ?? raw.task_id ?? "").trim()) return { sync_status: "not_synced", sync_reason: "not_created_yet" };
-  const wantsCalendar = truthy(raw.sync_calendar ?? raw.syncCalendar ?? raw.calendar_sync);
-  if (!wantsCalendar) return { sync_status: "not_synced", sync_reason: "calendar_sync_disabled" };
-  if (!assigneeIds.length) return { sync_status: "not_synced", sync_reason: "assignment_missing" };
-  return { sync_status: "pending", sync_reason: "awaiting_nylas" };
+  return { sync_status: "synced", sync_reason: "nylas_event_linked" };
 }
 
 /** Human readable explanation of a task sync state. */
@@ -79,14 +76,14 @@ export function describeTaskSync(
 ): { label: string; detail: string } {
   const en = lang === "en";
   const label = status === "synced"
-    ? (en ? "Calendar synced" : "Calendrier synchro")
+    ? (en ? "Synced to Maestro" : "Synchronisée à Maestro")
     : status === "pending"
       ? (en ? "Sync pending" : "Synchro en attente")
       : status === "not_synced"
         ? (en ? "Not synced" : "Non synchronisée")
         : (en ? "Unknown" : "Inconnu");
   const details: Record<TaskSyncReason, [string, string]> = {
-    nylas_event_linked: ["Événement Nylas lié — visible dans le calendrier Maestro.", "Nylas event linked — visible in the Maestro calendar."],
+    nylas_event_linked: ["Tâche enregistrée et visible dans Maestro.", "Task saved and visible in Maestro."],
     awaiting_nylas: ["En attente de la synchronisation Nylas côté Maestro.", "Waiting for Maestro's Nylas synchronisation."],
     calendar_sync_disabled: ["Synchronisation calendrier non demandée — visible uniquement dans la page Tâches.", "Calendar sync not requested — only visible on the Tasks page."],
     assignment_missing: ["Maestro n'a pas enregistré l'assignation (users vide).", "Maestro did not persist the assignment (users empty)."],

@@ -152,7 +152,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     setAssignee(initial?.users_id ? String(initial.users_id) : "");
     setHidden(initial?.is_hidden ?? false);
     setUpdateStatus(initial?.update_status ?? false);
-    setSyncCal(initial?.sync_calendar ?? false);
+    setSyncCal(initial?.sync_calendar ?? true);
     setNotify(initial?.notification ?? false);
     setNotifyTo((initial?.send_notification_to ?? []).join(", "));
     setNotifyClient(initial?.send_notification_client ?? false);
@@ -371,9 +371,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!selectedTarget) return;
     setTarget(tt === "contract" ? (selectedTarget.contracts[0]?.id ?? "") : (selectedTarget.user?.id ?? selectedTarget.client_id));
   };
-  // Assignment: Maestro only accepts yourself or an assistant of your own team.
-  // We never list the whole firm — other brokers would be rejected upstream and
-  // would receive tasks that are not theirs.
+  // Assignment: the signed-in broker and their real Maestro team.
   const teamUsers = (() => {
     const byId = new Map((people as any[]).map((u) => [String(u?.id ?? u?.broker_id ?? u?.user_id ?? ""), u]));
     return team
@@ -642,8 +640,8 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
               </div>
               <p className="mt-1 text-[11px] leading-snug" style={{ color: "var(--pp-text-muted)" }}>
                 {L(
-                  "Maestro n'accepte que vous-même ou un(e) adjoint(e) autorisé(e) sous votre profil.",
-                  "Maestro only accepts yourself or an assistant authorized under your profile.",
+                  "Vous-même ou un membre autorisé de votre équipe Maestro.",
+                  "You or an authorized member of your Maestro team.",
                 )}
               </p>
               <FieldError keys={["users_id"]} />

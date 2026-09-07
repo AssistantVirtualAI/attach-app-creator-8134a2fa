@@ -59,8 +59,8 @@ export default function ClientMaestro360({
 
   useEffect(() => { void load(); }, [load]);
 
-  // Temps réel : les dossiers et dépôts se rafraîchissent dès que Maestro
-  // pousse une modification (même logique que les tâches).
+  // Synchronisation automatique : temps réel Maestro (dossiers, dépôts,
+  // appels, contacts), rafraîchissement périodique et retour au premier plan.
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const bump = () => {
@@ -72,9 +72,25 @@ export default function ClientMaestro360({
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_pipeline" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_commission_register" }, bump)
       .on("postgres_changes", { event: "*", schema: "public", table: "planipret_phone_calls" }, bump)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_contacts" }, bump)
       .subscribe();
-    return () => { if (timer) clearTimeout(timer); void supabase.removeChannel(ch); };
+
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 60_000);
+    const onVisible = () => { if (document.visibilityState === "visible") bump(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      void supabase.removeChannel(ch);
+    };
   }, [load, idsKey]);
+
 
   const bundles = useMemo(() => buildClientBundles(tasks, deals, deposits, calls, contacts), [tasks, deals, deposits, calls, contacts]);
 

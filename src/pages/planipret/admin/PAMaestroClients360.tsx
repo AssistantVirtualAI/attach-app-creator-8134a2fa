@@ -58,6 +58,7 @@ export default function PAMaestroClients360() {
 
   const ownerIds = useMemo(() => {
     if (!broker) return userId ? [userId] : [];
+    if (broker === "all") return brokers.map((b) => b.userId).filter(Boolean) as string[];
     const b = brokers.find((x) => x.id === broker);
     return b?.userId ? [b.userId] : [];
   }, [broker, brokers, userId]);

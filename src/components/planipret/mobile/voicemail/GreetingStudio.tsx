@@ -72,9 +72,109 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
   const [categoryFilter, setCategoryFilter] = useState<"all" | "professional" | "natural" | "custom">("professional");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // --- Record my own voice -------------------------------------------------
+  const [mode, setMode] = useState<"tts" | "record">("tts");
+  const [recording, setRecording] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const [recUrl, setRecUrl] = useState<string | null>(null);
+  const [recBlob, setRecBlob] = useState<Blob | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    try { recorderRef.current?.stream?.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
+    if (recUrl) URL.revokeObjectURL(recUrl);
+  }, [recUrl]);
+
+  const pickMime = () => {
+    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac", "audio/ogg"];
+    return candidates.find((m) => (window as any).MediaRecorder?.isTypeSupported?.(m)) ?? "";
+  };
+
+  const startRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      toast.error(lang === "en" ? "Recording is not available on this device." : "L'enregistrement n'est pas disponible sur cet appareil.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+      const mimeType = pickMime();
+      const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        setRecBlob(blob);
+        setRecUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
+      };
+      rec.start();
+      recorderRef.current = rec;
+      setRecBlob(null);
+      setRecSeconds(0);
+      setRecording(true);
+      timerRef.current = setInterval(() => {
+        setRecSeconds((s) => {
+          if (s >= 119) { stopRecording(); return 120; }
+          return s + 1;
+        });
+      }, 1000);
+    } catch {
+      toast.error(lang === "en" ? "Microphone access denied." : "Accès au micro refusé.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    try { recorderRef.current?.state === "recording" && recorderRef.current.stop(); } catch { /* noop */ }
+    setRecording(false);
+  };
+
+  const publishRecording = async () => {
+    if (!recBlob) return;
+    setPublishing(true);
+    try {
+      const buf = new Uint8Array(await recBlob.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      const { data, error } = await supabase.functions.invoke("pp-greeting-record", {
+        body: {
+          audio_base64: btoa(bin),
+          mime_type: (recBlob.type || "audio/webm").split(";")[0],
+          duration_seconds: recSeconds,
+          label: lang === "en" ? "Greeting recorded by the broker" : "Message enregistré par le courtier",
+          push_to_ns: true,
+        },
+      });
+      const d = data as any;
+      if (error || !d?.success) {
+        toast.error(d?.error ?? error?.message ?? t("greeting.generateFailed"));
+        return;
+      }
+      if (d.pushed_to_ns) {
+        toast.success(t("greeting.activated"));
+        setRecBlob(null);
+        setRecUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+      } else {
+        toast.error(`${t("greeting.pushFailed")}: ${d.push_error ?? ""}`);
+      }
+      onProfileChange?.();
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
   const fullName = profile.full_name ?? t("greeting.defaultBroker");
   const charCount = text.length;
   const counterColor = charCount > 480 ? "#EF4444" : charCount > 400 ? "#F59E0B" : "#10B981";
+
 
   // Load voices
   useEffect(() => {

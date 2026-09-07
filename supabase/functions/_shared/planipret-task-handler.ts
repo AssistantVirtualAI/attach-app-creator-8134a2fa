@@ -239,6 +239,26 @@ export function normalizeClientTarget(row: any): ClientTarget | null {
 }
 
 /** All task targets this broker may legitimately use, from the Client List API. */
+/**
+ * Budget de temps: les vérifications amont (annuaire Maestro, périmètre client)
+ * ne doivent jamais faire dépasser la durée d'exécution de la fonction, sinon
+ * la création échoue au niveau réseau ("Failed to send a request") et la tâche
+ * n'arrive jamais dans Maestro.
+ */
+async function withDeadline<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<T>((resolve) => { t = setTimeout(() => resolve(fallback), ms); }),
+    ]);
+  } catch {
+    return fallback;
+  } finally {
+    if (t) clearTimeout(t);
+  }
+}
+
 async function loadClientTargets(deps: any, profile: any, search?: string | null): Promise<ClientTarget[]> {
   if (!deps.clientTargetsFetch) return [];
   let telecomId: string | null = null;
@@ -831,7 +851,11 @@ export async function handleTaskRequest(
       // its internal user directory and can be different (for example 387… vs
       // 93135). Sending the CRM id is accepted but leaves `users: []`, so the
       // task never appears in the assignee's Maestro calendar.
-      const internalAssignee = await deps.resolveTaskAssigneeId?.().catch(() => null);
+      const internalAssignee = await withDeadline(
+        Promise.resolve(deps.resolveTaskAssigneeId?.()).catch(() => null),
+        5000,
+        null,
+      );
       if (internalAssignee || ownXid) createInput.users_id = internalAssignee ?? ownXid;
     }
     const built = buildCreatePayload(createInput);
@@ -841,8 +865,13 @@ export async function handleTaskRequest(
 
     // Assignment scope: self or authorized team assistants only (Maestro rule).
     if (payload.users_id !== undefined && payload.users_id !== null) {
-      const allowedIds = await resolveAllowedAssignees(deps, profile);
-      const check = assertAssigneeAllowed(payload.users_id, allowedIds);
+      const allowedIds = await withDeadline(
+        Promise.resolve(resolveAllowedAssignees(deps, profile)).catch(() => [] as string[]),
+        5000,
+        [] as string[],
+      );
+      // Périmètre inconnu (annuaire lent/indisponible) : ne pas bloquer.
+      const check = allowedIds.length ? assertAssigneeAllowed(payload.users_id, allowedIds) : { ok: true as const };
       if (!check.ok) {
         await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "assignee_not_allowed" });
         return { status: 200, body: { success: false, ...check, correlation_id } };
@@ -861,7 +890,11 @@ export async function handleTaskRequest(
     ].filter(Boolean);
 
     if (payload.type === "user" || payload.type === "contract") {
-      const check = await validateTaskTarget(deps, admin, profile, userId, payload.type, payload.xid, ownIds);
+      const check = await withDeadline(
+        validateTaskTarget(deps, admin, profile, userId, payload.type, payload.xid, ownIds),
+        8000,
+        { ok: true, type: payload.type as "user" | "contract", xid: String(payload.xid ?? ""), reason: "scope_check_timeout_passthrough" } as any,
+      );
       if (!check.ok) {
         await audit(admin, {
           action: "task_create_denied", user_id: userId, source, session_id: sessionId,

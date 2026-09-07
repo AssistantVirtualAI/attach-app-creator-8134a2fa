@@ -31,7 +31,33 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const CALL_COLUMNS =
-  "id, user_id, transcript, transcript_raw, transcript_segments, transcript_language, ai_summary, ai_summary_short, ai_coaching, ai_analysis_json, ai_topics, ai_action_items, ai_key_points, ai_client_insights, next_actions, lead_score, lead_temperature, lead_score_reason, coaching_score, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, pipeline_state, metadata, duration_seconds, started_at, answered_at, ended_at";
+  "id, user_id, from_number, to_number, direction, contact_name, transcript, transcript_raw, transcript_segments, transcript_language, ai_summary, ai_summary_short, ai_coaching, ai_analysis_json, ai_topics, ai_action_items, ai_key_points, ai_client_insights, next_actions, lead_score, lead_temperature, lead_score_reason, coaching_score, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, pipeline_state, metadata, duration_seconds, started_at, answered_at, ended_at";
+
+/** Nettoie la transcription : remplace les URIs SIP par des noms lisibles. */
+function prettyTranscript(
+  raw: string,
+  opts: { brokerName?: string | null; brokerExt?: string | null; clientName?: string | null },
+): string {
+  const broker = (opts.brokerName || "Courtier").trim();
+  const client = (opts.clientName || "Client").trim();
+  const ext = String(opts.brokerExt ?? "").replace(/\D/g, "");
+  return String(raw)
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, '"')
+    .split(/\r?\n/)
+    .map((line) => {
+      const m = line.match(/^\s*sip:([^@\s]+)@[^\s:]+:\s*(.*)$/);
+      if (!m) return line.trim();
+      const user = m[1].replace(/\D/g, "");
+      const isBroker = ext ? user === ext || user === `1${ext}` || user.endsWith(ext) : false;
+      const text = m[2].trim();
+      if (!text) return "";
+      return `${isBroker ? broker : client}: ${text}`;
+    })
+    .filter((l) => l.length > 0)
+    .join("\n");
+}
+
 
 /** Maestro attend un format "YYYY-MM-DD HH:MM:SS". */
 function maestroDate(v: unknown): string | undefined {

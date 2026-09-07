@@ -136,6 +136,7 @@ Deno.serve(async (req) => {
     success: true,
     candidates: rows?.length ?? 0,
     duplicates_closed: duplicates.length,
+    test_messages_skipped: testSkipped.length,
     stuck_status_fixed: stuckFixed,
     processed: results.length,
     pushed: results.filter((r) => r.ok).length,

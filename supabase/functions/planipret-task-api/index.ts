@@ -362,7 +362,13 @@ Deno.serve(async (req) => {
             if (s) ids.add(s);
           }
         } catch { /* table may be empty */ }
+        try {
+          // Maestro teams: every broker eligible on this broker's clients.
+          const team = await teamOnce();
+          for (const s of team.ids) ids.add(s);
+        } catch { /* upstream optional */ }
         return [...ids];
+
       },
       resolveTaskAssigneeId: async () => {
         // Force an email-backed directory match instead of trusting the CRM id

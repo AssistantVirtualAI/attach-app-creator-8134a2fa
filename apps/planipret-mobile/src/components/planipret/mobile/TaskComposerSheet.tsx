@@ -640,6 +640,17 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
             <Toggle label={L("Masquer la tâche aux conseillers", "Hide task from advisors")} checked={hidden} onChange={setHidden} />
             <Toggle label={L("Créer l'événement calendrier", "Create calendar event")} checked={syncCal} onChange={setSyncCal} />
             <Toggle label={L("Envoyer une notification", "Send a notification")} checked={notify} onChange={setNotify} />
+            <Toggle
+              label={L("Avertir le client par courriel", "Email the client")}
+              checked={notifyClient}
+              onChange={(v) => {
+                setNotifyClient(v);
+                if (!v) {
+                  setNotifyClientSecondary(false);
+                  setNotificationUsers("");
+                }
+              }}
+            />
             <Toggle label={L("Tâche récurrente", "Recurring task")} checked={recurring} onChange={setRecurring} last />
           </div>
 
@@ -694,7 +705,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
 
           {showAdvanced && (
             <div className="space-y-4 rounded-2xl p-4" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
-              <Toggle label={L("Notifier le client", "Notify the client")} checked={notifyClient} onChange={setNotifyClient} />
+              
               <Toggle label={L("Notifier le client secondaire", "Notify the secondary client")} checked={notifyClientSecondary} onChange={setNotifyClientSecondary} />
               <Toggle label={L("Notifier l'adjoint(e)", "Notify the assistant")} checked={notifyAssistant} onChange={setNotifyAssistant} />
               {notifyAssistant && (

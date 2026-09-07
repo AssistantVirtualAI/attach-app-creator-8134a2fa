@@ -1,6 +1,7 @@
 // Probe: does Maestro expose an endpoint to HOST the call recording media?
 // Body: { call_id: uuid, dry?: boolean }
 import { adminClient, corsHeaders, getMaestroConfig, json, telecomAuth } from "../_shared/maestro.ts";
+import { recordingPermalink } from "../_shared/recording-link.ts";
 
 async function raw(cfg: any, opts: { method: string; path: string; token: string; body?: BodyInit; headers?: Record<string, string> }) {
   const url = `${cfg.url}${opts.path}${opts.path.includes("?") ? "&" : "?"}machine=1`;
@@ -19,8 +20,22 @@ async function raw(cfg: any, opts: { method: string; path: string; token: string
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const { call_id, paths } = await req.json().catch(() => ({} as any));
+  const { call_id, paths, play } = await req.json().catch(() => ({} as any));
   const admin = adminClient();
+
+  if (play) {
+    const link = await recordingPermalink(String(call_id));
+    const h = await fetch(link, { headers: { Range: "bytes=0-1023" } });
+    return json({
+      link,
+      status: h.status,
+      contentType: h.headers.get("content-type"),
+      contentRange: h.headers.get("content-range"),
+      acceptRanges: h.headers.get("accept-ranges"),
+      cors: h.headers.get("access-control-allow-origin"),
+      bytes: (await h.arrayBuffer()).byteLength,
+    });
+  }
 
   const { data: call } = await admin
     .from("planipret_phone_calls")

@@ -371,8 +371,9 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!selectedTarget) return;
     setTarget(tt === "contract" ? (selectedTarget.contracts[0]?.id ?? "") : (selectedTarget.user?.id ?? selectedTarget.client_id));
   };
-  // Assignment: the broker's Maestro team comes first (fetched live from the
-  // Maestro Client List API), then the rest of the firm directory.
+  // Assignment: Maestro only accepts yourself or an authorized team assistant.
+  // Once the team is known we offer nothing else — listing the whole firm just
+  // produced a rejection from Maestro at submit time.
   const teamIds = new Set(team.map((t) => String(t.id)));
   const teamUsers = (() => {
     const byId = new Map((people as any[]).map((u) => [String(u?.id ?? u?.broker_id ?? u?.user_id ?? ""), u]));
@@ -381,6 +382,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
       .sort((a, b) => contactName(a).localeCompare(contactName(b)));
   })();
   const assignableUsers = (() => {
+    if (teamUsers.length > 0) return [];
     const seen = new Set<string>();
     const out: any[] = [];
     for (const u of people as any[]) {
@@ -392,6 +394,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
 
     return out.sort((a, b) => contactName(a).localeCompare(contactName(b)));
   })();
+
 
   const frame = typeof document !== "undefined" ? document.getElementById("pp-mobile-frame") : null;
   const host = frame ?? (typeof document !== "undefined" ? document.body : null);
@@ -646,16 +649,25 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                       ))}
                     </optgroup>
                   )}
-                  <optgroup label={L("Tous les courtiers", "All brokers")}>
-                    {assignableUsers.map((u: any) => (
-                      <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
-                    ))}
-                  </optgroup>
+                  {assignableUsers.length > 0 && (
+                    <optgroup label={L("Adjoints autorisés", "Authorized assistants")}>
+                      {assignableUsers.map((u: any) => (
+                        <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
+                      ))}
+                    </optgroup>
+                  )}
 
                 </select>
                 <ChevronDown className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--pp-text-muted)" }} />
               </div>
+              <p className="mt-1 text-[11px] leading-snug" style={{ color: "var(--pp-text-muted)" }}>
+                {L(
+                  "Maestro n'accepte que vous-même ou un(e) adjoint(e) autorisé(e) sous votre profil.",
+                  "Maestro only accepts yourself or an assistant authorized under your profile.",
+                )}
+              </p>
               <FieldError keys={["users_id"]} />
+
             </div>
           </div>
 

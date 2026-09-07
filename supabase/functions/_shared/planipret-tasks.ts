@@ -312,7 +312,8 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
 }
 
 const UPDATABLE = new Set([
-  "date", "notes", "description", "status_option_id", "update_status",
+  "date", "notes", "description", "status", "status_option_id", "option", "update_status",
+  "xid", "type",
   "is_recurring", "recurring_value", "recurring_pattern", "next_send_date", "recurring_on", "users_id",
 ]);
 

@@ -103,6 +103,7 @@ export default function PABrokerStats() {
       const out: BrokerRow[] = ((profiles.data ?? []) as any[]).map((p) => {
         const uid = String(p.user_id ?? "");
         const t = tasksBy.get(uid) ?? { open: 0, overdue: 0 };
+        const a = actBy.get(uid) ?? { calls: 0, texts: 0, callsSynced: 0, textsSynced: 0, aiCalls: 0, talkSeconds: 0, lastActivity: null };
         return {
           userId: uid,
           name: p.full_name || p.email || uid.slice(0, 8),

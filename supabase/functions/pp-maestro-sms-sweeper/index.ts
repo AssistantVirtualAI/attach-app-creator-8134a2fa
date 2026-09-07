@@ -70,7 +70,13 @@ Deno.serve(async (req) => {
   const seen = new Set<string>();
   const batch: any[] = [];
   const duplicates: string[] = [];
+  const testSkipped: string[] = [];
   for (const r of rows ?? []) {
+    // Textos de test : jamais rejoués (hors Gilles/Marc) — on les ferme.
+    if (isTestSms(r.body) && !TEST_SMS_ALLOWED_USER_IDS.has(String(r.user_id))) {
+      testSkipped.push(r.id);
+      continue;
+    }
     const key = [
       r.user_id, r.direction, r.from_number ?? "", r.to_number ?? "",
       (r.body ?? "").trim(), String(r.sent_at ?? "").slice(0, 16),

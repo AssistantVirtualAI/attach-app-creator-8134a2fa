@@ -16,7 +16,28 @@ interface BrokerRow {
   texts30: number;
   openTasks: number;
   overdueTasks: number;
+  callsSynced: number;
+  textsSynced: number;
+  aiCalls: number;
+  talkSeconds: number;
+  lastActivity: string | null;
 }
+
+interface ActivityAgg {
+  calls: number;
+  texts: number;
+  callsSynced: number;
+  textsSynced: number;
+  aiCalls: number;
+  talkSeconds: number;
+  lastActivity: string | null;
+}
+
+const fmtDuration = (s: number) => {
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  return h > 0 ? `${h} h ${m % 60} min` : `${m} min`;
+};
 
 const DONE = new Set(["done", "completed", "complete", "closed", "termine", "terminé", "3", "4"]);
 

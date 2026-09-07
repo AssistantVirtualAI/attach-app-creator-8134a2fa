@@ -56,26 +56,36 @@ export default function PABrokerStats() {
     void (async () => {
       setLoading(true);
       const since = new Date(Date.now() - 30 * 86400000).toISOString();
-      const [profiles, calls, texts, tasks] = await Promise.all([
+      const [profiles, activity, tasks] = await Promise.all([
         supabase.from("planipret_profiles")
           .select("user_id, full_name, email, extension, ns_extension, maestro_connected, maestro_last_sync_at")
           .limit(1000),
-        supabase.from("planipret_phone_calls").select("user_id").gte("started_at", since).limit(10000),
-        supabase.from("planipret_phone_messages").select("user_id").gte("created_at", since).limit(10000),
+        supabase.from("planipret_maestro_activity")
+          .select("user_id, kind, occurred_at, duration_seconds, maestro_status, is_ai")
+          .gte("occurred_at", since).limit(20000),
         supabase.from("planipret_tasks_projection").select("user_id, status, due_at").is("deleted_at", null).limit(10000),
       ]);
       if (!alive) return;
 
-      const countBy = (list: any[] | null) => {
-        const m = new Map<string, number>();
-        for (const r of list ?? []) {
-          const k = String(r.user_id ?? "");
-          if (k) m.set(k, (m.get(k) ?? 0) + 1);
+      const actBy = new Map<string, ActivityAgg>();
+      for (const a of (activity.data ?? []) as any[]) {
+        const k = String(a.user_id ?? "");
+        if (!k) continue;
+        const cur = actBy.get(k) ?? { calls: 0, texts: 0, callsSynced: 0, textsSynced: 0, aiCalls: 0, talkSeconds: 0, lastActivity: null };
+        const synced = a.maestro_status === "synced";
+        if (a.kind === "call") {
+          cur.calls += 1;
+          if (synced) cur.callsSynced += 1;
+          if (a.is_ai) cur.aiCalls += 1;
+          cur.talkSeconds += Number(a.duration_seconds ?? 0);
+        } else {
+          cur.texts += 1;
+          if (synced) cur.textsSynced += 1;
         }
-        return m;
-      };
-      const callsBy = countBy(calls.data as any[]);
-      const textsBy = countBy(texts.data as any[]);
+        if (a.occurred_at && (!cur.lastActivity || a.occurred_at > cur.lastActivity)) cur.lastActivity = a.occurred_at;
+        actBy.set(k, cur);
+      }
+
 
       const tasksBy = new Map<string, { open: number; overdue: number }>();
       const now = Date.now();

@@ -102,7 +102,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [hidden, setHidden] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(false);
   const [syncCal, setSyncCal] = useState(false);
-  const [notify, setNotify] = useState(false);
+  const [notify, setNotify] = useState(true);
   const [notifyTo, setNotifyTo] = useState("");
   const [notifyClient, setNotifyClient] = useState(false);
   const [notifyClientSecondary, setNotifyClientSecondary] = useState(false);

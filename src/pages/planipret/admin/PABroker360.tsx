@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { UserSquare2, Users, FolderKanban, TrendingUp, CheckSquare, ExternalLink } from "lucide-react";
+import { UserSquare2, Users, FolderKanban, TrendingUp, CheckSquare, ExternalLink, Route } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PAPage, PAPageHeader, PATableWrap } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
@@ -8,6 +8,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import PBMaestroClients from "@/pages/planipret/broker/PBMaestroClients";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import TasksSection from "@/components/planipret/mobile/TasksSection";
+import BrokerJourney from "@/components/planipret/admin/BrokerJourney";
 
 type BrokerRow = {
   id: string;
@@ -19,7 +20,7 @@ type BrokerRow = {
   maestro_telecom_user_id: string | null;
 };
 
-type TabKey = "contacts" | "deals" | "commissions" | "tasks";
+type TabKey = "journey" | "contacts" | "deals" | "commissions" | "tasks";
 
 const brokerName = (b: BrokerRow) =>
   b.full_name || b.email || `#${b.id.slice(0, 8)}`;
@@ -111,7 +112,7 @@ export default function PABroker360() {
   const en = lang === "en";
   const [params, setParams] = useSearchParams();
   const brokerParam = params.get("broker") ?? "";
-  const tab = (params.get("tab") as TabKey) || "contacts";
+  const tab = (params.get("tab") as TabKey) || "journey";
 
   const [brokers, setBrokers] = useState<BrokerRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,6 +148,7 @@ export default function PABroker360() {
   };
 
   const TABS: { key: TabKey; label: string; Icon: typeof Users }[] = [
+    { key: "journey", label: en ? "Journey" : "Parcours", Icon: Route },
     { key: "contacts", label: en ? "Contacts" : "Contacts", Icon: Users },
     { key: "deals", label: en ? "Files" : "Dossiers", Icon: FolderKanban },
     { key: "commissions", label: en ? "Commissions" : "Commissions", Icon: TrendingUp },
@@ -212,6 +214,16 @@ export default function PABroker360() {
             ))}
           </div>
 
+          {tab === "journey" && (
+            <BrokerJourney
+              key={broker.id}
+              brokerIds={[broker.id, broker.user_id].filter(Boolean) as string[]}
+              brokerName={brokerName(broker)}
+              maestroBrokerId={brokerMaestroId}
+              userId={broker.user_id ?? broker.id}
+              en={en}
+            />
+          )}
           {tab === "contacts" && (
             <PBMaestroClients embedded telecomUserId={broker.maestro_telecom_user_id ?? broker.maestro_broker_id ?? null} />
           )}

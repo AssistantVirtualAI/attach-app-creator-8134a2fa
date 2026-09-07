@@ -371,17 +371,25 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!selectedTarget) return;
     setTarget(tt === "contract" ? (selectedTarget.contracts[0]?.id ?? "") : (selectedTarget.user?.id ?? selectedTarget.client_id));
   };
-  // A task can be kept for yourself or handed to any broker / assistant of the
-  // firm: the full Maestro directory is offered, de-duplicated and sorted.
+  // Assignment: the broker's Maestro team comes first (fetched live from the
+  // Maestro Client List API), then the rest of the firm directory.
+  const teamIds = new Set(team.map((t) => String(t.id)));
+  const teamUsers = (() => {
+    const byId = new Map((people as any[]).map((u) => [String(u?.id ?? u?.broker_id ?? u?.user_id ?? ""), u]));
+    return team
+      .map((t) => ({ ...(byId.get(String(t.id)) ?? {}), id: String(t.id), name: t.name, email: t.email }))
+      .sort((a, b) => contactName(a).localeCompare(contactName(b)));
+  })();
   const assignableUsers = (() => {
     const seen = new Set<string>();
     const out: any[] = [];
     for (const u of people as any[]) {
       const id = String(u?.id ?? u?.broker_id ?? u?.user_id ?? "");
-      if (!/^\d+$/.test(id) || seen.has(id)) continue;
+      if (!/^\d+$/.test(id) || seen.has(id) || teamIds.has(id)) continue;
       seen.add(id);
       out.push({ ...u, id });
     }
+
     return out.sort((a, b) => contactName(a).localeCompare(contactName(b)));
   })();
 

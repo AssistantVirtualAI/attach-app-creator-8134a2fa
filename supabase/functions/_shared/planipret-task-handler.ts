@@ -154,6 +154,25 @@ async function loadProjection(admin: any, userId: string) {
   return (data ?? []).map((r: any) => normalizeTask(r.payload));
 }
 
+/** Admin only: every broker's mirrored tasks (deduped by task id). */
+async function loadProjectionAll(admin: any) {
+  const { data } = await admin
+    .from("planipret_tasks_projection")
+    .select("task_id,payload")
+    .is("deleted_at", null)
+    .order("due_at", { ascending: true })
+    .limit(2000);
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const r of (data ?? []) as any[]) {
+    const id = String(r.task_id ?? "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(normalizeTask(r.payload));
+  }
+  return out;
+}
+
 /**
  * Full mirror of the upstream list into the projection. On an unfiltered sync
  * we also soft-delete rows the API no longer returns, so the projection stays

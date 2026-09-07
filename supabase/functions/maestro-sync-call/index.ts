@@ -313,11 +313,21 @@ Deno.serve(async (req) => {
           : asArray(call.ai_topics);
 
       const recordingLink = recordingLink0;
-      const { data: prof } = await admin
+      let { data: prof } = await admin
         .from("planipret_profiles")
         .select("full_name, first_name, last_name, extension")
         .eq("user_id", call.user_id)
         .maybeSingle();
+      if (!prof) {
+        // planipret_phone_calls.user_id référence parfois planipret_profiles.id.
+        const alt = await admin
+          .from("planipret_profiles")
+          .select("full_name, first_name, last_name, extension")
+          .eq("id", call.user_id)
+          .maybeSingle();
+        prof = alt.data as any;
+      }
+
       const brokerName = (prof as any)?.full_name
         || [ (prof as any)?.first_name, (prof as any)?.last_name ].filter(Boolean).join(" ")
         || "Courtier";

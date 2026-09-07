@@ -505,12 +505,15 @@ Deno.serve(async (req) => {
       // respecte `from-number` (le DID réel du courtier). Maestro
       // `POST /users/{id}/messages` envoie depuis un numéro générique Maestro
       // et sert donc uniquement de repli.
-      const nsBody: Record<string, unknown> = {
-        type: type === "chat" ? "chat" : "sms",
-        destination,
-        message,
-        "from-number": fromNumber,
-      };
+      const nsBody: Record<string, unknown> = isInternal
+        ? { type: "chat", destination, message, "from-number": String(ctx.extension) }
+        : {
+            type: type === "chat" ? "chat" : "sms",
+            destination,
+            message,
+            "from-number": fromNumber,
+          };
+
 
       // NS-API requires a 32-char random session id when creating a new thread.
       const sessionId = thread_id ?? newMessageSessionId();

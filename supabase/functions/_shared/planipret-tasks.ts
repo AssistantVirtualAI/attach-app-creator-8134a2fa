@@ -343,6 +343,28 @@ export function buildUpdateBody(taskId: string | number, changes: Record<string,
       body.users_id = assignee;
       continue;
     }
+    if (k === "xid") {
+      const target = Number(String(v).trim());
+      if (!Number.isInteger(target) || target <= 0) {
+        return { ok: false, error: "validation_failed", fields: { xid: "xid_required_integer" } };
+      }
+      body.xid = target;
+      continue;
+    }
+    if (k === "type") {
+      const t = String(v).trim().toLowerCase();
+      if (t !== "user" && t !== "contract") {
+        return { ok: false, error: "validation_failed", fields: { type: "type_must_be_user_or_contract" } };
+      }
+      body.type = t;
+      continue;
+    }
+    if (k === "status") {
+      const s = String(v).trim();
+      if (!s) continue;
+      body.status = s;
+      continue;
+    }
     if (k === "is_recurring" || k === "update_status") { body[k] = v === true || v === 1 || v === "1" ? 1 : 0; continue; }
     body[k] = v;
   }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { UserSquare2, Users, FolderKanban, TrendingUp, CheckSquare, ExternalLink } from "lucide-react";
+import { UserSquare2, Users, FolderKanban, TrendingUp, CheckSquare, ExternalLink, Route } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PAPage, PAPageHeader, PATableWrap } from "@/components/planipret/admin/PAPageShell";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
@@ -8,6 +8,7 @@ import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import PBMaestroClients from "@/pages/planipret/broker/PBMaestroClients";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import TasksSection from "@/components/planipret/mobile/TasksSection";
+import BrokerJourney from "@/components/planipret/admin/BrokerJourney";
 
 type BrokerRow = {
   id: string;
@@ -19,7 +20,7 @@ type BrokerRow = {
   maestro_telecom_user_id: string | null;
 };
 
-type TabKey = "contacts" | "deals" | "commissions" | "tasks";
+type TabKey = "journey" | "contacts" | "deals" | "commissions" | "tasks";
 
 const brokerName = (b: BrokerRow) =>
   b.full_name || b.email || `#${b.id.slice(0, 8)}`;

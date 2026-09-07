@@ -223,6 +223,20 @@ export default function RegisterCommissions({ lang, scope = "broker", forcedAgen
   // Bumped after a Maestro sync to refetch the stats.
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Live: any new commission row (import or Maestro sync) refetches the stats.
+  useEffect(() => {
+    const ch = supabase
+      .channel(`pp-commissions-live-${scopeKey}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_commission_register" }, () => {
+        setRefreshKey((k) => k + 1);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "planipret_commission_stats" }, () => {
+        setRefreshKey((k) => k + 1);
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(ch); };
+  }, [scopeKey]);
+
   // Per-broker "why is there no data" explanation (admin view only).
   const [coverage, setCoverage] = useState<CoverageMap>({});
   const [coverageMeta, setCoverageMeta] = useState<{ adminScopeConfigured: boolean; counts: Record<CoverageCause, number> } | null>(null);

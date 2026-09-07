@@ -244,20 +244,6 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
 
       {loading ? (
         <div className="space-y-2" aria-busy="true">{[0, 1, 2].map((i) => <Shimmer key={i} className="h-12" />)}</div>
-      ) : error === "tasks_unavailable" ? (
-        <p className="text-sm py-4 text-center" style={{ color: "var(--pp-text-muted)" }}>
-          {message ?? L("Liste des tâches indisponible côté Planiprêt.", "Task list unavailable from Planiprêt.")}
-        </p>
-      ) : error ? (
-        <div className="py-4 text-center">
-          <p className="text-sm flex items-center justify-center gap-1.5" style={{ color: "var(--pp-danger)" }}>
-            <AlertCircle className="w-4 h-4" /> {message ?? L("Chargement impossible", "Could not load tasks")}
-          </p>
-          <button onClick={() => void refresh()} className="mt-2 min-h-[44px] px-4 rounded-xl text-sm font-medium"
-            style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" }}>
-            {L("Réessayer", "Retry")}
-          </button>
-        </div>
       ) : openCount === 0 && closed.length === 0 ? (
         <p className="text-sm py-4 text-center" style={{ color: "var(--pp-text-muted)" }}>
           {L("Aucune tâche ouverte 🎉", "No open tasks 🎉")}

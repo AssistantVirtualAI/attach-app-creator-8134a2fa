@@ -13,7 +13,9 @@
 // Body: { action: "list" | "get" | "create" | "update" | "delete", ... }
 import { authBroker, corsHeaders, jsonResponse, supaAdmin } from "../_shared/ns-broker.ts";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
-import { resolveMaestroIdForUser, resolveTelecomUserId } from "../_shared/maestro-broker-directory.ts";
+import { loadBrokerDirectory, resolveMaestroIdForUser, resolveTelecomUserId } from "../_shared/maestro-broker-directory.ts";
+import { fetchMaestroTeam } from "../_shared/maestro-teams.ts";
+
 import { normalizeTask } from "../_shared/planipret-tasks.ts";
 import { handleTaskRequest, newCorrelationId, type UpstreamList } from "../_shared/planipret-task-handler.ts";
 
@@ -289,7 +291,43 @@ Deno.serve(async (req) => {
 
   try {
     const token = await planipretToken(admin, userId);
+
+    // Resolve, once per request, the Maestro team(s) this broker belongs to.
+    // Source of truth: `task_targets.user.eligible_broker_ids` from the Maestro
+    // Client List API (no `/teams` endpoint exists upstream).
+    const teamOnce = (() => {
+      let p: Promise<{ ids: string[]; byClient: Record<string, string[]> }> | null = null;
+      return () => {
+        if (!p) {
+          p = (async () => {
+            const tid = (await resolveTelecomUserId(admin, userId, {}).catch(() => null))?.id
+              ?? String(profile?.maestro_telecom_user_id ?? profile?.maestro_broker_id ?? "") || null;
+            return await fetchMaestroTeam({
+              token, telecomBase: TELECOM_BASE, apiBase: API_BASE, telecomId: tid,
+            }).catch(() => ({ ids: [], byClient: {} }));
+          })();
+        }
+        return p;
+      };
+    })();
+
+    // Read-only: the broker's Maestro team, ready for an assignment dropdown.
+    if (String(body?.action ?? "") === "team") {
+      const team = await teamOnce();
+      const dir = await loadBrokerDirectory(admin).catch(() => [] as any[]);
+      const byId = new Map((dir ?? []).map((d: any) => [String(d.id), d]));
+      const own = [profile?.maestro_broker_id, profile?.maestro_telecom_user_id]
+        .map((v) => String(v ?? "").trim()).filter(Boolean);
+      const ids = [...new Set([...own, ...team.ids])];
+      const members = ids.map((id) => {
+        const d: any = byId.get(id);
+        return { id, name: d?.name ?? null, email: d?.email ?? null, self: own.includes(id) };
+      }).sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+      return jsonResponse({ success: true, members, by_client: team.byClient, correlation_id }, 200);
+    }
+
     const out = await handleTaskRequest({ ...body, correlation_id }, {
+
       admin,
       userId,
       profile,

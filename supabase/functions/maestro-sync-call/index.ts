@@ -308,8 +308,31 @@ Deno.serve(async (req) => {
           : asArray(call.ai_topics);
 
       const recordingLink = recordingLink0;
-      const coachingText = call.ai_coaching
-        ? (typeof call.ai_coaching === "string" ? call.ai_coaching : JSON.stringify(call.ai_coaching))
+      const { data: prof } = await admin
+        .from("planipret_profiles")
+        .select("full_name, first_name, last_name, extension")
+        .eq("user_id", call.user_id)
+        .maybeSingle();
+      const brokerName = (prof as any)?.full_name
+        || [ (prof as any)?.first_name, (prof as any)?.last_name ].filter(Boolean).join(" ")
+        || "Courtier";
+      const clientName = (call as any).contact_name || "Client";
+      const prettyText = transcript
+        ? prettyTranscript(String(transcript), {
+            brokerName,
+            brokerExt: (prof as any)?.extension ?? null,
+            clientName,
+          })
+        : null;
+      const coaching = call.ai_coaching;
+      const coachingText = coaching
+        ? (typeof coaching === "string"
+            ? coaching
+            : [
+                asArray((coaching as any).strengths).length ? `Forces: ${asArray((coaching as any).strengths).map(String).join(" • ")}` : null,
+                asArray((coaching as any).improvements).length ? `À améliorer: ${asArray((coaching as any).improvements).map(String).join(" • ")}` : null,
+                asArray((coaching as any).next_steps).length ? `Prochaines étapes: ${asArray((coaching as any).next_steps).map(String).join(" • ")}` : null,
+              ].filter(Boolean).join("\n") || JSON.stringify(coaching))
         : null;
       const res = await maestroFetch(cfg, {
         method: "PUT",
@@ -321,22 +344,23 @@ Deno.serve(async (req) => {
         body: {
           status: "ended",
           ai_summary: summary ?? undefined,
-          transcript: transcript ? String(transcript).slice(0, 20000) : undefined,
+          transcript: prettyText ? prettyText.slice(0, 20000) : undefined,
           duration_seconds: call.duration_seconds != null ? Number(call.duration_seconds) : undefined,
           answered_at: maestroDate(call.answered_at ?? call.started_at),
           ended_at: maestroDate(call.ended_at),
           call_recording_filename: recordingLink ?? undefined,
           notes: [
-            recordingLink ? `Enregistrement: ${recordingLink}` : null,
+            recordingLink ? `Enregistrement (cliquer pour écouter): ${recordingLink}` : null,
             summary ? `Résumé IA: ${summary}` : null,
             keyPoints.length ? `Points clés: ${keyPoints.map(String).join(" • ")}` : null,
             nextActions.length ? `Prochaines actions: ${nextActions.map(actionTitle).filter(Boolean).join(" • ")}` : null,
             coachingText ? `Coaching IA${call.coaching_score != null ? ` (${call.coaching_score}/100)` : ""}:\n${coachingText.slice(0, 4000)}` : null,
             call.lead_score != null ? `Score du lead: ${call.lead_score}${call.lead_temperature ? ` (${call.lead_temperature})` : ""}` : null,
-            transcript ? `Transcription:\n${String(transcript).slice(0, 8000)}` : null,
+            prettyText ? `Transcription:\n${prettyText.slice(0, 8000)}` : null,
           ].filter(Boolean).join("\n\n") || null,
         },
       });
+
       const failure = res.ok ? null : summarizeMaestroFailure(res.status, res.data);
       steps.ai = { ok: res.ok, status: res.status, reused: true, error: failure?.error ?? null, detail: failure?.detail ?? null, permanent: failure?.permanent ?? false };
       await setPipelineStep(admin, call_id, "ai", res.ok ? "done" : "error", {

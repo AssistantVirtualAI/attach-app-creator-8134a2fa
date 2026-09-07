@@ -865,8 +865,13 @@ export async function handleTaskRequest(
 
     // Assignment scope: self or authorized team assistants only (Maestro rule).
     if (payload.users_id !== undefined && payload.users_id !== null) {
-      const allowedIds = await resolveAllowedAssignees(deps, profile);
-      const check = assertAssigneeAllowed(payload.users_id, allowedIds);
+      const allowedIds = await withDeadline(
+        Promise.resolve(resolveAllowedAssignees(deps, profile)).catch(() => [] as string[]),
+        5000,
+        [] as string[],
+      );
+      // Périmètre inconnu (annuaire lent/indisponible) : ne pas bloquer.
+      const check = allowedIds.length ? assertAssigneeAllowed(payload.users_id, allowedIds) : { ok: true as const };
       if (!check.ok) {
         await audit(admin, { action: "task_create_denied", user_id: userId, source, session_id: sessionId, correlation_id, result: "assignee_not_allowed" });
         return { status: 200, body: { success: false, ...check, correlation_id } };

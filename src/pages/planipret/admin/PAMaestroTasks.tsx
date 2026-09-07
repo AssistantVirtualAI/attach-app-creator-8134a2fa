@@ -109,6 +109,7 @@ export default function PAMaestroTasks() {
         <select aria-label={L("Courtier", "Broker")} value={broker} onChange={(e) => setBroker(e.target.value)}
           className="min-h-[36px] rounded-lg px-2 text-xs" style={selectStyle}>
           <option value="">{L("Mes tâches", "My tasks")}</option>
+          <option value="all">{L("Tous les courtiers", "All brokers")}</option>
           {brokers.map((b) => <option key={b.id} value={b.id}>{b.name} · #{b.id}</option>)}
         </select>
 

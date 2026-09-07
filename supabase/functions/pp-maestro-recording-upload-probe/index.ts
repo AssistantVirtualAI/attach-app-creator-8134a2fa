@@ -71,7 +71,25 @@ Deno.serve(async (req) => {
 
   const results: unknown[] = [];
 
+  if (peek) {
+    const lr = await fetch(`${cfg.url}/api/v1/users/${auth.brokerId}/calls?limit=40&machine=1`, {
+      headers: { Authorization: `Bearer ${auth.token}`, Accept: "application/json" },
+    });
+    const arr = await lr.json().catch(() => []);
+    const row = (arr as any[]).find?.((c) => c.id === call.maestro_call_id);
+    return json({
+      found: !!row,
+      transcript_head: String(row?.transcript ?? "").slice(0, 300),
+      ai_summary_head: String(row?.ai_summary ?? "").slice(0, 200),
+      notes_head: String(row?.notes ?? "").slice(0, 200),
+      call_recording_filename: row?.call_recording_filename ?? null,
+      saving_call_recording: row?.saving_call_recording,
+      saving_call_transcript: row?.saving_call_transcript,
+    });
+  }
+
   // S3 mode: set a plain filename, read back the presigned URL, try to PUT the bytes there.
+
   if (s3) {
     const filename = `${call.maestro_call_id}.wav`;
     const put = await raw(cfg, {

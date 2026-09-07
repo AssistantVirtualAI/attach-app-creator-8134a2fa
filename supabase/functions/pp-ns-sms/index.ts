@@ -416,6 +416,12 @@ Deno.serve(async (req) => {
         return jsonResponse({ ok: false, error: "Paramètres manquants: 'to' et 'message' sont requis", missing: { to: !to, message: !message } }, 400);
       }
 
+      // Textos de test : réservés à Gilles et Marc, jamais vers de vrais clients.
+      if (blockTestSms(ctx.userId, message)) {
+        console.warn("[pp-ns-sms] test SMS blocked", { userId: ctx.userId, to });
+        return jsonResponse({ ok: false, blocked: true, error: "Les textos de test sont limités à Gilles et Marc." }, 200);
+      }
+
       // Destination interne (poste 2–6 chiffres) → message de chat interne
       // NetSapiens : pas de DID requis, l'expéditeur est le poste du courtier.
       const toDigits = String(to).replace(/\D/g, "");

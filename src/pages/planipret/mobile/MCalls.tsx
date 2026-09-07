@@ -176,8 +176,8 @@ export default function MCalls() {
   const [recordings, setRecordings] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [recordingsLoading, setRecordingsLoading] = useState(false);
-  const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState(params.get("peer") ?? "");
+  const [searchOpen, setSearchOpen] = useState(!!params.get("peer"));
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<Call | null>(null);
   const [visibleCount, setVisibleCount] = useState(25);

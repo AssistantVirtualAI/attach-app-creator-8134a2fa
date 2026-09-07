@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Link2, PlayCircle, RefreshCw } from "lucide-react";
+import { AlertTriangle, Link2, PlayCircle, PlugZap, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
@@ -150,8 +150,8 @@ export default function PAMaestroPending() {
   return (
     <PAPage>
       <PAPageHeader
-        title={L("Appels en attente Maestro", "Calls pending in Maestro")}
-        subtitle={L("Appels réels jamais enregistrés dans Maestro, rejeu manuel et postes sans courtier.", "Real calls never recorded in Maestro, manual replay and unassigned extensions.")}
+        title={L("Maestro", "Maestro")}
+        subtitle={L("Courtiers connectés, postes sans courtier et appels en attente d'envoi vers Maestro.", "Connected brokers, unassigned extensions and calls pending delivery to Maestro.")}
         actions={
           <div className="flex items-center gap-2">
             <button onClick={() => void load()} className="min-h-[36px] px-3 rounded-lg text-xs inline-flex items-center gap-1.5" style={surface}>
@@ -179,18 +179,51 @@ export default function PAMaestroPending() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {[
               { k: L("En attente", "Pending"), v: calls.length },
               { k: L("Bloqués", "Stuck"), v: stuckCount },
               { k: L("Sans courtier", "No broker"), v: noBroker },
               { k: L("Postes orphelins", "Orphan extensions"), v: orphans.length },
+              { k: L("Courtiers connectés", "Connected brokers"), v: connectedBrokers.length },
             ].map((c) => (
               <div key={c.k} className="rounded-xl p-3" style={surface}>
                 <div className="text-xs" style={muted}>{c.k}</div>
                 <div className="text-2xl font-semibold">{c.v}</div>
               </div>
             ))}
+          </div>
+
+          <div className="rounded-xl overflow-hidden" style={surface}>
+            <div className="px-3 py-2 text-sm font-medium flex items-center gap-2">
+              <PlugZap className="w-4 h-4" /> {L("Courtiers connectés à Maestro", "Brokers connected to Maestro")}
+              <span className="text-xs" style={muted}>{connectedBrokers.length}/{brokers.length}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr style={muted}>
+                  <th className="text-left px-3 py-2">{L("Courtier", "Broker")}</th>
+                  <th className="text-left px-3 py-2">{L("Poste", "Ext")}</th>
+                  <th className="text-left px-3 py-2">{L("Maestro", "Maestro")}</th>
+                  <th className="text-right px-3 py-2">{L("En attente", "Pending")}</th>
+                </tr></thead>
+                <tbody>
+                  {[...brokers].sort((a, b) => Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name)).map((b) => (
+                    <tr key={b.user_id} style={{ borderTop: "1px solid var(--pp-bg-border)" }}>
+                      <td className="px-3 py-2">{b.name}</td>
+                      <td className="px-3 py-2">{b.extension ?? "—"}</td>
+                      <td className="px-3 py-2" style={{ color: b.connected ? "#047857" : "#B45309" }}>
+                        {b.connected ? L("Connecté", "Connected") : L("Non connecté", "Not connected")}
+                      </td>
+                      <td className="px-3 py-2 text-right">{calls.filter((c) => c.userId === b.user_id).length}</td>
+                    </tr>
+                  ))}
+                  {brokers.length === 0 && (
+                    <tr><td className="px-3 py-3" style={muted} colSpan={4}>{L("Aucun courtier.", "No broker.")}</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {orphans.length > 0 && (

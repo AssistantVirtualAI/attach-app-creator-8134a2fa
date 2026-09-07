@@ -84,6 +84,7 @@ export default function PAMessages() {
   const status = params.get("status") ?? "";
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
+  const peer = params.get("peer") ?? "";
   const updateParams = (patch: Record<string, string | null>, resetPage = false) => {
     const next = new URLSearchParams(params);
     Object.entries(patch).forEach(([k, v]) => { if (v == null || v === "") next.delete(k); else next.set(k, v); });
@@ -132,6 +133,7 @@ export default function PAMessages() {
     if (status) q = q.eq("status", status);
     if (from) q = q.gte("sent_at", from);
     if (to) q = q.lte("sent_at", to);
+    if (peer) q = q.or(`from_number.ilike.%${peer}%,to_number.ilike.%${peer}%`);
     const { data, count, error } = await q;
     dbg.push({
       label: "planipret_phone_messages (page)",
@@ -155,7 +157,7 @@ export default function PAMessages() {
 
   usePlanipretNsAutoSync({ onQueued: () => load(page, pageSize) });
 
-  useEffect(() => { load(page, pageSize); /* eslint-disable-next-line */ }, [page, pageSize, broker, direction, status, from, to]);
+  useEffect(() => { load(page, pageSize); /* eslint-disable-next-line */ }, [page, pageSize, broker, direction, status, from, to, peer]);
 
   useEffect(() => {
     const ch = supabase.channel("admin-messages")

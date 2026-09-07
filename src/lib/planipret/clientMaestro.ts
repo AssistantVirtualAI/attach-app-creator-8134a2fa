@@ -40,6 +40,9 @@ export interface ClientCall {
   to_name: string | null;
   ai_summary: string | null;
   recording_url: string | null;
+  /** Client Maestro rattaché manuellement ou par la synchro. */
+  maestro_client_name?: string | null;
+  maestro_client_id?: string | null;
 }
 
 export interface ClientMessage {
@@ -148,6 +151,11 @@ export function buildClientBundles(
     }
   }
   for (const c of calls) {
+    // Un rattachement explicite (maestro_client_name) crée le client au besoin.
+    if (c.maestro_client_name) {
+      const forced = ensure(c.maestro_client_name);
+      if (forced) { forced.calls.push(c); continue; }
+    }
     const named = [c.from_name, c.to_name].map((n) => clientKey(n)).find((k) => k && map.has(k));
     let b = named ? map.get(named)! : undefined;
     if (!b) {
@@ -223,7 +231,7 @@ export async function fetchClientCalls(userIds: string[], limit = 500): Promise<
   if (!ids.length) return [];
   const { data } = await supabase
     .from("planipret_phone_calls")
-    .select("id, user_id, direction, status, started_at, duration_seconds, from_number, to_number, from_name, to_name, ai_summary, recording_url")
+    .select("id, user_id, direction, status, started_at, duration_seconds, from_number, to_number, from_name, to_name, ai_summary, recording_url, maestro_client_name, maestro_client_id")
     .in("user_id", ids)
     .order("started_at", { ascending: false })
     .limit(limit);

@@ -43,6 +43,7 @@ const MCommissions = lazyWithRetry(() => import("./pages/planipret/mobile/MCommi
 
 const MTasks = lazyWithRetry(() => import("./pages/planipret/mobile/MTasks"));
 const MClients360 = lazyWithRetry(() => import("./pages/planipret/mobile/MClients360"));
+const MMaestro = lazyWithRetry(() => import("./pages/planipret/mobile/MMaestro"));
 const MBroker360 = lazyWithRetry(() => import("./pages/planipret/mobile/MBroker360"));
 const MClientDetail = lazyWithRetry(() => import("./pages/planipret/mobile/MClientDetail"));
 const MBrokerActivity = lazyWithRetry(() => import("./pages/planipret/mobile/MBrokerActivity"));
@@ -631,6 +632,7 @@ const App = () => (
 
                   <Route path="tasks" element={<Suspense fallback={<MobilePageSkeleton />}><MTasks /></Suspense>} />
                   <Route path="clients-360" element={<Suspense fallback={<MobilePageSkeleton />}><MClients360 /></Suspense>} />
+                  <Route path="maestro" element={<Suspense fallback={<MobilePageSkeleton />}><MMaestro /></Suspense>} />
                   <Route path="brokers-360" element={<Suspense fallback={<MobilePageSkeleton />}><MBroker360 /></Suspense>} />
                   <Route path="clients-360/:clientKey" element={<Suspense fallback={<MobilePageSkeleton />}><MClientDetail /></Suspense>} />
                   <Route path="broker-activity" element={<Suspense fallback={<MobilePageSkeleton />}><MBrokerActivity /></Suspense>} />
@@ -728,6 +730,7 @@ const App = () => (
                   <Route path="broker-daily" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerDailyReport /></Suspense>} />
                   <Route path="maestro-health" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroHealth /></Suspense>} />
                   <Route path="maestro-pending" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroPending /></Suspense>} />
+                  <Route path="maestro" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroPending /></Suspense>} />
 
                   <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />
                 </Route>

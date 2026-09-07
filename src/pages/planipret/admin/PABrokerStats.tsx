@@ -111,10 +111,15 @@ export default function PABrokerStats() {
           extension: String(p.extension || p.ns_extension || "").trim(),
           maestroConnected: Boolean(p.maestro_connected),
           maestroLastSync: p.maestro_last_sync_at ?? null,
-          calls30: callsBy.get(uid) ?? 0,
-          texts30: textsBy.get(uid) ?? 0,
+          calls30: a.calls,
+          texts30: a.texts,
           openTasks: t.open,
           overdueTasks: t.overdue,
+          callsSynced: a.callsSynced,
+          textsSynced: a.textsSynced,
+          aiCalls: a.aiCalls,
+          talkSeconds: a.talkSeconds,
+          lastActivity: a.lastActivity,
         };
       }).filter((r) => r.userId);
       out.sort((a, b) => b.calls30 - a.calls30 || a.name.localeCompare(b.name));

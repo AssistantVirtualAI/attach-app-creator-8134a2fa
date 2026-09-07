@@ -29,9 +29,9 @@ import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "brokerDaily" | "maestroHealth";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "brokerDaily" | "maestroHealth";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -66,6 +66,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/maestro-clients", key: "maestroClients", Icon: Users },
       { to: "/planipret/admin/broker-performance", key: "brokerPerformance", Icon: BarChart3 },
       { to: "/planipret/admin/broker-stats", key: "brokerStats", Icon: Users },
+      { to: "/planipret/admin/task-board", key: "taskBoard", Icon: CheckSquare },
       { to: "/planipret/admin/broker-daily", key: "brokerDaily", Icon: CheckSquare },
       { to: "/planipret/admin/maestro-health", key: "maestroHealth", Icon: Zap },
     ],
@@ -117,6 +118,7 @@ const NAV_REGULAR: typeof NAV = [
       { to: "/planipret/admin/maestro-clients", key: "maestroClients", Icon: Users },
       { to: "/planipret/admin/broker-performance", key: "brokerPerformance", Icon: BarChart3 },
       { to: "/planipret/admin/broker-stats", key: "brokerStats", Icon: Users },
+      { to: "/planipret/admin/task-board", key: "taskBoard", Icon: CheckSquare },
       { to: "/planipret/admin/broker-daily", key: "brokerDaily", Icon: CheckSquare },
       { to: "/planipret/admin/maestro-health", key: "maestroHealth", Icon: Zap },
       { to: "/planipret/admin/hold-music", key: "holdMusic",   Icon: Music },
@@ -154,6 +156,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/maestro-clients": "maestroClients",
   "/planipret/admin/broker-performance": "brokerPerformance",
   "/planipret/admin/broker-stats": "brokerStats",
+  "/planipret/admin/task-board": "taskBoard",
   "/planipret/admin/broker-daily": "brokerDaily",
   "/planipret/admin/maestro-health": "maestroHealth",
   "/planipret/admin/telecom-mapping": "telecomMapping",

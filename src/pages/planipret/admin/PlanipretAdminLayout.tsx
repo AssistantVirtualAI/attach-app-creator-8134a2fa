@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import PortalDomainGate from "@/components/planipret/PortalDomainGate";
 import {
   LayoutDashboard, Users, Phone, MessageSquare, Mic, Plug,
-  BarChart3, LogOut, Sun, Moon, ShieldCheck, ShieldAlert, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket, UserSquare2,
+  BarChart3, LogOut, Sun, Moon, ShieldCheck, ShieldAlert, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket, UserSquare2, AlertTriangle,
 } from "lucide-react";
 import SessionTimeoutModal from "@/components/planipret/SessionTimeoutModal";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";
@@ -29,9 +29,9 @@ import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -69,6 +69,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/task-board", key: "taskBoard", Icon: CheckSquare },
       { to: "/planipret/admin/broker-daily", key: "brokerDaily", Icon: CheckSquare },
       { to: "/planipret/admin/maestro-health", key: "maestroHealth", Icon: Zap },
+      { to: "/planipret/admin/maestro-pending", key: "maestroPending", Icon: AlertTriangle },
     ],
   },
   {
@@ -121,6 +122,7 @@ const NAV_REGULAR: typeof NAV = [
       { to: "/planipret/admin/task-board", key: "taskBoard", Icon: CheckSquare },
       { to: "/planipret/admin/broker-daily", key: "brokerDaily", Icon: CheckSquare },
       { to: "/planipret/admin/maestro-health", key: "maestroHealth", Icon: Zap },
+      { to: "/planipret/admin/maestro-pending", key: "maestroPending", Icon: AlertTriangle },
       { to: "/planipret/admin/hold-music", key: "holdMusic",   Icon: Music },
       { to: "/planipret/admin/access-log", key: "accessLog",  Icon: ShieldAlert },
 
@@ -159,6 +161,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/task-board": "taskBoard",
   "/planipret/admin/broker-daily": "brokerDaily",
   "/planipret/admin/maestro-health": "maestroHealth",
+  "/planipret/admin/maestro-pending": "maestroPending",
   "/planipret/admin/telecom-mapping": "telecomMapping",
   "/planipret/admin/did-reconcile": "didReconcile",
   "/planipret/admin/phone-numbers": "phoneNumbers",

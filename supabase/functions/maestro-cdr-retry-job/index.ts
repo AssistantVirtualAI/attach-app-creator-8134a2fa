@@ -116,6 +116,28 @@ Deno.serve(async (req) => {
       console.log(`[cdr-retry-job] sweep enqueued=${enqueued.length}`);
     }
 
+    // ── 1b. Manual replay: force specific calls back into the queue now ─────
+    const forced: string[] = Array.isArray(body?.call_ids)
+      ? body.call_ids.map((x: unknown) => String(x)).filter(Boolean).slice(0, 50)
+      : [];
+    if (forced.length && !dryRun) {
+      const { data: rows } = await admin
+        .from("planipret_phone_calls")
+        .select("id, user_id")
+        .in("id", forced);
+      const nowIso = new Date().toISOString();
+      for (const r of rows ?? []) {
+        await admin.from(CDR_RETRY_TABLE).upsert({
+          call_id: (r as any).id,
+          user_id: (r as any).user_id ?? null,
+          status: "pending",
+          attempts: 0,
+          next_attempt_at: nowIso,
+          last_reason: "manual_replay",
+        }, { onConflict: "call_id" });
+      }
+    }
+
     // ── 2. Drain the due queue ─────────────────────────────────────────────
     const { data: due } = await admin
       .from(CDR_RETRY_TABLE)
@@ -123,7 +145,7 @@ Deno.serve(async (req) => {
       .eq("status", "pending")
       .lte("next_attempt_at", new Date().toISOString())
       .order("next_attempt_at", { ascending: true })
-      .limit(limit);
+      .limit(forced.length ? Math.max(limit, forced.length) : limit);
 
     const supaUrl = Deno.env.get("SUPABASE_URL")!;
     const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

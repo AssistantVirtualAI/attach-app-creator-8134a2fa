@@ -319,7 +319,62 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
         )}
       </div>
 
+      {/* Mode: record my own voice, or synthesize a voice */}
+      <div className="grid grid-cols-2 gap-2">
+        {([
+          ["record", lang === "en" ? "🎙 Record my voice" : "🎙 Enregistrer ma voix"],
+          ["tts", lang === "en" ? "✨ Synthetic voice" : "✨ Voix de synthèse"],
+        ] as const).map(([k, label]) => (
+          <button key={k} onClick={() => setMode(k as any)}
+            className="h-11 rounded-xl text-[13px] font-semibold transition"
+            style={mode === k
+              ? { background: TOKENS.borderActive, color: "white" }
+              : { background: TOKENS.card, color: TOKENS.text, border: `1px solid ${TOKENS.border}` }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "record" && (
+        <div className="pp-card p-4 space-y-3">
+          <div className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: TOKENS.muted }}>
+            {lang === "en" ? "Record your greeting" : "Enregistrez votre message"}
+          </div>
+          <p className="text-[12px]" style={{ color: TOKENS.muted }}>
+            {lang === "en"
+              ? "Speak close to the microphone, up to 2 minutes. Publishing replaces your current greeting."
+              : "Parlez près du micro, jusqu'à 2 minutes. La publication remplace votre message actuel."}
+          </p>
+
+          <div className="flex items-center gap-3">
+            <button onClick={recording ? stopRecording : startRecording}
+              className="h-12 flex-1 rounded-xl text-[14px] font-semibold text-white flex items-center justify-center gap-2"
+              style={{ background: recording ? "linear-gradient(135deg,#EF4444,#B91C1C)" : "linear-gradient(135deg,#1A4A8A,#2E9BDC)" }}>
+              {recording
+                ? <><Pause className="w-4 h-4" /> {lang === "en" ? "Stop" : "Arrêter"} · {mmss(recSeconds)}</>
+                : <><Mic className="w-4 h-4" /> {recBlob ? (lang === "en" ? "Record again" : "Réenregistrer") : (lang === "en" ? "Start recording" : "Démarrer l'enregistrement")}</>}
+            </button>
+          </div>
+
+          {recUrl && !recording && (
+            <>
+              <audio controls src={recUrl} className="w-full h-9" style={{ filter: "invert(0.9)" }} />
+              <button onClick={publishRecording} disabled={publishing}
+                className="w-full h-12 rounded-xl text-[14px] font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                style={{ background: "linear-gradient(135deg,#10B981,#00A88A)" }}>
+                <Check className="w-4 h-4" />
+                {publishing
+                  ? (lang === "en" ? "Publishing…" : "Publication…")
+                  : (lang === "en" ? "Replace my greeting" : "Remplacer mon message")}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {mode === "tts" && (<>
       {/* Step 1 - Voice */}
+
       <div>
         <div className="text-[10px] uppercase tracking-widest mb-2 font-semibold" style={{ color: TOKENS.muted }}>{t("greeting.chooseVoice")}</div>
 

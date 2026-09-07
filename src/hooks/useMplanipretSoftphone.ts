@@ -1106,7 +1106,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
 
 
   const callViaPBX = useCallback(async (destination: string): Promise<OutboundResult> => {
-    const { data, error } = await supabase.functions.invoke("pp-ns-calls", { body: { action: "start", to_number: destination, client_type: clientType } });
+    const { data, error } = await ppEdgeInvoke("pp-ns-calls", { action: "start", to_number: ppNormalizeDestination(destination), client_type: clientType });
     if (error || (data as any)?.success === false) {
       const msg = (data as any)?.message ?? (data as any)?.error ?? error?.message ?? "PBX call failed";
       return { via: "none", ok: false, error: msg };

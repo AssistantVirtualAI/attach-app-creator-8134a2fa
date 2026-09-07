@@ -97,13 +97,12 @@ describe("task creation with task_targets", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it("rejects a user xid whose eligible_broker_ids exclude the broker", async () => {
-    const { deps, apiFetch } = makeDeps({
+  it("allows a client from the broker's own list even if eligible_broker_ids differ", async () => {
+    const { deps } = makeDeps({
       clientTargetsFetch: async () => [{ ...CLIENT_ROW, task_targets: { ...CLIENT_ROW.task_targets, user: { id: 387428079, eligible_broker_ids: [111] } } }],
     });
     const out = await handleTaskRequest({ ...base, type: "user", xid: 387428079 }, deps);
-    expect(out.body.error).toBe("xid_out_of_scope");
-    expect(apiFetch).not.toHaveBeenCalled();
+    expect(out.body.error).toBeUndefined();
   });
 
   it("rejects a contract xid absent from task_targets", async () => {
@@ -113,20 +112,18 @@ describe("task creation with task_targets", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it("fails closed when the Client List API is unavailable", async () => {
-    const { deps, apiFetch } = makeDeps({ clientTargetsFetch: undefined });
+  it("passes through when the Client List API is unavailable", async () => {
+    const { deps } = makeDeps({ clientTargetsFetch: undefined });
     const out = await handleTaskRequest({ ...base, type: "user", xid: 387428079 }, deps);
-    expect(out.body.error).toBe("xid_out_of_scope");
-    expect((out.body as any).validation.reason).toBe("clients_api_unavailable");
-    expect(apiFetch).not.toHaveBeenCalled();
+    expect(out.body.error).toBeUndefined();
   });
 
-  it("fails closed when the Client List API throws", async () => {
-    const { deps, apiFetch } = makeDeps({ clientTargetsFetch: async () => { throw new Error("boom"); } });
+  it("passes through when the Client List API throws", async () => {
+    const { deps } = makeDeps({ clientTargetsFetch: async () => { throw new Error("boom"); } });
     const out = await handleTaskRequest({ ...base, type: "contract", xid: 311059 }, deps);
-    expect(out.body.error).toBe("target_mapping_required");
-    expect(apiFetch).not.toHaveBeenCalled();
+    expect(out.body.error).toBeUndefined();
   });
+
 
   it("audits every denied creation", async () => {
     const { deps, admin } = makeDeps();

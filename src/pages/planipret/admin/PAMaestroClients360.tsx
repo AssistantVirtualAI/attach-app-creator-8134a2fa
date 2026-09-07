@@ -78,6 +78,7 @@ export default function PAMaestroClients360() {
             <select aria-label={L("Courtier", "Broker")} value={broker} onChange={(e) => setBroker(e.target.value)}
               className="min-h-[36px] rounded-lg px-2 text-xs" style={surface}>
               <option value="">{L("Mes clients", "My clients")}</option>
+              <option value="all">{L("Tous les courtiers", "All brokers")}</option>
               {brokers.map((b) => <option key={b.id} value={b.id}>{b.name} · #{b.id}</option>)}
             </select>
             <button onClick={() => void refresh()} className="min-h-[36px] px-3 rounded-lg text-xs inline-flex items-center gap-1.5" style={surface}>

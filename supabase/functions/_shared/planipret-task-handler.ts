@@ -246,8 +246,26 @@ async function loadClientTargets(deps: any, profile: any, search?: string | null
     telecomId = await deps.resolveTelecomUserId(profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null);
   } catch { /* ignore */ }
   const rows = await deps.clientTargetsFetch(telecomId, search ?? null).catch(() => []);
-  return (Array.isArray(rows) ? rows : []).map(normalizeClientTarget).filter(Boolean) as ClientTarget[];
+  // Maestro only exposes `task_targets` on part of its client list. Clients
+  // without that metadata are still legitimate targets (their own user id), so
+  // they must stay visible in the picker instead of silently disappearing.
+  const out: ClientTarget[] = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const normalized = normalizeClientTarget(row);
+    if (normalized) { out.push(normalized); continue; }
+    const id = String((row as any)?.user?.id ?? (row as any)?.user_id ?? (row as any)?.id ?? "").trim();
+    if (!id) continue;
+    out.push({
+      client_id: String((row as any)?.id ?? id),
+      name: clientLabel(row),
+      email: (row as any)?.email ? String((row as any).email) : null,
+      user: { id, eligible_broker_ids: [] },
+      contracts: [],
+    });
+  }
+  return out;
 }
+
 
 /** Is `xid` a valid target of the given type according to `task_targets`? */
 export function targetAllowed(

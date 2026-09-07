@@ -167,12 +167,38 @@ export default function PAMessages() {
     // eslint-disable-next-line
   }, []);
 
+  // Un fil = une paire (ligne du courtier ↔ numéro du client). On compare sur
+  // les 10 derniers chiffres, sinon +1 514…, 514… et (514) … créent des fils
+  // différents — et une simple correspondance sur un seul numéro affichait
+  // tous les textos de la ligne du courtier.
   const openThread = async (m: any) => {
-    const peer = m.direction === "outbound" ? m.to_number : m.from_number;
-    setThreadKey(peer);
-    const { data } = await supabase.from("planipret_phone_messages")
-      .select("*").or(`from_number.eq.${peer},to_number.eq.${peer}`).order("created_at", { ascending: true });
-    setThread(data ?? []);
+    const d10 = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-10);
+    const outbound = m.direction === "outbound";
+    const peerNum = outbound ? m.to_number : m.from_number;
+    const lineNum = outbound ? m.from_number : m.to_number;
+    const peerKey = d10(peerNum);
+    const lineKey = d10(lineNum);
+    setThreadKey(peerNum);
+    setThread([]);
+    const suffix = peerKey.slice(-8) || peerKey;
+    const { data } = await supabase
+      .from("planipret_phone_messages")
+      .select("*")
+      .or(`from_number.ilike.%${suffix},to_number.ilike.%${suffix}`)
+      .order("created_at", { ascending: true })
+      .limit(500);
+    const seen = new Set<string>();
+    const rows = (data ?? []).filter((r: any) => {
+      const a = d10(r.from_number);
+      const b = d10(r.to_number);
+      const pairOk = (a === peerKey && (!lineKey || b === lineKey)) || (b === peerKey && (!lineKey || a === lineKey));
+      if (!pairOk) return false;
+      const k = `${r.direction}|${String(r.body ?? "").trim()}|${String(r.created_at ?? "").slice(0, 16)}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    setThread(rows);
   };
 
   const syncAll = async () => {

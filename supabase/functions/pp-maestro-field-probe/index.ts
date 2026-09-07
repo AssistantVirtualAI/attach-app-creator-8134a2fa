@@ -3,7 +3,7 @@ import { adminClient, corsHeaders, getMaestroConfig, json, maestroFetch, telecom
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const { call_id, fields, sync, backfill } = await req.json().catch(() => ({} as any));
+  const { call_id, fields, sync, backfill, visibility_backfill } = await req.json().catch(() => ({} as any));
   const admin = adminClient();
   const runSync = async (id: string) => {
     const r = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/maestro-sync-call`, {
@@ -13,6 +13,29 @@ Deno.serve(async (req) => {
     });
     return { id, status: r.status, body: await r.json().catch(() => null) };
   };
+  if (visibility_backfill) {
+    const limit = Math.min(Number(visibility_backfill) || 5, 10);
+    const { data: rows } = await admin
+      .from("planipret_phone_calls")
+      .select("id, metadata")
+      .not("maestro_call_id", "is", null)
+      .or("transcript.not.is.null,ai_summary.not.is.null,recording_storage_path.not.is.null")
+      .is("metadata->>maestro_visibility_fixed_at", null)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    const out: unknown[] = [];
+    for (const row of rows ?? []) {
+      const res = await runSync(String((row as any).id));
+      const ok = (res.body as any)?.success === true;
+      if (ok) {
+        await admin.from("planipret_phone_calls").update({
+          metadata: { ...((row as any).metadata ?? {}), maestro_visibility_fixed_at: new Date().toISOString() },
+        }).eq("id", (row as any).id);
+      }
+      out.push({ id: (row as any).id, ok });
+    }
+    return json({ processed: out.length, results: out });
+  }
   if (backfill) {
     const limit = Number(backfill) || 25;
     const { data: rows } = await admin

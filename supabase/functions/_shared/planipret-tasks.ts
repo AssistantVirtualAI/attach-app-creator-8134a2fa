@@ -270,7 +270,13 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
   const notifyFrom = posInt(input.send_notification_from);
   if (notifyFrom) payload.send_notification_from = notifyFrom;
   const notifUsers = intList(input.notification_users);
-  if (notifUsers) payload.notification_users = notifUsers;
+  // Le courtier peut bloquer l'envoi au client : aucune notification client ne part alors.
+  if (payload.send_notification_client === 0) {
+    payload.send_notification_client_secondary = 0;
+    delete payload.notification_users;
+  } else if (notifUsers) {
+    payload.notification_users = notifUsers;
+  }
   if (input.scheduled === true) {
     const at = toApiDateTime(input.scheduled_at as string);
     if (!at) return { ok: false, error: "validation_failed", fields: { scheduled_at: "date_required_YYYY-MM-DD_HH:mm:ss" } };

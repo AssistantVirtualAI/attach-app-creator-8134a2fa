@@ -705,7 +705,7 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
 
           {showAdvanced && (
             <div className="space-y-4 rounded-2xl p-4" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border)" }}>
-              <Toggle label={L("Notifier le client", "Notify the client")} checked={notifyClient} onChange={setNotifyClient} />
+              
               <Toggle label={L("Notifier le client secondaire", "Notify the secondary client")} checked={notifyClientSecondary} onChange={setNotifyClientSecondary} />
               <Toggle label={L("Notifier l'adjoint(e)", "Notify the assistant")} checked={notifyAssistant} onChange={setNotifyAssistant} />
               {notifyAssistant && (

@@ -711,7 +711,7 @@ function ThreadView({ threadId: thId, number, initialText, autoSend, myExt, user
       console.info("[pp-ns-sms] send →", { to: number, len: body.length, thread_id: currentThreadId ?? null });
       // Retry automatique avec backoff exponentiel (2s → 6s → 18s).
       const d: any = await retryWithBackoff(async () => {
-        const { data, error: err } = await supabase.functions.invoke("pp-ns-sms", { body: payload });
+        const { data, error: err } = await ppEdgeInvoke("pp-ns-sms", payload);
         if (err) {
           console.error("[pp-ns-sms] invoke error", err);
           throw new Error(err.message || t("messages.sendFailed"));

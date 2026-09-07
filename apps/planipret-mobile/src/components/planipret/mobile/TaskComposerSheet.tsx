@@ -130,6 +130,8 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
   const [searching, setSearching] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<ClientTaskTarget | null>(null);
   const [people, setPeople] = useState<any[]>(() => peekPpContacts("maestro_brokers") ?? []);
+  /** Maestro team members eligible for direct task assignment. */
+  const [team, setTeam] = useState<Array<{ id: string; name: string | null; email: string | null; self?: boolean }>>([]);
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -187,6 +189,14 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     void getPpContacts("maestro").then((v) => { if (alive) setClients(v || []); }).catch(() => {});
     void listClientTargets().then((v) => { if (alive) setTargets(v || []); }).catch(() => {});
     void getPpContacts("maestro_brokers", { force: true, limit: 500 }).then((v) => { if (alive) setPeople(v || []); }).catch(() => {});
+    void supabase.functions
+      .invoke("planipret-task-api", { body: { action: "team" } })
+      .then(({ data }: any) => {
+        if (!alive) return;
+        const members = Array.isArray(data?.members) ? data.members : [];
+        setTeam(members.filter((x: any) => /^\d+$/.test(String(x?.id ?? ""))));
+      })
+      .catch(() => {});
     return () => { alive = false; };
   }, [open, step]);
 
@@ -356,18 +366,13 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!selectedTarget) return;
     setTarget(tt === "contract" ? (selectedTarget.contracts[0]?.id ?? "") : (selectedTarget.user?.id ?? selectedTarget.client_id));
   };
-  // A task can be kept for yourself or handed to any broker / assistant of the
-  // firm: the full Maestro directory is offered, de-duplicated and sorted.
+  // Only show members of the signed-in broker's real Maestro team.
   const assignableUsers = (() => {
-    const seen = new Set<string>();
-    const out: any[] = [];
-    for (const u of people as any[]) {
-      const id = String(u?.id ?? u?.broker_id ?? u?.user_id ?? "");
-      if (!/^\d+$/.test(id) || seen.has(id)) continue;
-      seen.add(id);
-      out.push({ ...u, id });
-    }
-    return out.sort((a, b) => contactName(a).localeCompare(contactName(b)));
+    const byId = new Map((people as any[]).map((u) => [String(u?.id ?? u?.broker_id ?? u?.user_id ?? ""), u]));
+    return team
+      .filter((member) => !member.self)
+      .map((member) => ({ ...(byId.get(String(member.id)) ?? {}), ...member, id: String(member.id) }))
+      .sort((a, b) => contactName(a).localeCompare(contactName(b)));
   })();
 
   const frame = typeof document !== "undefined" ? document.getElementById("pp-mobile-frame") : null;
@@ -616,9 +621,13 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                 <select className={`${field} appearance-none pr-9`} style={fieldStyle} value={assignee}
                   aria-label={L("Assigné à", "Assigned to")} onChange={(e) => setAssignee(e.target.value)}>
                   <option value="">{L("Moi (auto)", "Me (auto)")}</option>
-                  {assignableUsers.map((u: any) => (
-                    <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
-                  ))}
+                  {assignableUsers.length > 0 && (
+                    <optgroup label={L("Mon équipe (Maestro)", "My team (Maestro)")}>
+                      {assignableUsers.map((u: any) => (
+                        <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
                 <ChevronDown className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--pp-text-muted)" }} />
               </div>

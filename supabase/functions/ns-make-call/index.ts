@@ -28,6 +28,38 @@ function toE164(raw: string): string {
   return "+" + d;
 }
 
+/**
+ * Long-distance habit: brokers prefix "1" before an internal extension
+ * ("11136" for 1136). Those calls die at NS (5 digits is neither a valid
+ * extension nor a valid number). Resolve against the real extension list of
+ * the domain and dial the extension instead.
+ */
+async function resolveInternal(
+  admin: any,
+  domain: string,
+  destination: string,
+): Promise<{ destination: string; corrected: boolean }> {
+  const digits = destination.replace(/^\+/, "").replace(/\D/g, "");
+  if (digits.length < 2 || digits.length > 6) return { destination, corrected: false };
+
+  const candidates = [digits];
+  if (digits.length >= 4 && digits.startsWith("1")) candidates.push(digits.slice(1));
+
+  const { data } = await admin
+    .from("planipret_profiles")
+    .select("extension")
+    .in("extension", candidates);
+  const known = new Set((data ?? []).map((r: any) => String(r.extension ?? "")));
+
+  if (known.has(digits)) return { destination: digits, corrected: false };
+  for (const c of candidates.slice(1)) {
+    if (known.has(c)) return { destination: c, corrected: true };
+  }
+  return { destination: digits, corrected: false };
+}
+
+
+
 const trace = (traceId: string, event: string, data: Record<string, unknown> = {}) => {
   console.log(JSON.stringify({ fn: "ns-make-call", trace_id: traceId, event, ts: Date.now(), ...data }));
 };

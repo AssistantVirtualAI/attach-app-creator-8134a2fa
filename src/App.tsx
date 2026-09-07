@@ -721,6 +721,7 @@ const App = () => (
                   <Route path="maestro-clients/:clientKey" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroClientDetail /></Suspense>} />
                   <Route path="broker-performance" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerPerformance /></Suspense>} />
                   <Route path="broker-stats" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerStats /></Suspense>} />
+                  <Route path="broker-daily" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerDailyReport /></Suspense>} />
 
                   <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />
                 </Route>

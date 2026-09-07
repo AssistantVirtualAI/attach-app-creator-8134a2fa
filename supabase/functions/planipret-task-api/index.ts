@@ -313,19 +313,24 @@ Deno.serve(async (req) => {
       };
     })();
 
-    // Read-only: the broker's Maestro team, ready for an assignment dropdown.
+    // Read-only: only assistants explicitly authorized under this broker.
     if (String(body?.action ?? "") === "team") {
-      const team = await teamOnce();
+      const { data: assistants } = await admin.from("planipret_task_assistants")
+        .select("assistant_maestro_id,label")
+        .eq("owner_user_id", userId)
+        .eq("active", true);
       const dir = await loadBrokerDirectory(admin).catch(() => [] as any[]);
       const byId = new Map((dir ?? []).map((d: any) => [String(d.id), d]));
-      const own = [profile?.maestro_broker_id, profile?.maestro_telecom_user_id]
-        .map((v) => String(v ?? "").trim()).filter(Boolean);
-      const ids = [...new Set([...own, ...team.ids])];
+      const labels = new Map((assistants ?? []).map((row: any) => [
+        String(row.assistant_maestro_id ?? "").trim(),
+        String(row.label ?? "").trim(),
+      ]));
+      const ids = [...new Set([...labels.keys()].filter(Boolean))];
       const members = ids.map((id) => {
         const d: any = byId.get(id);
-        return { id, name: d?.name ?? null, email: d?.email ?? null, self: own.includes(id) };
+        return { id, name: d?.name ?? labels.get(id) ?? null, email: d?.email ?? null, self: false };
       }).sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
-      return jsonResponse({ success: true, members, by_client: team.byClient, correlation_id }, 200);
+      return jsonResponse({ success: true, members, by_client: {}, correlation_id }, 200);
     }
 
     const out = await handleTaskRequest({ ...body, correlation_id }, {
@@ -364,11 +369,6 @@ Deno.serve(async (req) => {
             if (s) ids.add(s);
           }
         } catch { /* table may be empty */ }
-        try {
-          // Maestro teams: every broker eligible on this broker's clients.
-          const team = await teamOnce();
-          for (const s of team.ids) ids.add(s);
-        } catch { /* upstream optional */ }
         return [...ids];
 
       },

@@ -34,7 +34,15 @@ Deno.serve(async (req) => {
       }
       out.push({ id: (row as any).id, ok });
     }
-    return json({ processed: out.length, results: out });
+    const successful = out.filter((item: any) => item.ok).length;
+    if ((rows?.length ?? 0) === limit && successful > 0) {
+      EdgeRuntime.waitUntil(fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-maestro-field-probe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({ visibility_backfill: limit }),
+      }).catch(() => undefined));
+    }
+    return json({ processed: out.length, successful, continuing: (rows?.length ?? 0) === limit && successful > 0, results: out });
   }
   if (backfill) {
     const limit = Number(backfill) || 25;

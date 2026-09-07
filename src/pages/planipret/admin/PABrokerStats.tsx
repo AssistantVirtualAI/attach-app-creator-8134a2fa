@@ -181,7 +181,10 @@ export default function PABrokerStats() {
                   <Th>{L("Poste", "Ext.")}</Th>
                   <Th>{L("Connexion", "Connection")}</Th>
                   <Th>{L("Appels (30 j)", "Calls (30 d)")}</Th>
+                  <Th>{L("Durée totale", "Total talk time")}</Th>
                   <Th>{L("Textos (30 j)", "Texts (30 d)")}</Th>
+                  <Th>{L("Envoyé à Maestro", "Sent to Maestro")}</Th>
+                  <Th>{L("Dernière activité", "Last activity")}</Th>
                   <Th>{L("Tâches ouvertes", "Open tasks")}</Th>
                   <Th>{L("En retard", "Overdue")}</Th>
                 </tr>

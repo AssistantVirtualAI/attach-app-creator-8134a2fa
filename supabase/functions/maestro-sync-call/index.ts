@@ -48,12 +48,17 @@ function prettyTranscript(
     .map((line) => {
       const m = line.match(/^\s*sip:([^@\s]+)@[^\s:]+:\s*(.*)$/);
       if (!m) return line.trim();
-      const user = m[1].replace(/\D/g, "");
-      const isBroker = ext ? user === ext || user === `1${ext}` || user.endsWith(ext) : false;
+      const rawUser = m[1];
+      const user = rawUser.replace(/\D/g, "");
+      // Broker side = internal extension (2-6 digits, optional M/W device suffix).
+      const isBroker = ext
+        ? user === ext || user === `1${ext}` || user.endsWith(ext)
+        : /^\d{2,6}[MWmw]?$/.test(rawUser);
       const text = m[2].trim();
       if (!text) return "";
       return `${isBroker ? broker : client}: ${text}`;
     })
+
     .filter((l) => l.length > 0)
     .join("\n");
 }

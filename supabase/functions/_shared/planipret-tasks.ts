@@ -241,9 +241,15 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
     payload.status = status || "pending";
   }
 
-  // Notifications and calendar sync are OFF unless explicitly enabled by the broker.
-  if (input.sync_cal === true || input.sync_calendar === true) payload.sync_cal = 1;
-  if (input.send_notification === true || input.notification === true) payload.send_notification = 1;
+  // Notifications and calendar sync are OFF unless explicitly enabled by the
+  // broker. Maestro defaults them ON server-side, which sends the "Alert! New
+  // referral" email into the client's Communications page, so the zeros must be
+  // sent explicitly instead of being omitted.
+  payload.sync_cal = input.sync_cal === true || input.sync_calendar === true ? 1 : 0;
+  payload.send_notification = input.send_notification === true || input.notification === true ? 1 : 0;
+  payload.send_notification_client = input.send_notification_client === true ? 1 : 0;
+  payload.send_notification_client_secondary = input.send_notification_client_secondary === true ? 1 : 0;
+  payload.send_notification_assistant = input.send_notification_assistant === true ? 1 : 0;
   if (input.is_hidden === true) payload.is_hidden = 1;
   if (input.update_status === true) payload.update_status = 1;
 

@@ -477,7 +477,37 @@ export async function handleTaskRequest(
     // Brokers are always locked to their own Maestro id.
     const isAdminRole = role === "admin" || role === "planipret_admin" || role === "super_admin";
     const requestedBroker = String(body?.broker_id ?? "").trim();
+    const allBrokers = isAdminRole && requestedBroker.toLowerCase() === "all";
     const overrideBroker = isAdminRole && /^\d+$/.test(requestedBroker) ? requestedBroker : null;
+
+    if (allBrokers) {
+      const all = await loadProjectionAll(admin);
+      const now = nowFn();
+      const counts = taskCounts(all, now);
+      const filtered = filterTasks(all, filter, now);
+      const pageOut = paginate(filtered, page, limit);
+      return {
+        status: 200,
+        body: {
+          success: true,
+          source: all.length ? "projection" : "unavailable",
+          maestro_user_id: null,
+          scoped_broker_id: "all",
+          telecom_user_id: null,
+          endpoint: null,
+          filter,
+          tasks: pageOut.items,
+          buckets: bucketTasks(pageOut.items, now),
+          counts,
+          overdue_count: counts.overdue,
+          page: pageOut.page,
+          limit,
+          total: pageOut.total,
+          has_more: pageOut.hasMore,
+          correlation_id,
+        },
+      };
+    }
 
     let maestroId: string | null = profile?.maestro_broker_id ? String(profile.maestro_broker_id) : null;
     let telecomId: string | null = null;

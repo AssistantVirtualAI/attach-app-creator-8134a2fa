@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, RefreshCw } from "lucide-react";
+import { AlertTriangle, CalendarClock, ChevronLeft, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import BrokerActivityDaily from "@/components/planipret/brokers/BrokerActivityDaily";
-import { fetchBrokerActivity, type BrokerActivity } from "@/lib/planipret/brokerActivity";
+import { fetchBrokerActivity, summarizeTasks, type BrokerActivity } from "@/lib/planipret/brokerActivity";
 
 interface BrokerOption { userId: string; name: string }
 
@@ -77,6 +77,11 @@ export default function MBrokerActivity() {
     };
   }, [load, selected, me]);
 
+  const summary = useMemo(() => summarizeTasks(activity.tasks), [activity.tasks]);
+  const dueLabel = (iso: string | null) => (iso
+    ? new Date(iso).toLocaleString(en ? "en-CA" : "fr-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Toronto" })
+    : L("Sans échéance", "No due date"));
+
   const surface = { background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" };
 
   return (
@@ -110,6 +115,41 @@ export default function MBrokerActivity() {
           </button>
         ))}
       </div>
+
+      {!loading && (
+        <div className="rounded-2xl p-3 space-y-2" style={surface} data-testid="broker-task-summary">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="w-4 h-4" style={{ color: "var(--pp-brand-accent)" }} />
+            <p className="text-xs font-semibold">{L("Prochaine tâche", "Next task")}</p>
+            <span className="ml-auto text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
+              {summary.open} {L("ouvertes", "open")}
+            </span>
+          </div>
+
+          {summary.overdue > 0 && (
+            <p className="flex items-center gap-1.5 text-[11.5px] font-semibold rounded-xl px-2.5 py-2"
+              style={{ background: "rgba(185,28,28,0.10)", color: "#B91C1C" }}>
+              <AlertTriangle className="w-3.5 h-3.5" />
+              {summary.overdue} {L("tâche(s) en retard", "task(s) overdue")}
+            </p>
+          )}
+
+          {summary.next ? (
+            <div>
+              <p className="text-sm font-medium truncate">{summary.next.client}</p>
+              <p className="text-[11.5px] truncate" style={{ color: "var(--pp-text-muted)" }}>{summary.next.title}</p>
+              <p className="text-[11.5px] font-semibold mt-0.5"
+                style={{ color: summary.next.overdue ? "#B91C1C" : "var(--pp-text-secondary, var(--pp-text-muted))" }}>
+                {summary.next.overdue ? L("En retard — ", "Overdue — ") : ""}{dueLabel(summary.next.at)}
+              </p>
+            </div>
+          ) : (
+            <p className="text-[11.5px]" style={{ color: "var(--pp-text-muted)" }}>
+              {L("Aucune tâche ouverte.", "No open task.")}
+            </p>
+          )}
+        </div>
+      )}
 
       <BrokerActivityDaily activity={activity} lang={lang} loading={loading} />
     </div>

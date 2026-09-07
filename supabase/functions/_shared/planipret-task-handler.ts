@@ -239,6 +239,26 @@ export function normalizeClientTarget(row: any): ClientTarget | null {
 }
 
 /** All task targets this broker may legitimately use, from the Client List API. */
+/**
+ * Budget de temps: les vérifications amont (annuaire Maestro, périmètre client)
+ * ne doivent jamais faire dépasser la durée d'exécution de la fonction, sinon
+ * la création échoue au niveau réseau ("Failed to send a request") et la tâche
+ * n'arrive jamais dans Maestro.
+ */
+async function withDeadline<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<T>((resolve) => { t = setTimeout(() => resolve(fallback), ms); }),
+    ]);
+  } catch {
+    return fallback;
+  } finally {
+    if (t) clearTimeout(t);
+  }
+}
+
 async function loadClientTargets(deps: any, profile: any, search?: string | null): Promise<ClientTarget[]> {
   if (!deps.clientTargetsFetch) return [];
   let telecomId: string | null = null;

@@ -165,11 +165,12 @@ export default function PABrokerStats() {
         <PPEmptyState icon={<Users className="w-5 h-5" />} title={L("Aucun courtier", "No broker")} />
       ) : (
         <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Kpi label={L("Courtiers connectés Maestro", "Maestro-connected brokers")} value={`${totals.connected}/${rows.length}`} style={surface} />
             <Kpi label={L("Appels (30 j)", "Calls (30 d)")} value={String(totals.calls)} style={surface} />
             <Kpi label={L("Textos (30 j)", "Texts (30 d)")} value={String(totals.texts)} style={surface} />
-            <Kpi label={L("Tâches ouvertes", "Open tasks")} value={String(totals.open)} style={surface} />
+            <Kpi label={L("Envoyés à Maestro", "Sent to Maestro")} value={String(totals.synced)} style={surface} />
+            <Kpi label={L("En attente Maestro", "Pending Maestro")} value={String(totals.pending)} style={surface} />
           </div>
 
           <div className="rounded-xl overflow-x-auto" style={surface}>

@@ -77,6 +77,11 @@ export default function MBrokerActivity() {
     };
   }, [load, selected, me]);
 
+  const summary = useMemo(() => summarizeTasks(activity.tasks), [activity.tasks]);
+  const dueLabel = (iso: string | null) => (iso
+    ? new Date(iso).toLocaleString(en ? "en-CA" : "fr-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Toronto" })
+    : L("Sans échéance", "No due date"));
+
   const surface = { background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" };
 
   return (

@@ -649,16 +649,25 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                       ))}
                     </optgroup>
                   )}
-                  <optgroup label={L("Tous les courtiers", "All brokers")}>
-                    {assignableUsers.map((u: any) => (
-                      <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
-                    ))}
-                  </optgroup>
+                  {assignableUsers.length > 0 && (
+                    <optgroup label={L("Adjoints autorisés", "Authorized assistants")}>
+                      {assignableUsers.map((u: any) => (
+                        <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
+                      ))}
+                    </optgroup>
+                  )}
 
                 </select>
                 <ChevronDown className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--pp-text-muted)" }} />
               </div>
+              <p className="mt-1 text-[11px] leading-snug" style={{ color: "var(--pp-text-muted)" }}>
+                {L(
+                  "Maestro n'accepte que vous-même ou un(e) adjoint(e) autorisé(e) sous votre profil.",
+                  "Maestro only accepts yourself or an assistant authorized under your profile.",
+                )}
+              </p>
               <FieldError keys={["users_id"]} />
+
             </div>
           </div>
 

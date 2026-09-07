@@ -300,8 +300,10 @@ Deno.serve(async (req) => {
       return () => {
         if (!p) {
           p = (async () => {
-            const tid = (await resolveTelecomUserId(admin, userId, {}).catch(() => null))?.id
-              ?? String(profile?.maestro_telecom_user_id ?? profile?.maestro_broker_id ?? "") || null;
+            const resolved = (await resolveTelecomUserId(admin, userId, {}).catch(() => null))?.id;
+            const fallback = String(profile?.maestro_telecom_user_id ?? profile?.maestro_broker_id ?? "").trim();
+            const tid = resolved ?? (fallback || null);
+
             return await fetchMaestroTeam({
               token, telecomBase: TELECOM_BASE, apiBase: API_BASE, telecomId: tid,
             }).catch(() => ({ ids: [], byClient: {} }));

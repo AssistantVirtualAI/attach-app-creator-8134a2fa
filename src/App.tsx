@@ -45,6 +45,7 @@ const MTasks = lazyWithRetry(() => import("./pages/planipret/mobile/MTasks"));
 const MClients360 = lazyWithRetry(() => import("./pages/planipret/mobile/MClients360"));
 const MBroker360 = lazyWithRetry(() => import("./pages/planipret/mobile/MBroker360"));
 const MClientDetail = lazyWithRetry(() => import("./pages/planipret/mobile/MClientDetail"));
+const MBrokerActivity = lazyWithRetry(() => import("./pages/planipret/mobile/MBrokerActivity"));
 
 const MAvaChat = lazyWithRetry(() => import("./pages/planipret/mobile/MAvaChat"));
 const MChangePassword = lazyWithRetry(() => import("./pages/planipret/mobile/MChangePassword"));
@@ -82,6 +83,7 @@ const PAMaestroClients360 = lazyWithRetry(() => import("./pages/planipret/admin/
 const PAMaestroClientDetail = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroClientDetail"));
 const PABrokerPerformance = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerPerformance"));
 const PABrokerStats = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerStats"));
+const PABrokerDailyReport = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerDailyReport"));
 const PAMobileApp = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileApp"));
 const PACalls = lazyWithRetry(() => import("./pages/planipret/admin/PACalls"));
 const PAMessages = lazyWithRetry(() => import("./pages/planipret/admin/PAMessages"));
@@ -628,6 +630,7 @@ const App = () => (
                   <Route path="clients-360" element={<Suspense fallback={<MobilePageSkeleton />}><MClients360 /></Suspense>} />
                   <Route path="brokers-360" element={<Suspense fallback={<MobilePageSkeleton />}><MBroker360 /></Suspense>} />
                   <Route path="clients-360/:clientKey" element={<Suspense fallback={<MobilePageSkeleton />}><MClientDetail /></Suspense>} />
+                  <Route path="broker-activity" element={<Suspense fallback={<MobilePageSkeleton />}><MBrokerActivity /></Suspense>} />
                   <Route path="ava" element={<Suspense fallback={<MobilePageSkeleton />}><MAvaChat /></Suspense>} />
 
                   <Route path="change-password" element={<Suspense fallback={<MobilePageSkeleton />}><MChangePassword /></Suspense>} />
@@ -718,6 +721,7 @@ const App = () => (
                   <Route path="maestro-clients/:clientKey" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroClientDetail /></Suspense>} />
                   <Route path="broker-performance" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerPerformance /></Suspense>} />
                   <Route path="broker-stats" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerStats /></Suspense>} />
+                  <Route path="broker-daily" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerDailyReport /></Suspense>} />
 
                   <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />
                 </Route>

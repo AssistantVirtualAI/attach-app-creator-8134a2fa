@@ -31,7 +31,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const CALL_COLUMNS =
-  "id, user_id, from_number, to_number, direction, contact_name, transcript, transcript_raw, transcript_segments, transcript_language, ai_summary, ai_summary_short, ai_coaching, ai_analysis_json, ai_topics, ai_action_items, ai_key_points, ai_client_insights, next_actions, lead_score, lead_temperature, lead_score_reason, coaching_score, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, pipeline_state, metadata, duration_seconds, started_at, answered_at, ended_at";
+  "id, user_id, from_number, to_number, direction, from_name, to_name, maestro_client_name, transcript, transcript_raw, transcript_segments, transcript_language, ai_summary, ai_summary_short, ai_coaching, ai_analysis_json, ai_topics, ai_action_items, ai_key_points, ai_client_insights, next_actions, lead_score, lead_temperature, lead_score_reason, coaching_score, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, pipeline_state, metadata, duration_seconds, started_at, answered_at, ended_at";
 
 /** Nettoie la transcription : remplace les URIs SIP par des noms lisibles. */
 function prettyTranscript(
@@ -316,7 +316,7 @@ Deno.serve(async (req) => {
       const brokerName = (prof as any)?.full_name
         || [ (prof as any)?.first_name, (prof as any)?.last_name ].filter(Boolean).join(" ")
         || "Courtier";
-      const clientName = (call as any).contact_name || "Client";
+      const clientName = (call as any).maestro_client_name || ((call as any).direction === "outbound" ? (call as any).to_name : (call as any).from_name) || "Client";
       const prettyText = transcript
         ? prettyTranscript(String(transcript), {
             brokerName,

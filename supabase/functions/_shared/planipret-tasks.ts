@@ -265,9 +265,6 @@ export function buildCreatePayload(input: CreateInput): ValidationResult {
   };
   const notifyTo = intList(input.send_notification_to);
   if (notifyTo) payload.send_notification_to = notifyTo;
-  if (input.send_notification_client === true) payload.send_notification_client = 1;
-  if (input.send_notification_client_secondary === true) payload.send_notification_client_secondary = 1;
-  if (input.send_notification_assistant === true) payload.send_notification_assistant = 1;
   const assistantId = posInt(input.assistant_users_id);
   if (assistantId) payload.assistant_users_id = assistantId;
   const notifyFrom = posInt(input.send_notification_from);

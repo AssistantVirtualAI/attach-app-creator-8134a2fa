@@ -86,6 +86,7 @@ const PABrokerStats = lazyWithRetry(() => import("./pages/planipret/admin/PABrok
 const PATaskBoard = lazyWithRetry(() => import("./pages/planipret/admin/PATaskBoard"));
 const PABrokerDailyReport = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerDailyReport"));
 const PAMaestroHealth = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroHealth"));
+const PAMaestroPending = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroPending"));
 const PAMobileApp = lazyWithRetry(() => import("./pages/planipret/admin/PAMobileApp"));
 const PACalls = lazyWithRetry(() => import("./pages/planipret/admin/PACalls"));
 const PAMessages = lazyWithRetry(() => import("./pages/planipret/admin/PAMessages"));
@@ -726,6 +727,7 @@ const App = () => (
                   <Route path="task-board" element={<Suspense fallback={<AdminPageSkeleton />}><PATaskBoard /></Suspense>} />
                   <Route path="broker-daily" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerDailyReport /></Suspense>} />
                   <Route path="maestro-health" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroHealth /></Suspense>} />
+                  <Route path="maestro-pending" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroPending /></Suspense>} />
 
                   <Route path="mobile-app" element={<Suspense fallback={<AdminPageSkeleton />}><PAMobileApp /></Suspense>} />
                 </Route>

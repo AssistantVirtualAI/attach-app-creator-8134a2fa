@@ -18,6 +18,7 @@ export interface ClientDeposit {
 
 export interface ClientDeal {
   id: string;
+  user_id?: string | null;
   contact_name: string | null;
   contact_number: string | null;
   stage: string | null;
@@ -28,6 +29,7 @@ export interface ClientDeal {
 
 export interface ClientCall {
   id: string;
+  user_id?: string | null;
   direction: string | null;
   status: string | null;
   started_at: string | null;
@@ -38,6 +40,16 @@ export interface ClientCall {
   to_name: string | null;
   ai_summary: string | null;
   recording_url: string | null;
+}
+
+export interface ClientMessage {
+  id: string;
+  user_id?: string | null;
+  direction: string | null;
+  body: string | null;
+  created_at: string | null;
+  from_number: string | null;
+  to_number: string | null;
 }
 
 export interface ClientBundle {
@@ -52,6 +64,9 @@ export interface ClientBundle {
   deposits: ClientDeposit[];
   depositTotal: number;
   calls: ClientCall[];
+  messages: ClientMessage[];
+  /** Courtiers (user_id) ayant une activité avec ce client. */
+  brokerIds: string[];
 }
 
 /** Derniers 10 chiffres d'un numéro, pour comparer des formats différents. */
@@ -78,6 +93,7 @@ export function buildClientBundles(
   deals: ClientDeal[] = [],
   deposits: ClientDeposit[] = [],
   calls: ClientCall[] = [],
+  messages: ClientMessage[] = [],
   contacts: { name: string; phone?: string | null }[] = [],
 ): ClientBundle[] {
   const { start, end } = dayBounds();
@@ -89,7 +105,7 @@ export function buildClientBundles(
     const key = clientKey(label);
     let b = map.get(key);
     if (!b) {
-      b = { key, name: label, tasks: [], overdue: 0, today: 0, upcoming: 0, nextDue: null, deals: [], deposits: [], depositTotal: 0, calls: [] };
+      b = { key, name: label, tasks: [], overdue: 0, today: 0, upcoming: 0, nextDue: null, deals: [], deposits: [], depositTotal: 0, calls: [], messages: [], brokerIds: [] };
       map.set(key, b);
     }
     return b;
@@ -140,7 +156,26 @@ export function buildClientBundles(
     }
     if (b) b.calls.push(c);
   }
+  // Textos : rattachés par numéro (dossier, contact ou appel déjà rattaché).
   for (const b of map.values()) {
+    for (const c of b.calls) {
+      for (const k of [digits10(c.from_number), digits10(c.to_number)]) {
+        if (k && !byPhone.has(k)) byPhone.set(k, b);
+      }
+    }
+  }
+  for (const m of messages) {
+    const k = [m.from_number, m.to_number].map(digits10).find((x) => x && byPhone.has(x));
+    if (k) byPhone.get(k)!.messages.push(m);
+  }
+
+  for (const b of map.values()) {
+    const owners = new Set<string>();
+    for (const x of [...b.calls, ...b.messages, ...b.deals] as any[]) {
+      if (x?.user_id) owners.add(String(x.user_id));
+    }
+    b.brokerIds = [...owners];
+    b.messages.sort((x, y) => new Date(y.created_at ?? 0).getTime() - new Date(x.created_at ?? 0).getTime());
     b.calls.sort((x, y) => new Date(y.started_at ?? 0).getTime() - new Date(x.started_at ?? 0).getTime());
   }
 
@@ -175,7 +210,7 @@ export async function fetchClientDeals(userIds: string[]): Promise<ClientDeal[]>
   if (!ids.length) return [];
   const { data } = await supabase
     .from("planipret_pipeline")
-    .select("id, contact_name, contact_number, stage, value_estimate, maestro_contact_id, updated_at")
+    .select("id, user_id, contact_name, contact_number, stage, value_estimate, maestro_contact_id, updated_at")
     .in("user_id", ids)
     .order("updated_at", { ascending: false })
     .limit(300);
@@ -188,11 +223,24 @@ export async function fetchClientCalls(userIds: string[], limit = 500): Promise<
   if (!ids.length) return [];
   const { data } = await supabase
     .from("planipret_phone_calls")
-    .select("id, direction, status, started_at, duration_seconds, from_number, to_number, from_name, to_name, ai_summary, recording_url")
+    .select("id, user_id, direction, status, started_at, duration_seconds, from_number, to_number, from_name, to_name, ai_summary, recording_url")
     .in("user_id", ids)
     .order("started_at", { ascending: false })
     .limit(limit);
   return ((data ?? []) as ClientCall[]);
+}
+
+/** Textos locaux pour un ou plusieurs propriétaires. */
+export async function fetchClientMessages(userIds: string[], limit = 500): Promise<ClientMessage[]> {
+  const ids = userIds.filter(Boolean);
+  if (!ids.length) return [];
+  const { data } = await supabase
+    .from("planipret_phone_messages")
+    .select("id, user_id, direction, body, created_at, from_number, to_number")
+    .in("user_id", ids)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return ((data ?? []) as ClientMessage[]);
 }
 
 /** Clients Maestro en direct (API officielle) — utilisé en secours du cache local. */

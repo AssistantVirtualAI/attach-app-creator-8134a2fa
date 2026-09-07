@@ -25,10 +25,11 @@ Deno.serve(async (req) => {
     const out: unknown[] = [];
     for (const r of rows ?? []) {
       const res = await runSync(String((r as any).id));
-      const aiOk = (res.body as any)?.steps?.ai?.ok === true;
-      out.push({ id: res.id, ok: aiOk, error: (res.body as any)?.steps?.ai?.error ?? (res.body as any)?.error ?? null });
+      const steps = (res.body as any)?.steps ?? {};
+      const allMediaOk = steps?.recording?.ok === true && steps?.transcript?.ok === true && steps?.ai?.ok === true;
+      out.push({ id: res.id, ok: allMediaOk, error: steps?.recording?.error ?? steps?.transcript?.error ?? steps?.ai?.error ?? (res.body as any)?.error ?? null });
       await admin.from("planipret_phone_calls")
-        .update({ maestro_media_synced_at: aiOk ? new Date().toISOString() : null })
+        .update({ maestro_media_synced_at: allMediaOk ? new Date().toISOString() : null })
         .eq("id", res.id);
     }
     return json({ processed: out.length, results: out });

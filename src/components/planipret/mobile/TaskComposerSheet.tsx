@@ -639,9 +639,19 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
                 <select className={`${field} appearance-none pr-9`} style={fieldStyle} value={assignee}
                   aria-label={L("Assigné à", "Assigned to")} onChange={(e) => setAssignee(e.target.value)}>
                   <option value="">{L("Moi (auto)", "Me (auto)")}</option>
-                  {assignableUsers.map((u: any) => (
-                    <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
-                  ))}
+                  {teamUsers.length > 0 && (
+                    <optgroup label={L("Mon équipe (Maestro)", "My team (Maestro)")}>
+                      {teamUsers.map((u: any) => (
+                        <option key={`t-${String(u.id)}`} value={String(u.id)}>{contactName(u)}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label={L("Tous les courtiers", "All brokers")}>
+                    {assignableUsers.map((u: any) => (
+                      <option key={String(u.id)} value={String(u.id)}>{contactName(u)}</option>
+                    ))}
+                  </optgroup>
+
                 </select>
                 <ChevronDown className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--pp-text-muted)" }} />
               </div>

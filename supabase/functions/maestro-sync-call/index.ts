@@ -31,7 +31,15 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const CALL_COLUMNS =
-  "id, user_id, transcript, transcript_raw, transcript_segments, transcript_language, ai_summary, ai_summary_short, ai_coaching, ai_analysis_json, ai_topics, ai_action_items, ai_key_points, ai_client_insights, next_actions, lead_score, lead_temperature, lead_score_reason, coaching_score, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, pipeline_state, metadata";
+  "id, user_id, transcript, transcript_raw, transcript_segments, transcript_language, ai_summary, ai_summary_short, ai_coaching, ai_analysis_json, ai_topics, ai_action_items, ai_key_points, ai_client_insights, next_actions, lead_score, lead_temperature, lead_score_reason, coaching_score, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, pipeline_state, metadata, duration_seconds, started_at, answered_at, ended_at";
+
+/** Maestro attend un format "YYYY-MM-DD HH:MM:SS". */
+function maestroDate(v: unknown): string | undefined {
+  if (!v) return undefined;
+  const d = new Date(String(v));
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toISOString().slice(0, 19).replace("T", " ");
+}
 
 async function invoke(fn: string, body: unknown) {
   try {
@@ -265,29 +273,39 @@ Deno.serve(async (req) => {
         ? asArray(call.next_actions)
         : asArray(call.ai_action_items);
 
-    if (summary && mId) {
+    const recordingLink0 = mId ? await recordingPermalink(String(call_id)).catch(() => null) : null;
+    if (mId && (summary || transcript || recordingLink0)) {
       const keyPoints = asArray(call.ai_key_points).length
         ? asArray(call.ai_key_points)
         : asArray(aij?.key_points).length
           ? asArray(aij.key_points)
           : asArray(call.ai_topics);
 
-      const recordingLink = await recordingPermalink(String(call_id)).catch(() => null);
+      const recordingLink = recordingLink0;
+      const coachingText = call.ai_coaching
+        ? (typeof call.ai_coaching === "string" ? call.ai_coaching : JSON.stringify(call.ai_coaching))
+        : null;
       const res = await maestroFetch(cfg, {
         method: "PUT",
         path: `/api/v1/users/${encodeURIComponent(String(auth.brokerId ?? ""))}/calls/${encodeURIComponent(String(mId))}`,
         token: auth.token,
-        // Maestro n'accepte que `status`, `ai_summary` et `notes` sur ce PUT :
-        // tout le reste (coaching, scores, transcription) part dans `notes`.
+        // Champs natifs acceptés par Maestro (testés) : status, ai_summary,
+        // transcript, notes, duration_seconds, answered_at, ended_at et
+        // call_recording_filename (accepte une URL complète).
         body: {
           status: "ended",
-          ai_summary: summary,
+          ai_summary: summary ?? undefined,
+          transcript: transcript ? String(transcript).slice(0, 20000) : undefined,
+          duration_seconds: call.duration_seconds != null ? Number(call.duration_seconds) : undefined,
+          answered_at: maestroDate(call.answered_at ?? call.started_at),
+          ended_at: maestroDate(call.ended_at),
+          call_recording_filename: recordingLink ?? undefined,
           notes: [
             recordingLink ? `Enregistrement: ${recordingLink}` : null,
             summary ? `Résumé IA: ${summary}` : null,
             keyPoints.length ? `Points clés: ${keyPoints.map(String).join(" • ")}` : null,
             nextActions.length ? `Prochaines actions: ${nextActions.map(actionTitle).filter(Boolean).join(" • ")}` : null,
-            call.ai_coaching ? `Coaching IA${call.coaching_score != null ? ` (${call.coaching_score}/100)` : ""}:\n${String(call.ai_coaching).slice(0, 4000)}` : null,
+            coachingText ? `Coaching IA${call.coaching_score != null ? ` (${call.coaching_score}/100)` : ""}:\n${coachingText.slice(0, 4000)}` : null,
             call.lead_score != null ? `Score du lead: ${call.lead_score}${call.lead_temperature ? ` (${call.lead_temperature})` : ""}` : null,
             transcript ? `Transcription:\n${String(transcript).slice(0, 8000)}` : null,
           ].filter(Boolean).join("\n\n") || null,

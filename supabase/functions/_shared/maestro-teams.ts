@@ -19,6 +19,24 @@ export interface MaestroTeam {
 const TTL_MS = 5 * 60_000;
 const cache = new Map<string, { at: number; value: MaestroTeam }>();
 
+function extractRows(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+  const keys = ["clients", "data", "items", "results", "response", "payload"];
+  const seen = new Set<any>();
+  const walk = (value: any, depth: number): any[] => {
+    if (Array.isArray(value)) return value;
+    if (!value || typeof value !== "object" || depth > 5 || seen.has(value)) return [];
+    seen.add(value);
+    for (const key of keys) {
+      const rows = walk(value[key], depth + 1);
+      if (rows.length) return rows;
+    }
+    return [];
+  };
+  return walk(payload, 0);
+}
+
 export async function fetchMaestroTeam(opts: {
   token: string | null;
   telecomBase: string;
@@ -50,7 +68,7 @@ export async function fetchMaestroTeam(opts: {
       });
       if (!res.ok) continue;
       const j: any = await res.json().catch(() => null);
-      const rows: any[] = Array.isArray(j) ? j : (j?.clients ?? j?.data ?? j?.items ?? j?.results ?? []);
+      const rows = extractRows(j);
       if (!Array.isArray(rows) || rows.length === 0) continue;
 
       const ids = new Set<string>();

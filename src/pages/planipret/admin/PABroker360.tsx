@@ -112,7 +112,7 @@ export default function PABroker360() {
   const en = lang === "en";
   const [params, setParams] = useSearchParams();
   const brokerParam = params.get("broker") ?? "";
-  const tab = (params.get("tab") as TabKey) || "contacts";
+  const tab = (params.get("tab") as TabKey) || "journey";
 
   const [brokers, setBrokers] = useState<BrokerRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,6 +148,7 @@ export default function PABroker360() {
   };
 
   const TABS: { key: TabKey; label: string; Icon: typeof Users }[] = [
+    { key: "journey", label: en ? "Journey" : "Parcours", Icon: Route },
     { key: "contacts", label: en ? "Contacts" : "Contacts", Icon: Users },
     { key: "deals", label: en ? "Files" : "Dossiers", Icon: FolderKanban },
     { key: "commissions", label: en ? "Commissions" : "Commissions", Icon: TrendingUp },

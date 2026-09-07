@@ -216,14 +216,24 @@ export default function PABroker360() {
             <RegisterCommissions lang={en ? "en" : "fr"} scope="admin" forcedAgent={brokerName(broker)} />
           )}
           {tab === "tasks" && (
-            <TasksSection
-              key={broker.id}
-              userId={broker.user_id ?? broker.id}
-              lang={en ? "en" : "fr"}
-              defaultTarget={broker.maestro_broker_id ?? null}
-              brokerId={broker.maestro_broker_id ?? null}
-              readOnly
-            />
+            brokerMaestroId ? (
+              <TasksSection
+                key={brokerMaestroId}
+                userId={broker.user_id ?? broker.id}
+                lang={en ? "en" : "fr"}
+                defaultTarget={brokerMaestroId}
+                brokerId={brokerMaestroId}
+                readOnly
+              />
+            ) : (
+              <PPEmptyState
+                icon={<CheckSquare className="w-5 h-5" />}
+                title={en ? "No Maestro account" : "Aucun compte Maestro"}
+                description={en
+                  ? "This broker has no Maestro id, so their tasks cannot be loaded."
+                  : "Ce courtier n'a pas d'identifiant Maestro : ses tâches ne peuvent pas être chargées."}
+              />
+            )
           )}
         </>
       )}

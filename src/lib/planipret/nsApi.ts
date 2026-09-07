@@ -15,6 +15,7 @@
  *   const blob = await nsApi.recordings.fetchAudio(callId);
  */
 import { supabase } from "@/integrations/supabase/client";
+import { ppNormalizeDestination } from "@/lib/planipret/ppEdge";
 
 type Json = Record<string, unknown>;
 
@@ -85,7 +86,7 @@ export const callsApi = {
       method: "POST",
       query: { action: "start" },
       body: {
-        to_number: toNumber,
+        to_number: ppNormalizeDestination(toNumber),
         caller_id_number: opts.callerIdNumber,
         caller_id_name: opts.callerIdName,
       },
@@ -195,7 +196,7 @@ export const smsApi = {
   listMessages: (threadId: string) =>
     invokeJson<{ messages: any[] }>("pp-ns-sms", { method: "GET", query: { action: "messages", thread_id: threadId } }),
   send: (toNumber: string, text: string) =>
-    invokeJson("pp-ns-sms", { method: "POST", query: { action: "send" }, body: { to: toNumber, message: text } }),
+    invokeJson("pp-ns-sms", { method: "POST", query: { action: "send" }, body: { to: ppNormalizeDestination(toNumber), message: text } }),
 };
 
 /* Single namespaced export consumed by /mplanipret screens. */

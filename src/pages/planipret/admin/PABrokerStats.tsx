@@ -129,12 +129,19 @@ export default function PABrokerStats() {
     return () => { alive = false; };
   }, [reloadKey]);
 
-  const totals = useMemo(() => ({
-    calls: rows.reduce((s, r) => s + r.calls30, 0),
-    texts: rows.reduce((s, r) => s + r.texts30, 0),
-    open: rows.reduce((s, r) => s + r.openTasks, 0),
-    connected: rows.filter((r) => r.maestroConnected).length,
-  }), [rows]);
+  const totals = useMemo(() => {
+    const calls = rows.reduce((s, r) => s + r.calls30, 0);
+    const texts = rows.reduce((s, r) => s + r.texts30, 0);
+    const synced = rows.reduce((s, r) => s + r.callsSynced + r.textsSynced, 0);
+    return {
+      calls,
+      texts,
+      synced,
+      pending: calls + texts - synced,
+      open: rows.reduce((s, r) => s + r.openTasks, 0),
+      connected: rows.filter((r) => r.maestroConnected).length,
+    };
+  }, [rows]);
 
   const surface = { background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" };
   const muted = { color: "var(--pp-text-muted)" };

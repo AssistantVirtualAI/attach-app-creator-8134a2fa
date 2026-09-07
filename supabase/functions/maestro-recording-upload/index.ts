@@ -160,6 +160,8 @@ Deno.serve(async (req) => {
       machine: auth.machine,
       body: {
         status: "ended",
+        saving_call_recording: 1,
+        saving_call_transcript: (aiCall as any)?.transcript ? 1 : 0,
         ai_summary: (aiCall as any)?.ai_summary ?? (aiCall as any)?.ai_summary_short ?? undefined,
         transcript: (aiCall as any)?.transcript ? String((aiCall as any).transcript).slice(0, 20000) : undefined,
         duration_seconds: (aiCall as any)?.duration_seconds != null ? Number((aiCall as any).duration_seconds) : undefined,

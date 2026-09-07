@@ -343,6 +343,10 @@ Deno.serve(async (req) => {
         // call_recording_filename (accepte une URL complète).
         body: {
           status: "ended",
+          // Maestro's Communication UI hides these panels while these flags
+          // remain 0, even when the corresponding fields are populated.
+          saving_call_recording: recordingLink ? 1 : 0,
+          saving_call_transcript: prettyText ? 1 : 0,
           ai_summary: summary ?? undefined,
           transcript: prettyText ? prettyText.slice(0, 20000) : undefined,
           duration_seconds: call.duration_seconds != null ? Number(call.duration_seconds) : undefined,

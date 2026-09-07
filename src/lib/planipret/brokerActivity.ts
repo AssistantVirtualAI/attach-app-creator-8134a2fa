@@ -49,8 +49,10 @@ const str = (v: unknown) => {
 /** Client / titre lisibles depuis le payload Maestro d'une tâche projetée. */
 function readTask(row: any): ActivityTask {
   const p = (row?.payload ?? {}) as Record<string, any>;
+  const raw = (p?.raw ?? {}) as Record<string, any>;
   const client =
-    str(p.client_name) || str(p.contact_name) || str(p.full_name) ||
+    str(p.target_name) || str(p.client_name) || str(p.contact_name) || str(p.full_name) ||
+    str(raw.client_name) || str(raw.contact_name) ||
     str(p.client?.full_name) || str(p.contact?.full_name) ||
     [str(p.first_name), str(p.last_name)].filter(Boolean).join(" ");
   const title = str(p.notes) || str(p.description) || str(p.title) || str(p.type) || "—";
@@ -140,4 +142,23 @@ export function groupActivityByDay(a: BrokerActivity): DailyBucket[] {
   for (const m of a.messages) get(dayKey(m.at)).messages.push(m);
   for (const t of a.tasks) get(dayKey(t.at)).tasks.push(t);
   return [...map.values()].sort((x, y) => (x.day < y.day ? 1 : x.day > y.day ? -1 : 0));
+}
+
+/** Résumé des tâches d'un courtier : ouvertes, en retard et prochaine échéance. */
+export interface TaskSummary {
+  open: number;
+  overdue: number;
+  next: ActivityTask | null;
+}
+
+export function summarizeTasks(tasks: ActivityTask[]): TaskSummary {
+  const openTasks = tasks.filter((t) => !isTaskDone(t.status));
+  const upcoming = openTasks
+    .filter((t) => !!t.at)
+    .sort((a, b) => new Date(a.at as string).getTime() - new Date(b.at as string).getTime());
+  return {
+    open: openTasks.length,
+    overdue: openTasks.filter((t) => t.overdue).length,
+    next: upcoming.find((t) => !t.overdue) ?? upcoming[0] ?? openTasks[0] ?? null,
+  };
 }

@@ -356,13 +356,19 @@ export default function TaskComposerSheet({ open, lang, defaultTarget, busy, ini
     if (!selectedTarget) return;
     setTarget(tt === "contract" ? (selectedTarget.contracts[0]?.id ?? "") : (selectedTarget.user?.id ?? selectedTarget.client_id));
   };
-  // Maestro rule: a task can only be assigned to yourself, unless the account
-  // is set up with team members (assistants) allowed to take tasks under your
-  // profile. So we only offer assistants, never the whole broker directory.
-  const assignableUsers = people
-    .filter((u: any) => /^\d+$/.test(String(u?.id ?? u?.broker_id ?? u?.user_id ?? "")))
-    .filter((u: any) => /assistant/i.test(String(u?.role ?? u?.type ?? u?.title ?? u?.position ?? "")))
-    .map((u: any) => ({ ...u, id: u?.id ?? u?.broker_id ?? u?.user_id }));
+  // A task can be kept for yourself or handed to any broker / assistant of the
+  // firm: the full Maestro directory is offered, de-duplicated and sorted.
+  const assignableUsers = (() => {
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const u of people as any[]) {
+      const id = String(u?.id ?? u?.broker_id ?? u?.user_id ?? "");
+      if (!/^\d+$/.test(id) || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ ...u, id });
+    }
+    return out.sort((a, b) => contactName(a).localeCompare(contactName(b)));
+  })();
 
   const frame = typeof document !== "undefined" ? document.getElementById("pp-mobile-frame") : null;
   const host = frame ?? (typeof document !== "undefined" ? document.body : null);

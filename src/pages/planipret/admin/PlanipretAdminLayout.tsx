@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import PortalDomainGate from "@/components/planipret/PortalDomainGate";
 import {
   LayoutDashboard, Users, Phone, MessageSquare, Mic, Plug,
-  BarChart3, LogOut, Sun, Moon, ShieldCheck, ShieldAlert, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket, UserSquare2,
+  BarChart3, LogOut, Sun, Moon, ShieldCheck, ShieldAlert, CheckSquare, Search, ChevronRight, Sparkles, Smartphone, PlugZap, Bot, Activity, Gauge, Zap, Music, Rocket, UserSquare2, AlertTriangle,
 } from "lucide-react";
 import SessionTimeoutModal from "@/components/planipret/SessionTimeoutModal";
 import { useAdminRealtime } from "@/hooks/useAdminRealtime";

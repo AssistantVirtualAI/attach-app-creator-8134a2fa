@@ -313,24 +313,28 @@ Deno.serve(async (req) => {
       };
     })();
 
-    // Read-only: only assistants explicitly authorized under this broker.
+    // Read-only: the broker's real Maestro team, plus explicitly authorized assistants.
     if (String(body?.action ?? "") === "team") {
+      const maestroTeam = await teamOnce();
       const { data: assistants } = await admin.from("planipret_task_assistants")
         .select("assistant_maestro_id,label")
         .eq("owner_user_id", userId)
         .eq("active", true);
-      const dir = await loadBrokerDirectory(admin).catch(() => [] as any[]);
+      const { entries: dir } = await loadBrokerDirectory(admin).catch(() => ({ entries: [] as any[] }));
       const byId = new Map((dir ?? []).map((d: any) => [String(d.id), d]));
       const labels = new Map((assistants ?? []).map((row: any) => [
         String(row.assistant_maestro_id ?? "").trim(),
         String(row.label ?? "").trim(),
       ]));
-      const ids = [...new Set([...labels.keys()].filter(Boolean))];
+      const ownIds = [profile?.maestro_broker_id, profile?.maestro_telecom_user_id]
+        .map((v) => String(v ?? "").trim()).filter(Boolean);
+      const ids = [...new Set([...maestroTeam.ids, ...labels.keys()].filter(Boolean))]
+        .filter((id) => !ownIds.includes(id));
       const members = ids.map((id) => {
         const d: any = byId.get(id);
         return { id, name: d?.name ?? labels.get(id) ?? null, email: d?.email ?? null, self: false };
       }).sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
-      return jsonResponse({ success: true, members, by_client: {}, correlation_id }, 200);
+      return jsonResponse({ success: true, members, by_client: maestroTeam.byClient, correlation_id }, 200);
     }
 
     const out = await handleTaskRequest({ ...body, correlation_id }, {
@@ -348,8 +352,8 @@ Deno.serve(async (req) => {
         return r?.id ?? null;
       },
       listAllowedAssignees: async () => {
-        // Maestro rule: self only, plus assistants explicitly authorized to
-        // work under this broker's profile.
+        // Maestro rule: self, members of the broker's real Maestro team, and
+        // assistants explicitly authorized under this broker's profile.
         const ids = new Set<string>();
         const { data: full } = await admin.from("planipret_profiles")
           .select("maestro_broker_id, maestro_telecom_user_id").eq("id", profile?.id).maybeSingle();
@@ -361,6 +365,10 @@ Deno.serve(async (req) => {
           const r = await resolveMaestroIdForUser(admin, userId, {});
           if (r?.maestro_broker_id) ids.add(String(r.maestro_broker_id));
         } catch { /* ignore */ }
+        try {
+          const maestroTeam = await teamOnce();
+          for (const id of maestroTeam.ids) ids.add(id);
+        } catch { /* team unavailable */ }
         try {
           const { data: rows } = await admin.from("planipret_task_assistants")
             .select("assistant_maestro_id").eq("owner_user_id", userId).eq("active", true);

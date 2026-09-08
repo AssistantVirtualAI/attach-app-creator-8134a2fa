@@ -69,6 +69,13 @@ Deno.serve(async (req) => {
 
     if (!from || !to || !text) return json({ error: "from, to, text required" }, 400);
 
+    // Blocage permanent des textos de test — aucun envoi vers de vrais numéros.
+    if (isTestSms(text)) {
+      console.warn("[telnyx-sms] test SMS blocked", { to });
+      return json({ error: TEST_SMS_BLOCK_MESSAGE, blocked: true }, 200);
+    }
+
+
     // Get Telnyx config from integration row (mock-mode aware)
     const { data: integ } = await admin
       .from("pbx_integrations")

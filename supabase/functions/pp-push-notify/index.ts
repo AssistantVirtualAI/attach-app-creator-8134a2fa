@@ -20,6 +20,30 @@ Deno.serve(async (req) => {
     const { user_id, title, body: text, data, icon, category, deep_link } = body ?? {};
     if (!user_id || !title) return json({ error: "missing_fields" }, 400);
 
+    // ---- Authorization -------------------------------------------------
+    // Trusted internal services call with the service-role key; end users may
+    // only send notifications to themselves (e.g. the "test notification"
+    // button). Anonymous callers are rejected.
+    const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    if (!token) return json({ error: "unauthorized" }, 401);
+    const isService = token === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!isService) {
+      const { data: userData } = await admin.auth.getUser(token);
+      const caller = userData?.user;
+      if (!caller) return json({ error: "unauthorized" }, 401);
+      if (String(user_id) !== caller.id) {
+        const { data: isAdmin } = await admin.rpc("is_planipret_admin", { _user_id: caller.id });
+        if (isAdmin !== true) return json({ error: "forbidden" }, 403);
+      }
+    }
+
+    // Basic input validation on attacker-controllable display fields
+    const safeTitle = String(title).slice(0, 120);
+    const safeText = text == null ? "" : String(text).slice(0, 500);
+    const safeDeepLink = typeof deep_link === "string" && /^\/[^\s]*$/.test(deep_link)
+      ? deep_link.slice(0, 300)
+      : undefined;
+
     // Preference gating by category
     const cat = String(category ?? "info");
     const prefMap: Record<string, string> = {

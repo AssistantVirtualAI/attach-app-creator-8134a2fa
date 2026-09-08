@@ -14,10 +14,6 @@ Deno.serve(async (req) => {
     const { to, message, type = "sms" } = body ?? {};
     if (!to || !message) return jsonResponse({ success: false, error: "to et message requis", code: 400 }, 400);
 
-    // Arrêt global permanent : cette ancienne voie ne doit plus émettre.
-    console.warn("[ns-sms] outbound SMS globally disabled", { userId, to });
-    return jsonResponse({ success: false, blocked: true, error: "L’envoi de textos est désactivé." });
-
     // Blocage permanent : aucun texto de test ne part, pour personne.
     if (blockTestSms(userId, message)) {
       console.warn("[ns-sms] test SMS blocked", { userId, to });

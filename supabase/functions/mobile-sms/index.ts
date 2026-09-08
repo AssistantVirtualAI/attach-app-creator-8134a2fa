@@ -38,6 +38,10 @@ Deno.serve(async (req) => {
       const text = (body.body as string || "").trim();
       if (!threadId || !text) return json({ error: "missing_fields" }, 400);
 
+      // Arrêt global permanent : ne pas créer de ligne en attente et ne pas
+      // déléguer à un fournisseur d’envoi.
+      return json({ ok: false, blocked: true, error: "L’envoi de textos est désactivé." }, 200);
+
       const { data: th } = await sb.from("pbx_sms_threads")
         .select("id, did_number, contact_phone, organization_id")
         .eq("id", threadId).maybeSingle();

@@ -480,6 +480,8 @@ export default function PlanipretAdminLayout() {
                   ? raw
                   : (key === "diagnostics" ? (lang === "en" ? "Diagnostics" : "Diagnostic")
                     : key === "maestroSync" ? (lang === "en" ? "Maestro sync" : "Sync Maestro")
+                    : key === "microsoftAuth" ? (lang === "en" ? "Microsoft sign-ins" : "Connexions Microsoft")
+
                     : key === "telecomMapping" ? (lang === "en" ? "Telecom mapping" : "Mapping Telecom")
                     : key === "didReconcile" ? (lang === "en" ? "DID reconciliation" : "Réconciliation DID")
                     : key === "phoneNumbers" ? (lang === "en" ? "Phone numbers" : "Numéros de téléphone")

@@ -18,7 +18,7 @@ import {
   requirePlanipretBroker,
   nsFetch,
 } from "../_shared/planipret-ns.ts";
-import { blockTestSms, isTestSms, TEST_SMS_ALLOWED_USER_IDS } from "../_shared/pp-test-sms.ts";
+import { blockTestSms, isTestSms, TEST_SMS_ALLOWED_USER_IDS, TEST_SMS_BLOCK_MESSAGE } from "../_shared/pp-test-sms.ts";
 import {
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
@@ -417,10 +417,10 @@ Deno.serve(async (req) => {
         return jsonResponse({ ok: false, error: "Paramètres manquants: 'to' et 'message' sont requis", missing: { to: !to, message: !message } }, 400);
       }
 
-      // Textos de test : réservés à Gilles et Marc, jamais vers de vrais clients.
+      // Blocage permanent : aucun texto de test n'est envoyé, sans exception.
       if (blockTestSms(ctx.userId, message)) {
         console.warn("[pp-ns-sms] test SMS blocked", { userId: ctx.userId, to });
-        return jsonResponse({ ok: false, blocked: true, error: "Les textos de test sont limités à Gilles et Marc." }, 200);
+        return jsonResponse({ ok: false, blocked: true, error: TEST_SMS_BLOCK_MESSAGE }, 200);
       }
 
       // Destination interne (poste 2–6 chiffres) → message de chat interne

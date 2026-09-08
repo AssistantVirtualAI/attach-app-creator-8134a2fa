@@ -1,18 +1,18 @@
-// Garde-fou : les textos de test ne doivent jamais partir vers de vrais clients.
-// Seuls Gilles et Marc (et l'admin technique) peuvent en envoyer / rejouer.
+// Garde-fou : PLUS AUCUN texto de test ne part, pour personne.
+// Décision produit (2026-09-08) : blocage définitif, sans exception ni allowlist.
 
-export const TEST_SMS_ALLOWED_USER_IDS = new Set<string>([
-  "46f02fcf-340b-495c-8b1d-442c27dc092f", // Gilles Bouillon
-  "a7df1872-f25a-4925-b763-a573e7452462", // Marc Alexandre Maglieri
-  "e5d025c9-eef2-4422-b97d-3190388b7376", // Mohamad Hassoun (admin)
-]);
+/** Conservé pour compatibilité d'import — volontairement vide. */
+export const TEST_SMS_ALLOWED_USER_IDS = new Set<string>();
 
 const TEST_PATTERNS = [
   /^\s*test\b/i,
-  /\btest\s*(sms|texto|text|qa|message)\b/i,
+  /\btest\b/i,
+  /\btexto\s*test\b/i,
   /\bqa\s*(ava|test|\d)/i,
   /- ?ignorer\b/i,
   /\bignore this\b/i,
+  /\bessai\b/i,
+  /\bdemo\s*(sms|texto|message)\b/i,
 ];
 
 export function isTestSms(body: string | null | undefined): boolean {
@@ -21,8 +21,10 @@ export function isTestSms(body: string | null | undefined): boolean {
   return TEST_PATTERNS.some((re) => re.test(t));
 }
 
-/** true = l'envoi doit être bloqué (texto de test hors Gilles/Marc). */
-export function blockTestSms(userId: string | null | undefined, body: string | null | undefined): boolean {
-  if (!isTestSms(body)) return false;
-  return !userId || !TEST_SMS_ALLOWED_USER_IDS.has(userId);
+/** true = l'envoi doit être bloqué. Aucun utilisateur n'est exempté. */
+export function blockTestSms(_userId: string | null | undefined, body: string | null | undefined): boolean {
+  return isTestSms(body);
 }
+
+export const TEST_SMS_BLOCK_MESSAGE =
+  "Les textos de test sont désactivés de façon permanente : aucun message de test ne peut être envoyé.";

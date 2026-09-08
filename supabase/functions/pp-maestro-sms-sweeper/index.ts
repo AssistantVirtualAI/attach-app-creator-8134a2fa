@@ -86,8 +86,8 @@ Deno.serve(async (req) => {
   const testSkipped: string[] = [];
   const noContact: string[] = [];
   for (const r of rows ?? []) {
-    // Textos de test : jamais rejoués (hors Gilles/Marc) — on les ferme.
-    if (isTestSms(r.body) && !TEST_SMS_ALLOWED_USER_IDS.has(String(r.user_id))) {
+    // Textos de test : jamais rejoués, pour personne — on les ferme.
+    if (isTestSms(r.body)) {
       testSkipped.push(r.id);
       continue;
     }

@@ -406,11 +406,6 @@ Deno.serve(async (req) => {
       const idempotencyKey = String(pick("idempotency_key") ?? "").trim().slice(0, 120) || null;
       const correlationId = idempotencyKey ?? crypto.randomUUID();
 
-      // Arrêt global permanent (2026-09-08) : aucun SMS sortant, manuel,
-      // automatique, AVA, reprise de file ou rejeu historique.
-      console.warn("[pp-ns-sms] outbound SMS globally disabled", { userId: ctx.userId, to });
-      return jsonResponse({ ok: false, success: false, blocked: true, error: "L’envoi de textos est désactivé." }, 200);
-
       console.info("[pp-ns-sms] send request", {
         correlation_id: correlationId, idempotency_key: idempotencyKey,
         userId: ctx.userId, extension: ctx.extension, domain: ctx.nsDomain,

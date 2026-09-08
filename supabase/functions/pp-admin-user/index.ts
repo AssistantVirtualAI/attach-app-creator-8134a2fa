@@ -93,7 +93,8 @@ function nsUserPayload(fullName: string, email: string, extension: string, passw
     "name-first-name": firstName || extension,
     "name-last-name": lastName,
     "directory-name": fullName || extension,
-    "email-address": email,
+    // Email is managed through Microsoft 365, not PBX unread-message alerts.
+    "email-address": "",
     "user-scope": "Basic User",
     "time-zone": "America/Montreal",
     "language-token": "fr_CA",

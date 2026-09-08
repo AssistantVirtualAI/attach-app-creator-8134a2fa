@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
           method: "GET",
           headers: { Authorization: `Bearer ${cfg.key}`, Accept: "application/json" },
         });
-        const text = (await r.text().catch(() => "")).slice(0, 400);
+        const text = (await r.text().catch(() => "")).slice(0, 2500);
         results.push({ path: `${p}${s}`, status: r.status, sample: text });
       } catch (e) {
         results.push({ path: `${p}${s}`, status: 0, error: String((e as Error)?.message ?? e) });

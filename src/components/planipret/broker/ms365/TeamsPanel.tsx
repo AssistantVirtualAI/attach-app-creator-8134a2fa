@@ -5,6 +5,18 @@ import { Users, Hash, MessageSquare, Send, RefreshCw, Loader2, Plus, X, Search }
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import { fmtDateTime } from "@/lib/planipret/brokerFormat";
 
+import DOMPurify from "dompurify";
+
+const sanitizeHtml = (html?: string | null) =>
+  DOMPurify.sanitize(String(html ?? ""), {
+    ALLOWED_TAGS: ["a","b","strong","i","em","u","s","p","br","hr","span","div","ul","ol","li","blockquote","pre","code","h1","h2","h3","h4","h5","h6","table","thead","tbody","tr","td","th","img"],
+    ALLOWED_ATTR: ["href","title","target","rel","src","alt","width","height","colspan","rowspan"],
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|cid:|data:image\/(?:png|jpeg|gif|webp);base64,)/i,
+    FORBID_TAGS: ["script","style","iframe","object","embed","form","input","link","meta"],
+    FORBID_ATTR: ["style","onerror","onload","onclick"],
+  });
+
+
 type Lang = "fr" | "en";
 type Thread =
   | { kind: "chat"; id: string; title: string }
@@ -204,7 +216,7 @@ export default function TeamsPanel({ lang }: { lang: Lang }) {
                     background: m.isMe ? "var(--pp-brand-accent-2)" : "var(--pp-bg-subtle, #f1f5f9)",
                     color: m.isMe ? "#fff" : "var(--pp-text-primary)", fontSize: 13,
                   }}>
-                    <div dangerouslySetInnerHTML={{ __html: m.content || "" }} />
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(m.content) }} />
                   </div>
                 </div>
               ))}

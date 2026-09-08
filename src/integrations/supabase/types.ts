@@ -15674,6 +15674,16 @@ export type Database = {
         }[]
       }
       get_my_extension_summary: { Args: never; Returns: Json }
+      get_my_softphone_credentials: {
+        Args: never
+        Returns: {
+          extension: string
+          id: string
+          sip_domain: string
+          sip_password: string
+          wss_url: string
+        }[]
+      }
       get_org_by_fusionpbx_domain: {
         Args: { _domain_uuid: string }
         Returns: {

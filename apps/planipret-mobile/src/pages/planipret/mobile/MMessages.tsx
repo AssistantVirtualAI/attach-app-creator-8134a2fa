@@ -28,6 +28,18 @@ import { ms365Connected } from "@/lib/planipret/ms365Connected";
 import { Ms365ConnectionNotice } from "@/components/planipret/mobile/Ms365ConnectionNotice";
 import { useMs365Status } from "@/hooks/useMs365Status";
 
+import DOMPurify from "dompurify";
+
+const sanitizeHtml = (html?: string | null) =>
+  DOMPurify.sanitize(String(html ?? ""), {
+    ALLOWED_TAGS: ["a","b","strong","i","em","u","s","p","br","hr","span","div","ul","ol","li","blockquote","pre","code","h1","h2","h3","h4","h5","h6","table","thead","tbody","tr","td","th","img"],
+    ALLOWED_ATTR: ["href","title","target","rel","src","alt","width","height","colspan","rowspan"],
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|cid:|data:image\/(?:png|jpeg|gif|webp);base64,)/i,
+    FORBID_TAGS: ["script","style","iframe","object","embed","form","input","link","meta"],
+    FORBID_ATTR: ["style","onerror","onload","onclick"],
+  });
+
+
 
 type SubTab = "sms" | "team" | "teams365" | "emails" | "history" | "roster";
 
@@ -2646,7 +2658,7 @@ function TeamsThreadView({ target, onClose }: {
                     <div className="text-[10px] mb-0.5 font-semibold" style={{ color: "var(--pp-brand-accent)" }}>{m.from}</div>
                   )}
                   {m.content && (
-                    <div className="text-sm break-words" dangerouslySetInnerHTML={{ __html: m.content }} />
+                    <div className="text-sm break-words" dangerouslySetInnerHTML={{ __html: sanitizeHtml(m.content) }} />
                   )}
                   {(m.attachments || []).length > 0 && (
                     <div className="mt-1.5 space-y-1">

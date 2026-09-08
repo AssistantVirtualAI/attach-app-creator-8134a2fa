@@ -6,6 +6,18 @@ import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimiti
 import { fmtDateTime } from "@/lib/planipret/brokerFormat";
 import ComposeEmailDialog, { type ComposeInit } from "./ComposeEmailDialog";
 
+import DOMPurify from "dompurify";
+
+const sanitizeHtml = (html?: string | null) =>
+  DOMPurify.sanitize(String(html ?? ""), {
+    ALLOWED_TAGS: ["a","b","strong","i","em","u","s","p","br","hr","span","div","ul","ol","li","blockquote","pre","code","h1","h2","h3","h4","h5","h6","table","thead","tbody","tr","td","th","img"],
+    ALLOWED_ATTR: ["href","title","target","rel","src","alt","width","height","colspan","rowspan"],
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|cid:|data:image\/(?:png|jpeg|gif|webp);base64,)/i,
+    FORBID_TAGS: ["script","style","iframe","object","embed","form","input","link","meta"],
+    FORBID_ATTR: ["style","onerror","onload","onclick"],
+  });
+
+
 type Lang = "fr" | "en";
 const PAGE_SIZE = 25;
 
@@ -150,7 +162,7 @@ export default function MailPanel({ lang }: { lang: Lang }) {
 
                 <div className="mt-4" style={{ fontSize: 13, color: "var(--pp-text-secondary)", whiteSpace: "pre-wrap" }}>
                   {detail.body?.contentType === "html"
-                    ? <div dangerouslySetInnerHTML={{ __html: detail.body?.content ?? "" }} />
+                    ? <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(detail.body?.content) }} />
                     : (detail.body?.content ?? detail.bodyPreview ?? "")}
                 </div>
               </>

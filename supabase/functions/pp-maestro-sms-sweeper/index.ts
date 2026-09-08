@@ -142,37 +142,20 @@ Deno.serve(async (req) => {
     await admin.from("planipret_phone_messages").update({ maestro_synced: true }).in("id", testSkipped);
   }
 
+  // ARRÊT DÉFINITIF DES RENVOIS (2026-09-08) : le rejeu vers Maestro déclenchait
+  // un véritable envoi de SMS au contact. Le backlog est désormais archivé
+  // localement, sans aucun appel réseau et sans aucun texto envoyé.
   const results: any[] = [];
-  for (const msg of batch) {
-    try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/maestro-sync-message`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
-        body: JSON.stringify({ message_id: msg.id }),
-      });
-      const data = await res.json().catch(() => ({} as any));
-      const ok = res.ok && data?.success !== false;
-      // Un SMS avec des numéros invalides ne sera jamais accepté : on le ferme.
-      const terminal = !ok && (data?.error === "invalid_numbers" || data?.error === "message_not_found" || data?.error === "maestro_recipient_not_found");
-      if (terminal) {
-        await admin.from("planipret_phone_messages").update({ maestro_synced: true }).eq("id", msg.id);
-      } else if (!ok) {
-        const attempts = Number((msg.metadata as any)?.maestro_push_attempts ?? 0) + 1;
-        await admin.from("planipret_phone_messages").update({
-          metadata: {
-            ...((msg.metadata as any) ?? {}),
-            maestro_push_attempts: attempts,
-            maestro_push_last_error: data?.error ?? `http_${res.status}`,
-            maestro_push_last_at: new Date().toISOString(),
-            maestro_push_state: attempts >= MAX_PUSH_ATTEMPTS ? "failed" : "retrying",
-          },
-        }).eq("id", msg.id);
-      }
-      results.push({ message_id: msg.id, contact_number: msg.__contact, ok, closed: terminal ? data?.error : undefined, error: ok ? null : (data?.error ?? `http_${res.status}`) });
-    } catch (e) {
-      results.push({ message_id: msg.id, ok: false, error: (e as Error).message });
+  if (batch.length) {
+    await admin
+      .from("planipret_phone_messages")
+      .update({ maestro_synced: true })
+      .in("id", batch.map((m) => m.id));
+    for (const msg of batch) {
+      results.push({ message_id: msg.id, contact_number: msg.__contact, ok: true, closed: "archived_no_resend" });
     }
   }
+
 
   return json({
     success: true,

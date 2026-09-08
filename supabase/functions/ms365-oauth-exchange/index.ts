@@ -49,6 +49,11 @@ Deno.serve(async (req) => {
       ms365_email: msEmail,
     }).eq("user_id", userId);
 
+    await admin.from("planipret_ms_auth_attempts").insert({
+      email: msEmail, attempt_type: "interactive", status: "success", source: "ms365-oauth-exchange",
+    }).then(() => {}, () => {});
+
+
     // Maestro Telecom auto-link used to run inline and could add 10-30s to the
     // callback. It is best-effort, so it now runs after the response is sent.
     if (msEmail) {

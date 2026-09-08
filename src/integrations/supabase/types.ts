@@ -11064,6 +11064,8 @@ export type Database = {
           metadata: Json
           mobile_app_enabled: boolean
           ms365_access_token: string | null
+          ms365_auth_error: string | null
+          ms365_auth_paused_at: string | null
           ms365_display_name: string | null
           ms365_email: string | null
           ms365_refresh_token: string | null
@@ -11171,6 +11173,8 @@ export type Database = {
           metadata?: Json
           mobile_app_enabled?: boolean
           ms365_access_token?: string | null
+          ms365_auth_error?: string | null
+          ms365_auth_paused_at?: string | null
           ms365_display_name?: string | null
           ms365_email?: string | null
           ms365_refresh_token?: string | null
@@ -11278,6 +11282,8 @@ export type Database = {
           metadata?: Json
           mobile_app_enabled?: boolean
           ms365_access_token?: string | null
+          ms365_auth_error?: string | null
+          ms365_auth_paused_at?: string | null
           ms365_display_name?: string | null
           ms365_email?: string | null
           ms365_refresh_token?: string | null

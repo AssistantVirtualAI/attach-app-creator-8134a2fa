@@ -65,11 +65,14 @@ Deno.serve(async (req) => {
         .select(prefCol).eq("user_id", user_id).maybeSingle();
       if (prof && (prof as any)[prefCol] === false) allowed = false;
     }
-    const finalDeepLink = deep_link ?? data?.deep_link ?? null;
+    const rawFallbackLink = typeof data?.deep_link === "string" && /^\/[^\s]*$/.test(data.deep_link)
+      ? data.deep_link.slice(0, 300)
+      : null;
+    const finalDeepLink = safeDeepLink ?? rawFallbackLink;
 
     // Always log in-app notification (even if push disabled)
     const { data: notifRow } = await admin.from("planipret_ava_notifications").insert({
-      user_id, category: cat, title, body: text ?? null,
+      user_id, category: cat, title: safeTitle, body: safeText || null,
       data: { ...(data ?? {}), deep_link: finalDeepLink }, deep_link: finalDeepLink,
       delivered: false,
     }).select("id").maybeSingle();
@@ -78,8 +81,8 @@ Deno.serve(async (req) => {
 
     // 1) Native devices (iOS APNs / Android FCM) — the installed mobile apps.
     const native = await sendNativeAlertPush(admin, user_id, {
-      title,
-      body: text ?? "",
+      title: safeTitle,
+      body: safeText,
       category: cat,
       data: { ...(data ?? {}), ...(finalDeepLink ? { deep_link: String(finalDeepLink) } : {}) },
     });
@@ -89,7 +92,7 @@ Deno.serve(async (req) => {
     const expired: string[] = [];
     if (vapidReady) {
       const { data: subs } = await admin.from("planipret_push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", user_id);
-      const payload = JSON.stringify({ title, body: text ?? "", data: { ...(data ?? {}), category: cat, deep_link: finalDeepLink }, icon: icon ?? "/icon-192.png" });
+      const payload = JSON.stringify({ title: safeTitle, body: safeText, data: { ...(data ?? {}), category: cat, deep_link: finalDeepLink }, icon: icon ?? "/icon-192.png" });
       for (const s of subs ?? []) {
         try {
           await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload);

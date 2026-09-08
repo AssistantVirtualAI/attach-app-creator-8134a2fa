@@ -64,13 +64,31 @@ function prettyTranscript(
 }
 
 
-/** Maestro attend un format "YYYY-MM-DD HH:MM:SS". */
+/** Maestro attend un format "YYYY-MM-DD HH:MM:SS" (heure locale Québec). */
 function maestroDate(v: unknown): string | undefined {
   if (!v) return undefined;
   const d = new Date(String(v));
   if (Number.isNaN(d.getTime())) return undefined;
-  return d.toISOString().slice(0, 19).replace("T", " ");
+  const p = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).formatToParts(d).reduce<Record<string, string>>((a, x) => (a[x.type] = x.value, a), {});
+  return `${p.year}-${p.month}-${p.day} ${p.hour === "24" ? "00" : p.hour}:${p.minute}:${p.second}`;
 }
+
+/** Libellé lisible de la date réelle de l'appel, pour l'en-tête des notes. */
+function humanCallDate(v: unknown): string | null {
+  if (!v) return null;
+  const d = new Date(String(v));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("fr-CA", {
+    timeZone: "America/Toronto",
+    day: "2-digit", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+}
+
 
 async function invoke(fn: string, body: unknown) {
   try {
@@ -365,11 +383,16 @@ Deno.serve(async (req) => {
           ai_summary: summary ?? undefined,
           transcript: prettyText ? prettyText.slice(0, 20000) : undefined,
           duration_seconds: call.duration_seconds != null ? Number(call.duration_seconds) : undefined,
+          started_at: maestroDate(call.started_at ?? call.answered_at),
           answered_at: maestroDate(call.answered_at ?? call.started_at),
-          ended_at: maestroDate(call.ended_at),
+          ended_at: maestroDate(call.ended_at ?? call.answered_at ?? call.started_at),
           call_recording_filename: recordingLink ?? undefined,
           notes: [
+            humanCallDate(call.started_at ?? call.answered_at)
+              ? `Appel du ${humanCallDate(call.started_at ?? call.answered_at)} (heure réelle de l'appel)`
+              : null,
             recordingLink ? `Enregistrement (cliquer pour écouter): ${recordingLink}` : null,
+
             summary ? `Résumé IA: ${summary}` : null,
             keyPoints.length ? `Points clés: ${keyPoints.map(String).join(" • ")}` : null,
             nextActions.length ? `Prochaines actions: ${nextActions.map(actionTitle).filter(Boolean).join(" • ")}` : null,

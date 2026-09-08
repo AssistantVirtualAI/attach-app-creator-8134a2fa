@@ -9,6 +9,7 @@ Deno.serve(async (req) => {
   const cfg = await getMaestroConfig(admin);
   if (!cfg.url || !cfg.key) return json({ ok: false, error: "maestro_not_configured" }, 200);
 
+  const base = String(body?.base ?? cfg.url).replace(/\/$/, "");
   const brokerId: string | null = body?.broker_id ? String(body.broker_id) : null;
   const prefixes: string[] = Array.isArray(body?.prefixes) && body.prefixes.length
     ? body.prefixes
@@ -31,7 +32,7 @@ Deno.serve(async (req) => {
   const results: any[] = [];
   for (const p of prefixes) {
     for (const s of suffixes) {
-      const url = `${cfg.url}${p}${s}${s.includes("?") ? "&" : "?"}machine=1&limit=1`;
+      const url = `${base}${p}${s}${s.includes("?") ? "&" : "?"}machine=1&limit=1`;
       try {
         const r = await fetch(url, {
           method: "GET",
@@ -45,5 +46,5 @@ Deno.serve(async (req) => {
     }
   }
   results.sort((a, b) => (a.status === 200 ? -1 : 0) - (b.status === 200 ? -1 : 0));
-  return json({ ok: true, base: cfg.url, results });
+  return json({ ok: true, base, results });
 });

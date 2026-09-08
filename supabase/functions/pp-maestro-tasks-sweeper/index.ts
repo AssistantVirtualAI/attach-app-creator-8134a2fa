@@ -90,11 +90,11 @@ Deno.serve(async (req) => {
     results.push({ broker: brokerId, name: p.full_name, tasks: tasks.length, ok: true });
   }
 
-  return jsonResponse(200, {
+  return jsonResponse({
     success: true,
     brokers: (profiles ?? []).length,
     brokers_with_tasks: synced,
     tasks: totalTasks,
     results: results.slice(0, 300),
-  });
+  }, 200);
 });

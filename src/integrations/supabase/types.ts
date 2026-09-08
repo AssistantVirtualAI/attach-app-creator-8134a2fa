@@ -10134,6 +10134,54 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_maestro_sms_threads: {
+        Row: {
+          contact_number: string
+          created_at: string
+          id: string
+          last_error: string | null
+          last_message_at: string | null
+          last_pushed_at: string | null
+          maestro_broker_id: string | null
+          maestro_thread_id: string | null
+          message_count: number
+          pushed_count: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contact_number: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_message_at?: string | null
+          last_pushed_at?: string | null
+          maestro_broker_id?: string | null
+          maestro_thread_id?: string | null
+          message_count?: number
+          pushed_count?: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contact_number?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          last_message_at?: string | null
+          last_pushed_at?: string | null
+          maestro_broker_id?: string | null
+          maestro_thread_id?: string | null
+          message_count?: number
+          pushed_count?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_maestro_sync_log: {
         Row: {
           action: string | null

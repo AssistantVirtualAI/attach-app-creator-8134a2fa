@@ -126,6 +126,35 @@ Deno.serve(async (req) => {
     }).catch(() => {});
 
 
+    // Registre des fils : un fil par (courtier, numéro du contact). Maestro
+    // regroupe les textos par numéro ; on tient le même regroupement chez nous
+    // pour l'audit et pour rejouer un fil complet dans l'ordre.
+    const upsertThread = async (ok: boolean, errorMsg: string | null) => {
+      const { data: existing } = await admin
+        .from("planipret_maestro_sms_threads")
+        .select("id, message_count, pushed_count, maestro_thread_id")
+        .eq("user_id", msg.user_id)
+        .eq("contact_number", contactNumber)
+        .maybeSingle();
+      const threadId = res.data?.thread_id ?? res.data?.conversation_id ?? existing?.maestro_thread_id ?? null;
+      const payload = {
+        user_id: msg.user_id,
+        contact_number: contactNumber,
+        maestro_broker_id: auth.brokerId ? String(auth.brokerId) : null,
+        maestro_thread_id: threadId ? String(threadId) : null,
+        message_count: (existing?.message_count ?? 0) + 1,
+        pushed_count: (existing?.pushed_count ?? 0) + (ok ? 1 : 0),
+        last_message_at: msg.sent_at ?? msg.created_at ?? new Date().toISOString(),
+        last_pushed_at: ok ? new Date().toISOString() : undefined,
+        status: ok ? "synced" : "failed",
+        last_error: ok ? null : errorMsg,
+      };
+      await admin
+        .from("planipret_maestro_sms_threads")
+        .upsert(payload, { onConflict: "user_id,contact_number" })
+        .then(() => {}, () => {});
+    };
+
     if (res.ok || res.status === 409) {
       await admin
         .from("planipret_phone_messages")
@@ -134,12 +163,16 @@ Deno.serve(async (req) => {
           metadata: {
             ...meta,
             maestro_synced_at: new Date().toISOString(),
+            maestro_contact_number: contactNumber,
             maestro_message_id: res.data?.id ?? res.data?.message_id ?? null,
           },
         })
         .eq("id", msg.id);
-      return json({ success: true, message_id: msg.id, status: res.status });
+      await upsertThread(true, null);
+      return json({ success: true, message_id: msg.id, contact_number: contactNumber, status: res.status });
     }
+
+    await upsertThread(false, `maestro_${res.status}`);
 
     // 404 = destinataire/endpoint inconnu côté Maestro : inutile de réessayer.
     if (res.status === 404) {

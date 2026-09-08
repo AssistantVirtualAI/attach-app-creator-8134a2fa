@@ -44,7 +44,7 @@ function Shimmer({ className = "" }: { className?: string }) {
 
 export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, brokerId, readOnly }: Props) {
   const L = (fr: string, en: string) => (lang === "en" ? en : fr);
-  const { tasks, buckets, counts, openCount, filter, setFilter, hasMore, loadMore, loadingMore, total, loading, refreshing, lastSyncAt, source, refresh, create, update, remove } = usePlanipretTasks(userId, { brokerId });
+  const { tasks, buckets, counts, openCount, filter, setFilter, hasMore, loadMore, loadingMore, total, loading, refreshing, lastSyncAt, source, error, message, refresh, create, update, remove } = usePlanipretTasks(userId, { brokerId });
   const [composer, setComposer] = useState<null | { initial?: any }>(null);
   const [busy, setBusy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string> | null>(null);
@@ -244,6 +244,17 @@ export default function TasksSection({ userId, lang, defaultTarget, onSeeAll, br
 
       {loading ? (
         <div className="space-y-2" aria-busy="true">{[0, 1, 2].map((i) => <Shimmer key={i} className="h-12" />)}</div>
+      ) : error ? (
+        // Chargement en échec : ne jamais afficher « aucune tâche » (faux vide trompeur).
+        <div className="py-4 text-center space-y-2" role="alert">
+          <p className="text-sm" style={{ color: "var(--pp-text-muted)" }}>
+            {message ?? L("Chargement impossible", "Loading failed")}
+          </p>
+          <button onClick={() => void refresh()} className="min-h-[44px] px-4 rounded-xl text-[12px] font-semibold text-white"
+            style={{ background: "var(--pp-brand-accent)" }}>
+            {L("Réessayer", "Retry")}
+          </button>
+        </div>
       ) : openCount === 0 && closed.length === 0 ? (
         <p className="text-sm py-4 text-center" style={{ color: "var(--pp-text-muted)" }}>
           {L("Aucune tâche ouverte 🎉", "No open tasks 🎉")}

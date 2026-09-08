@@ -42,6 +42,8 @@ Deno.serve(async (req) => {
     await admin.from("planipret_profiles").update({
       ms365_access_token: d.access_token,
       ms365_refresh_token: d.refresh_token,
+      ms365_auth_paused_at: null,
+      ms365_auth_error: null,
       ms365_scopes: d.scope ?? requestedScope,
       ms365_token_expiry: new Date(Date.now() + Number(d.expires_in ?? 3600) * 1000).toISOString(),
       ms365_email: msEmail,

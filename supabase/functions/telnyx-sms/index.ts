@@ -1,6 +1,7 @@
 // Send SMS / MMS via Telnyx; persists to pbx_sms_threads/messages and
 // broadcasts the new message on the org's realtime channel.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isTestSms, TEST_SMS_BLOCK_MESSAGE } from "../_shared/pp-test-sms.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

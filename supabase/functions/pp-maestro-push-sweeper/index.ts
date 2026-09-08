@@ -38,19 +38,35 @@ Deno.serve(async (req) => {
   const limit = Math.min(Math.max(Number(body?.limit) || 20, 1), 100);
   const maxAgeHours = Number(body?.max_age_hours ?? 24 * 14);
   const force = body?.force === true;
+  // include_unsynced: rattrapage des appels jamais poussés (pas de maestro_call_id).
+  const includeUnsynced = body?.include_unsynced === true;
 
   let q = admin
     .from("planipret_phone_calls")
     .select("id, user_id, duration_seconds, maestro_call_id, transcript, ai_summary, ai_coaching, recording_storage_path, recording_url, ns_recording_url, maestro_media_synced_at, metadata")
-    .not("maestro_call_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(limit * 3);
+
+  if (!includeUnsynced) q = q.not("maestro_call_id", "is", null);
+  else q = q.is("maestro_call_id", null);
 
   if (body?.call_id) q = q.eq("id", body.call_id);
   else {
     q = q.gte("created_at", new Date(Date.now() - maxAgeHours * 3600_000).toISOString());
-    if (!force) q = q.is("maestro_media_synced_at", null);
+    if (!force && !includeUnsynced) q = q.is("maestro_media_synced_at", null);
+    if (includeUnsynced) {
+      // Uniquement les courtiers réellement reliés à Maestro.
+      const { data: linked } = await admin
+        .from("planipret_profiles")
+        .select("id")
+        .not("maestro_telecom_user_id", "is", null)
+        .limit(1000);
+      const ids = (linked ?? []).map((p: any) => p.id);
+      if (!ids.length) return json({ success: true, candidates: 0, processed: 0, pushed: 0, results: [] });
+      q = q.in("user_id", ids);
+    }
   }
+
 
   const { data: rows, error } = await q;
   if (error) return json({ error: error.message }, 500);
@@ -75,7 +91,16 @@ Deno.serve(async (req) => {
       !!r.transcript || !!r.ai_summary || !!r.ai_coaching ||
       !!r.recording_storage_path || !!r.recording_url || !!r.ns_recording_url;
     if (body?.call_id || force) return true;
-    if (!hasPayload) return false;
+    // En rattrapage, on pousse même sans audio : le CDR, le résumé et le
+    // coaching doivent exister côté Maestro dans tous les cas.
+    if (!hasPayload && !includeUnsynced) return false;
+    const { attempts: a0, lastAt: l0 } = sweepState(r);
+    if (includeUnsynced) {
+      if (a0 >= MAX_SWEEP_ATTEMPTS) return false;
+      if (a0 > 0 && l0 && now - l0 < backoffMs(a0)) return false;
+      return true;
+    }
+
     const { attempts, lastAt } = sweepState(r);
     if (attempts >= MAX_SWEEP_ATTEMPTS) return false;
     if (attempts > 0 && lastAt && now - lastAt < backoffMs(attempts)) return false;

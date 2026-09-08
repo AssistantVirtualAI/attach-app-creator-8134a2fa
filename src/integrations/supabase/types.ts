@@ -10221,6 +10221,53 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_ms_auth_attempts: {
+        Row: {
+          attempt_type: string
+          created_at: string
+          email: string | null
+          error_code: string | null
+          error_message: string | null
+          id: string
+          paused: boolean
+          profile_id: string | null
+          source: string | null
+          status: string
+        }
+        Insert: {
+          attempt_type?: string
+          created_at?: string
+          email?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          paused?: boolean
+          profile_id?: string | null
+          source?: string | null
+          status: string
+        }
+        Update: {
+          attempt_type?: string
+          created_at?: string
+          email?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          paused?: boolean
+          profile_id?: string | null
+          source?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planipret_ms_auth_attempts_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "planipret_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planipret_ms_contacts: {
         Row: {
           company: string | null

@@ -154,6 +154,12 @@ Deno.serve(async (req) => {
       auth_method: "microsoft",
     }).eq("id", profile.id);
 
+    await admin.from("planipret_ms_auth_attempts").insert({
+      profile_id: profile.id, email: msEmail, attempt_type: "interactive",
+      status: "success", source: "pp-ms-auth-callback", paused: false,
+    }).then(() => {}, () => {});
+
+
     // Marque la session comme provenant de Microsoft : le portail refuse toute
     // session non-Microsoft, sinon l'utilisateur est renvoyé vers l'écran d'auth.
     try {

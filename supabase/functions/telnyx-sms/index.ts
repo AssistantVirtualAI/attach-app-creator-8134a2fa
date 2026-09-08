@@ -69,6 +69,10 @@ Deno.serve(async (req) => {
 
     if (!from || !to || !text) return json({ error: "from, to, text required" }, 400);
 
+    // Arrêt global permanent : aucun texto ne quitte Telnyx.
+    console.warn("[telnyx-sms] outbound SMS globally disabled", { to });
+    return json({ ok: false, blocked: true, error: "L’envoi de textos est désactivé." }, 200);
+
     // Blocage permanent des textos de test — aucun envoi vers de vrais numéros.
     if (isTestSms(text)) {
       console.warn("[telnyx-sms] test SMS blocked", { to });

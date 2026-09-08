@@ -117,6 +117,7 @@ const PADidReconcile = lazyWithRetry(() => import("./pages/planipret/admin/PADid
 const PAPhoneNumbers = lazyWithRetry(() => import("./pages/planipret/admin/PAPhoneNumbers"));
 const PAMaestroStatus = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroStatus"));
 const PAMicrosoftAuth = lazyWithRetry(() => import("./pages/planipret/admin/PAMicrosoftAuth"));
+const PAContracts = lazyWithRetry(() => import("./pages/planipret/admin/PAContracts"));
 
 
 const PlanipretBrokerLayout = lazyWithRetry(() => import("./pages/planipret/broker/PlanipretBrokerLayout"));
@@ -719,6 +720,7 @@ const App = () => (
                   <Route path="phone-numbers" element={<Suspense fallback={<AdminPageSkeleton />}><PAPhoneNumbers /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
                   <Route path="microsoft-auth" element={<Suspense fallback={<AdminPageSkeleton />}><PAMicrosoftAuth /></Suspense>} />
+                  <Route path="contracts" element={<Suspense fallback={<AdminPageSkeleton />}><PAContracts /></Suspense>} />
 
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
                   <Route path="commission-registry" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionRegistry /></Suspense>} />

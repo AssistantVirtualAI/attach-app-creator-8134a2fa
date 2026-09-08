@@ -92,8 +92,9 @@ Deno.serve(async (req) => {
           : "yes",
         "dial-policy": "US and Canada",
         "voicemail-transcription-enabled": "Deepgram",
-        "email-send-alert-new-voicemail-enabled": "yes",
-        "email-send-alert-new-missed-call-enabled": "yes",
+        // Never email brokers from the PBX (no unread-SMS/voicemail/missed-call mirrors).
+        "email-send-alert-new-voicemail-enabled": "no",
+        "email-send-alert-new-missed-call-enabled": "no",
         "ring-no-answer-timeout-seconds": 30,
       };
     };

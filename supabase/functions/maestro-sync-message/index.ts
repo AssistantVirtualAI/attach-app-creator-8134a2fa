@@ -82,19 +82,17 @@ Deno.serve(async (req) => {
     }
 
     const t0 = Date.now();
-    const res = await maestroFetchScoped(cfg, {
-      method: "POST",
-      path: "/api/v1/messages",
-      token: auth.token,
-      brokerId: auth.brokerId,
-      idempotencyKey: msg.id,
-      body: {
-        to_user_number: contactNumber,
-        message: msg.body ?? "",
-      },
+    // ARRÊT DÉFINITIF DES RENVOIS (2026-09-08) :
+    // POST /api/v1/messages chez Maestro ENVOIE réellement le texto au contact.
+    // Rejouer un ancien message renvoyait donc un vrai SMS au client/courtier.
+    // On n'appelle plus cet endpoint : le message est archivé localement.
+    const res = {
+      ok: true,
+      status: 200,
+      data: {} as any,
+      path: "(archive_local_no_resend)",
+    };
 
-
-    });
 
     await maestroSyncLog(admin, {
       user_id: msg.user_id,

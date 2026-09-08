@@ -383,11 +383,16 @@ Deno.serve(async (req) => {
           ai_summary: summary ?? undefined,
           transcript: prettyText ? prettyText.slice(0, 20000) : undefined,
           duration_seconds: call.duration_seconds != null ? Number(call.duration_seconds) : undefined,
+          started_at: maestroDate(call.started_at ?? call.answered_at),
           answered_at: maestroDate(call.answered_at ?? call.started_at),
-          ended_at: maestroDate(call.ended_at),
+          ended_at: maestroDate(call.ended_at ?? call.answered_at ?? call.started_at),
           call_recording_filename: recordingLink ?? undefined,
           notes: [
+            humanCallDate(call.started_at ?? call.answered_at)
+              ? `Appel du ${humanCallDate(call.started_at ?? call.answered_at)} (heure réelle de l'appel)`
+              : null,
             recordingLink ? `Enregistrement (cliquer pour écouter): ${recordingLink}` : null,
+
             summary ? `Résumé IA: ${summary}` : null,
             keyPoints.length ? `Points clés: ${keyPoints.map(String).join(" • ")}` : null,
             nextActions.length ? `Prochaines actions: ${nextActions.map(actionTitle).filter(Boolean).join(" • ")}` : null,

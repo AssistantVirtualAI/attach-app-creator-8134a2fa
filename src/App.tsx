@@ -716,6 +716,8 @@ const App = () => (
                   <Route path="did-reconcile" element={<Suspense fallback={<AdminPageSkeleton />}><PADidReconcile /></Suspense>} />
                   <Route path="phone-numbers" element={<Suspense fallback={<AdminPageSkeleton />}><PAPhoneNumbers /></Suspense>} />
                   <Route path="maestro-status" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroStatus /></Suspense>} />
+                  <Route path="microsoft-auth" element={<Suspense fallback={<AdminPageSkeleton />}><PAMicrosoftAuth /></Suspense>} />
+
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
                   <Route path="commission-registry" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionRegistry /></Suspense>} />
                   <Route path="maestro-scope" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroScope /></Suspense>} />

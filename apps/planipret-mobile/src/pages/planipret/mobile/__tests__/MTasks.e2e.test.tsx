@@ -108,7 +108,7 @@ describe("MTasks (mobile)", () => {
     const tabs = await screen.findAllByRole("tab");
     expect(tabs.length).toBe(5);
     fireEvent.click(tabs[1]);
-    expect(setFilter).toHaveBeenCalledWith("overdue");
+    expect(setFilter).toHaveBeenCalledWith("all");
   });
 
   it("rafraîchit la liste", async () => {

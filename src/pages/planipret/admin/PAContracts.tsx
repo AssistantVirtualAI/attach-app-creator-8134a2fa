@@ -66,7 +66,11 @@ export default function PAContracts() {
       setContracts([]);
     } else {
       setContracts(data.contracts ?? []);
-      if ((data.brokers ?? []).length) setBrokers(data.brokers.map((b: any) => ({ id: b.id, name: b.name })));
+      // Ne remplace la liste d'agents que sur un chargement non filtré :
+      // sinon la réponse ne contient que l'agent sélectionné et le filtre se vide.
+      if (brokerFilter === "all" && (data.brokers ?? []).length) {
+        setBrokers(data.brokers.map((b: any) => ({ id: b.id, name: b.name })));
+      }
     }
     setLoading(false);
   }, [brokerFilter]);

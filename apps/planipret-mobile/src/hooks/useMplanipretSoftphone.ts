@@ -1354,6 +1354,12 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   const hangup = useCallback(() => {
     const callId = ppSipProvider.getSnapshot().callId;
     const restId = restCall?.id ?? null;
+    // Fin d'appel : demander au courtier s'il sauvegarde l'appel dans Maestro.
+    try {
+      window.dispatchEvent(new CustomEvent("pp:call-ended", {
+        detail: { providerCallId: restId || callId || null },
+      }));
+    } catch { /* l'écran de consentement reste accessible depuis l'historique */ }
     console.info("[hangup] requested", { sipCallId: callId || null, restCallId: restId, hasLiveSipSession });
     // Always signal the PBX over REST as well, with retry + backoff: the SIP BYE
     // can be lost when the WebSocket dropped or the session never reached

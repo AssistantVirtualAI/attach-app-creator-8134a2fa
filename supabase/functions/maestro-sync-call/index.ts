@@ -31,7 +31,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const CALL_COLUMNS =
-  "id, user_id, from_number, to_number, direction, from_name, to_name, maestro_client_name, transcript, transcript_raw, transcript_segments, transcript_language, ai_summary, ai_summary_short, ai_coaching, ai_analysis_json, ai_topics, ai_action_items, ai_key_points, ai_client_insights, next_actions, lead_score, lead_temperature, lead_score_reason, coaching_score, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, pipeline_state, metadata, duration_seconds, started_at, answered_at, ended_at";
+  "id, user_id, from_number, to_number, direction, from_name, to_name, maestro_client_name, transcript, transcript_raw, transcript_segments, transcript_language, ai_summary, ai_summary_short, ai_coaching, ai_analysis_json, ai_topics, ai_action_items, ai_key_points, ai_client_insights, next_actions, lead_score, lead_temperature, lead_score_reason, coaching_score, maestro_synced, maestro_call_id, maestro_client_id, ns_call_id, pipeline_state, metadata, duration_seconds, started_at, answered_at, ended_at, save_consent, deleted_at";
 
 /** Nettoie la transcription : remplace les URIs SIP par des noms lisibles. */
 function prettyTranscript(
@@ -186,6 +186,17 @@ Deno.serve(async (req) => {
       return json({ success: false, error: "call_not_found", request_id: rid, db_error: callErr?.message ?? null }, 404);
     }
     log("call_loaded", { user_id: call.user_id, maestro_synced: call.maestro_synced, maestro_call_id: call.maestro_call_id });
+
+    // ── Consentement du courtier ───────────────────────────
+    // Rien ne part vers Maestro tant que le courtier n'a pas dit oui,
+    // et jamais pour un appel supprimé.
+    if ((call as any).deleted_at) {
+      return json({ success: false, skipped: "call_deleted", request_id: rid }, 200);
+    }
+    if (String((call as any).save_consent ?? "pending") !== "approved") {
+      return json({ success: false, skipped: "consent_pending", request_id: rid }, 200);
+    }
+
 
 
     const steps: Record<string, unknown> = {};

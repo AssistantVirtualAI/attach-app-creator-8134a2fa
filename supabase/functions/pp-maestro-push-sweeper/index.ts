@@ -47,6 +47,9 @@ Deno.serve(async (req) => {
     .order("created_at", { ascending: false })
     .limit(limit * 3);
 
+  // Consentement obligatoire : jamais d'appel refusé, en attente ou supprimé.
+  q = q.eq("save_consent", "approved").is("deleted_at", null);
+
   if (!includeUnsynced) q = q.not("maestro_call_id", "is", null);
   else q = q.is("maestro_call_id", null);
 

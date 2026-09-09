@@ -8655,6 +8655,68 @@ export type Database = {
           },
         ]
       }
+      planipret_call_followups: {
+        Row: {
+          approved_at: string | null
+          body: string
+          call_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          kind: string
+          maestro_client_id: string | null
+          recipient: string
+          recipient_name: string | null
+          sent_at: string | null
+          status: string
+          subject: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          body: string
+          call_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind: string
+          maestro_client_id?: string | null
+          recipient: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          body?: string
+          call_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          kind?: string
+          maestro_client_id?: string | null
+          recipient?: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          status?: string
+          subject?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planipret_call_followups_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "planipret_phone_calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planipret_call_job_queue: {
         Row: {
           attempts: number
@@ -10558,6 +10620,9 @@ export type Database = {
           callback_reason: string | null
           coaching_score: number | null
           created_at: string
+          delete_reason: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           direction: string
           duration_seconds: number | null
           ended_at: string | null
@@ -10578,6 +10643,8 @@ export type Database = {
           maestro_media_sync_error: string | null
           maestro_media_synced_at: string | null
           maestro_mortgage_stage: string | null
+          maestro_purge_error: string | null
+          maestro_purged_at: string | null
           maestro_synced: boolean
           maestro_tasks_created: Json
           metadata: Json
@@ -10599,6 +10666,10 @@ export type Database = {
           recording_cached_at: string | null
           recording_storage_path: string | null
           recording_url: string | null
+          save_consent: string
+          save_consent_at: string | null
+          save_consent_by: string | null
+          save_consent_channel: string | null
           started_at: string | null
           status: string | null
           suggested_callback_delay: string | null
@@ -10634,6 +10705,9 @@ export type Database = {
           callback_reason?: string | null
           coaching_score?: number | null
           created_at?: string
+          delete_reason?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           direction: string
           duration_seconds?: number | null
           ended_at?: string | null
@@ -10654,6 +10728,8 @@ export type Database = {
           maestro_media_sync_error?: string | null
           maestro_media_synced_at?: string | null
           maestro_mortgage_stage?: string | null
+          maestro_purge_error?: string | null
+          maestro_purged_at?: string | null
           maestro_synced?: boolean
           maestro_tasks_created?: Json
           metadata?: Json
@@ -10675,6 +10751,10 @@ export type Database = {
           recording_cached_at?: string | null
           recording_storage_path?: string | null
           recording_url?: string | null
+          save_consent?: string
+          save_consent_at?: string | null
+          save_consent_by?: string | null
+          save_consent_channel?: string | null
           started_at?: string | null
           status?: string | null
           suggested_callback_delay?: string | null
@@ -10710,6 +10790,9 @@ export type Database = {
           callback_reason?: string | null
           coaching_score?: number | null
           created_at?: string
+          delete_reason?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           direction?: string
           duration_seconds?: number | null
           ended_at?: string | null
@@ -10730,6 +10813,8 @@ export type Database = {
           maestro_media_sync_error?: string | null
           maestro_media_synced_at?: string | null
           maestro_mortgage_stage?: string | null
+          maestro_purge_error?: string | null
+          maestro_purged_at?: string | null
           maestro_synced?: boolean
           maestro_tasks_created?: Json
           metadata?: Json
@@ -10751,6 +10836,10 @@ export type Database = {
           recording_cached_at?: string | null
           recording_storage_path?: string | null
           recording_url?: string | null
+          save_consent?: string
+          save_consent_at?: string | null
+          save_consent_by?: string | null
+          save_consent_channel?: string | null
           started_at?: string | null
           status?: string | null
           suggested_callback_delay?: string | null

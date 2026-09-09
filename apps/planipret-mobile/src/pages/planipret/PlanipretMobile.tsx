@@ -24,6 +24,7 @@ import planipretLogoAsset from "@/assets/planipret-logo.png.asset.json";
 import MobileAuthScreen from "@/components/planipret/mobile/MobileAuthScreen";
 import MobileHeaderControls from "@/components/planipret/mobile/MobileHeaderControls";
 import PpActiveCallScreen from "@/components/planipret/PpActiveCallScreen";
+import PostCallConsentSheet from "@/components/planipret/mobile/PostCallConsentSheet";
 import { useMplanipretTheme } from "@/hooks/useMplanipretTheme";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { ROUTES } from "@/lib/routes";
@@ -1253,6 +1254,7 @@ export default function PlanipretMobile() {
 
         <Dialer open={dialerOpen} autoDial={dialerAutoDial} onClose={() => { setDialerOpen(false); setDialerAutoDial(false); }} initial={dialerInit} openMessages={(n) => { setDialerOpen(false); openSmsComposer({ number: n }); }} softphone={softphone} maestroConfigured={Boolean(profile?.maestro_broker_id)} />
         <PpActiveCallScreen softphone={softphone} />
+        <PostCallConsentSheet />
         {/* A live WebRTC session owns the UI: PpActiveCallScreen already shows
             the ringing/answer + keypad screen, so the REST overlay must not
             steal the tap. */}

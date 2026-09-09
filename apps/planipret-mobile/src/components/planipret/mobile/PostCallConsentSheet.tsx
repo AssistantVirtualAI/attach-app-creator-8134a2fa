@@ -56,7 +56,9 @@ export default function PostCallConsentSheet() {
   const [draft, setDraft] = useState("");
   const [subject, setSubject] = useState("Suivi de notre appel");
   const [confirmed, setConfirmed] = useState(false);
+  const [email, setEmail] = useState("");
   const spokenFor = useRef<string | null>(null);
+  const draftEmail = () => email.trim();
 
   useEffect(() => {
     const onEnded = async (e: Event) => {
@@ -179,9 +181,6 @@ export default function PostCallConsentSheet() {
       setBusy(false);
     }
   };
-
-  const [email, setEmail] = useState("");
-  const draftEmail = () => email.trim();
 
   return (
     <div style={wrap} onClick={(e) => { if (e.target === e.currentTarget) close(); }}>

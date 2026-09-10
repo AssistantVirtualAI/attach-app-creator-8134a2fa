@@ -16,17 +16,24 @@ AVA chat + voicebot → ava-tool-executor → planipret-task-api (mêmes permiss
 Le client React n'appelle **jamais** `client.planipret.com` directement et ne
 manipule aucun Bearer token ni clé service role.
 
-## Endpoints officiels utilisés
-- `POST /api/main/tasks` — création (`xid`, `type`, `date`, `notes` requis)
+## Endpoints officiels utilisés (doc Scribe, 2026-09-09)
+Base `https://client.planipret.com`, préfixe `/api/main`, `Authorization: Bearer`.
+- `GET /api/main/tasks` — liste (`status`, `type`, `delegate_users_id`,
+  `target_id`, `date_from`+`date_to`, `date_scope`, `order_by`, `per_page` ≤ 200)
+- `POST /api/main/tasks` — création (`xid`, `type`, `date`, `notes`, `description`)
 - `PUT /api/main/tasks/{taskId}` — modification (`task_id` aussi dans le corps)
 - `DELETE /api/main/tasks/{taskId}` — suppression logique (`task_id` dans le corps)
 
-## Limites de l'endpoint de liste
-Planiprêt n'expose **aucun GET public**. La passerelle sonde uniquement la route
-interne `/users/{telecomUserId}/tasks?status=…`. Si elle répond 404/405/501, la
-réponse est `source: "projection"` (dernier état connu, scopé par `user_id`) ou
-`source: "unavailable"` avec `error: "tasks_unavailable"`. Aucune route n'est
-devinée. **En attente d'une documentation officielle Planiprêt.**
+Autres ressources exposées par la même API et branchées via
+`pp-maestro-scribe` (`_shared/maestro-scribe.ts`, client
+`src/lib/planipret/maestroScribe.ts`) : clients (`/clients`, adresses et
+téléphones imbriqués), contrats (`GET/POST /contracts`, `PUT /contracts/{id}`),
+institutions financières et rapports de commissions.
+
+## Repli de la liste
+Si `GET /api/main/tasks` échoue, la réponse devient `source: "projection"`
+(dernier état connu, scopé par `user_id`) ou `source: "unavailable"` avec
+`error: "tasks_unavailable"`.
 
 ## Format des dates
 `YYYY-MM-DD HH:mm:ss` en **America/Toronto** (`toApiDateTime`), imposé côté

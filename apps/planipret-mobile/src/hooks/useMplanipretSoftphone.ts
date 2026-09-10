@@ -965,7 +965,11 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     if (softphoneOwnerId !== ownerIdRef.current) return;
     if (snap.callState !== "ended" || !snap.callId) return;
     void endSession(snap.callId, snap.errorCause || "hangup");
-  }, [snap.callState, snap.callId, snap.errorCause, ownerTick]);
+    // Le client peut raccrocher en premier : la question de consentement doit
+    // aussi s'afficher quand la fin d'appel vient du réseau, pas seulement
+    // quand le courtier appuie sur Raccrocher.
+    emitCallEnded(restCall?.id ?? snap.callId);
+  }, [snap.callState, snap.callId, snap.errorCause, restCall?.id, ownerTick]);
 
   const registered = snap.status === "registered";
 

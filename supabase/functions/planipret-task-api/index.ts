@@ -1,13 +1,14 @@
 // Planiprêt Task API gateway — the ONLY path the mobile app and AVA use to
 // read/write tasks. Never expose the Planiprêt bearer token to the client.
 //
-// Routes consumed (official docs: https://client.planipret.com/api-docs):
+// Routes consumed (official Scribe docs, 2026-09-09):
+//   GET    /api/main/tasks             (status, delegate_users_id, target_id,
+//                                       date_from/date_to, order_by, per_page)
 //   POST   /api/main/tasks
 //   PUT    /api/main/tasks/{taskId}    (task_id also in body)
 //   DELETE /api/main/tasks/{taskId}    (task_id also in body, soft delete)
-// Listing is NOT officially documented: we best-effort the internal
-// `GET /telecom/api/v1/users/{telecomUserId}/tasks` and degrade to the local
-// projection (`planipret_tasks_projection`) or `tasks_unavailable`.
+// If the list call fails we degrade to the local projection
+// (`planipret_tasks_projection`) or `tasks_unavailable`.
 //
 // All business logic lives in ../_shared/planipret-task-handler.ts (unit tested).
 // Body: { action: "list" | "get" | "create" | "update" | "delete", ... }

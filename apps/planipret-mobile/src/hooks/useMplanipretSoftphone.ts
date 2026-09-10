@@ -151,6 +151,22 @@ function acquireSoftphoneOwner(instanceId: string, userId: string): boolean {
 
 /** Mounted hook instances, so ownership can be handed over instead of lost. */
 const softphoneInstances = new Set<{ id: string; notify: () => void }>();
+
+// Fin d'appel : émettre une seule fois par appel, peu importe qui raccroche.
+const emittedCallEnded = new Set<string>();
+function emitCallEnded(providerCallId: string | null) {
+  const key = providerCallId || "unknown";
+  if (emittedCallEnded.has(key)) return;
+  emittedCallEnded.add(key);
+  if (emittedCallEnded.size > 50) {
+    emittedCallEnded.delete(emittedCallEnded.values().next().value as string);
+  }
+  try {
+    window.dispatchEvent(new CustomEvent("pp:call-ended", {
+      detail: { providerCallId: providerCallId || null },
+    }));
+  } catch { /* l'écran de consentement reste accessible depuis l'historique */ }
+}
 /** Instances that actually render the call UI. They win ownership. */
 const softphonePrimaryIds = new Set<string>();
 

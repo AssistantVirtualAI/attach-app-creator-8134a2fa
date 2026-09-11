@@ -29,9 +29,9 @@ import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -60,6 +60,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/recordings", key: "recordings",  Icon: Mic },
       { to: "/planipret/admin/synced-calls", key: "syncedCalls", Icon: BarChart3 },
       { to: "/planipret/admin/commissions", key: "commissions", Icon: BarChart3 },
+      { to: "/planipret/admin/commissions-monthly", key: "commissionsMonthly", Icon: BarChart3 },
       { to: "/planipret/admin/tasks", key: "tasks", Icon: CheckSquare },
       { to: "/planipret/admin/broker-360", key: "broker360", Icon: UserSquare2 },
       { to: "/planipret/admin/maestro-tasks", key: "maestroTasks", Icon: CheckSquare },
@@ -115,6 +116,7 @@ const NAV_REGULAR: typeof NAV = [
       { to: "/planipret/admin/messages",   key: "messages",    Icon: MessageSquare },
       { to: "/planipret/admin/recordings", key: "recordings",  Icon: Mic },
       { to: "/planipret/admin/commissions", key: "commissions", Icon: BarChart3 },
+      { to: "/planipret/admin/commissions-monthly", key: "commissionsMonthly", Icon: BarChart3 },
       { to: "/planipret/admin/tasks",      key: "tasks",       Icon: CheckSquare },
       { to: "/planipret/admin/broker-360", key: "broker360",  Icon: UserSquare2 },
       { to: "/planipret/admin/maestro-tasks", key: "maestroTasks", Icon: CheckSquare },
@@ -157,6 +159,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/contracts": "contracts",
   "/planipret/admin/synced-calls": "syncedCalls",
   "/planipret/admin/commissions": "commissions",
+  "/planipret/admin/commissions-monthly": "commissionsMonthly",
   "/planipret/admin/tasks": "tasks",
   "/planipret/admin/broker-360": "broker360",
   "/planipret/admin/maestro-tasks": "maestroTasks",

@@ -102,12 +102,15 @@ Deno.serve(async (req) => {
       if (nk) byName.set(nk, String(id));
       if (email) byEmail.set(email, String(id));
     }
-    const resolved: { user_id: string; maestro_broker_id: string }[] = [];
+    // On corrige AUSSI les identifiants déjà stockés mais erronés : un id qui
+    // appartient en réalité à un autre courtier ferait voir à ce profil les
+    // commissions d'un collègue.
+    const resolved: { user_id: string; maestro_broker_id: string | null }[] = [];
     for (const p of list as any[]) {
-      if (p.maestro_broker_id != null) continue;
       const id = byEmail.get(String(p.email ?? "").trim().toLowerCase())
         ?? (agentKey(String(p.full_name ?? "")) ? byName.get(agentKey(String(p.full_name ?? "")) as string) : undefined);
       if (!id) continue;
+      if (String(p.maestro_broker_id ?? "") === String(id)) continue;
       p.maestro_broker_id = id;
       resolved.push({ user_id: p.user_id, maestro_broker_id: id });
     }
@@ -210,8 +213,10 @@ Deno.serve(async (req) => {
       const date = row.date_trans ? String(row.date_trans).slice(0, 10) : null;
       const rowMid = row.agent_name_id != null ? String(row.agent_name_id) : mid;
       const rowName = String(row.agent_name ?? row.target_name ?? "").trim();
-      const owner = (rowMid ? profileByMaestroId.get(rowMid) : null)
-        ?? (agentKey(rowName) ? profileByNameKey.get(agentKey(rowName) as string) : null)
+      // Le nom de l'agent Maestro prime : c'est la seule donnée qui reste juste
+      // même si un profil porte un identifiant Maestro périmé ou erroné.
+      const owner = (agentKey(rowName) ? profileByNameKey.get(agentKey(rowName) as string) : null)
+        ?? (rowMid ? profileByMaestroId.get(rowMid) : null)
         ?? (rowMid && mid && rowMid === mid ? p.user_id : null);
       return {
         dedupe_key: dedupeKey(row as any),

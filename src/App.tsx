@@ -75,6 +75,7 @@ const PlanipretAdminLayout = lazyWithRetry(() => import("./pages/planipret/admin
 const PAOverview = lazyWithRetry(() => import("./pages/planipret/admin/PAOverview"));
 const PAUsers = lazyWithRetry(() => import("./pages/planipret/admin/PAUsers"));
 const PACommissions = lazyWithRetry(() => import("./pages/planipret/admin/PACommissions"));
+const PACommissionsMonthly = lazyWithRetry(() => import("./pages/planipret/admin/PACommissionsMonthly"));
 const PACommissionRegistry = lazyWithRetry(() => import("./pages/planipret/admin/PACommissionRegistry"));
 const PAMaestroScope = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroScope"));
 const PATasks = lazyWithRetry(() => import("./pages/planipret/admin/PATasks"));
@@ -723,6 +724,7 @@ const App = () => (
                   <Route path="contracts" element={<Suspense fallback={<AdminPageSkeleton />}><PAContracts /></Suspense>} />
 
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
+                  <Route path="commissions-monthly" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionsMonthly /></Suspense>} />
                   <Route path="commission-registry" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionRegistry /></Suspense>} />
                   <Route path="maestro-scope" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroScope /></Suspense>} />
                   <Route path="tasks" element={<Suspense fallback={<AdminPageSkeleton />}><PATasks /></Suspense>} />

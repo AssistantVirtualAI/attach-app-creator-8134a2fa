@@ -19,7 +19,7 @@ const cad = (n: number) =>
  * par client, mais dépliées sur une page dédiée.
  */
 export default function ClientMaestroDetail({
-  clientKey, tasks, userIds, lang, lastSyncAt, loading, variant = "admin",
+  clientKey, tasks, userIds, lang, lastSyncAt, loading, variant = "admin", onDraftSms,
 }: {
   clientKey: string;
   tasks: NormalizedTask[];
@@ -29,6 +29,8 @@ export default function ClientMaestroDetail({
   loading?: boolean;
   /** Détermine vers quelles pages pointent les liens « voir la conversation ». */
   variant?: "admin" | "mobile";
+  /** Ouvre un brouillon de texto (mobile) : rien n'est envoyé sans confirmation. */
+  onDraftSms?: (target: { name: string; number: string; clientKey: string }) => void;
 }) {
   const en = lang === "en";
   const L = (fr: string, e: string) => (en ? e : fr);

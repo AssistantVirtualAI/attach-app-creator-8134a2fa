@@ -19,6 +19,14 @@ import { fetchMaestroTeam } from "../_shared/maestro-teams.ts";
 
 import { normalizeTask } from "../_shared/planipret-tasks.ts";
 import { handleTaskRequest, newCorrelationId, type UpstreamList } from "../_shared/planipret-task-handler.ts";
+import {
+  buildIdempotencyKey,
+  claimAction,
+  confirmationRequiredResult,
+  finishAction,
+  isAvaOriginated,
+  isConfirmed,
+} from "../_shared/ava-confirm.ts";
 
 const API_BASE = (Deno.env.get("PLANIPRET_API_BASE_URL") ?? "https://client.planipret.com").replace(/\/$/, "");
 const TELECOM_BASE = (Deno.env.get("MAESTRO_TELECOM_BASE_URL") ?? "https://client.planipret.com/telecom/api/v1").replace(/\/$/, "");
@@ -357,6 +365,42 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: true, members, by_client: maestroTeam.byClient, correlation_id }, 200);
     }
 
+    // ---- Barrière de confirmation + idempotence (mêmes règles que les textos)
+    // Toute mutation de tâche proposée par AVA (chat, voix, suivi post-appel)
+    // exige confirmed=true, et ne s'exécute qu'une seule fois.
+    const taskAction = String(body?.action ?? "");
+    const mutating = taskAction === "create" || taskAction === "update" || taskAction === "delete";
+    let taskClaimId: string | null = null;
+    if (mutating && isAvaOriginated(body)) {
+      if (!isConfirmed(body)) {
+        return jsonResponse({
+          ...confirmationRequiredResult(`${taskAction}_task`, body?.task ?? body),
+          correlation_id,
+        }, 200);
+      }
+      const destination = String(body?.task?.target_id ?? body?.task_id ?? body?.id ?? "").slice(0, 64);
+      const idempotencyKey = await buildIdempotencyKey({
+        userId,
+        action: `task:${taskAction}`,
+        destination,
+        callId: body?.call_id ?? null,
+        payload: { ...(body?.task ?? {}), task_id: body?.task_id ?? body?.id ?? null },
+        provided: body?.idempotency_key ?? null,
+      });
+      const claim = await claimAction(admin, {
+        userId,
+        brokerId: profile?.id ?? null,
+        callId: body?.call_id ?? null,
+        action: `task:${taskAction}`,
+        surface: "maestro_tasks",
+        destination,
+        provider: "maestro",
+        idempotencyKey,
+      });
+      if (claim.replay) return jsonResponse({ ...claim.result, correlation_id }, 200);
+      taskClaimId = claim.id;
+    }
+
     const out = await handleTaskRequest({ ...body, correlation_id }, {
 
       admin,
@@ -407,6 +451,11 @@ Deno.serve(async (req) => {
         return r?.maestro_broker_id ?? null;
       },
     });
+    if (taskClaimId) {
+      const ok = out.status < 400 && (out.body as any)?.success !== false;
+      await finishAction(admin, taskClaimId, ok, ok ? out.body : null,
+        ok ? null : String((out.body as any)?.error ?? "task_error")).catch(() => null);
+    }
     return jsonResponse(out.body, out.status);
   } catch (e) {
     console.error("[planipret-task-api]", correlation_id, e);

@@ -98,8 +98,15 @@ const volumeKey = (r: RegisterRow) =>
     Math.abs(n(r.loan_amt)).toFixed(2),
   ].join("|");
 
+/**
+ * A `base` row without a loan amount is never a mortgage file: Maestro uses it for
+ * referral / partner payouts (insurers, "Elle Conseille", iA referrals, ...).
+ * It must not create a deal, volume, nor gross commission.
+ */
+const isReferralPayout = (r: RegisterRow) => isBase(r) && n(r.loan_amt) === 0;
+
 /** Per-row classification memo (regex + string work done once per row, not per period). */
-interface RowFlags { base: boolean; adjustment: boolean; insurance: boolean; loan: number; vKey: string; dKey: string }
+interface RowFlags { base: boolean; adjustment: boolean; insurance: boolean; referral: boolean; loan: number; vKey: string; dKey: string }
 const flagCache = new WeakMap<RegisterRow, RowFlags>();
 function flags(r: RegisterRow): RowFlags {
   let f = flagCache.get(r);
@@ -108,6 +115,7 @@ function flags(r: RegisterRow): RowFlags {
       base: isBase(r),
       adjustment: isAdjustment(r),
       insurance: isInsurance(r),
+      referral: isReferralPayout(r),
       loan: n(r.loan_amt),
       vKey: volumeKey(r),
       dKey: normalizedKeyPart(r.number),
@@ -123,6 +131,7 @@ export type ExclusionReason =
   | "reversal_row"
   | "adjustment"
   | "insurance"
+  | "referral_no_loan"
   | "non_base"
   | "no_loan_amount";
 

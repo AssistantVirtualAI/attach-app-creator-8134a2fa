@@ -9,6 +9,21 @@ import {
   type ClientBundle, type ClientCall, type ClientDeal, type ClientDeposit, type ClientMessage,
 } from "@/lib/planipret/clientMaestro";
 import { supabase } from "@/integrations/supabase/client";
+import { maestroContractUrl } from "@/lib/planipret/maestroLinks";
+
+type MaestroContract = {
+  contract_id: string;
+  contract_number: string | null;
+  status: string | null;
+  maestro_status: string | null;
+  loan_amt: number | null;
+  rate: string | null;
+  date_closing: string | null;
+  date_maturity: string | null;
+  clients: { id?: string; name?: string; email?: string | null }[] | null;
+  broker_name: string | null;
+  last_activity_at: string | null;
+};
 
 const cad = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n || 0);

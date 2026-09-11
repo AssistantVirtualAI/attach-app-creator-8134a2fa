@@ -78,12 +78,24 @@ export default function PABrokerCommissions() {
 
   const brokerName = useMemo(() => brokers.find((b) => b.id === broker)?.name ?? "", [brokers, broker]);
 
+  const pyOf = (month: number) => monthlyPy.find((x) => x.month === month) ?? null;
+
   const exportCsv = () => {
-    const head = ["Mois", "Chiffre d'affaires", "Écart mois précédent", "Volume", "Dossiers"];
-    const body = monthly.map((m, i) => {
-      const prev = i > 0 ? monthly[i - 1] : null;
+    const head = [
+      "Mois",
+      `Chiffre d'affaires ${year}`, `Chiffre d'affaires ${year - 1}`, "Écart % (a/a)",
+      `Volume ${year}`, `Volume ${year - 1}`,
+      `Dossiers ${year}`, `Dossiers ${year - 1}`,
+    ];
+    const body = monthly.map((m) => {
+      const prev = pyOf(m.month);
       const pct = prev && prev.commission ? ((m.commission - prev.commission) / Math.abs(prev.commission)) * 100 : "";
-      return [MONTHS[m.month - 1], m.commission, pct === "" ? "" : `${pct.toFixed(1)} %`, m.volume, m.deals];
+      return [
+        MONTHS[m.month - 1],
+        m.commission, prev?.commission ?? 0, pct === "" ? "" : `${pct.toFixed(1)} %`,
+        m.volume, prev?.volume ?? 0,
+        m.deals, prev?.deals ?? 0,
+      ];
     });
     const csv = [head, ...body].map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));

@@ -52,6 +52,8 @@ export default function PAAvaConfirmations() {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
+  const [brokerFilter, setBrokerFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState("all");
 
   useEffect(() => {
     let cancelled = false;

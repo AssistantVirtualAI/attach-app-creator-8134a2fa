@@ -106,16 +106,48 @@ export default function PAAvaConfirmations() {
     [rows],
   );
 
+  const monthOf = (r: Row) => String(r.proposed_at ?? r.created_at ?? "").slice(0, 7);
+
+  const brokers = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rows) {
+      const id = r.user_id ?? r.broker_id;
+      if (id) map.set(id, (r.user_id ? names[r.user_id] : null) ?? r.broker_id ?? id.slice(0, 8));
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, names]);
+
+  const months = useMemo(
+    () => Array.from(new Set(rows.map(monthOf).filter(Boolean))).sort().reverse(),
+    [rows],
+  );
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
       if (actionFilter !== "all" && r.action !== actionFilter) return false;
+      if (brokerFilter !== "all" && (r.user_id ?? r.broker_id) !== brokerFilter) return false;
+      if (monthFilter !== "all" && monthOf(r) !== monthFilter) return false;
       if (!needle) return true;
       return [brokerOf(r), r.call_id, r.action, r.destination, r.idempotency_key, r.status]
         .some((v) => String(v ?? "").toLowerCase().includes(needle));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, actionFilter, names]);
+  }, [rows, q, actionFilter, brokerFilter, monthFilter, names]);
+
+  // Nombre d'appels (call_id distincts) par statut, sur la sélection courante.
+  const statusCounts = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const r of filtered) {
+      const s = (r.status ?? (r.decision ? r.decision : "pending")).toLowerCase();
+      if (!map.has(s)) map.set(s, new Set());
+      map.get(s)!.add(r.call_id ?? r.session_id ?? r.id);
+    }
+    return Array.from(map.entries())
+      .map(([status, set]) => ({ status, calls: set.size }))
+      .sort((a, b) => b.calls - a.calls);
+  }, [filtered]);
 
   const pending = useMemo(
     () => filtered.filter((r) => !r.executed_at && (PENDING.has((r.status ?? "").toLowerCase()) || !r.decision)),

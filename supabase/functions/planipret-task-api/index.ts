@@ -144,8 +144,9 @@ function makeListFetch(token: string | null) {
       withParam("user_id", maestroId),
       withParam("delegate_users_id", maestroId),
       withParam("target_id", maestroId),
-      `${API_BASE}/api/main/tasks?${base.toString()}`,
       `${TELECOM_BASE}/users/${maestroId}/tasks${legacySuffix}`,
+      // Dernier recours, non filtré côté Maestro (filtré localement par assignation).
+      `${API_BASE}/api/main/tasks?${base.toString()}`,
     ];
 
 

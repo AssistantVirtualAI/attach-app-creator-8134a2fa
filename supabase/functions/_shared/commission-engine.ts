@@ -276,7 +276,11 @@ export function periodDeals(rows: RegisterRow[], w: Window, c: Criteria = {}): n
 
 export function periodCommission(rows: RegisterRow[], w: Window, c: Criteria = {}): number {
   let sum = 0;
-  for (const r of windowRows(rows, w)) if (!flags(r).insurance && matches(r, c)) sum += n(r.amount);
+  for (const r of windowRows(rows, w)) {
+    const f = flags(r);
+    if (f.insurance || f.referral) continue; // insurers + referral payouts are outside broker commissions
+    if (matches(r, c)) sum += n(r.amount);
+  }
   return sum;
 }
 

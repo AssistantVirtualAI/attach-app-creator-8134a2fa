@@ -213,8 +213,10 @@ Deno.serve(async (req) => {
       const date = row.date_trans ? String(row.date_trans).slice(0, 10) : null;
       const rowMid = row.agent_name_id != null ? String(row.agent_name_id) : mid;
       const rowName = String(row.agent_name ?? row.target_name ?? "").trim();
-      const owner = (rowMid ? profileByMaestroId.get(rowMid) : null)
-        ?? (agentKey(rowName) ? profileByNameKey.get(agentKey(rowName) as string) : null)
+      // Le nom de l'agent Maestro prime : c'est la seule donnée qui reste juste
+      // même si un profil porte un identifiant Maestro périmé ou erroné.
+      const owner = (agentKey(rowName) ? profileByNameKey.get(agentKey(rowName) as string) : null)
+        ?? (rowMid ? profileByMaestroId.get(rowMid) : null)
         ?? (rowMid && mid && rowMid === mid ? p.user_id : null);
       return {
         dedupe_key: dedupeKey(row as any),

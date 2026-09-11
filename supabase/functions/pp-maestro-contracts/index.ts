@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
       sort: "desc",
     });
 
-    if (api.ok && Array.isArray(api.data)) {
+    if (api.ok && Array.isArray(api.data) && api.data.length > 0) {
       for (const c of api.data as any[]) {
         const key = String(c?.contract_id ?? c?.id ?? "");
         if (!key) continue;

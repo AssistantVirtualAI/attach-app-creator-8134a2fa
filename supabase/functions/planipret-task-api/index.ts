@@ -124,7 +124,7 @@ function makeListFetch(token: string | null) {
     }
     base.set("per_page", "200");
     base.set("order_by", "date");
-    base.set("sort", "asc");
+    base.set("sort", "desc");
 
     const withParam = (k: string, v: string) => {
       const qs = new URLSearchParams(base);
@@ -140,10 +140,13 @@ function makeListFetch(token: string | null) {
     const legacySuffix = `?${legacy.toString()}`;
 
     const candidates = [
+      // Forme mesurée en production: scoping par user_id.
+      withParam("user_id", maestroId),
       withParam("delegate_users_id", maestroId),
       withParam("target_id", maestroId),
-      `${API_BASE}/api/main/tasks?${base.toString()}`,
       `${TELECOM_BASE}/users/${maestroId}/tasks${legacySuffix}`,
+      // Dernier recours, non filtré côté Maestro (filtré localement par assignation).
+      `${API_BASE}/api/main/tasks?${base.toString()}`,
     ];
 
 

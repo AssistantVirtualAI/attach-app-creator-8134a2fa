@@ -1,0 +1,174 @@
+// Vue par courtier : chiffre d'affaires, volume et dossiers par mois, avec
+// comparaison au mois précédent.
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, Download, TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
+
+type Month = { month: number; volume: number; deals: number; commission: number };
+
+const MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+
+const cad = (n: number) => n.toLocaleString("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
+
+function Delta({ cur, prev }: { cur: number; prev: number }) {
+  if (!prev && !cur) return <span className="text-muted-foreground text-xs">—</span>;
+  if (!prev) return <span className="text-xs text-emerald-600">Nouveau</span>;
+  const pct = ((cur - prev) / Math.abs(prev)) * 100;
+  const Icon = pct > 0.5 ? TrendingUp : pct < -0.5 ? TrendingDown : Minus;
+  const color = pct > 0.5 ? "text-emerald-600" : pct < -0.5 ? "text-destructive" : "text-muted-foreground";
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs ${color}`}>
+      <Icon className="h-3 w-3" />{pct >= 0 ? "+" : ""}{pct.toFixed(1)} %
+    </span>
+  );
+}
+
+export default function PABrokerCommissions() {
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState(thisYear);
+  const [brokers, setBrokers] = useState<{ id: string; name: string }[]>([]);
+  const [broker, setBroker] = useState<string>("");
+  const [monthly, setMonthly] = useState<Month[]>([]);
+  const [totals, setTotals] = useState<{ volume: number; deals: number; commission: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const { data } = await supabase
+        .from("planipret_profiles")
+        .select("user_id, full_name")
+        .not("user_id", "is", null)
+        .order("full_name");
+      const list = (data ?? [])
+        .filter((p: any) => p.user_id)
+        .map((p: any) => ({ id: p.user_id as string, name: (p.full_name as string) ?? p.user_id }));
+      setBrokers(list);
+      if (list.length && !broker) setBroker(list[0].id);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const load = useCallback(async () => {
+    if (!broker) return;
+    setLoading(true);
+    setError(null);
+    const { data, error: err } = await supabase.functions.invoke("pp-commission-audit", {
+      body: { year, broker_user_id: broker },
+    });
+    if (err || !data?.ok) {
+      setError("Impossible de charger les chiffres de ce courtier.");
+      setMonthly([]); setTotals(null);
+    } else {
+      setMonthly(data.monthly ?? []);
+      setTotals(data.totals ?? null);
+    }
+    setLoading(false);
+  }, [broker, year]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const brokerName = useMemo(() => brokers.find((b) => b.id === broker)?.name ?? "", [brokers, broker]);
+
+  const exportCsv = () => {
+    const head = ["Mois", "Chiffre d'affaires", "Écart mois précédent", "Volume", "Dossiers"];
+    const body = monthly.map((m, i) => {
+      const prev = i > 0 ? monthly[i - 1] : null;
+      const pct = prev && prev.commission ? ((m.commission - prev.commission) / Math.abs(prev.commission)) * 100 : "";
+      return [MONTHS[m.month - 1], m.commission, pct === "" ? "" : `${pct.toFixed(1)} %`, m.volume, m.deals];
+    });
+    const csv = [head, ...body].map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `commissions-${brokerName || "courtier"}-${year}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold">Commissions par courtier</h1>
+          <p className="text-sm text-muted-foreground">
+            Chiffre d'affaires, volume et nombre de dossiers mois par mois, comparés au mois précédent.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select className="h-9 rounded-md border bg-background px-3 text-sm" value={broker} onChange={(e) => setBroker(e.target.value)}>
+            {brokers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+          <select className="h-9 rounded-md border bg-background px-3 text-sm" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+            {[thisYear, thisYear - 1, thisYear - 2, thisYear - 3].map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Rafraîchir
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={!monthly.length}>
+            <Download className="h-4 w-4 mr-2" /> CSV
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <Card><CardContent className="pt-6 text-sm text-destructive flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4" /> {error}
+        </CardContent></Card>
+      )}
+
+      {totals && (
+        <div className="grid gap-3 md:grid-cols-3">
+          <Card><CardContent className="pt-6">
+            <p className="text-xs text-muted-foreground">Chiffre d'affaires {year}</p>
+            <p className="text-xl font-semibold">{cad(totals.commission)}</p>
+          </CardContent></Card>
+          <Card><CardContent className="pt-6">
+            <p className="text-xs text-muted-foreground">Volume de prêts</p>
+            <p className="text-xl font-semibold">{cad(totals.volume)}</p>
+          </CardContent></Card>
+          <Card><CardContent className="pt-6">
+            <p className="text-xs text-muted-foreground">Dossiers</p>
+            <p className="text-xl font-semibold">{totals.deals}</p>
+          </CardContent></Card>
+        </div>
+      )}
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">{brokerName} — {year}</CardTitle></CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground">
+              <tr className="border-b">
+                <th className="text-left py-2">Mois</th>
+                <th className="text-right">Chiffre d'affaires</th>
+                <th className="text-right pl-3">vs mois préc.</th>
+                <th className="text-right pl-3">Volume</th>
+                <th className="text-right pl-3">vs mois préc.</th>
+                <th className="text-right pl-3">Dossiers</th>
+                <th className="text-right pl-3">vs mois préc.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monthly.map((m, i) => {
+                const prev = i > 0 ? monthly[i - 1] : null;
+                return (
+                  <tr key={m.month} className="border-b last:border-0">
+                    <td className="py-1.5">{MONTHS[m.month - 1]}</td>
+                    <td className="text-right">{cad(m.commission)}</td>
+                    <td className="text-right pl-3"><Delta cur={m.commission} prev={prev?.commission ?? 0} /></td>
+                    <td className="text-right pl-3">{cad(m.volume)}</td>
+                    <td className="text-right pl-3"><Delta cur={m.volume} prev={prev?.volume ?? 0} /></td>
+                    <td className="text-right pl-3">{m.deals}</td>
+                    <td className="text-right pl-3"><Delta cur={m.deals} prev={prev?.deals ?? 0} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!loading && !monthly.length && <p className="text-sm text-muted-foreground pt-3">Aucune donnée pour ce courtier.</p>}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

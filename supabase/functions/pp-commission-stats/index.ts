@@ -390,11 +390,12 @@ Deno.serve(async (req) => {
         .reduce((s, r) => s + Number(r.amount ?? 0), 0),
     })).sort((a, b) => b.amount - a.amount);
 
-    // Club Excellence — nominative standings across all brokers
+    // Club Excellence — nominative standings. Only admins see the whole firm;
+    // a broker only ever gets his own line (with his rank inside the standings).
     const seasonCur = seasonWindow(year - (month >= 8 ? 0 : 1));
     const seasonPrev = seasonWindow(year - (month >= 8 ? 1 : 2));
     const brokerNames = uniq(volumeTranches(allRows, seasonCur).map((r) => r.agent_name));
-    const club = brokerNames
+    const clubFull = brokerNames
       .map((name) => {
         const c = metrics(allRows, seasonCur, { broker: name });
         const p = metrics(allRows, seasonPrev, { broker: name });
@@ -418,6 +419,13 @@ Deno.serve(async (req) => {
       })
       .sort((a, b) => b.volume - a.volume)
       .map((x, i) => ({ rank: i + 1, ...x }));
+
+    const isMeClub = (x: any) =>
+      x.isMe
+      || (myMaestroId && String(x.maestroBrokerId ?? "") === String(myMaestroId))
+      || x.brokerUserId === user.id
+      || (agentKey(x.broker) && myKeys.has(agentKey(x.broker) as string));
+    const club = isAdmin && scope === "all" ? clubFull : clubFull.filter(isMeClub);
 
     const clubMonthly = Array.from({ length: 12 }, (_, i) => {
       const m = ((7 + i) % 12) + 1; // Aug..Jul

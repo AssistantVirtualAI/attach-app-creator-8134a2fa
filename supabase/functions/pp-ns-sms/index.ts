@@ -423,6 +423,24 @@ Deno.serve(async (req) => {
         return jsonResponse({ ok: false, blocked: true, error: TEST_SMS_BLOCK_MESSAGE }, 200);
       }
 
+      // ---- Barrière de confirmation (côté serveur) -------------------------
+      // Tout texto proposé par AVA (chatbot, agent vocal, suivi post-appel)
+      // doit porter confirmed=true : le brouillon seul n'envoie jamais.
+      const origin = String(pick("origin") ?? pick("surface") ?? "").toLowerCase();
+      const avaOriginated = origin.includes("ava") || pick("ava_generated") === true ||
+        pick("draft") === true || pick("proposal") === true;
+      const explicitlyConfirmed = pick("confirmed") === true || pick("approved") === true;
+      if (avaOriginated && !explicitlyConfirmed) {
+        console.warn("[pp-ns-sms] AVA send without explicit confirmation — refused", { userId: ctx.userId });
+        return jsonResponse({
+          ok: false,
+          needs_confirmation: true,
+          error: "confirmation_required",
+          message: "Ce texto doit être confirmé explicitement par le courtier avant l'envoi.",
+        }, 200);
+      }
+
+
       // Destination interne (poste 2–6 chiffres) → message de chat interne
       // NetSapiens : pas de DID requis, l'expéditeur est le poste du courtier.
       const toDigits = String(to).replace(/\D/g, "");

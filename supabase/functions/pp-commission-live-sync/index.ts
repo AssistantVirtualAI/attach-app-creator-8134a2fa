@@ -102,12 +102,15 @@ Deno.serve(async (req) => {
       if (nk) byName.set(nk, String(id));
       if (email) byEmail.set(email, String(id));
     }
-    const resolved: { user_id: string; maestro_broker_id: string }[] = [];
+    // On corrige AUSSI les identifiants déjà stockés mais erronés : un id qui
+    // appartient en réalité à un autre courtier ferait voir à ce profil les
+    // commissions d'un collègue.
+    const resolved: { user_id: string; maestro_broker_id: string | null }[] = [];
     for (const p of list as any[]) {
-      if (p.maestro_broker_id != null) continue;
       const id = byEmail.get(String(p.email ?? "").trim().toLowerCase())
         ?? (agentKey(String(p.full_name ?? "")) ? byName.get(agentKey(String(p.full_name ?? "")) as string) : undefined);
       if (!id) continue;
+      if (String(p.maestro_broker_id ?? "") === String(id)) continue;
       p.maestro_broker_id = id;
       resolved.push({ user_id: p.user_id, maestro_broker_id: id });
     }

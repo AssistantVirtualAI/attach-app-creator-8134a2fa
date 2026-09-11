@@ -194,11 +194,37 @@ export default function PAAvaConfirmations() {
             {actions.map((a) => <SelectItem key={a} value={a}>{actionLabel(a)}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={brokerFilter} onValueChange={setBrokerFilter}>
+          <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{L("Tous les courtiers", "All brokers")}</SelectItem>
+            {brokers.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={monthFilter} onValueChange={setMonthFilter}>
+          <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{L("Tous les mois", "All months")}</SelectItem>
+            {months.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           <span className="ml-2">{L("Actualiser", "Refresh")}</span>
         </Button>
       </div>
+
+      <Card className="mb-4">
+        <CardContent className="py-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium mr-1">{L("Appels par statut", "Calls by status")}</span>
+          {statusCounts.length === 0 && (
+            <span className="text-sm text-muted-foreground">{L("Aucune donnée pour cette sélection.", "No data for this selection.")}</span>
+          )}
+          {statusCounts.map((s) => (
+            <Badge key={s.status} variant="outline">{s.status} · {s.calls}</Badge>
+          ))}
+        </CardContent>
+      </Card>
 
       {error && <Card className="mb-4 border-destructive/40"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
 

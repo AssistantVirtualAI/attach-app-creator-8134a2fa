@@ -724,6 +724,7 @@ const App = () => (
                   <Route path="contracts" element={<Suspense fallback={<AdminPageSkeleton />}><PAContracts /></Suspense>} />
 
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
+                  <Route path="commissions-monthly" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionsMonthly /></Suspense>} />
                   <Route path="commission-registry" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionRegistry /></Suspense>} />
                   <Route path="maestro-scope" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroScope /></Suspense>} />
                   <Route path="tasks" element={<Suspense fallback={<AdminPageSkeleton />}><PATasks /></Suspense>} />

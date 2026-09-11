@@ -100,17 +100,22 @@ export async function fetchLiveRegisterRows(
     ].filter(Boolean).map((s) => s.toLocaleLowerCase("fr-CA"));
   }
 
-  let q = admin
-    .from("planipret_commission_live_cache")
-    .select("broker_user_id, broker_label, maestro_broker_id, agent_name, date_trans, fiscal_year, row_data, synced_at")
-    .in("fiscal_year", years)
-    .limit(20000);
-  if (!isAdmin) {
-    q = ownMaestroId
-      ? q.or(`broker_user_id.eq.${userId},maestro_broker_id.eq.${ownMaestroId}`)
-      : q.eq("broker_user_id", userId);
-  }
-  if (agentFilter) q = q.ilike("agent_name", agentFilter);
+  // PostgREST returns at most 1000 rows per response: page explicitly, otherwise
+  // the prior-year deposits are silently missing and YoY percentages explode.
+  const baseQuery = () => {
+    let q = admin
+      .from("planipret_commission_live_cache")
+      .select("broker_user_id, broker_label, maestro_broker_id, agent_name, date_trans, fiscal_year, row_data, synced_at")
+      .in("fiscal_year", years)
+      .order("id", { ascending: true });
+    if (!isAdmin) {
+      q = ownMaestroId
+        ? q.or(`broker_user_id.eq.${userId},maestro_broker_id.eq.${ownMaestroId}`)
+        : q.eq("broker_user_id", userId);
+    }
+    if (agentFilter) q = q.ilike("agent_name", agentFilter);
+    return q;
+  };
 
   const isMineCacheRow = (c: any) => {
     if (isAdmin) return true;
@@ -121,8 +126,16 @@ export async function fetchLiveRegisterRows(
     return c.broker_user_id === userId;
   };
 
-  const { data: cached, error } = await q;
-  if (error) failures.push({ broker: "cache", status: 500, message: error.message });
+  const PAGE = 1000;
+  const cached: any[] = [];
+  for (let from = 0; from < 60000; from += PAGE) {
+    const { data, error } = await baseQuery().range(from, from + PAGE - 1);
+    if (error) { failures.push({ broker: "cache", status: 500, message: error.message }); break; }
+    const page = (data ?? []) as any[];
+    cached.push(...page);
+    if (page.length < PAGE) break;
+  }
+
 
   let seq = -1;
   let syncedAt: string | null = null;

@@ -267,7 +267,37 @@ export default function ClientMaestroDetail({
         )}
       </Card>
 
-      <Card title={L("Dossiers", "Files")} surface={surface}>
+      <Card title={L("Dossiers Maestro", "Maestro files")} surface={surface}>
+        {clientContracts.length === 0 ? <Empty text={L("Aucun dossier Maestro rattaché.", "No linked Maestro file.")} /> : (
+          <ul className="space-y-1.5">
+            {clientContracts.map((c) => (
+              <li key={`${c.contract_id}-${c.contract_number ?? ""}`} className="rounded-lg px-2 py-2" style={{ background: "#F7F9FC" }}>
+                <div className="flex flex-wrap items-center gap-x-2 text-[11.5px]" style={{ color: "var(--pp-text-muted)" }}>
+                  <span style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>
+                    {c.contract_number ? `${L("Dossier", "File")} ${c.contract_number}` : `${L("Contrat", "Contract")} ${c.contract_id}`}
+                  </span>
+                  <span>{c.maestro_status || c.status || "—"}</span>
+                  {c.loan_amt ? <span>{cad(Number(c.loan_amt))}</span> : null}
+                  {c.rate ? <span>{c.rate}%</span> : null}
+                  {c.date_closing ? <span>{L("clôture", "closing")} {c.date_closing}</span> : null}
+                </div>
+                <a
+                  href={maestroContractUrl(c.contract_id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold min-h-[36px]"
+                  style={{ background: "var(--pp-brand, #2E9BDC)", color: "#fff" }}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  {L("Ouvrir dans Maestro", "Open in Maestro")}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card title={L("Dossiers locaux", "Local files")} surface={surface}>
         {b.deals.length === 0 ? <Empty text={L("Aucun dossier.", "No file.")} /> : (
           <ul className="space-y-1">
             {b.deals.map((d) => (

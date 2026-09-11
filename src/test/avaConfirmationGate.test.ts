@@ -7,6 +7,8 @@ import {
   finishAction,
   isConfirmed,
   isSensitiveAvaTool,
+  isAvaOriginated,
+  isSensitiveMs365Action,
 } from "../../supabase/functions/_shared/ava-confirm";
 import { validateFollowup, normalizeE164 } from "../../supabase/functions/pp-call-followup/logic";
 
@@ -142,5 +144,53 @@ describe("suivi de fin d'appel côté serveur", () => {
   it("normalise les numéros nord-américains", () => {
     expect(normalizeE164("5550001111")).toBe("+15550001111");
     expect(normalizeE164("123")).toBeNull();
+  });
+});
+
+describe("barrière Microsoft 365 et textos AVA", () => {
+  it("classe les actions M365 sortantes comme sensibles", () => {
+    for (const a of ["send_email", "reply_email", "reply_all_email", "forward_email", "delete_email",
+      "create_calendar_event", "update_calendar_event", "delete_calendar_event",
+      "send_teams_message", "reply_teams_message", "create_teams_chat", "upsert_contact"]) {
+      expect(isSensitiveMs365Action(a)).toBe(true);
+    }
+  });
+  it("laisse passer les lectures M365", () => {
+    for (const a of ["read_emails", "list_folders", "daily_briefing", "connection_status", "search_contact"]) {
+      expect(isSensitiveMs365Action(a)).toBe(false);
+    }
+  });
+  it("détecte un envoi préparé par AVA", () => {
+    expect(isAvaOriginated({ origin: "ava_chat" })).toBe(true);
+    expect(isAvaOriginated({ surface: "AVA-voice" })).toBe(true);
+    expect(isAvaOriginated({ ava_generated: true })).toBe(true);
+    expect(isAvaOriginated({ draft: true })).toBe(true);
+    expect(isAvaOriginated({ origin: "mobile_manual" })).toBe(false);
+    expect(isAvaOriginated({})).toBe(false);
+  });
+  it("un brouillon AVA n'est jamais confirmé implicitement", () => {
+    expect(isConfirmed({ origin: "ava", draft: true })).toBe(false);
+    expect(isConfirmed({ origin: "ava", confirmed: "true" })).toBe(false);
+    expect(isConfirmed({ origin: "ava", confirmed: true })).toBe(true);
+    expect(isConfirmed({ origin: "ava", approved: true })).toBe(true);
+  });
+  it("la même action M365 confirmée deux fois n'exécute qu'une fois", async () => {
+    const admin = fakeAdmin();
+    const key = await buildIdempotencyKey({
+      userId: "broker-1", action: "ms365:send_email",
+      destination: "client@example.test", callId: "call-1", payload: { subject: "Suivi" },
+    });
+    const first = await claimAction(admin as any, {
+      userId: "broker-1", action: "ms365:send_email", surface: "ms365",
+      destination: "client@example.test", provider: "microsoft365", idempotencyKey: key,
+    });
+    expect(first.replay).toBe(false);
+    await finishAction(admin as any, (first as any).id, true, { success: true, id: "msg-1" });
+    const second = await claimAction(admin as any, {
+      userId: "broker-1", action: "ms365:send_email", surface: "ms365",
+      destination: "client@example.test", provider: "microsoft365", idempotencyKey: key,
+    });
+    expect(second.replay).toBe(true);
+    expect((second as any).result).toMatchObject({ id: "msg-1", idempotent_replay: true });
   });
 });

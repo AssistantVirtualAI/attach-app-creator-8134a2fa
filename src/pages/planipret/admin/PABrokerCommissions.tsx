@@ -31,7 +31,9 @@ export default function PABrokerCommissions() {
   const [brokers, setBrokers] = useState<{ id: string; name: string }[]>([]);
   const [broker, setBroker] = useState<string>("");
   const [monthly, setMonthly] = useState<Month[]>([]);
+  const [monthlyPy, setMonthlyPy] = useState<Month[]>([]);
   const [totals, setTotals] = useState<{ volume: number; deals: number; commission: number } | null>(null);
+  const [totalsPy, setTotalsPy] = useState<{ volume: number; deals: number; commission: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,15 +57,19 @@ export default function PABrokerCommissions() {
     if (!broker) return;
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase.functions.invoke("pp-commission-audit", {
-      body: { year, broker_user_id: broker },
-    });
-    if (err || !data?.ok) {
+    const [cur, py] = await Promise.all([
+      supabase.functions.invoke("pp-commission-audit", { body: { year, broker_user_id: broker } }),
+      supabase.functions.invoke("pp-commission-audit", { body: { year: year - 1, broker_user_id: broker } }),
+    ]);
+    if (cur.error || !(cur.data as any)?.ok) {
       setError("Impossible de charger les chiffres de ce courtier.");
-      setMonthly([]); setTotals(null);
+      setMonthly([]); setTotals(null); setMonthlyPy([]); setTotalsPy(null);
     } else {
-      setMonthly(data.monthly ?? []);
-      setTotals(data.totals ?? null);
+      setMonthly((cur.data as any).monthly ?? []);
+      setTotals((cur.data as any).totals ?? null);
+      const pyOk = !py.error && (py.data as any)?.ok;
+      setMonthlyPy(pyOk ? ((py.data as any).monthly ?? []) : []);
+      setTotalsPy(pyOk ? ((py.data as any).totals ?? null) : null);
     }
     setLoading(false);
   }, [broker, year]);
@@ -72,12 +78,24 @@ export default function PABrokerCommissions() {
 
   const brokerName = useMemo(() => brokers.find((b) => b.id === broker)?.name ?? "", [brokers, broker]);
 
+  const pyOf = (month: number) => monthlyPy.find((x) => x.month === month) ?? null;
+
   const exportCsv = () => {
-    const head = ["Mois", "Chiffre d'affaires", "Écart mois précédent", "Volume", "Dossiers"];
-    const body = monthly.map((m, i) => {
-      const prev = i > 0 ? monthly[i - 1] : null;
+    const head = [
+      "Mois",
+      `Chiffre d'affaires ${year}`, `Chiffre d'affaires ${year - 1}`, "Écart % (a/a)",
+      `Volume ${year}`, `Volume ${year - 1}`,
+      `Dossiers ${year}`, `Dossiers ${year - 1}`,
+    ];
+    const body = monthly.map((m) => {
+      const prev = pyOf(m.month);
       const pct = prev && prev.commission ? ((m.commission - prev.commission) / Math.abs(prev.commission)) * 100 : "";
-      return [MONTHS[m.month - 1], m.commission, pct === "" ? "" : `${pct.toFixed(1)} %`, m.volume, m.deals];
+      return [
+        MONTHS[m.month - 1],
+        m.commission, prev?.commission ?? 0, pct === "" ? "" : `${pct.toFixed(1)} %`,
+        m.volume, prev?.volume ?? 0,
+        m.deals, prev?.deals ?? 0,
+      ];
     });
     const csv = [head, ...body].map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
@@ -92,7 +110,7 @@ export default function PABrokerCommissions() {
         <div>
           <h1 className="text-2xl font-semibold">Commissions par courtier</h1>
           <p className="text-sm text-muted-foreground">
-            Chiffre d'affaires, volume et nombre de dossiers mois par mois, comparés au mois précédent.
+            Chiffre d'affaires, volume et nombre de dossiers mois par mois, comparés au même mois de l'année précédente.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -122,44 +140,59 @@ export default function PABrokerCommissions() {
           <Card><CardContent className="pt-6">
             <p className="text-xs text-muted-foreground">Chiffre d'affaires {year}</p>
             <p className="text-xl font-semibold">{cad(totals.commission)}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {year - 1} : {cad(totalsPy?.commission ?? 0)} <Delta cur={totals.commission} prev={totalsPy?.commission ?? 0} />
+            </p>
           </CardContent></Card>
           <Card><CardContent className="pt-6">
             <p className="text-xs text-muted-foreground">Volume de prêts</p>
             <p className="text-xl font-semibold">{cad(totals.volume)}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {year - 1} : {cad(totalsPy?.volume ?? 0)} <Delta cur={totals.volume} prev={totalsPy?.volume ?? 0} />
+            </p>
           </CardContent></Card>
           <Card><CardContent className="pt-6">
             <p className="text-xs text-muted-foreground">Dossiers</p>
             <p className="text-xl font-semibold">{totals.deals}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {year - 1} : {totalsPy?.deals ?? 0} <Delta cur={totals.deals} prev={totalsPy?.deals ?? 0} />
+            </p>
           </CardContent></Card>
         </div>
       )}
 
       <Card>
-        <CardHeader><CardTitle className="text-base">{brokerName} — {year}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{brokerName} — {year} vs {year - 1}</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground">
               <tr className="border-b">
                 <th className="text-left py-2">Mois</th>
-                <th className="text-right">Chiffre d'affaires</th>
-                <th className="text-right pl-3">vs mois préc.</th>
-                <th className="text-right pl-3">Volume</th>
-                <th className="text-right pl-3">vs mois préc.</th>
-                <th className="text-right pl-3">Dossiers</th>
-                <th className="text-right pl-3">vs mois préc.</th>
+                <th className="text-right">CA {year}</th>
+                <th className="text-right pl-3">CA {year - 1}</th>
+                <th className="text-right pl-3">Écart</th>
+                <th className="text-right pl-3">Volume {year}</th>
+                <th className="text-right pl-3">Volume {year - 1}</th>
+                <th className="text-right pl-3">Écart</th>
+                <th className="text-right pl-3">Dossiers {year}</th>
+                <th className="text-right pl-3">Dossiers {year - 1}</th>
+                <th className="text-right pl-3">Écart</th>
               </tr>
             </thead>
             <tbody>
-              {monthly.map((m, i) => {
-                const prev = i > 0 ? monthly[i - 1] : null;
+              {monthly.map((m) => {
+                const prev = pyOf(m.month);
                 return (
                   <tr key={m.month} className="border-b last:border-0">
                     <td className="py-1.5">{MONTHS[m.month - 1]}</td>
                     <td className="text-right">{cad(m.commission)}</td>
+                    <td className="text-right pl-3 text-muted-foreground">{cad(prev?.commission ?? 0)}</td>
                     <td className="text-right pl-3"><Delta cur={m.commission} prev={prev?.commission ?? 0} /></td>
                     <td className="text-right pl-3">{cad(m.volume)}</td>
+                    <td className="text-right pl-3 text-muted-foreground">{cad(prev?.volume ?? 0)}</td>
                     <td className="text-right pl-3"><Delta cur={m.volume} prev={prev?.volume ?? 0} /></td>
                     <td className="text-right pl-3">{m.deals}</td>
+                    <td className="text-right pl-3 text-muted-foreground">{prev?.deals ?? 0}</td>
                     <td className="text-right pl-3"><Delta cur={m.deals} prev={prev?.deals ?? 0} /></td>
                   </tr>
                 );

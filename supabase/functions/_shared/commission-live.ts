@@ -127,6 +127,7 @@ export async function fetchLiveRegisterRows(
   let seq = -1;
   let syncedAt: string | null = null;
   for (const c of (cached ?? []) as any[]) {
+    if (!isMineCacheRow(c)) continue;
     const d = c.row_data ?? {};
     const name = String(c.agent_name ?? c.broker_label ?? "").trim();
     brokers.add(name || String(c.broker_label ?? ""));

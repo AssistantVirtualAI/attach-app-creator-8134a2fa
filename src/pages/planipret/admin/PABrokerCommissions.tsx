@@ -140,44 +140,59 @@ export default function PABrokerCommissions() {
           <Card><CardContent className="pt-6">
             <p className="text-xs text-muted-foreground">Chiffre d'affaires {year}</p>
             <p className="text-xl font-semibold">{cad(totals.commission)}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {year - 1} : {cad(totalsPy?.commission ?? 0)} <Delta cur={totals.commission} prev={totalsPy?.commission ?? 0} />
+            </p>
           </CardContent></Card>
           <Card><CardContent className="pt-6">
             <p className="text-xs text-muted-foreground">Volume de prêts</p>
             <p className="text-xl font-semibold">{cad(totals.volume)}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {year - 1} : {cad(totalsPy?.volume ?? 0)} <Delta cur={totals.volume} prev={totalsPy?.volume ?? 0} />
+            </p>
           </CardContent></Card>
           <Card><CardContent className="pt-6">
             <p className="text-xs text-muted-foreground">Dossiers</p>
             <p className="text-xl font-semibold">{totals.deals}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {year - 1} : {totalsPy?.deals ?? 0} <Delta cur={totals.deals} prev={totalsPy?.deals ?? 0} />
+            </p>
           </CardContent></Card>
         </div>
       )}
 
       <Card>
-        <CardHeader><CardTitle className="text-base">{brokerName} — {year}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{brokerName} — {year} vs {year - 1}</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground">
               <tr className="border-b">
                 <th className="text-left py-2">Mois</th>
-                <th className="text-right">Chiffre d'affaires</th>
-                <th className="text-right pl-3">vs mois préc.</th>
-                <th className="text-right pl-3">Volume</th>
-                <th className="text-right pl-3">vs mois préc.</th>
-                <th className="text-right pl-3">Dossiers</th>
-                <th className="text-right pl-3">vs mois préc.</th>
+                <th className="text-right">CA {year}</th>
+                <th className="text-right pl-3">CA {year - 1}</th>
+                <th className="text-right pl-3">Écart</th>
+                <th className="text-right pl-3">Volume {year}</th>
+                <th className="text-right pl-3">Volume {year - 1}</th>
+                <th className="text-right pl-3">Écart</th>
+                <th className="text-right pl-3">Dossiers {year}</th>
+                <th className="text-right pl-3">Dossiers {year - 1}</th>
+                <th className="text-right pl-3">Écart</th>
               </tr>
             </thead>
             <tbody>
-              {monthly.map((m, i) => {
-                const prev = i > 0 ? monthly[i - 1] : null;
+              {monthly.map((m) => {
+                const prev = pyOf(m.month);
                 return (
                   <tr key={m.month} className="border-b last:border-0">
                     <td className="py-1.5">{MONTHS[m.month - 1]}</td>
                     <td className="text-right">{cad(m.commission)}</td>
+                    <td className="text-right pl-3 text-muted-foreground">{cad(prev?.commission ?? 0)}</td>
                     <td className="text-right pl-3"><Delta cur={m.commission} prev={prev?.commission ?? 0} /></td>
                     <td className="text-right pl-3">{cad(m.volume)}</td>
+                    <td className="text-right pl-3 text-muted-foreground">{cad(prev?.volume ?? 0)}</td>
                     <td className="text-right pl-3"><Delta cur={m.volume} prev={prev?.volume ?? 0} /></td>
                     <td className="text-right pl-3">{m.deals}</td>
+                    <td className="text-right pl-3 text-muted-foreground">{prev?.deals ?? 0}</td>
                     <td className="text-right pl-3"><Delta cur={m.deals} prev={prev?.deals ?? 0} /></td>
                   </tr>
                 );

@@ -51,11 +51,11 @@ export function useBrokerOverview(userId: string, days: number, lang: "fr" | "en
       supabase.from("planipret_phone_calls")
         .select("id, direction, status, duration_seconds, has_recording, has_transcript, analyzed_at, ai_summary, from_number, to_number, from_name, to_name, created_at")
         .eq("user_id", userId).gte("created_at", sincePrev.toISOString())
-        .order("created_at", { ascending: true }).limit(5000),
+        .order("created_at", { ascending: true }).limit(1000),
       supabase.from("planipret_phone_messages")
         .select("id, direction, body, from_number, to_number, read_at, created_at")
         .eq("user_id", userId).gte("created_at", sincePrev.toISOString())
-        .order("created_at", { ascending: true }).limit(5000),
+        .order("created_at", { ascending: true }).limit(1000),
       supabase.from("planipret_voicemails").select("id", { count: "exact", head: true })
         .eq("user_id", userId).eq("is_read", false),
     ]);

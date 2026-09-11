@@ -129,7 +129,6 @@ export default function AdminDashboard() {
       ]);
       const callRows = (calls.data ?? []) as any[];
       const smsRows = (sms.data ?? []) as any[];
-      const recRows: any[] = [];
       const sentRows = (sentiments.data ?? []) as any[];
       const r30 = (recent30.data ?? []) as any[];
       const softRows = (softTotal.data ?? []) as any[];

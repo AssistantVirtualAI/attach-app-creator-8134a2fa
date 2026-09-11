@@ -16001,6 +16001,7 @@ export type Database = {
         Args: { _answered_by: string; _call_id: string }
         Returns: boolean
       }
+      pp_norm_name: { Args: { t: string }; Returns: string }
       read_planipret_sip_secret: { Args: { _name: string }; Returns: string }
       reconcile_pbx_call_records: { Args: { _org_id: string }; Returns: Json }
       relink_my_softphone_user: { Args: never; Returns: Json }

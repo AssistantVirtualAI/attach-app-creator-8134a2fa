@@ -120,6 +120,8 @@ const PAPhoneNumbers = lazyWithRetry(() => import("./pages/planipret/admin/PAPho
 const PAMaestroStatus = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroStatus"));
 const PAMicrosoftAuth = lazyWithRetry(() => import("./pages/planipret/admin/PAMicrosoftAuth"));
 const PAContracts = lazyWithRetry(() => import("./pages/planipret/admin/PAContracts"));
+const PACommissionAudit = lazyWithRetry(() => import("./pages/planipret/admin/PACommissionAudit"));
+const PABrokerCommissions = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerCommissions"));
 
 
 const PlanipretBrokerLayout = lazyWithRetry(() => import("./pages/planipret/broker/PlanipretBrokerLayout"));
@@ -727,6 +729,8 @@ const App = () => (
                   <Route path="commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissions /></Suspense>} />
                   <Route path="ava-confirmations" element={<Suspense fallback={<AdminPageSkeleton />}><PAAvaConfirmations /></Suspense>} />
                   <Route path="commissions-monthly" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionsMonthly /></Suspense>} />
+                  <Route path="commission-audit" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionAudit /></Suspense>} />
+                  <Route path="broker-commissions" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerCommissions /></Suspense>} />
                   <Route path="commission-registry" element={<Suspense fallback={<AdminPageSkeleton />}><PACommissionRegistry /></Suspense>} />
                   <Route path="maestro-scope" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroScope /></Suspense>} />
                   <Route path="tasks" element={<Suspense fallback={<AdminPageSkeleton />}><PATasks /></Suspense>} />

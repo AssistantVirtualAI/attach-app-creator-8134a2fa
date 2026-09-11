@@ -226,11 +226,47 @@ Deno.serve(async (req) => {
 
   contracts.sort((a, b) => String(b.last_activity_at ?? "").localeCompare(String(a.last_activity_at ?? "")));
 
+  // Persistance en base : l'écran Contrats lit ensuite planipret_contracts.
+  let persisted = 0;
+  if (contracts.length) {
+    const rows = contracts.map((c) => ({
+      contract_id: c.contract_id,
+      contract_number: c.contract_number,
+      broker_profile_id: c.broker_profile_id,
+      broker_name: c.broker_name,
+      maestro_status: c.maestro_status ?? null,
+      status: c.status,
+      loan_amt: c.loan_amt != null && String(c.loan_amt).trim() !== "" ? Number(String(c.loan_amt).replace(/[^0-9.-]/g, "")) || null : null,
+      rate: c.rate ?? null,
+      date_closing: c.date_closing || null,
+      date_maturity: c.date_maturity || null,
+      clients: c.clients,
+      source: c.source,
+      last_activity_at: c.last_activity_at,
+      calls_total: c.calls_total,
+      calls_synced: c.calls_synced,
+      with_transcript: c.with_transcript,
+      with_summary: c.with_summary,
+      with_coaching: c.with_coaching,
+      raw: { timeline: c.timeline.slice(-60) },
+      synced_at: new Date().toISOString(),
+    }));
+    for (let i = 0; i < rows.length; i += 200) {
+      const chunk = rows.slice(i, i + 200);
+      const { error: upErr } = await admin
+        .from("planipret_contracts")
+        .upsert(chunk, { onConflict: "contract_id,broker_profile_id" });
+      if (upErr) errors.push({ stage: "persist", error: upErr.message });
+      else persisted += chunk.length;
+    }
+  }
+
   return json({
     ok: true,
     endpoint: `${cfg.url}/api/main/contracts?agent_id={agentId}`,
     brokers: brokers.map((b: any) => ({ id: b.id, name: b.full_name, telecom_id: b.maestro_telecom_user_id })),
     contracts,
+    persisted,
     errors,
   });
 });

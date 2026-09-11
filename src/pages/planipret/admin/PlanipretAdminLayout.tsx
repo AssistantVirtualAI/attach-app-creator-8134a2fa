@@ -29,9 +29,9 @@ import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -62,6 +62,8 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/synced-calls", key: "syncedCalls", Icon: BarChart3 },
       { to: "/planipret/admin/commissions", key: "commissions", Icon: BarChart3 },
       { to: "/planipret/admin/commissions-monthly", key: "commissionsMonthly", Icon: BarChart3 },
+      { to: "/planipret/admin/broker-commissions", key: "brokerCommissions", Icon: BarChart3 },
+      { to: "/planipret/admin/commission-audit", key: "commissionAudit", Icon: BarChart3 },
       { to: "/planipret/admin/tasks", key: "tasks", Icon: CheckSquare },
       { to: "/planipret/admin/broker-360", key: "broker360", Icon: UserSquare2 },
       { to: "/planipret/admin/maestro-tasks", key: "maestroTasks", Icon: CheckSquare },
@@ -119,6 +121,8 @@ const NAV_REGULAR: typeof NAV = [
       { to: "/planipret/admin/recordings", key: "recordings",  Icon: Mic },
       { to: "/planipret/admin/commissions", key: "commissions", Icon: BarChart3 },
       { to: "/planipret/admin/commissions-monthly", key: "commissionsMonthly", Icon: BarChart3 },
+      { to: "/planipret/admin/broker-commissions", key: "brokerCommissions", Icon: BarChart3 },
+      { to: "/planipret/admin/commission-audit", key: "commissionAudit", Icon: BarChart3 },
       { to: "/planipret/admin/tasks",      key: "tasks",       Icon: CheckSquare },
       { to: "/planipret/admin/broker-360", key: "broker360",  Icon: UserSquare2 },
       { to: "/planipret/admin/maestro-tasks", key: "maestroTasks", Icon: CheckSquare },
@@ -163,6 +167,8 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/synced-calls": "syncedCalls",
   "/planipret/admin/commissions": "commissions",
   "/planipret/admin/commissions-monthly": "commissionsMonthly",
+  "/planipret/admin/commission-audit": "commissionAudit",
+  "/planipret/admin/broker-commissions": "brokerCommissions",
   "/planipret/admin/tasks": "tasks",
   "/planipret/admin/broker-360": "broker360",
   "/planipret/admin/maestro-tasks": "maestroTasks",
@@ -492,6 +498,8 @@ export default function PlanipretAdminLayout() {
                   : (key === "diagnostics" ? (lang === "en" ? "Diagnostics" : "Diagnostic")
                     : key === "maestroSync" ? (lang === "en" ? "Maestro sync" : "Sync Maestro")
                     : key === "contracts" ? (lang === "en" ? "Contracts" : "Contrats")
+                    : key === "commissionAudit" ? (lang === "en" ? "Commission audit" : "Audit commissions")
+                    : key === "brokerCommissions" ? (lang === "en" ? "Broker commissions" : "Commissions par courtier")
                     : key === "microsoftAuth" ? (lang === "en" ? "Microsoft sign-ins" : "Connexions Microsoft")
 
                     : key === "telecomMapping" ? (lang === "en" ? "Telecom mapping" : "Mapping Telecom")

@@ -34,10 +34,38 @@ export const AVA_SENSITIVE_TOOLS = new Set<string>([
 
 export const isSensitiveAvaTool = (tool: string) => AVA_SENSITIVE_TOOLS.has(String(tool));
 
+/** Actions Microsoft 365 sortantes : jamais sans confirmation explicite. */
+export const MS365_SENSITIVE_ACTIONS = new Set<string>([
+  "send_email",
+  "reply_email",
+  "reply_all_email",
+  "forward_email",
+  "delete_email",
+  "create_calendar_event",
+  "update_calendar_event",
+  "delete_calendar_event",
+  "send_teams_message",
+  "reply_teams_message",
+  "create_teams_chat",
+  "upsert_contact",
+]);
+
+export const isSensitiveMs365Action = (action: string) => MS365_SENSITIVE_ACTIONS.has(String(action));
+
 /** `confirmed: true` (ou `approved: true`) explicitement fourni par le courtier. */
 export function isConfirmed(params: any): boolean {
   return params?.confirmed === true || params?.approved === true;
 }
+
+/** Un envoi préparé par AVA (brouillon, suivi post-appel, tool call vocal). */
+export function isAvaOriginated(params: any): boolean {
+  const origin = String(params?.origin ?? params?.surface ?? "").toLowerCase();
+  return origin.includes("ava") ||
+    params?.ava_generated === true ||
+    params?.draft === true ||
+    params?.proposal === true;
+}
+
 
 export function confirmationRequiredResult(tool: string, params: any) {
   return {

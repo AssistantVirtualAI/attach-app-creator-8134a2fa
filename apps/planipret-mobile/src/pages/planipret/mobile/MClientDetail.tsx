@@ -22,6 +22,7 @@ export default function MClientDetail() {
     return () => { alive = false; };
   }, []);
 
+  const [smsTarget, setSmsTarget] = useState<SmsDraftTarget | null>(null);
   const { tasks, loading, lastSyncAt, setFilter } = usePlanipretTasks(userId);
   useEffect(() => { setFilter("all"); }, [setFilter]);
 

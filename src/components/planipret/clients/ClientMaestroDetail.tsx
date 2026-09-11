@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CalendarClock, FolderKanban, MessageSquare, Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, User, Wallet } from "lucide-react";
+import { AlertTriangle, CalendarClock, ExternalLink, FolderKanban, MessageSquare, Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, User, Wallet } from "lucide-react";
 import MaestroTaskRow from "@/components/planipret/mobile/MaestroTaskRow";
 import { formatTaskDue, type NormalizedTask } from "@/lib/planipret/tasks";
 import {

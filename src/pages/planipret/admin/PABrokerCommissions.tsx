@@ -31,7 +31,9 @@ export default function PABrokerCommissions() {
   const [brokers, setBrokers] = useState<{ id: string; name: string }[]>([]);
   const [broker, setBroker] = useState<string>("");
   const [monthly, setMonthly] = useState<Month[]>([]);
+  const [monthlyPy, setMonthlyPy] = useState<Month[]>([]);
   const [totals, setTotals] = useState<{ volume: number; deals: number; commission: number } | null>(null);
+  const [totalsPy, setTotalsPy] = useState<{ volume: number; deals: number; commission: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

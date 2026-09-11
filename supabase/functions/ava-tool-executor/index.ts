@@ -4,6 +4,15 @@ import { aiFetch } from "../_shared/claude-compat.ts";
 // planipret_ava_conversations.
 import { authBroker, corsHeaders, jsonResponse, nsBrokerFetch } from "../_shared/ns-broker.ts";
 import { normalizePhoneE164 } from "../_shared/phone-normalize.ts";
+import {
+  buildIdempotencyKey,
+  claimAction,
+  confirmationRequiredResult,
+  finishAction,
+  isConfirmed,
+  isSensitiveAvaTool,
+  logProposal,
+} from "../_shared/ava-confirm.ts";
 import { linkBrokerIdByEmail, resolveTelecomUserId } from "../_shared/maestro-broker-directory.ts";
 import { claudeText } from "../_shared/anthropic.ts";
 import {

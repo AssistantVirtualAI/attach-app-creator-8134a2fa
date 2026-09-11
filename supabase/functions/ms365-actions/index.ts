@@ -118,9 +118,61 @@ Deno.serve(async (req) => {
     if (!profile?.ms365_access_token) {
       return new Response(JSON.stringify({ success: false, error: "Microsoft 365 non connecté pour ce courtier" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    const j = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    let j = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    // ---- Barrière de confirmation + idempotence (côté serveur) -------------
+    // Aucune action sortante Microsoft 365 proposée par AVA ne part sans une
+    // confirmation explicite du courtier, et jamais deux fois.
+    const MS365_SENSITIVE = new Set([
+      "send_email", "reply_email", "reply_all_email", "forward_email", "delete_email",
+      "create_calendar_event", "update_calendar_event", "delete_calendar_event",
+      "send_teams_message", "reply_teams_message", "create_teams_chat", "upsert_contact",
+    ]);
+    if (MS365_SENSITIVE.has(String(action))) {
+      const confirmed = payload?.confirmed === true || payload?.approved === true || body?.confirmed === true;
+      if (!confirmed) {
+        return j({
+          success: false,
+          needs_confirmation: true,
+          error: "confirmation_required",
+          action,
+          proposal: payload,
+          message: "Cette action doit être confirmée explicitement par le courtier avant exécution.",
+        }, 200);
+      }
+      const destination = String(
+        payload?.to ?? payload?.recipient ?? payload?.email ?? payload?.chat_id ?? payload?.message_id ?? "",
+      ).slice(0, 120);
+      const idempotencyKey = await buildIdempotencyKey({
+        userId,
+        action: `ms365:${action}`,
+        destination,
+        callId: payload?.call_id ?? null,
+        payload: { ...payload, confirmed: undefined, approved: undefined },
+        provided: payload?.idempotency_key ?? body?.idempotency_key ?? null,
+      });
+      const claim = await claimAction(admin, {
+        userId,
+        brokerId: profile?.id ?? null,
+        callId: payload?.call_id ?? null,
+        action: `ms365:${action}`,
+        surface: "ms365",
+        destination,
+        provider: "microsoft365",
+        idempotencyKey,
+      });
+      if (claim.replay) return j(claim.result);
+      const base = j;
+      j = (b: any, s = 200) => {
+        const ok = s < 400 && b?.success !== false;
+        finishAction(admin, claim.id, ok, ok ? b : null, ok ? null : String(b?.error ?? "error"))
+          .catch(() => null);
+        return base(b, s);
+      };
+    }
 
     switch (action) {
+
       case "connection_status": {
         return j({
           success: true,

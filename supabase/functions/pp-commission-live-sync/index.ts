@@ -193,11 +193,20 @@ Deno.serve(async (req) => {
 
     if (source === "broker_token") connectedCount += 1;
 
+    // A team-lead / admin token returns OTHER brokers' deposits too. Each row is
+    // attributed to the broker it actually belongs to (Maestro agent id, then
+    // name), never to the account that fetched it — otherwise a broker would see
+    // his colleagues' commissions in his own totals.
     const payload = rows.map((row) => {
       const date = row.date_trans ? String(row.date_trans).slice(0, 10) : null;
+      const rowMid = row.agent_name_id != null ? String(row.agent_name_id) : mid;
+      const rowName = String(row.agent_name ?? row.target_name ?? "").trim();
+      const owner = (rowMid ? profileByMaestroId.get(rowMid) : null)
+        ?? (agentKey(rowName) ? profileByNameKey.get(agentKey(rowName) as string) : null)
+        ?? (rowMid && mid && rowMid === mid ? p.user_id : null);
       return {
         dedupe_key: dedupeKey(row as any),
-        broker_user_id: p.user_id,
+        broker_user_id: owner ?? null,
         broker_label: label,
         maestro_broker_id: row.agent_name_id != null ? String(row.agent_name_id) : mid,
         agent_name: String(row.agent_name ?? row.target_name ?? label).trim() || label,

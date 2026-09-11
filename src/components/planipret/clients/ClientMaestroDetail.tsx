@@ -40,6 +40,7 @@ export default function ClientMaestroDetail({
   const [calls, setCalls] = useState<ClientCall[]>([]);
   const [messages, setMessages] = useState<ClientMessage[]>([]);
   const [brokerNames, setBrokerNames] = useState<Record<string, string>>({});
+  const [contracts, setContracts] = useState<MaestroContract[]>([]);
 
   const idsKey = userIds.filter(Boolean).sort().join(",");
 
@@ -49,6 +50,12 @@ export default function ClientMaestroDetail({
       fetchClientDeals(ids), fetchClientDeposits(), fetchClientCalls(ids), fetchClientMessages(ids),
     ]);
     setDeals(d); setDeposits(dep); setCalls(cl); setMessages(ms);
+    const { data: ct } = await supabase
+      .from("planipret_contracts")
+      .select("contract_id, contract_number, status, maestro_status, loan_amt, rate, date_closing, date_maturity, clients, broker_name, last_activity_at")
+      .order("last_activity_at", { ascending: false, nullsFirst: false })
+      .limit(1000);
+    setContracts((ct ?? []) as unknown as MaestroContract[]);
   }, [idsKey]);
 
   useEffect(() => { void load(); }, [load]);

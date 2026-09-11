@@ -60,10 +60,8 @@ export default function PABrokerStats() {
         supabase.from("planipret_profiles")
           .select("user_id, full_name, email, extension, ns_extension, maestro_connected, maestro_last_sync_at")
           .limit(1000),
-        supabase.from("planipret_maestro_activity")
-          .select("user_id, kind, occurred_at, duration_seconds, maestro_status, is_ai")
-          .gte("occurred_at", since).limit(20000),
-        supabase.from("planipret_tasks_projection").select("user_id, status, due_at").is("deleted_at", null).limit(10000),
+        supabase.rpc("planipret_broker_activity_stats", { _since: since }),
+        supabase.rpc("planipret_broker_task_stats"),
       ]);
       if (!alive) return;
 
@@ -71,33 +69,23 @@ export default function PABrokerStats() {
       for (const a of (activity.data ?? []) as any[]) {
         const k = String(a.user_id ?? "");
         if (!k) continue;
-        const cur = actBy.get(k) ?? { calls: 0, texts: 0, callsSynced: 0, textsSynced: 0, aiCalls: 0, talkSeconds: 0, lastActivity: null };
-        const synced = a.maestro_status === "synced";
-        if (a.kind === "call") {
-          cur.calls += 1;
-          if (synced) cur.callsSynced += 1;
-          if (a.is_ai) cur.aiCalls += 1;
-          cur.talkSeconds += Number(a.duration_seconds ?? 0);
-        } else {
-          cur.texts += 1;
-          if (synced) cur.textsSynced += 1;
-        }
-        if (a.occurred_at && (!cur.lastActivity || a.occurred_at > cur.lastActivity)) cur.lastActivity = a.occurred_at;
-        actBy.set(k, cur);
+        actBy.set(k, {
+          calls: Number(a.calls ?? 0),
+          texts: Number(a.texts ?? 0),
+          callsSynced: Number(a.calls_synced ?? 0),
+          textsSynced: Number(a.texts_synced ?? 0),
+          aiCalls: Number(a.ai_calls ?? 0),
+          talkSeconds: Number(a.talk_seconds ?? 0),
+          lastActivity: a.last_activity ?? null,
+        });
       }
 
 
       const tasksBy = new Map<string, { open: number; overdue: number }>();
-      const now = Date.now();
       for (const t of (tasks.data ?? []) as any[]) {
         const k = String(t.user_id ?? "");
         if (!k) continue;
-        const done = DONE.has(String(t.status ?? "").toLowerCase());
-        if (done) continue;
-        const cur = tasksBy.get(k) ?? { open: 0, overdue: 0 };
-        cur.open += 1;
-        if (t.due_at && new Date(t.due_at).getTime() < now) cur.overdue += 1;
-        tasksBy.set(k, cur);
+        tasksBy.set(k, { open: Number(t.open_tasks ?? 0), overdue: Number(t.overdue_tasks ?? 0) });
       }
 
       const out: BrokerRow[] = ((profiles.data ?? []) as any[]).map((p) => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CalendarClock, FolderKanban, MessageSquare, Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, User, Wallet } from "lucide-react";
+import { AlertTriangle, CalendarClock, ExternalLink, FolderKanban, MessageSquare, Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, User, Wallet } from "lucide-react";
 import MaestroTaskRow from "@/components/planipret/mobile/MaestroTaskRow";
 import { formatTaskDue, type NormalizedTask } from "@/lib/planipret/tasks";
 import {
@@ -9,6 +9,21 @@ import {
   type ClientBundle, type ClientCall, type ClientDeal, type ClientDeposit, type ClientMessage,
 } from "@/lib/planipret/clientMaestro";
 import { supabase } from "@/integrations/supabase/client";
+import { maestroContractUrl } from "@/lib/planipret/maestroLinks";
+
+type MaestroContract = {
+  contract_id: string;
+  contract_number: string | null;
+  status: string | null;
+  maestro_status: string | null;
+  loan_amt: number | null;
+  rate: string | null;
+  date_closing: string | null;
+  date_maturity: string | null;
+  clients: { id?: string; name?: string; email?: string | null }[] | null;
+  broker_name: string | null;
+  last_activity_at: string | null;
+};
 
 const cad = (n: number) =>
   new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n || 0);
@@ -40,6 +55,7 @@ export default function ClientMaestroDetail({
   const [calls, setCalls] = useState<ClientCall[]>([]);
   const [messages, setMessages] = useState<ClientMessage[]>([]);
   const [brokerNames, setBrokerNames] = useState<Record<string, string>>({});
+  const [contracts, setContracts] = useState<MaestroContract[]>([]);
 
   const idsKey = userIds.filter(Boolean).sort().join(",");
 
@@ -49,6 +65,12 @@ export default function ClientMaestroDetail({
       fetchClientDeals(ids), fetchClientDeposits(), fetchClientCalls(ids), fetchClientMessages(ids),
     ]);
     setDeals(d); setDeposits(dep); setCalls(cl); setMessages(ms);
+    const { data: ct } = await supabase
+      .from("planipret_contracts")
+      .select("contract_id, contract_number, status, maestro_status, loan_amt, rate, date_closing, date_maturity, clients, broker_name, last_activity_at")
+      .order("last_activity_at", { ascending: false, nullsFirst: false })
+      .limit(1000);
+    setContracts((ct ?? []) as unknown as MaestroContract[]);
   }, [idsKey]);
 
   useEffect(() => { void load(); }, [load]);
@@ -70,6 +92,15 @@ export default function ClientMaestroDetail({
     const key = makeKey(decodeURIComponent(clientKey));
     return buildClientBundles(tasks, deals, deposits, calls, messages).find((b) => b.key === key);
   }, [tasks, deals, deposits, calls, messages, clientKey]);
+
+  // Dossiers Maestro rattachés à ce client (correspondance par nom normalisé).
+  const clientContracts = useMemo(() => {
+    const key = makeKey(decodeURIComponent(clientKey));
+    if (!key) return [] as MaestroContract[];
+    return contracts.filter((c) =>
+      (c.clients ?? []).some((cl) => makeKey(cl?.name) === key),
+    );
+  }, [contracts, clientKey]);
 
   const brokerIdsKey = (bundle?.brokerIds ?? []).join(",");
   useEffect(() => {
@@ -236,7 +267,37 @@ export default function ClientMaestroDetail({
         )}
       </Card>
 
-      <Card title={L("Dossiers", "Files")} surface={surface}>
+      <Card title={L("Dossiers Maestro", "Maestro files")} surface={surface}>
+        {clientContracts.length === 0 ? <Empty text={L("Aucun dossier Maestro rattaché.", "No linked Maestro file.")} /> : (
+          <ul className="space-y-1.5">
+            {clientContracts.map((c) => (
+              <li key={`${c.contract_id}-${c.contract_number ?? ""}`} className="rounded-lg px-2 py-2" style={{ background: "#F7F9FC" }}>
+                <div className="flex flex-wrap items-center gap-x-2 text-[11.5px]" style={{ color: "var(--pp-text-muted)" }}>
+                  <span style={{ color: "var(--pp-text-primary)", fontWeight: 600 }}>
+                    {c.contract_number ? `${L("Dossier", "File")} ${c.contract_number}` : `${L("Contrat", "Contract")} ${c.contract_id}`}
+                  </span>
+                  <span>{c.maestro_status || c.status || "—"}</span>
+                  {c.loan_amt ? <span>{cad(Number(c.loan_amt))}</span> : null}
+                  {c.rate ? <span>{c.rate}%</span> : null}
+                  {c.date_closing ? <span>{L("clôture", "closing")} {c.date_closing}</span> : null}
+                </div>
+                <a
+                  href={maestroContractUrl(c.contract_id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold min-h-[36px]"
+                  style={{ background: "var(--pp-brand, #2E9BDC)", color: "#fff" }}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  {L("Ouvrir dans Maestro", "Open in Maestro")}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card title={L("Dossiers locaux", "Local files")} surface={surface}>
         {b.deals.length === 0 ? <Empty text={L("Aucun dossier.", "No file.")} /> : (
           <ul className="space-y-1">
             {b.deals.map((d) => (

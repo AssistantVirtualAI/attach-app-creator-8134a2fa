@@ -152,6 +152,42 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Réparation des lignes sans client : l'endpoint officiel renvoie parfois un
+    // contrat sans bloc `clients`. On complète via la liste des clients du
+    // courtier (contrats imbriqués dans task_targets.contracts).
+    const orphans = Array.from(byContract.values()).filter((r) => r.clients.length === 0);
+    if (orphans.length) {
+      const res = await maestroFetch(cfg, { path: CLIENTS_PATH(telecomId, limit), token: cfg.key });
+      if (res.ok && Array.isArray(res.data)) {
+        const byContractClients = new Map<string, ContractRow["clients"]>();
+        for (const c of res.data as any[]) {
+          const cid = String(c?.id ?? "");
+          const list = c?.task_targets?.contracts ?? [];
+          for (const k of Array.isArray(list) ? list : []) {
+            const key = String(k?.id ?? "");
+            if (!key) continue;
+            if (!byContractClients.has(key)) byContractClients.set(key, []);
+            byContractClients.get(key)!.push({
+              id: cid,
+              name: `${c?.first_name ?? ""} ${c?.last_name ?? ""}`.trim(),
+              email: c?.email ?? null,
+              created: c?.created ?? null,
+              modified: c?.modified ?? null,
+            });
+          }
+        }
+        for (const row of orphans) {
+          const found = byContractClients.get(row.contract_id) ?? [];
+          for (const cl of found) {
+            if (cl.id) clientIds.push(cl.id);
+            row.clients.push(cl);
+          }
+        }
+      } else {
+        errors.push({ broker: p.full_name, stage: "orphan_repair", status: res.status, endpoint: res.endpoint });
+      }
+    }
+
     // Appels locaux rattachés aux clients Maestro de ce courtier.
     const callsByClient = new Map<string, any[]>();
     if (clientIds.length) {
@@ -215,7 +251,9 @@ Deno.serve(async (req) => {
       }
       row.timeline.sort((a, b) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
       row.last_activity_at = row.timeline.length ? row.timeline[row.timeline.length - 1].at : null;
-      row.status = row.calls_total === 0
+      row.status = row.clients.length === 0
+        ? "sans client"
+        : row.calls_total === 0
         ? "aucun appel"
         : row.calls_synced === row.calls_total
           ? "complet"

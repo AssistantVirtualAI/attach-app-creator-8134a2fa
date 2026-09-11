@@ -52,6 +52,8 @@ export default function PAAvaConfirmations() {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
+  const [brokerFilter, setBrokerFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -104,16 +106,48 @@ export default function PAAvaConfirmations() {
     [rows],
   );
 
+  const monthOf = (r: Row) => String(r.proposed_at ?? r.created_at ?? "").slice(0, 7);
+
+  const brokers = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rows) {
+      const id = r.user_id ?? r.broker_id;
+      if (id) map.set(id, (r.user_id ? names[r.user_id] : null) ?? r.broker_id ?? id.slice(0, 8));
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, names]);
+
+  const months = useMemo(
+    () => Array.from(new Set(rows.map(monthOf).filter(Boolean))).sort().reverse(),
+    [rows],
+  );
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
       if (actionFilter !== "all" && r.action !== actionFilter) return false;
+      if (brokerFilter !== "all" && (r.user_id ?? r.broker_id) !== brokerFilter) return false;
+      if (monthFilter !== "all" && monthOf(r) !== monthFilter) return false;
       if (!needle) return true;
       return [brokerOf(r), r.call_id, r.action, r.destination, r.idempotency_key, r.status]
         .some((v) => String(v ?? "").toLowerCase().includes(needle));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, actionFilter, names]);
+  }, [rows, q, actionFilter, brokerFilter, monthFilter, names]);
+
+  // Nombre d'appels (call_id distincts) par statut, sur la sélection courante.
+  const statusCounts = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const r of filtered) {
+      const s = (r.status ?? (r.decision ? r.decision : "pending")).toLowerCase();
+      if (!map.has(s)) map.set(s, new Set());
+      map.get(s)!.add(r.call_id ?? r.session_id ?? r.id);
+    }
+    return Array.from(map.entries())
+      .map(([status, set]) => ({ status, calls: set.size }))
+      .sort((a, b) => b.calls - a.calls);
+  }, [filtered]);
 
   const pending = useMemo(
     () => filtered.filter((r) => !r.executed_at && (PENDING.has((r.status ?? "").toLowerCase()) || !r.decision)),
@@ -160,11 +194,37 @@ export default function PAAvaConfirmations() {
             {actions.map((a) => <SelectItem key={a} value={a}>{actionLabel(a)}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={brokerFilter} onValueChange={setBrokerFilter}>
+          <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{L("Tous les courtiers", "All brokers")}</SelectItem>
+            {brokers.map(([id, name]) => <SelectItem key={id} value={id}>{name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={monthFilter} onValueChange={setMonthFilter}>
+          <SelectTrigger className="w-[170px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{L("Tous les mois", "All months")}</SelectItem>
+            {months.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           <span className="ml-2">{L("Actualiser", "Refresh")}</span>
         </Button>
       </div>
+
+      <Card className="mb-4">
+        <CardContent className="py-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium mr-1">{L("Appels par statut", "Calls by status")}</span>
+          {statusCounts.length === 0 && (
+            <span className="text-sm text-muted-foreground">{L("Aucune donnée pour cette sélection.", "No data for this selection.")}</span>
+          )}
+          {statusCounts.map((s) => (
+            <Badge key={s.status} variant="outline">{s.status} · {s.calls}</Badge>
+          ))}
+        </CardContent>
+      </Card>
 
       {error && <Card className="mb-4 border-destructive/40"><CardContent className="py-3 text-sm text-destructive">{error}</CardContent></Card>}
 

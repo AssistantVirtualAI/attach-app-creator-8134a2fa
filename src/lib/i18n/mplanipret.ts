@@ -1866,6 +1866,7 @@ export const MP_DICT = {
         recordings: "Recordings",
         syncedCalls: "Synced calls",
         commissions: "Commissions",
+        commissionsMonthly: "Commissions by month",
         tasks: "Tasks",
         broker360: "Broker 360",
         maestroTasks: "Maestro tasks",

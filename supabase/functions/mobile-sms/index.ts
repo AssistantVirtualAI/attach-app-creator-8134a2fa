@@ -47,11 +47,11 @@ Deno.serve(async (req) => {
       // deux envois. Même fil + même texte dans les 60 dernières secondes → replay.
       const since = new Date(Date.now() - 60_000).toISOString();
       const { data: dup } = await sb.from("pbx_sms_messages")
-        .select("id, sent_at, created_at")
+        .select("id, sent_at")
         .eq("thread_id", th.id).eq("organization_id", orgId)
         .eq("direction", "outbound").eq("body", text)
-        .gte("created_at", since)
-        .order("created_at", { ascending: false })
+        .gte("sent_at", since)
+        .order("sent_at", { ascending: false })
         .limit(1).maybeSingle();
       if (dup?.id) return json({ id: dup.id, idempotent_replay: true });
 

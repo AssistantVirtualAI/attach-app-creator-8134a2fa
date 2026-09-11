@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { generateText, Output } from "npm:ai";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
+import { buildIdempotencyKey, claimAction, finishAction } from "../_shared/ava-confirm.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

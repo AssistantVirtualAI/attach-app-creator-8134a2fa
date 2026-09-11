@@ -420,6 +420,13 @@ Deno.serve(async (req) => {
       .sort((a, b) => b.volume - a.volume)
       .map((x, i) => ({ rank: i + 1, ...x }));
 
+    const isMeClub = (x: any) =>
+      x.isMe
+      || (myMaestroId && String(x.maestroBrokerId ?? "") === String(myMaestroId))
+      || x.brokerUserId === user.id
+      || (agentKey(x.broker) && myKeys.has(agentKey(x.broker) as string));
+    const club = isAdmin && scope === "all" ? clubFull : clubFull.filter(isMeClub);
+
     const clubMonthly = Array.from({ length: 12 }, (_, i) => {
       const m = ((7 + i) % 12) + 1; // Aug..Jul
       const y = m >= 8 ? Number(seasonCur.start.slice(0, 4)) : Number(seasonCur.start.slice(0, 4)) + 1;

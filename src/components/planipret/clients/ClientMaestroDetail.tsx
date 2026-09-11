@@ -93,6 +93,15 @@ export default function ClientMaestroDetail({
     return buildClientBundles(tasks, deals, deposits, calls, messages).find((b) => b.key === key);
   }, [tasks, deals, deposits, calls, messages, clientKey]);
 
+  // Dossiers Maestro rattachés à ce client (correspondance par nom normalisé).
+  const clientContracts = useMemo(() => {
+    const key = makeKey(decodeURIComponent(clientKey));
+    if (!key) return [] as MaestroContract[];
+    return contracts.filter((c) =>
+      (c.clients ?? []).some((cl) => makeKey(cl?.name) === key),
+    );
+  }, [contracts, clientKey]);
+
   const brokerIdsKey = (bundle?.brokerIds ?? []).join(",");
   useEffect(() => {
     const ids = brokerIdsKey ? brokerIdsKey.split(",") : [];

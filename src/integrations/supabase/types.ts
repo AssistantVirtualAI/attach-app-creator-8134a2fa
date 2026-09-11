@@ -9542,6 +9542,84 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_contracts: {
+        Row: {
+          broker_name: string | null
+          broker_profile_id: string
+          calls_synced: number
+          calls_total: number
+          clients: Json
+          contract_id: string
+          contract_number: string | null
+          created_at: string
+          date_closing: string | null
+          date_maturity: string | null
+          id: string
+          last_activity_at: string | null
+          loan_amt: number | null
+          maestro_status: string | null
+          rate: string | null
+          raw: Json
+          source: string | null
+          status: string | null
+          synced_at: string
+          updated_at: string
+          with_coaching: number
+          with_summary: number
+          with_transcript: number
+        }
+        Insert: {
+          broker_name?: string | null
+          broker_profile_id: string
+          calls_synced?: number
+          calls_total?: number
+          clients?: Json
+          contract_id: string
+          contract_number?: string | null
+          created_at?: string
+          date_closing?: string | null
+          date_maturity?: string | null
+          id?: string
+          last_activity_at?: string | null
+          loan_amt?: number | null
+          maestro_status?: string | null
+          rate?: string | null
+          raw?: Json
+          source?: string | null
+          status?: string | null
+          synced_at?: string
+          updated_at?: string
+          with_coaching?: number
+          with_summary?: number
+          with_transcript?: number
+        }
+        Update: {
+          broker_name?: string | null
+          broker_profile_id?: string
+          calls_synced?: number
+          calls_total?: number
+          clients?: Json
+          contract_id?: string
+          contract_number?: string | null
+          created_at?: string
+          date_closing?: string | null
+          date_maturity?: string | null
+          id?: string
+          last_activity_at?: string | null
+          loan_amt?: number | null
+          maestro_status?: string | null
+          rate?: string | null
+          raw?: Json
+          source?: string | null
+          status?: string | null
+          synced_at?: string
+          updated_at?: string
+          with_coaching?: number
+          with_summary?: number
+          with_transcript?: number
+        }
+        Relationships: []
+      }
       planipret_did_assignments: {
         Row: {
           callerid_name: string | null

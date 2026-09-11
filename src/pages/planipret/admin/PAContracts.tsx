@@ -55,25 +55,59 @@ export default function PAContracts() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<string | null>(null);
 
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+
+  // Lecture depuis la base : planipret_contracts est alimentée par la synchro Maestro.
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
+    let q = supabase
+      .from("planipret_contracts")
+      .select("contract_id, contract_number, broker_profile_id, broker_name, status, clients, last_activity_at, calls_total, calls_synced, with_transcript, with_summary, with_coaching, raw, synced_at")
+      .order("last_activity_at", { ascending: false, nullsFirst: false })
+      .limit(1000);
+    if (brokerFilter !== "all") q = q.eq("broker_profile_id", brokerFilter);
+    const { data, error } = await q;
+    if (error) {
+      setError("Impossible de charger les contrats enregistrés.");
+      setContracts([]);
+    } else {
+      const rows = (data ?? []).map((r: any) => ({
+        contract_id: r.contract_id,
+        contract_number: r.contract_number,
+        broker_profile_id: r.broker_profile_id,
+        broker_name: r.broker_name,
+        clients: Array.isArray(r.clients) ? r.clients : [],
+        status: r.status ?? "—",
+        last_activity_at: r.last_activity_at,
+        calls_total: r.calls_total ?? 0,
+        calls_synced: r.calls_synced ?? 0,
+        with_transcript: r.with_transcript ?? 0,
+        with_summary: r.with_summary ?? 0,
+        with_coaching: r.with_coaching ?? 0,
+        timeline: Array.isArray(r.raw?.timeline) ? r.raw.timeline : [],
+      })) as Contract[];
+      setContracts(rows);
+      setLastSync(rows.length ? ((data ?? [])[0] as any).synced_at ?? null : null);
+      const uniq = new Map<string, { id: string; name: string | null }>();
+      for (const r of data ?? []) uniq.set((r as any).broker_profile_id, { id: (r as any).broker_profile_id, name: (r as any).broker_name });
+      if (brokerFilter === "all" && uniq.size) setBrokers(Array.from(uniq.values()));
+    }
+    setLoading(false);
+  }, [brokerFilter]);
+
+  // Recharge depuis l'API Maestro puis relit la base.
+  const resync = useCallback(async () => {
+    setSyncing(true);
     setError(null);
     const { data, error } = await supabase.functions.invoke("pp-maestro-contracts", {
       body: brokerFilter === "all" ? {} : { broker_profile_id: brokerFilter },
     });
-    if (error || !data?.ok) {
-      setError("Impossible de charger les contrats Maestro.");
-      setContracts([]);
-    } else {
-      setContracts(data.contracts ?? []);
-      // Ne remplace la liste d'agents que sur un chargement non filtré :
-      // sinon la réponse ne contient que l'agent sélectionné et le filtre se vide.
-      if (brokerFilter === "all" && (data.brokers ?? []).length) {
-        setBrokers(data.brokers.map((b: any) => ({ id: b.id, name: b.name })));
-      }
-    }
-    setLoading(false);
-  }, [brokerFilter]);
+    if (error || !data?.ok) setError("La synchronisation Maestro a échoué.");
+    setSyncing(false);
+    await load();
+  }, [brokerFilter, load]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -106,9 +140,17 @@ export default function PAContracts() {
             Dossiers par agent, avec l'historique complet : demande Maestro, appels remontés, résumé et coaching IA.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Rafraîchir
-        </Button>
+        <div className="flex items-center gap-2">
+          {lastSync && (
+            <span className="text-xs text-muted-foreground">Synchro {fmt(lastSync)}</span>
+          )}
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading || syncing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Rafraîchir
+          </Button>
+          <Button size="sm" onClick={() => void resync()} disabled={syncing}>
+            <CloudUpload className={`h-4 w-4 mr-2 ${syncing ? "animate-pulse" : ""}`} /> Recharger depuis Maestro
+          </Button>
+        </div>
       </div>
 
       <Card>

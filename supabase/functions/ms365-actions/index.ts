@@ -2,7 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
 import { callAnthropic } from "../_shared/anthropic.ts";
-import { buildIdempotencyKey, claimAction, finishAction } from "../_shared/ava-confirm.ts";
+import { buildIdempotencyKey, claimAction, finishAction, isConfirmed, isSensitiveMs365Action } from "../_shared/ava-confirm.ts";
 
 
 
@@ -125,13 +125,8 @@ Deno.serve(async (req) => {
     // ---- Barrière de confirmation + idempotence (côté serveur) -------------
     // Aucune action sortante Microsoft 365 proposée par AVA ne part sans une
     // confirmation explicite du courtier, et jamais deux fois.
-    const MS365_SENSITIVE = new Set([
-      "send_email", "reply_email", "reply_all_email", "forward_email", "delete_email",
-      "create_calendar_event", "update_calendar_event", "delete_calendar_event",
-      "send_teams_message", "reply_teams_message", "create_teams_chat", "upsert_contact",
-    ]);
-    if (MS365_SENSITIVE.has(String(action))) {
-      const confirmed = payload?.confirmed === true || payload?.approved === true || body?.confirmed === true;
+    if (isSensitiveMs365Action(String(action))) {
+      const confirmed = isConfirmed(payload) || isConfirmed(body);
       if (!confirmed) {
         return j({
           success: false,

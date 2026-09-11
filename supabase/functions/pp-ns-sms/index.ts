@@ -20,6 +20,7 @@ import {
 } from "../_shared/planipret-ns.ts";
 import { blockTestSms, isTestSms, TEST_SMS_ALLOWED_USER_IDS, TEST_SMS_BLOCK_MESSAGE } from "../_shared/pp-test-sms.ts";
 import {
+import { isAvaOriginated, isConfirmed } from "../_shared/ava-confirm.ts";
   getMaestroTelecomConfig,
   isMaestroTelecomConfigured,
   maestroTelecomFetch,
@@ -426,11 +427,12 @@ Deno.serve(async (req) => {
       // ---- Barrière de confirmation (côté serveur) -------------------------
       // Tout texto proposé par AVA (chatbot, agent vocal, suivi post-appel)
       // doit porter confirmed=true : le brouillon seul n'envoie jamais.
-      const origin = String(pick("origin") ?? pick("surface") ?? "").toLowerCase();
-      const avaOriginated = origin.includes("ava") || pick("ava_generated") === true ||
-        pick("draft") === true || pick("proposal") === true;
-      const explicitlyConfirmed = pick("confirmed") === true || pick("approved") === true;
-      if (avaOriginated && !explicitlyConfirmed) {
+      const confirmScope = {
+        origin: pick("origin"), surface: pick("surface"), ava_generated: pick("ava_generated"),
+        draft: pick("draft"), proposal: pick("proposal"),
+        confirmed: pick("confirmed"), approved: pick("approved"),
+      };
+      if (isAvaOriginated(confirmScope) && !isConfirmed(confirmScope)) {
         console.warn("[pp-ns-sms] AVA send without explicit confirmation — refused", { userId: ctx.userId });
         return jsonResponse({
           ok: false,

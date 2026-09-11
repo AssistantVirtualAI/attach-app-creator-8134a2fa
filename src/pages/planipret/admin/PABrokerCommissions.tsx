@@ -110,7 +110,7 @@ export default function PABrokerCommissions() {
         <div>
           <h1 className="text-2xl font-semibold">Commissions par courtier</h1>
           <p className="text-sm text-muted-foreground">
-            Chiffre d'affaires, volume et nombre de dossiers mois par mois, comparés au mois précédent.
+            Chiffre d'affaires, volume et nombre de dossiers mois par mois, comparés au même mois de l'année précédente.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

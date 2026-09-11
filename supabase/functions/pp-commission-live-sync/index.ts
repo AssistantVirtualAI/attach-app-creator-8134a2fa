@@ -119,6 +119,15 @@ Deno.serve(async (req) => {
   let upserted = 0;
   const diagRows: any[] = [];
 
+  // Ownership maps: which portal account each Maestro agent id / name belongs to.
+  const profileByMaestroId = new Map<string, string>();
+  const profileByNameKey = new Map<string, string>();
+  for (const p of list as any[]) {
+    if (p.maestro_broker_id != null) profileByMaestroId.set(String(p.maestro_broker_id), p.user_id);
+    const nk = agentKey(String(p.full_name ?? ""));
+    if (nk) profileByNameKey.set(nk, p.user_id);
+  }
+
   // La commission brute = base + bonus + bonus2 + perform. Maestro ne renvoie
   // qu'un bucket par appel, donc on parcourt les quatre; le volume de prêt
   // n'est conservé que sur la ligne "base" pour éviter de le compter 4 fois.

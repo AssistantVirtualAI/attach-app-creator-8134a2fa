@@ -251,7 +251,9 @@ Deno.serve(async (req) => {
       }
       row.timeline.sort((a, b) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
       row.last_activity_at = row.timeline.length ? row.timeline[row.timeline.length - 1].at : null;
-      row.status = row.calls_total === 0
+      row.status = row.clients.length === 0
+        ? "sans client"
+        : row.calls_total === 0
         ? "aucun appel"
         : row.calls_synced === row.calls_total
           ? "complet"

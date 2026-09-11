@@ -15862,6 +15862,14 @@ export type Database = {
       is_planipret_only: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       lemtel_can_grant_app_access: { Args: { _uid: string }; Returns: boolean }
+      lemtel_dashboard_daily_calls: {
+        Args: { _org: string; _since: string }
+        Returns: {
+          day: string
+          missed: number
+          total: number
+        }[]
+      }
       log_access_violation: {
         Args: {
           _action: string
@@ -15900,7 +15908,28 @@ export type Database = {
       }
       pin_chat_message: { Args: { _message_id: string }; Returns: undefined }
       planipret_ava_org_id: { Args: never; Returns: string }
+      planipret_broker_activity_stats: {
+        Args: { _since: string }
+        Returns: {
+          ai_calls: number
+          calls: number
+          calls_synced: number
+          last_activity: string
+          talk_seconds: number
+          texts: number
+          texts_synced: number
+          user_id: string
+        }[]
+      }
       planipret_broker_ids: { Args: { _uid: string }; Returns: string[] }
+      planipret_broker_task_stats: {
+        Args: never
+        Returns: {
+          open_tasks: number
+          overdue_tasks: number
+          user_id: string
+        }[]
+      }
       pp_audit_realtime_check: { Args: never; Returns: Json }
       pp_claim_call: {
         Args: { _answered_by: string; _call_id: string }

@@ -8083,6 +8083,72 @@ export type Database = {
           },
         ]
       }
+      planipret_ava_action_confirmations: {
+        Row: {
+          action: string
+          broker_id: string | null
+          call_id: string | null
+          created_at: string
+          decided_at: string | null
+          decision: string
+          destination: string | null
+          error_code: string | null
+          executed_at: string | null
+          id: string
+          idempotency_key: string
+          proposed_at: string
+          provider: string | null
+          result: Json | null
+          session_id: string | null
+          status: string
+          surface: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          broker_id?: string | null
+          call_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision?: string
+          destination?: string | null
+          error_code?: string | null
+          executed_at?: string | null
+          id?: string
+          idempotency_key: string
+          proposed_at?: string
+          provider?: string | null
+          result?: Json | null
+          session_id?: string | null
+          status?: string
+          surface?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          broker_id?: string | null
+          call_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision?: string
+          destination?: string | null
+          error_code?: string | null
+          executed_at?: string | null
+          id?: string
+          idempotency_key?: string
+          proposed_at?: string
+          provider?: string | null
+          result?: Json | null
+          session_id?: string | null
+          status?: string
+          surface?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_ava_action_log: {
         Row: {
           action_params: Json | null

@@ -57,15 +57,19 @@ export default function PABrokerCommissions() {
     if (!broker) return;
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase.functions.invoke("pp-commission-audit", {
-      body: { year, broker_user_id: broker },
-    });
-    if (err || !data?.ok) {
+    const [cur, py] = await Promise.all([
+      supabase.functions.invoke("pp-commission-audit", { body: { year, broker_user_id: broker } }),
+      supabase.functions.invoke("pp-commission-audit", { body: { year: year - 1, broker_user_id: broker } }),
+    ]);
+    if (cur.error || !(cur.data as any)?.ok) {
       setError("Impossible de charger les chiffres de ce courtier.");
-      setMonthly([]); setTotals(null);
+      setMonthly([]); setTotals(null); setMonthlyPy([]); setTotalsPy(null);
     } else {
-      setMonthly(data.monthly ?? []);
-      setTotals(data.totals ?? null);
+      setMonthly((cur.data as any).monthly ?? []);
+      setTotals((cur.data as any).totals ?? null);
+      const pyOk = !py.error && (py.data as any)?.ok;
+      setMonthlyPy(pyOk ? ((py.data as any).monthly ?? []) : []);
+      setTotalsPy(pyOk ? ((py.data as any).totals ?? null) : null);
     }
     setLoading(false);
   }, [broker, year]);

@@ -39,7 +39,6 @@ const fmtDuration = (s: number) => {
   return h > 0 ? `${h} h ${m % 60} min` : `${m} min`;
 };
 
-const DONE = new Set(["done", "completed", "complete", "closed", "termine", "terminé", "3", "4"]);
 
 /** Tableau global par courtier : appels, textos, tâches et statut de connexion (30 jours). */
 export default function PABrokerStats() {

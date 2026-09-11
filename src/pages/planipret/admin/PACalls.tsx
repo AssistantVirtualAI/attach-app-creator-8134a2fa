@@ -134,8 +134,18 @@ export default function PACalls() {
   const paged = rows;
 
   const exportCsv = async () => {
-    const q = buildQuery().order("started_at", { ascending: false }).limit(5000);
-    const { data: all } = await q;
+    // Export paginé : 1 000 lignes par lot pour éviter les délais SQL.
+    const BATCH = 1000;
+    const MAX = 5000;
+    const all: any[] = [];
+    for (let offset = 0; offset < MAX; offset += BATCH) {
+      const { data: batch, error } = await buildQuery()
+        .order("started_at", { ascending: false })
+        .range(offset, offset + BATCH - 1);
+      if (error) break;
+      all.push(...((batch as any[]) ?? []));
+      if (!batch || batch.length < BATCH) break;
+    }
     const headers = [t("adminPortal.calls.colBroker"), t("adminPortal.calls.direction"), t("adminPortal.calls.colFrom"), t("adminPortal.calls.colTo"), t("adminPortal.calls.colDuration"), t("adminPortal.calls.colDate")];
     const lines = [headers.join(",")].concat((all ?? []).map((r: any) =>
       [brokerName(r), r.direction, r.from_number, r.to_number, r.duration_seconds, r.started_at].map((v) => `"${v ?? ""}"`).join(",")

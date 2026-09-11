@@ -19,6 +19,14 @@ import { fetchMaestroTeam } from "../_shared/maestro-teams.ts";
 
 import { normalizeTask } from "../_shared/planipret-tasks.ts";
 import { handleTaskRequest, newCorrelationId, type UpstreamList } from "../_shared/planipret-task-handler.ts";
+import {
+  buildIdempotencyKey,
+  claimAction,
+  confirmationRequiredResult,
+  finishAction,
+  isAvaOriginated,
+  isConfirmed,
+} from "../_shared/ava-confirm.ts";
 
 const API_BASE = (Deno.env.get("PLANIPRET_API_BASE_URL") ?? "https://client.planipret.com").replace(/\/$/, "");
 const TELECOM_BASE = (Deno.env.get("MAESTRO_TELECOM_BASE_URL") ?? "https://client.planipret.com/telecom/api/v1").replace(/\/$/, "");

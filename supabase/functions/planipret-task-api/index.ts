@@ -443,6 +443,11 @@ Deno.serve(async (req) => {
         return r?.maestro_broker_id ?? null;
       },
     });
+    if (taskClaimId) {
+      const ok = out.status < 400 && (out.body as any)?.success !== false;
+      await finishAction(admin, taskClaimId, ok, ok ? out.body : null,
+        ok ? null : String((out.body as any)?.error ?? "task_error")).catch(() => null);
+    }
     return jsonResponse(out.body, out.status);
   } catch (e) {
     console.error("[planipret-task-api]", correlation_id, e);

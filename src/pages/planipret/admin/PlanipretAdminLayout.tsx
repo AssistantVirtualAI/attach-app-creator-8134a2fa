@@ -29,9 +29,9 @@ import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -43,6 +43,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/ava-agent",  key: "avaAgent", Icon: Bot },
       { to: "/planipret/admin/ava-logs",   key: "avaLogs",  Icon: Activity },
       { to: "/planipret/admin/ava-tools-audit", key: "avaToolsAudit", Icon: Activity },
+      { to: "/planipret/admin/ava-confirmations", key: "avaConfirmations", Icon: CheckSquare },
       { to: "/planipret/admin/maestro-dashboard", key: "maestroDashboard", Icon: Gauge },
     ],
   },
@@ -106,6 +107,7 @@ const NAV_REGULAR: typeof NAV = [
       { to: "/planipret/admin/overview", key: "overview", Icon: LayoutDashboard },
       { to: "/planipret/admin/reports",  key: "reports",  Icon: BarChart3 },
       { to: "/planipret/admin/ava",      key: "ava",      Icon: Sparkles },
+      { to: "/planipret/admin/ava-confirmations", key: "avaConfirmations", Icon: CheckSquare },
     ],
   },
   {
@@ -150,6 +152,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/ava-agent": "avaAgent",
   "/planipret/admin/ava-logs": "avaLogs",
   "/planipret/admin/ava-tools-audit": "avaToolsAudit",
+  "/planipret/admin/ava-confirmations": "avaConfirmations",
   "/planipret/admin/mobile-devices": "mobileDevices",
   "/planipret/admin/hold-music": "holdMusic",
   "/planipret/admin/sip-diagnostic": "sipDiagnostic",

@@ -40,13 +40,17 @@ export default function MClientDetail() {
       </div>
 
       <ClientMaestroDetail
+        variant="mobile"
         clientKey={clientKey}
         tasks={tasks}
         userIds={userId ? [userId] : []}
         lang={lang}
         lastSyncAt={lastSyncAt}
         loading={loading}
+        onDraftSms={(t) => setSmsTarget({ name: t.name, number: t.number, clientKey: t.clientKey })}
       />
+
+      <SmsDraftSheet target={smsTarget} onClose={() => setSmsTarget(null)} />
     </div>
   );
 }

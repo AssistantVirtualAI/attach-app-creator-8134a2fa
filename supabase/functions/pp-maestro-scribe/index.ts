@@ -34,9 +34,22 @@ Deno.serve(async (req) => {
 
   const admin = adminClient();
   const cfg = await getMaestroConfig(admin);
-  if (!cfg.key) return json({ ok: false, error: "maestro_not_configured" }, 200);
 
-  const o = { prefix };
+  // L'API publique `/api/main` est authentifiée par OAuth Planiprêt (jeton du
+  // courtier connecté, sinon jeton cabinet). La clé machine Telecom n'y est PAS
+  // valide — elle ne sert que de dernier recours.
+  const ownToken = await getUserMaestroAccessToken(admin, guard.user.id).catch(() => null);
+  const firm = ownToken ? { token: null, source: "none" as const } : await getMaestroAdminAccessToken();
+  const token =
+    ownToken ??
+    firm.token ??
+    Deno.env.get("PLANIPRET_ACCESS_TOKEN") ??
+    cfg.key ??
+    null;
+  const tokenSource = ownToken ? "broker_oauth" : firm.token ? firm.source : Deno.env.get("PLANIPRET_ACCESS_TOKEN") ? "static_env" : cfg.key ? "telecom_machine_key" : "none";
+  if (!token) return json({ ok: false, error: "maestro_not_configured", token_source: tokenSource }, 200);
+
+  const o = { prefix, token };
   const needId = () => id === undefined || id === null || id === "";
   const needSub = () => subId === undefined || subId === null || subId === "";
   const missing = (what: string) => json({ ok: false, error: `${what}_required` }, 400);

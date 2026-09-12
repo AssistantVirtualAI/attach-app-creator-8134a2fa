@@ -625,6 +625,7 @@ export class NativeSipService {
   }
 
   async setMute(muted: boolean) { await getPjsip()?.setMute({ muted }).catch(() => {}); }
+  async setHold(onHold: boolean) { await getPjsip()?.setHold({ onHold }).catch(() => {}); }
   async setSpeaker(enabled: boolean) { await getPjsip()?.setSpeaker({ enabled }).catch(() => {}); }
   async sendDTMF(digits: string) { await getPjsip()?.sendDTMF({ digits }).catch(() => {}); }
 

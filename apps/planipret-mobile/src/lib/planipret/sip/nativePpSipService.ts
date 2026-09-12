@@ -48,6 +48,7 @@ type PpVoipCallPlugin = {
   refreshVoipPushToken?: () => Promise<{ ok: boolean; token?: string }>;
   reportCallEnded?: (opts: { callId?: string; reason?: string }) => Promise<{ ok: boolean }>;
   completeAnswer?: (opts: { callId?: string; ok: boolean }) => Promise<{ ok: boolean; reason?: string }>;
+  setHeld?: (opts: { onHold: boolean }) => Promise<{ ok: boolean }>;
   addListener?: (
     event:
       | "voipPushToken"
@@ -55,6 +56,7 @@ type PpVoipCallPlugin = {
       | "incomingCallAnswered"
       | "incomingCallRejected"
       | "callKitReady"
+      | "callHeld"
       | "audioSessionActivated"
       | "audioSessionDeactivated",
     cb: (data: any) => void,

@@ -88,6 +88,25 @@ Deno.serve(async (req) => {
     let result: any = null;
     let errorMsg: string | null = null;
 
+    // Idempotence : double tap, retry réseau ou rejeu → une seule exécution.
+    const idempotencyKey = await buildIdempotencyKey({
+      userId,
+      action: `ava_action:${action.type}`,
+      destination: String(params.to ?? params.chat_id ?? params.channel_id ?? ""),
+      payload: { analysis_id, action_id, content },
+      provided: body?.idempotency_key ?? null,
+    });
+    const claim = await claimAction(admin, {
+      userId,
+      brokerId: profile?.id ?? null,
+      action: `ava_action:${action.type}`,
+      surface: "ava_email_actions",
+      destination: String(params.to ?? params.chat_id ?? params.channel_id ?? "").slice(0, 120),
+      provider: action.type.startsWith("maestro") ? "maestro" : "ms365",
+      idempotencyKey,
+    });
+    if (claim.replay) return j({ success: true, execution_mode: "live", ...claim.result });
+
     try {
       switch (action.type) {
         case "email_reply": {

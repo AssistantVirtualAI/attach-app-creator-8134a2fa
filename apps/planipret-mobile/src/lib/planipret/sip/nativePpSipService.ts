@@ -192,6 +192,27 @@ export async function reportPlanipretCallEnded(callId?: string, reason?: string)
   catch { /* noop */ }
 }
 
+/**
+ * Mise en attente demandée depuis l'écran d'appel du système (y compris
+ * l'écran verrouillé). CallKit est la source de vérité : le JS applique
+ * l'état à la session SIP et à l'interface.
+ */
+export async function onPlanipretCallKitHold(
+  cb: (data: { onHold: boolean; callId?: string; source?: "pjsip" | "jssip" }) => void,
+): Promise<() => void> {
+  if (platform() !== "ios") return () => undefined;
+  return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "callHeld", (data: any) => {
+    cb({ onHold: !!data?.onHold, callId: data?.callId, source: data?.source });
+  });
+}
+
+/** Reflète une mise en attente faite dans l'app vers l'écran d'appel système. */
+export async function setPlanipretCallKitHeld(onHold: boolean): Promise<void> {
+  if (platform() !== "ios") return;
+  try { await NativePpVoipCall.setHeld?.({ onHold }); }
+  catch { /* noop */ }
+}
+
 export async function completePlanipretCallKitAnswer(callId: string | undefined, ok: boolean): Promise<void> {
   if (platform() !== "ios") return;
   try { await NativePpVoipCall.completeAnswer?.({ callId, ok }); }

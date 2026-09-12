@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Download, TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
+import { RefreshCw, Download, TrendingUp, TrendingDown, Minus, AlertTriangle, BarChart3 } from "lucide-react";
+import { PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 
 type Month = { month: number; volume: number; deals: number; commission: number };
 

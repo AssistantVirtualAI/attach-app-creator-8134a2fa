@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { RefreshCw, Download, AlertTriangle } from "lucide-react";
+import { RefreshCw, Download, AlertTriangle, ScrollText } from "lucide-react";
+import { PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 
 type Row = {
   id: string;

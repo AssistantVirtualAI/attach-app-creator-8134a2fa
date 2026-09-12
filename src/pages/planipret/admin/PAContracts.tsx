@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { RefreshCw, FileText, Phone, Sparkles, GraduationCap, CloudUpload, ChevronRight } from "lucide-react";
+import { PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 
 type TimelineItem = {
   at: string | null;

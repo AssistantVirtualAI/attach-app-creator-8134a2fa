@@ -13,6 +13,7 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
       CAPPluginMethod(name: "refreshVoipPushToken", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "reportCallEnded", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "completeAnswer", returnType: CAPPluginReturnPromise),
+      CAPPluginMethod(name: "setHeld", returnType: CAPPluginReturnPromise),
       CAPPluginMethod(name: "addListener", returnType: CAPPluginReturnCallback),
       CAPPluginMethod(name: "removeAllListeners", returnType: CAPPluginReturnPromise)
     ]
@@ -415,6 +416,37 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         action.fulfill()
     }
 
+    /// Mise en attente depuis l'écran d'appel système (y compris écran
+    /// verrouillé) → re-INVITE sendonly côté PJSIP + état poussé vers JS.
+    public func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction) {
+        NotificationCenter.default.post(
+            name: Notification.Name("PpPjsipHoldRequested"), object: nil,
+            userInfo: ["onHold": action.isOnHold, "callId": activeCallId ?? ""]
+        )
+        notifyListeners("callHeld", data: [
+            "onHold": action.isOnHold,
+            "callId": activeCallId ?? "",
+            "source": nativeEngineOwnsCall ? "pjsip" : "jssip"
+        ], retainUntilConsumed: true)
+        action.fulfill()
+    }
+
+    /// Appelé par le JS quand le courtier met en attente depuis l'app : garde
+    /// l'écran système et l'interface alignés.
+    @objc func setHeld(_ call: CAPPluginCall) {
+        let onHold = call.getBool("onHold") ?? false
+        guard let uuid = activeCallUUID else { call.resolve(["ok": false]); return }
+        let action = CXSetHeldCallAction(call: uuid, onHold: onHold)
+        callController.request(CXTransaction(action: action)) { error in
+            if let error = error {
+                NSLog("[PpVoipCall] setHeld failed: %@", error.localizedDescription)
+                call.resolve(["ok": false])
+            } else {
+                call.resolve(["ok": true])
+            }
+        }
+    }
+
     /// Clavier CallKit → DTMF RFC 2833 côté PJSIP.
     public func provider(_ provider: CXProvider, perform action: CXPlayDTMFCallAction) {
         NotificationCenter.default.post(
@@ -489,7 +521,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         update.remoteHandle = action.handle
         update.hasVideo = false
         update.supportsDTMF = true
-        update.supportsHolding = false
+        // L'écran d'appel système doit pouvoir mettre en attente un appel
+        // sortant comme un appel entrant (CXSetHeldCallAction ci-dessous).
+        update.supportsHolding = true
         provider.reportCall(with: action.callUUID, updated: update)
         provider.reportOutgoingCall(with: action.callUUID, startedConnectingAt: Date())
         action.fulfill()

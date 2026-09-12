@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       case "diag": {
         const root = apiRoot(cfg, prefix);
         const probe = await api.listFinancialInstitutions(cfg, o);
-        return json({ ok: true, root, reachable: probe.ok, status: probe.status, endpoint: probe.endpoint, error: probe.error });
+        return json({ ok: true, root, token_source: tokenSource, reachable: probe.ok, status: probe.status, endpoint: probe.endpoint, error: probe.error });
       }
 
       case "clients.get": return needId() ? missing("id") : json(await api.getClient(cfg, id, o));

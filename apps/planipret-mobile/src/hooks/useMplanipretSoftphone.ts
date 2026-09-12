@@ -1465,8 +1465,9 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     reregister: () => { try { ppSipProvider.forceReregister(); } catch {} },
     mute: () => (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: true }) : ppSipProvider.mute(),
     unmute: () => (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: false }) : ppSipProvider.unmute(),
-    hold: () => (restCall?.id && !hasLiveSipSession) ? void restControl("hold") : ppSipProvider.hold(),
-    unhold: () => (restCall?.id && !hasLiveSipSession) ? void restControl("unhold") : ppSipProvider.unhold(),
+    // L'attente faite dans l'app est aussi reflétée sur l'écran d'appel système.
+    hold: () => { applyHold(true); void setPlanipretCallKitHeld(true); },
+    unhold: () => { applyHold(false); void setPlanipretCallKitHeld(false); },
     sendDTMF: (k: string) => (restCall?.id && !hasLiveSipSession) ? void restControl("dtmf", { digit: k }) : ppSipProvider.sendDTMF(k),
     transfer: (t: string) => (restCall?.id && !hasLiveSipSession) ? void restControl("transfer", { destination: t, target: t }) : ppSipProvider.transfer(t),
     // The provider owns a persistent hidden <audio> sink; screens must not

@@ -490,7 +490,9 @@ public class PpVoipCall: CAPPlugin, CAPBridgedPlugin, PKPushRegistryDelegate, CX
         update.remoteHandle = action.handle
         update.hasVideo = false
         update.supportsDTMF = true
-        update.supportsHolding = false
+        // L'écran d'appel système doit pouvoir mettre en attente un appel
+        // sortant comme un appel entrant (CXSetHeldCallAction ci-dessous).
+        update.supportsHolding = true
         provider.reportCall(with: action.callUUID, updated: update)
         provider.reportOutgoingCall(with: action.callUUID, startedConnectingAt: Date())
         action.fulfill()

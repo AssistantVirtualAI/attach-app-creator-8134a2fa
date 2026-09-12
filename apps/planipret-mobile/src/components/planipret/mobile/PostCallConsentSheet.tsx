@@ -89,12 +89,14 @@ export default function PostCallConsentSheet() {
 
       const since = new Date(Date.now() - 10 * 60_000).toISOString();
       let rows: ConsentCall[] = [];
+      let source: "provider" | "recent" = "recent";
       if (detail.providerCallId) {
         const pid = detail.providerCallId;
         const { data } = await supabase
           .from("planipret_phone_calls").select(SELECT)
           .or(`id.eq.${pid},ns_callid.eq.${pid},ns_call_id.eq.${pid}`).limit(3);
         rows = (data as any as ConsentCall[]) ?? [];
+        if (rows.length) source = "provider";
       }
       if (!rows.length) {
         const { data } = await supabase
@@ -104,7 +106,7 @@ export default function PostCallConsentSheet() {
           .order("created_at", { ascending: false }).limit(5);
         rows = (data as any as ConsentCall[]) ?? [];
       }
-      const picked = pickEndedCall(rows, detail, owners);
+      const picked = pickEndedCall(rows, { ...detail, source }, owners);
       // Une réponse déjà donnée ne vaut jamais pour un nouvel appel, et un même
       // appel ne repose jamais deux fois la question.
       if (!picked || handled.current.has(picked.id)) return;

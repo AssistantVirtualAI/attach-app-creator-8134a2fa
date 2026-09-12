@@ -18,9 +18,10 @@ const cad = (n: number) =>
  * par client, mais dépliées sur une page dédiée.
  */
 export default function ClientMaestroDetail({
-  clientKey, tasks, userIds, lang, lastSyncAt, loading,
+  clientKey, tasks, userIds, lang, lastSyncAt, loading, onDraftSms,
 }: {
   clientKey: string;
+  onDraftSms?: (target: { name: string; number: string; clientKey: string }) => void;
   tasks: NormalizedTask[];
   userIds: string[];
   lang: "fr" | "en";
@@ -118,6 +119,22 @@ export default function ClientMaestroDetail({
           <p className="text-[11px]" style={{ color: "var(--pp-text-muted)" }}>
             {L("Synchro", "Sync")} {new Date(lastSyncAt).toLocaleTimeString(en ? "en-CA" : "fr-CA", { timeZone: "America/Toronto" })}
           </p>
+        )}
+        {onDraftSms && (
+          <button
+            className="mt-2.5 w-full rounded-xl px-3 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
+            style={{ background: "var(--pp-brand, #2E9BDC)", color: "#fff" }}
+            onClick={() => onDraftSms({
+              name: b.name,
+              number: [...b.messages, ...b.calls]
+                .map((x) => String((x.direction === "outbound" ? x.to_number : x.from_number) ?? "").trim())
+                .find((n) => n.replace(/\D/g, "").length >= 10) ?? "",
+              clientKey: b.key,
+            })}
+          >
+            <MessageSquare className="w-4 h-4" />
+            {L("Préparer un texto", "Draft a text")}
+          </button>
         )}
       </div>
 

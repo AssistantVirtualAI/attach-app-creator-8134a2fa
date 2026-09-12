@@ -40,7 +40,6 @@ export default function MClientDetail() {
       </div>
 
       <ClientMaestroDetail
-        variant="mobile"
         clientKey={clientKey}
         tasks={tasks}
         userIds={userId ? [userId] : []}

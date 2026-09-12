@@ -179,6 +179,10 @@ final class PjsipEngine {
         nc.addObserver(forName: Notification.Name("PpPjsipDtmfRequested"), object: nil, queue: nil) { [weak self] note in
             self?.sendDTMF((note.userInfo?["digits"] as? String) ?? "")
         }
+        // Mise en attente demandée par CallKit (écran d'appel / verrouillé).
+        nc.addObserver(forName: Notification.Name("PpPjsipHoldRequested"), object: nil, queue: nil) { [weak self] note in
+            self?.setHold((note.userInfo?["onHold"] as? Bool) ?? false)
+        }
         // CallKit est seul maître de l'AVAudioSession : PJSIP n'ouvre son
         // périphérique audio qu'une fois la session activée par le système.
         nc.addObserver(forName: Notification.Name("PpCallKitAudioActivated"), object: nil, queue: nil) { [weak self] _ in

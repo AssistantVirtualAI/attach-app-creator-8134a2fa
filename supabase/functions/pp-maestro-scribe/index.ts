@@ -5,6 +5,8 @@ import { adminClient, corsHeaders, getMaestroConfig, json } from "../_shared/mae
 import { guardPlanipret } from "../_shared/planipret-guard.ts";
 import * as api from "../_shared/maestro-scribe.ts";
 import { apiRoot } from "../_shared/maestro-scribe.ts";
+import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
+import { getMaestroAdminAccessToken } from "../_shared/maestro-admin-token.ts";
 
 type Action =
   | "diag"

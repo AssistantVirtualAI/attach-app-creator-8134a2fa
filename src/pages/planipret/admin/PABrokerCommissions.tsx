@@ -105,29 +105,28 @@ export default function PABrokerCommissions() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold">Commissions par courtier</h1>
-          <p className="text-sm text-muted-foreground">
-            Chiffre d'affaires, volume et nombre de dossiers mois par mois, comparés au même mois de l'année précédente.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <select className="h-9 rounded-md border bg-background px-3 text-sm" value={broker} onChange={(e) => setBroker(e.target.value)}>
-            {brokers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-          <select className="h-9 rounded-md border bg-background px-3 text-sm" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-            {[thisYear, thisYear - 1, thisYear - 2, thisYear - 3].map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Rafraîchir
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCsv} disabled={!monthly.length}>
-            <Download className="h-4 w-4 mr-2" /> CSV
-          </Button>
-        </div>
-      </div>
+    <div className="pa-page">
+      <PAPageHeader
+        icon={<BarChart3 className="h-[18px] w-[18px]" />}
+        title="Commissions par courtier"
+        subtitle="Chiffre d'affaires, volume et nombre de dossiers mois par mois, comparés au même mois de l'année précédente."
+        actions={
+          <>
+            <select className="h-9 rounded-md border bg-background px-3 text-sm" value={broker} onChange={(e) => setBroker(e.target.value)}>
+              {brokers.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+            <select className="h-9 rounded-md border bg-background px-3 text-sm" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+              {[thisYear, thisYear - 1, thisYear - 2, thisYear - 3].map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Rafraîchir
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportCsv} disabled={!monthly.length}>
+              <Download className="h-4 w-4 mr-2" /> CSV
+            </Button>
+          </>
+        }
+      />
 
       {error && (
         <Card><CardContent className="pt-6 text-sm text-destructive flex items-center gap-2">

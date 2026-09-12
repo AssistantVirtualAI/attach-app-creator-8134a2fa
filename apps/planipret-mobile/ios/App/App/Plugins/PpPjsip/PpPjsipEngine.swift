@@ -505,6 +505,28 @@ final class PjsipEngine {
         }
     }
 
+    /// Attente SIP réelle : re-INVITE `a=sendonly` (hold) puis reprise du média.
+    /// La session audio reste la propriété de CallKit : on ne touche pas
+    /// AVAudioSession ici.
+    func setHold(_ on: Bool) {
+        onHold = on
+        guard activeCall >= 0 else { return }
+        thread.run { [weak self] in
+            guard let self = self else { return }
+            self.scheduleOnPjsipThread {
+                guard self.activeCall >= 0 else { return }
+                if on {
+                    pjsua_call_set_hold(self.activeCall, nil)
+                } else {
+                    var opt = pjsua_call_setting()
+                    pjsua_call_setting_default(&opt)
+                    opt.flag = UInt32(PJSUA_CALL_UNHOLD.rawValue)
+                    pjsua_call_reinvite2(self.activeCall, &opt, nil)
+                }
+            }
+        }
+    }
+
     func setSpeaker(_ enabled: Bool) {
         speakerOn = enabled
         // Un seul propriétaire de la session audio : PpSipKeepAlive. Deux

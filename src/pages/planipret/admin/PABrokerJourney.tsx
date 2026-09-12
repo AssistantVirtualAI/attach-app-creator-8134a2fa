@@ -156,7 +156,7 @@ export default function PABrokerJourney() {
         }
       />
 
-      {loading ? <PPSkeleton rows={4} /> : (
+      {loading ? <PPSkeleton /> : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <Tile label={L("Appels", "Calls")} value={calls.length} surface={surface} />

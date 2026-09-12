@@ -11,7 +11,7 @@ type Action =
   | "clients.get" | "clients.create" | "clients.update"
   | "addresses.create" | "addresses.update" | "addresses.delete"
   | "telephones.create" | "telephones.update" | "telephones.delete"
-  | "contracts.list" | "contracts.create" | "contracts.update"
+  | "contracts.list" | "contracts.create" | "contracts.update" | "contracts.delete"
   | "institutions.list"
   | "commissions.deposits" | "commissions.agents"
   | "tasks.list" | "tasks.create" | "tasks.update" | "tasks.delete";
@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
       case "contracts.list": return json(await api.listContracts(cfg, query, o));
       case "contracts.create": return json(await api.createContract(cfg, payload, o));
       case "contracts.update": return needId() ? missing("id") : json(await api.updateContract(cfg, id, payload, o));
+      case "contracts.delete": return needId() ? missing("id") : json(await api.deleteContract(cfg, id, o));
 
       case "institutions.list": return json(await api.listFinancialInstitutions(cfg, o));
 

@@ -345,7 +345,7 @@ export default function PASipDiagnostic() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </PAPage>
   );
 }
 
@@ -354,6 +354,6 @@ function Row({ k, v, mono }: { k: string; v?: string | null; mono?: boolean }) {
     <div className="flex items-baseline justify-between gap-3 border-b border-border pb-1 last:border-b-0">
       <dt className="text-muted-foreground">{k}</dt>
       <dd className={`text-right break-all text-foreground ${mono ? "font-mono" : ""}`}>{v ?? "—"}</dd>
-    </PAPage>
+    </div>
   );
 }

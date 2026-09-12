@@ -57,6 +57,7 @@ interface PjsipPlugin {
   answerCall(opts: { callId?: string }): Promise<{ callId: string }>;
   hangupCall(opts: { callId?: string }): Promise<{ ok: boolean }>;
   setMute(opts: { muted: boolean }): Promise<{ ok: boolean }>;
+  setHold(opts: { onHold: boolean }): Promise<{ ok: boolean }>;
   setSpeaker(opts: { enabled: boolean }): Promise<{ ok: boolean }>;
   sendDTMF(opts: { digits: string }): Promise<{ ok: boolean }>;
   getState(): Promise<{

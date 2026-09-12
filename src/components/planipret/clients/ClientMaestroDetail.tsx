@@ -45,7 +45,10 @@ export default function ClientMaestroDetail({
   /** Détermine vers quelles pages pointent les liens « voir la conversation ». */
   variant?: "admin" | "mobile";
   /** Ouvre un brouillon de texto (mobile) : rien n'est envoyé sans confirmation. */
-  onDraftSms?: (target: { name: string; number: string; clientKey: string }) => void;
+  onDraftSms?: (target: {
+    name: string; number: string; clientKey: string;
+    contractId?: string; contractNumber?: string | null; body?: string;
+  }) => void;
 }) {
   const en = lang === "en";
   const L = (fr: string, e: string) => (en ? e : fr);
@@ -128,6 +131,10 @@ export default function ClientMaestroDetail({
   }
 
   const b = bundle;
+  const clientNumber =
+    [...b.messages, ...b.calls]
+      .map((x) => String((x.direction === "outbound" ? x.to_number : x.from_number) ?? "").trim())
+      .find((n) => n.replace(/\D/g, "").length >= 10) ?? "";
 
   // Liens « voir la conversation » : page Appels / Textos de l'admin, ou
   // l'écran correspondant dans l'app mobile.
@@ -178,7 +185,7 @@ export default function ClientMaestroDetail({
             style={{ background: "var(--pp-brand, #2E9BDC)", color: "#fff" }}
             onClick={() => onDraftSms({
               name: b.name,
-              number: [...b.messages, ...b.calls].map(peerOf).find((n) => n.replace(/\D/g, "").length >= 10) ?? "",
+              number: clientNumber,
               clientKey: b.key,
             })}
           >
@@ -218,6 +225,28 @@ export default function ClientMaestroDetail({
                     <span>{missed ? L("manqué", "missed") : (c.status ?? L("terminé", "completed"))}</span>
                     <span>{missed ? "" : `${Math.floor(secs / 60)}m ${secs % 60}s`}</span>
                     <span>{out ? (c.to_number ?? "—") : (c.from_number ?? "—")}</span>
+                  </span>
+                  <span className="flex flex-wrap items-center gap-x-3 mt-0.5">
+                    <span>
+                      {L("Fin d'appel", "Call ended")} :{" "}
+                      {c.ended_at
+                        ? new Date(c.ended_at).toLocaleString(en ? "en-CA" : "fr-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "America/Toronto" })
+                        : "—"}
+                    </span>
+                    <span>
+                      {L("Réponse du courtier", "Broker answer")} :{" "}
+                      <span style={{ color: c.save_consent === "approved" ? "#047857" : c.save_consent === "declined" ? "#B91C1C" : "var(--pp-text-muted)", fontWeight: 600 }}>
+                        {c.save_consent === "approved"
+                          ? L("sauvegardé dans Maestro", "saved to Maestro")
+                          : c.save_consent === "declined"
+                            ? L("refusé", "declined")
+                            : L("en attente", "pending")}
+                      </span>
+                      {c.save_consent_at
+                        ? ` · ${new Date(c.save_consent_at).toLocaleString(en ? "en-CA" : "fr-CA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "America/Toronto" })}`
+                        : ""}
+                      {c.save_consent_channel ? ` · ${c.save_consent_channel === "voice" ? L("par la voix", "by voice") : L("à l'écran", "on screen")}` : ""}
+                    </span>
                   </span>
                   {c.ai_summary && (
                     <span className="block break-words mt-1 rounded-md px-2 py-1.5" style={{ background: "rgba(37,99,235,0.06)", color: "var(--pp-text-primary)" }}>
@@ -291,6 +320,26 @@ export default function ClientMaestroDetail({
                   <ExternalLink className="w-3.5 h-3.5" />
                   {L("Ouvrir dans Maestro", "Open in Maestro")}
                 </a>
+                {onDraftSms && (
+                  <button
+                    className="mt-1.5 ml-2 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold min-h-[36px]"
+                    style={{ background: "var(--pp-bg-surface)", border: "1px solid var(--pp-bg-border)", color: "var(--pp-text-primary)" }}
+                    onClick={() => onDraftSms({
+                      name: b.name,
+                      number: clientNumber,
+                      clientKey: b.key,
+                      contractId: String(c.contract_id),
+                      contractNumber: c.contract_number,
+                      body: L(
+                        `Bonjour ${b.name}, au sujet de votre dossier ${c.contract_number ?? c.contract_id} : `,
+                        `Hello ${b.name}, regarding your file ${c.contract_number ?? c.contract_id}: `,
+                      ),
+                    })}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    {L("Préparer un texto", "Draft a text")}
+                  </button>
+                )}
               </li>
             ))}
           </ul>

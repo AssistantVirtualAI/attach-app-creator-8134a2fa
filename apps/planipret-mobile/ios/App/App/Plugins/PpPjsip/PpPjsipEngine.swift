@@ -570,6 +570,7 @@ final class PjsipEngine {
             "username": username,
             "callId": currentCallIdString,
             "muted": muted,
+            "onHold": onHold,
             "speaker": speakerOn
         ]
     }

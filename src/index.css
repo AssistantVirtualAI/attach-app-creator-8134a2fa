@@ -1460,3 +1460,35 @@ All colors MUST be HSL.
 @media (prefers-reduced-motion: reduce) {
   .planipret-admin-scope .pa-skel { animation: none; }
 }
+
+/* --- Normalisation globale des pages admin (pages pas encore migrées au shell) --- */
+.planipret-admin-scope .pa-main > div > h1,
+.planipret-admin-scope .pa-main h1.pa-title,
+.planipret-admin-scope .pa-main h1.pp-heading {
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--pp-text-primary) !important;
+}
+.planipret-admin-scope .pa-main h2 { letter-spacing: -0.005em; }
+.planipret-admin-scope .pa-main table { font-size: 13px; }
+.planipret-admin-scope .pa-main table thead th {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--pp-text-muted);
+}
+.planipret-admin-scope .pa-main .pp-card,
+.planipret-admin-scope .pa-main .pp-card-elevated {
+  border-radius: 16px;
+  border: 1px solid var(--pp-bg-border);
+  box-shadow: var(--pp-shadow-sm, 0 1px 2px rgba(8,20,38,.08));
+}
+.planipret-admin-scope .pa-main .rounded-lg,
+.planipret-admin-scope .pa-main .rounded-xl { border-radius: 14px; }
+.planipret-admin-scope .pa-main input:focus-visible,
+.planipret-admin-scope .pa-main select:focus-visible,
+.planipret-admin-scope .pa-main textarea:focus-visible,
+.planipret-admin-scope .pa-main button:focus-visible {
+  outline: 2px solid var(--pp-brand-accent-2, #2E9BDC);
+  outline-offset: 2px;
+}

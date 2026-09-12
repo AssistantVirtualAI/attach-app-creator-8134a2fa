@@ -1100,6 +1100,32 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     return true;
   }, [restCall?.id]);
 
+  // Mise en attente demandée depuis l'écran d'appel du téléphone (y compris
+  // l'écran verrouillé) : CallKit décide, le JS applique l'état à la session
+  // courante (REST NS-API ou session SIP live).
+  const applyHold = useCallback((onHold: boolean) => {
+    if (restCall?.id && !hasLiveSipSession) {
+      void restControl(onHold ? "hold" : "unhold");
+      return;
+    }
+    try {
+      if (onHold) ppSipProvider.hold(); else ppSipProvider.unhold();
+    } catch { /* noop */ }
+  }, [restCall?.id, hasLiveSipSession, restControl]);
+
+  const applyHoldRef = useRef(applyHold);
+  applyHoldRef.current = applyHold;
+
+  useEffect(() => {
+    let disposed = false;
+    let off: (() => void) | null = null;
+    void onPlanipretCallKitHold(({ onHold }) => applyHoldRef.current(onHold)).then((remove) => {
+      if (disposed) { remove(); return; }
+      off = remove;
+    });
+    return () => { disposed = true; off?.(); };
+  }, []);
+
   // Best-effort REST teardown with exponential backoff. Used on hangup so the
   // PBX always drops the leg even when the SIP WebSocket is down and the BYE
   // never leaves the device.

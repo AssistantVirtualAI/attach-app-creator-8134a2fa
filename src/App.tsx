@@ -122,6 +122,7 @@ const PAMicrosoftAuth = lazyWithRetry(() => import("./pages/planipret/admin/PAMi
 const PAContracts = lazyWithRetry(() => import("./pages/planipret/admin/PAContracts"));
 const PACommissionAudit = lazyWithRetry(() => import("./pages/planipret/admin/PACommissionAudit"));
 const PABrokerCommissions = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerCommissions"));
+const PABrokerJourney = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerJourney"));
 
 
 const PlanipretBrokerLayout = lazyWithRetry(() => import("./pages/planipret/broker/PlanipretBrokerLayout"));
@@ -739,6 +740,7 @@ const App = () => (
                   <Route path="maestro-clients" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroClients360 /></Suspense>} />
                   <Route path="maestro-clients/:clientKey" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroClientDetail /></Suspense>} />
                   <Route path="broker-performance" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerPerformance /></Suspense>} />
+                  <Route path="broker-journey" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerJourney /></Suspense>} />
                   <Route path="broker-stats" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerStats /></Suspense>} />
                   <Route path="task-board" element={<Suspense fallback={<AdminPageSkeleton />}><PATaskBoard /></Suspense>} />
                   <Route path="broker-daily" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerDailyReport /></Suspense>} />

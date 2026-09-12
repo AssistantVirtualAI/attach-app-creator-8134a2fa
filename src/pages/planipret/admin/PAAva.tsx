@@ -671,6 +671,6 @@ export default function PAAva() {
           </div>
         )}
       </div>
-    </div>
+    </PAPage>
   );
 }

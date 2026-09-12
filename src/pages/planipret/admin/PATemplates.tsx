@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Trash2, Edit3, Save, X, Zap } from "lucide-react";
+import { Plus, Trash2, Edit3, Save, X, Zap, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { PPEmptyState, PPSkeleton } from "@/components/planipret/admin/PPPrimitives";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";

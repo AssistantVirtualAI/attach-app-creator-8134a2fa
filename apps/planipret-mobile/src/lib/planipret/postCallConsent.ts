@@ -15,7 +15,17 @@ export type ConsentCall = {
   save_consent: string | null;
 };
 
-export type EndedDetail = { providerCallId?: string | null; number?: string | null };
+export type EndedDetail = {
+  providerCallId?: string | null;
+  number?: string | null;
+  /**
+   * D'où viennent les lignes fournies :
+   *  • "provider" : requête ciblée sur l'identifiant fournisseur (id / ns_callid
+   *    / ns_call_id) — la correspondance est déjà faite par la base ;
+   *  • "recent"  : appels très récents du courtier (repli).
+   */
+  source?: "provider" | "recent";
+};
 
 /** Un appel déjà tranché (oui/non) ne redemande jamais le consentement. */
 export function alreadyDecided(call: Pick<ConsentCall, "save_consent">): boolean {

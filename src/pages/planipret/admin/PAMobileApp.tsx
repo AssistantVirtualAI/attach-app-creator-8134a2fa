@@ -1,3 +1,4 @@
+import { PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -180,24 +181,20 @@ export default function PAMobileApp() {
   const active = useMemo(() => releases.find((r) => r.is_active) ?? null, [releases]);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold flex items-center gap-2">
-            <Smartphone className="w-5 h-5" />
-            {fr ? "Application mobile" : "Mobile app"}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {fr
-              ? "Poussez des réglages et des mises à jour vers l'app sans passer par l'App Store."
-              : "Push settings and updates to the app without an App Store release."}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          {fr ? "Rafraîchir" : "Refresh"}
-        </Button>
-      </div>
+    <div className="pa-page">
+      <PAPageHeader
+        icon={<Smartphone className="h-[18px] w-[18px]" />}
+        title={fr ? "Application mobile" : "Mobile app"}
+        subtitle={fr
+          ? "Poussez des réglages et des mises à jour vers l'app sans passer par l'App Store."
+          : "Push settings and updates to the app without an App Store release."}
+        actions={
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            {fr ? "Rafraîchir" : "Refresh"}
+          </Button>
+        }
+      />
 
       <div className="flex flex-wrap gap-2">
         {APPS.map((a) => (

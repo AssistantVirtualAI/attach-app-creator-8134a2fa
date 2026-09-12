@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, RefreshCw, PhoneOff, PhoneForwarded, RotateCw, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, RefreshCw, PhoneOff, PhoneForwarded, RotateCw, CheckCircle2, AlertTriangle, Phone } from "lucide-react";
+import { PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { toast } from "sonner";
 import DidReclaimPanel from "@/components/planipret/admin/DidReclaimPanel";
 import DidDuplicateAlert from "@/components/planipret/admin/DidDuplicateAlert";
@@ -110,19 +111,18 @@ export default function PAPhoneNumbers() {
   }), [numbers]);
 
   return (
-    <div className="space-y-4 p-4">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold">Numéros de téléphone</h1>
-          <p className="text-sm text-muted-foreground">
-            Inventaire des DID Planiprêt. Les numéros sans courtier réel sont marqués disponibles et peuvent être assignés ici.
-          </p>
-        </div>
-        <Button variant="outline" className="gap-2" onClick={() => refetch()} disabled={isFetching}>
-          {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Rafraîchir
-        </Button>
-      </div>
+    <div className="pa-page">
+      <PAPageHeader
+        icon={<Phone className="h-[18px] w-[18px]" />}
+        title="Numéros de téléphone"
+        subtitle="Inventaire des DID Planiprêt. Les numéros sans courtier réel sont marqués disponibles et peuvent être assignés ici."
+        actions={
+          <Button variant="outline" className="gap-2" onClick={() => refetch()} disabled={isFetching}>
+            {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Rafraîchir
+          </Button>
+        }
+      />
 
       <DidDuplicateAlert numbers={numbers} />
 

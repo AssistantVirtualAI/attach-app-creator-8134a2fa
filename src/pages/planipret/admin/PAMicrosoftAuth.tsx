@@ -1,3 +1,4 @@
+import { PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -168,17 +169,18 @@ export default function PAMicrosoftAuth() {
     new Date(iso).toLocaleString(lang === "en" ? "en-CA" : "fr-CA", { dateStyle: "short", timeStyle: "short" });
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{t.title}</h1>
-          <p className="text-sm text-muted-foreground">{t.subtitle}</p>
-        </div>
-        <Button variant="outline" onClick={load} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          {t.refresh}
-        </Button>
-      </div>
+    <div className="pa-page">
+      <PAPageHeader
+        icon={<CheckCircle2 className="h-[18px] w-[18px]" />}
+        title={t.title}
+        subtitle={t.subtitle}
+        actions={
+          <Button variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            {t.refresh}
+          </Button>
+        }
+      />
 
       {err && (
         <Card className="border-destructive/50">

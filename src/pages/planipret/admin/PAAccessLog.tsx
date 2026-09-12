@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ShieldCheck, ShieldAlert, RefreshCw, Search, Loader2 } from "lucide-react";
+import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 
 type Row = {
   id: string;
@@ -55,15 +56,12 @@ export default function PAAccessLog() {
   const blockedCount = rows.filter((r) => r.event === "blocked" || r.event === "2fa_failed").length;
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-semibold" style={{ color: "var(--pp-text-primary)" }}>Journal des accès</h1>
-          <p className="text-sm" style={{ color: "var(--pp-text-muted)" }}>
-            Connexions au portail et tentatives refusées (500 derniers événements).
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <PAPage>
+      <PAPageHeader
+        icon={<ShieldCheck className="w-5 h-5" />}
+        title="Journal des accès"
+        subtitle="Connexions au portail et tentatives refusées (500 derniers événements)."
+        actions={<div className="flex items-center gap-2">
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: "var(--pp-bg-deep)", border: "1px solid var(--pp-bg-border-2)" }}>
             <Search size={15} style={{ color: "var(--pp-text-muted)" }} />
             <input
@@ -88,8 +86,8 @@ export default function PAAccessLog() {
           >
             <RefreshCw size={15} /> Actualiser
           </button>
-        </div>
-      </div>
+        </div>}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
@@ -152,6 +150,6 @@ export default function PAAccessLog() {
           </div>
         )}
       </div>
-    </div>
+    </PAPage>
   );
 }

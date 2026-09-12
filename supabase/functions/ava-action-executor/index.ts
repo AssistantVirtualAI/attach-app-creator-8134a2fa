@@ -35,8 +35,23 @@ Deno.serve(async (req) => {
     const userId = claims?.claims?.sub as string | undefined;
     if (!userId) return j({ success: false, error: "Unauthorized" }, 401);
 
-    const { analysis_id, action_id, modified_content, modified_params } = await req.json();
+    const body = await req.json();
+    const { analysis_id, action_id, modified_content, modified_params } = body ?? {};
     if (!analysis_id || !action_id) return j({ success: false, error: "analysis_id + action_id required" }, 400);
+
+    // Barrière serveur : AVA propose, le courtier confirme, le serveur exécute.
+    if (!isConfirmed(body)) {
+      await logProposal(admin, {
+        userId,
+        action: `ava_action:${action_id}`,
+        surface: "ava_email_actions",
+        decision: "proposed",
+        idempotencyKey: await buildIdempotencyKey({
+          userId, action: `ava_action:${action_id}`, payload: { analysis_id, action_id },
+        }),
+      });
+      return j(confirmationRequiredResult(`ava_action:${action_id}`, { analysis_id, action_id }), 403);
+    }
 
     const { data: analysis, error: aErr } = await admin
       .from("planipret_ava_email_analyses")

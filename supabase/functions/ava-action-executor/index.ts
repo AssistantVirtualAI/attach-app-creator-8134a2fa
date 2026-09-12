@@ -203,7 +203,9 @@ Deno.serve(async (req) => {
       modified_by_broker: modifiedByBroker,
     });
 
-    return j({ success, execution_mode: executionMode, result, error: errorMsg }, success ? 200 : 500);
+    await finishAction(admin, claim.id, success, { execution_mode: executionMode, result }, errorMsg);
+
+    return j({ success, execution_mode: executionMode, result, error: errorMsg, idempotency_key: idempotencyKey }, success ? 200 : 500);
   } catch (e: any) {
     console.error("[ava-action-executor]", e);
     return j({ success: false, error: e?.message ?? "Erreur serveur" }, 500);

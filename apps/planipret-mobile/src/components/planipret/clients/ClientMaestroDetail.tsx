@@ -18,9 +18,11 @@ const cad = (n: number) =>
  * par client, mais dépliées sur une page dédiée.
  */
 export default function ClientMaestroDetail({
-  clientKey, tasks, userIds, lang, lastSyncAt, loading,
+  clientKey, tasks, userIds, lang, lastSyncAt, loading, variant, onDraftSms,
 }: {
   clientKey: string;
+  variant?: "admin" | "mobile";
+  onDraftSms?: (target: { name: string; number: string; clientKey: string }) => void;
   tasks: NormalizedTask[];
   userIds: string[];
   lang: "fr" | "en";

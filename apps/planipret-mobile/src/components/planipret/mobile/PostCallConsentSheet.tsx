@@ -96,6 +96,7 @@ export default function PostCallConsentSheet() {
           .from("planipret_phone_calls").select(SELECT)
           .or(`id.eq.${pid},ns_callid.eq.${pid},ns_call_id.eq.${pid}`).limit(3);
         rows = (data as any as ConsentCall[]) ?? [];
+        if (rows.length) source = "provider";
       }
       if (!rows.length) {
         const { data } = await supabase

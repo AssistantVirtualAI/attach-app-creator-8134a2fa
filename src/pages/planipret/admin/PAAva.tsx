@@ -72,7 +72,7 @@ function KpiTile({ icon, label, value, color, sub }: { icon: any; label: string;
       <div className="tabular-nums" style={{ fontSize: 26, fontWeight: 700, marginTop: 8, color: "var(--pp-text-primary)" }}>{value}</div>
       <p style={{ fontSize: 11, color: "var(--pp-text-secondary)", marginTop: 4 }}>{label}</p>
       {sub && <p style={{ fontSize: 10, color: "var(--pp-text-faint)", marginTop: 2 }}>{sub}</p>}
-    </PAPage>
+    </div>
   );
 }
 
@@ -671,6 +671,6 @@ export default function PAAva() {
           </div>
         )}
       </div>
-    </div>
+    </PAPage>
   );
 }

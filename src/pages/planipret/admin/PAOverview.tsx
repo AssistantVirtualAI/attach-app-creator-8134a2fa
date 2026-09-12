@@ -714,7 +714,7 @@ export default function PAOverview() {
           </ul>
         </div>
       )}
-    </div>
+    </PAPage>
   );
 }
 
@@ -727,6 +727,6 @@ function MiniStat({ label, value, sub, color }: { label: string; value: string |
       </div>
       <div style={{ fontSize: 22, fontWeight: 700, color }} className="tabular-nums">{value}</div>
       <p style={{ fontSize: 10, color: "var(--pp-text-faint)", marginTop: 2 }}>{sub}</p>
-    </PAPage>
+    </div>
   );
 }

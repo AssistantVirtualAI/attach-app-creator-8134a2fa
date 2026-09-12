@@ -104,7 +104,7 @@ export default function PostCallConsentSheet() {
           .order("created_at", { ascending: false }).limit(5);
         rows = (data as any as ConsentCall[]) ?? [];
       }
-      const picked = pickEndedCall(rows, detail, owners);
+      const picked = pickEndedCall(rows, { ...detail, source }, owners);
       // Une réponse déjà donnée ne vaut jamais pour un nouvel appel, et un même
       // appel ne repose jamais deux fois la question.
       if (!picked || handled.current.has(picked.id)) return;

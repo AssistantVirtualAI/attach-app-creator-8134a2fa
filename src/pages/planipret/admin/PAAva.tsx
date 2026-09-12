@@ -56,7 +56,7 @@ const TooltipDark = ({ active, payload, label }: any) => {
           <span>{p.name}: <strong>{p.value}</strong></span>
         </div>
       ))}
-    </PAPage>
+    </div>
   );
 };
 

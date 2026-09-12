@@ -714,7 +714,7 @@ export default function PAOverview() {
           </ul>
         </div>
       )}
-    </div>
+    </PAPage>
   );
 }
 

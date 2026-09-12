@@ -1331,3 +1331,132 @@ All colors MUST be HSL.
 [data-pp-hr="1"] .pp-commissions-root .pp-hero-aurora { opacity: .12 !important; }
 [data-pp-hr="1"] .pp-commissions-root * { text-shadow: none !important; }
 [data-pp-hr="1"] .pp-commissions-root .pp-tab-pill[aria-selected="true"] { outline: 2px solid var(--pp-text-primary); outline-offset: 1px; }
+
+/* ============================================================
+   Planiprêt admin — système visuel unifié (pa-*)
+   Toutes les pages du portail admin partagent ces primitives.
+   ============================================================ */
+.planipret-admin-scope .pa-main { max-width: 1680px; margin-inline: auto; width: 100%; }
+
+.planipret-admin-scope .pa-page { display: flex; flex-direction: column; gap: 20px; }
+
+.planipret-admin-scope .pa-header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  padding: 16px 18px;
+  border: 1px solid var(--pp-bg-border);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 180% at 0% 0%, color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 12%, transparent), transparent 62%),
+    var(--pp-bg-surface, #fff);
+  box-shadow: var(--pp-shadow-md, 0 10px 26px -18px rgba(8,20,38,.35));
+}
+.planipret-admin-scope .pa-header-title {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0; font-size: 20px; line-height: 1.25; font-weight: 800; letter-spacing: -0.01em;
+  color: var(--pp-text-primary);
+}
+.planipret-admin-scope .pa-header-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; flex: 0 0 34px; border-radius: 11px;
+  color: var(--pp-brand-accent-2, #2E9BDC);
+  background: color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 28%, transparent);
+}
+.planipret-admin-scope .pa-header-sub { margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: var(--pp-text-muted); }
+.planipret-admin-scope .pa-header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.planipret-admin-scope .pa-card {
+  border: 1px solid var(--pp-bg-border);
+  border-radius: 16px;
+  background: var(--pp-bg-card, var(--pp-bg-surface, #fff));
+  color: var(--pp-text-primary);
+  box-shadow: var(--pp-shadow-sm, 0 1px 2px rgba(8,20,38,.08));
+  overflow: hidden;
+}
+.planipret-admin-scope .pa-card-pad { padding: 16px 18px; }
+.planipret-admin-scope .pa-card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 18px; border-bottom: 1px solid var(--pp-bg-border);
+  background: color-mix(in srgb, var(--pp-bg-elevated, var(--pp-bg-surface, #fff)) 60%, transparent);
+}
+.planipret-admin-scope .pa-card-title { font-size: 14px; font-weight: 700; color: var(--pp-text-primary); display: flex; align-items: center; gap: 8px; margin: 0; }
+.planipret-admin-scope .pa-card-sub { font-size: 12px; color: var(--pp-text-muted); margin: 2px 0 0; }
+
+.planipret-admin-scope .pa-toolbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 12px 14px; border: 1px solid var(--pp-bg-border); border-radius: 14px;
+  background: var(--pp-bg-surface, #fff);
+}
+.planipret-admin-scope .pa-toolbar input,
+.planipret-admin-scope .pa-toolbar select {
+  min-height: 34px; border-radius: 10px; padding: 0 10px; font-size: 13px;
+  border: 1px solid var(--pp-bg-border); background: var(--pp-bg-deep, #fff); color: var(--pp-text-primary);
+}
+
+.planipret-admin-scope .pa-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 14px; }
+.planipret-admin-scope .pa-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.planipret-admin-scope .pa-table thead th {
+  position: sticky; top: 0; z-index: 1;
+  text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--pp-text-muted); padding: 10px 12px; white-space: nowrap;
+  background: color-mix(in srgb, var(--pp-bg-elevated, var(--pp-bg-surface, #fff)) 92%, transparent);
+  border-bottom: 1px solid var(--pp-bg-border);
+}
+.planipret-admin-scope .pa-table tbody td { padding: 11px 12px; border-bottom: 1px solid color-mix(in srgb, var(--pp-bg-border) 70%, transparent); color: var(--pp-text-primary); vertical-align: middle; }
+.planipret-admin-scope .pa-table tbody tr:last-child td { border-bottom: 0; }
+.planipret-admin-scope .pa-table tbody tr:hover td { background: color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 8%, transparent); }
+.planipret-admin-scope .pa-table .pa-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.planipret-admin-scope .pa-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; line-height: 1.5;
+  border: 1px solid color-mix(in srgb, var(--pa-badge-c, var(--pp-text-muted)) 34%, transparent);
+  color: var(--pa-badge-c, var(--pp-text-secondary));
+  background: color-mix(in srgb, var(--pa-badge-c, var(--pp-text-muted)) 13%, transparent);
+  white-space: nowrap;
+}
+.planipret-admin-scope .pa-badge-success { --pa-badge-c: var(--pp-success, #16a34a); }
+.planipret-admin-scope .pa-badge-warning { --pa-badge-c: var(--pp-warning, #F0B429); }
+.planipret-admin-scope .pa-badge-danger  { --pa-badge-c: var(--pp-danger, #E84C4C); }
+.planipret-admin-scope .pa-badge-info    { --pa-badge-c: var(--pp-brand-accent-2, #2E9BDC); }
+
+.planipret-admin-scope .pa-stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.planipret-admin-scope .pa-stat {
+  padding: 14px 16px; border: 1px solid var(--pp-bg-border); border-radius: 14px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 7%, transparent), transparent 70%),
+    var(--pp-bg-card, var(--pp-bg-surface, #fff));
+  box-shadow: var(--pp-shadow-sm, 0 1px 2px rgba(8,20,38,.08));
+}
+.planipret-admin-scope .pa-stat-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--pp-text-muted); display: flex; align-items: center; gap: 6px; }
+.planipret-admin-scope .pa-stat-value { margin-top: 6px; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: var(--pp-text-primary); font-variant-numeric: tabular-nums; }
+.planipret-admin-scope .pa-stat-hint { margin-top: 3px; font-size: 12px; color: var(--pp-text-muted); }
+
+.planipret-admin-scope .pa-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 34px; padding: 0 12px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--pp-bg-border); background: var(--pp-bg-surface, #fff); color: var(--pp-text-primary);
+  cursor: pointer; transition: background .15s ease, border-color .15s ease, transform .1s ease;
+}
+.planipret-admin-scope .pa-btn:hover { background: color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 10%, var(--pp-bg-surface, #fff)); border-color: color-mix(in srgb, var(--pp-brand-accent-2, #2E9BDC) 40%, var(--pp-bg-border)); }
+.planipret-admin-scope .pa-btn:active { transform: translateY(1px); }
+.planipret-admin-scope .pa-btn-primary { background: var(--pp-brand-accent-2, #2E9BDC); border-color: var(--pp-brand-accent-2, #2E9BDC); color: #fff; }
+.planipret-admin-scope .pa-btn-primary:hover { background: var(--pp-brand-accent, #4FA8E8); border-color: var(--pp-brand-accent, #4FA8E8); }
+.planipret-admin-scope .pa-btn:disabled { opacity: .55; cursor: not-allowed; }
+.planipret-admin-scope .pa-btn:focus-visible,
+.planipret-admin-scope .pa-header-actions :focus-visible { outline: 2px solid var(--pp-brand-accent-2, #2E9BDC); outline-offset: 2px; }
+
+.planipret-admin-scope .pa-empty { padding: 34px 18px; text-align: center; color: var(--pp-text-muted); font-size: 13px; }
+.planipret-admin-scope .pa-skel { border-radius: 10px; background: linear-gradient(90deg, color-mix(in srgb, var(--pp-text-muted) 12%, transparent), color-mix(in srgb, var(--pp-text-muted) 22%, transparent), color-mix(in srgb, var(--pp-text-muted) 12%, transparent)); background-size: 200% 100%; animation: pa-shimmer 1.3s linear infinite; }
+@keyframes pa-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+@media (max-width: 767px) {
+  .planipret-admin-scope .pa-page { gap: 14px; }
+  .planipret-admin-scope .pa-header { padding: 14px; border-radius: 14px; }
+  .planipret-admin-scope .pa-header-title { font-size: 17px; }
+  .planipret-admin-scope .pa-card-pad { padding: 13px; }
+  .planipret-admin-scope .pa-btn { min-height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .planipret-admin-scope .pa-skel { animation: none; }
+}

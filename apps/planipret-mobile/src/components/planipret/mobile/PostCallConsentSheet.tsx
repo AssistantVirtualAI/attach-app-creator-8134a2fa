@@ -89,6 +89,7 @@ export default function PostCallConsentSheet() {
 
       const since = new Date(Date.now() - 10 * 60_000).toISOString();
       let rows: ConsentCall[] = [];
+      let source: "provider" | "recent" = "recent";
       if (detail.providerCallId) {
         const pid = detail.providerCallId;
         const { data } = await supabase

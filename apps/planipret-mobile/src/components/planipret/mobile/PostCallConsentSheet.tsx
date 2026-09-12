@@ -66,6 +66,8 @@ export default function PostCallConsentSheet() {
   const [clientChoice, setClientChoice] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
   const spokenFor = useRef<string | null>(null);
+  // Heure exacte où l'appel s'est terminé (moment de l'événement, pas de la réponse).
+  const endedAt = useRef<string | null>(null);
   const sending = useRef(false);
   const handled = useRef<Set<string>>(new Set());
 
@@ -78,6 +80,7 @@ export default function PostCallConsentSheet() {
   useEffect(() => {
     const onEnded = async (e: Event) => {
       const detail = ((e as CustomEvent).detail ?? {}) as EndedDetail;
+      const endedIso = new Date().toISOString();
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth?.user?.id;
       if (!uid) return;
@@ -111,6 +114,7 @@ export default function PostCallConsentSheet() {
       // appel ne repose jamais deux fois la question.
       if (!picked || handled.current.has(picked.id)) return;
       handled.current.add(picked.id);
+      endedAt.current = endedIso;
       setCall(picked);
       reset();
     };
@@ -162,6 +166,7 @@ export default function PostCallConsentSheet() {
           call_id: call.id,
           action,
           channel: "screen",
+          ended_at: endedAt.current,
           client_name: clientChoice.trim() || undefined,
         },
       });

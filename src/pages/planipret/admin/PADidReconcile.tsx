@@ -143,23 +143,24 @@ export default function PADidReconcile() {
   });
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">{t.title}</h1>
-          <p className="text-sm text-muted-foreground max-w-2xl">{t.sub}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { void load(); void loadReports(); }} disabled={loading}>
-            {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-            {t.refresh}
-          </Button>
-          <Button onClick={runJob} disabled={running}>
-            {running ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlayCircle className="w-4 h-4 mr-2" />}
-            {t.runJob}
-          </Button>
-        </div>
-      </div>
+    <div className="pa-page">
+      <PAPageHeader
+        icon={<CheckCircle2 className="h-[18px] w-[18px]" />}
+        title={t.title}
+        subtitle={t.sub}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => { void load(); void loadReports(); }} disabled={loading}>
+              {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+              {t.refresh}
+            </Button>
+            <Button onClick={runJob} disabled={running}>
+              {running ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <PlayCircle className="w-4 h-4 mr-2" />}
+              {t.runJob}
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[

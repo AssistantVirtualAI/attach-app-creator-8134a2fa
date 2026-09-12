@@ -154,6 +154,7 @@ final class PjsipEngine {
 
     private var muted = false
     private var speakerOn = false
+    private var onHold = false
     private var audioSessionReady = false
 
     var currentCallIdString: String { activeCall >= 0 ? String(activeCall) : "" }

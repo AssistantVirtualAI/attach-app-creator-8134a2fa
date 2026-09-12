@@ -218,6 +218,15 @@ public class PpPjsip: CAPPlugin, CAPBridgedPlugin {
         #endif
     }
 
+    @objc func setHold(_ call: CAPPluginCall) {
+        #if canImport(pjsua)
+        PjsipEngine.shared.setHold(call.getBool("onHold") ?? false)
+        call.resolve(["ok": true])
+        #else
+        rejectMissingBinary(call)
+        #endif
+    }
+
     @objc func setSpeaker(_ call: CAPPluginCall) {
         #if canImport(pjsua)
         PjsipEngine.shared.setSpeaker(call.getBool("enabled") ?? false)

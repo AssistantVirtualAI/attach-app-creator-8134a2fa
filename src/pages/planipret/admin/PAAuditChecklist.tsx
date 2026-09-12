@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { downloadPdfBlob } from "@/lib/pdf/downloadBlob";
 import { jsPDF } from "jspdf";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
+import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 
 type Status = "pass" | "fail" | "warn" | "skip" | "running";
 type Item = { id: string; name: string; description?: string; status: Status; detail?: string; ms?: number };
@@ -540,16 +541,8 @@ export default function PAAuditChecklist() {
   };
 
   return (
-    <div className="pa-page space-y-5 min-h-full" style={{ background: C.bg, color: C.text }}>
-      {/* Header */}
-      <div className="flex flex-col gap-2 mb-6">
-        <h1 className="font-bold" style={{ fontFamily: "Inter,sans-serif", fontSize: 28, color: C.text }}>
-          {t.title}
-        </h1>
-        <p style={{ fontFamily: "DM Sans,sans-serif", fontSize: 14, color: C.textMuted }}>
-          {t.subtitle}
-        </p>
-      </div>
+    <PAPage className="min-h-full">
+      <PAPageHeader icon={<ShieldCheck className="w-5 h-5" />} title={t.title} subtitle={t.subtitle} />
 
       {/* Score card */}
       <div
@@ -819,7 +812,7 @@ export default function PAAuditChecklist() {
           })}
         </div>
       </div>
-    </div>
+    </PAPage>
   );
 }
 

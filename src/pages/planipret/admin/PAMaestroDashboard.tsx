@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { toast } from "sonner";
+import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -649,23 +650,8 @@ export default function PAMaestroDashboard() {
   const edgeErrors = edgeRuns.filter((e) => e.status === "error").length;
 
   return (
-    <div className="space-y-5 p-4 md:p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Activity className="w-6 h-6" style={{ color: ACCENT }} />
-            {t.title}
-            <Badge variant="secondary" className="ml-1 flex items-center gap-1 text-xs">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              {t.live}
-            </Badge>
-          </h1>
-          <p className="text-muted-foreground text-sm">{t.subtitle}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {lastRefresh.toLocaleTimeString(lang)} · {loading ? t.loading : `${filteredLogs.length} logs`}
-          </p>
-        </div>
+    <PAPage>
+      <PAPageHeader icon={<Activity className="w-5 h-5" />} title={t.title} subtitle={`${t.subtitle} · ${lastRefresh.toLocaleTimeString(lang)} · ${loading ? t.loading : `${filteredLogs.length} logs`}`} actions={
         <div className="flex items-center gap-2 flex-wrap">
           <select
             value={hours}
@@ -684,8 +670,8 @@ export default function PAMaestroDashboard() {
             <Radio className="w-4 h-4 mr-1.5" />
             {t.runAudit}
           </Button>
-        </div>
-      </div>
+        </div>}
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -1204,6 +1190,6 @@ export default function PAMaestroDashboard() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PAPage>
   );
 }

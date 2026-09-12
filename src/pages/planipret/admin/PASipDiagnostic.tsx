@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import CallDoctorCard from "@/components/planipret/admin/CallDoctorCard";
 import DidAnnouncementCard from "@/components/planipret/admin/DidAnnouncementCard";
+import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 
 const DICT = {
   fr: {
@@ -238,14 +239,9 @@ export default function PASipDiagnostic() {
   const showProvisionCta = resolved && !resolved.ok && (resolved.error === "device_not_found" || resolved.error === "no_extension");
 
   return (
-    <div className="space-y-5 p-1">
+    <PAPage>
       <audio ref={audioRef} autoPlay hidden />
-
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">{t.title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t.subtitle}</p>
-        </div>
+      <PAPageHeader icon={<PlugZap className="h-5 w-5" />} title={t.title} subtitle={t.subtitle} actions={
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={resolveOnly} disabled={resolving}>
             {resolving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -261,8 +257,8 @@ export default function PASipDiagnostic() {
           <Button variant="outline" size="sm" onClick={runRecordingDiag}>
             {t.diagRecordings}
           </Button>
-        </div>
-      </div>
+        </div>}
+      />
 
       <CallDoctorCard />
       <DidAnnouncementCard />
@@ -358,6 +354,6 @@ function Row({ k, v, mono }: { k: string; v?: string | null; mono?: boolean }) {
     <div className="flex items-baseline justify-between gap-3 border-b border-border pb-1 last:border-b-0">
       <dt className="text-muted-foreground">{k}</dt>
       <dd className={`text-right break-all text-foreground ${mono ? "font-mono" : ""}`}>{v ?? "—"}</dd>
-    </div>
+    </PAPage>
   );
 }

@@ -101,7 +101,10 @@ export async function sendSipWakePush(admin: any, userId: string): Promise<SipWa
       const sa = parseServiceAccount(config.fcm_service_account_json ?? Deno.env.get("FCM_SERVICE_ACCOUNT_JSON"));
       if (sa) {
         for (const row of androidTokens) {
-          const res = await sendFcmData(sa, row.token, { type: "sip_register" });
+          const res = await sendFcmDataMessage(sa, row.token, { type: "sip_register" }, {
+            collapseKey: "pp-sip-register",
+            ttlSeconds: 120,
+          });
           if (res.ok) { out.android++; out.sent++; }
           else if (res.unregistered) await admin.from("mobile_push_tokens").delete().eq("id", row.id);
         }

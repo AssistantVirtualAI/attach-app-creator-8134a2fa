@@ -111,6 +111,8 @@ const PAMobileDevices = lazyWithRetry(() => import("./pages/planipret/admin/PAMo
 const PAHoldMusic = lazyWithRetry(() => import("./pages/planipret/admin/PAHoldMusic"));
 const PASipDiagnostic = lazyWithRetry(() => import("./pages/planipret/admin/PASipDiagnostic"));
 const PACallTest = lazyWithRetry(() => import("./pages/planipret/admin/PACallTest"));
+const PASipMonitor = lazyWithRetry(() => import("./pages/planipret/admin/PASipMonitor"));
+const PAOutboundCalls = lazyWithRetry(() => import("./pages/planipret/admin/PAOutboundCalls"));
 const PADiagnostics = lazyWithRetry(() => import("./pages/planipret/admin/PADiagnostics"));
 const PAMaestroSync = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroSync"));
 const PAMaestroDashboard = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroDashboard"));
@@ -718,6 +720,8 @@ const App = () => (
                   <Route path="hold-music" element={<Suspense fallback={<AdminPageSkeleton />}><PAHoldMusic /></Suspense>} />
                   <Route path="sip-diagnostic" element={<Suspense fallback={<AdminPageSkeleton />}><PASipDiagnostic /></Suspense>} />
                   <Route path="call-test" element={<Suspense fallback={<AdminPageSkeleton />}><PACallTest /></Suspense>} />
+                  <Route path="sip-monitor" element={<Suspense fallback={<AdminPageSkeleton />}><PASipMonitor /></Suspense>} />
+                  <Route path="outbound-calls" element={<Suspense fallback={<AdminPageSkeleton />}><PAOutboundCalls /></Suspense>} />
                   <Route path="diagnostics" element={<Suspense fallback={<AdminPageSkeleton />}><PADiagnostics /></Suspense>} />
                   <Route path="maestro-sync" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroSync /></Suspense>} />
                   <Route path="maestro-dashboard" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroDashboard /></Suspense>} />

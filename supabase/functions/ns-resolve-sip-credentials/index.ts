@@ -307,10 +307,14 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* empty ok */ }
   const clientType = normalizeClientType(body?.client_type);
-  // Invariant AOR/transport : `<ext>M` = app native PJSIP/TLS uniquement,
-  // `<ext>W` = navigateur JsSIP/WSS. Jamais l'inverse, sinon le dernier
-  // REGISTER reçu vole le Contact et les appels partent au mauvais client.
-  const sipTransport: SipTransport = clientType === "mobile" ? "tls" : "wss";
+  // The installed mobile app currently registers `<ext>M` through the
+  // foreground/background WSS stack on the NetSapiens core (:9002). Provision
+  // the Device with the same transport; declaring it TLS while the client sends
+  // WSS REGISTERs leaves the AOR permanently unregistered.
+  const requestedTransport = String(body?.transport ?? "wss").toLowerCase();
+  const sipTransport: SipTransport = requestedTransport === "tcp" ? "tcp"
+    : requestedTransport === "tls" ? "tls"
+    : "wss";
 
 
   const authHeader = req.headers.get("Authorization") ?? "";

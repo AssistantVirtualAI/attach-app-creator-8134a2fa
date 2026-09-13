@@ -23,7 +23,7 @@ export const useAuth = () => {
         if (event === 'SIGNED_IN' && session?.user) {
           void supabase.functions
             .invoke('ns-resolve-sip-credentials', {
-              body: { client_type: 'mobile', transport: 'tls', on_login: true },
+              body: { client_type: 'mobile', transport: 'wss', on_login: true },
             })
             .catch(() => { /* silencieux : la connexion ne doit jamais échouer pour ça */ });
         }

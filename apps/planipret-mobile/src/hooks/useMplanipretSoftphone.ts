@@ -413,7 +413,9 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         if (opts?.force) {
           try { ppSipProvider.stop(); } catch {}
         }
-        const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", { body: { client_type: clientType } });
+        const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
+          body: { client_type: clientType, transport: "wss" },
+        });
         if (cancelled) return;
         if (error || !data || (data as any)?.error) return;
         const d = data as any;

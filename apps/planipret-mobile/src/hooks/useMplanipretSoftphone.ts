@@ -1189,12 +1189,9 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
 
   const placeCall = useCallback(async (destination: string): Promise<OutboundResult> => {
     if (!destination) return { via: "none", ok: false, error: "empty destination" };
-    const mic = await ensureMicPermission();
-    if (mic.state !== "granted") {
-      try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
-      return { via: "none", ok: false, error: mic.error ?? "microphone unavailable", micState: mic.state };
-    }
-    try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
+    // PJSIP owns the native iOS audio session. Do not gate it behind the
+    // WebView getUserMedia permission: on some installed builds WebKit reports
+    // the microphone as unavailable even though the native engine can call.
     if (clientType === "mobile" && Capacitor.isNativePlatform() && nativeSip.isAvailable()) {
       const ready = nativeSip.isRegistered() || await nativeSip.repairRegistration();
       if (ready && await nativeSip.makeCall(ppNormalizeDestination(destination))) {
@@ -1210,6 +1207,13 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       canUseSip = st === "registered" || st === "connected";
     }
     if (canUseSip) {
+      const mic = await ensureMicPermission();
+      if (mic.state !== "granted") {
+        try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
+        console.warn("[softphone] WebRTC microphone unavailable, falling back to PBX", mic.error ?? mic.state);
+        return await callViaPBX(destination);
+      }
+      try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
       try {
         await ppSipProvider.call(destination);
         return { via: "webrtc", ok: true };

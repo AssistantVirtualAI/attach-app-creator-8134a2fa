@@ -242,7 +242,7 @@ Deno.serve(async (req) => {
       const ok = res.ok || res.status === 202;
       return jsonResponse({
         success: ok,
-        call_id: parsed?.["call-id"] ?? parsed?.call_id ?? nsBody["call-id"],
+        call_id: parsed?.["call-id"] ?? parsed?.call_id ?? cbCallId,
         destination: dest,
         ns_status: res.status,
         error: ok ? undefined : ((typeof parsed === "object" && parsed?.message) || `NS-API error ${res.status}`),

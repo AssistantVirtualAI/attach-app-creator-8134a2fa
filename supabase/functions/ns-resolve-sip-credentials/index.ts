@@ -311,7 +311,7 @@ Deno.serve(async (req) => {
   // foreground/background WSS stack on the NetSapiens core (:9002). Provision
   // the Device with the same transport; declaring it TLS while the client sends
   // WSS REGISTERs leaves the AOR permanently unregistered.
-  const requestedTransport = String(body?.transport ?? "wss").toLowerCase();
+  const requestedTransport = String(body?.transport ?? (clientType === "mobile" ? "tls" : "wss")).toLowerCase();
   const sipTransport: SipTransport = requestedTransport === "tcp" ? "tcp"
     : requestedTransport === "tls" ? "tls"
     : "wss";

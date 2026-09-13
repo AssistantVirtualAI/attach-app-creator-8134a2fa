@@ -286,6 +286,51 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (action === "enable_recording_all") {
+      // Same as enable_recording, but enumerates EVERY user of the NS domain
+      // (including extensions not present in planipret_profiles), then reads back.
+      const mode = String(body?.mode ?? "yes-with-transcription-and-sentiment");
+      const listed = await ns(`/domains/${encodeURIComponent(NS_DOMAIN)}/users?limit=1000`);
+      if (!listed.ok) return json({ error: "ns_list_failed", status: listed.status, detail: listed.data }, 502);
+      const users: any[] = Array.isArray(listed.data) ? listed.data : (listed.data?.users ?? []);
+      const exts = Array.from(new Set(
+        users.map((u: any) => String(u?.user ?? u?.["user"] ?? u?.extension ?? "").trim()).filter(Boolean),
+      ));
+
+      const results: any[] = [];
+      for (let i = 0; i < exts.length; i += 5) {
+        const chunk = exts.slice(i, i + 5);
+        const res = await Promise.all(chunk.map(async (ext: string) => {
+          const put = await ns(`/domains/${encodeURIComponent(NS_DOMAIN)}/users/${encodeURIComponent(ext)}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              "recording-configuration": mode,
+              "voicemail-transcription-enabled": "Deepgram",
+            }),
+          });
+          const back = await ns(`/domains/${encodeURIComponent(NS_DOMAIN)}/users/${encodeURIComponent(ext)}`);
+          const cfg = Array.isArray(back.data) ? back.data[0] : back.data;
+          return {
+            extension: ext,
+            ok: put.ok,
+            status: put.status,
+            recording_configuration: cfg?.["recording-configuration"] ?? null,
+            error: put.ok ? null : (typeof put.data === "object" ? put.data?.message ?? null : String(put.data ?? "")),
+          };
+        }));
+        results.push(...res);
+      }
+
+      return json({
+        ok: true,
+        mode,
+        total: results.length,
+        updated: results.filter((r) => r.ok).length,
+        verified: results.filter((r) => String(r.recording_configuration ?? "").startsWith("yes")).length,
+        failed: results.filter((r) => !r.ok),
+      });
+    }
+
     return json({ error: "unknown_action" }, 400);
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500);

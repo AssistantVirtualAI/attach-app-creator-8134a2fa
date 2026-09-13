@@ -11,6 +11,7 @@ import { downloadPdfBlob } from "@/lib/pdf/downloadBlob";
 import { jsPDF } from "jspdf";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
+import paBanner from "@/assets/planipret/banner-audit.jpg";
 
 type Status = "pass" | "fail" | "warn" | "skip" | "running";
 type Item = { id: string; name: string; description?: string; status: Status; detail?: string; ms?: number };
@@ -542,7 +543,7 @@ export default function PAAuditChecklist() {
 
   return (
     <PAPage className="min-h-full">
-      <PAPageHeader icon={<ShieldCheck className="w-5 h-5" />} title={t.title} subtitle={t.subtitle} />
+      <PAPageHeader image={paBanner} accent="#8B5CF6" icon={<ShieldCheck className="w-5 h-5" />} title={t.title} subtitle={t.subtitle} />
 
       {/* Score card */}
       <div

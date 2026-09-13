@@ -10,6 +10,7 @@ import {
 import { Activity, RefreshCw, Trash2, Zap, Timer, Layers } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
+import paBanner from "@/assets/planipret/banner-diagnostics.jpg";
 
 const DICT = {
   fr: {
@@ -149,6 +150,8 @@ export default function PADiagnostics() {
   return (
     <PAPage className="planipret-scope planipret-admin-scope" key={tick}>
       <PAPageHeader
+        image={paBanner}
+        accent="#F59E0B"
         icon={<Activity className="w-5 h-5" />}
         title={t.title}
         subtitle={t.subtitle}

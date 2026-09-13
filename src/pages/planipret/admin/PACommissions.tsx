@@ -6,6 +6,7 @@ import MaestroReconnectButton from "@/components/planipret/commissions/MaestroRe
 import MaestroSyncDiagnostics from "@/components/planipret/commissions/MaestroSyncDiagnostics";
 import RegisterCommissions from "@/components/planipret/commissions/RegisterCommissions";
 import { supabase } from "@/integrations/supabase/client";
+import paBanner from "@/assets/planipret/banner-commissions.jpg";
 
 export default function PACommissions() {
   const { lang } = useMplanipretLang();
@@ -56,6 +57,8 @@ export default function PACommissions() {
   return (
     <PAPage>
       <PAPageHeader
+        image={paBanner}
+        accent="#10B981"
         icon={<TrendingUp className="w-5 h-5" />}
         title={lang === "en" ? "Commission statistics" : "Statistiques de commissions"}
         subtitle={lang === "en"

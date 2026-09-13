@@ -6,6 +6,7 @@ import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { usePlanipretTasks } from "@/hooks/planipret/usePlanipretTasks";
 import ClientMaestro360 from "@/components/planipret/clients/ClientMaestro360";
+import paBanner from "@/assets/planipret/banner-clients.jpg";
 
 interface BrokerOption { id: string; name: string; userId: string | null }
 
@@ -68,6 +69,8 @@ export default function PAMaestroClients360() {
   return (
     <PAPage>
       <PAPageHeader
+        image={paBanner}
+        accent="#3B82F6"
         icon={<Users className="w-5 h-5" />}
         title={L("Clients Maestro", "Maestro clients")}
         subtitle={L(

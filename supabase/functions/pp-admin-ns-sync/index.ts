@@ -503,8 +503,8 @@ async function syncCalls(admin: ReturnType<typeof createClient>, domain: string,
     });
   }
 
-  const transcriptions = await enrichTranscriptions(rows);
-
+  // Persist the CDRs FIRST. Transcription enrichment is slow and used to run
+  // before the upsert, so a CPU-time kill lost every call of the run.
   let upserted = 0;
   let errors: string[] = [];
   for (let i = 0; i < rows.length; i += 200) {
@@ -513,6 +513,17 @@ async function syncCalls(admin: ReturnType<typeof createClient>, domain: string,
     if (error) errors.push(error.message);
     else upserted += chunk.length;
   }
+
+  const transcriptions = await enrichTranscriptions(rows);
+  if (transcriptions > 0) {
+    const enrichedRows = rows.filter((r) => r.transcript || r.ai_summary || r.transcript_segments);
+    for (let i = 0; i < enrichedRows.length; i += 100) {
+      const chunk = enrichedRows.slice(i, i + 100);
+      const { error } = await admin.from("planipret_phone_calls").upsert(chunk, { onConflict: "ns_call_id" });
+      if (error) errors.push(error.message);
+    }
+  }
+
   return { fetched: rawItems.length, mapped: rows.length, upserted, recordings: rows.filter((r) => r.recording_url).length, transcriptions, warnings: domainCdrs.warning ? [domainCdrs.warning] : [], errors };
 }
 

@@ -118,6 +118,7 @@ const PAOutboundAudio = lazyWithRetry(() => import("./pages/planipret/admin/PAOu
 const PATranscriptTracking = lazyWithRetry(() => import("./pages/planipret/admin/PATranscriptTracking"));
 const PAClientCalls = lazyWithRetry(() => import("./pages/planipret/admin/PAClientCalls"));
 const PABrokerTelephony = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerTelephony"));
+const PABrokerMonthly = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerMonthly"));
 const PADiagnostics = lazyWithRetry(() => import("./pages/planipret/admin/PADiagnostics"));
 const PAMaestroSync = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroSync"));
 const PAMaestroDashboard = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroDashboard"));
@@ -732,6 +733,7 @@ const App = () => (
                   <Route path="transcript-tracking" element={<Suspense fallback={<AdminPageSkeleton />}><PATranscriptTracking /></Suspense>} />
                   <Route path="client-calls" element={<Suspense fallback={<AdminPageSkeleton />}><PAClientCalls /></Suspense>} />
                   <Route path="broker-telephony" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerTelephony /></Suspense>} />
+                  <Route path="broker-monthly" element={<Suspense fallback={<AdminPageSkeleton />}><PABrokerMonthly /></Suspense>} />
                   <Route path="diagnostics" element={<Suspense fallback={<AdminPageSkeleton />}><PADiagnostics /></Suspense>} />
                   <Route path="maestro-sync" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroSync /></Suspense>} />
                   <Route path="maestro-dashboard" element={<Suspense fallback={<AdminPageSkeleton />}><PAMaestroDashboard /></Suspense>} />

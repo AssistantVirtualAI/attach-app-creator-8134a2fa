@@ -104,35 +104,51 @@ Deno.serve(async (req) => {
         }
       } catch { /* fallback to constructed */ }
 
-      // Aucun appareil SIP inscrit : la première jambe doit sonner ailleurs,
-      // sinon NS n'a personne à appeler et l'appel meurt en ~3 s.
-      // Repli documenté (calls.md, call-orig-user) : composer le cellulaire du
-      // courtier, sinon son poste.
-      let origFallback: "device" | "cell" | "extension" = "device";
+      // Jamais de repli vers le cellulaire du courtier : l'appel doit toujours
+      // partir de la ligne de l'app, sinon on retourne une erreur explicite.
+      const origFallback: "device" = "device";
       if (!deviceRegistered) {
-        let cell = "";
-        try {
-          const { data: prof } = await guard.supabase
-            .from("planipret_profiles")
-            .select("phone")
-            .eq("user_id", ctx.userId)
-            .maybeSingle();
-          cell = String(prof?.phone ?? "").replace(/[^\d]/g, "");
-        } catch { /* ignore */ }
-        if (cell.length >= 10) {
-          callOrigUser = cell;
-          origFallback = "cell";
-        } else {
-          callOrigUser = `${ctx.extension}@${ctx.nsDomain}`;
-          origFallback = "extension";
-        }
+        return jsonResponse({
+          success: false,
+          error: "sip_not_registered",
+          device_registered: false,
+          device_state: deviceState,
+          device_name: deviceName,
+          message: "Votre ligne n'est pas connectée — rouvrez l'application puis réessayez",
+        }, 200);
       }
 
       const clientCallId = crypto.randomUUID();
       // NS dial rules ne connaissent pas le format E.164 avec « + » :
       // POST .../calls répond 404 "Resource not found." Composer en chiffres.
       const nsDest = dest.replace(/^\+/, "");
-      const callerId = String(payload.caller_id_number ?? "").replace(/[^\d]/g, "");
+
+      // Numéro affiché : configuration « Appels sortants » du courtier, sinon
+      // le DID attribué à son poste chez le fournisseur.
+      let callerId = String(payload.caller_id_number ?? "").replace(/[^\d]/g, "");
+      let callerName = String(payload.caller_id_name ?? "").trim();
+      if (!callerId) {
+        try {
+          const { data: outbound } = await guard.supabase
+            .from("planipret_outbound_settings")
+            .select("caller_id_number, caller_id_name")
+            .eq("user_id", ctx.userId)
+            .maybeSingle();
+          callerId = String(outbound?.caller_id_number ?? "").replace(/[^\d]/g, "");
+          if (!callerName) callerName = String(outbound?.caller_id_name ?? "").trim();
+        } catch { /* ignore */ }
+      }
+      if (!callerId) {
+        try {
+          const uRes = await nsFetch(`/domains/${encodeURIComponent(ctx.nsDomain)}/users/${encodeURIComponent(ctx.extension)}`, { method: "GET" });
+          if (uRes.ok) {
+            const ud = await uRes.json().catch(() => null);
+            const u = Array.isArray(ud) ? ud[0] : ud;
+            callerId = String(u?.["caller-id-number"] ?? u?.["caller-id-number-emergency"] ?? "").replace(/[^\d]/g, "");
+          }
+        } catch { /* ignore */ }
+      }
+
       const buildBody = (term: string) => ({
         // Champs documentés uniquement (docs/netsapiens/calls.md).
         "call-id": clientCallId,
@@ -141,6 +157,7 @@ Deno.serve(async (req) => {
         "call-term-user": term,
         "auto-answer-enabled": "no",
         ...(callerId ? { "caller-id-number": callerId } : {}),
+        ...(callerName ? { "caller-id-name": callerName } : {}),
         "synchronous": "no",
       });
 
@@ -200,9 +217,8 @@ Deno.serve(async (req) => {
           device_was_unregistered: !deviceRegistered,
           device_state: deviceState,
           orig_fallback: origFallback,
-          message: origFallback === "cell"
-            ? "Votre cellulaire va sonner — décrochez pour parler au client"
-            : "Votre téléphone va sonner — décrochez pour parler au client",
+          caller_id_number: callerId || null,
+          message: "Appel en cours — le numéro composé sonne",
         }, 200);
       }
 

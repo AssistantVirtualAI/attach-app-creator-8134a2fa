@@ -230,7 +230,7 @@ function ensureGumProxy() {
 
 export type OutboundResult =
   | { via: "webrtc"; ok: true }
-  | { via: "pbx"; ok: true; callId?: string; ringsOnCell?: boolean }
+  | { via: "pbx"; ok: true; callId?: string }
   | { via: "none"; ok: false; error: string; micState?: MicPermissionState };
 
 type RestCallAttachment = {
@@ -1113,23 +1113,19 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       return { via: "none", ok: false, error: msg };
     }
     const callId = String((data as any)?.call_id ?? "");
-    const fallback = String((data as any)?.orig_fallback ?? "device");
-    const ringsOnCell = fallback !== "device";
     if (callId) {
-      if (!ringsOnCell) {
-        setRestCall({
-          id: callId,
-          direction: "out",
-          other: destination,
-          number: destination,
-          status: "ringing-out",
-          startedAt: Date.now(),
-        });
-      }
+      setRestCall({
+        id: callId,
+        direction: "out",
+        other: destination,
+        number: destination,
+        status: "ringing-out",
+        startedAt: Date.now(),
+      });
       // Rules 1 & 2 — always post outbound calls to Maestro.
       postOutboundCall({ providerCallId: callId, number: destination });
     }
-    return { via: "pbx", ok: true, callId, ringsOnCell };
+    return { via: "pbx", ok: true, callId };
   }, [clientType]);
 
 

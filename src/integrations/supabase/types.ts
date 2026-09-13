@@ -10868,6 +10868,7 @@ export type Database = {
           transcript_raw: string | null
           transcript_segments: Json | null
           transcript_source: string | null
+          transcript_status: string | null
           updated_at: string
           user_id: string | null
         }
@@ -10953,6 +10954,7 @@ export type Database = {
           transcript_raw?: string | null
           transcript_segments?: Json | null
           transcript_source?: string | null
+          transcript_status?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -11038,6 +11040,7 @@ export type Database = {
           transcript_raw?: string | null
           transcript_segments?: Json | null
           transcript_source?: string | null
+          transcript_status?: string | null
           updated_at?: string
           user_id?: string | null
         }

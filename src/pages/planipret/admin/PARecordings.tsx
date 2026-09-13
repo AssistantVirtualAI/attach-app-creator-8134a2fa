@@ -485,6 +485,8 @@ export default function PARecordings() {
                     <span style={{ fontSize: 10, color: "var(--pp-success)" }}>{t.available}</span>
                   ) : c.transcript_pending ? (
                     <span style={{ fontSize: 10, color: "#f59e0b" }}>{t.pending}</span>
+                  ) : c.transcript_status === "no_audio" ? (
+                    <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>Sans enregistrement</span>
                   ) : (
                     <span style={{ fontSize: 10, color: "var(--pp-text-faint)" }}>—</span>
                   )}

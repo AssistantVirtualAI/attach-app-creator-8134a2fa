@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, Phone, BarChart3, ShieldCheck } from "lucide-react";
+import { Loader2, RefreshCw, Phone, BarChart3, ShieldCheck, Copy, Route } from "lucide-react";
 import { toast } from "sonner";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
@@ -195,6 +195,177 @@ export function ExtensionDidCard({ defaultExtension = "1136" }: { defaultExtensi
         )}
       </CardContent>
     </Card>
+  );
+}
+
+type HealthDevice = {
+  aor: string;
+  transport: string | null;
+  registration_state: string | null;
+  registration_expires: string | null;
+  contact_host: string | null;
+  core_server: string | null;
+};
+
+/** Route SIP complète d'un courtier (AOR, serveur, ports, DID), copiable. */
+export function BrokerSipRouteCard({ defaultExtension = "1136" }: { defaultExtension?: string }) {
+  const { lang } = useMplanipretLang();
+  const [brokers, setBrokers] = useState<Broker[]>([]);
+  const [ext, setExt] = useState(defaultExtension);
+  const [domain, setDomain] = useState("planipret.ca");
+  const [devices, setDevices] = useState<HealthDevice[]>([]);
+  const [did, setDid] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    supabase
+      .from("planipret_profiles")
+      .select("user_id, full_name, extension, email")
+      .not("extension", "is", null)
+      .order("extension")
+      .then(({ data }) => setBrokers((data as Broker[]) ?? []));
+  }, []);
+
+  const broker = useMemo(() => brokers.find((b) => String(b.extension) === String(ext)) ?? null, [brokers, ext]);
+
+  const load = useCallback(async () => {
+    if (!ext) return;
+    setLoading(true);
+    const [health, didRes] = await Promise.all([
+      supabase.functions.invoke("pp-ns-health", { body: { extension: ext } }),
+      supabase
+        .from("planipret_did_assignments")
+        .select("phone_number_e164, status")
+        .eq("extension", ext)
+        .limit(1),
+    ]);
+    const d = health.data as any;
+    setDevices(((d?.devices as HealthDevice[]) ?? []).filter(Boolean));
+    if (d?.domain) setDomain(String(d.domain));
+    setDid((didRes.data as any[])?.[0]?.phone_number_e164 ?? null);
+    setLoading(false);
+    if (health.error) toast.error(L(lang, "Lecture du serveur impossible", "Could not read the server"), { description: health.error.message });
+  }, [ext, lang]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const mobile = devices.find((d) => /M$/i.test(d.aor ?? ""));
+  const web = devices.find((d) => /W$/i.test(d.aor ?? ""));
+  const core = mobile?.core_server ?? web?.core_server ?? devices[0]?.core_server ?? "core1.cluster1.ucstack.io";
+
+  const routeText = useMemo(() => {
+    const lines = [
+      `${L(lang, "Courtier", "Broker")}: ${broker?.full_name ?? broker?.email ?? "—"}`,
+      `${L(lang, "Poste", "Extension")}: ${ext}`,
+      `${L(lang, "Domaine", "Domain")}: ${domain}`,
+      `${L(lang, "Numéro public", "Public number")}: ${did ?? "—"}`,
+      `AOR mobile: ${ext}M@${domain}  ·  sip:${core}:5061;transport=tls`,
+      `AOR web: ${ext}W@${domain}  ·  wss://${core}:9002`,
+      `${L(lang, "Serveur", "Server")}: ${core}`,
+      ...devices.map(
+        (d) =>
+          `${d.aor}: ${d.registration_state ?? L(lang, "non inscrit", "unregistered")}` +
+          ` · ${d.transport ?? "—"}` +
+          ` · ${L(lang, "expire", "expires")} ${d.registration_expires ?? "—"}` +
+          ` · contact ${d.contact_host ?? "—"}`,
+      ),
+    ];
+    return lines.join("\n");
+  }, [broker, ext, domain, did, core, devices, lang]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(routeText);
+      toast.success(L(lang, "Route copiée", "Route copied"));
+    } catch {
+      toast.error(L(lang, "Copie impossible", "Copy failed"));
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-medium">
+          <Route className="h-4 w-4" />
+          {L(lang, "Route SIP du courtier", "Broker SIP route")}
+        </CardTitle>
+        <CardDescription className="text-xs">
+          {L(
+            lang,
+            "Chemin complet utilisé par ce poste : adresses SIP, serveur, ports et numéro public. Copiable en un clic.",
+            "Full path used by this extension: SIP addresses, server, ports and public number. One-click copy.",
+          )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={ext}
+            onChange={(e) => setExt(e.target.value)}
+            className="h-9 min-w-[16rem] rounded-md border border-border bg-background px-2 text-sm"
+          >
+            {brokers.every((b) => String(b.extension) !== String(ext)) && <option value={ext}>{ext}</option>}
+            {brokers.map((b) => (
+              <option key={`${b.user_id}-${b.extension}`} value={String(b.extension)}>
+                {b.extension} · {b.full_name ?? b.email ?? b.user_id}
+              </option>
+            ))}
+          </select>
+          <Button size="sm" variant="outline" onClick={() => void load()} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {L(lang, "Recharger", "Reload")}
+          </Button>
+          <Button size="sm" onClick={copy} disabled={!ext}>
+            <Copy className="h-4 w-4" />
+            {L(lang, "Copier la route", "Copy route")}
+          </Button>
+        </div>
+
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs md:grid-cols-2">
+          <RouteRow k={L(lang, "Courtier", "Broker")} v={broker?.full_name ?? broker?.email ?? "—"} />
+          <RouteRow k={L(lang, "Numéro public", "Public number")} v={did ?? "—"} mono />
+          <RouteRow k="AOR mobile" v={`${ext}M@${domain}`} mono />
+          <RouteRow k="AOR web" v={`${ext}W@${domain}`} mono />
+          <RouteRow k={L(lang, "Natif (TLS)", "Native (TLS)")} v={`sip:${core}:5061;transport=tls`} mono />
+          <RouteRow k="WSS" v={`wss://${core}:9002`} mono />
+        </dl>
+
+        {devices.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            {loading ? "…" : L(lang, "Aucun appareil trouvé sur le serveur pour ce poste.", "No device found on the server for this extension.")}
+          </p>
+        ) : (
+          <ul className="space-y-1">
+            {devices.map((d) => {
+              const reg = String(d.registration_state ?? "").toLowerCase() === "registered";
+              return (
+                <li key={d.aor} className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+                  <span className="font-mono">{d.aor}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-muted-foreground">{d.transport ?? "—"}</span>
+                    <span className="text-muted-foreground">{d.registration_expires ?? "—"}</span>
+                    <Badge variant="outline" className={reg ? "border-emerald-500/30 text-emerald-600" : "border-amber-500/30 text-amber-600"}>
+                      {reg ? L(lang, "inscrit", "registered") : L(lang, "non inscrit", "unregistered")}
+                    </Badge>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <pre className="max-h-52 overflow-auto rounded-md border bg-muted/40 p-2 text-[11px]">{routeText}</pre>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RouteRow({ k, v, mono }: { k: string; v?: string | null; mono?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-border pb-1 last:border-b-0">
+      <dt className="text-muted-foreground">{k}</dt>
+      <dd className={`break-all text-right ${mono ? "font-mono" : ""}`}>{v ?? "—"}</dd>
+    </div>
   );
 }
 

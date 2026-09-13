@@ -819,6 +819,7 @@ export const MP_DICT = {
         mobileDevices: "Devices mobiles",
         holdMusic: "Musique d'attente",
         sipDiagnostic: "Diagnostic SIP",
+        callTest: "Test d'appel",
         compliance: "Conformité",
         auditChecklist: "Audit",
         accessLog: "Journal des accès",
@@ -861,6 +862,7 @@ export const MP_DICT = {
         mobileDevices: "Vérification devices mobiles",
         holdMusic: "Musique d'attente",
         sipDiagnostic: "Diagnostic SIP — 113_web",
+        callTest: "Test d'appel entrant",
       },
       holdMusic: {
         subtitle: "Rédigez l'annonce, générez l'audio et poussez-le vers le PBX.",
@@ -1905,6 +1907,7 @@ export const MP_DICT = {
         mobileDevices: "Mobile devices",
         holdMusic: "Hold music",
         sipDiagnostic: "SIP diagnostic",
+        callTest: "Call test",
         compliance: "Compliance",
         auditChecklist: "Audit",
         accessLog: "Access log",
@@ -1947,6 +1950,7 @@ export const MP_DICT = {
         mobileDevices: "Mobile device verification",
         holdMusic: "Hold music",
         sipDiagnostic: "SIP diagnostic — 113_web",
+        callTest: "Inbound call test",
       },
       holdMusic: {
         subtitle: "Write the announcement, generate the audio and push it to the PBX.",

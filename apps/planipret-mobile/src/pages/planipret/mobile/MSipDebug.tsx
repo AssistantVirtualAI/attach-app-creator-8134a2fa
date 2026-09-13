@@ -78,7 +78,9 @@ export default function MSipDebug() {
   const nativePlatform = Capacitor.isNativePlatform();
   const pbxRegistered = Boolean(pbx?.registration?.mobile_registered);
   const status = nativePlatform
-    ? (nativeState === "registered" || pbxRegistered ? "registered" : nativeState === "failed" ? "error" : nativeState)
+    ? (nativeState === "registered" || pbxRegistered
+      ? "registered"
+      : nativeState === "failed" ? "error" : nativeState === "unavailable" ? "disconnected" : nativeState)
     : (pbxRegistered && snap.status !== "registered" ? "registered" : snap.status);
   const rawIdx = STAGES.indexOf(status as any);
   const currentIdx = rawIdx >= 0 ? rawIdx : 0;
@@ -161,7 +163,7 @@ export default function MSipDebug() {
           ))}
         </div>
 
-        {(isError || nativeUnavailable) && (
+        {(isError || (nativeUnavailable && status !== "registered")) && (
           <div className="flex items-start gap-2 p-2 rounded-lg"
             style={{ background: nativeUnavailable ? "rgba(59,130,246,0.08)" : "rgba(239,68,68,0.08)", color: nativeUnavailable ? "#3B82F6" : "#EF4444" }}>
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />

@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import CallDoctorCard from "@/components/planipret/admin/CallDoctorCard";
 import DidAnnouncementCard from "@/components/planipret/admin/DidAnnouncementCard";
+import { BrokerDeviceResyncCard, ExtensionDidCard, ExtensionStatsCard } from "@/components/planipret/admin/SipBrokerTools";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 
 const DICT = {
@@ -259,6 +260,10 @@ export default function PASipDiagnostic() {
           </Button>
         </div>}
       />
+
+      <BrokerDeviceResyncCard />
+      <ExtensionDidCard defaultExtension="1136" />
+      <ExtensionStatsCard />
 
       <CallDoctorCard />
       <DidAnnouncementCard />

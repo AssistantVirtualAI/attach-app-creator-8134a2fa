@@ -50,6 +50,7 @@ import {
 } from "@/lib/planipret/sip/nativePpSipService";
 import { addDedupedCapListener } from "@/lib/planipret/sip/capListeners";
 import { checkSipBackendRegistration } from "@/lib/planipret/sip/sipBackendCheck";
+import { nativeSip } from "@/lib/planipret/sip/nativeSipService";
 
 import {
   upsertRingingSession,
@@ -412,6 +413,13 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       try {
         if (opts?.force) {
           try { ppSipProvider.stop(); } catch {}
+        }
+        const nativeClient = clientType === "mobile" && Capacitor.isNativePlatform() && nativeSip.isAvailable();
+        if (nativeClient) {
+          const ready = await nativeSip.initialize();
+          if (cancelled) return;
+          if (!ready) console.warn("[softphone] native SIP initialization did not register");
+          return;
         }
         const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
           body: { client_type: clientType, transport: "wss" },
@@ -1187,6 +1195,13 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       return { via: "none", ok: false, error: mic.error ?? "microphone unavailable", micState: mic.state };
     }
     try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
+    if (clientType === "mobile" && Capacitor.isNativePlatform() && nativeSip.isAvailable()) {
+      const ready = nativeSip.isRegistered() || await nativeSip.repairRegistration();
+      if (ready && await nativeSip.makeCall(ppNormalizeDestination(destination))) {
+        return { via: "webrtc", ok: true };
+      }
+      console.warn("[softphone] native call failed, falling back to PBX");
+    }
     let canUseSip = registered;
     if (!canUseSip) {
       try { ppSipProvider.forceReregister(); } catch {}
@@ -1203,7 +1218,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       }
     }
     return await callViaPBX(destination);
-  }, [registered, callViaPBX]);
+  }, [registered, callViaPBX, clientType]);
 
   // Last-resort pickup: ask NetSapiens to answer the live ringing leg over
   // NS-API. Used when the SIP INVITE never reaches the WebView after a VoIP
@@ -1262,6 +1277,9 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   // Every branch is logged so the exact route to answer() is visible in Xcode /
   // Logcat when debugging a VoIP-push answer.
   const answerOnce = useCallback(async () => {
+    if (clientType === "mobile" && Capacitor.isNativePlatform() && nativeSip.isAvailable() && nativeSip.getCallId()) {
+      return nativeSip.answer();
+    }
     const sipSnap = ppSipProvider.getSnapshot();
     console.info("[answer] tapped", {
       hasLiveSipSession,
@@ -1364,7 +1382,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // Clear the REST/DB attachment so the in-call UI follows the live session.
     if (ok && restCall?.id) setRestCall(null);
     return ok;
-  }, [restCall?.id, restCall?.number, restControl, hasLiveSipSession, pushRing, callbackAnswer]);
+  }, [restCall?.id, restCall?.number, restControl, hasLiveSipSession, pushRing, callbackAnswer, clientType]);
 
   const answer = useCallback((): Promise<boolean> => {
     const pending = answerAttemptRef.current;
@@ -1407,6 +1425,9 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // Fin d'appel : demander au courtier s'il sauvegarde l'appel dans Maestro.
     emitCallEnded(restId || callId || null);
     console.info("[hangup] requested", { sipCallId: callId || null, restCallId: restId, hasLiveSipSession });
+    if (clientType === "mobile" && Capacitor.isNativePlatform() && nativeSip.getCallId()) {
+      void nativeSip.hangup();
+    }
     // Always signal the PBX over REST as well, with retry + backoff: the SIP BYE
     // can be lost when the WebSocket dropped or the session never reached
     // "active", which would leave the call up on NetSapiens.
@@ -1425,7 +1446,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       void endSession(callId, "hangup");
       void updateCallIfPosted(callId, { status: "ended", ended_reason: "completed" });
     }
-  }, [restCall?.id, restDisconnectWithRetry, hasLiveSipSession]);
+  }, [restCall?.id, restDisconnectWithRetry, hasLiveSipSession, clientType]);
 
 
 
@@ -1465,12 +1486,12 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     answer,
     hangup,
     reregister: () => { try { ppSipProvider.forceReregister(); } catch {} },
-    mute: () => (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: true }) : ppSipProvider.mute(),
-    unmute: () => (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: false }) : ppSipProvider.unmute(),
+    mute: () => nativeSip.getCallId() ? void nativeSip.setMute(true) : (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: true }) : ppSipProvider.mute(),
+    unmute: () => nativeSip.getCallId() ? void nativeSip.setMute(false) : (restCall?.id && !hasLiveSipSession) ? void restControl("mute", { muted: false }) : ppSipProvider.unmute(),
     // L'attente faite dans l'app est aussi reflétée sur l'écran d'appel système.
     hold: () => { applyHold(true); void setPlanipretCallKitHeld(true); },
     unhold: () => { applyHold(false); void setPlanipretCallKitHeld(false); },
-    sendDTMF: (k: string) => (restCall?.id && !hasLiveSipSession) ? void restControl("dtmf", { digit: k }) : ppSipProvider.sendDTMF(k),
+    sendDTMF: (k: string) => nativeSip.getCallId() ? void nativeSip.sendDTMF(k) : (restCall?.id && !hasLiveSipSession) ? void restControl("dtmf", { digit: k }) : ppSipProvider.sendDTMF(k),
     transfer: (t: string) => (restCall?.id && !hasLiveSipSession) ? void restControl("transfer", { destination: t, target: t }) : ppSipProvider.transfer(t),
     // The provider owns a persistent hidden <audio> sink; screens must not
     // detach it on unmount (that killed remote audio mid-call).

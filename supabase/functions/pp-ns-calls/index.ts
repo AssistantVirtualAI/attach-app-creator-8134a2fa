@@ -198,6 +198,7 @@ Deno.serve(async (req) => {
           device_registered: deviceRegistered,
           device_was_unregistered: !deviceRegistered,
           device_state: deviceState,
+          orig_fallback: origFallback,
           message: deviceRegistered
             ? "Votre téléphone va sonner — décrochez pour parler au client"
             : "Votre téléphone sonnera dans quelques secondes — assurez-vous que l'app est ouverte",

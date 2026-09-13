@@ -1208,10 +1208,16 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     }
     let canUseSip = registered;
     if (!canUseSip) {
+      // Réveil borné (~2 s max) : dès que la ligne revient on part tout de
+      // suite, au lieu d'attendre un délai fixe puis de basculer sur le
+      // repli cellulaire (lent + audio hors de l'app).
       try { ppSipProvider.forceReregister(); } catch {}
-      await new Promise((resolve) => window.setTimeout(resolve, 1200));
-      const st = ppSipProvider.getSnapshot().status;
-      canUseSip = st === "registered" || st === "connected";
+      const deadline = Date.now() + 2000;
+      while (Date.now() < deadline) {
+        const st = ppSipProvider.getSnapshot().status;
+        if (st === "registered" || st === "connected") { canUseSip = true; break; }
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
     }
     if (canUseSip) {
       const mic = await ensureMicPermission();

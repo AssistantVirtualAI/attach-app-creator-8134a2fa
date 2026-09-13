@@ -109,25 +109,36 @@ Deno.serve(async (req) => {
       }
 
       const clientCallId = crypto.randomUUID();
-      const nsBody = {
+      // NS dial rules ne connaissent pas le format E.164 avec « + » :
+      // POST .../calls répond 404 "Resource not found." Composer en chiffres.
+      const nsDest = dest.replace(/^\+/, "");
+      const buildBody = (term: string) => ({
         "call-id": clientCallId,
-        "destination": dest,
+        "destination": term,
         "origination": callOrigUser,
         "call-orig-user": callOrigUser,
-        "call-term-user": dest,
+        "call-term-user": term,
         "auto-answer-enabled": "no",
         // Force NS to fully ring the originator (broker's phone) and wait for
         // pickup BEFORE dialing the destination. Without this NS may dial the
         // destination first, so the customer hears ringing before the broker.
         "synchronous": "yes",
-      };
+      });
 
-      console.log(`[pp-ns-calls] REST start requested_client=${requestedClientType} forced_client=${clientType} device=${deviceName} orig=${callOrigUser} term=${dest} ext=${ctx.extension}`);
+      console.log(`[pp-ns-calls] REST start requested_client=${requestedClientType} forced_client=${clientType} device=${deviceName} orig=${callOrigUser} term=${nsDest} ext=${ctx.extension}`);
 
-      const res = await nsFetch(base, { method: "POST", body: JSON.stringify(nsBody) });
-      const text = await res.text();
+      let res = await nsFetch(base, { method: "POST", body: JSON.stringify(buildBody(nsDest)) });
+      let text = await res.text();
       let parsed: any = null;
       try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
+
+      // Repli : certains dial plans acceptent uniquement le format E.164.
+      if (res.status === 404 && nsDest !== dest) {
+        console.log("[pp-ns-calls] retry originate with E.164 destination");
+        res = await nsFetch(base, { method: "POST", body: JSON.stringify(buildBody(dest)) });
+        text = await res.text();
+        try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
+      }
 
       console.log(`[pp-ns-calls] NS status=${res.status} body=${typeof parsed === "string" ? parsed.slice(0,200) : JSON.stringify(parsed).slice(0,200)}`);
 

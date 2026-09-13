@@ -119,19 +119,54 @@ export default function MSipDebug() {
         </div>
 
         {snap.errorCause && (
-          <div className="flex items-start gap-2 p-2 rounded-lg" style={{ background: "rgba(239,68,68,0.08)", color: "#EF4444" }}>
+          <div className="flex items-start gap-2 p-2 rounded-lg"
+            style={{ background: nativeUnavailable ? "rgba(59,130,246,0.08)" : "rgba(239,68,68,0.08)", color: nativeUnavailable ? "#3B82F6" : "#EF4444" }}>
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span className="text-[12px]">{snap.errorCause}</span>
+            <span className="text-[12px]">
+              {nativeUnavailable
+                ? (lang === "fr"
+                  ? "Aperçu web : le module d'appel natif n'est pas chargé. Les appels passent en mode REST. Installez l'app pour le SIP natif."
+                  : "Web preview: the native calling module is not loaded. Calls use REST mode. Install the app for native SIP.")
+                : snap.errorCause}
+            </span>
           </div>
         )}
 
         <div className="grid grid-cols-2 gap-2 text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
           <div><span className="opacity-60">{t("screens.sipDebug.extShort")}</span> {cfg?.sipUsername ?? pbx?.extension ?? "—"}</div>
-          <div><span className="opacity-60">{t("screens.sipDebug.domainShort")}</span> {cfg?.sipDomain ?? "—"}</div>
+          <div><span className="opacity-60">{t("screens.sipDebug.domainShort")}</span> {cfg?.sipDomain ?? pbxDomain ?? "—"}</div>
           <div className="col-span-2 truncate"><span className="opacity-60">{t("screens.sipDebug.wssShort")}</span> {cfg?.wssUrl ?? "—"}</div>
           <div className="col-span-2"><span className="opacity-60">{t("screens.sipDebug.lastRegistration")}</span> {snap.lastRegistrationAt ? new Date(snap.lastRegistrationAt).toLocaleTimeString(lang === "fr" ? "fr-CA" : "en-CA") : "—"}</div>
         </div>
       </section>
+
+      {/* Phone system (server-side truth) */}
+      <section className="pp-card p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Radio className="w-4 h-4" style={{ color: serverColor }} />
+          <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>
+            {lang === "fr" ? "Système téléphonique" : "Phone system"}
+          </span>
+          <span className="ml-auto px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ background: serverColor, color: "#fff" }}>
+            {serverLabel}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
+          <div><span className="opacity-60">{lang === "fr" ? "Serveur" : "Server"}</span> {pbx ? (lang === "fr" ? "joignable" : "reachable") : "—"}</div>
+          <div><span className="opacity-60">{lang === "fr" ? "Inscriptions" : "Registrations"}</span> {pbx?.registration?.count ?? 0}</div>
+          <div className="col-span-2 truncate"><span className="opacity-60">AOR</span> {pbx?.registration?.mobile_aor ?? "—"}</div>
+          <div><span className="opacity-60">Push</span> {pbx?.push?.token_present ? (lang === "fr" ? "actif" : "active") : (lang === "fr" ? "absent" : "missing")}</div>
+          <div><span className="opacity-60">{lang === "fr" ? "Abonnement appels" : "Call subscription"}</span> {pbx?.call_subscription ? (lang === "fr" ? "actif" : "active") : "—"}</div>
+        </div>
+        {!pbxRegistered && (
+          <p className="text-[11px]" style={{ color: "#F59E0B" }}>
+            {lang === "fr"
+              ? "Aucun appareil inscrit : ouvrez l'app installée jusqu'à l'état « Enregistré » pour recevoir les appels."
+              : "No device registered: open the installed app until it shows “Registered” to receive calls."}
+          </p>
+        )}
+      </section>
+
 
 
       {/* 24h stability soak */}

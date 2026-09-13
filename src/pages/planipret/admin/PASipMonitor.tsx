@@ -49,16 +49,60 @@ export default function PASipMonitor() {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [domain, setDomain] = useState<string>("");
 
   const load = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.functions.invoke("pp-admin-sip-ops", { body: { action: "status", limit: 60 } });
     setLoading(false);
     if (error) { toast.error(error.message); return; }
-    const res = data as { extensions?: Row[]; error?: string };
+    const res = data as { extensions?: Row[]; error?: string; domain?: string };
     if (res?.error) { toast.error(res.error); return; }
     setRows(res?.extensions ?? []);
+    setDomain(res?.domain ?? "");
   }, []);
+
+  const buildRoute = useCallback((r: Row) => {
+    const dids = r.dids.map((d) => d.phone_number_e164).filter(Boolean);
+    const lines: string[] = [];
+    lines.push(`Courtier: ${r.name}${r.email ? ` <${r.email}>` : ""}`);
+    lines.push(`Domaine SIP: ${domain || "—"}`);
+    lines.push(`Poste (AOR de base): ${r.extension}@${domain || "—"}`);
+    lines.push(`Numéros (DID): ${dids.length ? dids.join(", ") : "—"}`);
+    lines.push("");
+    lines.push("Route entrante:");
+    lines.push(`  ${dids.length ? dids.join(" / ") : "DID"} → domaine ${domain || "—"} → utilisateur ${r.extension} → règles de sonnerie → appareils inscrits`);
+    lines.push("");
+    lines.push("Route sortante:");
+    lines.push(`  appareil (${r.devices.map((d) => d.transport ?? "?").join("/") || "—"}) → ${r.extension}@${domain || "—"} → coeur NetSapiens → passerelle → RTC`);
+    lines.push("");
+    lines.push(`Appareils (${r.devices.length}):`);
+    if (!r.devices.length) lines.push("  aucun appareil");
+    for (const d of r.devices) {
+      lines.push(
+        `  ${d.registered ? "[INSCRIT]" : "[HORS LIGNE]"} ${d.aor ?? "—"} · ${d.transport ?? "—"} · serveur ${d.server ?? "—"}`,
+      );
+      lines.push(`      contact: ${d.contact ?? "—"}`);
+      lines.push(`      inscrit: ${fmt(d.registered_at)} · expire: ${fmt(d.expires_at)} · UA: ${d.user_agent ?? "—"}`);
+    }
+    if (r.errors.length) {
+      lines.push("");
+      lines.push("Dernières erreurs:");
+      for (const e of r.errors.slice(0, 5)) lines.push(`  ${fmt(e.created_at)} · ${e.status ?? "—"} · ${e.path}${e.error ? ` · ${e.error}` : ""}`);
+    }
+    return lines.join("\n");
+  }, [domain]);
+
+  const copyRoute = async (r: Row) => {
+    try {
+      await navigator.clipboard.writeText(buildRoute(r));
+      toast.success(L(lang, "Route SIP copiée.", "SIP route copied."));
+    } catch {
+      toast.error(L(lang, "Copie impossible.", "Copy failed."));
+    }
+  };
+
+  const marc = useMemo(() => rows.find((r) => String(r.name ?? "").toLowerCase().includes("marc")) ?? null, [rows]);
 
   useEffect(() => { void load(); }, [load]);
 

@@ -29,9 +29,9 @@ import { toast } from "sonner";
 import { PLANIPRET_PROFILE_SAFE_COLUMNS } from "@/lib/planipret/profileColumns";
 
 type NavBadge = "brokers" | "missed" | "integrations" | "audit";
-type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "brokerJourney" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts" | "callTest" | "outboundCalls" | "sipMonitor" | "telephonyDashboard" | "outboundAudio" | "transcriptTracking" | "clientCalls";
+type NavKey = "overview" | "reports" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "brokers" | "calls" | "messages" | "recordings" | "integrations" | "mobileDevices" | "mobileApp" | "holdMusic" | "sipDiagnostic" | "compliance" | "auditChecklist" | "accessLog" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "brokerJourney" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts" | "callTest" | "outboundCalls" | "sipMonitor" | "telephonyDashboard" | "outboundAudio" | "transcriptTracking" | "clientCalls" | "brokerTelephony";
 type SectionKey = "pilotage" | "brokers" | "communications" | "system";
-type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "brokerJourney" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts" | "callTest" | "outboundCalls" | "sipMonitor" | "telephonyDashboard" | "outboundAudio" | "transcriptTracking" | "clientCalls";
+type PageKey = "overview" | "users" | "calls" | "messages" | "recordings" | "integrations" | "reports" | "auditChecklist" | "accessLog" | "compliance" | "ava" | "avaAgent" | "avaLogs" | "avaToolsAudit" | "avaConfirmations" | "mobileDevices" | "holdMusic" | "sipDiagnostic" | "diagnostics" | "maestroSync" | "maestroDashboard" | "syncedCalls" | "telecomMapping" | "didReconcile" | "commissions" | "commissionsMonthly" | "commissionAudit" | "brokerCommissions" | "phoneNumbers" | "tasks" | "broker360" | "maestroTasks" | "maestroClients" | "brokerPerformance" | "brokerStats" | "brokerJourney" | "taskBoard" | "brokerDaily" | "maestroHealth" | "maestroPending" | "microsoftAuth" | "contracts" | "callTest" | "outboundCalls" | "sipMonitor" | "telephonyDashboard" | "outboundAudio" | "transcriptTracking" | "clientCalls" | "brokerTelephony";
 
 const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKey; Icon: any; badge?: NavBadge }> }> = [
   {
@@ -93,6 +93,7 @@ const NAV: Array<{ sectionKey: SectionKey; items: Array<{ to: string; key: NavKe
       { to: "/planipret/admin/outbound-audio",  key: "outboundAudio",   Icon: Mic },
       { to: "/planipret/admin/transcript-tracking", key: "transcriptTracking", Icon: Mic },
       { to: "/planipret/admin/client-calls", key: "clientCalls", Icon: Users },
+      { to: "/planipret/admin/broker-telephony", key: "brokerTelephony", Icon: Phone },
       { to: "/planipret/admin/diagnostics",     key: "diagnostics",     Icon: Gauge },
       { to: "/planipret/admin/maestro-sync",    key: "maestroSync",     Icon: Zap },
       { to: "/planipret/admin/microsoft-auth",  key: "microsoftAuth",   Icon: ShieldAlert },
@@ -176,6 +177,7 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/planipret/admin/outbound-audio": "outboundAudio",
   "/planipret/admin/transcript-tracking": "transcriptTracking",
   "/planipret/admin/client-calls": "clientCalls",
+  "/planipret/admin/broker-telephony": "brokerTelephony",
   "/planipret/admin/diagnostics": "diagnostics",
   "/planipret/admin/maestro-sync": "maestroSync",
   "/planipret/admin/microsoft-auth": "microsoftAuth",

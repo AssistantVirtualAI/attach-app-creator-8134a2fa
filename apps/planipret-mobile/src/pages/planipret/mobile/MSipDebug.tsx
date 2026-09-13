@@ -63,7 +63,15 @@ export default function MSipDebug() {
   const status = pbxRegistered && snap.status !== "registered" ? "registered" : snap.status;
   const rawIdx = STAGES.indexOf(status as any);
   const currentIdx = rawIdx >= 0 ? rawIdx : 0;
-  const isError = status === "error";
+  const nativeUnavailable = /native_sip_unavailable/i.test(String(snap.errorCause ?? ""));
+  const isError = status === "error" && !nativeUnavailable;
+  const pbxDomain = pbx?.registration?.mobile_aor?.split("@")[1] ?? null;
+  const serverColor = pbxRegistered ? "#10B981" : pbx ? "#F59E0B" : "#94A3B8";
+  const serverLabel = pbxRegistered
+    ? (lang === "fr" ? "CONNECTÉ" : "CONNECTED")
+    : pbx
+      ? (lang === "fr" ? "SERVEUR OK" : "SERVER OK")
+      : (lang === "fr" ? "VÉRIFICATION" : "CHECKING");
 
 
   const copy = async () => {

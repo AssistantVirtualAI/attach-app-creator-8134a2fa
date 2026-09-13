@@ -33,7 +33,7 @@ type SipRow = {
   errors: { created_at: string; status: number | null; path: string; error: string | null }[];
 };
 
-type ExtStat = { ext: string; total: number; answered: number; eligible: number; transcribed: number; registered: boolean };
+type ExtStat = { ext: string; total: number; answered: number; eligible: number; transcribed: number; outbound: number; registered: boolean };
 type BrokerStat = {
   key: string;
   name: string;
@@ -42,6 +42,7 @@ type BrokerStat = {
   answered: number;
   eligible: number;
   transcribed: number;
+  outbound: number;
   sipUserId: string | null;
   errors: SipRow["errors"];
 };
@@ -86,14 +87,14 @@ export default function PABrokerTelephony() {
     const sipByExt = new Map(sip.map((r) => [String(r.extension), r]));
 
     const ensure = (key: string, name: string) =>
-      map.get(key) ?? { key, name, exts: [], total: 0, answered: 0, eligible: 0, transcribed: 0, sipUserId: null, errors: [] };
+      map.get(key) ?? { key, name, exts: [], total: 0, answered: 0, eligible: 0, transcribed: 0, outbound: 0, sipUserId: null, errors: [] };
 
     for (const r of sip) {
       const b = ensure(r.name || r.extension, r.name || r.extension);
       b.sipUserId = r.user_id;
       b.errors = r.errors ?? [];
       if (!b.exts.some((e) => e.ext === String(r.extension))) {
-        b.exts.push({ ext: String(r.extension), total: 0, answered: 0, eligible: 0, transcribed: 0, registered: r.registered_count > 0 });
+        b.exts.push({ ext: String(r.extension), total: 0, answered: 0, eligible: 0, transcribed: 0, outbound: 0, registered: r.registered_count > 0 });
       }
       map.set(b.key, b);
     }
@@ -104,12 +105,13 @@ export default function PABrokerTelephony() {
       const b = ensure(name, name);
       let e = b.exts.find((x) => x.ext === ext);
       if (!e) {
-        e = { ext, total: 0, answered: 0, eligible: 0, transcribed: 0, registered: (sipByExt.get(ext)?.registered_count ?? 0) > 0 };
+        e = { ext, total: 0, answered: 0, eligible: 0, transcribed: 0, outbound: 0, registered: (sipByExt.get(ext)?.registered_count ?? 0) > 0 };
         b.exts.push(e);
       }
       const answered = !!r.answered_at || (r.duration_seconds ?? 0) > 0;
       const eligible = (r.duration_seconds ?? 0) >= 15;
       e.total += 1; b.total += 1;
+      if ((r.direction ?? "").toLowerCase().startsWith("out")) { e.outbound += 1; b.outbound += 1; }
       if (answered) { e.answered += 1; b.answered += 1; }
       if (eligible) {
         e.eligible += 1; b.eligible += 1;
@@ -133,6 +135,7 @@ export default function PABrokerTelephony() {
     answered: brokers.reduce((s, b) => s + b.answered, 0),
     eligible: brokers.reduce((s, b) => s + b.eligible, 0),
     transcribed: brokers.reduce((s, b) => s + b.transcribed, 0),
+    outbound: brokers.reduce((s, b) => s + b.outbound, 0),
   }), [brokers]);
 
   const relaunch = async (b: BrokerStat) => {
@@ -183,6 +186,10 @@ export default function PABrokerTelephony() {
           <div className="pa-stat-label">{L(lang, "Taux de transcription (>15s)", "Transcription rate (>15s)")}</div>
           <div className="pa-stat-value text-sky-400">{pct(totals.transcribed, totals.eligible)}%</div>
         </div>
+        <div className="pa-stat">
+          <div className="pa-stat-label">{L(lang, "Taux d'appels sortants", "Outbound rate")}</div>
+          <div className="pa-stat-value text-amber-400">{pct(totals.outbound, totals.calls)}%</div>
+        </div>
       </div>
 
       <Card className="pa-card">
@@ -209,6 +216,7 @@ export default function PABrokerTelephony() {
                   <th className="text-right">{L(lang, "Taux de réponse", "Answer rate")}</th>
                   <th className="text-right">{L(lang, "Transcrits", "Transcribed")}</th>
                   <th className="text-right">{L(lang, "Taux transcription", "Transcript rate")}</th>
+                  <th className="text-right">{L(lang, "Taux sortants", "Outbound rate")}</th>
                   <th className="text-right">{L(lang, "Actions", "Actions")}</th>
                 </tr>
               </thead>
@@ -231,6 +239,7 @@ export default function PABrokerTelephony() {
                         <td className="text-right">{pct(b.answered, b.total)}%</td>
                         <td className="text-right">{b.transcribed}/{b.eligible}</td>
                         <td className="text-right">{pct(b.transcribed, b.eligible)}%</td>
+                        <td className="text-right">{pct(b.outbound, b.total)}%</td>
                         <td className="text-right">
                           <Button
                             size="sm"
@@ -246,7 +255,7 @@ export default function PABrokerTelephony() {
                       </tr>
                       {isOpen && (
                         <tr>
-                          <td colSpan={8} className="bg-muted/30">
+                          <td colSpan={9} className="bg-muted/30">
                             <div className="p-3 space-y-3">
                               <table className="pa-table w-full text-xs">
                                 <thead>
@@ -256,6 +265,7 @@ export default function PABrokerTelephony() {
                                     <th className="text-right">{L(lang, "Appels", "Calls")}</th>
                                     <th className="text-right">{L(lang, "Taux de réponse", "Answer rate")}</th>
                                     <th className="text-right">{L(lang, "Taux transcription", "Transcript rate")}</th>
+                                    <th className="text-right">{L(lang, "Taux sortants", "Outbound rate")}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -270,6 +280,7 @@ export default function PABrokerTelephony() {
                                       <td className="text-right">{e.total}</td>
                                       <td className="text-right">{pct(e.answered, e.total)}%</td>
                                       <td className="text-right">{pct(e.transcribed, e.eligible)}%</td>
+                                      <td className="text-right">{pct(e.outbound, e.total)}%</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -292,7 +303,7 @@ export default function PABrokerTelephony() {
                   );
                 })}
                 {!loading && filtered.length === 0 && (
-                  <tr><td colSpan={8} className="pa-empty">{L(lang, "Aucun courtier.", "No broker.")}</td></tr>
+                  <tr><td colSpan={9} className="pa-empty">{L(lang, "Aucun courtier.", "No broker.")}</td></tr>
                 )}
               </tbody>
             </table>

@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     `/domains/${D}/users?limit=1`,
     `/domains/${D}/calls`,
     `/domains/${D}/cdrs?limit=5&start-date=${since}`,
-    `/domains/${D}/cdrs/count?start-date=${since}+00:00:00&end-date=${today}+23:59:59`,
+    `/domains/${D}/cdrs/count?start-date=${since} 00:00:00&end-date=${today} 23:59:59`,
     `/domains/${D}/cdrs?limit=200&start-date=${since} 00:00:00&end-date=${today} 23:59:59`,
     `/domains/${D}/users/${U}/cdrs?limit=5&start-date=${since}`,
     `/domains/${D}/users/${U}/devices`,
@@ -85,11 +85,15 @@ Deno.serve(async (req) => {
     subs = (arr ?? []).map((s: any) => {
       const url = String(s["post-url"] ?? s.post_url ?? s.url ?? "");
       return {
+        id: s.id ?? s["subscription-id"] ?? null,
         model: s.model ?? s.event ?? null,
         domain: s.domain ?? null,
+        host: url.replace(/\?.*$/, ""),
+        expires: s["subscription-expires-datetime"] ?? s.expires ?? s["expires-datetime"] ?? null,
         targets_receiver: url.includes("ns-webhook-receiver"),
         has_secret: /[?&]secret=/.test(url),
       };
+
     });
   } catch { /* ignore */ }
 

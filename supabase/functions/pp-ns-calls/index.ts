@@ -104,24 +104,43 @@ Deno.serve(async (req) => {
         }
       } catch { /* fallback to constructed */ }
 
+      // Aucun appareil SIP inscrit : la première jambe doit sonner ailleurs,
+      // sinon NS n'a personne à appeler et l'appel meurt en ~3 s.
+      // Repli documenté (calls.md, call-orig-user) : composer le cellulaire du
+      // courtier, sinon son poste.
+      let origFallback: "device" | "cell" | "extension" = "device";
       if (!deviceRegistered) {
-        callOrigUser = `${ctx.extension}@${ctx.nsDomain}`;
+        let cell = "";
+        try {
+          const { data: prof } = await guard.supabase
+            .from("planipret_profiles")
+            .select("phone")
+            .eq("user_id", ctx.userId)
+            .maybeSingle();
+          cell = String(prof?.phone ?? "").replace(/[^\d]/g, "");
+        } catch { /* ignore */ }
+        if (cell.length >= 10) {
+          callOrigUser = cell;
+          origFallback = "cell";
+        } else {
+          callOrigUser = `${ctx.extension}@${ctx.nsDomain}`;
+          origFallback = "extension";
+        }
       }
 
       const clientCallId = crypto.randomUUID();
       // NS dial rules ne connaissent pas le format E.164 avec « + » :
       // POST .../calls répond 404 "Resource not found." Composer en chiffres.
       const nsDest = dest.replace(/^\+/, "");
+      const callerId = String(payload.caller_id_number ?? "").replace(/[^\d]/g, "");
       const buildBody = (term: string) => ({
+        // Champs documentés uniquement (docs/netsapiens/calls.md).
         "call-id": clientCallId,
-        "destination": term,
-        "origination": callOrigUser,
+        "dial-rule-application": "call",
         "call-orig-user": callOrigUser,
         "call-term-user": term,
         "auto-answer-enabled": "no",
-        // Force NS to fully ring the originator (broker's phone) and wait for
-        // pickup BEFORE dialing the destination. Without this NS may dial the
-        // destination first, so the customer hears ringing before the broker.
+        ...(callerId ? { "caller-id-number": callerId } : {}),
         "synchronous": "no",
       });
 
@@ -179,9 +198,10 @@ Deno.serve(async (req) => {
           device_registered: deviceRegistered,
           device_was_unregistered: !deviceRegistered,
           device_state: deviceState,
-          message: deviceRegistered
-            ? "Votre téléphone va sonner — décrochez pour parler au client"
-            : "Votre téléphone sonnera dans quelques secondes — assurez-vous que l'app est ouverte",
+          orig_fallback: origFallback,
+          message: origFallback === "cell"
+            ? "Votre cellulaire va sonner — décrochez pour parler au client"
+            : "Votre téléphone va sonner — décrochez pour parler au client",
         }, 200);
       }
 

@@ -250,6 +250,15 @@ export default function PASipMonitor() {
                                 ))}
                               </div>
                             </div>
+                            <div className="px-3 pb-3">
+                              <div className="flex items-center justify-between mb-1">
+                                <div className="text-xs font-semibold">{L(lang, "Route SIP complète", "Full SIP route")}</div>
+                                <Button size="sm" variant="outline" className="gap-1" onClick={() => void copyRoute(r)}>
+                                  <Copy className="w-3 h-3" />{L(lang, "Copier", "Copy")}
+                                </Button>
+                              </div>
+                              <pre className="text-[11px] whitespace-pre-wrap font-mono bg-background/60 rounded p-2 border">{buildRoute(r)}</pre>
+                            </div>
                           </td>
                         </tr>
                       )}

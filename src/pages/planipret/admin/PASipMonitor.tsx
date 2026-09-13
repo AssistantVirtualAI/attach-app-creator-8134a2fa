@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { PAPage, PAPageHeader } from "@/components/planipret/admin/PAPageShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -148,8 +148,8 @@ export default function PASipMonitor() {
                   const expires = r.devices.map((d) => d.expires_at).filter(Boolean).sort().pop() ?? null;
                   const isOpen = open === r.user_id;
                   return (
-                    <>
-                      <tr key={r.user_id} className="cursor-pointer" onClick={() => setOpen(isOpen ? null : r.user_id)}>
+                    <Fragment key={r.user_id}>
+                      <tr className="cursor-pointer" onClick={() => setOpen(isOpen ? null : r.user_id)}>
                         <td className="font-mono">{r.extension}</td>
                         <td>{r.name}</td>
                         <td>
@@ -176,7 +176,7 @@ export default function PASipMonitor() {
                         </td>
                       </tr>
                       {isOpen && (
-                        <tr key={`${r.user_id}-detail`}>
+                        <tr>
                           <td colSpan={7} className="bg-muted/30">
                             <div className="grid md:grid-cols-2 gap-4 p-3">
                               <div>
@@ -209,7 +209,7 @@ export default function PASipMonitor() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
                 {!loading && filtered.length === 0 && (

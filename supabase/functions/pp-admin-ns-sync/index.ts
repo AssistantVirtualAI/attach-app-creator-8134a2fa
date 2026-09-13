@@ -411,10 +411,14 @@ async function fetchTranscription(path: string | null) {
   }
 }
 
-async function enrichTranscriptions(rows: any[]) {
-  const candidates = rows.filter((r) => r.metadata?.["prefilled-transcription-api"] || r.metadata?.transcription_path);
+async function enrichTranscriptions(rows: any[], budgetMs = 20000, maxRows = 120) {
+  const deadline = Date.now() + budgetMs;
+  const candidates = rows
+    .filter((r) => r.metadata?.["prefilled-transcription-api"] || r.metadata?.transcription_path)
+    .slice(0, maxRows);
   let enriched = 0;
   for (let i = 0; i < candidates.length; i += 8) {
+    if (Date.now() > deadline) break;
     const chunk = candidates.slice(i, i + 8);
     await Promise.all(chunk.map(async (row) => {
       const path = row.metadata?.transcription_path ?? transcriptionPath(row.metadata);
@@ -431,6 +435,7 @@ async function enrichTranscriptions(rows: any[]) {
   }
   return enriched;
 }
+
 
 async function syncCalls(admin: ReturnType<typeof createClient>, domain: string, users: any[], start: string, end: string) {
   const { data: profiles } = await admin

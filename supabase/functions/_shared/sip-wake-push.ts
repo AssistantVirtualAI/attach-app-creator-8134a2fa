@@ -8,7 +8,7 @@
 // Never touches PJSIP, CallKit, audio or AOR ownership — it only asks the app
 // to redo what it already does at login.
 
-import { parseServiceAccount, sendFcmData } from "./fcm.ts";
+import { parseServiceAccount, sendFcmDataMessage } from "./fcm.ts";
 
 function b64url(input: ArrayBuffer | string) {
   const bytes = typeof input === "string" ? new TextEncoder().encode(input) : new Uint8Array(input);

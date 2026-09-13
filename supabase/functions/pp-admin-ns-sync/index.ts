@@ -505,14 +505,20 @@ async function syncCalls(admin: ReturnType<typeof createClient>, domain: string,
 
   // Persist the CDRs FIRST. Transcription enrichment is slow and used to run
   // before the upsert, so a CPU-time kill lost every call of the run.
+  // Duplicate ns_call_id values inside one batch make Postgres reject the whole
+  // chunk ("ON CONFLICT DO UPDATE command cannot affect row a second time").
+  const byId = new Map<string, any>();
+  for (const r of rows) byId.set(String(r.ns_call_id), r);
+  const uniqueRows = Array.from(byId.values());
   let upserted = 0;
   let errors: string[] = [];
-  for (let i = 0; i < rows.length; i += 200) {
-    const chunk = rows.slice(i, i + 200);
+  for (let i = 0; i < uniqueRows.length; i += 200) {
+    const chunk = uniqueRows.slice(i, i + 200);
     const { error } = await admin.from("planipret_phone_calls").upsert(chunk, { onConflict: "ns_call_id" });
     if (error) errors.push(error.message);
     else upserted += chunk.length;
   }
+
 
   const transcriptions = await enrichTranscriptions(rows);
   if (transcriptions > 0) {

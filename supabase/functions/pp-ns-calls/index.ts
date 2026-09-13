@@ -146,6 +146,7 @@ Deno.serve(async (req) => {
 
       console.log(`[pp-ns-calls] REST start requested_client=${requestedClientType} forced_client=${clientType} device=${deviceName} orig=${callOrigUser} term=${nsDest} ext=${ctx.extension}`);
 
+      const t0 = Date.now();
       let res = await nsFetch(base, { method: "POST", body: JSON.stringify(buildBody(nsDest)) });
       let text = await res.text();
       let parsed: any = null;

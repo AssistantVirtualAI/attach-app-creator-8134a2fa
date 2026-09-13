@@ -230,7 +230,7 @@ function ensureGumProxy() {
 
 export type OutboundResult =
   | { via: "webrtc"; ok: true }
-  | { via: "pbx"; ok: true; callId?: string; ringsOnCell?: boolean }
+  | { via: "pbx"; ok: true; callId?: string }
   | { via: "none"; ok: false; error: string; micState?: MicPermissionState };
 
 type RestCallAttachment = {

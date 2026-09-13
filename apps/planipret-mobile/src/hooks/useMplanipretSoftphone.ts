@@ -1024,6 +1024,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
+    let lastHealAt = 0;
     const suffix = clientType === "mobile" ? "m" : "w";
     const run = async () => {
       const check = await checkSipBackendRegistration();
@@ -1032,6 +1033,13 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       const own = aors.some((a) => a.endsWith(suffix)) ||
         (clientType === "mobile" && !!check.registration?.mobile_registered);
       setPbxRegistration(own ? "own" : aors.length > 0 ? "other" : "none");
+      // Self-heal: a logged-in broker must always keep `<ext>M` registered on
+      // the PBX. If NetSapiens says otherwise, force a re-REGISTER (max 1/min).
+      if (!own && Date.now() - lastHealAt > 60_000) {
+        lastHealAt = Date.now();
+        try { ppSipProvider.forceReregister(); } catch { /* ignore */ }
+        try { window.dispatchEvent(new CustomEvent("pp:sip-ready", { detail: { force: true } })); } catch { /* ignore */ }
+      }
     };
     void run();
     const id = setInterval(run, 30_000);

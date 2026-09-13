@@ -13,6 +13,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { requirePlanipretAdmin } from "../_shared/require-planipret-admin.ts";
+import { sendSipWakePush } from "../_shared/sip-wake-push.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -332,6 +333,67 @@ Deno.serve(async (req) => {
         updated: results.filter((r) => r.ok).length,
         verified: results.filter((r) => String(r.recording_configuration ?? "").startsWith("yes")).length,
         failed: results.filter((r) => !r.ok),
+      });
+    }
+
+    if (action === "force_register" || action === "force_register_all") {
+      // A SIP REGISTER can only be issued by the device. We wake every mobile
+      // app (silent push) so it re-REGISTERs its own `<ext>M` AOR.
+      const onlyUnregistered = body?.only_unregistered !== false;
+      const brokerId = String(body?.broker_id ?? "");
+      let q = admin
+        .from("planipret_profiles")
+        .select("user_id, full_name, email, extension")
+        .not("extension", "is", null)
+        .not("user_id", "is", null)
+        .order("extension", { ascending: true })
+        .limit(action === "force_register" ? 1 : 500);
+      if (action === "force_register") {
+        if (!brokerId) return json({ error: "broker_id required" }, 400);
+        q = q.or(`id.eq.${brokerId},user_id.eq.${brokerId}`);
+      }
+      const { data: profiles, error } = await q;
+      if (error) return json({ error: error.message }, 500);
+
+      const rows = (profiles ?? []).filter((p: any) => String(p.extension ?? "").trim());
+      const results: any[] = [];
+      for (let i = 0; i < rows.length; i += 6) {
+        const chunk = rows.slice(i, i + 6);
+        const res = await Promise.all(chunk.map(async (p: any) => {
+          const ext = String(p.extension);
+          const mobileAor = `${ext}M`;
+          const r = await ns(`/domains/${encodeURIComponent(NS_DOMAIN)}/users/${encodeURIComponent(ext)}/devices`);
+          const list = Array.isArray(r.data) ? r.data : (r.data?.devices ?? r.data?.data ?? []);
+          const devices = (Array.isArray(list) ? list : []).map(deviceSummary);
+          const mobile = devices.find((d) =>
+            String(d.aor ?? "").replace(/^sip:/i, "").split("@")[0].toLowerCase() === mobileAor.toLowerCase());
+          const registered = !!mobile?.registered;
+          if (registered && onlyUnregistered) {
+            return { extension: ext, name: p.full_name ?? p.email, registered: true, woken: false, reason: "already_registered" };
+          }
+          const push = await sendSipWakePush(admin, p.user_id);
+          return {
+            extension: ext,
+            name: p.full_name ?? p.email,
+            registered,
+            device_missing: !mobile,
+            woken: push.sent > 0,
+            ios: push.ios,
+            android: push.android,
+            reason: push.reason ?? null,
+          };
+        }));
+        results.push(...res);
+      }
+
+      return json({
+        ok: true,
+        total: results.length,
+        already_registered: results.filter((r) => r.registered && !r.woken).length,
+        woken: results.filter((r) => r.woken).length,
+        no_token: results.filter((r) => r.reason === "no_native_token").length,
+        device_missing: results.filter((r) => r.device_missing).length,
+        results,
       });
     }
 

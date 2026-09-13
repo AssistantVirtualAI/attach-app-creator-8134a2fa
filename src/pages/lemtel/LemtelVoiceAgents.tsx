@@ -53,7 +53,7 @@ export default function LemtelVoiceAgents() {
   });
 
   const hasElevenLabs = useMemo(
-    () => (voice as any[]).some(a => a.platform === 'elevenlabs' && a.platform_api_key),
+    () => (voice as any[]).some(a => a.platform === 'elevenlabs' && a.has_api_key),
     [voice],
   );
   function openEdit(a: Agent) {

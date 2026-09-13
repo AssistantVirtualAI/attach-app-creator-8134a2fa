@@ -85,11 +85,15 @@ Deno.serve(async (req) => {
     subs = (arr ?? []).map((s: any) => {
       const url = String(s["post-url"] ?? s.post_url ?? s.url ?? "");
       return {
+        id: s.id ?? s["subscription-id"] ?? null,
         model: s.model ?? s.event ?? null,
         domain: s.domain ?? null,
+        host: url.replace(/\?.*$/, ""),
+        expires: s["subscription-expires-datetime"] ?? s.expires ?? s["expires-datetime"] ?? null,
         targets_receiver: url.includes("ns-webhook-receiver"),
         has_secret: /[?&]secret=/.test(url),
       };
+
     });
   } catch { /* ignore */ }
 

@@ -826,6 +826,7 @@ export const MP_DICT = {
         outboundAudio: "Audio sortants",
         transcriptTracking: "Suivi transcription",
         clientCalls: "Appels par client",
+        brokerTelephony: "Téléphonie par courtier",
         compliance: "Conformité",
         auditChecklist: "Audit",
         accessLog: "Journal des accès",
@@ -875,6 +876,7 @@ export const MP_DICT = {
         outboundAudio: "Audio des appels sortants",
         transcriptTracking: "Suivi transcription par appel",
         clientCalls: "Appels par client",
+        brokerTelephony: "Postes, appels, taux de réponse et transcription par courtier.",
       },
       holdMusic: {
         subtitle: "Rédigez l'annonce, générez l'audio et poussez-le vers le PBX.",
@@ -1926,6 +1928,7 @@ export const MP_DICT = {
         outboundAudio: "Outbound audio",
         transcriptTracking: "Transcript tracking",
         clientCalls: "Calls by client",
+        brokerTelephony: "Telephony by broker",
         compliance: "Compliance",
         auditChecklist: "Audit",
         accessLog: "Access log",
@@ -1975,6 +1978,7 @@ export const MP_DICT = {
         outboundAudio: "Outbound call audio",
         transcriptTracking: "Transcription tracking by call",
         clientCalls: "Calls by client",
+        brokerTelephony: "Extensions, calls, answer and transcription rates per broker.",
       },
       holdMusic: {
         subtitle: "Write the announcement, generate the audio and push it to the PBX.",

@@ -104,9 +104,26 @@ Deno.serve(async (req) => {
         }
       } catch { /* fallback to constructed */ }
 
-      // Jamais de repli vers le cellulaire du courtier : l'appel doit toujours
-      // partir de la ligne de l'app, sinon on retourne une erreur explicite.
+      // Si l'appareil visé n'est pas inscrit, utiliser n'importe quel appareil
+      // inscrit du poste (web/mobile). Erreur explicite seulement si aucun.
       const origFallback: "device" = "device";
+      if (!deviceRegistered) {
+        try {
+          const regRes = await nsFetch(`/domains/${encodeURIComponent(ctx.nsDomain)}/users/${encodeURIComponent(ctx.extension)}/registrations`, { method: "GET" });
+          if (regRes.ok) {
+            const rd = await regRes.json().catch(() => null);
+            const regs = Array.isArray(rd) ? rd : (rd ? [rd] : []);
+            const alt = regs.find((r: any) => typeof (r?.["aor"] ?? r?.["registration-uri"] ?? r?.["contact-uri"]) === "string");
+            const aor = alt?.["aor"] ?? alt?.["registration-uri"] ?? alt?.["contact-uri"];
+            if (typeof aor === "string" && aor.length) {
+              callOrigUser = String(aor).replace(/^sip:/i, "").split(";")[0];
+              deviceRegistered = true;
+              deviceState = "registered_alt";
+              console.log(`[pp-ns-calls] fallback to registered device aor=${callOrigUser}`);
+            }
+          }
+        } catch { /* ignore */ }
+      }
       if (!deviceRegistered) {
         return jsonResponse({
           success: false,
@@ -117,6 +134,7 @@ Deno.serve(async (req) => {
           message: "Votre ligne n'est pas connectée — rouvrez l'application puis réessayez",
         }, 200);
       }
+
 
       const clientCallId = crypto.randomUUID();
       // NS dial rules ne connaissent pas le format E.164 avec « + » :

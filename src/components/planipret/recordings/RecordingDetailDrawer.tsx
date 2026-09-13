@@ -680,6 +680,13 @@ export default function RecordingDetailDrawer({ call, onClose, onUpdated, showBr
                     </div>
                   );
                 })()
+              ) : detail.transcript_status === "no_audio" && transcribing !== detail.id ? (
+                <div>
+                  <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.transcription}</p>
+                  <div className="p-3 rounded-lg text-xs" style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
+                    Aucun enregistrement disponible pour cet appel côté système téléphonique.
+                  </div>
+                </div>
               ) : transcribing === detail.id || detail.transcript_pending ? (
                 <div>
                   <p style={{ fontSize: 11, color: "var(--pp-text-muted)", marginBottom: 4 }}>{t.transcription}</p>

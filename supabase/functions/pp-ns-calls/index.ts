@@ -220,18 +220,25 @@ Deno.serve(async (req) => {
         if (profileDevice?.ns_mobile_device_id) deviceName = String(profileDevice.ns_mobile_device_id);
       } catch { /* keep default */ }
 
-      const nsBody = {
-        "call-id": crypto.randomUUID(),
+      const cbCallId = crypto.randomUUID();
+      const nsDest = dest.replace(/^\+/, "");
+      const cbBody = (term: string) => ({
+        "call-id": cbCallId,
         "call-orig-user": `${deviceName}@${ctx.nsDomain}`,
-        "call-term-user": dest,
+        "call-term-user": term,
         "auto-answer-enabled": "yes",
         "synchronous": "yes",
-      };
-      console.log(`[pp-ns-calls] callback orig=${nsBody["call-orig-user"]} term=${dest}`);
-      const res = await nsFetch(base, { method: "POST", body: JSON.stringify(nsBody) });
-      const text = await res.text();
+      });
+      console.log(`[pp-ns-calls] callback orig=${deviceName}@${ctx.nsDomain} term=${nsDest}`);
+      let res = await nsFetch(base, { method: "POST", body: JSON.stringify(cbBody(nsDest)) });
+      let text = await res.text();
       let parsed: any = null;
       try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
+      if (res.status === 404 && nsDest !== dest) {
+        res = await nsFetch(base, { method: "POST", body: JSON.stringify(cbBody(dest)) });
+        text = await res.text();
+        try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
+      }
       const ok = res.ok || res.status === 202;
       return jsonResponse({
         success: ok,

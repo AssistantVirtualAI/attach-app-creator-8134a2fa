@@ -161,6 +161,23 @@ export default function PASipMonitor() {
         </div>
       </div>
 
+      {marc && (
+        <Card className="pa-card">
+          <CardHeader className="pa-card-head">
+            <CardTitle className="pa-card-title">{L(lang, `Route SIP actuelle — ${marc.name}`, `Current SIP route — ${marc.name}`)}</CardTitle>
+            <CardDescription className="pa-card-sub">
+              {L(lang, "Route entrante, sortante et appareils inscrits.", "Inbound route, outbound route and registered devices.")}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => void copyRoute(marc)}>
+              <Copy className="w-3 h-3" />{L(lang, "Copier la route", "Copy route")}
+            </Button>
+            <pre className="text-[11px] whitespace-pre-wrap font-mono bg-background/60 rounded p-2 border">{buildRoute(marc)}</pre>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="pa-card">
         <CardHeader className="pa-card-head">
           <CardTitle className="pa-card-title">{L(lang, "Postes", "Extensions")}</CardTitle>

@@ -103,6 +103,7 @@ Deno.serve(async (req) => {
             transcript_language: nsTx.language ?? null,
             transcript_source: "netsapiens",
             transcript_pending: false,
+            transcript_status: "done",
             transcript_fetched_at: new Date().toISOString(),
           })
           .eq("id", callId);
@@ -179,6 +180,7 @@ Deno.serve(async (req) => {
         transcript,
         transcript_source: "whisper-fallback",
         transcript_pending: false,
+        transcript_status: "done",
         recording_url: recUrl ?? row.recording_url,
         transcript_fetched_at: new Date().toISOString(),
       })

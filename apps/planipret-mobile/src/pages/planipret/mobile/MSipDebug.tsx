@@ -6,6 +6,8 @@ import { ppSipProvider, type PpSipEvent, type PpSipSnapshot } from "@/lib/planip
 import { exportSipStability, getSipStabilityReport, resetSipStability } from "@/lib/planipret/sip/sipStabilityMonitor";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { checkSipBackendRegistration, getLastSipBackendCheck, type SipBackendCheck } from "@/lib/planipret/sip/sipBackendCheck";
+import { nativeSip, type SipRegistrationState } from "@/lib/planipret/sip/nativeSipService";
+import { Capacitor } from "@capacitor/core";
 
 const STAGES = ["idle", "connecting", "connected", "registered"] as const;
 
@@ -36,11 +38,25 @@ export default function MSipDebug() {
   const [snap, setSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
   const [events, setEvents] = useState<PpSipEvent[]>(() => ppSipProvider.getEvents());
   const [pbx, setPbx] = useState<SipBackendCheck | null>(() => getLastSipBackendCheck());
+  const [nativeState, setNativeState] = useState<SipRegistrationState>(() => nativeSip.getState());
+  const [repairing, setRepairing] = useState(false);
 
   useEffect(() => {
     const us = ppSipProvider.subscribe(setSnap);
     const ue = ppSipProvider.subscribeEvents(setEvents);
     return () => { us(); ue(); };
+  }, []);
+
+  useEffect(() => {
+    const onNativeState = (event: Event) => {
+      const detail = (event as CustomEvent<{ state?: SipRegistrationState }>).detail;
+      if (detail?.state) setNativeState(detail.state);
+    };
+    window.addEventListener("sip-registration-state", onNativeState);
+    void nativeSip.refreshState().then((state) => {
+      if (state?.registered) setNativeState("registered");
+    });
+    return () => window.removeEventListener("sip-registration-state", onNativeState);
   }, []);
 
   // Live PBX-side truth: the local stack can be idle while the extension is
@@ -59,11 +75,16 @@ export default function MSipDebug() {
   }, []);
 
   const cfg = ppSipProvider.getConfig();
-  const pbxRegistered = Boolean(pbx?.registration?.mobile_registered || (pbx?.registration?.count ?? 0) > 0);
-  const status = pbxRegistered && snap.status !== "registered" ? "registered" : snap.status;
+  const nativePlatform = Capacitor.isNativePlatform();
+  const pbxRegistered = Boolean(pbx?.registration?.mobile_registered);
+  const status = nativePlatform
+    ? (nativeState === "registered" || pbxRegistered
+      ? "registered"
+      : nativeState === "failed" ? "error" : nativeState === "unavailable" ? "disconnected" : nativeState)
+    : (pbxRegistered && snap.status !== "registered" ? "registered" : snap.status);
   const rawIdx = STAGES.indexOf(status as any);
   const currentIdx = rawIdx >= 0 ? rawIdx : 0;
-  const nativeUnavailable = /native_sip_unavailable/i.test(String(snap.errorCause ?? ""));
+  const nativeUnavailable = nativePlatform && nativeState === "unavailable";
   const isError = status === "error" && !nativeUnavailable;
   const pbxDomain = pbx?.registration?.mobile_aor?.split("@")[1] ?? null;
   const serverColor = pbxRegistered ? "#10B981" : pbx ? "#F59E0B" : "#94A3B8";
@@ -72,6 +93,22 @@ export default function MSipDebug() {
     : pbx
       ? (lang === "fr" ? "SERVEUR OK" : "SERVER OK")
       : (lang === "fr" ? "VÉRIFICATION" : "CHECKING");
+
+  const repair = async () => {
+    if (repairing) return;
+    setRepairing(true);
+    try {
+      if (nativePlatform) await nativeSip.repairRegistration();
+      else await ppSipProvider.forceReregister?.();
+      const res = await checkSipBackendRegistration({ force: true, minIntervalMs: 0 });
+      if (res) setPbx(res);
+      toast(nativeSip.isRegistered() || res?.registration?.mobile_registered
+        ? (lang === "fr" ? "Ligne mobile enregistrée" : "Mobile line registered")
+        : t("screens.sipDebug.reregisterSent"));
+    } finally {
+      setRepairing(false);
+    }
+  };
 
 
   const copy = async () => {
@@ -104,9 +141,9 @@ export default function MSipDebug() {
           style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
           <Trash2 className="w-3 h-3" /> {t("screens.sipDebug.clear")}
         </button>
-        <button onClick={() => { ppSipProvider.forceReregister?.(); toast(t("screens.sipDebug.reregisterSent")); }} className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold"
+        <button onClick={() => { void repair(); }} disabled={repairing} className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold disabled:opacity-60"
           style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>
-          <RefreshCw className="w-3 h-3" /> {t("screens.sipDebug.reregister")}
+          <RefreshCw className={`w-3 h-3 ${repairing ? "animate-spin" : ""}`} /> {t("screens.sipDebug.reregister")}
         </button>
       </header>
 
@@ -126,7 +163,7 @@ export default function MSipDebug() {
           ))}
         </div>
 
-        {snap.errorCause && (
+        {(isError || (nativeUnavailable && status !== "registered")) && (
           <div className="flex items-start gap-2 p-2 rounded-lg"
             style={{ background: nativeUnavailable ? "rgba(59,130,246,0.08)" : "rgba(239,68,68,0.08)", color: nativeUnavailable ? "#3B82F6" : "#EF4444" }}>
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -135,7 +172,7 @@ export default function MSipDebug() {
                 ? (lang === "fr"
                   ? "Aperçu web : le module d'appel natif n'est pas chargé. Les appels passent en mode REST. Installez l'app pour le SIP natif."
                   : "Web preview: the native calling module is not loaded. Calls use REST mode. Install the app for native SIP.")
-                : snap.errorCause}
+                : snap.errorCause ?? (lang === "fr" ? "Échec de l’inscription SIP native" : "Native SIP registration failed")}
             </span>
           </div>
         )}

@@ -59,7 +59,7 @@ export default function MSipDebug() {
   }, []);
 
   const cfg = ppSipProvider.getConfig();
-  const pbxRegistered = Boolean(pbx?.registration?.mobile_registered || (pbx?.registration?.count ?? 0) > 0);
+  const pbxRegistered = Boolean(pbx?.registration?.mobile_registered);
   const status = pbxRegistered && snap.status !== "registered" ? "registered" : snap.status;
   const rawIdx = STAGES.indexOf(status as any);
   const currentIdx = rawIdx >= 0 ? rawIdx : 0;
@@ -118,7 +118,7 @@ export default function MSipDebug() {
           ))}
         </div>
 
-        {snap.errorCause && (
+        {snap.errorCause && !pbxRegistered && (
           <div className="flex items-start gap-2 p-2 rounded-lg" style={{ background: "rgba(239,68,68,0.08)", color: "#EF4444" }}>
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span className="text-[12px]">{snap.errorCause}</span>

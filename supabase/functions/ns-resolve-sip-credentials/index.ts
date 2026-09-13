@@ -346,6 +346,18 @@ Deno.serve(async (req) => {
 
   console.log(`[ns-resolve] client_type=${clientType} ext=${ext} device=${deviceName}`);
 
+  // Auto-renew the broker's NS devices at every mobile sign-in (forced on an
+  // explicit login, throttled otherwise) so no broker stays unregistered while
+  // waiting for an admin resync.
+  if (clientType === "mobile") {
+    queueDeviceRefresh(
+      String(profile.user_id ?? user.id),
+      sipTransport,
+      body?.on_login ? "mobile_login" : "mobile_resolve",
+      !!body?.on_login,
+    );
+  }
+
 
   // Try the specific device first.
   let detail = await nsGet(`/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(ext)}/devices/${encodeURIComponent(deviceName)}`);

@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
         try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
       }
 
-      console.log(`[pp-ns-calls] NS status=${res.status} body=${typeof parsed === "string" ? parsed.slice(0,200) : JSON.stringify(parsed).slice(0,200)}`);
+      console.log(`[pp-ns-calls] NS status=${res.status} latency_ms=${Date.now() - t0} orig_fallback_pending body=${typeof parsed === "string" ? parsed.slice(0,200) : JSON.stringify(parsed).slice(0,200)}`);
 
       const ok = res.ok || res.status === 202;
       if (ok) {

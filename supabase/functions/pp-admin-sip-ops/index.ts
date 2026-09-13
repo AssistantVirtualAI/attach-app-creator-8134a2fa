@@ -241,6 +241,51 @@ Deno.serve(async (req) => {
       }, 200);
     }
 
+    if (action === "enable_recording") {
+      // Enables provider-side call recording (+ transcription/sentiment) for every broker extension.
+      const mode = String(body?.mode ?? "yes-with-transcription-and-sentiment");
+      const { data: profiles, error } = await admin
+        .from("planipret_profiles")
+        .select("user_id, full_name, email, extension")
+        .not("extension", "is", null)
+        .order("extension", { ascending: true })
+        .limit(500);
+      if (error) return json({ error: error.message }, 500);
+
+      const rows = (profiles ?? []).filter((p: any) => String(p.extension ?? "").trim());
+      const results: any[] = [];
+      for (let i = 0; i < rows.length; i += 5) {
+        const chunk = rows.slice(i, i + 5);
+        const res = await Promise.all(chunk.map(async (p: any) => {
+          const ext = String(p.extension);
+          const r = await ns(`/domains/${encodeURIComponent(NS_DOMAIN)}/users/${encodeURIComponent(ext)}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              "recording-configuration": mode,
+              "voicemail-transcription-enabled": "Deepgram",
+            }),
+          });
+          return {
+            extension: ext,
+            name: p.full_name ?? p.email ?? ext,
+            ok: r.ok,
+            status: r.status,
+            error: r.ok ? null : (typeof r.data === "object" ? r.data?.message ?? null : String(r.data ?? "")),
+          };
+        }));
+        results.push(...res);
+      }
+
+      return json({
+        ok: true,
+        mode,
+        total: results.length,
+        updated: results.filter((r) => r.ok).length,
+        failed: results.filter((r) => !r.ok),
+        results,
+      });
+    }
+
     return json({ error: "unknown_action" }, 400);
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500);

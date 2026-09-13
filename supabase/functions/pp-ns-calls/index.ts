@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
         // Force NS to fully ring the originator (broker's phone) and wait for
         // pickup BEFORE dialing the destination. Without this NS may dial the
         // destination first, so the customer hears ringing before the broker.
-        "synchronous": "yes",
+        "synchronous": "no",
       });
 
       console.log(`[pp-ns-calls] REST start requested_client=${requestedClientType} forced_client=${clientType} device=${deviceName} orig=${callOrigUser} term=${nsDest} ext=${ctx.extension}`);
@@ -227,7 +227,7 @@ Deno.serve(async (req) => {
         "call-orig-user": `${deviceName}@${ctx.nsDomain}`,
         "call-term-user": term,
         "auto-answer-enabled": "yes",
-        "synchronous": "yes",
+        "synchronous": "no",
       });
       console.log(`[pp-ns-calls] callback orig=${deviceName}@${ctx.nsDomain} term=${nsDest}`);
       let res = await nsFetch(base, { method: "POST", body: JSON.stringify(cbBody(nsDest)) });
@@ -316,7 +316,7 @@ Deno.serve(async (req) => {
               "call-orig-user": `${ctx.extension}@${ctx.nsDomain}`,
               "call-term-user": target,
               "auto-answer-enabled": "no",
-              "synchronous": "yes",
+              "synchronous": "no",
             }),
           });
           const txt = await res.text();

@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
           "call-orig-user": callOrigUser,
           "call-term-user": term,
           "auto-answer-enabled": "no",
-          synchronous: "yes",
+          synchronous: "no",
         }),
       });
       let r = await originate(nsDest);

@@ -37,19 +37,13 @@ Deno.serve(async (req) => {
   out.push(await q(`/domains/${d}/users/${u}/registrations`));
   out.push(await q(`/domains/${d}/users/${u}/calls`));
 
-  if (body.originate) {
-    const term = String(body.term ?? "");
-    const orig = String(body.orig ?? `${ext}@${domain}`);
-    out.push(await q(`/domains/${d}/users/${u}/calls`, {
-      method: "POST",
-      body: JSON.stringify({
-        "call-id": crypto.randomUUID(),
-        "call-orig-user": orig,
-        "call-term-user": term,
-        "auto-answer-enabled": "no",
-        synchronous: "yes",
-      }),
-    }));
+  if (Array.isArray(body.bodies)) {
+    for (const b of body.bodies) {
+      out.push(await q(`/domains/${d}/users/${u}/calls`, {
+        method: "POST",
+        body: JSON.stringify({ "call-id": crypto.randomUUID(), ...b }),
+      }));
+    }
   }
 
   return new Response(JSON.stringify({ domain, ext, results: out }, null, 2), {

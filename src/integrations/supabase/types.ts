@@ -10707,6 +10707,45 @@ export type Database = {
         }
         Relationships: []
       }
+      planipret_outbound_settings: {
+        Row: {
+          caller_id_name: string | null
+          caller_id_number: string | null
+          client_type: string
+          created_at: string
+          extension: string | null
+          id: string
+          notes: string | null
+          outbound_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          caller_id_name?: string | null
+          caller_id_number?: string | null
+          client_type?: string
+          created_at?: string
+          extension?: string | null
+          id?: string
+          notes?: string | null
+          outbound_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          caller_id_name?: string | null
+          caller_id_number?: string | null
+          client_type?: string
+          created_at?: string
+          extension?: string | null
+          id?: string
+          notes?: string | null
+          outbound_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       planipret_pbx_action_queue: {
         Row: {
           action: string

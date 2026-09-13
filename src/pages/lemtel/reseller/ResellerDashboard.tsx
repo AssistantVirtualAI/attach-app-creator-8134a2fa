@@ -20,7 +20,7 @@ export default function ResellerDashboard() {
     queryKey: ["org-by-slug", slug],
     queryFn: async () => {
       const { data } = await supabase
-        .from("organizations")
+        .from("organizations_safe")
         .select("*")
         .eq("slug", slug!)
         .maybeSingle();
@@ -34,7 +34,7 @@ export default function ResellerDashboard() {
     enabled: !!org?.id,
     queryFn: async () => {
       const { data } = await supabase
-        .from("organizations")
+        .from("organizations_safe")
         .select("*")
         .eq("parent_org_id", org.id);
       return (data || []) as any[];

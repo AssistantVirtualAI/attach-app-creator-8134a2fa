@@ -20,7 +20,7 @@ export default function CustomerSettings() {
   const { data: org } = useQuery({
     queryKey: ["org-full", slug],
     queryFn: async () => {
-      const { data } = await supabase.from("organizations").select("*").eq("slug", slug!).maybeSingle();
+      const { data } = await supabase.from("organizations_safe").select("*").eq("slug", slug!).maybeSingle();
       return data as any;
     },
     enabled: !!slug,

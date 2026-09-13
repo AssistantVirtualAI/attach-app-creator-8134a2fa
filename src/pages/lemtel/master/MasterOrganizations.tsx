@@ -28,7 +28,7 @@ export default function MasterOrganizations() {
     queryKey: ["all-orgs"],
     queryFn: async () => {
       const { data } = await supabase
-        .from("organizations")
+        .from("organizations_safe")
         .select("*")
         .order("created_at", { ascending: false });
       return (data || []) as any[];

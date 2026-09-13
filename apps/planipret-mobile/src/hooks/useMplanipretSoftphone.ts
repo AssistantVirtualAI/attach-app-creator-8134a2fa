@@ -1037,8 +1037,12 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       // the PBX. If NetSapiens says otherwise, force a re-REGISTER (max 1/min).
       if (!own && Date.now() - lastHealAt > 60_000) {
         lastHealAt = Date.now();
-        try { ppSipProvider.forceReregister(); } catch { /* ignore */ }
-        try { window.dispatchEvent(new CustomEvent("pp:sip-ready", { detail: { force: true } })); } catch { /* ignore */ }
+        if (clientType === "mobile" && Capacitor.isNativePlatform() && nativeSip.isAvailable()) {
+          void nativeSip.repairRegistration();
+        } else {
+          try { ppSipProvider.forceReregister(); } catch { /* ignore */ }
+          try { window.dispatchEvent(new CustomEvent("pp:sip-ready", { detail: { force: true } })); } catch { /* ignore */ }
+        }
       }
     };
     void run();

@@ -190,18 +190,22 @@ Deno.serve(async (req) => {
       if (!registered) callOrigUser = `${ext}@${NS_DOMAIN}`;
 
       const clientCallId = crypto.randomUUID();
-      const r = await ns(`/domains/${encodeURIComponent(NS_DOMAIN)}/users/${encodeURIComponent(ext)}/calls`, {
+      // NS dial plan refuse le « + » (404 Resource not found) → chiffres seuls.
+      const nsDest = String(dest).replace(/^\+/, "");
+      const originate = (term: string) => ns(`/domains/${encodeURIComponent(NS_DOMAIN)}/users/${encodeURIComponent(ext)}/calls`, {
         method: "POST",
         body: JSON.stringify({
           "call-id": clientCallId,
-          destination: dest,
+          destination: term,
           origination: callOrigUser,
           "call-orig-user": callOrigUser,
-          "call-term-user": dest,
+          "call-term-user": term,
           "auto-answer-enabled": "no",
           synchronous: "yes",
         }),
       });
+      let r = await originate(nsDest);
+      if (r.status === 404 && nsDest !== dest) r = await originate(String(dest));
 
       const ok = r.ok || r.status === 202;
       if (ok) {

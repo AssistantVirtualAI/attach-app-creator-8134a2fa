@@ -118,6 +118,7 @@ const PAOutboundAudio = lazyWithRetry(() => import("./pages/planipret/admin/PAOu
 const PATranscriptTracking = lazyWithRetry(() => import("./pages/planipret/admin/PATranscriptTracking"));
 const PAClientCalls = lazyWithRetry(() => import("./pages/planipret/admin/PAClientCalls"));
 const PABrokerTelephony = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerTelephony"));
+const PABrokerTelephony = lazyWithRetry(() => import("./pages/planipret/admin/PABrokerTelephony"));
 const PADiagnostics = lazyWithRetry(() => import("./pages/planipret/admin/PADiagnostics"));
 const PAMaestroSync = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroSync"));
 const PAMaestroDashboard = lazyWithRetry(() => import("./pages/planipret/admin/PAMaestroDashboard"));

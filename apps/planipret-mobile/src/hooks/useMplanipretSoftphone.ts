@@ -249,7 +249,7 @@ function ensureGumProxy() {
 
 export type OutboundResult =
   | { via: "webrtc"; ok: true }
-  | { via: "pbx"; ok: true; callId?: string }
+  | { via: "pbx"; ok: true; callId?: string; ringsOnCell?: boolean }
   | { via: "none"; ok: false; error: string; micState?: MicPermissionState };
 
 type RestCallAttachment = {
@@ -1171,19 +1171,26 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       return { via: "none", ok: false, error: msg };
     }
     const callId = String((data as any)?.call_id ?? "");
+    // Quand le central fait sonner le cellulaire (ou le poste physique) du
+    // courtier, la conversation n'est PAS dans l'app : ne jamais rattacher
+    // d'écran d'appel, sinon il reste figé et sans audio.
+    const fallback = String((data as any)?.orig_fallback ?? "device");
+    const ringsOnCell = fallback !== "device";
     if (callId) {
-      setRestCall({
-        id: callId,
-        direction: "out",
-        other: destination,
-        number: destination,
-        status: "ringing-out",
-        startedAt: Date.now(),
-      });
+      if (!ringsOnCell) {
+        setRestCall({
+          id: callId,
+          direction: "out",
+          other: destination,
+          number: destination,
+          status: "ringing-out",
+          startedAt: Date.now(),
+        });
+      }
       // Rules 1 & 2 — always post outbound calls to Maestro.
       postOutboundCall({ providerCallId: callId, number: destination });
     }
-    return { via: "pbx", ok: true, callId };
+    return { via: "pbx", ok: true, callId, ringsOnCell };
   }, [clientType]);
 
 

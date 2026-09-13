@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, RotateCw, Search, Wifi } from "lucide-react";
+import { Copy, Loader2, RefreshCw, RotateCw, Search, Wifi } from "lucide-react";
 import { toast } from "sonner";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 

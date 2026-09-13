@@ -249,7 +249,7 @@ function ensureGumProxy() {
 
 export type OutboundResult =
   | { via: "webrtc"; ok: true }
-  | { via: "pbx"; ok: true; callId?: string }
+  | { via: "pbx"; ok: true; callId?: string; ringsOnCell?: boolean }
   | { via: "none"; ok: false; error: string; micState?: MicPermissionState };
 
 type RestCallAttachment = {
@@ -1171,19 +1171,26 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       return { via: "none", ok: false, error: msg };
     }
     const callId = String((data as any)?.call_id ?? "");
+    // Quand le central fait sonner le cellulaire (ou le poste physique) du
+    // courtier, la conversation n'est PAS dans l'app : ne jamais rattacher
+    // d'écran d'appel, sinon il reste figé et sans audio.
+    const fallback = String((data as any)?.orig_fallback ?? "device");
+    const ringsOnCell = fallback !== "device";
     if (callId) {
-      setRestCall({
-        id: callId,
-        direction: "out",
-        other: destination,
-        number: destination,
-        status: "ringing-out",
-        startedAt: Date.now(),
-      });
+      if (!ringsOnCell) {
+        setRestCall({
+          id: callId,
+          direction: "out",
+          other: destination,
+          number: destination,
+          status: "ringing-out",
+          startedAt: Date.now(),
+        });
+      }
       // Rules 1 & 2 — always post outbound calls to Maestro.
       postOutboundCall({ providerCallId: callId, number: destination });
     }
-    return { via: "pbx", ok: true, callId };
+    return { via: "pbx", ok: true, callId, ringsOnCell };
   }, [clientType]);
 
 
@@ -1201,10 +1208,16 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     }
     let canUseSip = registered;
     if (!canUseSip) {
+      // Réveil borné (~2 s max) : dès que la ligne revient on part tout de
+      // suite, au lieu d'attendre un délai fixe puis de basculer sur le
+      // repli cellulaire (lent + audio hors de l'app).
       try { ppSipProvider.forceReregister(); } catch {}
-      await new Promise((resolve) => window.setTimeout(resolve, 1200));
-      const st = ppSipProvider.getSnapshot().status;
-      canUseSip = st === "registered" || st === "connected";
+      const deadline = Date.now() + 2000;
+      while (Date.now() < deadline) {
+        const st = ppSipProvider.getSnapshot().status;
+        if (st === "registered" || st === "connected") { canUseSip = true; break; }
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
     }
     if (canUseSip) {
       const mic = await ensureMicPermission();

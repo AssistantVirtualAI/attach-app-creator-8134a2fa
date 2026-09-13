@@ -193,7 +193,11 @@ function Dialer({ open, onClose, initial, autoDial, openMessages, softphone, mae
       toast.error(("error" in result && result.error) || t("dialer.callFailed"));
       return;
     }
-    toast.success(t("dialer.callStarted"));
+    toast.success(
+      "ringsOnCell" in result && result.ringsOnCell
+        ? t("dialer.callStartedCell")
+        : t("dialer.callStarted"),
+    );
     setNumber("");
     onClose();
   };

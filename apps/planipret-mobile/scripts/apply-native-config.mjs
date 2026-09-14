@@ -2361,16 +2361,21 @@ function ensurePjsipXcframework(iosRoot) {
     present &&
     fs.readdirSync(abs).some((slice) => fs.existsSync(path.join(abs, slice, "Headers")));
 
-  // Le script ne doit JAMAIS échouer si le binaire manque : le repli JsSIP
-  // prend le relais. On avertit clairement en fin d'exécution.
+  // Une app iOS sans ce binaire affiche une fausse sonnerie puis bascule vers
+  // REST sans média. Les scripts de livraison exécutent ensure-pjsip-ios.sh;
+  // les builds web restent permis dans les environnements Linux sans Xcode.
   if (!present) {
-    pjsipWarnings.push(`⚠ libpjsip.xcframework absent → lancer scripts/build-pjsip-ios.sh (${rel})`);
+    if (process.env.PP_REQUIRE_PJSIP === "1") {
+      throw new Error(`[native-config] libpjsip.xcframework absent — build iOS refusé (${rel}). Lance npm run ios:oneclick.`);
+    }
+    pjsipWarnings.push(`⚠ libpjsip.xcframework absent — livraison iOS interdite (${rel})`);
   } else if (!hasHeaders) {
-    pjsipWarnings.push("⚠ libpjsip.xcframework sans dossier Headers → canImport(pjsua) sera faux; relancer scripts/build-pjsip-ios.sh");
+    if (process.env.PP_REQUIRE_PJSIP === "1") {
+      throw new Error("[native-config] libpjsip.xcframework sans Headers — build iOS refusé; relance scripts/build-pjsip-ios.sh");
+    }
+    pjsipWarnings.push("⚠ libpjsip.xcframework sans Headers — livraison iOS interdite");
   }
 
-  // Sans binaire sur disque, on n'injecte pas de référence (Xcode refuserait
-  // de compiler un fichier manquant) — le repli JsSIP reste opérationnel.
   if (!present) return false;
 
   const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");

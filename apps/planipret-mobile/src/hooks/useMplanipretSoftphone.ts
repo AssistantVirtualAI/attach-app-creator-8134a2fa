@@ -1211,7 +1211,8 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // PJSIP owns the native iOS audio session. Do not gate it behind the
     // WebView getUserMedia permission: on some installed builds WebKit reports
     // the microphone as unavailable even though the native engine can call.
-    if (clientType === "mobile" && Capacitor.isNativePlatform() && nativeSip.isAvailable()) {
+    const nativeIos = clientType === "mobile" && Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+    if (nativeIos && nativeSip.isAvailable()) {
       // Composition immédiate quand la ligne est déjà inscrite (cas normal :
       // l'inscription est faite au login et entretenue toutes les 30 s).
       // Sinon on borne la réparation à 1,5 s au lieu d'attendre sa fin.
@@ -1226,7 +1227,22 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       if (ready && await nativeSip.makeCall(ppNormalizeDestination(destination))) {
         return { via: "webrtc", ok: true };
       }
-      console.warn("[softphone] native call failed, falling back to PBX");
+      // REST ne transporte aucun média vers l'app. L'ancien repli affichait
+      // « Ringing » malgré l'absence d'une jambe SIP joignable.
+      console.error("[softphone] native call refused — PJSIP is not registered");
+      return {
+        via: "none",
+        ok: false,
+        error: "Ligne mobile non inscrite. Gardez l’application ouverte quelques secondes, puis réessayez.",
+      };
+    }
+    if (nativeIos) {
+      console.error("[softphone] PJSIP plugin missing from installed iOS binary");
+      return {
+        via: "none",
+        ok: false,
+        error: "Moteur d’appel absent de cette version. Une mise à jour de l’application est requise.",
+      };
     }
     let canUseSip = registered;
     if (!canUseSip) {

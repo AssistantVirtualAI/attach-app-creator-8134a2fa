@@ -83,6 +83,174 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
   useEffect(() => guard.current.subscribe(setAudioBusy), []);
   useEffect(() => () => guard.current.cancel(), []);
 
+  // --- Enregistrer ma propre voix -----------------------------------------
+  const [mode, setMode] = useState<"record" | "tts">("record");
+  const [recording, setRecording] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const [recUrl, setRecUrl] = useState<string | null>(null);
+  const [recWav, setRecWav] = useState<Uint8Array | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recUrlRef = useRef<string | null>(null);
+
+  const releaseMic = () => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    try { streamRef.current?.getTracks().forEach((tr) => tr.stop()); } catch { /* noop */ }
+    streamRef.current = null;
+  };
+
+  useEffect(() => () => {
+    releaseMic();
+    try { recorderRef.current?.state === "recording" && recorderRef.current.stop(); } catch { /* noop */ }
+    if (recUrlRef.current) URL.revokeObjectURL(recUrlRef.current);
+  }, []);
+
+  const setTake = (url: string | null) => {
+    if (recUrlRef.current) URL.revokeObjectURL(recUrlRef.current);
+    recUrlRef.current = url;
+    setRecUrl(url);
+  };
+
+  const pickMime = () => {
+    const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac", "audio/ogg"];
+    const MR: any = (window as any).MediaRecorder;
+    return candidates.find((m) => MR?.isTypeSupported?.(m)) ?? "";
+  };
+
+  const stopRecording = () => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    try {
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      else releaseMic();
+    } catch { releaseMic(); }
+    setRecording(false);
+  };
+
+  const startRecording = async () => {
+    if (recording || preparing || publishing) return;
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      toast.error(lang === "en" ? "Recording is not available on this device." : "L'enregistrement n'est pas disponible sur cet appareil.");
+      return;
+    }
+    // Le moteur d'appel possède la session audio : jamais d'enregistrement pendant un appel.
+    if ((window as any).__ppCallActive) {
+      toast.error(lang === "en" ? "End your call before recording." : "Terminez votre appel avant d'enregistrer.");
+      return;
+    }
+    guard.current.cancel(); // coupe toute écoute en cours
+
+    const perm = await ensureMicPermission();
+    perm.stream?.getTracks().forEach((tr) => tr.stop());
+    if (perm.state === "denied") {
+      toast.error(lang === "en"
+        ? "Microphone access denied — allow it in your phone settings."
+        : "Accès au micro refusé — autorisez-le dans les réglages du téléphone.");
+      return;
+    }
+    if (perm.state === "unavailable") {
+      toast.error(lang === "en" ? "No microphone detected." : "Aucun micro détecté.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      streamRef.current = stream;
+      const mimeType = pickMime();
+      const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.onerror = () => {
+        releaseMic();
+        setRecording(false);
+        toast.error(lang === "en" ? "Recording failed." : "L'enregistrement a échoué.");
+      };
+      rec.onstop = async () => {
+        releaseMic();
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        chunksRef.current = [];
+        if (blob.size < 1024) {
+          toast.error(lang === "en" ? "Recording too short." : "Enregistrement trop court.");
+          return;
+        }
+        setPreparing(true);
+        try {
+          const wav = await blobToWavMono8k(blob);
+          if (wavPeak(wav) < 0.02) {
+            toast.error(lang === "en" ? "No sound captured — check your microphone." : "Aucun son capté — vérifiez votre micro.");
+            setRecWav(null);
+            setTake(null);
+            return;
+          }
+          setRecWav(wav);
+          setTake(URL.createObjectURL(new Blob([wav.slice()], { type: "audio/wav" })));
+        } catch {
+          toast.error(lang === "en" ? "Could not process the recording." : "Impossible de traiter l'enregistrement.");
+          setRecWav(null);
+          setTake(null);
+        } finally {
+          setPreparing(false);
+        }
+      };
+      rec.start(250); // timeslice : évite les blobs vides sur iOS
+      recorderRef.current = rec;
+      setRecWav(null);
+      setTake(null);
+      setRecSeconds(0);
+      setRecording(true);
+      timerRef.current = setInterval(() => {
+        setRecSeconds((s) => {
+          if (s >= 119) { stopRecording(); return 120; }
+          return s + 1;
+        });
+      }, 1000);
+    } catch {
+      releaseMic();
+      toast.error(lang === "en" ? "Microphone access denied." : "Accès au micro refusé.");
+    }
+  };
+
+  const publishRecording = async () => {
+    if (!recWav || publishing) return;
+    setPublishing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pp-greeting-record", {
+        body: {
+          audio_base64: bytesToBase64(recWav),
+          mime_type: "audio/wav",
+          duration_seconds: recSeconds,
+          label: lang === "en" ? "Greeting recorded by the broker" : "Message enregistré par le courtier",
+          push_to_ns: true,
+        },
+      });
+      const d = data as any;
+      if (error || !d?.success) {
+        const ctx = (error as any)?.context;
+        const detail = ctx?.text ? await ctx.text().catch(() => "") : "";
+        toast.error([d?.error, d?.detail, detail, error?.message].filter(Boolean)[0]
+          ?? (lang === "en" ? "Publishing failed." : "La publication a échoué."));
+        return;
+      }
+      if (d.pushed_to_ns) {
+        toast.success(lang === "en" ? "Your greeting is now live." : "Votre message est maintenant actif.");
+        setRecWav(null);
+        setTake(null);
+      } else {
+        toast.error(`${lang === "en" ? "Saved, but not activated" : "Sauvegardé, mais non activé"}: ${d.push_error ?? ""}`);
+      }
+      onProfileChange?.();
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
   const fullName = profile.full_name ?? t("greeting.defaultBroker");
   const charCount = text.length;
   const counterColor = charCount > 480 ? "#EF4444" : charCount > 400 ? "#F59E0B" : "#10B981";

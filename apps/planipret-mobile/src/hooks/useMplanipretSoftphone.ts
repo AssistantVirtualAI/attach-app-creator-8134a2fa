@@ -480,18 +480,19 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         // credentials. In foreground startSipService only stores this config and
         // remains idle (`foreground_js_owns`); once iOS backgrounds the app it can
         // take ownership without failing with `missing_host`.
-        if (clientType === "mobile") {
+        // En repli `<ext>W`, ne JAMAIS amorcer le service de maintien avec ces
+        // identifiants : il tient `<ext>M` et deux inscriptions sur la même AOR
+        // referment les sockets (WSS 1001).
+        if (clientType === "mobile" && !fallbackToWebAor) {
           startPlanipretSipKeepAlive(sipConfig)
             .then((s) => { if (s && !cancelled) setNativeStatus(s); })
             .catch(() => undefined);
         }
 
 
-        // This is the mobile application: both foreground JsSIP and the native
-        // background bridge must use `<ext>M`. `<ext>W` is reserved for the web
-        // widget; borrowing it here creates two registrations for the same
-        // NetSapiens device and the SBC closes the older WSS with code 1001.
-        sameAorRef.current = clientType === "mobile";
+        // Même AOR que le service natif uniquement hors repli : en repli le
+        // softphone est sur `<ext>W`, un device NetSapiens distinct de `<ext>M`.
+        sameAorRef.current = clientType === "mobile" && !fallbackToWebAor;
         if (cancelled) return;
         await ppSipProvider.init(sipConfig);
         if (clientType === "mobile") {

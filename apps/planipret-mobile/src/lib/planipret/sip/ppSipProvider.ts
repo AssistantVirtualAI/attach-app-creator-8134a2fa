@@ -477,7 +477,7 @@ class PpSipProvider {
     // Arbitrage d'AOR : le moteur natif PJSIP est le seul REGISTER autorisé sur
     // `<ext>M`. Créer un UA JsSIP ici (register:true) rouvrirait la course qui
     // provoque les WSS 1001.
-    if (nativeOwnsAor()) {
+    if (nativeOwnsAor() && isMobileAor) {
       this.log("warn", "JsSIP init blocked: native PJSIP owns the AOR");
       this.pushHistory("blocked", "native_owns_aor_init");
       this.emitMetrics();

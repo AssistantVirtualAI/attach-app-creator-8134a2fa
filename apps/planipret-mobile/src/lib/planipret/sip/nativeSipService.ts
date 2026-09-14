@@ -139,6 +139,21 @@ export class NativeSipService {
   }
 
   isAvailable() { return getPjsip() !== null; }
+  /** Diagnostic honnête affiché dans l'écran « État SIP ». */
+  getDiagnostics(): NativeSipDiagnostics {
+    let nativePlatform = false;
+    try { nativePlatform = Capacitor.isNativePlatform(); } catch { /* noop */ }
+    const pluginPresent = getPjsip() !== null;
+    return {
+      nativePlatform,
+      pluginPresent,
+      registered: this.registered,
+      state: this.lastState,
+      extension: this.extension,
+      username: this.username,
+      failure: this.registered ? null : (lastNativeFailure ?? (pluginPresent ? null : "plugin_absent")),
+    };
+  }
   isRegistered() { return this.registered; }
   getUsername() { return this.username; }
   getExtension() { return this.extension; }

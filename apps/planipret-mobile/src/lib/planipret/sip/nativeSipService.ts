@@ -448,6 +448,7 @@ export class NativeSipService {
   private setState(state: SipRegistrationState) {
     this.lastState = state;
     this.registered = state === "registered";
+    if (this.registered) lastNativeFailure = null;
     emit("sip-registration-state", {
       registered: this.registered,
       state,

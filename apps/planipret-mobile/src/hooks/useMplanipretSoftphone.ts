@@ -1244,13 +1244,50 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         error: "Ligne mobile non inscrite. Gardez l’application ouverte quelques secondes, puis réessayez.",
       };
     }
-    if (nativeMobile) {
-      console.error("[softphone] native SIP engine missing from installed binary");
-      return {
-        via: "none",
-        ok: false,
-        error: "Moteur d’appel absent de cette version. Une mise à jour de l’application est requise.",
-      };
+    if (route === "webview") {
+      // Binaire installé sans moteur natif : la WebView reprend l'AOR mobile.
+      // On libère d'abord le service de maintien natif (sinon NetSapiens ferme
+      // un des deux sockets, code 1001), puis JsSIP compose avec un vrai média
+      // WebRTC. Aucun repli REST ici : il affichait « Ringing » sans audio.
+      try { await stopPlanipretSipKeepAlive(); } catch { /* noop */ }
+      const mic = await ensureMicPermission();
+      try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
+      if (mic.state !== "granted") {
+        console.error("[softphone] webview call refused — microphone denied", mic.error ?? mic.state);
+        return {
+          via: "none",
+          ok: false,
+          error: "Microphone refusé. Autorisez le micro pour l’application, puis réessayez.",
+        };
+      }
+      let ready = ppSipProvider.getSnapshot().status === "registered";
+      if (!ready) {
+        try { ppSipProvider.forceReregister(); } catch { /* noop */ }
+        const deadline = Date.now() + 4000;
+        while (Date.now() < deadline) {
+          if (ppSipProvider.getSnapshot().status === "registered") { ready = true; break; }
+          await new Promise((resolve) => window.setTimeout(resolve, 100));
+        }
+      }
+      if (!ready) {
+        console.error("[softphone] webview call refused — JsSIP not registered");
+        return {
+          via: "none",
+          ok: false,
+          error: "Ligne mobile non inscrite. Gardez l’application ouverte quelques secondes, puis réessayez.",
+        };
+      }
+      try {
+        await ppSipProvider.call(destination);
+        return { via: "webrtc", ok: true };
+      } catch (e: any) {
+        console.error("[softphone] webview call failed", e?.message ?? e);
+        return {
+          via: "none",
+          ok: false,
+          error: "L’appel n’a pas pu être établi. Réessayez dans quelques secondes.",
+        };
+      }
     }
     let canUseSip = registered;
     if (!canUseSip) {

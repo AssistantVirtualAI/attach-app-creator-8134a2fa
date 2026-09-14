@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { createAudioGuard } from "@/lib/planipret/audio/audioGuard";
+import { blobToWavMono8k, wavPeak, bytesToBase64 } from "@/lib/planipret/audio/wavEncode";
+import { ensureMicPermission } from "@/lib/planipret/audio/micPermission";
 import { Play, Pause, Sparkles, Mic, RotateCw, Check, Settings2, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 

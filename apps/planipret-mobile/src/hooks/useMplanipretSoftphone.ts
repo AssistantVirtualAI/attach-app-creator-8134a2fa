@@ -417,13 +417,22 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         if (opts?.force) {
           try { ppSipProvider.stop(); } catch {}
         }
-        const nativeClient = clientType === "mobile" && Capacitor.isNativePlatform() && nativeSip.isAvailable();
+        const onNative = Capacitor.isNativePlatform();
+        const nativeClient = clientType === "mobile" && onNative && nativeSip.isAvailable();
+        let nativeEngineReady = false;
         if (nativeClient) {
-          const ready = await nativeSip.initialize();
+          nativeEngineReady = await nativeSip.initialize();
           if (cancelled) return;
-          if (!ready) console.warn("[softphone] native SIP initialization did not register");
-          return;
+          if (nativeEngineReady) return;
+          console.warn("[softphone] native SIP initialization did not register — fallback to the `<ext>W` browser line");
         }
+        // Repli sans nouvelle soumission : quand le moteur natif est absent du
+        // binaire installé (ou refuse de s'inscrire), le softphone de la
+        // WebView prend la ligne navigateur `<ext>W` — un device NetSapiens
+        // distinct. `<ext>M` reste réservée au moteur natif, donc aucun vol
+        // d'AOR, et le SimRing fait sonner les deux.
+        const fallbackToWebAor = onNative && clientType === "mobile";
+        const resolveClientType = fallbackToWebAor ? "web" : clientType;
         // Garde restaurée (configuration du 7 septembre) : le resolver réécrit
         // `device-sip-transport-type`. Sans ce garde il repasse `<ext>M` en WSS
         // 9002 alors que le moteur natif est inscrit en TLS 5061 — le moteur
@@ -431,9 +440,9 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         // appel ne porte d'audio.
         // `on_login` (re)provisionne le device pour chaque courtier qui ouvre
         // l'app, y compris Android et les builds sans PJSIP.
-        const sipTransport = nativeOwnsAor() ? "tls" : "wss";
+        const sipTransport = !fallbackToWebAor && nativeOwnsAor() ? "tls" : "wss";
         const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
-          body: { client_type: clientType, transport: sipTransport, on_login: clientType === "mobile" },
+          body: { client_type: resolveClientType, transport: sipTransport, on_login: clientType === "mobile" },
         });
         if (cancelled) return;
         if (error || !data || (data as any)?.error) return;
@@ -471,18 +480,19 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
         // credentials. In foreground startSipService only stores this config and
         // remains idle (`foreground_js_owns`); once iOS backgrounds the app it can
         // take ownership without failing with `missing_host`.
-        if (clientType === "mobile") {
+        // En repli `<ext>W`, ne JAMAIS amorcer le service de maintien avec ces
+        // identifiants : il tient `<ext>M` et deux inscriptions sur la même AOR
+        // referment les sockets (WSS 1001).
+        if (clientType === "mobile" && !fallbackToWebAor) {
           startPlanipretSipKeepAlive(sipConfig)
             .then((s) => { if (s && !cancelled) setNativeStatus(s); })
             .catch(() => undefined);
         }
 
 
-        // This is the mobile application: both foreground JsSIP and the native
-        // background bridge must use `<ext>M`. `<ext>W` is reserved for the web
-        // widget; borrowing it here creates two registrations for the same
-        // NetSapiens device and the SBC closes the older WSS with code 1001.
-        sameAorRef.current = clientType === "mobile";
+        // Même AOR que le service natif uniquement hors repli : en repli le
+        // softphone est sur `<ext>W`, un device NetSapiens distinct de `<ext>M`.
+        sameAorRef.current = clientType === "mobile" && !fallbackToWebAor;
         if (cancelled) return;
         await ppSipProvider.init(sipConfig);
         if (clientType === "mobile") {

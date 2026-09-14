@@ -646,8 +646,8 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
       </div>
       </>)}
 
-      {mode === "tts" && (
-      /* Advanced settings */
+      {mode === "tts" && (<>
+      {/* Advanced settings */}
       <button onClick={() => setShowSettings((s) => !s)}
         className="w-full flex items-center justify-between text-[12px] px-3 py-2 rounded-xl"
         style={{ background: TOKENS.card, color: TOKENS.muted, border: `1px solid ${TOKENS.border}` }}>

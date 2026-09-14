@@ -142,8 +142,18 @@ Deno.serve(async (req) => {
     blockers.push("REGISTERED_ON_WRONG_CORE");
     actions.push("reregister");
   }
+  // Le service de maintien (`Planipret iOS KeepAlive`) peut inscrire `<ext>M`
+  // sans que le moteur d'appel PJSIP soit présent dans le binaire installé :
+  // la ligne paraît inscrite mais aucun appel ne peut porter d'audio.
+  const uaLower = String(regUserAgent ?? "").toLowerCase();
+  const engineMissing = mobileRegistered && uaLower.includes("keepalive") &&
+    !uaLower.includes("pj");
+  if (engineMissing) {
+    blockers.push("CALL_ENGINE_MISSING");
+    actions.push("update_app_build");
+  }
 
-  const healthy = mobileRegistered && !!tokenRow?.device_token && callSubscription &&
+  const healthy = mobileRegistered && !engineMissing && !!tokenRow?.device_token && callSubscription &&
     devicePushEnabled !== false && coreServerOk;
 
 

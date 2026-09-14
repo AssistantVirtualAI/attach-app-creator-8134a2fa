@@ -51,6 +51,7 @@ import {
 import { addDedupedCapListener } from "@/lib/planipret/sip/capListeners";
 import { checkSipBackendRegistration } from "@/lib/planipret/sip/sipBackendCheck";
 import { nativeSip } from "@/lib/planipret/sip/nativeSipService";
+import { decideOutboundRoute } from "@/lib/planipret/sip/outboundRoute";
 
 import {
   upsertRingingSession,
@@ -1211,8 +1212,18 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // PJSIP owns the native iOS audio session. Do not gate it behind the
     // WebView getUserMedia permission: on some installed builds WebKit reports
     // the microphone as unavailable even though the native engine can call.
-    const nativeIos = clientType === "mobile" && Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
-    if (nativeIos && nativeSip.isAvailable()) {
+    // Toute plateforme native (iOS ET Android) : JsSIP est interdit dans la
+    // WebView (arbitrage d'AOR), donc le seul chemin porteur d'audio est le
+    // moteur natif. Le repli REST ne transporte rien : il affichait « Ringing »
+    // sans jambe SIP joignable. Il est interdit ici, sur les deux plateformes.
+    const route = decideOutboundRoute({
+      clientType,
+      isNativePlatform: Capacitor.isNativePlatform(),
+      engineAvailable: nativeSip.isAvailable(),
+      engineRegistered: nativeSip.isRegistered(),
+    });
+    const nativeMobile = route !== "web";
+    if (route === "native" || route === "native_unregistered") {
       // Composition immédiate quand la ligne est déjà inscrite (cas normal :
       // l'inscription est faite au login et entretenue toutes les 30 s).
       // Sinon on borne la réparation à 1,5 s au lieu d'attendre sa fin.
@@ -1227,17 +1238,15 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       if (ready && await nativeSip.makeCall(ppNormalizeDestination(destination))) {
         return { via: "webrtc", ok: true };
       }
-      // REST ne transporte aucun média vers l'app. L'ancien repli affichait
-      // « Ringing » malgré l'absence d'une jambe SIP joignable.
-      console.error("[softphone] native call refused — PJSIP is not registered");
+      console.error("[softphone] native call refused — native SIP engine is not registered");
       return {
         via: "none",
         ok: false,
         error: "Ligne mobile non inscrite. Gardez l’application ouverte quelques secondes, puis réessayez.",
       };
     }
-    if (nativeIos) {
-      console.error("[softphone] PJSIP plugin missing from installed iOS binary");
+    if (nativeMobile) {
+      console.error("[softphone] native SIP engine missing from installed binary");
       return {
         via: "none",
         ok: false,

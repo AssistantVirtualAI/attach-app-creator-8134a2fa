@@ -1212,7 +1212,17 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // WebView getUserMedia permission: on some installed builds WebKit reports
     // the microphone as unavailable even though the native engine can call.
     if (clientType === "mobile" && Capacitor.isNativePlatform() && nativeSip.isAvailable()) {
-      const ready = nativeSip.isRegistered() || await nativeSip.repairRegistration();
+      // Composition immédiate quand la ligne est déjà inscrite (cas normal :
+      // l'inscription est faite au login et entretenue toutes les 30 s).
+      // Sinon on borne la réparation à 1,5 s au lieu d'attendre sa fin.
+      let ready = nativeSip.isRegistered();
+      if (!ready) {
+        const repair = nativeSip.repairRegistration().catch(() => false);
+        ready = await Promise.race([
+          repair,
+          new Promise<boolean>((resolve) => window.setTimeout(() => resolve(nativeSip.isRegistered()), 1500)),
+        ]);
+      }
       if (ready && await nativeSip.makeCall(ppNormalizeDestination(destination))) {
         return { via: "webrtc", ok: true };
       }
@@ -1220,17 +1230,18 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     }
     let canUseSip = registered;
     if (!canUseSip) {
-      // Réveil borné (~2 s max) : dès que la ligne revient on part tout de
+      // Réveil borné (~1,2 s max) : dès que la ligne revient on part tout de
       // suite, au lieu d'attendre un délai fixe puis de basculer sur le
       // repli cellulaire (lent + audio hors de l'app).
       try { ppSipProvider.forceReregister(); } catch {}
-      const deadline = Date.now() + 2000;
+      const deadline = Date.now() + 1200;
       while (Date.now() < deadline) {
         const st = ppSipProvider.getSnapshot().status;
         if (st === "registered" || st === "connected") { canUseSip = true; break; }
-        await new Promise((resolve) => window.setTimeout(resolve, 150));
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
       }
     }
+
     if (canUseSip) {
       const mic = await ensureMicPermission();
       if (mic.state !== "granted") {

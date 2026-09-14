@@ -89,10 +89,15 @@ Deno.serve(async (req) => {
 
     // Verify caller is admin
     const authHeader = req.headers.get("Authorization") ?? "";
+    // Internal server-to-server call (ns-resolve-sip-credentials on login):
+    // authenticated by the service-role bearer, which carries no user, so
+    // auth.getUser() returns null and the refresh used to 401.
+    const internalCall = req.headers.get("x-internal-call") === "1"
+      && authHeader.replace(/^Bearer\s+/i, "").trim() === SERVICE_ROLE;
     const userClient = createClient(SUPABASE_URL, ANON_KEY ?? SERVICE_ROLE, { global: { headers: { Authorization: authHeader } } });
-    const { data: userData } = await userClient.auth.getUser();
+    const { data: userData } = internalCall ? { data: null as any } : await userClient.auth.getUser();
     const caller = userData?.user;
-    if (!caller) return json({ error: "not_authenticated" }, 401);
+    if (!caller && !internalCall) return json({ error: "not_authenticated" }, 401);
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const readSipSecret = async (name: string) => {

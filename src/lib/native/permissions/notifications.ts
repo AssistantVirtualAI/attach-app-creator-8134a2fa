@@ -3,6 +3,34 @@ import { supabase } from "@/integrations/supabase/client";
 import { ensureIncomingCallActionType, showIncomingCallNotification } from "./localCallNotifications";
 
 let listenersRegistered = false;
+let apnsTokenUploaded = false;
+const PENDING_INCOMING_KEY = "pp.pending-incoming-action.v1";
+
+/** True once the OS push token has been accepted by the backend. Used by the
+ *  bootstrap to retry: without this token the backend cannot wake the app to
+ *  re-REGISTER its `<ext>M` line. */
+export function hasUploadedPushToken() {
+  return apnsTokenUploaded;
+}
+
+type IncomingNotificationAction = "open" | "answer" | "decline";
+
+function publishIncomingAction(callId: string, action: IncomingNotificationAction, from?: string) {
+  if (!callId) return;
+  const detail = { callId, action, from: from ?? "", ts: Date.now() };
+  try { sessionStorage.setItem(PENDING_INCOMING_KEY, JSON.stringify(detail)); } catch { /* ignore */ }
+  try { window.dispatchEvent(new CustomEvent("pp:incoming-notification-action", { detail })); } catch { /* ignore */ }
+  // Keep the mounted shell alive. A full location.assign() reload used to lose
+  // the native INVITE and leave the user on the calls/home page with no controls.
+  try {
+    if (!window.location.pathname.startsWith("/mplanipret")) {
+      window.location.assign("/mplanipret/calls");
+    } else if (window.location.pathname !== "/mplanipret/calls") {
+      window.history.replaceState(window.history.state, "", "/mplanipret/calls");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
+  } catch { /* ignore */ }
+}
 
 export async function ensureNotifications(extension?: string): Promise<PermStatus> {
   let status: PermStatus = "unavailable";
@@ -37,12 +65,17 @@ export async function registerPushListeners(extension?: string) {
     const platform = await getPlatform();
 
     PushNotifications.addListener("registration", async (token) => {
-      try {
-        await supabase.functions.invoke("mobile-register-push", {
-          body: { token: token.value, platform, extension: extension ?? "" },
-        });
-      } catch (e) {
-        console.warn("[push] register failed", e);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const { error } = await supabase.functions.invoke("mobile-register-push", {
+            body: { token: token.value, platform, extension: extension ?? "" },
+          });
+          if (!error) { apnsTokenUploaded = true; return; }
+          console.warn("[push] register rejected", error);
+        } catch (e) {
+          console.warn("[push] register failed", e);
+        }
+        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
       }
     });
 
@@ -52,6 +85,22 @@ export async function registerPushListeners(extension?: string) {
 
     PushNotifications.addListener("pushNotificationReceived", async (notif) => {
       const data = (notif.data ?? {}) as Record<string, string>;
+      if (data.type === "sip_register") {
+        // Silent wake sent by the backend when `<ext>M` is not registered:
+        // redo exactly what login does — re-REGISTER our own AOR.
+        if (platform === "android") {
+          try {
+            const { wakePlanipretNativeSipForIncomingCall } = await import(
+              "@/lib/planipret/sip/nativePpSipService"
+            );
+            await wakePlanipretNativeSipForIncomingCall("sip_register_push");
+          } catch { /* ignore */ }
+        }
+        try {
+          window.dispatchEvent(new CustomEvent("pp:sip-ready", { detail: { force: true } }));
+        } catch { /* ignore */ }
+        return;
+      }
       if (data.type === "incoming_call") {
         // Android counterpart of the iOS PushKit wake: the FCM data message is
         // the only reliable way to get the app running again, so ask the native
@@ -93,11 +142,10 @@ export async function registerPushListeners(extension?: string) {
       const data = (action.notification?.data ?? {}) as Record<string, string>;
       const callId = data.call_id ?? data.ns_callid ?? "";
       if (callId) {
-        const act = action.actionId === "decline" ? "decline" : "answer";
-        try { window.location.assign(`/mplanipret/calls?incoming=${encodeURIComponent(callId)}&action=${act}`); } catch { /* ignore */ }
-      }
-      else if (data.deep_link) {
-        try { window.location.assign(data.deep_link); } catch { /* ignore */ }
+        const act: IncomingNotificationAction = action.actionId === "decline"
+          ? "decline"
+          : action.actionId === "answer" ? "answer" : "open";
+        publishIncomingAction(callId, act, data.from ?? action.notification?.body);
       }
     });
 
@@ -106,10 +154,14 @@ export async function registerPushListeners(extension?: string) {
       await ensureIncomingCallActionType();
       LocalNotifications.addListener("localNotificationActionPerformed", (event) => {
         const data = (event.notification?.extra ?? {}) as Record<string, string>;
-        const callId = data.callId ?? "";
+        // Native PpSipKeepAlive uses pp_call_id; JS-scheduled notifications use
+        // callId. Accept both so a banner tap always restores the ringing UI.
+        const callId = data.callId ?? data.pp_call_id ?? "";
         if (callId) {
-          const act = event.actionId === "decline" ? "decline" : "answer";
-          try { window.location.assign(`/mplanipret/calls?incoming=${encodeURIComponent(callId)}&action=${act}`); } catch { /* ignore */ }
+          const act: IncomingNotificationAction = event.actionId === "decline"
+            ? "decline"
+            : event.actionId === "answer" ? "answer" : "open";
+          publishIncomingAction(callId, act, event.notification?.body);
         }
       });
     } catch { /* ignore */ }

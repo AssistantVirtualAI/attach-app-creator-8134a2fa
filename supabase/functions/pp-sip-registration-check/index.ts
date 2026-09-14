@@ -184,6 +184,7 @@ Deno.serve(async (req) => {
     },
     call_subscription: callSubscription,
     blockers,
+    warnings,
     actions,
 
   });

@@ -41,6 +41,11 @@ export default function MSipDebug() {
   const [pbx, setPbx] = useState<SipBackendCheck | null>(() => getLastSipBackendCheck());
   const [nativeState, setNativeState] = useState<SipRegistrationState>(() => nativeSip.getState());
   const [repairing, setRepairing] = useState(false);
+  const [diag, setDiag] = useState<NativeSipDiagnostics | null>(() => nativeSip.getDiagnostics());
+  const [version, setVersion] = useState<AppVersionInfo | null>(null);
+
+  useEffect(() => { setDiag(nativeSip.getDiagnostics()); }, [nativeState, pbx]);
+  useEffect(() => { void getAppVersionInfo().then(setVersion).catch(() => undefined); }, []);
 
   useEffect(() => {
     const us = ppSipProvider.subscribe(setSnap);

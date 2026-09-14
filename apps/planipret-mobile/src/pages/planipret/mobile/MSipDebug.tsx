@@ -189,6 +189,41 @@ export default function MSipDebug() {
         </div>
       </section>
 
+      {/* Moteur d'appel : diagnostic honnête (d'où vient l'état affiché) */}
+      {nativePlatform && (
+        <section className="pp-card p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <Radio className="w-4 h-4" style={{ color: diag?.pluginPresent ? "#10B981" : "#EF4444" }} />
+            <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>
+              {lang === "fr" ? "Moteur d'appel" : "Calling engine"}
+            </span>
+            <span className="ml-auto px-2 py-0.5 rounded-full text-[11px] font-bold"
+              style={{ background: diag?.registered ? "#10B981" : diag?.pluginPresent ? "#F59E0B" : "#EF4444", color: "#fff" }}>
+              {diag?.registered
+                ? (lang === "fr" ? "ACTIF" : "ACTIVE")
+                : diag?.pluginPresent
+                  ? (lang === "fr" ? "PRÉSENT" : "PRESENT")
+                  : (lang === "fr" ? "ABSENT" : "MISSING")}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
+            <div><span className="opacity-60">{lang === "fr" ? "Moteur natif" : "Native engine"}</span>{" "}
+              {diag?.pluginPresent ? (lang === "fr" ? "présent" : "present") : (lang === "fr" ? "absent du binaire" : "missing from binary")}</div>
+            <div><span className="opacity-60">{lang === "fr" ? "Ligne du moteur" : "Engine line"}</span> {diag?.username ?? "—"}</div>
+            <div className="col-span-2"><span className="opacity-60">{lang === "fr" ? "Motif" : "Reason"}</span> {diag?.failure ?? "—"}</div>
+            <div className="col-span-2"><span className="opacity-60">{lang === "fr" ? "Version installée" : "Installed version"}</span>{" "}
+              {version ? `${version.native}${version.ota ? ` + ${version.ota}` : ""}` : "—"}</div>
+          </div>
+          {diag && !diag.pluginPresent && (
+            <p className="text-[11px]" style={{ color: "#F59E0B" }}>
+              {lang === "fr"
+                ? "Le moteur d'appel natif n'est pas dans cette version installée : les appels passent par la ligne navigateur (application ouverte)."
+                : "The native calling engine is not in this installed build: calls use the browser line (app open only)."}
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Phone system (server-side truth) */}
       <section className="pp-card p-4 space-y-3">
         <div className="flex items-center gap-2">

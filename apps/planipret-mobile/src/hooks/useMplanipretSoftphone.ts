@@ -1222,7 +1222,6 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       engineAvailable: nativeSip.isAvailable(),
       engineRegistered: nativeSip.isRegistered(),
     });
-    const nativeMobile = route !== "web";
     if (route === "native" || route === "native_unregistered") {
       // Composition immédiate quand la ligne est déjà inscrite (cas normal :
       // l'inscription est faite au login et entretenue toutes les 30 s).

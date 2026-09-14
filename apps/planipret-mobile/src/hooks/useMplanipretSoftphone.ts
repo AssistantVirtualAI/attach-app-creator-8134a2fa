@@ -1309,6 +1309,19 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
       }
     }
 
+    if (Capacitor.isNativePlatform()) {
+      // Interdit sur téléphone : le click-to-call NS-API n'établit aucune jambe
+      // média vers l'appareil. Il affichait « Ringing… » puis l'écran d'appel
+      // disparaissait sans un son. Erreur honnête à la place.
+      console.warn("[outbound] blocked CLICK-TO-CALL on native", { micGranted, registered, route });
+      return {
+        via: "none",
+        ok: false,
+        error: micGranted
+          ? "Ligne d'appel non inscrite — impossible de porter l'audio. Rouvrez l'application puis réessayez."
+          : "Accès au micro refusé — autorisez le micro pour appeler depuis l'application.",
+      };
+    }
     console.info("[outbound] route=CLICK-TO-CALL", { destination, micGranted, registered, route });
     return await callViaPBX(destination);
   }, [registered, callViaPBX, clientType]);

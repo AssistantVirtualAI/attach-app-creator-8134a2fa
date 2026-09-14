@@ -7,6 +7,7 @@ import { exportSipStability, getSipStabilityReport, resetSipStability } from "@/
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { checkSipBackendRegistration, getLastSipBackendCheck, type SipBackendCheck } from "@/lib/planipret/sip/sipBackendCheck";
 import { nativeSip, type SipRegistrationState } from "@/lib/planipret/sip/nativeSipService";
+import { ensureForegroundOwnership, resetOwnershipRepairBackoff } from "@/lib/planipret/sip/sipOwnershipRepair";
 import { Capacitor } from "@capacitor/core";
 
 const STAGES = ["idle", "connecting", "connected", "registered"] as const;
@@ -100,6 +101,9 @@ export default function MSipDebug() {
     try {
       if (nativePlatform) await nativeSip.repairRegistration();
       else await ppSipProvider.forceReregister?.();
+      // Reprise de la ligne si le service d'arrière-plan la tient encore.
+      resetOwnershipRepairBackoff();
+      await ensureForegroundOwnership().catch(() => undefined);
       const res = await checkSipBackendRegistration({ force: true, minIntervalMs: 0 });
       if (res) setPbx(res);
       toast(nativeSip.isRegistered() || res?.registration?.mobile_registered
@@ -202,7 +206,26 @@ export default function MSipDebug() {
           <div className="col-span-2 truncate"><span className="opacity-60">AOR</span> {pbx?.registration?.mobile_aor ?? "—"}</div>
           <div><span className="opacity-60">Push</span> {pbx?.push?.token_present ? (lang === "fr" ? "actif" : "active") : (lang === "fr" ? "absent" : "missing")}</div>
           <div><span className="opacity-60">{lang === "fr" ? "Abonnement appels" : "Call subscription"}</span> {pbx?.call_subscription ? (lang === "fr" ? "actif" : "active") : "—"}</div>
+          <div><span className="opacity-60">{lang === "fr" ? "Ligne tenue par" : "Line held by"}</span>{" "}
+            {pbx?.registration?.holder === "app"
+              ? (lang === "fr" ? "l'application" : "the app")
+              : pbx?.registration?.holder === "background"
+                ? (lang === "fr" ? "service d'arrière-plan" : "background service")
+                : "—"}
+          </div>
+          <div><span className="opacity-60">{lang === "fr" ? "Depuis" : "Since"}</span>{" "}
+            {pbx?.registration?.registered_at
+              ? new Date(pbx.registration.registered_at).toLocaleTimeString(lang === "fr" ? "fr-CA" : "en-CA")
+              : "—"}
+          </div>
         </div>
+        {pbx?.registration?.holder === "background" && (
+          <button onClick={() => { void repair(); }} disabled={repairing}
+            className="w-full py-2 rounded-lg text-[12px] font-semibold disabled:opacity-60"
+            style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>
+            {lang === "fr" ? "Réparer maintenant" : "Repair now"}
+          </button>
+        )}
         {!pbxRegistered && (
           <p className="text-[11px]" style={{ color: "#F59E0B" }}>
             {lang === "fr"

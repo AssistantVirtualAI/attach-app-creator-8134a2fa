@@ -6,6 +6,9 @@ import { ppSipProvider, type PpSipEvent, type PpSipSnapshot } from "@/lib/planip
 import { exportSipStability, getSipStabilityReport, resetSipStability } from "@/lib/planipret/sip/sipStabilityMonitor";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { checkSipBackendRegistration, getLastSipBackendCheck, type SipBackendCheck } from "@/lib/planipret/sip/sipBackendCheck";
+import { nativeSip, type SipRegistrationState } from "@/lib/planipret/sip/nativeSipService";
+import { ensureForegroundOwnership, resetOwnershipRepairBackoff } from "@/lib/planipret/sip/sipOwnershipRepair";
+import { Capacitor } from "@capacitor/core";
 
 const STAGES = ["idle", "connecting", "connected", "registered"] as const;
 
@@ -36,11 +39,25 @@ export default function MSipDebug() {
   const [snap, setSnap] = useState<PpSipSnapshot>(() => ppSipProvider.getSnapshot());
   const [events, setEvents] = useState<PpSipEvent[]>(() => ppSipProvider.getEvents());
   const [pbx, setPbx] = useState<SipBackendCheck | null>(() => getLastSipBackendCheck());
+  const [nativeState, setNativeState] = useState<SipRegistrationState>(() => nativeSip.getState());
+  const [repairing, setRepairing] = useState(false);
 
   useEffect(() => {
     const us = ppSipProvider.subscribe(setSnap);
     const ue = ppSipProvider.subscribeEvents(setEvents);
     return () => { us(); ue(); };
+  }, []);
+
+  useEffect(() => {
+    const onNativeState = (event: Event) => {
+      const detail = (event as CustomEvent<{ state?: SipRegistrationState }>).detail;
+      if (detail?.state) setNativeState(detail.state);
+    };
+    window.addEventListener("sip-registration-state", onNativeState);
+    void nativeSip.refreshState().then((state) => {
+      if (state?.registered) setNativeState("registered");
+    });
+    return () => window.removeEventListener("sip-registration-state", onNativeState);
   }, []);
 
   // Live PBX-side truth: the local stack can be idle while the extension is
@@ -59,11 +76,43 @@ export default function MSipDebug() {
   }, []);
 
   const cfg = ppSipProvider.getConfig();
+  const nativePlatform = Capacitor.isNativePlatform();
   const pbxRegistered = Boolean(pbx?.registration?.mobile_registered);
-  const status = pbxRegistered && snap.status !== "registered" ? "registered" : snap.status;
+  const status = nativePlatform
+    ? (nativeState === "registered" || pbxRegistered
+      ? "registered"
+      : nativeState === "failed" ? "error" : nativeState === "unavailable" ? "disconnected" : nativeState)
+    : (pbxRegistered && snap.status !== "registered" ? "registered" : snap.status);
   const rawIdx = STAGES.indexOf(status as any);
   const currentIdx = rawIdx >= 0 ? rawIdx : 0;
-  const isError = status === "error";
+  const nativeUnavailable = nativePlatform && nativeState === "unavailable";
+  const isError = status === "error" && !nativeUnavailable;
+  const pbxDomain = pbx?.registration?.mobile_aor?.split("@")[1] ?? null;
+  const serverColor = pbxRegistered ? "#10B981" : pbx ? "#F59E0B" : "#94A3B8";
+  const serverLabel = pbxRegistered
+    ? (lang === "fr" ? "CONNECTÉ" : "CONNECTED")
+    : pbx
+      ? (lang === "fr" ? "SERVEUR OK" : "SERVER OK")
+      : (lang === "fr" ? "VÉRIFICATION" : "CHECKING");
+
+  const repair = async () => {
+    if (repairing) return;
+    setRepairing(true);
+    try {
+      if (nativePlatform) await nativeSip.repairRegistration();
+      else await ppSipProvider.forceReregister?.();
+      // Reprise de la ligne si le service d'arrière-plan la tient encore.
+      resetOwnershipRepairBackoff();
+      await ensureForegroundOwnership().catch(() => undefined);
+      const res = await checkSipBackendRegistration({ force: true, minIntervalMs: 0 });
+      if (res) setPbx(res);
+      toast(nativeSip.isRegistered() || res?.registration?.mobile_registered
+        ? (lang === "fr" ? "Ligne mobile enregistrée" : "Mobile line registered")
+        : t("screens.sipDebug.reregisterSent"));
+    } finally {
+      setRepairing(false);
+    }
+  };
 
 
   const copy = async () => {
@@ -96,9 +145,9 @@ export default function MSipDebug() {
           style={{ background: "var(--pp-bg-elevated)", border: "1px solid var(--pp-bg-border-2)", color: "var(--pp-text-secondary)" }}>
           <Trash2 className="w-3 h-3" /> {t("screens.sipDebug.clear")}
         </button>
-        <button onClick={() => { ppSipProvider.forceReregister?.(); toast(t("screens.sipDebug.reregisterSent")); }} className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold"
+        <button onClick={() => { void repair(); }} disabled={repairing} className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold disabled:opacity-60"
           style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>
-          <RefreshCw className="w-3 h-3" /> {t("screens.sipDebug.reregister")}
+          <RefreshCw className={`w-3 h-3 ${repairing ? "animate-spin" : ""}`} /> {t("screens.sipDebug.reregister")}
         </button>
       </header>
 
@@ -118,20 +167,74 @@ export default function MSipDebug() {
           ))}
         </div>
 
-        {snap.errorCause && !pbxRegistered && (
-          <div className="flex items-start gap-2 p-2 rounded-lg" style={{ background: "rgba(239,68,68,0.08)", color: "#EF4444" }}>
+        {(isError || (nativeUnavailable && status !== "registered")) && (
+          <div className="flex items-start gap-2 p-2 rounded-lg"
+            style={{ background: nativeUnavailable ? "rgba(59,130,246,0.08)" : "rgba(239,68,68,0.08)", color: nativeUnavailable ? "#3B82F6" : "#EF4444" }}>
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span className="text-[12px]">{snap.errorCause}</span>
+            <span className="text-[12px]">
+              {nativeUnavailable
+                ? (lang === "fr"
+                  ? "Aperçu web : le module d'appel natif n'est pas chargé. Les appels passent en mode REST. Installez l'app pour le SIP natif."
+                  : "Web preview: the native calling module is not loaded. Calls use REST mode. Install the app for native SIP.")
+                : snap.errorCause ?? (lang === "fr" ? "Échec de l’inscription SIP native" : "Native SIP registration failed")}
+            </span>
           </div>
         )}
 
         <div className="grid grid-cols-2 gap-2 text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
           <div><span className="opacity-60">{t("screens.sipDebug.extShort")}</span> {cfg?.sipUsername ?? pbx?.extension ?? "—"}</div>
-          <div><span className="opacity-60">{t("screens.sipDebug.domainShort")}</span> {cfg?.sipDomain ?? "—"}</div>
+          <div><span className="opacity-60">{t("screens.sipDebug.domainShort")}</span> {cfg?.sipDomain ?? pbxDomain ?? "—"}</div>
           <div className="col-span-2 truncate"><span className="opacity-60">{t("screens.sipDebug.wssShort")}</span> {cfg?.wssUrl ?? "—"}</div>
           <div className="col-span-2"><span className="opacity-60">{t("screens.sipDebug.lastRegistration")}</span> {snap.lastRegistrationAt ? new Date(snap.lastRegistrationAt).toLocaleTimeString(lang === "fr" ? "fr-CA" : "en-CA") : "—"}</div>
         </div>
       </section>
+
+      {/* Phone system (server-side truth) */}
+      <section className="pp-card p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Radio className="w-4 h-4" style={{ color: serverColor }} />
+          <span className="font-bold text-sm" style={{ color: "var(--pp-text-primary)" }}>
+            {lang === "fr" ? "Système téléphonique" : "Phone system"}
+          </span>
+          <span className="ml-auto px-2 py-0.5 rounded-full text-[11px] font-bold" style={{ background: serverColor, color: "#fff" }}>
+            {serverLabel}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[11px]" style={{ color: "var(--pp-text-secondary)" }}>
+          <div><span className="opacity-60">{lang === "fr" ? "Serveur" : "Server"}</span> {pbx ? (lang === "fr" ? "joignable" : "reachable") : "—"}</div>
+          <div><span className="opacity-60">{lang === "fr" ? "Inscriptions" : "Registrations"}</span> {pbx?.registration?.count ?? 0}</div>
+          <div className="col-span-2 truncate"><span className="opacity-60">AOR</span> {pbx?.registration?.mobile_aor ?? "—"}</div>
+          <div><span className="opacity-60">Push</span> {pbx?.push?.token_present ? (lang === "fr" ? "actif" : "active") : (lang === "fr" ? "absent" : "missing")}</div>
+          <div><span className="opacity-60">{lang === "fr" ? "Abonnement appels" : "Call subscription"}</span> {pbx?.call_subscription ? (lang === "fr" ? "actif" : "active") : "—"}</div>
+          <div><span className="opacity-60">{lang === "fr" ? "Ligne tenue par" : "Line held by"}</span>{" "}
+            {pbx?.registration?.holder === "app"
+              ? (lang === "fr" ? "l'application" : "the app")
+              : pbx?.registration?.holder === "background"
+                ? (lang === "fr" ? "service d'arrière-plan" : "background service")
+                : "—"}
+          </div>
+          <div><span className="opacity-60">{lang === "fr" ? "Depuis" : "Since"}</span>{" "}
+            {pbx?.registration?.registered_at
+              ? new Date(pbx.registration.registered_at).toLocaleTimeString(lang === "fr" ? "fr-CA" : "en-CA")
+              : "—"}
+          </div>
+        </div>
+        {pbx?.registration?.holder === "background" && (
+          <button onClick={() => { void repair(); }} disabled={repairing}
+            className="w-full py-2 rounded-lg text-[12px] font-semibold disabled:opacity-60"
+            style={{ background: "var(--pp-brand-accent)", color: "#fff" }}>
+            {lang === "fr" ? "Réparer maintenant" : "Repair now"}
+          </button>
+        )}
+        {!pbxRegistered && (
+          <p className="text-[11px]" style={{ color: "#F59E0B" }}>
+            {lang === "fr"
+              ? "Aucun appareil inscrit : ouvrez l'app installée jusqu'à l'état « Enregistré » pour recevoir les appels."
+              : "No device registered: open the installed app until it shows “Registered” to receive calls."}
+          </p>
+        )}
+      </section>
+
 
 
       {/* 24h stability soak */}

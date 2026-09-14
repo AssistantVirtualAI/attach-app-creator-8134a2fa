@@ -50,6 +50,7 @@ import {
 } from "@/lib/planipret/sip/nativePpSipService";
 import { addDedupedCapListener } from "@/lib/planipret/sip/capListeners";
 import { checkSipBackendRegistration } from "@/lib/planipret/sip/sipBackendCheck";
+import { ensureForegroundOwnership, resetOwnershipRepairBackoff } from "@/lib/planipret/sip/sipOwnershipRepair";
 import { nativeSip } from "@/lib/planipret/sip/nativeSipService";
 import { decideOutboundRoute } from "@/lib/planipret/sip/outboundRoute";
 
@@ -858,7 +859,15 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
        evaluate();
        // Backend fallback: the client can look "registered" while NS holds no
        // live binding. Ask the backend for the real state and self-heal.
-       void checkSipBackendRegistration().then((check) => {
+       void checkSipBackendRegistration({ force: true, minIntervalMs: 0 }).then((check) => {
+         // Un seul propriétaire de l'AOR au premier plan : si le service de
+         // maintien tient encore la ligne, l'app la reprend (avec backoff).
+         if (check?.registration?.holder === "background") {
+           void ensureForegroundOwnership(check).then((r) => {
+             if (r.attempted) console.info(`[pp-sip] reprise de la ligne → ${r.repaired ? "app" : r.holder}`);
+             handedOffToNative = false;
+           });
+         }
          if (!check || check.healthy) return;
          console.warn("[pp-sip] backend registration check unhealthy", check);
          if (check.actions?.includes("reregister")) {
@@ -897,6 +906,7 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
             // isActive:false blips and a late handoff would restart the native
             // stack while JsSIP is registered (WSS 1001 loop).
             cancelPendingHandoff();
+            resetOwnershipRepairBackoff();
             resumeSip();
           } else {
             scheduleHandoff();
@@ -908,11 +918,17 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // Foreground-only watchdog. Background ownership is transferred exactly
     // once by the real lifecycle events above; a periodic handoff restarted the
     // native service every 15s and caused competing NetSapiens AOR bindings.
+    let ownershipTick = 0;
     const heartbeat = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
         return;
       }
       evaluate();
+      // Toutes les 2 min : le serveur a-t-il toujours l'app comme propriétaire
+      // de la ligne ? Sinon, reprise automatique (backoff interne au module).
+      if (++ownershipTick % 8 === 0) {
+        void ensureForegroundOwnership().catch(() => undefined);
+      }
     }, 15_000);
     // Initial evaluation — don't wait for the first SIP event.
     evaluate();

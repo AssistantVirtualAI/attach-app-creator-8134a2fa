@@ -448,16 +448,21 @@ Deno.serve(async (req) => {
         } catch (e) {
           console.warn("[pp-ns-calls] failed to mark row ended", (e as Error).message);
         }
-        // Mirror end to Maestro Telecom — fire-and-forget by maestro_call_id
-        // if we captured one, otherwise by the NS provider_call_id.
+        // Mirror end to Maestro Telecom. Only a real Maestro call id can be
+        // PUT on /calls/{id}: Maestro keys that route on its own TelecomCall
+        // model, so sending the NetSapiens/local id always answered
+        // 404 "No query results for model [TelecomCall]". When the call has
+        // not been published yet we hand it to maestro-cdr, which creates the
+        // record and then marks it ended with the id Maestro returned.
         if (ctx.maestroBrokerId) {
           try {
             const { data: row } = await guard.supabase
               .from("planipret_phone_calls")
-              .select("maestro_call_id")
-              .or(`ns_callid.eq.${callId},ns_call_id.eq.${callId}`)
+              .select("id, maestro_call_id")
+              .or(`id.eq.${callId},ns_callid.eq.${callId},ns_call_id.eq.${callId}`)
               .maybeSingle();
             const maestroId = (row as any)?.maestro_call_id;
+            const localId = (row as any)?.id;
             const endedReason = nsAction === "reject" ? "rejected" : "completed";
             if (maestroId) {
               maestroTelecomMirror(
@@ -465,14 +470,12 @@ Deno.serve(async (req) => {
                 `/users/${encodeURIComponent(ctx.maestroBrokerId)}/calls/${encodeURIComponent(maestroId)}`,
                 { method: "PUT", body: { status: "ended", ended_reason: endedReason }, action: "call.end", userId: ctx.userId },
               );
+            } else if (localId) {
+              void guard.supabase.functions
+                .invoke("maestro-cdr", { body: { call_id: localId } })
+                .catch((e: unknown) => console.warn("[pp-ns-calls] maestro-cdr invoke failed:", (e as Error)?.message));
             } else {
-              // No maestro id — try updating by provider_call_id path (some
-              // Maestro deployments accept it interchangeably).
-              maestroTelecomMirror(
-                guard.supabase,
-                `/users/${encodeURIComponent(ctx.maestroBrokerId)}/calls/${encodeURIComponent(String(callId))}`,
-                { method: "PUT", body: { status: "ended", ended_reason: endedReason }, action: "call.end", userId: ctx.userId },
-              );
+              console.warn(`[pp-ns-calls] no local call row for ${callId}; Maestro end skipped`);
             }
           } catch (e) {
             console.warn("[pp-ns-calls] maestro mirror (end) failed:", (e as Error)?.message);

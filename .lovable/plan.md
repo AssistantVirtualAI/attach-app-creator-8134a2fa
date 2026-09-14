@@ -1,38 +1,42 @@
-# Valider et réparer l'enregistrement téléphonique — sans nouvelle soumission
+# Enregistrement mobile + test en profondeur du système téléphonique
 
-Objectif : confirmer que l'application mobile déjà installée s'enregistre bien sur le système téléphonique pour chaque courtier, et corriger ce qui cloche en utilisant uniquement le serveur et la mise à jour à distance du contenu de l'app (pas de passage par l'App Store).
+Deux objectifs : (1) confirmer et réparer l'enregistrement de l'app mobile sur le système téléphonique sans passer par une nouvelle soumission, (2) tester chaque fonctionnalité téléphonique pour tous les courtiers avant la prochaine mise à jour.
 
-## Ce qui est possible sans soumission
+## Ce qui est réparable sans soumission
 
-- Tout ce qui vit côté serveur : création/alignement du poste mobile, réglages du poste, réveil des appareils, jeton de notification, abonnements d'événements.
-- Le contenu web de l'app, qui se met à jour tout seul au démarrage (canal « prod » déjà en place, version actuelle 1.0.21).
-- Ce qui reste impossible sans nouvelle version : le moteur d'appel natif. L'enregistrement et l'état « en ligne » peuvent être réparés; l'audio des appels dépend toujours d'une build native complète.
+- Tout le serveur : postes mobiles, mots de passe, réglages, réveil des appareils, jetons de notification, abonnements d'événements, boîte vocale, textos, enregistrements.
+- Le contenu web de l'app, qui se met à jour seul au démarrage (canal « prod », version 1.0.21).
+- Exception : le moteur d'appel natif. L'audio des appels exige une build native complète — c'est le seul point qui impose une soumission.
 
-## Étapes
+## Partie 1 — Enregistrement mobile
 
-1. **Mesure de l'état réel**
-   - Interroger le système téléphonique pour les 40 postes : poste mobile présent, mot de passe aligné, enregistrement vivant, échéance, jeton de notification, abonnement d'appel.
-   - Produire un tableau clair : qui est enregistré, qui ne l'est pas, et la raison exacte de chaque échec.
+1. **Mesure réelle** sur les 40 postes : poste mobile présent, mot de passe aligné, enregistrement vivant, échéance, jeton de réveil, abonnement d'appel. Tableau : qui est en ligne, qui ne l'est pas, et pourquoi.
+2. **Correction serveur** : réaligner les postes mal configurés, recréer les abonnements manquants, réenregistrer les jetons périmés, forcer un réenregistrement puis revérifier.
+3. **Auto-réparation livrée à distance** : au réveil de l'app, détecter « je me crois en ligne mais le serveur ne me voit pas », réparer, afficher un état honnête, avec relance espacée pour ne pas dupliquer l'enregistrement.
 
-2. **Correction serveur des causes trouvées**
-   - Réaligner les postes mobiles mal configurés (nom, mot de passe, transport, durée d'enregistrement, notifications activées).
-   - Recréer les abonnements d'événements manquants et réenregistrer les jetons de réveil périmés.
-   - Forcer un réenregistrement sur les postes hors ligne et revérifier après coup.
+## Partie 2 — Test en profondeur, fonctionnalité par fonctionnalité
 
-3. **Auto-réparation côté app, livrée à distance**
-   - Renforcer le contrôle au réveil de l'app : détecter « je me crois en ligne mais le serveur ne me voit pas », réparer, et afficher un état honnête.
-   - Ajouter une relance espacée (évite de dupliquer l'enregistrement et de couper la ligne précédente).
-   - Publier ce contenu comme mise à jour à distance : les courtiers l'auront au prochain démarrage, sans rien installer.
+Pour chacune : un test réel sur le poste 113, puis un échantillon d'autres courtiers, puis une vérification de couverture sur les 40 comptes.
 
-4. **Validation**
-   - Test sur le poste 113 : déconnexion/reconnexion, mise en arrière-plan, retour au premier plan — vérifier chaque fois côté serveur que la ligne mobile est bien vivante.
-   - Test sur un échantillon d'autres courtiers.
-   - Rapport final : nombre de postes enregistrés avant/après, cas restants et pourquoi.
+- Appels sortants : composition, sonnerie, audio, raccrochage, journal.
+- Appels entrants : réveil de l'app, sonnerie, prise d'appel, refus, renvoi.
+- En cours d'appel : muet, haut-parleur, attente, clavier, transfert simple et supervisé, second appel et conférence.
+- Boîte vocale : enregistrement de sa voix, voix de synthèse, publication et activation, écoute, transcription, résumé, suppression — pour tous les courtiers, pas seulement le poste 113.
+- Messages texte : envoi, réception, fil sans doublons.
+- Enregistrements d'appels : activation, stockage, lecture.
+- Avis d'enregistrement et règles de réponse : entrants seulement, routage DID intact.
+- Notifications et réveil : app fermée, arrière-plan, premier plan.
+- Remontée vers Maestro : appels, textos, résumés.
+
+## Livrable
+
+Rapport par fonctionnalité : testé / réparé / bloqué, avec la cause exacte et le nombre de courtiers couverts. Feu vert ou non pour la soumission, clairement énoncé.
 
 ## Détails techniques
 
-- Lecture : `pp-sip-registration-check` (lecture seule), `/domains/{d}/users/{e}/devices`, `pp-mobile-device-status`.
-- Écriture : `ns-resolve-sip-credentials` (provisionnement `<ext>M`), `pp-admin-sip-ops` (`force_register`, `force_register_all`, `reprovision`), `mobile-register-push`, abonnements webhook `call`.
-- Côté app (OTA) : `src/lib/planipret/sip/sipBackendCheck.ts`, `sipStabilityMonitor.ts`, `aorTransportRecovery.ts`, `nativePpSipService.ts` — pas de code natif touché.
-- Publication : `mobile-release-publish` + `mobile-config` (canal `prod`), bundle appliqué au redémarrage suivant.
-- Invariants respectés : aucune écriture DID/règles de réponse, propriété exclusive de l'AOR `<ext>M`, pas de REGISTER en double, aucun secret journalisé.
+- Lecture : `pp-sip-registration-check`, `/domains/{d}/users/{e}/devices`, `pp-mobile-device-status`, CDR.
+- Écriture : `ns-resolve-sip-credentials` (poste `<ext>M`), `pp-admin-sip-ops` (`force_register`, `force_register_all`, `reprovision`), `mobile-register-push`, abonnements webhook `call`.
+- Boîte vocale : `pp-greeting-record`, `pp-greeting-generate`, `pp-ns-voicemail`, `ns-transcription`.
+- Côté app (mise à jour à distance) : `sipBackendCheck.ts`, `sipStabilityMonitor.ts`, `aorTransportRecovery.ts`, `outboundRoute.ts` — aucun code natif touché.
+- Publication : `mobile-release-publish` + `mobile-config` (canal `prod`).
+- Invariants : aucune écriture DID ni règles de réponse, propriété exclusive de l'AOR `<ext>M`, pas de REGISTER en double, aucun secret journalisé, aucune donnée réelle de courtier altérée (tout test restauré à l'état initial).

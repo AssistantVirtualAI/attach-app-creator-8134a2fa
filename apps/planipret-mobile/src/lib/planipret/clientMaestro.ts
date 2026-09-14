@@ -40,6 +40,9 @@ export interface ClientCall {
   to_name: string | null;
   ai_summary: string | null;
   recording_url: string | null;
+  /** Rattachement explicite à un client Maestro, quand il a été forcé. */
+  maestro_client_name?: string | null;
+  maestro_client_id?: string | null;
 }
 
 export interface ClientMessage {

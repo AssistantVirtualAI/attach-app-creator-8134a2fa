@@ -1590,6 +1590,17 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
     // detach it on unmount (that killed remote audio mid-call).
     setAudioEl: (_el: HTMLAudioElement | null) => {},
 
+    // Deuxième ligne / conférence : gérée par la pile JsSIP uniquement. Sur un
+    // appel porté par le moteur natif, CallKit possède la session et ces
+    // commandes n'ont pas d'équivalent — l'écran masque alors les boutons.
+    multiLineSupported: !nativeSip.getCallId(),
+    callSecond: (n: string) => ppSipProvider.callSecond(n),
+    hangupSecond: () => ppSipProvider.hangupSecond(),
+    swapLines: () => ppSipProvider.swapLines(),
+    mergeLines: () => ppSipProvider.mergeLines(),
+    answerSecond: () => ppSipProvider.answerSecond(),
+    declineSecond: () => ppSipProvider.declineSecond(),
+
     forceHandover: () => handoverController.forceHandover(),
   }), [effectiveSnap, loading, net, quality, nativeStatus, pbxRegistration, sipConnected, placeCall, answer, hangup, answeredElsewhere, attachRestCall, restCall?.id, restControl, hasLiveSipSession, applyHold]);
 

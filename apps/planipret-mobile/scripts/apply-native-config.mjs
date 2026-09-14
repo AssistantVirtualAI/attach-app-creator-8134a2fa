@@ -2362,12 +2362,21 @@ function ensurePjsipXcframework(iosRoot) {
     fs.readdirSync(abs).some((slice) => fs.existsSync(path.join(abs, slice, "Headers")));
 
   // Une app iOS sans ce binaire affiche une fausse sonnerie puis bascule vers
-  // REST sans média. Refuser le build plutôt que livrer un téléphone inutilisable.
+  // REST sans média. Les scripts de livraison exécutent ensure-pjsip-ios.sh;
+  // les builds web restent permis dans les environnements Linux sans Xcode.
   if (!present) {
-    throw new Error(`[native-config] libpjsip.xcframework absent — build iOS refusé (${rel}). Lance npm run ios:oneclick.`);
+    if (process.env.PP_REQUIRE_PJSIP === "1") {
+      throw new Error(`[native-config] libpjsip.xcframework absent — build iOS refusé (${rel}). Lance npm run ios:oneclick.`);
+    }
+    pjsipWarnings.push(`⚠ libpjsip.xcframework absent — livraison iOS interdite (${rel})`);
   } else if (!hasHeaders) {
-    throw new Error("[native-config] libpjsip.xcframework sans Headers — build iOS refusé; relance scripts/build-pjsip-ios.sh");
+    if (process.env.PP_REQUIRE_PJSIP === "1") {
+      throw new Error("[native-config] libpjsip.xcframework sans Headers — build iOS refusé; relance scripts/build-pjsip-ios.sh");
+    }
+    pjsipWarnings.push("⚠ libpjsip.xcframework sans Headers — livraison iOS interdite");
   }
+
+  if (!present) return false;
 
   const pbx = path.join(iosRoot, "App.xcodeproj", "project.pbxproj");
   if (!fs.existsSync(pbx)) return false;

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Refuse de produire une app iOS sans le moteur d'appel PJSIP natif.
 set -euo pipefail
+export PP_REQUIRE_PJSIP=1
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 FRAMEWORK="$APP_DIR/ios/App/App/Plugins/PpPjsip/Frameworks/libpjsip.xcframework"

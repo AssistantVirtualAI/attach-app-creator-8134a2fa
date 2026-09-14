@@ -674,6 +674,7 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
             className="text-[11px]" style={{ color: TOKENS.muted }}>{t("greeting.reset")}</button>
         </div>
       )}
+      </>)}
     </div>
   );
 }

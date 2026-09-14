@@ -8,7 +8,7 @@ import {
   nativeOwnsAor,
   normalizeMobileAor,
   preclaimNativeAor,
-  releaseAorFromNative,
+  releaseAorFromNative as releaseAorFromNativeRaw,
 } from "./aorArbitration";
 import { pinnedCoreHost } from "./sipEdgePolicy";
 import { trackRegisterAttempt, logRegisterMetricsSummary, type RegisterTracker } from "./registerMetrics";

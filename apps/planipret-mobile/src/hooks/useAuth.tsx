@@ -32,9 +32,9 @@ export const useAuth = () => {
             try {
               const { Capacitor } = await import('@capacitor/core');
               if (!Capacitor.isNativePlatform()) return;
-              const { nativeSipService } = await import('@/lib/planipret/sip/nativeSipService');
-              const ok = await nativeSipService.repairRegistration();
-              if (!ok) setTimeout(() => { void nativeSipService.repairRegistration().catch(() => {}); }, 8000);
+              const { nativeSip } = await import('@/lib/planipret/sip/nativeSipService');
+              const ok = await nativeSip.repairRegistration();
+              if (!ok) setTimeout(() => { void nativeSip.repairRegistration().catch(() => {}); }, 8000);
             } catch { /* jamais bloquant pour la connexion */ }
           })();
         }

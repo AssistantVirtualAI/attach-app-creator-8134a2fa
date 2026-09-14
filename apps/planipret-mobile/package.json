@@ -1,6 +1,6 @@
 {
   "name": "planipret-mobile",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "androidVersionCode": 16,
   "description": "Planiprêt — Standalone Capacitor Mobile App (iOS + Android)",
   "private": true,
@@ -54,7 +54,6 @@
     "preflight:postsync": "PP_POST_CAP_SYNC=1 node scripts/preflight-submission.mjs"
   },
   "dependencies": {
-    "dompurify": "^3.4.11",
     "@capacitor-community/bluetooth-le": "^6.1.0",
     "@capacitor-community/contacts": "^6.0.1",
     "@capacitor/android": "^6.1.2",
@@ -85,6 +84,7 @@
     "capacitor-pjsip": "file:./capacitor-pjsip",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dompurify": "^3.4.11",
     "framer-motion": "^11.15.0",
     "jssip": "^3.10.0",
     "lucide-react": "^0.462.0",

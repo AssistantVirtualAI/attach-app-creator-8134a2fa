@@ -11,12 +11,36 @@ import { Capacitor } from "@capacitor/core";
 import { getPpSipReconnectConfig, ppSipBackoffDelay, PP_SIP_RECONNECT_FLOOR_MS } from "./ppSipReconnectConfig";
 import { edgeOnlyWssUrls, isPortalWssUrl } from "./sipEdgePolicy";
 import { checkSipBackendRegistration } from "./sipBackendCheck";
+import {
+  PP_AOR_CLAIM_EVENT,
+  nativeOwnsAor,
+  normalizeMobileAor,
+  preclaimNativeAor,
+} from "./aorArbitration";
+
+// Résout la propriété AOR avant toute création d'UA JsSIP.
+preclaimNativeAor();
+
 
 // Let the SBC finish removing the previous Contact before a replacement UA
 // REGISTERs the same AOR. Without this gap NetSapiens closes one WSS with 1001.
 const PP_SIP_UA_SWAP_DELAY_MS = 800;
 /** Must remain shorter than the native CallKit answer watchdog (32s). */
 export const PP_PENDING_ANSWER_TIMEOUT_MS = 30_000;
+
+// One owner per AOR: the native PJSIP engine announces itself with
+// `pp:sip-native-owns-aor`, after which JsSIP must never REGISTER again.
+// The authoritative state lives in `aorArbitration` (persisted + pre-claimed
+// on native platforms before any JsSIP UA can race it).
+export const ppNativeSipOwnsAor = () => nativeOwnsAor();
+if (typeof window !== "undefined") {
+  window.addEventListener(PP_AOR_CLAIM_EVENT, () => {
+    // Tear down any live WebView registration immediately: leaving it bound
+    // makes NetSapiens close the native branch with a 1001.
+    try { ppSipProvider?.yieldAorToNative(); } catch { /* provider not built yet */ }
+  });
+}
+
 
 export type PpSipStatus = "idle" | "connecting" | "connected" | "registered" | "disconnected" | "error";
 export type PpCallState = "idle" | "ringing-out" | "ringing-in" | "active" | "held" | "ended";
@@ -44,6 +68,10 @@ export interface PpSipSnapshot {
   startedAt: number | null;
   errorCause?: string;
   lastRegistrationAt: number | null;
+  /** 2e ligne (appel supplémentaire) — null quand il n'y en a pas. */
+  second?: { state: PpCallState; number: string; name: string; startedAt: number | null } | null;
+  /** true quand les deux lignes sont fusionnées en conférence à trois. */
+  conference?: boolean;
 }
 
 
@@ -106,16 +134,6 @@ function sipToken(value: string): string {
     .slice(0, 48) || "pp";
 }
 
-/** "mobile" dans l'app native Capacitor, "web" dans un navigateur. */
-function ppUaTag(): "mobile" | "web" {
-  try { return Capacitor.isNativePlatform() ? "mobile" : "web"; } catch { return "web"; }
-}
-
-/** User-Agent SIP lisible côté NetSapiens pour identifier le client. */
-function ppUserAgent(): string {
-  return ppUaTag() === "mobile" ? "Planipret Mobile/1.0" : "Planipret Web/1.0";
-}
-
 function buildContactUri(cfg: PpSipConfig): string {
   // Device AORs are case-sensitive in this NetSapiens tenant (`113M`, not
   // `113m`). Do not pass the Contact user through sipToken(), which lowercases.
@@ -127,9 +145,7 @@ function buildContactUri(cfg: PpSipConfig): string {
   // NS-API v2 documents the registration URI as sip:[device]@[domain]. The
   // edge SBC belongs only in the WSS transport URL, never in the SIP AOR.
   const host = /^[a-z0-9.-]+$/.test(domain) ? domain : "planipret.ca";
-  // Tag d'identification du client dans le Contact NS : `pp-ua=mobile-<ext>`
-  // pour la WebView Capacitor, `pp-ua=web-<ext>` pour le portail navigateur.
-  return `sip:${user}@${host};transport=wss;pp-ua=${ppUaTag()}-${ext}`;
+  return `sip:${user}@${host};transport=wss;pp-ua=web-${ext}`;
 }
 
 function isKnownJsSipParserCrash(value: unknown): boolean {
@@ -164,6 +180,12 @@ type EventsListener = (e: PpSipEvent[]) => void;
 class PpSipProvider {
   private ua: any = null;
   private session: any = null;
+  /** 2e ligne (multi-appel / conférence). */
+  private secondSession: any = null;
+  private expectingSecond = false;
+  private confCtx: AudioContext | null = null;
+  private confMic: MediaStream | null = null;
+  private secondAudioEl: HTMLAudioElement | null = null;
   private cfg: PpSipConfig | null = null;
   private listeners = new Set<Listener>();
   private eventListeners = new Set<EventsListener>();
@@ -370,6 +392,14 @@ class PpSipProvider {
   }
 
   private guardedRegister(reason: string, options: { priority?: boolean } = {}): boolean {
+    // A native SIP engine (PJSIP) holding the AOR is the single owner: a JS
+    // REGISTER on the same AOR makes NetSapiens close the native branch (1001).
+    if (ppNativeSipOwnsAor()) {
+      this.log("warn", `REGISTER blocked: native SIP owns AOR (${reason})`);
+      this.pushHistory("blocked", "native_owns_aor");
+      this.emitMetrics();
+      return false;
+    }
     const ua = this.ua;
     if (!ua?.isConnected?.()) {
       // An inbound call cannot wait for the backoff curve: rebuild now.
@@ -429,12 +459,38 @@ class PpSipProvider {
 
   async init(cfg: PpSipConfig) {
     if (ppSipInitInFlight) return;
+    // Sur plateforme native, l'AOR mobile `<ext>M` appartient EXCLUSIVEMENT au
+    // moteur natif : un UA JsSIP sur cette AOR la lui volerait (WSS 1001,
+    // INVITE entrants détournés). En revanche l'AOR navigateur `<ext>W` est un
+    // device distinct : quand le moteur natif est absent du binaire installé,
+    // c'est le seul moyen de porter de l'audio sans nouvelle soumission.
+    const jsUsername = String(cfg.sipUsername || cfg.extension || "").trim();
+    const isMobileAor = /M$/.test(jsUsername);
+    if (Capacitor.isNativePlatform() && isMobileAor) {
+      this.log("error", "JsSIP init blocked on native platform — `<ext>M` belongs to the native engine");
+      this.pushHistory("blocked", "native_platform_jssip_forbidden");
+      this.emitMetrics();
+      if (this.ua) this.yieldAorToNative();
+      this.update({ status: "error", errorCause: "native_sip_unavailable" });
+      return;
+    }
+    // Arbitrage d'AOR : le moteur natif PJSIP est le seul REGISTER autorisé sur
+    // `<ext>M`. Créer un UA JsSIP ici (register:true) rouvrirait la course qui
+    // provoque les WSS 1001.
+    if (nativeOwnsAor() && isMobileAor) {
+      this.log("warn", "JsSIP init blocked: native PJSIP owns the AOR");
+      this.pushHistory("blocked", "native_owns_aor_init");
+      this.emitMetrics();
+      if (this.ua) this.yieldAorToNative();
+      return;
+    }
     installSipParserGuard();
     const rawWssUrl = String(cfg.wssUrl ?? "").trim();
     if (!cfg.extension || !cfg.sipDomain || !rawWssUrl || rawWssUrl === "undefined" || !/^wss?:\/\//i.test(rawWssUrl) || !cfg.password) {
       this.update({ status: "error", errorCause: "invalid_config" });
       return;
     }
+
     // Registrations must live on a call-processing core node (core1/core2);
     // the portal server accepts REGISTER but does not deliver inbound calls.
     const edgeUrls = edgeOnlyWssUrls([rawWssUrl, ...(cfg.wssUrls || [])]);
@@ -442,7 +498,13 @@ class PpSipProvider {
       this.log("warn", `portal WSS target rejected (${rawWssUrl}) -> using core ${edgeUrls[0]}`);
     }
     const wssUrl = edgeUrls[0];
-    const cleanCfg = { ...cfg, wssUrl, wssUrls: edgeUrls };
+    // Invariant d'AOR : la WebView ne peut REGISTER que `<ext>M`.
+    const mobileAor = normalizeMobileAor(cfg.sipUsername || cfg.extension);
+    if (mobileAor && mobileAor !== cfg.sipUsername) {
+      this.log("warn", `AOR normalisé ${cfg.sipUsername} -> ${mobileAor}`);
+    }
+    const cleanCfg = { ...cfg, sipUsername: mobileAor || cfg.sipUsername, wssUrl, wssUrls: edgeUrls };
+
     const sig = `${cleanCfg.extension}|${cleanCfg.sipDomain}|${cleanCfg.wssUrl}|${cleanCfg.password}`;
     if (this.ua && sig === this.lastSig && this.snap.status === "registered") {
       return;
@@ -514,7 +576,7 @@ class PpSipProvider {
         register_expires: reconnectConfig.registerExpiresSec,
         connection_recovery_min_interval: Math.max(3, Math.ceil(reconnectConfig.socketBackoffMinMs / 1000)),
         connection_recovery_max_interval: Math.max(3, Math.ceil(reconnectConfig.socketBackoffMaxMs / 1000)),
-        user_agent: ppUserAgent(),
+        user_agent: "Planipret Softphone 1.0",
       });
 
       try {
@@ -629,8 +691,27 @@ class PpSipProvider {
       });
       ua.on("newRTCSession", (e: any) => {
         if (!isCurrentUa()) return;
+        // 2e appel demandé par l'utilisateur : ne jamais écraser la ligne 1.
+        if (this.expectingSecond && e.originator === "local") {
+          this.expectingSecond = false;
+          this.attachSecondSession(e.session);
+          return;
+        }
+        // Appel entrant pendant un appel en cours = appel en attente.
+        // Sans cette branche, le nouvel INVITE écrasait la session active et
+        // l'appel courant était perdu.
+        if (e.originator === "remote" && this.session && this.isLineBusy()) {
+          if (this.secondSession) {
+            // Deux lignes déjà occupées → 486 Busy Here.
+            try { e.session.terminate({ status_code: 486, reason_phrase: "Busy Here" }); } catch {}
+            return;
+          }
+          this.attachSecondSession(e.session, true);
+          return;
+        }
         this.attachSession(e.session, e.originator);
       });
+
 
       this.ua = ua;
       ua.start();
@@ -832,6 +913,32 @@ class PpSipProvider {
     // keeping it after the call ends blocks every later REGISTER refresh.
     this.pendingAnswer = null;
     this.pendingDecline = null;
+
+    // Si une 2e ligne existe encore, elle devient l'appel courant au lieu de
+    // fermer l'écran d'appel.
+    if (this.secondSession) {
+      const promoted = this.secondSession;
+      const info = this.snap.second;
+      this.secondSession = null;
+      this.teardownConferenceMix();
+      this.session = promoted;
+      try { promoted.unhold(); } catch {}
+      this.update({
+        callState: "active",
+        remoteIdentity: info?.name || info?.number || "",
+        remoteNumber: info?.number || "",
+        direction: "out",
+        startedAt: info?.startedAt ?? Date.now(),
+        muted: false,
+        onHold: false,
+        second: null,
+        conference: false,
+      });
+      this.attachRemoteAudio((promoted as any).connection);
+      return;
+    }
+
+    this.teardownConferenceMix();
     this.update({
       callState: "idle",
       remoteIdentity: "",
@@ -841,32 +948,31 @@ class PpSipProvider {
       startedAt: null,
       muted: false,
       onHold: false,
+      second: null,
+      conference: false,
     });
   }
 
 
   async call(number: string) {
     if (!this.cfg || !this.ua) throw new Error("softphone_not_registered");
-    // Le SIP URI n'accepte ni espaces ni ponctuation : « (438) 953-4902 »
-    // produit une URI invalide et l'INVITE n'est jamais émis (aucune sonnerie).
-    // Postes internes (2–6 chiffres) : composés bruts. Sinon : E.164.
-    const raw = String(number ?? "").trim();
-    const digits = raw.replace(/\D/g, "");
-    let dest: string;
-    if (/^\d{2,6}$/.test(digits) && !raw.startsWith("+")) dest = digits;
-    else if (raw.startsWith("+")) dest = `+${digits}`;
-    else if (digits.length === 10) dest = `+1${digits}`;
-    else if (digits.length === 11 && digits.startsWith("1")) dest = `+${digits}`;
-    else dest = digits || raw;
-    if (!dest) throw new Error("invalid_destination");
-    this.update({ callState: "ringing-out", remoteIdentity: dest, remoteNumber: dest, direction: "out", errorCause: undefined });
+    // Ligne 1 : on repart toujours d'un état propre. Un drapeau `expectingSecond`
+    // resté armé (2e appel avorté) détournerait cet appel vers la ligne 2 et
+    // l'écran d'appel ne s'ouvrirait jamais.
+    this.expectingSecond = false;
+    if (!this.session && this.secondSession) {
+      try { this.secondSession.terminate(); } catch {}
+      this.secondSession = null;
+      this.update({ second: null });
+    }
+    this.update({ callState: "ringing-out", remoteIdentity: number, remoteNumber: number, direction: "out", errorCause: undefined });
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         video: false,
       });
-      const target = `sip:${dest}@${this.cfg.sipDomain}`;
 
+      const target = `sip:${number}@${this.cfg.sipDomain}`;
       const session = this.ua.call(target, {
         mediaStream,
         mediaConstraints: { audio: true, video: false },
@@ -950,9 +1056,18 @@ class PpSipProvider {
     }
   }
 
-  hangup() { try { this.session?.terminate(); } catch {} }
-  mute() { this.session?.mute({ audio: true }); }
-  unmute() { this.session?.unmute({ audio: true }); }
+  hangup() {
+    // En conférence / 2e ligne : raccrocher termine TOUTES les jambes.
+    try { this.secondSession?.terminate(); } catch {}
+    this.secondSession = null;
+    this.teardownConferenceMix();
+    try { this.session?.terminate(); } catch {}
+  }
+  mute() { this.session?.mute({ audio: true }); this.update({ muted: true }); }
+  unmute() { this.session?.unmute({ audio: true }); this.update({ muted: false }); }
+  /** Native PJSIP calls have no JsSIP session: reflect their mute state in the snapshot. */
+  setMutedFlag(muted: boolean) { this.update({ muted }); }
+
   hold() { this.session?.hold(); }
   unhold() { this.session?.unhold(); }
   sendDTMF(k: string) { this.session?.sendDTMF(k, { duration: 100, interToneGap: 70 }); }
@@ -960,6 +1075,270 @@ class PpSipProvider {
     if (!this.session || !this.cfg) return;
     this.session.refer(`sip:${target}@${this.cfg.sipDomain}`);
   }
+
+  // ---------------------------------------------------------------------
+  // Multi-ligne : 2e appel, permutation, conférence 3 voies
+  // ---------------------------------------------------------------------
+
+  hasSecondLine() { return !!this.secondSession; }
+
+  /**
+   * Place un 2e appel : la ligne courante passe automatiquement en attente,
+   * puis un nouvel INVITE part vers `number`. La 2e session est suivie
+   * séparément (`snap.second`) pour ne jamais écraser l'appel principal.
+   */
+  async callSecond(number: string) {
+    if (!this.cfg || !this.ua) throw new Error("softphone_not_registered");
+    if (!this.session) throw new Error("no_active_call");
+    if (this.secondSession) throw new Error("second_line_busy");
+
+    try { if (!this.snap.onHold) this.session.hold(); } catch {}
+
+    const mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false,
+    });
+    this.expectingSecond = true;
+    this.update({ second: { state: "ringing-out", number, name: number, startedAt: null } });
+    try {
+      const target = `sip:${number}@${this.cfg.sipDomain}`;
+      const session = this.ua.call(target, {
+        mediaStream,
+        mediaConstraints: { audio: true, video: false },
+        rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
+      });
+      if (!session) throw new Error("call_session_not_created");
+    } catch (err: any) {
+      this.expectingSecond = false;
+      this.update({ second: null });
+      try { this.session?.unhold(); } catch {}
+      this.log("error", `second call failed: ${err?.message || err}`);
+      throw err;
+    }
+  }
+
+  /** Raccroche uniquement la 2e ligne et reprend la première. */
+  hangupSecond() {
+    try { this.secondSession?.terminate(); } catch {}
+    this.secondSession = null;
+    this.teardownConferenceMix();
+    this.update({ second: null, conference: false });
+    try { if (this.snap.onHold) this.session?.unhold(); } catch {}
+  }
+
+  /** Permute la ligne active et la ligne en attente. */
+  swapLines() {
+    if (!this.session || !this.secondSession) return;
+    if (this.snap.conference) return;
+    const primary = this.session;
+    const second = this.secondSession;
+    try { if (!this.snap.onHold) primary.hold(); } catch {}
+    try { second.unhold(); } catch {}
+
+    // Échange des rôles : la 2e ligne devient l'appel affiché en grand.
+    this.session = second;
+    this.secondSession = primary;
+    const prevSecond = this.snap.second;
+    const prevMain = {
+      state: (this.snap.callState === "held" ? "held" : this.snap.callState) as PpCallState,
+      number: this.snap.remoteNumber,
+      name: this.snap.remoteIdentity,
+      startedAt: this.snap.startedAt,
+    };
+    this.update({
+      callState: "active",
+      onHold: false,
+      remoteIdentity: prevSecond?.name || prevSecond?.number || "",
+      remoteNumber: prevSecond?.number || "",
+      startedAt: prevSecond?.startedAt ?? Date.now(),
+      second: { ...prevMain, state: "held" },
+    });
+    this.attachRemoteAudio((second as any).connection);
+  }
+
+  /**
+   * Fusionne les deux lignes en conférence à trois.
+   * Le mixage est fait localement (WebAudio) : chaque correspondant reçoit
+   * micro + l'autre correspondant, et le courtier entend les deux.
+   */
+  async mergeLines(): Promise<boolean> {
+    const a = this.session;
+    const b = this.secondSession;
+    if (!a || !b) return false;
+    try {
+      try { a.unhold(); } catch {}
+      try { b.unhold(); } catch {}
+
+      const pcA: RTCPeerConnection | null = (a as any).connection ?? null;
+      const pcB: RTCPeerConnection | null = (b as any).connection ?? null;
+      if (!pcA || !pcB) throw new Error("no_peer_connections");
+
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.confCtx = ctx;
+      const mic = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
+      this.confMic = mic;
+      const micSrc = ctx.createMediaStreamSource(mic);
+
+      const remote = (pc: RTCPeerConnection) => {
+        const tracks = (pc.getReceivers?.() ?? []).map((r) => r.track).filter((t) => t && t.kind === "audio") as MediaStreamTrack[];
+        return tracks.length ? ctx.createMediaStreamSource(new MediaStream(tracks)) : null;
+      };
+      const remA = remote(pcA);
+      const remB = remote(pcB);
+
+      const destA = ctx.createMediaStreamDestination();
+      const destB = ctx.createMediaStreamDestination();
+      micSrc.connect(destA); micSrc.connect(destB);
+      remB?.connect(destA);
+      remA?.connect(destB);
+
+      const swap = async (pc: RTCPeerConnection, dest: MediaStreamAudioDestinationNode) => {
+        const sender = (pc.getSenders?.() ?? []).find((s) => s.track?.kind === "audio");
+        const track = dest.stream.getAudioTracks()[0];
+        if (sender && track) await sender.replaceTrack(track);
+      };
+      await swap(pcA, destA);
+      await swap(pcB, destB);
+
+      // Le courtier doit entendre les deux correspondants.
+      this.attachRemoteAudio(pcA);
+      this.attachSecondaryAudio(pcB);
+
+      this.update({
+        conference: true,
+        callState: "active",
+        onHold: false,
+        second: this.snap.second ? { ...this.snap.second, state: "active" } : null,
+      });
+      this.log("info", "conference merge OK (3-way local mix)");
+      return true;
+    } catch (e: any) {
+      this.log("error", `conference merge failed: ${e?.message || e}`);
+      this.teardownConferenceMix();
+      return false;
+    }
+  }
+
+  private teardownConferenceMix() {
+    try { this.confMic?.getTracks().forEach((t) => t.stop()); } catch {}
+    this.confMic = null;
+    try { void this.confCtx?.close(); } catch {}
+    this.confCtx = null;
+    if (this.secondAudioEl) {
+      try { this.secondAudioEl.srcObject = null; this.secondAudioEl.remove(); } catch {}
+      this.secondAudioEl = null;
+    }
+  }
+
+  private attachSecondaryAudio(pc: RTCPeerConnection | null) {
+    try {
+      if (!pc || typeof document === "undefined") return;
+      if (!this.secondAudioEl) {
+        const el = document.createElement("audio");
+        el.autoplay = true;
+        (el as any).playsInline = true;
+        el.setAttribute("playsinline", "true");
+        el.style.display = "none";
+        document.body.appendChild(el);
+        this.secondAudioEl = el;
+      }
+      const tracks = (pc.getReceivers?.() ?? []).map((r) => r.track).filter((t) => t && t.kind === "audio") as MediaStreamTrack[];
+      if (!tracks.length) return;
+      const stream = new MediaStream(tracks);
+      this.secondAudioEl.srcObject = stream;
+      this.secondAudioEl.muted = false;
+      this.secondAudioEl.volume = 1;
+      void this.secondAudioEl.play().catch(() => {});
+    } catch {}
+  }
+
+  private attachSecondSession(session: any, incoming = false) {
+    this.secondSession = session;
+    const remoteUri = session.remote_identity?.uri?.user || "";
+    const remoteName = session.remote_identity?.display_name || remoteUri;
+    const patchSecond = (p: Partial<NonNullable<PpSipSnapshot["second"]>>) => {
+      const cur = this.snap.second ?? {
+        state: (incoming ? "ringing-in" : "ringing-out") as PpCallState,
+        number: remoteUri, name: remoteName, startedAt: null,
+      };
+      this.update({ second: { ...cur, ...p } });
+    };
+    if (incoming) {
+      this.log("info", "call waiting: 2nd INVITE parked on line 2", { from: remoteUri });
+      this.update({ second: { state: "ringing-in", number: remoteUri, name: remoteName, startedAt: null } });
+      try { navigator.vibrate?.([180, 120, 180]); } catch {}
+    } else {
+      patchSecond({ number: remoteUri || this.snap.second?.number || "", name: remoteName || this.snap.second?.name || "" });
+    }
+
+    session.on("progress", () => { if (!incoming) patchSecond({ state: "ringing-out" }); });
+    session.on("confirmed", () => {
+      patchSecond({ state: "active", startedAt: Date.now() });
+      this.attachSecondaryAudio((session as any).connection);
+    });
+    session.on("accepted", () => this.attachSecondaryAudio((session as any).connection));
+    const ended = () => {
+      if (this.secondSession !== session) return;
+      this.secondSession = null;
+      this.teardownConferenceMix();
+      this.update({ second: null, conference: false });
+      // En conférence, la fin d'une jambe laisse l'appel principal actif.
+      try { if (this.snap.onHold) this.session?.unhold(); } catch {}
+    };
+    session.on("failed", ended);
+    session.on("ended", ended);
+  }
+
+  /** true quand la ligne 1 porte un appel réel (sonnerie sortante incluse). */
+  private isLineBusy() {
+    const s = this.snap.callState;
+    return s === "active" || s === "held" || s === "ringing-out" || s === "ringing-in";
+  }
+
+  /**
+   * Appel en attente : répond au 2e appel entrant en mettant automatiquement
+   * le premier en attente. La ligne 1 n'est jamais raccrochée.
+   */
+  async answerSecond(): Promise<boolean> {
+    const second = this.secondSession;
+    if (!second || this.snap.second?.state !== "ringing-in") return false;
+    try { if (!this.snap.onHold) this.session?.hold(); } catch {}
+    let mediaStream: MediaStream | undefined;
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
+    } catch (e: any) {
+      this.log("warn", `answerSecond: mic unavailable (${e?.name || e})`);
+    }
+    try {
+      second.answer({
+        ...(mediaStream ? { mediaStream } : {}),
+        mediaConstraints: { audio: true, video: false },
+        rtcAnswerConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
+      });
+      this.update({ second: { ...(this.snap.second!), state: "active", startedAt: Date.now() } });
+      this.log("info", "call waiting answered on line 2");
+      return true;
+    } catch (e: any) {
+      this.log("error", `answerSecond failed: ${e?.message || e}`);
+      try { this.session?.unhold(); } catch {}
+      return false;
+    }
+  }
+
+  /** Refuse l'appel en attente sans toucher à l'appel en cours. */
+  declineSecond() {
+    try { this.secondSession?.terminate({ status_code: 486, reason_phrase: "Busy Here" }); } catch {}
+    this.secondSession = null;
+    this.update({ second: null });
+  }
+
+
 
   // ---- Quality/handover helpers used by the audio & network modules ----
   getActivePeerConnection(): RTCPeerConnection | null {
@@ -990,7 +1369,13 @@ class PpSipProvider {
    * rebuild the transport and wait for a REAL `registered` event.
    */
   async wakeForIncoming(callId?: string): Promise<boolean> {
+    // Le réveil push sert à démarrer PJSIP, pas à re-REGISTER la WebView.
+    if (nativeOwnsAor()) {
+      this.log("warn", "push wake ignored: native PJSIP owns the AOR");
+      return false;
+    }
     if (this.wakeInFlight) {
+
       this.log("info", "joining incoming wake already in flight");
       return this.wakeInFlight;
     }
@@ -1031,8 +1416,16 @@ class PpSipProvider {
     if (ok && this.getSnapshot().callState !== "ringing-in") {
       const backend = await checkSipBackendRegistration({ force: true, minIntervalMs: 0 });
       if (backend?.registration?.mobile_registered === false) {
-        this.log("warn", "push wake: local registered but PBX mobile AOR absent → rebuilding");
-        this.hardRebuild("push_wake_pbx_unregistered");
+        // Never destroy the socket after the user has tapped Answer: the INVITE
+        // may already be in flight on this exact transport. Refresh REGISTER on
+        // the existing UA and let the queued answer consume the incoming dialog.
+        if (this.pendingAnswer && this.ua?.isConnected?.()) {
+          this.log("warn", "push wake: PBX AOR absent while answer pending → preserving socket + REGISTER");
+          this.guardedRegister("push_answer_pbx_unregistered", { priority: true });
+        } else {
+          this.log("warn", "push wake: local registered but PBX mobile AOR absent → rebuilding");
+          this.hardRebuild("push_wake_pbx_unregistered");
+        }
         ok = await this.waitForRegistered(12_000);
         if (ok) {
           const verified = await checkSipBackendRegistration({ force: true, minIntervalMs: 0 });
@@ -1044,8 +1437,10 @@ class PpSipProvider {
     if (this.pendingAnswer) this.pendingAnswer.expiresAt = Date.now() + PP_PENDING_ANSWER_TIMEOUT_MS;
     // R5 (ring9): claim/release the shared 113M AOR on the native side so the
     // keep-alive skips (or performs) its fallback REGISTER accordingly.
+    // Si PJSIP possède l'AOR, le JS ne le revendique jamais.
     void import("./nativePpSipService")
-      .then((m) => m.declarePlanipretJsOwnsAor(ok))
+      .then((m) => m.declarePlanipretJsOwnsAor(ok && !nativeOwnsAor()))
+
       .catch(() => undefined);
     this.log(ok ? "info" : "warn", `push wake → ${ok ? "registered" : "NOT registered"}`);
     return ok;
@@ -1067,6 +1462,12 @@ class PpSipProvider {
   /** Destroy the (possibly zombie) UA and rebuild immediately, bypassing every
    *  debounce/backoff guard. Answer intent is preserved on purpose. */
   private hardRebuild(reason: string) {
+    if (ppNativeSipOwnsAor()) {
+      this.log("warn", `hard transport rebuild blocked: native SIP owns AOR (${reason})`);
+      this.pushHistory("blocked", `native_owns_aor_hard_rebuild:${reason}`);
+      this.emitMetrics();
+      return;
+    }
     const cfg = this.cfg;
     if (!cfg) return;
     const ua = this.ua;
@@ -1123,6 +1524,12 @@ class PpSipProvider {
    *  the delay never regresses to 1000ms. */
   private scheduleSocketReconnect(reason: string) {
     if (this.wsRetryTimer) return;
+    if (ppNativeSipOwnsAor()) {
+      this.log("warn", `socket reconnect blocked: native SIP owns AOR (${reason})`);
+      this.pushHistory("blocked", `native_owns_aor_reconnect:${reason}`);
+      this.emitMetrics();
+      return;
+    }
     // Exclusive lease: if JsSIP's connection_recovery currently owns recovery,
     // we must not open a competing socket.
     if (!this.acquireRecovery("watchdog", `schedule:${reason}`)) return;
@@ -1283,7 +1690,26 @@ class PpSipProvider {
    * the caller lands in voicemail. Removing it lets the native keep-alive
    * registration (or the VoIP push) take the call instead.
    */
+  /**
+   * Le moteur natif vient de revendiquer `<ext>M` : retirer immédiatement le
+   * Contact WebView (unregister ciblé, jamais `all:true`) puis arrêter l'UA.
+   * Sans cela NetSapiens voit deux contacts sur le même AOR et ferme la
+   * branche native avec un WSS 1001.
+   */
+  yieldAorToNative(): void {
+    if (!this.ua) return;
+    if (this.hasActiveCall() || this.snap.callState === "ringing-in" || this.snap.callState === "ringing-out") {
+      this.log("warn", "AOR handover deferred: call in progress");
+      return;
+    }
+    this.log("warn", "native PJSIP owns the AOR -> releasing JsSIP registration");
+    this.pushHistory("blocked", "aor_handover_native");
+    try { this.ua.unregister({ all: false }); } catch { /* noop */ }
+    setTimeout(() => { try { this.stop(); } catch { /* noop */ } }, 250);
+  }
+
   async releaseForBackground(): Promise<void> {
+
     if (this.hasActiveCall() || this.snap.callState === "ringing-in" || this.snap.callState === "ringing-out") return;
     // Never drop the registration while an inbound call is being answered.
     if (this.pendingAnswer && this.pendingAnswer.expiresAt > Date.now()) {

@@ -6,7 +6,8 @@ import { ppSipProvider, type PpSipEvent, type PpSipSnapshot } from "@/lib/planip
 import { exportSipStability, getSipStabilityReport, resetSipStability } from "@/lib/planipret/sip/sipStabilityMonitor";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 import { checkSipBackendRegistration, getLastSipBackendCheck, type SipBackendCheck } from "@/lib/planipret/sip/sipBackendCheck";
-import { nativeSip, type SipRegistrationState } from "@/lib/planipret/sip/nativeSipService";
+import { nativeSip, type SipRegistrationState, type NativeSipDiagnostics } from "@/lib/planipret/sip/nativeSipService";
+import { getAppVersionInfo, type AppVersionInfo } from "@/lib/planipret/appVersion";
 import { ensureForegroundOwnership, resetOwnershipRepairBackoff } from "@/lib/planipret/sip/sipOwnershipRepair";
 import { Capacitor } from "@capacitor/core";
 

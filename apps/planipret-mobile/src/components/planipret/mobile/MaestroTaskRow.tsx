@@ -2,7 +2,7 @@ import { ChevronDown, Clock, Repeat, Sparkles } from "lucide-react";
 import { formatTaskDue, type NormalizedTask } from "@/lib/planipret/tasks";
 import { maestroTaskView, formatMaestroCreated } from "@/lib/planipret/taskMaestroView";
 
-export default function MaestroTaskRow({ task, lang, actions, extra, syncedAt, expanded = false, onToggle }: {
+export default function MaestroTaskRow({ task, lang, actions, extra, syncedAt, expanded = true, onToggle }: {
   task: NormalizedTask;
   lang: "fr" | "en";
   actions?: React.ReactNode;

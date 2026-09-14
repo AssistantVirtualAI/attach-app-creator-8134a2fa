@@ -424,13 +424,16 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
           if (!ready) console.warn("[softphone] native SIP initialization did not register");
           return;
         }
-        // `on_login` forces the NS `<ext>M` device to be (re)provisioned and
-        // aligned on the WSS transport for EVERY broker that opens the app,
-        // not only for the native PJSIP path. Without it an Android broker (or
-        // an iOS build without the PJSIP binary) could sign in while the AOR
-        // stayed missing/drifted → inbound calls go straight to voicemail.
+        // Garde restaurée (configuration du 7 septembre) : le resolver réécrit
+        // `device-sip-transport-type`. Sans ce garde il repasse `<ext>M` en WSS
+        // 9002 alors que le moteur natif est inscrit en TLS 5061 — le moteur
+        // perd la ligne, le service de maintien WSS la récupère, et plus aucun
+        // appel ne porte d'audio.
+        // `on_login` (re)provisionne le device pour chaque courtier qui ouvre
+        // l'app, y compris Android et les builds sans PJSIP.
+        const sipTransport = nativeOwnsAor() ? "tls" : "wss";
         const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
-          body: { client_type: clientType, transport: "wss", on_login: clientType === "mobile" },
+          body: { client_type: clientType, transport: sipTransport, on_login: clientType === "mobile" },
         });
         if (cancelled) return;
         if (error || !data || (data as any)?.error) return;

@@ -36,6 +36,7 @@ type PpSipKeepAlivePlugin = {
   wakeForIncomingCall?: (opts?: { reason?: string }) => Promise<PpNativeSipStatus>;
   setCallActive?: (opts: { active: boolean }) => Promise<PpNativeSipStatus>;
   declareJsOwnsAor?: (opts: { owns: boolean }) => Promise<PpNativeSipStatus>;
+  declareNativeEngineOwnsAor?: (opts: { owns: boolean }) => Promise<PpNativeSipStatus>;
   addListener?: (
     event: "sipServiceStatus" | "sipReregisterRequested" | "sipIncomingInvite",
     cb: (data: any) => void,
@@ -47,13 +48,17 @@ type PpVoipCallPlugin = {
   refreshVoipPushToken?: () => Promise<{ ok: boolean; token?: string }>;
   reportCallEnded?: (opts: { callId?: string; reason?: string }) => Promise<{ ok: boolean }>;
   completeAnswer?: (opts: { callId?: string; ok: boolean }) => Promise<{ ok: boolean; reason?: string }>;
+  setHeld?: (opts: { onHold: boolean }) => Promise<{ ok: boolean }>;
   addListener?: (
     event:
       | "voipPushToken"
       | "voipPushTokenInvalidated"
       | "incomingCallAnswered"
       | "incomingCallRejected"
-      | "callKitReady",
+      | "callKitReady"
+      | "callHeld"
+      | "audioSessionActivated"
+      | "audioSessionDeactivated",
     cb: (data: any) => void,
   ) => Promise<ListenerHandle>;
 };
@@ -130,7 +135,7 @@ export async function onPlanipretVoipPushToken(cb: (data: { token: string; bundl
   return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "voipPushToken", (data: any) => cb(data ?? {}));
 }
 
-export async function onPlanipretIncomingCallAnswered(cb: (data: { callUUID: string; callId?: string }) => void): Promise<() => void> {
+export async function onPlanipretIncomingCallAnswered(cb: (data: { callUUID: string; callId?: string; source?: "pjsip" | "jssip" }) => void): Promise<() => void> {
   if (platform() !== "ios") return () => undefined;
   return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "incomingCallAnswered", (data: any) => cb(data ?? {}));
 }
@@ -139,6 +144,18 @@ export async function onPlanipretIncomingCallRejected(cb: (data: { callUUID: str
   if (platform() !== "ios") return () => undefined;
   return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "incomingCallRejected", (data: any) => cb(data ?? {}));
 }
+
+// ring17: CallKit owns the AVAudioSession. The microphone track is only
+// guaranteed live after `didActivate`, so re-assert local audio then.
+if (platform() === "ios") {
+  void addDedupedCapListener("PpVoipCall", NativePpVoipCall, "audioSessionActivated", (data: any) => {
+    try {
+      window.dispatchEvent(new CustomEvent("pp:callkit-audio-active", { detail: data ?? {} }));
+    } catch { /* noop */ }
+  });
+}
+
+
 
 
 /**
@@ -172,6 +189,27 @@ export async function onPlanipretVoipIncomingCall(
 export async function reportPlanipretCallEnded(callId?: string, reason?: string): Promise<void> {
   if (platform() !== "ios") return;
   try { await NativePpVoipCall.reportCallEnded?.({ callId, reason }); }
+  catch { /* noop */ }
+}
+
+/**
+ * Mise en attente demandée depuis l'écran d'appel du système (y compris
+ * l'écran verrouillé). CallKit est la source de vérité : le JS applique
+ * l'état à la session SIP et à l'interface.
+ */
+export async function onPlanipretCallKitHold(
+  cb: (data: { onHold: boolean; callId?: string; source?: "pjsip" | "jssip" }) => void,
+): Promise<() => void> {
+  if (platform() !== "ios") return () => undefined;
+  return addDedupedCapListener("PpVoipCall", NativePpVoipCall, "callHeld", (data: any) => {
+    cb({ onHold: !!data?.onHold, callId: data?.callId, source: data?.source });
+  });
+}
+
+/** Reflète une mise en attente faite dans l'app vers l'écran d'appel système. */
+export async function setPlanipretCallKitHeld(onHold: boolean): Promise<void> {
+  if (platform() !== "ios") return;
+  try { await NativePpVoipCall.setHeld?.({ onHold }); }
   catch { /* noop */ }
 }
 
@@ -316,6 +354,13 @@ export async function declarePlanipretJsOwnsAor(owns: boolean): Promise<void> {
   if (!isPlanipretNativeSipAvailable()) return;
   try { await NativePpSip.declareJsOwnsAor?.({ owns }); }
   catch { /* older native build: ignore */ }
+}
+
+/** Keep the legacy WSS native service passive while PJSIP/TLS owns `<ext>M`. */
+export async function declarePlanipretNativeEngineOwnsAor(owns: boolean): Promise<void> {
+  if (!isPlanipretNativeSipAvailable()) return;
+  try { await NativePpSip.declareNativeEngineOwnsAor?.({ owns }); }
+  catch { /* older native build: build guard will prevent release */ }
 }
 
 export async function acknowledgePlanipretIncoming(): Promise<void> {

@@ -155,7 +155,18 @@ Deno.serve(async (req) => {
   if (engineMissing) {
     warnings.push("CALL_ENGINE_BACKGROUND_ONLY");
     actions.push("open_app");
+    // L'app au premier plan doit reprendre l'AOR au service de maintien :
+    // un seul propriétaire par AOR (docs/netsapiens/registrations.md).
+    actions.push("takeover_foreground");
   }
+
+  // Qui tient réellement la ligne, et depuis quand.
+  const holder: "app" | "background" | "none" = !mobileRegistered
+    ? "none"
+    : (uaLower.includes("keepalive") && !uaLower.includes("pj") ? "background" : "app");
+  const registeredAtRaw = String(mobileRow?.["device-sip-registration-datetime"] ?? "");
+  const registeredAtMs = registeredAtRaw ? Date.parse(registeredAtRaw.replace(" ", "T")) : NaN;
+  const registeredAt = Number.isFinite(registeredAtMs) ? new Date(registeredAtMs).toISOString() : null;
 
   const healthy = mobileRegistered && !!tokenRow?.device_token && callSubscription &&
     devicePushEnabled !== false && coreServerOk;
@@ -175,6 +186,8 @@ Deno.serve(async (req) => {
       core_server_ok: coreServerOk,
       contact: regContact || null,
       user_agent: regUserAgent || null,
+      holder,
+      registered_at: registeredAt,
     },
     push: {
       device_push_enabled: devicePushEnabled,

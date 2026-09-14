@@ -53,6 +53,7 @@ import { checkSipBackendRegistration } from "@/lib/planipret/sip/sipBackendCheck
 import { ensureForegroundOwnership, resetOwnershipRepairBackoff } from "@/lib/planipret/sip/sipOwnershipRepair";
 import { nativeSip } from "@/lib/planipret/sip/nativeSipService";
 import { decideOutboundRoute } from "@/lib/planipret/sip/outboundRoute";
+import { nativeOwnsAor } from "@/lib/planipret/sip/aorArbitration";
 
 import {
   upsertRingingSession,
@@ -423,13 +424,16 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
           if (!ready) console.warn("[softphone] native SIP initialization did not register");
           return;
         }
-        // `on_login` forces the NS `<ext>M` device to be (re)provisioned and
-        // aligned on the WSS transport for EVERY broker that opens the app,
-        // not only for the native PJSIP path. Without it an Android broker (or
-        // an iOS build without the PJSIP binary) could sign in while the AOR
-        // stayed missing/drifted → inbound calls go straight to voicemail.
+        // Garde restaurée (configuration du 7 septembre) : le resolver réécrit
+        // `device-sip-transport-type`. Sans ce garde il repasse `<ext>M` en WSS
+        // 9002 alors que le moteur natif est inscrit en TLS 5061 — le moteur
+        // perd la ligne, le service de maintien WSS la récupère, et plus aucun
+        // appel ne porte d'audio.
+        // `on_login` (re)provisionne le device pour chaque courtier qui ouvre
+        // l'app, y compris Android et les builds sans PJSIP.
+        const sipTransport = nativeOwnsAor() ? "tls" : "wss";
         const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
-          body: { client_type: clientType, transport: "wss", on_login: clientType === "mobile" },
+          body: { client_type: clientType, transport: sipTransport, on_login: clientType === "mobile" },
         });
         if (cancelled) return;
         if (error || !data || (data as any)?.error) return;
@@ -1225,24 +1229,24 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
 
   const placeCall = useCallback(async (destination: string): Promise<OutboundResult> => {
     if (!destination) return { via: "none", ok: false, error: "empty destination" };
-    // PJSIP owns the native iOS audio session. Do not gate it behind the
-    // WebView getUserMedia permission: on some installed builds WebKit reports
-    // the microphone as unavailable even though the native engine can call.
-    // Toute plateforme native (iOS ET Android) : JsSIP est interdit dans la
-    // WebView (arbitrage d'AOR), donc le seul chemin porteur d'audio est le
-    // moteur natif. Le repli REST ne transporte rien : il affichait « Ringing »
-    // sans jambe SIP joignable. Il est interdit ici, sur les deux plateformes.
+
+    // Séquence restaurée (configuration validée le 7 septembre, CDR 113M avec
+    // média porté par l'appareil) :
+    //   1) moteur natif quand il tient l'AOR mobile → audio natif (PJSIP) ;
+    //   2) JsSIP dans la WebView quand le moteur est absent → audio WebRTC ;
+    //   3) click-to-call NS-API en dernier recours, jamais avant.
+    // Le micro de la WebView ne bloque jamais le chemin natif : la permission
+    // est gérée côté iOS et `getUserMedia` peut échouer sans empêcher l'appel.
     const route = decideOutboundRoute({
       clientType,
       isNativePlatform: Capacitor.isNativePlatform(),
       engineAvailable: nativeSip.isAvailable(),
       engineRegistered: nativeSip.isRegistered(),
     });
+    const number = ppNormalizeDestination(destination);
+
     if (route === "native" || route === "native_unregistered") {
-      // Composition immédiate quand la ligne est déjà inscrite (cas normal :
-      // l'inscription est faite au login et entretenue toutes les 30 s).
-      // Sinon on borne la réparation à 1,5 s au lieu d'attendre sa fin.
-      let ready = nativeSip.isRegistered();
+      let ready = nativeSip.isRegistered() && nativeOwnsAor();
       if (!ready) {
         const repair = nativeSip.repairRegistration().catch(() => false);
         ready = await Promise.race([
@@ -1250,90 +1254,52 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
           new Promise<boolean>((resolve) => window.setTimeout(() => resolve(nativeSip.isRegistered()), 1500)),
         ]);
       }
-      if (ready && await nativeSip.makeCall(ppNormalizeDestination(destination))) {
+      if (ready && await nativeSip.makeCall(number)) {
+        postOutboundCall({ providerCallId: nativeSip.getCallId() ?? `pjsip-${Date.now()}`, number: destination });
+        console.info("[outbound] route=NATIVE", { destination });
         return { via: "webrtc", ok: true };
       }
-      console.error("[softphone] native call refused — native SIP engine is not registered");
-      return {
-        via: "none",
-        ok: false,
-        error: "Ligne mobile non inscrite. Gardez l’application ouverte quelques secondes, puis réessayez.",
-      };
+      console.warn("[softphone] native call unavailable — falling back to WebRTC/PBX");
     }
-    if (route === "webview") {
-      // Binaire installé sans moteur natif : la WebView reprend l'AOR mobile.
-      // On libère d'abord le service de maintien natif (sinon NetSapiens ferme
-      // un des deux sockets, code 1001), puis JsSIP compose avec un vrai média
-      // WebRTC. Aucun repli REST ici : il affichait « Ringing » sans audio.
+
+    // Chemin WebView : le moteur natif n'est pas là (ou a refusé). On libère le
+    // service de maintien natif pour éviter deux sockets sur le même AOR, puis
+    // JsSIP compose avec un vrai média WebRTC.
+    if (route === "webview" || route === "native_unregistered" || route === "native") {
       try { await stopPlanipretSipKeepAlive(); } catch { /* noop */ }
-      const mic = await ensureMicPermission();
-      try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
-      if (mic.state !== "granted") {
-        console.error("[softphone] webview call refused — microphone denied", mic.error ?? mic.state);
-        return {
-          via: "none",
-          ok: false,
-          error: "Microphone refusé. Autorisez le micro pour l’application, puis réessayez.",
-        };
-      }
-      let ready = ppSipProvider.getSnapshot().status === "registered";
-      if (!ready) {
-        try { ppSipProvider.forceReregister(); } catch { /* noop */ }
-        const deadline = Date.now() + 4000;
-        while (Date.now() < deadline) {
-          if (ppSipProvider.getSnapshot().status === "registered") { ready = true; break; }
-          await new Promise((resolve) => window.setTimeout(resolve, 100));
-        }
-      }
-      if (!ready) {
-        console.error("[softphone] webview call refused — JsSIP not registered");
-        return {
-          via: "none",
-          ok: false,
-          error: "Ligne mobile non inscrite. Gardez l’application ouverte quelques secondes, puis réessayez.",
-        };
-      }
-      try {
-        await ppSipProvider.call(destination);
-        return { via: "webrtc", ok: true };
-      } catch (e: any) {
-        console.error("[softphone] webview call failed", e?.message ?? e);
-        return {
-          via: "none",
-          ok: false,
-          error: "L’appel n’a pas pu être établi. Réessayez dans quelques secondes.",
-        };
-      }
     }
-    let canUseSip = registered;
-    if (!canUseSip) {
-      // Réveil borné (~1,2 s max) : dès que la ligne revient on part tout de
-      // suite, au lieu d'attendre un délai fixe puis de basculer sur le
-      // repli cellulaire (lent + audio hors de l'app).
-      try { ppSipProvider.forceReregister(); } catch {}
-      const deadline = Date.now() + 1200;
+    let micGranted = true;
+    try {
+      const mic = await ensureMicPermission();
+      micGranted = mic.state === "granted";
+      try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
+      if (!micGranted) console.warn("[softphone] mic not granted in WebView", mic.state, mic.error);
+    } catch (e: any) {
+      micGranted = false;
+      console.warn("[softphone] mic probe threw", e?.message ?? e);
+    }
+
+    let canUseSip = micGranted && (registered || ppSipProvider.getSnapshot().status === "registered");
+    if (!canUseSip && micGranted) {
+      try { ppSipProvider.forceReregister(); } catch { /* noop */ }
+      const deadline = Date.now() + 4000;
       while (Date.now() < deadline) {
         const st = ppSipProvider.getSnapshot().status;
         if (st === "registered" || st === "connected") { canUseSip = true; break; }
         await new Promise((resolve) => window.setTimeout(resolve, 100));
       }
     }
-
     if (canUseSip) {
-      const mic = await ensureMicPermission();
-      if (mic.state !== "granted") {
-        try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
-        console.warn("[softphone] WebRTC microphone unavailable, falling back to PBX", mic.error ?? mic.state);
-        return await callViaPBX(destination);
-      }
-      try { mic.stream?.getTracks().forEach((tr) => tr.stop()); } catch {}
       try {
         await ppSipProvider.call(destination);
+        console.info("[outbound] route=WEBRTC", { destination });
         return { via: "webrtc", ok: true };
       } catch (e: any) {
         console.warn("[softphone] WebRTC call failed, falling back to PBX", e?.message ?? e);
       }
     }
+
+    console.info("[outbound] route=CLICK-TO-CALL", { destination, micGranted, registered, route });
     return await callViaPBX(destination);
   }, [registered, callViaPBX, clientType]);
 

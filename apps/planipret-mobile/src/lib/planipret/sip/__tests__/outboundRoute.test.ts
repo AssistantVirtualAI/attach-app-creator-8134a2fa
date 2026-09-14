@@ -14,11 +14,11 @@ describe("decideOutboundRoute", () => {
     })).toBe("native_unregistered");
   });
 
-  it("signale un binaire sans moteur natif — iOS comme Android", () => {
+  it("bascule sur JsSIP (WebView) quand le binaire n'embarque pas le moteur natif", () => {
     for (const _platform of ["ios", "android"]) {
       expect(decideOutboundRoute({
         clientType: "mobile", isNativePlatform: true, engineAvailable: false, engineRegistered: false,
-      })).toBe("engine_missing");
+      })).toBe("webview");
     }
   });
 

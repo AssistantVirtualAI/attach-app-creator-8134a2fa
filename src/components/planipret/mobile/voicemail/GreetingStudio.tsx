@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createAudioGuard } from "@/lib/planipret/audio/audioGuard";
+import { blobToWavMono8k, wavPeak, bytesToBase64 } from "@/lib/planipret/audio/wavEncode";
+import { ensureMicPermission } from "@/lib/planipret/audio/micPermission";
 import { Play, Pause, Sparkles, Mic, RotateCw, Check, Settings2, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { useMplanipretLang } from "@/hooks/useMplanipretLang";
 
@@ -35,12 +38,17 @@ const TEMPLATES: { key: string; label: string; lang: "fr" | "en"; body: (n: stri
     body: (n) => `Hello, you've reached ${n}, mortgage broker at Planiprêt. I'm currently unavailable. Please leave your name, number and the best time to reach you, and I'll return your call as soon as possible. Thank you and have a great day.` },
 ];
 
+// Repli si la liste ElevenLabs ne peut pas être chargée : sans voix,
+// le bouton « Générer » restait désactivé sans aucun message.
 const FALLBACK_VOICES: Voice[] = [
   { voice_id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah", language: "EN", gender: "F", preview_url: "", category: "professional" },
   { voice_id: "JBFqnCBsd6RMkjVDRZzb", name: "George", language: "EN", gender: "M", preview_url: "", category: "professional" },
   { voice_id: "cgSgspJ2msm6clMCkdW9", name: "Jessica", language: "EN", gender: "F", preview_url: "", category: "natural" },
   { voice_id: "TX3LPaxmHKxFdv7VOQHJ", name: "Liam", language: "EN", gender: "M", preview_url: "", category: "natural" },
 ];
+
+
+
 
 const TOKENS = {
   bg: "var(--pp-bg-base)",
@@ -70,52 +78,129 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [genderFilter, setGenderFilter] = useState<"all" | "F" | "M">("all");
   const [categoryFilter, setCategoryFilter] = useState<"all" | "professional" | "natural" | "custom">("professional");
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const guard = useRef(createAudioGuard());
+  const [audioBusy, setAudioBusy] = useState(false);
+  useEffect(() => guard.current.subscribe(setAudioBusy), []);
+  useEffect(() => () => guard.current.cancel(), []);
 
-  // --- Record my own voice -------------------------------------------------
-  const [mode, setMode] = useState<"tts" | "record">("tts");
+  // --- Enregistrer ma propre voix -----------------------------------------
+  const [mode, setMode] = useState<"record" | "tts">("record");
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const [recUrl, setRecUrl] = useState<string | null>(null);
-  const [recBlob, setRecBlob] = useState<Blob | null>(null);
+  const [recWav, setRecWav] = useState<Uint8Array | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recUrlRef = useRef<string | null>(null);
+
+  const releaseMic = () => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    try { streamRef.current?.getTracks().forEach((tr) => tr.stop()); } catch { /* noop */ }
+    streamRef.current = null;
+  };
 
   useEffect(() => () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    try { recorderRef.current?.stream?.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
-    if (recUrl) URL.revokeObjectURL(recUrl);
-  }, [recUrl]);
+    releaseMic();
+    try { recorderRef.current?.state === "recording" && recorderRef.current.stop(); } catch { /* noop */ }
+    if (recUrlRef.current) URL.revokeObjectURL(recUrlRef.current);
+  }, []);
+
+  const setTake = (url: string | null) => {
+    if (recUrlRef.current) URL.revokeObjectURL(recUrlRef.current);
+    recUrlRef.current = url;
+    setRecUrl(url);
+  };
 
   const pickMime = () => {
     const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac", "audio/ogg"];
-    return candidates.find((m) => (window as any).MediaRecorder?.isTypeSupported?.(m)) ?? "";
+    const MR: any = (window as any).MediaRecorder;
+    return candidates.find((m) => MR?.isTypeSupported?.(m)) ?? "";
+  };
+
+  const stopRecording = () => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    try {
+      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      else releaseMic();
+    } catch { releaseMic(); }
+    setRecording(false);
   };
 
   const startRecording = async () => {
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    if (recording || preparing || publishing) return;
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       toast.error(lang === "en" ? "Recording is not available on this device." : "L'enregistrement n'est pas disponible sur cet appareil.");
       return;
     }
+    // Le moteur d'appel possède la session audio : jamais d'enregistrement pendant un appel.
+    if ((window as any).__ppCallActive) {
+      toast.error(lang === "en" ? "End your call before recording." : "Terminez votre appel avant d'enregistrer.");
+      return;
+    }
+    guard.current.cancel(); // coupe toute écoute en cours
+
+    const perm = await ensureMicPermission();
+    perm.stream?.getTracks().forEach((tr) => tr.stop());
+    if (perm.state === "denied") {
+      toast.error(lang === "en"
+        ? "Microphone access denied — allow it in your phone settings."
+        : "Accès au micro refusé — autorisez-le dans les réglages du téléphone.");
+      return;
+    }
+    if (perm.state === "unavailable") {
+      toast.error(lang === "en" ? "No microphone detected." : "Aucun micro détecté.");
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
+      streamRef.current = stream;
       const mimeType = pickMime();
       const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       chunksRef.current = [];
       rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      rec.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
-        setRecBlob(blob);
-        setRecUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
+      rec.onerror = () => {
+        releaseMic();
+        setRecording(false);
+        toast.error(lang === "en" ? "Recording failed." : "L'enregistrement a échoué.");
       };
-      rec.start();
+      rec.onstop = async () => {
+        releaseMic();
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        chunksRef.current = [];
+        if (blob.size < 1024) {
+          toast.error(lang === "en" ? "Recording too short." : "Enregistrement trop court.");
+          return;
+        }
+        setPreparing(true);
+        try {
+          const wav = await blobToWavMono8k(blob);
+          if (wavPeak(wav) < 0.02) {
+            toast.error(lang === "en" ? "No sound captured — check your microphone." : "Aucun son capté — vérifiez votre micro.");
+            setRecWav(null);
+            setTake(null);
+            return;
+          }
+          setRecWav(wav);
+          setTake(URL.createObjectURL(new Blob([wav.slice()], { type: "audio/wav" })));
+        } catch {
+          toast.error(lang === "en" ? "Could not process the recording." : "Impossible de traiter l'enregistrement.");
+          setRecWav(null);
+          setTake(null);
+        } finally {
+          setPreparing(false);
+        }
+      };
+      rec.start(250); // timeslice : évite les blobs vides sur iOS
       recorderRef.current = rec;
-      setRecBlob(null);
+      setRecWav(null);
+      setTake(null);
       setRecSeconds(0);
       setRecording(true);
       timerRef.current = setInterval(() => {
@@ -125,27 +210,19 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
         });
       }, 1000);
     } catch {
+      releaseMic();
       toast.error(lang === "en" ? "Microphone access denied." : "Accès au micro refusé.");
     }
   };
 
-  const stopRecording = () => {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    try { recorderRef.current?.state === "recording" && recorderRef.current.stop(); } catch { /* noop */ }
-    setRecording(false);
-  };
-
   const publishRecording = async () => {
-    if (!recBlob) return;
+    if (!recWav || publishing) return;
     setPublishing(true);
     try {
-      const buf = new Uint8Array(await recBlob.arrayBuffer());
-      let bin = "";
-      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
       const { data, error } = await supabase.functions.invoke("pp-greeting-record", {
         body: {
-          audio_base64: btoa(bin),
-          mime_type: (recBlob.type || "audio/webm").split(";")[0],
+          audio_base64: bytesToBase64(recWav),
+          mime_type: "audio/wav",
           duration_seconds: recSeconds,
           label: lang === "en" ? "Greeting recorded by the broker" : "Message enregistré par le courtier",
           push_to_ns: true,
@@ -153,15 +230,18 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
       });
       const d = data as any;
       if (error || !d?.success) {
-        toast.error(d?.error ?? error?.message ?? t("greeting.generateFailed"));
+        const ctx = (error as any)?.context;
+        const detail = ctx?.text ? await ctx.text().catch(() => "") : "";
+        toast.error([d?.error, d?.detail, detail, error?.message].filter(Boolean)[0]
+          ?? (lang === "en" ? "Publishing failed." : "La publication a échoué."));
         return;
       }
       if (d.pushed_to_ns) {
-        toast.success(t("greeting.activated"));
-        setRecBlob(null);
-        setRecUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+        toast.success(lang === "en" ? "Your greeting is now live." : "Votre message est maintenant actif.");
+        setRecWav(null);
+        setTake(null);
       } else {
-        toast.error(`${t("greeting.pushFailed")}: ${d.push_error ?? ""}`);
+        toast.error(`${lang === "en" ? "Saved, but not activated" : "Sauvegardé, mais non activé"}: ${d.push_error ?? ""}`);
       }
       onProfileChange?.();
     } finally {
@@ -175,26 +255,37 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
   const charCount = text.length;
   const counterColor = charCount > 480 ? "#EF4444" : charCount > 400 ? "#F59E0B" : "#10B981";
 
-
   // Load voices
   useEffect(() => {
     let cancelled = false;
     const timeout = window.setTimeout(() => {
-      if (!cancelled) { setVoicesError(t("greeting.voiceLoadFailed") || "voice_load_timeout"); setVoices(FALLBACK_VOICES); }
+      if (!cancelled) setVoicesError(t("greeting.voiceLoadFailed") || "voice_load_timeout");
     }, 10_000);
-    supabase.functions.invoke("pp-greeting-voices").then(({ data, error }) => {
+    supabase.functions.invoke("pp-greeting-voices").then(async ({ data, error }) => {
       if (cancelled) return;
-      if (error || !(data as any)?.success || !(data as any)?.voices?.length) {
-        setVoicesError((data as any)?.error ?? error?.message ?? "unknown_error");
+      if (error) {
+        const ctx = (error as any)?.context;
+        const detail = ctx?.text ? await ctx.text().catch(() => "") : "";
+        setVoicesError(detail || error.message);
         setVoices(FALLBACK_VOICES);
-      } else setVoices((data as any).voices);
+        return;
+      }
+      if ((data as any)?.success && (data as any).voices?.length) setVoices((data as any).voices);
+      else {
+        setVoicesError((data as any)?.error ?? "unknown_error");
+        setVoices(FALLBACK_VOICES);
+      }
     }).finally(() => window.clearTimeout(timeout));
+
     return () => { cancelled = true; window.clearTimeout(timeout); };
   }, [t]);
 
+  // Sélectionne automatiquement une voix : sans sélection le bouton
+  // « Générer » ne faisait rien et n'affichait aucun message.
   useEffect(() => {
     if (!selectedVoice && voices?.length) setSelectedVoice(voices[0].voice_id);
   }, [voices, selectedVoice]);
+
 
   // Sign current greeting URL if it's a storage path
   useEffect(() => {
@@ -213,15 +304,23 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
     setActiveTemplate(k);
   };
 
+  // Garde-fou : un seul média actif, les clics répétés annulent la lecture
+  // précédente au lieu d'empiler des objets Audio (cause du gel de la page).
   const playVoicePreview = (v: Voice) => {
     if (!v.preview_url) return;
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    if (previewing === v.voice_id) { setPreviewing(null); return; }
-    const audio = new Audio(v.preview_url);
-    audio.onended = () => setPreviewing(null);
-    audio.play().catch(() => setPreviewing(null));
-    audioRef.current = audio;
+    if (previewing === v.voice_id) { guard.current.cancel(); setPreviewing(null); return; }
     setPreviewing(v.voice_id);
+    guard.current.play(v.preview_url, () => setPreviewing((cur) => (cur === v.voice_id ? null : cur)));
+  };
+
+  const saveAudio = () => {
+    if (!previewUrl || audioBusy) return;
+    const link = document.createElement("a");
+    link.href = previewUrl;
+    link.download = `message-vocal-${Date.now()}.mp3`;
+    link.rel = "noopener";
+    link.click();
+    toast.success(t("greeting.audioSaved"));
   };
 
   const improveText = async () => {
@@ -237,6 +336,8 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
   const generate = async (pushToNs: boolean) => {
     if (!selectedVoice) { toast.error(t("greeting.voiceLoadFailed") || "Choisissez une voix"); return; }
     if (text.trim().length < 10) { toast.error(t("greeting.draftTooShort")); return; }
+    if (generating || audioBusy) return; // anti double-soumission
+    guard.current.cancel();               // stoppe toute lecture en cours
     setGenerating(true);
     setGenStep(pushToNs ? t("greeting.activation") : t("greeting.generation"));
     const { data, error } = await supabase.functions.invoke("pp-greeting-generate", {
@@ -250,9 +351,15 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
     setGenerating(false);
     setGenStep("");
     if (error || !(data as any)?.success) {
-      toast.error((data as any)?.error ?? error?.message ?? t("greeting.generateFailed"));
+      const ctx = (error as any)?.context;
+      const detail = ctx?.text ? await ctx.text().catch(() => "") : "";
+      const d = data as any;
+      toast.error(
+        [d?.error, d?.detail, detail, error?.message].filter(Boolean)[0] ?? t("greeting.generateFailed"),
+      );
       return;
     }
+
     const d = data as any;
     setPreviewUrl(d.audio_url);
     setPreviewPath(d.storage_path);
@@ -264,17 +371,6 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
       onProfileChange?.();
       toast.success(t("greeting.audioGenerated"));
     }
-  };
-
-
-  const saveAudio = () => {
-    if (!previewUrl) return;
-    const link = document.createElement("a");
-    link.href = previewUrl;
-    link.download = `message-vocal-${Date.now()}.mp3`;
-    link.rel = "noopener";
-    link.click();
-    toast.success(t("greeting.audioSaved"));
   };
 
   return (
@@ -319,14 +415,15 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
         )}
       </div>
 
-      {/* Mode: record my own voice, or synthesize a voice */}
+      {/* Mode : enregistrer ma voix ou synthétiser */}
       <div className="grid grid-cols-2 gap-2">
         {([
           ["record", lang === "en" ? "🎙 Record my voice" : "🎙 Enregistrer ma voix"],
           ["tts", lang === "en" ? "✨ Synthetic voice" : "✨ Voix de synthèse"],
         ] as const).map(([k, label]) => (
-          <button key={k} onClick={() => setMode(k as any)}
-            className="h-11 rounded-xl text-[13px] font-semibold transition"
+          <button key={k} onClick={() => { if (!recording) setMode(k as any); }}
+            className="h-11 rounded-xl text-[13px] font-semibold transition disabled:opacity-50"
+            disabled={recording || preparing || publishing}
             style={mode === k
               ? { background: TOKENS.borderActive, color: "white" }
               : { background: TOKENS.card, color: TOKENS.text, border: `1px solid ${TOKENS.border}` }}>
@@ -346,26 +443,26 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
               : "Parlez près du micro, jusqu'à 2 minutes. La publication remplace votre message actuel."}
           </p>
 
-          <div className="flex items-center gap-3">
-            <button onClick={recording ? stopRecording : startRecording}
-              className="h-12 flex-1 rounded-xl text-[14px] font-semibold text-white flex items-center justify-center gap-2"
-              style={{ background: recording ? "linear-gradient(135deg,#EF4444,#B91C1C)" : "linear-gradient(135deg,#1A4A8A,#2E9BDC)" }}>
-              {recording
-                ? <><Pause className="w-4 h-4" /> {lang === "en" ? "Stop" : "Arrêter"} · {mmss(recSeconds)}</>
-                : <><Mic className="w-4 h-4" /> {recBlob ? (lang === "en" ? "Record again" : "Réenregistrer") : (lang === "en" ? "Start recording" : "Démarrer l'enregistrement")}</>}
-            </button>
-          </div>
+          <button onClick={recording ? stopRecording : startRecording}
+            disabled={preparing || publishing}
+            className="h-12 w-full rounded-xl text-[14px] font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
+            style={{ background: recording ? "linear-gradient(135deg,#EF4444,#B91C1C)" : "linear-gradient(135deg,#1A4A8A,#2E9BDC)" }}>
+            {recording
+              ? <><Pause className="w-4 h-4" /> {lang === "en" ? "Stop" : "Arrêter"} · {mmss(recSeconds)}</>
+              : preparing
+                ? <><RotateCw className="w-4 h-4 animate-spin" /> {lang === "en" ? "Processing…" : "Traitement…"}</>
+                : <><Mic className="w-4 h-4" /> {recWav ? (lang === "en" ? "Record again" : "Réenregistrer") : (lang === "en" ? "Start recording" : "Démarrer l'enregistrement")}</>}
+          </button>
 
-          {recUrl && !recording && (
+          {recUrl && !recording && !preparing && (
             <>
               <audio controls src={recUrl} className="w-full h-9" style={{ filter: "invert(0.9)" }} />
               <button onClick={publishRecording} disabled={publishing}
                 className="w-full h-12 rounded-xl text-[14px] font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg,#10B981,#00A88A)" }}>
-                <Check className="w-4 h-4" />
                 {publishing
-                  ? (lang === "en" ? "Publishing…" : "Publication…")
-                  : (lang === "en" ? "Replace my greeting" : "Remplacer mon message")}
+                  ? <><RotateCw className="w-4 h-4 animate-spin" /> {lang === "en" ? "Publishing…" : "Publication…"}</>
+                  : <><Check className="w-4 h-4" /> {lang === "en" ? "Replace my greeting" : "Remplacer mon message"}</>}
               </button>
             </>
           )}
@@ -374,7 +471,6 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
 
       {mode === "tts" && (<>
       {/* Step 1 - Voice */}
-
       <div>
         <div className="text-[10px] uppercase tracking-widest mb-2 font-semibold" style={{ color: TOKENS.muted }}>{t("greeting.chooseVoice")}</div>
 
@@ -434,7 +530,7 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
                 aria-checked={selectedVoice === v.voice_id}
                 aria-label={`${t("greeting.selectVoice")} ${v.name}`}
                 tabIndex={0}
-                onClick={() => setSelectedVoice(v.voice_id)}
+                onClick={() => { if (!generating) setSelectedVoice(v.voice_id); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedVoice(v.voice_id); }
                 }}
@@ -461,10 +557,15 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
                   {v.preview_url && (
                     <button type="button"
                       aria-label={`${t("greeting.preview")} ${v.name}`}
+                      disabled={generating || (audioBusy && previewing !== v.voice_id)}
+                      aria-busy={audioBusy && previewing === v.voice_id}
                       onClick={(e) => { e.stopPropagation(); playVoicePreview(v); }}
-                      className="text-[10px] px-2 py-0.5 rounded flex items-center gap-1 min-h-[28px]"
+                      className="text-[10px] px-2 py-0.5 rounded flex items-center gap-1 min-h-[28px] disabled:opacity-50"
                       style={{ background: "rgba(255,255,255,0.05)", color: TOKENS.text }}>
-                      {previewing === v.voice_id ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />} {t("greeting.preview")}
+                      {audioBusy && previewing === v.voice_id
+                        ? <RotateCw className="w-3 h-3 animate-spin" />
+                        : previewing === v.voice_id ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                      {t("greeting.preview")}
                     </button>
                   )}
                 </div>
@@ -506,8 +607,8 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
       {/* Step 3 - Generate */}
       <div>
         <div className="text-[10px] uppercase tracking-widest mb-2 font-semibold" style={{ color: TOKENS.muted }}>{t("greeting.previewGenerate")}</div>
-        <button onClick={() => generate(false)}
-          disabled={!selectedVoice || text.length < 10 || generating}
+        <button onClick={() => generate(false)} aria-busy={generating}
+          disabled={!selectedVoice || text.length < 10 || generating || audioBusy}
           className="w-full h-[52px] rounded-xl text-[15px] font-semibold text-white disabled:opacity-50 transition"
           style={{ background: "linear-gradient(135deg,#1A4A8A,#2E9BDC)" }}>
           {generating ? genStep : t("greeting.generateAudio")}
@@ -543,7 +644,9 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
           </div>
         )}
       </div>
+      </>)}
 
+      {mode === "tts" && (<>
       {/* Advanced settings */}
       <button onClick={() => setShowSettings((s) => !s)}
         className="w-full flex items-center justify-between text-[12px] px-3 py-2 rounded-xl"
@@ -573,6 +676,5 @@ export default function GreetingStudio({ profile, onProfileChange }: { profile: 
       )}
       </>)}
     </div>
-
   );
 }

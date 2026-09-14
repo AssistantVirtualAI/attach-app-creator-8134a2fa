@@ -105,11 +105,14 @@ Deno.serve(async (req) => {
       const value = String(data ?? "").trim();
       return value && !/^\*+$/.test(value) ? value : null;
     };
-    const { data: callerProfile } = await admin
-      .from("planipret_profiles").select("role,user_id,id").or(`user_id.eq.${caller.id},id.eq.${caller.id}`).maybeSingle();
-    let isAdmin = ["admin", "super_admin", "owner", "planipret_admin"].includes(String(callerProfile?.role ?? "").toLowerCase());
-    if (!isAdmin) { try { const { data } = await admin.rpc("is_planipret_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
-    if (!isAdmin) { try { const { data } = await admin.rpc("is_super_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
+    const { data: callerProfile } = caller
+      ? await admin
+        .from("planipret_profiles").select("role,user_id,id").or(`user_id.eq.${caller.id},id.eq.${caller.id}`).maybeSingle()
+      : { data: null as any };
+    let isAdmin = internalCall
+      || ["admin", "super_admin", "owner", "planipret_admin"].includes(String(callerProfile?.role ?? "").toLowerCase());
+    if (!isAdmin && caller) { try { const { data } = await admin.rpc("is_planipret_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
+    if (!isAdmin && caller) { try { const { data } = await admin.rpc("is_super_admin", { _user_id: caller.id }); if (data) isAdmin = true; } catch { /* ignore */ } }
     // Self-provisioning: le client mobile appelle sans broker_id juste après le
     // 200 OK du REGISTER PJSIP pour forcer le transport TLS sur SON device.
     if (!bulk && !broker_id && (callerProfile?.id || callerProfile?.user_id)) {

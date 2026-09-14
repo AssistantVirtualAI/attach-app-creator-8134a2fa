@@ -87,6 +87,29 @@ const getPjsip = (): PjsipPlugin | null => {
   return Pjsip;
 };
 
+/**
+ * Dernière cause d'indisponibilité du moteur natif. Exposée telle quelle à
+ * l'écran de diagnostic : « REGISTERED » côté serveur ne dit rien de l'état
+ * réel du moteur, il faut pouvoir distinguer « binaire sans moteur » de
+ * « moteur présent mais REGISTER refusé ».
+ */
+let lastNativeFailure: string | null = null;
+
+const releaseAorFromNative = (reason: string) => {
+  lastNativeFailure = reason;
+  releaseAorFromNativeRaw(reason);
+};
+
+export type NativeSipDiagnostics = {
+  nativePlatform: boolean;
+  pluginPresent: boolean;
+  registered: boolean;
+  state: string;
+  extension: string | null;
+  username: string | null;
+  failure: string | null;
+};
+
 const emit = (name: string, detail: any) => {
   try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch { /* noop */ }
 };

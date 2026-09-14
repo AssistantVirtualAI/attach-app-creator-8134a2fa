@@ -146,14 +146,18 @@ Deno.serve(async (req) => {
   // sans que le moteur d'appel PJSIP soit présent dans le binaire installé :
   // la ligne paraît inscrite mais aucun appel ne peut porter d'audio.
   const uaLower = String(regUserAgent ?? "").toLowerCase();
+  // Depuis la mise à jour à distance, la WebView (JsSIP) reprend l'AOR et porte
+  // l'audio quand le moteur natif est absent : ce n'est plus un blocage dur,
+  // seulement un avertissement (l'app doit être ouverte au moment de l'appel).
   const engineMissing = mobileRegistered && uaLower.includes("keepalive") &&
     !uaLower.includes("pj");
+  const warnings: string[] = [];
   if (engineMissing) {
-    blockers.push("CALL_ENGINE_MISSING");
-    actions.push("update_app_build");
+    warnings.push("CALL_ENGINE_BACKGROUND_ONLY");
+    actions.push("open_app");
   }
 
-  const healthy = mobileRegistered && !engineMissing && !!tokenRow?.device_token && callSubscription &&
+  const healthy = mobileRegistered && !!tokenRow?.device_token && callSubscription &&
     devicePushEnabled !== false && coreServerOk;
 
 
@@ -180,6 +184,7 @@ Deno.serve(async (req) => {
     },
     call_subscription: callSubscription,
     blockers,
+    warnings,
     actions,
 
   });

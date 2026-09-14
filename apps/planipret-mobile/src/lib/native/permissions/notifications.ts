@@ -3,7 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { ensureIncomingCallActionType, showIncomingCallNotification } from "./localCallNotifications";
 
 let listenersRegistered = false;
+let apnsTokenUploaded = false;
 const PENDING_INCOMING_KEY = "pp.pending-incoming-action.v1";
+
+/** True once the OS push token has been accepted by the backend. Used by the
+ *  bootstrap to retry: without this token the backend cannot wake the app to
+ *  re-REGISTER its `<ext>M` line. */
+export function hasUploadedPushToken() {
+  return apnsTokenUploaded;
+}
 
 type IncomingNotificationAction = "open" | "answer" | "decline";
 

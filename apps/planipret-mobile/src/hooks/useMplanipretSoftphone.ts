@@ -421,8 +421,13 @@ export function useMplanipretSoftphone(enabled = true, opts?: { primary?: boolea
           if (!ready) console.warn("[softphone] native SIP initialization did not register");
           return;
         }
+        // `on_login` forces the NS `<ext>M` device to be (re)provisioned and
+        // aligned on the WSS transport for EVERY broker that opens the app,
+        // not only for the native PJSIP path. Without it an Android broker (or
+        // an iOS build without the PJSIP binary) could sign in while the AOR
+        // stayed missing/drifted → inbound calls go straight to voicemail.
         const { data, error } = await supabase.functions.invoke("ns-resolve-sip-credentials", {
-          body: { client_type: clientType, transport: "wss" },
+          body: { client_type: clientType, transport: "wss", on_login: clientType === "mobile" },
         });
         if (cancelled) return;
         if (error || !data || (data as any)?.error) return;

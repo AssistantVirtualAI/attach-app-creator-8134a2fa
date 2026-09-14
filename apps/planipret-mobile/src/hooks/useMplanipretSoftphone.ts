@@ -53,6 +53,7 @@ import { checkSipBackendRegistration } from "@/lib/planipret/sip/sipBackendCheck
 import { ensureForegroundOwnership, resetOwnershipRepairBackoff } from "@/lib/planipret/sip/sipOwnershipRepair";
 import { nativeSip } from "@/lib/planipret/sip/nativeSipService";
 import { decideOutboundRoute } from "@/lib/planipret/sip/outboundRoute";
+import { nativeOwnsAor } from "@/lib/planipret/sip/aorArbitration";
 
 import {
   upsertRingingSession,

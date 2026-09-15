@@ -8,7 +8,7 @@
         "@11labs/react": "^0.2.0",
         "@ai-sdk/openai-compatible": "^2.0.50",
         "@ai-sdk/react": "^3.0.206",
-        "@capacitor-community/bluetooth-le": "^8.2.0",
+        "@capacitor-community/bluetooth-le": "^6.1.0",
         "@capacitor-community/contacts": "^6.0.1",
         "@capacitor/app": "^6.0.1",
         "@capacitor/browser": "^6.0.6",
@@ -30,7 +30,7 @@
         "@fontsource/epilogue": "^5.2.8",
         "@fontsource/urbanist": "^5.2.7",
         "@hookform/resolvers": "^3.10.0",
-        "@mozartec/capacitor-microphone": "^7.1.0",
+        "@mozartec/capacitor-microphone": "^6.0.0",
         "@playwright/test": "^1.57.0",
         "@radix-ui/react-accordion": "^1.2.11",
         "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -164,7 +164,7 @@
 
     "@bufbuild/protobuf": ["@bufbuild/protobuf@1.10.1", "", {}, "sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ=="],
 
-    "@capacitor-community/bluetooth-le": ["@capacitor-community/bluetooth-le@8.2.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor-community/bluetooth-le/-/bluetooth-le-8.2.0.tgz", { "dependencies": { "@types/web-bluetooth": "^0.0.20" }, "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-wsy2h9sVcXaynyb3Nf9fVZklnQHDtIfT4fc6iL9McZvi19rDJ5aCoEBqa4wch5RywbF3Ic1W/StKuHJuWUumiQ=="],
+    "@capacitor-community/bluetooth-le": ["@capacitor-community/bluetooth-le@6.1.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor-community/bluetooth-le/-/bluetooth-le-6.1.0.tgz", { "dependencies": { "@types/web-bluetooth": "^0.0.20" }, "peerDependencies": { "@capacitor/core": "^6.0.0" } }, "sha512-hnNChEwV+xNOVqDYI4bfkQtFtvEyzBMlgYs+6xsLYTJVl0v8h6Hn3nCwjW9l6LH0tMzYaRYlFLCiGHKPHt1N0Q=="],
 
     "@capacitor-community/contacts": ["@capacitor-community/contacts@6.1.1", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor-community/contacts/-/contacts-6.1.1.tgz", { "peerDependencies": { "@capacitor/core": "^6.0.0" } }, "sha512-/VFEYyJQUajUcjWdR7thsTYXDcoKtE5NLkU5dLql72xbLFCoSNWrgTQwj6kPpAvYSi32smUDabeipsIseVSFlg=="],
 
@@ -332,7 +332,7 @@
 
     "@monogrid/gainmap-js": ["@monogrid/gainmap-js@3.4.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@monogrid/gainmap-js/-/gainmap-js-3.4.0.tgz", { "dependencies": { "promise-worker-transferable": "^1.0.4" }, "peerDependencies": { "three": ">= 0.159.0" } }, "sha512-2Z0FATFHaoYJ8b+Y4y4Hgfn3FRFwuU5zRrk+9dFWp4uGAdHGqVEdP7HP+gLA3X469KXHmfupJaUbKo1b/aDKIg=="],
 
-    "@mozartec/capacitor-microphone": ["@mozartec/capacitor-microphone@7.1.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@mozartec/capacitor-microphone/-/capacitor-microphone-7.1.0.tgz", { "peerDependencies": { "@capacitor/core": ">=7.0.0" } }, "sha512-7adiK4UKGOPQbKbPlFNLFFT756EwTv8viFlU0FDLqxzDsMWIIk6+I3RWMhhgQPPIJrPxYS4Wf9O6phtRfmcTnw=="],
+    "@mozartec/capacitor-microphone": ["@mozartec/capacitor-microphone@6.0.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@mozartec/capacitor-microphone/-/capacitor-microphone-6.0.0.tgz", { "peerDependencies": { "@capacitor/core": "^6.0.0" } }, "sha512-bx2Dcp84C9/crmBc3yRAg4tDAJYUIzjnRTZX2CluNBNrFRpPrXkRuwNGPNBy3pXP8fjhGM8NqSZ/7eMYfKRuNg=="],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 

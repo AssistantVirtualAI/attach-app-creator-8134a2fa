@@ -212,3 +212,59 @@ verify_jwt = false
 
 [functions.maestro-oauth-state-info]
 verify_jwt = false
+
+# --- Planiprêt Mobile 1.4.8 — politique JWT ---
+# Ces fonctions exigent un porteur JWT valide au niveau de la passerelle
+# (utilisateur authentifié OU vrai bearer SUPABASE_SERVICE_ROLE_KEY pour les
+# appels internes) et refont la validation d'identité dans le code.
+# ava-tool-executor / ava-agent-config / elevenlabs-tool-handler restent en
+# verify_jwt = false car ElevenLabs y présente un jeton de session signé AVA :
+# leur authentification est intégralement validée dans le code.
+
+[functions.pp-ai-consent]
+verify_jwt = true
+
+[functions.pp-ava-chat]
+verify_jwt = true
+
+[functions.pp-ava-webrtc-token]
+verify_jwt = true
+
+[functions.pp-ava-stt]
+verify_jwt = true
+
+[functions.pp-ava-tts]
+verify_jwt = true
+
+[functions.pp-ava-brief]
+verify_jwt = true
+
+[functions.pp-ava-report]
+verify_jwt = true
+
+[functions.ava-email-analyzer]
+verify_jwt = true
+
+[functions.maestro-actions]
+verify_jwt = true
+
+[functions.maestro-appointment]
+verify_jwt = true
+
+[functions.ns-get-recording]
+verify_jwt = true
+
+[functions.ns-get-transcription]
+verify_jwt = true
+
+[functions.pp-admin-transcribe]
+verify_jwt = true
+
+[functions.pp-coach-call]
+verify_jwt = true
+
+[functions.pp-call-consent]
+verify_jwt = true
+
+[functions.planipret-task-api]
+verify_jwt = true

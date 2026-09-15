@@ -8,6 +8,7 @@ import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { MS365_DELEGATED_SCOPES, refreshMicrosoftAccessToken } from "../_shared/ms365.ts";
 import { getUserMaestroAccessToken } from "../_shared/maestro-oauth.ts";
+import { getAiConsent, consentRequiredBody } from "../_shared/ai-consent.ts";
 import { commissionGet, summarize } from "../_shared/commission-reports.ts";
 
 /**
@@ -348,9 +349,10 @@ Deno.serve(async (req) => {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Mode service (cron scheduler) : accepte broker_user_id via header/body si appelé avec service_role.
-    const serviceHeader = req.headers.get("x-ava-service");
+    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const isService = bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     let effectiveUserId: string | null = null;
-    if (serviceHeader) {
+    if (isService) {
       effectiveUserId = req.headers.get("x-broker-user-id") ?? body?.broker_user_id ?? null;
     } else {
       const token = authHeader.replace(/^Bearer\s+/i, "");
@@ -364,6 +366,11 @@ Deno.serve(async (req) => {
       effectiveUserId = u.user.id;
     }
     if (!effectiveUserId) return json(degradedBrief(requestedLang ?? "fr", "no_user"));
+
+    {
+      const consent = await getAiConsent(admin, effectiveUserId);
+      if (!consent.granted) return json(consentRequiredBody(consent), 403);
+    }
 
     const { data: profile } = await admin.from("planipret_profiles")
       .select("id, user_id, full_name, extension, ns_extension, organization_id, language, ms365_access_token, ms365_refresh_token, ms365_email")

@@ -2,6 +2,7 @@
 // pour un courtier Planiprêt, via Lovable AI Gateway (Claude / GPT-5.5).
 // Retourne { report, period, stats }.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getAiConsent, consentRequiredBody } from "../_shared/ai-consent.ts";
 import { generateText } from "npm:ai";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 
@@ -35,9 +36,12 @@ Deno.serve(async (req) => {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Mode service (voice agent / scheduler) : accepte broker_user_id via header/body si appelé avec service_role.
-    const serviceHeader = req.headers.get("x-ava-service");
+    // Un appel interne doit présenter le VRAI bearer service role (un en-tête
+    // personnalisé n'est jamais une preuve de confiance).
+    const bearer = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const isService = bearer === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     let effectiveUserId: string | null = null;
-    if (serviceHeader) {
+    if (isService) {
       effectiveUserId = req.headers.get("x-broker-user-id") ?? body?.broker_user_id ?? body?._user_id ?? null;
     } else {
       const sb = createClient(
@@ -50,6 +54,11 @@ Deno.serve(async (req) => {
       effectiveUserId = u.user.id;
     }
     if (!effectiveUserId) return json({ error: "no_user" }, 400);
+
+    {
+      const consent = await getAiConsent(admin, effectiveUserId);
+      if (!consent.granted) return json(consentRequiredBody(consent), 403);
+    }
 
     const { data: profile } = await admin.from("planipret_profiles")
       .select("id, user_id, full_name, extension")

@@ -98,6 +98,12 @@ type Opts = { prefix?: string | null; token?: string | null };
 const id = (v: string | number) => encodeURIComponent(String(v));
 
 // ── Clients ──────────────────────────────────────────────────────────────
+export const CLIENT_FILTERS = ["search", "agent_id", "order_by", "sort", "page", "per_page"] as const;
+export const listClients = (cfg: MaestroConfig, query: Record<string, any> = {}, o: Opts = {}) => {
+  const clean: Record<string, any> = {};
+  for (const k of CLIENT_FILTERS) if (query[k] !== undefined) clean[k] = query[k];
+  return scribeFetch(cfg, "/clients", { query: clean, ...o });
+};
 export const getClient = (cfg: MaestroConfig, clientId: string | number, o: Opts = {}) =>
   scribeFetch(cfg, `/clients/${id(clientId)}`, o);
 export const createClient_ = (cfg: MaestroConfig, body: Record<string, unknown>, o: Opts = {}) =>
@@ -134,6 +140,8 @@ export const listContracts = (cfg: MaestroConfig, query: Record<string, any> = {
   for (const k of CONTRACT_FILTERS) if (query[k] !== undefined) clean[k] = query[k];
   return scribeFetch(cfg, "/contracts", { query: clean, ...o });
 };
+export const getContract = (cfg: MaestroConfig, contractId: string | number, o: Opts = {}) =>
+  scribeFetch(cfg, `/contracts/${id(contractId)}`, o);
 export const createContract = (cfg: MaestroConfig, body: Record<string, unknown>, o: Opts = {}) =>
   scribeFetch(cfg, "/contracts", { method: "POST", body, ...o });
 export const updateContract = (cfg: MaestroConfig, contractId: string | number, body: Record<string, unknown>, o: Opts = {}) =>
@@ -144,6 +152,8 @@ export const deleteContract = (cfg: MaestroConfig, contractId: string | number, 
 // ── Financial institutions ───────────────────────────────────────────────
 export const listFinancialInstitutions = (cfg: MaestroConfig, o: Opts = {}) =>
   scribeFetch(cfg, "/financial-institutions", o);
+export const getFinancialInstitution = (cfg: MaestroConfig, fiId: string | number, o: Opts = {}) =>
+  scribeFetch(cfg, `/financial-institutions/${id(fiId)}`, o);
 
 // ── Commission reports ───────────────────────────────────────────────────
 export const COMMISSION_FILTERS = [
@@ -158,6 +168,12 @@ export const commissionDeposits = (cfg: MaestroConfig, query: Record<string, any
 };
 export const commissionAgents = (cfg: MaestroConfig, o: Opts = {}) =>
   scribeFetch(cfg, "/commissions/reports/agents", o);
+
+/** Rapports de commissions documentés (/commission-reports). */
+export const listCommissionReports = (cfg: MaestroConfig, query: Record<string, any> = {}, o: Opts = {}) =>
+  scribeFetch(cfg, "/commission-reports", { query, ...o });
+export const getCommissionReport = (cfg: MaestroConfig, reportId: string | number, o: Opts = {}) =>
+  scribeFetch(cfg, `/commission-reports/${id(reportId)}`, o);
 
 // ── Tasks (documented list + CRUD) ───────────────────────────────────────
 export const TASK_FILTERS = [

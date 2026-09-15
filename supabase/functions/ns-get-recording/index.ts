@@ -7,6 +7,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // @ts-ignore npm package has no bundled TS declarations.
 import GSMDecoder from "npm:gsm-decoder@1.0.0";
+import { requireCallAccess } from "../_shared/planipret-call-access.ts";
 
 const FALLBACK_NS_API_BASE_URL = (Deno.env.get("NS_API_BASE_URL") ?? "https://voice.ava-telecom.ca/ns-api/v2").replace(/\/$/, "");
 const FALLBACK_NS_DOMAIN = Deno.env.get("NS_DEFAULT_DOMAIN") ?? Deno.env.get("NS_API_DOMAIN") ?? "planipret.ca";
@@ -421,6 +422,15 @@ Deno.serve(async (req) => {
   let domain = String(body.domain ?? url.searchParams.get("domain") ?? cfg.domain);
   const attempts: any[] = [];
   const preferUrl = body?.prefer_url === true || url.searchParams.get("prefer_url") === "1";
+
+  // Identité + propriété + consentement post-appel approuvé.
+  {
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const targetId = call_db_id ?? body.call_id ?? null;
+    if (!targetId) return json({ success: false, error: "call_db_id_required" }, 400);
+    const access = await requireCallAccess(req, admin, String(targetId), { headers: corsHeaders, requireConsent: true });
+    if ("error" in access) return access.error;
+  }
 
   if ((!ns_callid || !ns_extension || preferUrl) && call_db_id) {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);

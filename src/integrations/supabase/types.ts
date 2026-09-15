@@ -8853,6 +8853,7 @@ export type Database = {
           deep_link: string | null
           delivered: boolean
           id: string
+          idempotency_key: string | null
           read_at: string | null
           title: string
           user_id: string
@@ -8865,6 +8866,7 @@ export type Database = {
           deep_link?: string | null
           delivered?: boolean
           id?: string
+          idempotency_key?: string | null
           read_at?: string | null
           title: string
           user_id: string
@@ -8877,6 +8879,7 @@ export type Database = {
           deep_link?: string | null
           delivered?: boolean
           id?: string
+          idempotency_key?: string | null
           read_at?: string | null
           title?: string
           user_id?: string
@@ -11718,6 +11721,9 @@ export type Database = {
       }
       planipret_profiles: {
         Row: {
+          ai_consent_at: string | null
+          ai_consent_revoked_at: string | null
+          ai_consent_version: string | null
           auth_method: string | null
           ava_autonomy_mode: string
           ava_chat_mode: string
@@ -11827,6 +11833,9 @@ export type Database = {
           widget_enabled: boolean
         }
         Insert: {
+          ai_consent_at?: string | null
+          ai_consent_revoked_at?: string | null
+          ai_consent_version?: string | null
           auth_method?: string | null
           ava_autonomy_mode?: string
           ava_chat_mode?: string
@@ -11936,6 +11945,9 @@ export type Database = {
           widget_enabled?: boolean
         }
         Update: {
+          ai_consent_at?: string | null
+          ai_consent_revoked_at?: string | null
+          ai_consent_version?: string | null
           auth_method?: string | null
           ava_autonomy_mode?: string
           ava_chat_mode?: string

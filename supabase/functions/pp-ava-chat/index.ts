@@ -6,6 +6,7 @@ import { generateText, Output } from "npm:ai";
 import { z } from "npm:zod";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 import { buildIdempotencyKey, claimAction, finishAction } from "../_shared/ava-confirm.ts";
+import { getAiConsent, consentRequiredBody } from "../_shared/ai-consent.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -221,6 +222,12 @@ Deno.serve(async (req) => {
 
     // Light Planipret context
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // Consentement IA serveur : aucun appel fournisseur sans consentement valide.
+    {
+      const consent = await getAiConsent(admin, u.user.id);
+      if (!consent.granted) return json(consentRequiredBody(consent), 403);
+    }
     const { data: profile } = await admin.from("planipret_profiles")
       .select("id, user_id, full_name, role, extension, ms365_access_token, ms365_scopes, ms365_email, language")
       .eq("user_id", u.user.id).maybeSingle();

@@ -19,6 +19,7 @@
 import { generateText, tool, stepCountIs } from "npm:ai";
 import { z } from "npm:zod";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getAiConsent, consentRequiredBody } from "../_shared/ai-consent.ts";
 import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
 
@@ -83,6 +84,11 @@ Deno.serve(async (req) => {
     );
     const { data: u } = await sb.auth.getUser();
     if (!u?.user) return json({ error: "unauthorized" }, 401);
+
+    {
+      const consent = await getAiConsent(admin, u.user.id);
+      if (!consent.granted) return json(consentRequiredBody(consent), 403);
+    }
 
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) return json({ answer: "AVA is not configured yet (missing AI key)." });

@@ -492,6 +492,25 @@ Deno.serve(async (req) => {
       steps,
     });
 
+    // Notification finale unique (idempotente) après une synchro réussie.
+    if (allOk) {
+      try {
+        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pp-push-notify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_ROLE}` },
+          body: JSON.stringify({
+            user_id: call.user_id,
+            category: "ai",
+            title: "Appel traité",
+            body: "Le résumé et l'analyse de l'appel sont prêts.",
+            deep_link: `/calls/${call_id}`,
+            idempotency_key: `post_call_ready:${call_id}`,
+            data: { call_id, kind: "post_call_ready" },
+          }),
+        });
+      } catch { /* best-effort : jamais bloquant */ }
+    }
+
     log("done", { allOk, steps });
     return json({ success: allOk, call_id, maestro_call_id: mId, error: allOk ? null : firstError, detail: firstDetail, permanent: stepValues.some((s) => s?.permanent === true), steps, request_id: rid });
   } catch (e: any) {

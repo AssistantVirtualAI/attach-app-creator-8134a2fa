@@ -18,6 +18,9 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const { user_id, title, body: text, data, icon, category, deep_link } = body ?? {};
+    const idempotencyKey = typeof body?.idempotency_key === "string" && body.idempotency_key.trim()
+      ? body.idempotency_key.trim().slice(0, 200)
+      : null;
     if (!user_id || !title) return json({ error: "missing_fields" }, 400);
 
     // ---- Authorization -------------------------------------------------
@@ -70,12 +73,20 @@ Deno.serve(async (req) => {
       : null;
     const finalDeepLink = safeDeepLink ?? rawFallbackLink;
 
-    // Always log in-app notification (even if push disabled)
-    const { data: notifRow } = await admin.from("planipret_ava_notifications").insert({
+    // Always log in-app notification (even if push disabled).
+    // Une clé d'idempotence (ex: post_call_ready:{call_id}) garantit qu'un
+    // retry ne crée jamais une deuxième notification ni un deuxième push.
+    const { data: notifRow, error: notifErr } = await admin.from("planipret_ava_notifications").insert({
       user_id, category: cat, title: safeTitle, body: safeText || null,
       data: { ...(data ?? {}), deep_link: finalDeepLink }, deep_link: finalDeepLink,
       delivered: false,
+      ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
     }).select("id").maybeSingle();
+
+    if (notifErr && idempotencyKey && String(notifErr.code) === "23505") {
+      return json({ delivered: 0, duplicate: true, idempotent_replay: true, idempotency_key: idempotencyKey });
+    }
+    if (notifErr) return json({ error: "notification_log_failed", detail: notifErr.message }, 500);
 
     if (!allowed) return json({ delivered: 0, blocked_by_preference: true, logged: true });
 
